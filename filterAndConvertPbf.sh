@@ -22,6 +22,6 @@ osmium tags-filter \
     r/route=light_rail \
     r/route=subway
 
-osmium export temp.osm.pbf -f geojson > $2
+osmium export temp.osm.pbf -a id -f geojson > $2
 
 rm temp.osm.pbf
