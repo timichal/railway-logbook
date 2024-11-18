@@ -17,7 +17,8 @@ fs.readFile(process.argv[2], function (err, data) {
         return true;
       }
       if (feat.geometry.type === "LineString") {
-        if (["rail", "narrow_gauge"].includes(feat.properties.railway) && ["main", "branch"].includes(feat.properties.usage)) return true;
+        if (feat.properties.railway === "rail" && ["main", "branch"].includes(feat.properties.usage)) return true;
+        if (feat.properties.railway === "narrow_gauge") return true;
         return false;
       }
       return false;
@@ -49,7 +50,6 @@ fs.readFile(process.argv[2], function (err, data) {
     const toMerge = mergedFeatures
       .filter((f) => railway.ids.includes(f.properties["@id"]))
       .map((f) => f.geometry.coordinates);
-
     const mergedRailway = {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: mergeCoordinateLists(toMerge) },
@@ -57,6 +57,7 @@ fs.readFile(process.argv[2], function (err, data) {
         name: railway.name,
         description: railway.description,
         '@id': railway.ids.join(';'),
+        track_id: railway.track_id,
         railway: 'rail',
       },
     };

@@ -1,37 +1,49 @@
-// shamelessly outsourced to ChatGPT
+// shamelessly subcontracted to chatgpt
 
-export default function mergeCoordinateLists(lists) {
-  let merged = [];  // This will hold the final merged list
-  let remainingLists = [...lists];  // Clone the input lists
-
-  // Find the first list that doesn't match the end of any other list
-  let firstListIndex = remainingLists.findIndex(list => {
-    return !remainingLists.some(otherList => {
+export default function mergeLinearChain(sublists) {
+  let startingSublistIndex = sublists.findIndex(list => {
+    return !sublists.some(otherList => {
       return list !== otherList &&
         list[0][0] === otherList[otherList.length - 1][0] &&
         list[0][1] === otherList[otherList.length - 1][1];
     });
   });
 
-  // Start with the first list
-  merged = remainingLists.splice(firstListIndex, 1)[0];
-
-  // Merge the rest of the lists
-  while (remainingLists.length > 0) {
-    for (let i = 0; i < remainingLists.length; i++) {
-      const lastCoord = merged[merged.length - 1];
-      const firstCoord = remainingLists[i][0];
-
-      // If the last coordinate of the merged list matches the first of the current list
-      if (lastCoord[0] === firstCoord[0] && lastCoord[1] === firstCoord[1]) {
-        // Append the rest of the current list to the merged list, excluding the matching coordinate
-        merged = merged.concat(remainingLists[i].slice(1));
-        // Remove the current list from remaining lists
-        remainingLists.splice(i, 1);
-        break;
-      }
-    }
+  if (startingSublistIndex === -1) {
+    throw new Error("No valid starting sublist found.");
   }
 
-  return merged;
+  // Extract the starting sublist
+  let mergedChain = [...sublists[startingSublistIndex]];
+  sublists.splice(startingSublistIndex, 1); // Remove the starting sublist
+
+  // Step 3: Build the chain incrementally
+  while (sublists.length > 0) {
+    const lastCoord = mergedChain[mergedChain.length - 1];
+
+    // Find the next sublist that connects to the current chain
+    const nextIndex = sublists.findIndex(sublist =>
+      sublist.some(([x, y]) => x === lastCoord[0] && y === lastCoord[1])
+    );
+
+    if (nextIndex === -1) {
+      throw new Error("Chain is broken; no connecting sublist found.");
+    }
+
+    // Extract the next sublist and reverse it if necessary
+    let nextSublist = sublists[nextIndex];
+    const overlapIndex = nextSublist.findIndex(([x, y]) => x === lastCoord[0] && y === lastCoord[1]);
+
+    if (overlapIndex !== 0) {
+      nextSublist.reverse(); // Reverse if the overlap is not at the start
+    }
+
+    // Add the non-overlapping part of the sublist to the chain
+    mergedChain.push(...nextSublist.slice(1));
+
+    // Remove the processed sublist
+    sublists.splice(nextIndex, 1);
+  }
+
+  return mergedChain;
 }
