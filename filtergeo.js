@@ -1,6 +1,11 @@
 import fs from "fs";
 
-fs.readFile('data-cz.geojson', function (err, data) {
+if (process.argv.length === 2) {
+  console.error('Syntax: filtergeo.js geojson_file.geojson');
+  process.exit(1);
+}
+
+fs.readFile(process.argv[2], function (err, data) {
   const col = JSON.parse(data);
   const filtered = {
     "type": "FeatureCollection",
