@@ -23,8 +23,10 @@ fs.readFile('data-cz.geojson', function (err, data) {
               "addr:city", "addr:postcode", "addr:conscriptionnumber", "addr:country", "addr:housenumber", "addr:street",
               "addr:place",
               "website", "note", "source", "source:ele", "ref:ruian:addr",
-              "source:addr", "source:name", "source:official_name", "source:ref",
-              "proposed:electrified", "proposed:frequency", "proposed:voltage", "source:maxspeed",
+              "source:addr", "source:name", "source:official_name", "source:ref", "source:maxspeed",
+              "railway:etcs", "railway:ls", "railway:lzb", "railway:pzb", "railway:preferred_direction",
+              "railway:radio", "railway:track_class", "railway:traffic_mode",
+              "proposed:electrified", "proposed:frequency", "proposed:voltage",
             ].includes(key)
           )
         ),
