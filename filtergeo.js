@@ -63,7 +63,7 @@ fs.readFile(process.argv[2], function (err, data) {
     };
 
     mergedFeatures = [
-      ...prunedFeatures.filter((f) => !railway.ids.includes(f.properties["@id"])),
+      ...mergedFeatures.filter((f) => !railway.ids.includes(f.properties["@id"])),
       mergedRailway
     ]
   })
@@ -71,5 +71,17 @@ fs.readFile(process.argv[2], function (err, data) {
   fs.writeFileSync('filtered-cz.geojson', JSON.stringify({
     "type": "FeatureCollection",
     "features": mergedFeatures,
+  }), 'utf8');
+
+  const mergedOnly = mergedFeatures.filter((feat) => {
+    if (feat.geometry.type === "LineString" && !feat.properties.track_id) {
+      return false;
+    }
+    return true;
+  });
+
+  fs.writeFileSync('merged-only-cz.geojson', JSON.stringify({
+    "type": "FeatureCollection",
+    "features": mergedOnly,
   }), 'utf8');
 }); 
