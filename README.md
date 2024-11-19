@@ -14,4 +14,4 @@ Výchozí filtr + export:
 node filtergeo.js ./data-cz.geojson
 ```
 
-Geojson se dá následně vložit sem: https://umap.openstreetmap.fr/en/map/new/#8/49.829/15.447
+Aktuálně se pak výsledný geojson vkládá sem, kde se vykreslí na mapě (po loginu edit link): https://umap.openstreetmap.fr/en/map/railroad-map_1140579#9/49.9290/13.9595
