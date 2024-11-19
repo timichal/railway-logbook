@@ -61,7 +61,7 @@ fs.readFile(process.argv[2], function (err, data) {
       geometry: { type: 'LineString', coordinates: mergeCoordinateLists(coordinatesToMerge) },
       properties: {
         name: `Trať ${railway.local_number}: ${railway.from} – ${railway.to}`,
-        description: `${usageDict[railway.usage]}, ${railway.operator}`,
+        description: `${railway.usage.split(";").map((entry) => usageDict[entry]).join(", ")}, ${railway.operator}`,
         '@id': railway.ways,
         track_id: `cz${railway.local_number}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
         railway: 'rail',
