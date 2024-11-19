@@ -1,5 +1,5 @@
 import fs from "fs";
-import railwayData from "./railwayData.js";
+import railwayData, { usageDict } from "./railwayData.js";
 import mergeCoordinateLists from "./mergeCoordinateLists.js";
 
 if (process.argv.length === 2) {
@@ -17,7 +17,7 @@ fs.readFile(process.argv[2], function (err, data) {
         return true;
       }
       if (feat.geometry.type === "LineString") {
-        if (feat.properties.railway === "rail" && ["main", "branch"].includes(feat.properties.usage)) return true;
+        if (feat.properties.railway === "rail" && ["main", "branch"].includes(feat.properties.usage) || feat.properties.service === "crossover") return true;
         if (feat.properties.railway === "narrow_gauge") return true;
         return false;
       }
@@ -45,28 +45,34 @@ fs.readFile(process.argv[2], function (err, data) {
     process.exit(1);
   }
 
+  const trackPartCount = new Map();
   let mergedFeatures = prunedFeatures;
   railwayData.forEach((railway) => {
-    const toMerge = mergedFeatures
-      .filter((f) => railway.ids.includes(f.properties["@id"]))
+    const wayIds = railway.ways.split(";").map(Number);
+    const coordinatesToMerge = mergedFeatures
+      .filter((f) => railway.ways.split(";").map(Number).includes(f.properties["@id"]))
       .map((f) => f.geometry.coordinates);
+
+    const trackKey = `cz${railway.local_number}`
+    trackPartCount.set(trackKey, (trackPartCount.get(trackKey) || 0) + 1);
+
     const mergedRailway = {
       type: 'Feature',
-      geometry: { type: 'LineString', coordinates: mergeCoordinateLists(toMerge) },
+      geometry: { type: 'LineString', coordinates: mergeCoordinateLists(coordinatesToMerge) },
       properties: {
-        name: railway.name,
-        description: railway.description,
-        '@id': railway.ids.join(';'),
-        track_id: railway.track_id,
+        name: `Trať ${railway.local_number}: ${railway.from} – ${railway.to}`,
+        description: `${usageDict[railway.usage]}, ${railway.operator}`,
+        '@id': railway.ways,
+        track_id: `cz${railway.local_number}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
         railway: 'rail',
       },
     };
 
     mergedFeatures = [
-      ...mergedFeatures.filter((f) => !railway.ids.includes(f.properties["@id"])),
+      ...mergedFeatures.filter((f) => !wayIds.includes(f.properties["@id"])),
       mergedRailway
     ]
-  })
+  });
 
   fs.writeFileSync('filtered-cz.geojson', JSON.stringify({
     "type": "FeatureCollection",

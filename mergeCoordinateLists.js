@@ -1,12 +1,18 @@
-// shamelessly subcontracted to chatgpt
+// shamelessly outsourced to chatgpt
 
 export default function mergeLinearChain(sublists) {
-  let startingSublistIndex = sublists.findIndex(list => {
-    return !sublists.some(otherList => {
-      return list !== otherList &&
-        list[0][0] === otherList[otherList.length - 1][0] &&
-        list[0][1] === otherList[otherList.length - 1][1];
-    });
+  // Step 1: Create a map of coordinate frequencies
+  const coordCount = new Map();
+  sublists.flat().forEach(([x, y]) => {
+    const key = `${x},${y}`;
+    coordCount.set(key, (coordCount.get(key) || 0) + 1);
+  });
+
+  // Step 2: Find the starting sublist
+  let startingSublistIndex = sublists.findIndex(sublist => {
+    const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
+    const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
+    return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
   });
 
   if (startingSublistIndex === -1) {
@@ -16,6 +22,12 @@ export default function mergeLinearChain(sublists) {
   // Extract the starting sublist
   let mergedChain = [...sublists[startingSublistIndex]];
   sublists.splice(startingSublistIndex, 1); // Remove the starting sublist
+
+  // Step 2.1: Ensure the starting sublist is oriented correctly
+  const lastCoord = `${mergedChain[mergedChain.length - 1][0]},${mergedChain[mergedChain.length - 1][1]}`;
+  if (coordCount.get(lastCoord) === 1) {
+    mergedChain.reverse(); // Reverse if the starting point is at the "end"
+  }
 
   // Step 3: Build the chain incrementally
   while (sublists.length > 0) {
