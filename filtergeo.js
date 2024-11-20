@@ -17,7 +17,7 @@ fs.readFile(process.argv[2], function (err, data) {
         return true;
       }
       if (feat.geometry.type === "LineString") {
-        if (feat.properties.railway === "rail" && ["main", "branch"].includes(feat.properties.usage) || feat.properties.service === "crossover") return true;
+        if (feat.properties.railway === "rail") return true;
         if (feat.properties.railway === "narrow_gauge") return true;
         return false;
       }
