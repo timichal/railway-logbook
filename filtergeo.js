@@ -47,7 +47,9 @@ fs.readFile(process.argv[2], function (err, data) {
 
   const trackPartCount = new Map();
   let mergedFeatures = prunedFeatures;
-  railwayData.forEach((railway) => {
+  console.log(`Total railways: ${railwayData.length}`);
+  railwayData.forEach((railway, index) => {
+    console.log(`Processing: ${index + 1}/${railwayData.length}`)
     const wayIds = railway.ways.split(";").map(Number);
     const coordinatesToMerge = mergedFeatures
       .filter((f) => railway.ways.split(";").map(Number).includes(f.properties["@id"]))
@@ -62,7 +64,7 @@ fs.readFile(process.argv[2], function (err, data) {
       properties: {
         name: `Trať ${railway.local_number}: ${railway.from} – ${railway.to}`,
         description: `${railway.usage.split(";").map((entry) => usageDict[entry]).join(", ")}, ${railway.operator}`,
-        '@id': railway.ways,
+        // '@id': railway.ways,
         track_id: `cz${railway.local_number}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
         railway: 'rail',
       },
