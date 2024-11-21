@@ -6,14 +6,14 @@ Dump českých dat ke: 2024-11-20T21:21:02Z
 
 Zatím procesování dat z Česka. Používá se [defaultní OpenRailwayMap filtr](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md#load-osm-data-into-the-database) pro všechna vlaková data, až následně se osekává geojson - OSM formát se špatně filtruje vzhledem k relacím dat.
 
-Výchozí filtr + export:
+Stažení aktuálních dat + výchozí filtr + export:
 ```
-./filterAndConvertPbf.sh czech-republic-latest.osm.pbf data-cz.geojson
+./filterAndConvertPbf.sh cz
 ```
 
 Čištění dat:
 ```
-node filtergeo.js ./data-cz.geojson
+node filtergeo.js ./cz.geojson
 ```
 
 Aktuálně se pak výsledný geojson vkládá sem, kde se vykreslí na mapě (po loginu edit link): https://umap.openstreetmap.fr/en/map/railroad-map_1140579#9/49.9290/13.9595

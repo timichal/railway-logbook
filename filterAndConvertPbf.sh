@@ -1,14 +1,25 @@
 #!/bin/sh
 
-if [ $# -ne 2 ]
+if [ $# -ne 1 ]
   then
-    echo "Usage: filterAndConvertPbf.sh input.osm.pbf output.geojson"
+    echo "Usage: filterAndConvertPbf.sh country_code"
     exit 1
 fi
 
+code="${1}"
+case ${code} in
+  "cz") filename="czech-republic-latest.osm.pbf"
+  ;;
+  *) echo "Unknown country code. Aborting"
+  exit 1
+  ;;
+esac
+
+curl https://download.geofabrik.de/europe/${filename} -o ${code}.osm.pbf
+ 
 osmium tags-filter \
     -o temp.osm.pbf \
-    $1 \
+    ${code}.osm.pbf \
     nwr/railway \
     nwr/disused:railway \
     nwr/abandoned:railway \
@@ -22,6 +33,6 @@ osmium tags-filter \
     r/route=light_rail \
     r/route=subway
 
-osmium export temp.osm.pbf -a id -f geojson > $2
+osmium export temp.osm.pbf -a id -f geojson > ${code}.geojson
 
 rm temp.osm.pbf
