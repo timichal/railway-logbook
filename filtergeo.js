@@ -60,13 +60,17 @@ fs.readFile(process.argv[2], function (err, data) {
 
     const mergedRailway = {
       type: 'Feature',
-      geometry: { type: 'LineString', coordinates: mergeCoordinateLists(coordinatesToMerge) },
+      geometry: {
+        type: 'LineString',
+        coordinates: mergeCoordinateLists(coordinatesToMerge),
+      },
       properties: {
         name: `Trať ${railway.local_number}: ${railway.from} – ${railway.to}`,
         description: `${railway.usage.split(";").map((entry) => usageDict[entry]).join(", ")}, ${railway.operator}`,
         // '@id': railway.ways,
         track_id: `cz${railway.local_number}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
         railway: 'rail',
+        _umap_options: { "color": railway.custom?.last_ride ? "DarkGreen" : "Crimson" }
       },
     };
 
