@@ -49,7 +49,7 @@ fs.readFile(process.argv[2], function (err, data) {
   let mergedFeatures = prunedFeatures;
   console.log(`Total railways: ${railwayData.length}`);
   railwayData.forEach((railway, index) => {
-    console.log(`Processing: ${index + 1}/${railwayData.length}`)
+    console.log(`Processing: ${index + 1}/${railwayData.length}: ${railway.local_number} ${railway.from} - ${railway.to}`)
     const wayIds = railway.ways.split(";").map(Number);
     const coordinatesToMerge = mergedFeatures
       .filter((f) => railway.ways.split(";").map(Number).includes(f.properties["@id"]))
