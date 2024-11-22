@@ -1,2 +1,3 @@
 *.pbf
 *.geojson
+node_modules/

@@ -1,0 +1,23 @@
+{
+  "name": "osm-trains",
+  "version": "1.0.0",
+  "description": "Data fetching and processing for an interactive railway map",
+  "main": "filtergeo.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/timichal/osm-trains.git"
+  },
+  "author": "Michal Zlatkovský",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/timichal/osm-trains/issues"
+  },
+  "homepage": "https://github.com/timichal/osm-trains#readme",
+  "dependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}
