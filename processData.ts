@@ -1,5 +1,5 @@
 import fs from "fs";
-import railwayData, { usageDict } from "./railwayData";
+import railwayData, { Usage } from "./railwayData";
 import mergeCoordinateLists from "./mergeCoordinateLists";
 
 if (process.argv.length !== 3) {
@@ -50,6 +50,17 @@ type ProcessedFeature = {
 type EntryData = {
   features: Feature[]
 }
+
+const usageDict = {
+  [Usage.Regular]: "Pravidelný provoz",
+  [Usage.OnceDaily]: "Provoz jednou denně",
+  [Usage.Seasonal]: "Sezónní provoz",
+  [Usage.OnceWeekly]: "Provoz jednou týdně",
+  [Usage.Weekdays]: "Provoz o pracovních dnech",
+  [Usage.Weekends]: "Provoz o víkendech",
+  [Usage.Special]: "Provoz při zvláštních příležitostech",
+};
+
 
 fs.readFile(`${process.argv[2]}.geojson`, function (err, data) {
   const parsedData: EntryData = JSON.parse(data.toString());
@@ -110,7 +121,7 @@ fs.readFile(`${process.argv[2]}.geojson`, function (err, data) {
       },
       properties: {
         name: `Trať ${railway.local_number}: ${railway.from} – ${railway.to}`,
-        description: `${railway.usage.split(";").map((entry) => (usageDict as Record<string, string>)[entry]).join(", ")}, ${railway.operator}`,
+        description: `${railway.usage.map((entry) => usageDict[entry]).join(", ")}, ${railway.operator}\n\n${railway.custom?.last_ride && `Naposledy projeto: ${railway.custom.last_ride}`}`,
         '@id': railway.ways,
         track_id: `cz${railway.local_number}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
         railway: 'rail',
