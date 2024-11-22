@@ -119,7 +119,7 @@ fs.readFile(`${process.argv[2]}.geojson`, function (err, data) {
     };
 
     mergedFeatures = [
-      ...mergedFeatures.filter((f) =>  typeof f.properties["@id"] === "number" && !wayIds.includes(f.properties["@id"])),
+      ...mergedFeatures.filter((f) => (typeof f.properties["@id"] === "number" && !wayIds.includes(f.properties["@id"])) || true),
       mergedRailway
     ]
   });
