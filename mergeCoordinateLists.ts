@@ -1,6 +1,8 @@
 // shamelessly outsourced to chatgpt
 
-export default function mergeLinearChain(sublists) {
+type Coord = [x: number, y: number];
+
+export default function mergeLinearChain(sublists: Coord[][]) {
   // Step 1: Create a map of coordinate frequencies
   const coordCount = new Map();
   sublists.flat().forEach(([x, y]) => {
