@@ -121,11 +121,14 @@ fs.readFile(`${process.argv[2]}.geojson`, function (err, data) {
       },
       properties: {
         name: `Trať ${railway.local_number}: ${railway.from} – ${railway.to}`,
-        description: `${railway.usage.map((entry) => usageDict[entry]).join(", ")}, ${railway.operator}\n\n${railway.custom?.last_ride ? `Naposledy projeto: ${railway.custom.last_ride}` : ''}`,
+        description: `${railway.usage.map((entry) => usageDict[entry]).join(", ")}, ${railway.operator}${railway.custom?.last_ride ? `\n\nNaposledy projeto: ${railway.custom.last_ride}` : ''}${railway.custom?.note ? `\n\n*${railway.custom.note}*` : ''}`,
         '@id': railway.ways,
         track_id: `cz${railway.local_number}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
         railway: 'rail',
-        _umap_options: { "color": railway.custom?.last_ride ? "DarkGreen" : "Crimson" }
+        _umap_options: {
+          color: railway.custom?.last_ride ? "DarkGreen" : "Crimson",
+          ...(railway.usage[0] === Usage.Special ? { weight: 2 } : {}),
+        }
       },
     };
 
