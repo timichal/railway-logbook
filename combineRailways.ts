@@ -25,10 +25,20 @@ const usageDict = {
   [Usage.Special]: "Provoz při zvláštních příležitostech",
 };
 
+const getRailwayData = async (countryCode: string) => {
+  const file = await import(`./data/railways/${countryCode}.ts`);
+  return file.railwayData as RailwayData[];
+}
+
 fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
-  const railwayData: RailwayData[] = (await import(`./data/railways/${countryCode}.ts`)).railwayData;
   const parsedData: EntryData = JSON.parse(data.toString());
-  const prunedFeatures = parsedData.features;
+  let prunedFeatures = parsedData.features;
+
+  const splitCode = countryCode.split("-");
+  const railwayData = [
+    await getRailwayData(countryCode),
+    ...(splitCode.length > 1 ? await Promise.all(splitCode.map(code => getRailwayData(code))) : [])
+  ].flat();
 
   const trackPartCount = new Map();
   let mergedFeatures: (Feature | ProcessedFeature)[] = prunedFeatures;
