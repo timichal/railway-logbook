@@ -1,42 +1,19 @@
 import fs from "fs";
+import { EntryData, Feature } from "./types";
 
 if (process.argv.length !== 3) {
-  console.error('Usage: npm run build country_code');
+  console.error('Usage: npm run prune country_code');
   process.exit(1);
 }
 
 const countryCode = process.argv[2];
 
-if (!fs.existsSync(`${countryCode}.geojson`)) {
-  console.error(`Missing file: ${countryCode}.geojson. Generate the geojson first.`);
+if (!fs.existsSync(`data/${countryCode}-rail.geojson`)) {
+  console.error(`Missing file: ${countryCode}-rail.geojson. Generate the geojson first.`);
   process.exit(1);
 }
 
-type Coord = [x: number, y: number];
-
-type Geometry = {
-  type: "Point"
-  coordinates: Coord
-} | {
-  type: "LineString"
-  coordinates: Coord[]
-}
-
-type Feature = {
-  type: "Feature"
-  geometry: Geometry
-  properties: {
-    "@id": number
-    railway: string
-    subway: string
-  }
-}
-
-type EntryData = {
-  features: Feature[]
-}
-
-fs.readFile(`${countryCode}.geojson`, function (err, data) {
+fs.readFile(`data/${countryCode}-rail.geojson`, function (err, data) {
   const parsedData: EntryData = JSON.parse(data.toString());
 
   const prunedFeatures = parsedData.features
@@ -68,13 +45,7 @@ fs.readFile(`${countryCode}.geojson`, function (err, data) {
       ),
     })) as Feature[];
 
-  const ids = prunedFeatures.map((feat) => feat.properties["@id"]);
-  if (ids.length !== new Set(ids).size) {
-    console.error('There are duplicate IDs in the pruned list! Cannot continue.');
-    process.exit(1);
-  }
-
-  fs.writeFileSync(`${countryCode}-pruned.geojson`, JSON.stringify({
+  fs.writeFileSync(`data/${countryCode}-pruned.geojson`, JSON.stringify({
     "type": "FeatureCollection",
     "features": prunedFeatures,
   }), 'utf8');

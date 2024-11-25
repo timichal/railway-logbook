@@ -4,11 +4,13 @@
   "description": "Data fetching and processing for an interactive railway map",
   "main": "processData.ts",
   "scripts": {
-    "download": "sh ./pbf-scripts/download.sh",
-    "filter": "sh ./pbf-scripts/filterRailFeatures.sh",    
-    "merge": "sh ./pbf-scripts/merge.sh",
-    "convert": "sh ./pbf-scripts/convertToGeoJson.sh",
-    "build": "tsx processData.ts"    
+    "download": "sh ./osmium-scripts/download.sh",
+    "filter": "sh ./osmium-scripts/filterRailFeatures.sh",
+    "merge": "sh ./osmium-scripts/merge.sh",
+    "convert": "sh ./osmium-scripts/convertToGeoJson.sh",
+    "process": "sh ./osmium-scripts/processPbf.sh",
+    "prune": "tsx pruneData.ts",
+    "combine": "tsx combineRailways.ts"
   },
   "repository": {
     "type": "git",

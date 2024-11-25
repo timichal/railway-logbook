@@ -1,16 +1,16 @@
 import fs from "fs";
-import railwayData, { Usage } from "./railwayData";
+import railwayData, { Usage } from "./data/railwayData";
 import mergeCoordinateLists from "./mergeCoordinateLists";
 
 if (process.argv.length !== 3) {
-  console.error('Usage: npm run build country_code');
+  console.error('Usage: npm run combine country_code');
   process.exit(1);
 }
 
 const countryCode = process.argv[2];
 
-if (!fs.existsSync(`data/${countryCode}-rail.geojson`)) {
-  console.error(`Missing file: ${countryCode}-rail.geojson. Generate the geojson first.`);
+if (!fs.existsSync(`data/${countryCode}-pruned.geojson`)) {
+  console.error(`Missing file: ${countryCode}-pruned.geojson. Generate the geojson first.`);
   process.exit(1);
 }
 
@@ -64,15 +64,9 @@ const usageDict = {
 };
 
 
-fs.readFile(`data/${countryCode}-rail.geojson`, function (err, data) {
+fs.readFile(`data/${countryCode}-pruned.geojson`, function (err, data) {
   const parsedData: EntryData = JSON.parse(data.toString());
   const prunedFeatures = parsedData.features;
-
-  const ids = prunedFeatures.map((feat) => feat.properties["@id"]);
-  if (ids.length !== new Set(ids).size) {
-    console.error('There are duplicate IDs in the pruned list! Cannot continue.');
-    process.exit(1);
-  }
 
   const trackPartCount = new Map();
   let mergedFeatures: (Feature | ProcessedFeature)[] = prunedFeatures;
@@ -113,7 +107,7 @@ fs.readFile(`data/${countryCode}-rail.geojson`, function (err, data) {
     ]
   });
 
-  fs.writeFileSync(`data/${countryCode}-filtered.geojson`, JSON.stringify({
+  fs.writeFileSync(`data/${countryCode}-combined.geojson`, JSON.stringify({
     "type": "FeatureCollection",
     "features": mergedFeatures,
   }), 'utf8');
