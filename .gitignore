@@ -1,3 +1,4 @@
 *.pbf
 *.geojson
 node_modules/
+data/

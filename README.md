@@ -2,7 +2,7 @@ K filtraci a exportu dat je potřeba [Osmium Tool](https://osmcode.org/osmium-to
 
 Zdrojová data z OpenStreetMap: https://download.geofabrik.de/europe.html
 
-Dump českých dat ke: 2024-11-21T21:20:39Z
+Poslední stažení dumpů: 25. 11. 2024
 
 Zatím procesování dat z Česka. Používá se [defaultní OpenRailwayMap filtr](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md#load-osm-data-into-the-database) pro všechna vlaková data, až následně se osekává geojson - OSM formát se špatně filtruje vzhledem k relacím dat.
 
