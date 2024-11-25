@@ -18,5 +18,9 @@ Proces:
 - vždycky export jedné země pro tratě v rámci jedné země
 - pro mezinárodní tratě merge daných zemí
 
+Mapy tratí + řády:
+- ČR: https://www.cd.cz/jizdni-rad/tratove-jizdni-rady
+- ÖBB: https://www.oebb.at/en/fahrplan/fahrplanbilder
+
 
 Aktuálně se pak výsledný geojson vkládá sem, kde se vykreslí na mapě (po loginu edit link): https://umap.openstreetmap.fr/en/map/railroad-map_1140579#9/49.9290/13.9595
