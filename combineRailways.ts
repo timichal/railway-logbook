@@ -1,6 +1,7 @@
 import fs from "fs";
-import railwayData, { Usage } from "./data/railwayData";
 import mergeCoordinateLists from "./mergeCoordinateLists";
+import { Usage } from "./enums";
+import { Coord, EntryData, Feature, ProcessedFeature, RailwayData } from "./types";
 
 if (process.argv.length !== 3) {
   console.error('Usage: npm run combine country_code');
@@ -14,45 +15,6 @@ if (!fs.existsSync(`data/${countryCode}-pruned.geojson`)) {
   process.exit(1);
 }
 
-type Coord = [x: number, y: number];
-
-type Geometry = {
-  type: "Point"
-  coordinates: Coord
-} | {
-  type: "LineString"
-  coordinates: Coord[]
-}
-
-type Feature = {
-  type: "Feature"
-  geometry: Geometry
-  properties: {
-    "@id": number
-    railway: string
-    subway: string
-  }
-}
-
-type ProcessedFeature = {
-  type: "Feature"
-  geometry: Geometry
-  properties: {
-    "@id": number | string
-    name: string
-    description: string
-    track_id: string
-    railway: string
-    _umap_options: {
-      color: string
-    };
-  }
-}
-
-type EntryData = {
-  features: Feature[]
-}
-
 const usageDict = {
   [Usage.Regular]: "Pravidelný provoz",
   [Usage.OnceDaily]: "Provoz jednou denně",
@@ -63,23 +25,28 @@ const usageDict = {
   [Usage.Special]: "Provoz při zvláštních příležitostech",
 };
 
-
-fs.readFile(`data/${countryCode}-pruned.geojson`, function (err, data) {
+fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
+  const railwayData: RailwayData[] = (await import(`./data/railways/${countryCode}.ts`)).railwayData;
+  console.log(railwayData)
   const parsedData: EntryData = JSON.parse(data.toString());
   const prunedFeatures = parsedData.features;
 
   const trackPartCount = new Map();
   let mergedFeatures: (Feature | ProcessedFeature)[] = prunedFeatures;
   console.log(`Total railways: ${railwayData.length}`);
-  
+
   railwayData.forEach((railway, index) => {
     console.log(`Processing: ${index + 1}/${railwayData.length}: ${railway.local_number} ${railway.from} - ${railway.to}`)
     const wayIds = railway.ways.split(";").map(Number);
     const coordinatesToMerge = mergedFeatures
-      .filter((f) => typeof f.properties["@id"] === "number" && railway.ways.split(";").map(Number).includes(f.properties["@id"]))
+      .filter((f) => (
+        f.geometry.type === "LineString"
+        && typeof f.properties["@id"] === "number"
+        && railway.ways.split(";").map(Number).includes(f.properties["@id"]))
+      )
       .map((f) => f.geometry.coordinates as Coord[]);
 
-    const trackKey = `cz${railway.local_number}`
+    const trackKey = `${countryCode}${railway.local_number}`
     trackPartCount.set(trackKey, (trackPartCount.get(trackKey) || 0) + 1);
 
     const mergedRailway: ProcessedFeature = {
@@ -92,7 +59,7 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, function (err, data) {
         name: `Trať ${railway.local_number}: ${railway.from} – ${railway.to}`,
         description: `${railway.usage.map((entry) => usageDict[entry]).join(", ")}, ${railway.operator}${railway.custom?.last_ride ? `\n\nNaposledy projeto: ${railway.custom.last_ride}` : ''}${railway.custom?.note ? `\n\n*${railway.custom.note}*` : ''}`,
         '@id': railway.ways,
-        track_id: `cz${railway.local_number}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
+        track_id: `${trackKey}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
         railway: 'rail',
         _umap_options: {
           color: railway.custom?.last_ride ? "DarkGreen" : "Crimson",

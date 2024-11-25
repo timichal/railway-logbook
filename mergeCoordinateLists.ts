@@ -1,6 +1,6 @@
 // shamelessly outsourced to chatgpt
 
-type Coord = [x: number, y: number];
+import { Coord } from "./types";
 
 export default function mergeLinearChain(sublists: Coord[][]) {
   // Step 1: Create a map of coordinate frequencies

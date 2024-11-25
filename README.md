@@ -15,6 +15,8 @@ Proces:
 - `npm run combine cz` spojí tratě a uloží do `cz-combined.geojson`
 
 - JOSM si s moc velkými daty neporadí
+- vždycky export jedné země pro tratě v rámci jedné země
+- pro mezinárodní tratě merge daných zemí
 
 
 Aktuálně se pak výsledný geojson vkládá sem, kde se vykreslí na mapě (po loginu edit link): https://umap.openstreetmap.fr/en/map/railroad-map_1140579#9/49.9290/13.9595

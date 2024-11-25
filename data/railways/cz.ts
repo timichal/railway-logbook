@@ -1,19 +1,12 @@
-export enum Usage {
-  Regular, // Pravidelný provoz
-  OnceDaily, // Provoz jednou denně
-  Seasonal, // Sezónní provoz
-  OnceWeekly, // Provoz jednou týdně
-  Weekdays, // Provoz o pracovních dnech
-  Weekends, // Provoz o víkendech
-  Special, // Provoz při zvláštních příležitostech
-}
-
 /*
 sporné: 
   - 193 Netolice-Týn: jen zvláštní vlaky
 */
 
-export const railwayData = [
+import { Usage } from "../../enums";
+import { RailwayData } from "../../types";
+
+export const railwayData: RailwayData[] = [
   {
     from: "Aš",
     to: "Hranice v Čechách",
