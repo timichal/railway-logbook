@@ -9,7 +9,7 @@ Zatím procesování dat z Česka. Používá se [defaultní OpenRailwayMap filt
 Proces:
 - `npm run download cz` stáhne aktuální kompletní data za Česko v osm.pbf formátu
 - `npm run filter cz` uplatní na data filtr z OpenRailwayMap a uloží do `cz-rail.osm.pbf`
-- `npm run merge` dočasný skript na merge cz/at/li dat
+- `npm run merge cz at li` mergne data z Česka, Rakouska a Lichtenštenjska
 - `npm run convert cz` převede data do geojsonu `cz-rail.geojson`
 - `npm run prune cz` aplikuje další filtry a uloží do `cz-pruned.geojson`
 - `npm run combine cz` spojí tratě a uloží do `cz-combined.geojson`
