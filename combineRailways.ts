@@ -27,7 +27,6 @@ const usageDict = {
 
 fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
   const railwayData: RailwayData[] = (await import(`./data/railways/${countryCode}.ts`)).railwayData;
-  console.log(railwayData)
   const parsedData: EntryData = JSON.parse(data.toString());
   const prunedFeatures = parsedData.features;
 
