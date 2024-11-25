@@ -2,13 +2,15 @@
 
 if [ $# -ne 1 ]
   then
-    echo "Usage: filterAndConvertPbf.sh country_code"
+    echo "Usage: downloadAndConvertPbf.sh country_code"
     exit 1
 fi
 
 code="${1}"
 case ${code} in
   "cz") filename="czech-republic-latest.osm.pbf"
+  ;;
+  "at") filename="austria-latest.osm.pbf"
   ;;
   *) echo "Unknown country code. Aborting"
   exit 1

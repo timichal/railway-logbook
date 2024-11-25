@@ -7,8 +7,10 @@ if (process.argv.length !== 3) {
   process.exit(1);
 }
 
-if (!fs.existsSync(`${process.argv[2]}.geojson`)) {
-  console.error(`Missing file: ${process.argv[2]}.geojson. Generate the geojson first.`);
+const countryCode = process.argv[2];
+
+if (!fs.existsSync(`${countryCode}.geojson`)) {
+  console.error(`Missing file: ${countryCode}.geojson. Generate the geojson first.`);
   process.exit(1);
 }
 
@@ -62,37 +64,9 @@ const usageDict = {
 };
 
 
-fs.readFile(`${process.argv[2]}.geojson`, function (err, data) {
+fs.readFile(`${countryCode}.geojson`, function (err, data) {
   const parsedData: EntryData = JSON.parse(data.toString());
-
-  const prunedFeatures = parsedData.features
-    .filter((feat) => {
-      if (feat.geometry.type === "Point") {
-        if (!["station", "halt"].includes(feat.properties.railway) || feat.properties.subway) return false;
-        return true;
-      }
-      if (feat.geometry.type === "LineString") {
-        if (feat.properties.railway === "rail") return true;
-        if (feat.properties.railway === "narrow_gauge") return true;
-        return false;
-      }
-      return false;
-    })
-    .map((feat, index) => ({
-      ...feat,
-      properties: Object.fromEntries(Object.entries(feat.properties)
-        .filter(([key, val]) => {
-          if (key === "@id") return true;
-          if (feat.geometry.type === "Point") {
-            if (["name", "railway"].includes(key)) return true;
-          }
-          if (feat.geometry.type === "LineString") {
-            if (["name", "railway", "usage"].includes(key)) return true;
-          }
-          return false;
-        })
-      ),
-    })) as Feature[];
+  const prunedFeatures = parsedData.features;
 
   const ids = prunedFeatures.map((feat) => feat.properties["@id"]);
   if (ids.length !== new Set(ids).size) {
@@ -103,6 +77,7 @@ fs.readFile(`${process.argv[2]}.geojson`, function (err, data) {
   const trackPartCount = new Map();
   let mergedFeatures: (Feature | ProcessedFeature)[] = prunedFeatures;
   console.log(`Total railways: ${railwayData.length}`);
+  
   railwayData.forEach((railway, index) => {
     console.log(`Processing: ${index + 1}/${railwayData.length}: ${railway.local_number} ${railway.from} - ${railway.to}`)
     const wayIds = railway.ways.split(";").map(Number);
@@ -138,7 +113,7 @@ fs.readFile(`${process.argv[2]}.geojson`, function (err, data) {
     ]
   });
 
-  fs.writeFileSync('cz-filtered.geojson', JSON.stringify({
+  fs.writeFileSync(`${countryCode}-filtered.geojson`, JSON.stringify({
     "type": "FeatureCollection",
     "features": mergedFeatures,
   }), 'utf8');
@@ -150,7 +125,7 @@ fs.readFile(`${process.argv[2]}.geojson`, function (err, data) {
     return true;
   });
 
-  fs.writeFileSync('cz-merged-only.geojson', JSON.stringify({
+  fs.writeFileSync(`${countryCode}-merged-only.geojson`, JSON.stringify({
     "type": "FeatureCollection",
     "features": mergedOnly,
   }), 'utf8');

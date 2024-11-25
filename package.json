@@ -4,6 +4,9 @@
   "description": "Data fetching and processing for an interactive railway map",
   "main": "processData.ts",
   "scripts": {
+    "download": "sh ./downloadAndConvertPbf.sh",
+    "filter": "tsx pruneData.ts",
+    "merge": "tsx merge.ts",
     "build": "tsx processData.ts"
   },
   "repository": {
@@ -17,6 +20,7 @@
   },
   "homepage": "https://github.com/timichal/osm-trains#readme",
   "dependencies": {
+    "@mapbox/geojson-merge": "^1.1.1",
     "@types/node": "^22.9.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
