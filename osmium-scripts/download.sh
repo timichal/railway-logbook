@@ -1,22 +1,27 @@
 #!/bin/sh
 
-if [ $# -ne 1 ]
-  then
-    echo "Usage: download.sh country_code"
+if [ $# -lt 1 ]
+then
+    echo "Usage: download.sh country_code [country_code ...]"
     exit 1
 fi
 
-code="${1}"
-case ${code} in
-  "cz") filename="czech-republic-latest.osm.pbf"
-  ;;
-  "at") filename="austria-latest.osm.pbf"
-  ;;
-  "li") filename="liechtenstein-latest.osm.pbf"
-  ;;
-  *) echo "Unknown country code. Aborting"
-  exit 1
-  ;;
-esac
+for code in "$@"
+do
+    case ${code} in
+        "cz") filename="czech-republic-latest.osm.pbf"
+        ;;
+        "at") filename="austria-latest.osm.pbf"
+        ;;
+        "li") filename="liechtenstein-latest.osm.pbf"
+        ;;
+        *) echo "Unknown country code: ${code}. Skipping."
+        continue
+        ;;
+    esac
 
-curl https://download.geofabrik.de/europe/${filename} -o data/${code}.osm.pbf
+    echo "Downloading ${filename} for country code ${code}..."
+    curl -o "data/${code}.osm.pbf" "https://download.geofabrik.de/europe/${filename}" || {
+        echo "Failed to download ${filename} for ${code}. Continuing."
+    }
+done
