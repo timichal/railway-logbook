@@ -21,4 +21,5 @@ export enum Operator {
   VL = "Vltavotýnská lokálka",
   KŽC = "KŽC Doprava",
   AŽD = "AŽD Praha",
+  LE = "Leo Express",
 }
