@@ -1,4 +1,4 @@
-import { Usage } from "./enums";
+import { Operator, Usage } from "./enums";
 
 export type Coord = [x: number, y: number];
 
@@ -45,7 +45,7 @@ export type RailwayData = {
   to: string
   local_number: string | number
   usage: Usage[]
-  operator: string
+  primary_operator: Operator
   ways: string
   custom?: {
     last_ride?: string
