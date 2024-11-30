@@ -41,16 +41,17 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
   ].flat();
 
   const trackPartCount = new Map();
-  let mergedFeatures: (Feature | ProcessedFeature)[] = prunedFeatures;
+  const pointFeatures = prunedFeatures.filter((f) => f.geometry.type === "Point");
+  let lineFeatures: (Feature | ProcessedFeature)[] = prunedFeatures.filter((f) => f.geometry.type === "LineString");
+
   console.log(`Total railways: ${railwayData.length}`);
 
   railwayData.forEach((railway, index) => {
     console.log(`Processing: ${index + 1}/${railwayData.length}: ${railway.local_number} ${railway.from} - ${railway.to}`)
     const wayIds = railway.ways.split(";").map(Number);
-    const coordinatesToMerge = mergedFeatures
+    const coordinatesToMerge = lineFeatures
       .filter((f) => (
-        f.geometry.type === "LineString"
-        && typeof f.properties["@id"] === "number"
+        typeof f.properties["@id"] === "number"
         && railway.ways.split(";").map(Number).includes(f.properties["@id"]))
       )
       .map((f) => f.geometry.coordinates as Coord[]);
@@ -77,11 +78,13 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
       },
     };
 
-    mergedFeatures = [
-      ...mergedFeatures.filter((f) => (typeof f.properties["@id"] === "number" && !wayIds.includes(f.properties["@id"])) || typeof f.properties["@id"] === "string"),
+    lineFeatures = [
+      ...lineFeatures.filter((f) => (typeof f.properties["@id"] === "number" && !wayIds.includes(f.properties["@id"])) || typeof f.properties["@id"] === "string"),
       mergedRailway
     ]
   });
+
+  const mergedFeatures = [...pointFeatures, ...lineFeatures];
 
   fs.writeFileSync(`data/${countryCode}-combined.geojson`, JSON.stringify({
     "type": "FeatureCollection",
