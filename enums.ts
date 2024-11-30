@@ -15,7 +15,7 @@ export enum Operator {
   RC = "Railway Capital",
   DLB = "Die Länderbahn",
   RJ = "RegioJet",
-  AR = "Arriva",
+  ARR = "Arriva",
   MPD = "Mladějovská průmyslová dráha",
   MBM = "MBM Rail",
   VL = "Vltavotýnská lokálka",
