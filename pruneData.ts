@@ -1,19 +1,25 @@
 import fs from "fs";
 import { EntryData, Feature } from "./types";
 
-if (process.argv.length !== 3) {
-  console.error('Usage: npm run prune country_code');
+if (process.argv.length < 3) {
+  console.error('Usage: npm run prune country_code1 [country_code ...]');
   process.exit(1);
 }
 
-const countryCode = process.argv[2];
+const countryCodes = process.argv.slice(2);
 
-if (!fs.existsSync(`data/${countryCode}-rail.geojson`)) {
-  console.error(`Missing file: ${countryCode}-rail.geojson. Generate the geojson first.`);
-  process.exit(1);
-}
+console.log(`Processing ${countryCodes.length} files...`);
 
-fs.readFile(`data/${countryCode}-rail.geojson`, function (err, data) {
+countryCodes.forEach((countryCode, index) => {
+  const inputFilePath = `data/${countryCode}-rail.geojson`;
+  const outputFilePath = `data/${countryCode}-pruned.geojson`;
+
+  if (!fs.existsSync(inputFilePath)) {
+    console.error(`Missing file: ${inputFilePath}. Generate the geojson first. Exitting.`);
+    process.exit(1);
+  }
+
+  const data = fs.readFileSync(inputFilePath, 'utf8');
   const parsedData: EntryData = JSON.parse(data.toString());
 
   const prunedFeatures = parsedData.features
@@ -45,8 +51,10 @@ fs.readFile(`data/${countryCode}-rail.geojson`, function (err, data) {
       ),
     })) as Feature[];
 
-  fs.writeFileSync(`data/${countryCode}-pruned.geojson`, JSON.stringify({
+  fs.writeFileSync(outputFilePath, JSON.stringify({
     "type": "FeatureCollection",
     "features": prunedFeatures,
   }), 'utf8');
-}); 
+
+  console.log(`(${index + 1}/${countryCodes.length}) Pruned data written to ${outputFilePath}.`);
+})

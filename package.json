@@ -4,12 +4,7 @@
   "description": "Data fetching and processing for an interactive railway map",
   "main": "processData.ts",
   "scripts": {
-    "download": "sh ./osmium-scripts/download.sh",
-    "filter": "sh ./osmium-scripts/filterRailFeatures.sh",
-    "merge": "sh ./osmium-scripts/merge.sh",
-    "convert": "sh ./osmium-scripts/convertToGeoJson.sh",
-    "process": "sh ./osmium-scripts/processPbf.sh",
-    "prune": "tsx pruneData.ts",
+    "prepare": "sh ./osmium-scripts/prepare.sh",
     "combine": "tsx combineRailways.ts"
   },
   "repository": {
