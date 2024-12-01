@@ -7,12 +7,17 @@ Poslední stažení dumpů: 1. 12. 2024
 Zatím procesování dat z Česka. Používá se [defaultní OpenRailwayMap filtr](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md#load-osm-data-into-the-database) pro všechna vlaková data, až následně se osekává geojson - OSM formát se špatně filtruje vzhledem k relacím dat.
 
 Proces:
-- `npm run download cz` stáhne aktuální kompletní data za Česko v osm.pbf formátu
-- `npm run filter cz` uplatní na data filtr z OpenRailwayMap a uloží do `cz-rail.osm.pbf`
-- `npm run merge cz at li` mergne data z Česka, Rakouska a Lichtenštenjska
-- `npm run convert cz` převede data do geojsonu `cz-rail.geojson`
-- `npm run prune cz` aplikuje další filtry a uloží do `cz-pruned.geojson`
+- `npm run prepare` stáhne a připraví data
 - `npm run combine cz` spojí tratě a uloží do `cz-combined.geojson`
+
+Skripty v `osmium-scripts` volané při `npm run prepare`:
+- `prepare.sh` volá přímo npm. Zatím natvrdo vepsané parametry
+- `download.sh` stáhne aktuální kompletní data pro dané země v osm.pbf formátu, výstup např. `cz.osm.pbf`
+- `filterRailFeatures.sh` uplatní na data filtr z OpenRailwayMap, výstup např. `cz-rail.osm.pbf`
+- `merge.sh` mergne data z různých zemí kvůli mezinárodním tratím, výstup např. `at-cz-rail.osm.pbf`
+- `convertToGeojson.sh` převede data do geojsonu, výstup např. `cz-rail.geojson`
+- `pruneData.ts` aplikuje custom filtry a uloží do `cz-pruned.geojson`
+
 
 - JOSM si s moc velkými daty neporadí
 - vždycky export jedné země pro tratě v rámci jedné země

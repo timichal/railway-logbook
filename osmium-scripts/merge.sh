@@ -8,9 +8,10 @@ output_file+="-rail.osm.pbf"
 
 command="osmium merge -O -o $output_file"
 
+echo "Merging codes $(IFS=" "; echo "${sorted_countries[*]}") into $output_file..."
+
 for country in "${sorted_countries[@]}"; do
     command="$command data/$country-rail.osm.pbf"
 done
 
 eval "$command"
-echo "Merged $(IFS=" "; echo "${sorted_countries[*]}") into $output_file"
