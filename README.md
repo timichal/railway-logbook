@@ -8,6 +8,7 @@ Zatím procesování dat z Česka. Používá se [defaultní OpenRailwayMap filt
 
 Proces:
 - `npm run prepare` stáhne a připraví data
+- `npm run check cz` zkontroluje záznamy o tratích a zakomentuje neplatné
 - `npm run combine cz` spojí tratě a uloží do `cz-combined.geojson`
 
 Skripty v `osmium-scripts` volané při `npm run prepare`:

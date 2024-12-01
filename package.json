@@ -5,7 +5,8 @@
   "main": "processData.ts",
   "scripts": {
     "prepare": "sh ./osmium-scripts/prepare.sh",
-    "combine": "tsx combineRailways.ts"
+    "combine": "tsx combineRailways.ts",
+    "check": "tsx checkRailways.ts"
   },
   "repository": {
     "type": "git",
