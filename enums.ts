@@ -22,4 +22,8 @@ export enum Operator {
   KŽC = "KŽC Doprava",
   AŽD = "AŽD Praha",
   LE = "Leo Express",
+  // Rakousko
+  ÖBB = "ÖBB",
+  NÖB = "Niederösterreich Bahnen",
+  WSV = "Waldviertler Schmalspurbahnverein",
 }
