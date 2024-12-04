@@ -27,4 +27,6 @@ export enum Operator {
   NÖB = "Niederösterreich Bahnen",
   WSV = "Waldviertler Schmalspurbahnverein",
   ZVT = "Zillertaler Verkehrsbetriebe",
+  ASB = "Achenseebahn Infrastruktur- und Betriebs-GmbH",
+  SBL = "Salzburg Linien",
 }
