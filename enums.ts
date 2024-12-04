@@ -26,4 +26,5 @@ export enum Operator {
   ÖBB = "ÖBB",
   NÖB = "Niederösterreich Bahnen",
   WSV = "Waldviertler Schmalspurbahnverein",
+  ZVT = "Zillertaler Verkehrsbetriebe",
 }

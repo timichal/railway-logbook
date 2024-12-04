@@ -2,7 +2,7 @@ K filtraci a exportu dat je potřeba [Osmium Tool](https://osmcode.org/osmium-to
 
 Zdrojová data z OpenStreetMap: https://download.geofabrik.de/europe.html
 
-Poslední stažení dumpů: 2. 12. 2024
+Poslední stažení dumpů: 4. 12. 2024
 
 Zatím procesování dat z Česka. Používá se [defaultní OpenRailwayMap filtr](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md#load-osm-data-into-the-database) pro všechna vlaková data, až následně se osekává geojson - OSM formát se špatně filtruje vzhledem k relacím dat.
 
@@ -25,8 +25,12 @@ Skripty v `osmium-scripts` volané při `npm run prepare`:
 - pro mezinárodní tratě merge daných zemí
 
 Mapy tratí + řády:
-- ČR: https://www.cd.cz/jizdni-rad/tratove-jizdni-rady
+- ČD: https://www.cd.cz/jizdni-rad/tratove-jizdni-rady
 - ÖBB: https://www.oebb.at/en/fahrplan/fahrplanbilder
+
+Stav:
+- ČR: hotovo
+- Rakousko: rozpracováno
 
 
 Aktuálně se pak výsledný geojson vkládá sem, kde se vykreslí na mapě (po loginu edit link): https://umap.openstreetmap.fr/en/map/railroad-map_1140579#9/49.9290/13.9595
