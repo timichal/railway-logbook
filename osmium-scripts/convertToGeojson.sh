@@ -8,8 +8,8 @@ fi
 
 for code in "$@"
 do
-    input_file="data/${code}-rail.osm.pbf"
-    output_file="data/${code}-rail.geojson"
+    input_file="data/${code}-rail.tmp.osm.pbf"
+    output_file="data/${code}-rail.tmp.geojson"
 
     if [ ! -f "${input_file}" ]; then
         echo "Input file ${input_file} not found for country code ${code}. Skipping."

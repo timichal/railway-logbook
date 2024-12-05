@@ -11,7 +11,7 @@ const countryCodes = process.argv.slice(2);
 console.log(`Processing ${countryCodes.length} files...`);
 
 countryCodes.forEach((countryCode, index) => {
-  const inputFilePath = `data/${countryCode}-rail.geojson`;
+  const inputFilePath = `data/${countryCode}-rail.tmp.geojson`;
   const outputFilePath = `data/${countryCode}-pruned.geojson`;
 
   if (!fs.existsSync(inputFilePath)) {
