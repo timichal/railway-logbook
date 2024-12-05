@@ -21,7 +21,7 @@ do
     esac
 
     echo "Downloading ${filename} for country code ${code}..."
-    curl -o "data/${code}.osm.pbf" "https://download.geofabrik.de/europe/${filename}" || {
+    curl -o "data/${code}.tmp.osm.pbf" "https://download.geofabrik.de/europe/${filename}" || {
         echo "Failed to download ${filename} for ${code}. Continuing."
     }
 done

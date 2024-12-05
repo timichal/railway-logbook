@@ -8,8 +8,8 @@ fi
 
 for code in "$@"
 do
-    input_file="data/${code}.osm.pbf"
-    output_file="data/${code}-rail.osm.pbf"
+    input_file="data/${code}.tmp.osm.pbf"
+    output_file="data/${code}-rail.tmp.osm.pbf"
 
     if [ ! -f "${input_file}" ]; then
         echo "Input file ${input_file} not found for country code ${code}. Skipping."
