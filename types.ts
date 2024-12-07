@@ -43,7 +43,7 @@ export type ProcessedFeature = {
 export type RailwayData = {
   from: string
   to: string
-  local_number: string | number
+  local_number: string
   usage: Usage[]
   primary_operator: Operator
   ways: string
