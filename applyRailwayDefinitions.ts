@@ -26,7 +26,7 @@ const usageDict = {
 };
 
 const getRailwayData = async (countryCode: string) => {
-  const file = await import(`./data/railways/${countryCode}.ts`);
+  const file = await import(`./definitions/${countryCode}.ts`);
   return file.railwayData as RailwayData[];
 }
 
@@ -89,17 +89,5 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
   fs.writeFileSync(`data/${countryCode}-combined.geojson`, JSON.stringify({
     "type": "FeatureCollection",
     "features": mergedFeatures,
-  }), 'utf8');
-
-  const mergedOnly = mergedFeatures.filter((feat) => {
-    if (feat.geometry.type === "LineString" && !("track_id" in feat.properties)) {
-      return false;
-    }
-    return true;
-  });
-
-  fs.writeFileSync(`data/${countryCode}-merged-only.geojson`, JSON.stringify({
-    "type": "FeatureCollection",
-    "features": mergedOnly,
   }), 'utf8');
 }); 

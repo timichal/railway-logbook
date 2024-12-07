@@ -14,9 +14,9 @@ if (!fs.existsSync(`data/${countryCode}-pruned.geojson`)) {
   process.exit(1);
 }
 
-const path = `./data/railways/${countryCode}.ts`;
+const path = `./definitions/${countryCode}.ts`;
 
-const getRailwayData = async (countryCode: string) => {
+const getRailwayData = async () => {
   const file = await import(path);
   return file.railwayData as RailwayData[];
 }
@@ -25,7 +25,7 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
   const parsedData: EntryData = JSON.parse(data.toString());
   let prunedFeatures = parsedData.features;
 
-  const railwayData = await getRailwayData(countryCode);
+  const railwayData = await getRailwayData();
 
   let lineFeatures: (Feature | ProcessedFeature)[] = prunedFeatures.filter((f) => f.geometry.type === "LineString");
 

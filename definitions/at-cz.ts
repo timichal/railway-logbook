@@ -1,5 +1,5 @@
-import { Usage } from "../../enums";
-import { RailwayData } from "../../types";
+import { Usage } from "../enums";
+import { RailwayData } from "../types";
 
 export const railwayData: RailwayData[] = [
   {

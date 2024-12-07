@@ -40,6 +40,10 @@ export type ProcessedFeature = {
   }
 }
 
+export type ProcessedData = {
+  features: ProcessedFeature[]
+}
+
 export type RailwayData = {
   from: string
   to: string
