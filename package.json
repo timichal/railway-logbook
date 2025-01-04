@@ -20,7 +20,7 @@
   },
   "homepage": "https://github.com/timichal/osm-trains#readme",
   "dependencies": {
-    "@types/node": "^22.9.1",
+    "@types/node": "^22.10.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

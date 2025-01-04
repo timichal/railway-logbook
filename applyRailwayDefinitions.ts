@@ -34,10 +34,10 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
   const parsedData: EntryData = JSON.parse(data.toString());
   let prunedFeatures = parsedData.features;
 
-  const splitCode = countryCode.split("-");
+  // const splitCode = countryCode.split("-");
   const railwayData = [
     await getRailwayData(countryCode),
-    ...(splitCode.length > 1 ? await Promise.all(splitCode.map(code => getRailwayData(code))) : [])
+    // ...(splitCode.length > 1 ? await Promise.all(splitCode.map(code => getRailwayData(code))) : [])
   ].flat();
 
   const trackPartCount = new Map();

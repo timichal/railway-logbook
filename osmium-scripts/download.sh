@@ -9,19 +9,19 @@ fi
 for code in "$@"
 do
     case ${code} in
-        "cz") filename="czech-republic-latest.osm.pbf"
+        "cz") filename="czech-republic"
         ;;
-        "at") filename="austria-latest.osm.pbf"
+        "at") filename="austria"
         ;;
-        "li") filename="liechtenstein-latest.osm.pbf"
+        "li") filename="liechtenstein"
         ;;
         *) echo "Unknown country code: ${code}. Skipping."
         continue
         ;;
     esac
 
-    echo "Downloading ${filename} for country code ${code}..."
-    curl -o "data/${code}.tmp.osm.pbf" "https://download.geofabrik.de/europe/${filename}" || {
-        echo "Failed to download ${filename} for ${code}. Continuing."
+    echo "Downloading ${filename}-250101.osm.pbf for country code ${code}..."
+    curl -o "data/${code}.tmp.osm.pbf" "https://download.geofabrik.de/europe/${filename}-250101.osm.pbf" || {
+        echo "Failed to download ${filename}-250101.osm.pbf for ${code}. Continuing."
     }
 done
