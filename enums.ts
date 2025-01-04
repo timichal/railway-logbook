@@ -29,4 +29,5 @@ export enum Operator {
   ZVT = "Zillertaler Verkehrsbetriebe",
   ASB = "Achenseebahn Infrastruktur- und Betriebs-GmbH",
   SBL = "Salzburg Linien",
+  NBK = "Nostalgiebahnen in Kärnten",
 }
