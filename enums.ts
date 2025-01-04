@@ -30,4 +30,6 @@ export enum Operator {
   ASB = "Achenseebahn Infrastruktur- und Betriebs-GmbH",
   SBL = "Salzburg Linien",
   NBK = "Nostalgiebahnen in Kärnten",
+  IVB = "Innsbrucker Verkehrsbetriebe und Stubaitalbahn",
+  SHF = "Stern Hafferl Verkehr",
 }

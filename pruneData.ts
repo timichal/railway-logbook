@@ -29,8 +29,7 @@ countryCodes.forEach((countryCode, index) => {
         return true;
       }
       if (feat.geometry.type === "LineString") {
-        if (feat.properties.railway === "rail") return true;
-        if (feat.properties.railway === "narrow_gauge") return true;
+        if (["rail", "narrow_gauge", "light_rail"].includes(feat.properties.railway)) return true;
         return false;
       }
       return false;
