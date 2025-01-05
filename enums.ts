@@ -32,4 +32,6 @@ export enum Operator {
   NBK = "Nostalgiebahnen in Kärnten",
   IVB = "Innsbrucker Verkehrsbetriebe und Stubaitalbahn",
   SHF = "Stern Hafferl Verkehr",
+  STB = "Steiermärkische Landesbahnen",
+  TRB = "Taurachbahn",
 }
