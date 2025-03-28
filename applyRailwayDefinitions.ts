@@ -4,7 +4,7 @@ import { Usage } from "./enums";
 import { Coord, EntryData, Feature, ProcessedFeature, RailwayData } from "./types";
 
 if (process.argv.length !== 3) {
-  console.error('Usage: npm run combine country_code');
+  console.error('Usage: npm run apply country_code');
   process.exit(1);
 }
 

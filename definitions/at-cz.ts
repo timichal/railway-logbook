@@ -20,6 +20,9 @@ export const railwayData: RailwayData[] = [
     usage: [Usage.Regular],
     primary_operator: "ČD/ÖBB",
     ways: "183040348;30965757;183040321;183040322;30965760;123857286;183053821;282060478;1072992745;583953785;25441867;1267859909",
+    custom: {
+      last_ride: "2025-02-14",
+    }
   },
 ];
 
