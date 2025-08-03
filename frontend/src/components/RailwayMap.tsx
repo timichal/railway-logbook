@@ -33,24 +33,52 @@ export default function RailwayMap({ className = '' }: RailwayMapProps) {
 
     mapInstanceRef.current = map;
 
+    // Create layer groups for different zoom levels
+    const stationLayerGroup = L.layerGroup();
+    const railwayLayerGroup = L.layerGroup();
+    
+    // Add layer groups to map
+    railwayLayerGroup.addTo(map);
+    
     // Load and display GeoJSON data
     fetch('/merged-only.geojson')
       .then(response => response.json())
       .then(data => {
         L.geoJSON(data, {
+          pointToLayer: (feature, latlng) => {
+            // Create small circle markers for stations instead of default markers
+            return L.circleMarker(latlng, {
+              radius: 4,
+              fillColor: '#ff7800',
+              color: '#000',
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.8
+            });
+          },
           style: (feature) => {
-            // Use the color from _umap_options if available
-            const color = feature?.properties?._umap_options?.color || '#0066ff';
-            const weight = feature?.properties?._umap_options?.weight || 3;
-            
-            return {
-              color: color,
-              weight: weight,
-              opacity: 0.8,
-              fillOpacity: 0.6
-            };
+            // Only style LineString features (railway lines)
+            if (feature?.geometry?.type === 'LineString') {
+              const color = feature?.properties?._umap_options?.color || '#0066ff';
+              const weight = feature?.properties?._umap_options?.weight || 3;
+              
+              return {
+                color: color,
+                weight: weight,
+                opacity: 0.8,
+                fillOpacity: 0.6
+              };
+            }
+            return {};
           },
           onEachFeature: (feature, layer) => {
+            // Add to appropriate layer group based on geometry type
+            if (feature.geometry.type === 'Point') {
+              stationLayerGroup.addLayer(layer);
+            } else {
+              railwayLayerGroup.addLayer(layer);
+            }
+            
             // Add popup with railway information
             if (feature.properties) {
               const props = feature.properties;
@@ -77,7 +105,29 @@ export default function RailwayMap({ className = '' }: RailwayMapProps) {
               layer.bindPopup(popupContent);
             }
           }
-        }).addTo(map);
+        });
+        
+        // Add zoom-based visibility for stations
+        const handleZoomEnd = () => {
+          const currentZoom = map.getZoom();
+          if (currentZoom >= 10) {
+            // Show stations at zoom level 10 and above
+            if (!map.hasLayer(stationLayerGroup)) {
+              map.addLayer(stationLayerGroup);
+            }
+          } else {
+            // Hide stations at lower zoom levels
+            if (map.hasLayer(stationLayerGroup)) {
+              map.removeLayer(stationLayerGroup);
+            }
+          }
+        };
+        
+        // Set initial station visibility
+        handleZoomEnd();
+        
+        // Listen for zoom changes
+        map.on('zoomend', handleZoomEnd);
       })
       .catch(error => {
         console.error('Error loading railway data:', error);
@@ -96,7 +146,7 @@ export default function RailwayMap({ className = '' }: RailwayMapProps) {
     <div 
       ref={mapRef} 
       className={`w-full h-full ${className}`}
-      style={{ minHeight: '500px' }}
+      style={{ height: '100%', minHeight: '400px' }}
     />
   );
 }
