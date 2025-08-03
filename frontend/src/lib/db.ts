@@ -1,4 +1,4 @@
-import { Client, Pool } from 'pg';
+import { Pool } from 'pg';
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -11,7 +11,7 @@ const dbConfig = {
 // Create a connection pool for better performance
 const pool = new Pool(dbConfig);
 
-export async function query(text: string, params?: any[]) {
+export async function query(text: string, params?: unknown[]) {
   const client = await pool.connect();
   try {
     const result = await client.query(text, params);

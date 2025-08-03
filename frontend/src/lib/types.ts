@@ -8,24 +8,12 @@ export interface Station {
 export interface RailwayRoute {
   track_id: string;
   name: string;
+  description: string;
   usage_types: string[];
   primary_operator: string;
-  geometry: {
-    type: 'LineString';
-    coordinates: number[][];
-  };
-}
-
-export interface UserRailwayData {
-  user_id: number;
-  track_id: string;
-  last_ride?: string;
-  note?: string;
-}
-
-// Combined types for frontend use
-export interface RailwayRouteWithUserData extends RailwayRoute {
-  user_data?: UserRailwayData;
+  last_ride: Date;
+  note: string;
+  geometry: string;
 }
 
 export interface GeoJSONFeature {
@@ -36,12 +24,15 @@ export interface GeoJSONFeature {
   };
   properties: {
     '@id'?: number;
-    name?: string;
-    description?: string;
+    name: string;
     track_id?: string;
-    railway?: string;
-    color?: string;
-    weight?: number;
+    primary_operator?: string;
+    usage?: number[];
+    description?: string;
+    custom?: {
+      last_ride?: Date;
+      note?: string;
+    }
   };
 }
 
