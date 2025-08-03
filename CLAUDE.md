@@ -91,7 +91,7 @@ Railway definitions in `definitions/` files follow this schema:
 - Railway definitions use OSM way IDs to reconstruct complete routes from segmented data
 
 ### Output Format
-Final GeoJSON includes custom properties for UMap visualization:
+Final GeoJSON includes custom properties for visualization:
 - `track_id` - Unique identifier for railway routes
-- `_umap_options` - Styling information (colors, weights)
+- Dynamic styling based on user data and usage types
 - Localized descriptions in Czech/German based on operator

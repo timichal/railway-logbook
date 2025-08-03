@@ -33,10 +33,6 @@ export type ProcessedFeature = {
     description: string
     track_id: string
     railway: string
-    _umap_options: {
-      color: string
-      weight?: number
-    }
   }
 }
 
@@ -51,6 +47,7 @@ export type RailwayData = {
   usage: Usage[]
   primary_operator: Operator
   ways: string
+  description?: string
   custom?: {
     last_ride?: string
     note?: string

@@ -14,8 +14,6 @@ export interface RailwayRoute {
     type: 'LineString';
     coordinates: number[][];
   };
-  color: string;
-  weight: number;
 }
 
 export interface UserRailwayData {
@@ -42,10 +40,8 @@ export interface GeoJSONFeature {
     description?: string;
     track_id?: string;
     railway?: string;
-    _umap_options?: {
-      color?: string;
-      weight?: number;
-    };
+    color?: string;
+    weight?: number;
   };
 }
 

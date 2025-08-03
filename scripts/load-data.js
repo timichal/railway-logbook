@@ -69,81 +69,49 @@ async function loadGeoJSONData() {
           .join(',');
         const lineString = `LINESTRING(${coordsStr})`;
 
-        // Extract usage types from description
-        const usageTypes = [];
-        if (properties.description) {
-          if (properties.description.includes('Pravidelný provoz')) usageTypes.push('Regular');
-          if (properties.description.includes('Sezónní provoz')) usageTypes.push('Seasonal');
-          if (properties.description.includes('Provoz při zvláštních příležitostech')) usageTypes.push('Special');
-          if (properties.description.includes('Provoz jednou denně')) usageTypes.push('OnceDaily');
-          if (properties.description.includes('Provoz jednou týdně')) usageTypes.push('OnceWeekly');
-          if (properties.description.includes('Provoz o pracovních dnech')) usageTypes.push('Weekdays');
-          if (properties.description.includes('Provoz o víkendech')) usageTypes.push('Weekends');
-        }
-
-        // Extract operator from description
-        let primaryOperator = 'Unknown';
-        if (properties.description) {
-          const operatorMatch = properties.description.match(/^[^,]+,\s*([^,\n]+)/);
-          if (operatorMatch) {
-            primaryOperator = operatorMatch[1].trim();
-          }
-        }
+        // Get usage types and operator directly from properties
+        const usageTypes = properties.usage || [];
+        const primaryOperator = properties.primary_operator || 'Unknown';
 
         // Insert railway route
         await client.query(`
           INSERT INTO railway_routes (
-            track_id, name, usage_types, primary_operator,
-            geometry, color, weight
+            track_id, name, description, usage_types, primary_operator, geometry
           )
-          VALUES ($1, $2, $3, $4, ST_GeomFromText($5, 4326), $6, $7)
+          VALUES ($1, $2, $3, $4, $5, ST_GeomFromText($6, 4326))
           ON CONFLICT (track_id) DO UPDATE SET
             name = EXCLUDED.name,
+            description = EXCLUDED.description,
             usage_types = EXCLUDED.usage_types,
             primary_operator = EXCLUDED.primary_operator,
             updated_at = CURRENT_TIMESTAMP
         `, [
           properties.track_id,
           properties.name || 'Unknown Route',
+          properties.description || null,
           usageTypes,
           primaryOperator,
-          lineString,
-          properties._umap_options?.color || '#0066ff',
-          properties._umap_options?.weight || 3
+          lineString
         ]);
 
         routesCount++;
 
-        // Extract and insert user data (last_ride, notes)
-        if (properties.description) {
-          let lastRide = null;
-          let note = null;
+        // Extract and insert user data (last_ride, notes) from properties
+        const lastRide = properties.last_ride || null;
+        const note = properties.note || null;
 
-          // Extract last ride date
-          const lastRideMatch = properties.description.match(/Naposledy projeto: (\d{4}-\d{2}-\d{2})/);
-          if (lastRideMatch) {
-            lastRide = lastRideMatch[1];
-          }
+        // Insert user data if we have any
+        if (lastRide || note) {
+          await client.query(`
+            INSERT INTO user_railway_data (user_id, track_id, last_ride, note)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, track_id) DO UPDATE SET
+              last_ride = EXCLUDED.last_ride,
+              note = EXCLUDED.note,
+              updated_at = CURRENT_TIMESTAMP
+          `, [1, properties.track_id, lastRide, note]);
 
-          // Extract notes (text in asterisks)
-          const noteMatches = properties.description.match(/\*([^*]+)\*/g);
-          if (noteMatches) {
-            note = noteMatches.map(match => match.replace(/\*/g, '')).join(' | ');
-          }
-
-          // Insert user data if we have any
-          if (lastRide || note) {
-            await client.query(`
-              INSERT INTO user_railway_data (user_id, track_id, last_ride, note)
-              VALUES ($1, $2, $3, $4)
-              ON CONFLICT (user_id, track_id) DO UPDATE SET
-                last_ride = EXCLUDED.last_ride,
-                note = EXCLUDED.note,
-                updated_at = CURRENT_TIMESTAMP
-            `, [1, properties.track_id, lastRide, note]);
-
-            userDataCount++;
-          }
+          userDataCount++;
         }
       }
     }

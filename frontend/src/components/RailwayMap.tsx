@@ -59,13 +59,8 @@ export default function RailwayMap({ className = '', geoJsonData }: RailwayMapPr
           style: (feature) => {
             // Only style LineString features (railway lines)
             if (feature?.geometry?.type === 'LineString') {
-              const color = feature?.properties?._umap_options?.color || '#0066ff';
-              let weight = feature?.properties?._umap_options?.weight || 3;
-              
-              // Make special usage lines thinner
-              if (feature?.properties?.description?.includes('Provoz při zvláštních příležitostech')) {
-                weight = Math.max(1, weight - 1); // Reduce weight by 1, minimum 1
-              }
+              const color = feature?.properties?.color || '#0066ff';
+              const weight = feature?.properties?.weight || 3;
               
               return {
                 color: color,

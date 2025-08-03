@@ -27,11 +27,10 @@ CREATE TABLE stations (
 CREATE TABLE railway_routes (
     track_id VARCHAR(255) PRIMARY KEY, -- Unique track identifier
     name VARCHAR(255) NOT NULL,
+    description TEXT, -- Route description
     usage_types TEXT[], -- Array of usage types
     primary_operator VARCHAR(255),
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
-    color VARCHAR(50), -- color from _umap_options (can be hex or named color)
-    weight INTEGER DEFAULT 3, -- line weight from _umap_options
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

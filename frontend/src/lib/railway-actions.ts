@@ -1,7 +1,7 @@
 'use server';
 
 import { query } from './db';
-import { Station, RailwayRoute, UserRailwayData, RailwayRouteWithUserData, GeoJSONFeatureCollection } from './types';
+import { Station, RailwayRoute, UserRailwayData, RailwayRouteWithUserData, GeoJSONFeatureCollection, GeoJSONFeature } from './types';
 
 export async function getAllStations(): Promise<Station[]> {
   const result = await query(`
@@ -24,11 +24,10 @@ export async function getAllRailwayRoutes(userId: number = 1): Promise<RailwayRo
     SELECT 
       rr.track_id,
       rr.name,
+      rr.description,
       rr.usage_types,
       rr.primary_operator,
       ST_AsGeoJSON(rr.geometry) as geometry,
-      rr.color,
-      rr.weight,
       urd.last_ride,
       urd.note
     FROM railway_routes rr
@@ -42,9 +41,7 @@ export async function getAllRailwayRoutes(userId: number = 1): Promise<RailwayRo
       name: row.name,
       usage_types: row.usage_types || [],
       primary_operator: row.primary_operator,
-      geometry: JSON.parse(row.geometry),
-      color: row.color,
-      weight: row.weight
+      geometry: JSON.parse(row.geometry)
     };
 
     if (row.last_ride || row.note) {
@@ -74,36 +71,37 @@ export async function getRailwayDataAsGeoJSON(userId: number = 1): Promise<GeoJS
     SELECT 
       rr.track_id,
       rr.name,
+      rr.description,
       rr.usage_types,
       rr.primary_operator,
       ST_AsGeoJSON(rr.geometry) as geometry,
-      rr.color,
-      rr.weight,
       urd.last_ride,
       urd.note
     FROM railway_routes rr
     LEFT JOIN user_railway_data urd ON rr.track_id = urd.track_id AND urd.user_id = $1
   `, [userId]);
 
-  const features = [];
+  const features: GeoJSONFeature[] = [];
 
   // Helper function to generate description from usage types and operator
-  const generateDescription = (usageTypes: string[], operator: string, lastRide?: string, note?: string) => {
-    const usageMap: Record<string, string> = {
-      'Regular': 'Pravidelný provoz',
-      'OnceDaily': 'Provoz jednou denně',
-      'Seasonal': 'Sezónní provoz',
-      'OnceWeekly': 'Provoz jednou týdně',
-      'Weekdays': 'Provoz o pracovních dnech',
-      'Weekends': 'Provoz o víkendech',
-      'Special': 'Provoz při zvláštních příležitostech'
+  const generateDescription = (usageTypes: (string | number)[], operator: string, lastRide?: Date, note?: string) => {
+    // Usage enum mapping from numbers to Czech strings
+    const usageMap: Record<string | number, string> = {
+      // Number keys for enum values
+      0: 'Pravidelný provoz', // Regular
+      1: 'Provoz jednou denně', // OnceDaily
+      2: 'Sezónní provoz', // Seasonal
+      3: 'Provoz jednou týdně', // OnceWeekly
+      4: 'Provoz o pracovních dnech', // Weekdays
+      5: 'Provoz o víkendech', // Weekends
+      6: 'Provoz při zvláštních příležitostech' // Special
     };
 
     const usage = usageTypes.map(type => usageMap[type] || type).join(', ') || 'Pravidelný provoz';
     let description = `${usage}, ${operator}`;
     
     if (lastRide) {
-      description += `\n\nNaposledy projeto: ${lastRide}`;
+      description += `\n\nNaposledy projeto: ${new Intl.DateTimeFormat("cs-CZ").format(lastRide)}`;
     }
     if (note) {
       description += `\n\n*${note}*`;
@@ -115,9 +113,9 @@ export async function getRailwayDataAsGeoJSON(userId: number = 1): Promise<GeoJS
   // Add station features
   for (const station of stationsResult.rows) {
     features.push({
-      type: 'Feature',
+      type: 'Feature' as const,
       geometry: {
-        type: 'Point',
+        type: 'Point' as const,
         coordinates: [station.lon, station.lat]
       },
       properties: {
@@ -130,25 +128,38 @@ export async function getRailwayDataAsGeoJSON(userId: number = 1): Promise<GeoJS
 
   // Add railway route features
   for (const route of routesResult.rows) {
-    const description = generateDescription(
+    // Combine database description with generated content
+    let description = route.description || '';
+    const generatedDescription = generateDescription(
       route.usage_types || [],
       route.primary_operator || 'Unknown',
       route.last_ride,
       route.note
     );
+    
+    if (description && generatedDescription) {
+      description = `${description}\n\n${generatedDescription}`;
+    } else {
+      description = description || generatedDescription;
+    }
+
+    // Dynamic color logic: dark green if last_ride exists, crimson otherwise
+    const color = route.last_ride ? 'DarkGreen' : 'Crimson';
+    
+    // Dynamic weight logic: thinner (2) for Special usage, normal (3) otherwise
+    const isSpecial = route.usage_types && (route.usage_types.includes('Special') || route.usage_types.includes(6));
+    const weight = isSpecial ? 2 : 3;
 
     features.push({
-      type: 'Feature',
+      type: 'Feature' as const,
       geometry: JSON.parse(route.geometry),
       properties: {
         name: route.name,
         description: description,
         track_id: route.track_id,
         railway: 'rail',
-        _umap_options: {
-          color: route.color,
-          weight: route.weight
-        }
+        color: color,
+        weight: weight
       }
     });
   }

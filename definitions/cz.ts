@@ -1149,9 +1149,7 @@ export const railwayData: RailwayData[] = [
     usage: [Usage.Special],
     primary_operator: Operator.VL,
     ways: "1077628403;58111796;58111797;293525640;37264168;329744009;329744028;329744027;329744025;329744024;329744012;329744022;329744033;329744010;329744032;329744021;329744020;329744031;37264169;329744030",
-    custom: {
-      note: "Občasný provoz: [[https://www.vltavotynskalokalka.cz/]]"
-    }
+    description: "Občasný provoz: [[https://www.vltavotynskalokalka.cz/]]"
   },
   {
     from: "Brno",
@@ -2554,9 +2552,7 @@ export const railwayData: RailwayData[] = [
     usage: [Usage.Special],
     primary_operator: Operator.RC,
     ways: "294948750;294948752;294948753;294948754;294948755;294948749;550728441;544632368;372521896;550728059;544632369;372521886;550728060;550728061",
-    custom: {
-      note: "Místní dráha"
-    }
+    description: "Místní dráha"
   },
   {
     from: "Velké Březno",
@@ -2565,9 +2561,7 @@ export const railwayData: RailwayData[] = [
     usage: [Usage.Seasonal, Usage.Weekends],
     primary_operator: Operator.MBM,
     ways: "731938432;564054758;731938433;564054757;564056221;23166399;564056224;564056223;383345886;1080789358;1280866246;564056222;383345887;383345884;1208880300;383345883;1208880299",
-    custom: {
-      note: "Muzeální dráha"
-    }
+    description: "Muzeální dráha"
   },
 ];
 

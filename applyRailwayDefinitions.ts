@@ -67,14 +67,14 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
       },
       properties: {
         name: `Trať ${railway.local_number}: ${railway.from} – ${railway.to}`,
-        description: `${railway.usage.map((entry) => usageDict[entry]).join(", ")}, ${railway.primary_operator}${railway.custom?.last_ride ? `\n\nNaposledy projeto: ${railway.custom.last_ride}` : ''}${railway.custom?.note ? `\n\n*${railway.custom.note}*` : ''}`,
+        description: railway.description,
         '@id': railway.ways,
         track_id: `${trackKey}${String.fromCharCode(96 + trackPartCount.get(trackKey))}`,
         railway: 'rail',
-        _umap_options: {
-          color: railway.custom?.last_ride ? "DarkGreen" : "Crimson",
-          ...(railway.usage[0] === Usage.Special ? { weight: 2 } : {}),
-        }
+        usage: railway.usage,
+        primary_operator: railway.primary_operator,
+        ...(railway.custom?.last_ride && { last_ride: railway.custom.last_ride }),
+        ...(railway.custom?.note && { note: railway.custom.note }),
       },
     };
 
