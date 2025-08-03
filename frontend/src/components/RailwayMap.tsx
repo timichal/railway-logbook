@@ -60,7 +60,12 @@ export default function RailwayMap({ className = '' }: RailwayMapProps) {
             // Only style LineString features (railway lines)
             if (feature?.geometry?.type === 'LineString') {
               const color = feature?.properties?._umap_options?.color || '#0066ff';
-              const weight = feature?.properties?._umap_options?.weight || 3;
+              let weight = feature?.properties?._umap_options?.weight || 3;
+              
+              // Make special usage lines thinner
+              if (feature?.properties?.description?.includes('Provoz při zvláštních příležitostech')) {
+                weight = Math.max(1, weight - 1); // Reduce weight by 1, minimum 1
+              }
               
               return {
                 color: color,
@@ -89,15 +94,29 @@ export default function RailwayMap({ className = '' }: RailwayMapProps) {
               }
               
               if (props.description) {
-                popupContent += `<p class="mb-2">${props.description}</p>`;
-              }
-              
-              if (props.track_id) {
-                popupContent += `<p class="text-sm text-gray-600"><strong>Track ID:</strong> ${props.track_id}</p>`;
-              }
-              
-              if (props.railway) {
-                popupContent += `<p class="text-sm text-gray-600"><strong>Railway Type:</strong> ${props.railway}</p>`;
+                // Format the description to handle last_ride and notes better
+                let formattedDescription = props.description;
+                
+                // Extract and format "Naposledy projeto" (last ride) information
+                const lastRideMatch = formattedDescription.match(/Naposledy projeto: (\d{4}-\d{2}-\d{2})/);
+                if (lastRideMatch) {
+                  const lastRideDate = new Date(lastRideMatch[1]).toLocaleDateString('cs-CZ');
+                  formattedDescription = formattedDescription.replace(
+                    /Naposledy projeto: \d{4}-\d{2}-\d{2}/,
+                    `<strong>Naposledy projeto:</strong> ${lastRideDate}`
+                  );
+                }
+                
+                // Format notes in asterisks to be more prominent
+                formattedDescription = formattedDescription.replace(
+                  /\*([^*]+)\*/g,
+                  '<em class="text-blue-600">$1</em>'
+                );
+                
+                // Convert line breaks to HTML
+                formattedDescription = formattedDescription.replace(/\n/g, '<br>');
+                
+                popupContent += `<div class="mb-2">${formattedDescription}</div>`;
               }
               
               popupContent += `</div>`;
