@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { GeoJSONFeatureCollection } from '@/lib/types';
 
 // Fix for default markers in Leaflet with Next.js
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -14,9 +15,10 @@ L.Icon.Default.mergeOptions({
 
 interface RailwayMapProps {
   className?: string;
+  geoJsonData: GeoJSONFeatureCollection;
 }
 
-export default function RailwayMap({ className = '' }: RailwayMapProps) {
+export default function RailwayMap({ className = '', geoJsonData }: RailwayMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
 
@@ -40,11 +42,9 @@ export default function RailwayMap({ className = '' }: RailwayMapProps) {
     // Add layer groups to map
     railwayLayerGroup.addTo(map);
     
-    // Load and display GeoJSON data
-    fetch('/merged-only.geojson')
-      .then(response => response.json())
-      .then(data => {
-        L.geoJSON(data, {
+    // Display GeoJSON data
+    if (geoJsonData) {
+        L.geoJSON(geoJsonData, {
           pointToLayer: (feature, latlng) => {
             // Create small circle markers for stations instead of default markers
             return L.circleMarker(latlng, {
@@ -147,10 +147,7 @@ export default function RailwayMap({ className = '' }: RailwayMapProps) {
         
         // Listen for zoom changes
         map.on('zoomend', handleZoomEnd);
-      })
-      .catch(error => {
-        console.error('Error loading railway data:', error);
-      });
+    }
 
     // Cleanup function
     return () => {
@@ -159,7 +156,7 @@ export default function RailwayMap({ className = '' }: RailwayMapProps) {
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [geoJsonData]);
 
   return (
     <div 

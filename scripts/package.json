@@ -1,0 +1,12 @@
+{
+  "name": "osm-railways-scripts",
+  "version": "1.0.0",
+  "description": "Database loading scripts for OSM Railways",
+  "main": "load-data.js",
+  "scripts": {
+    "load-data": "node load-data.js"
+  },
+  "dependencies": {
+    "pg": "^8.12.0"
+  }
+}

@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.5-alpine
+    container_name: osm-railways-db
+    environment:
+      POSTGRES_DB: railways
+      POSTGRES_USER: railways_user
+      POSTGRES_PASSWORD: railways_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+  # Frontend service (to be added later)
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - postgres
+  #   environment:
+  #     DATABASE_URL: postgresql://railways_user:railways_pass@postgres:5432/railways
+
+volumes:
+  postgres_data:
