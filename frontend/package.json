@@ -26,5 +26,11 @@
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
     "@eslint/eslintrc": "^3"
+  },
+  "overrides": {
+    "react-leaflet": {
+      "react": "19.1.0",
+      "react-dom": "19.1.0"
+    }
   }
 }

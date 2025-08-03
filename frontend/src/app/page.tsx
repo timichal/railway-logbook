@@ -1,4 +1,4 @@
-import RailwayMap from '@/components/RailwayMap';
+import MapWrapper from '@/components/MapWrapper';
 
 export default function Home() {
   return (
@@ -15,7 +15,7 @@ export default function Home() {
       </header>
       
       <main className="flex-1 overflow-hidden">
-        <RailwayMap className="w-full h-full" />
+        <MapWrapper className="w-full h-full" />
       </main>
     </div>
   );
