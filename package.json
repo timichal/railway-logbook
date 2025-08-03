@@ -4,10 +4,11 @@
   "description": "Data fetching and processing for an interactive railway map",
   "main": "processData.ts",
   "scripts": {
-    "prepare": "sh ./osmium-scripts/prepare.sh",
+    "prepareData": "sh ./osmium-scripts/prepare.sh",
     "check": "tsx checkRailwayDefinitions.ts",
     "apply": "tsx applyRailwayDefinitions.ts",
-    "merge": "tsx mergeCountryFiles.ts"
+    "merge": "tsx mergeCountryFiles.ts",
+    "populateDb": "node load-data.js"
   },
   "repository": {
     "type": "git",
@@ -21,6 +22,7 @@
   "homepage": "https://github.com/timichal/osm-trains#readme",
   "dependencies": {
     "@types/node": "^22.10.5",
+    "pg": "^8.12.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

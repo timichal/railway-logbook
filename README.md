@@ -7,7 +7,7 @@ Stabilní dumpy z 1. 1. 2025
 Zatím procesování dat z Česka. Používá se [defaultní OpenRailwayMap filtr](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md#load-osm-data-into-the-database) pro všechna vlaková data, až následně se osekává geojson - OSM formát se špatně filtruje vzhledem k relacím dat.
 
 Proces:
-- `npm run prepare` stáhne a připraví data
+- `npm run prepareData` stáhne a připraví data
 - `npm run check cz` zkontroluje definice tratí a zakomentuje neplatné
 - `npm run apply cz` aplikuje definice tratí (spojí definované úseky) a uloží do `cz-combined.geojson`
 - `npm run merge` zkombinuje všechna data ze souborů `-combined.geojson` do `merged-only.geojson`
