@@ -1,9 +1,9 @@
 import fs from "fs";
 import mergeCoordinateLists from "./mergeCoordinateLists";
-import { Coord, EntryData, Feature, ProcessedFeature, RailwayData } from "./types";
+import { Coord, EntryData, Feature, ProcessedFeature, RailwayData } from "../types";
 
 if (process.argv.length !== 3) {
-  console.error('Usage: npm run combine country_code');
+  console.error('Usage: npm run check country_code');
   process.exit(1);
 }
 
@@ -14,7 +14,7 @@ if (!fs.existsSync(`data/${countryCode}-pruned.geojson`)) {
   process.exit(1);
 }
 
-const path = `./definitions/${countryCode}.ts`;
+const path = `../definitions/${countryCode}.ts`;
 
 const getRailwayData = async () => {
   const file = await import(path);

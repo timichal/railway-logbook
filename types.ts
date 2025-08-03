@@ -32,7 +32,8 @@ export type ProcessedFeature = {
     name: string
     description: string
     track_id: string
-    railway: string
+    usage: Usage[]
+    primary_operator: string
   }
 }
 

@@ -1,10 +1,17 @@
-#!/usr/bin/env node
-
-const fs = require('fs');
-const { Client } = require('pg');
+import fs from 'fs';
+import { Client } from 'pg';
+import { Usage } from '../enums';
 
 // Database connection configuration
-const dbConfig = {
+interface DbConfig {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+
+const dbConfig: DbConfig = {
   host: 'localhost',
   port: 5432,
   database: 'railways',
@@ -12,9 +19,37 @@ const dbConfig = {
   password: 'railways_pass'
 };
 
-async function loadGeoJSONData() {
+// GeoJSON types
+interface GeoJSONGeometry {
+  type: 'Point' | 'LineString';
+  coordinates: number[] | number[][];
+}
+
+interface GeoJSONProperties {
+  '@id'?: number;
+  name?: string;
+  track_id?: string;
+  description?: string;
+  usage?: Usage[];
+  primary_operator?: string;
+  last_ride?: string;
+  note?: string;
+}
+
+interface GeoJSONFeature {
+  type: 'Feature';
+  geometry: GeoJSONGeometry;
+  properties: GeoJSONProperties;
+}
+
+interface GeoJSONFeatureCollection {
+  type: 'FeatureCollection';
+  features: GeoJSONFeature[];
+}
+
+async function loadGeoJSONData(): Promise<void> {
   const client = new Client(dbConfig);
-  
+
   try {
     await client.connect();
     console.log('Connected to database');
@@ -22,7 +57,7 @@ async function loadGeoJSONData() {
     // Read the GeoJSON file
     const geoJsonPath = './data/merged-only.geojson';
     console.log('Reading GeoJSON file...');
-    const geoJsonData = JSON.parse(fs.readFileSync(geoJsonPath, 'utf8'));
+    const geoJsonData: GeoJSONFeatureCollection = JSON.parse(fs.readFileSync(geoJsonPath, 'utf8'));
 
     // Clear existing data
     console.log('Clearing existing data...');
@@ -35,25 +70,25 @@ async function loadGeoJSONData() {
     let userDataCount = 0;
 
     console.log('Processing features...');
-    
+
     for (const feature of geoJsonData.features) {
       const { geometry, properties } = feature;
 
       if (geometry.type === 'Point') {
         // Handle stations
-        const [lon, lat] = geometry.coordinates;
-        
+        const [lon, lat] = geometry.coordinates as [number, number];
+
         await client.query(`
-          INSERT INTO stations (id, name, coordinates)
-          VALUES ($1, $2, ST_MakePoint($3, $4))
-          ON CONFLICT (id) DO NOTHING
-        `, [
+            INSERT INTO stations (id, name, coordinates)
+            VALUES ($1, $2, ST_MakePoint($3, $4))
+            ON CONFLICT (id) DO NOTHING
+          `, [
           properties['@id'],
           properties.name || 'Unknown Station',
           lon,
           lat
         ]);
-        
+
         stationsCount++;
 
       } else if (geometry.type === 'LineString') {
@@ -64,7 +99,8 @@ async function loadGeoJSONData() {
         }
 
         // Convert coordinates to PostGIS LineString format
-        const coordsStr = geometry.coordinates
+        const coords = geometry.coordinates as number[][];
+        const coordsStr = coords
           .map(coord => `${coord[0]} ${coord[1]}`)
           .join(',');
         const lineString = `LINESTRING(${coordsStr})`;
@@ -75,17 +111,17 @@ async function loadGeoJSONData() {
 
         // Insert railway route
         await client.query(`
-          INSERT INTO railway_routes (
-            track_id, name, description, usage_types, primary_operator, geometry
-          )
-          VALUES ($1, $2, $3, $4, $5, ST_GeomFromText($6, 4326))
-          ON CONFLICT (track_id) DO UPDATE SET
-            name = EXCLUDED.name,
-            description = EXCLUDED.description,
-            usage_types = EXCLUDED.usage_types,
-            primary_operator = EXCLUDED.primary_operator,
-            updated_at = CURRENT_TIMESTAMP
-        `, [
+            INSERT INTO railway_routes (
+              track_id, name, description, usage_types, primary_operator, geometry
+            )
+            VALUES ($1, $2, $3, $4, $5, ST_GeomFromText($6, 4326))
+            ON CONFLICT (track_id) DO UPDATE SET
+              name = EXCLUDED.name,
+              description = EXCLUDED.description,
+              usage_types = EXCLUDED.usage_types,
+              primary_operator = EXCLUDED.primary_operator,
+              updated_at = CURRENT_TIMESTAMP
+          `, [
           properties.track_id,
           properties.name || 'Unknown Route',
           properties.description || null,
@@ -103,13 +139,13 @@ async function loadGeoJSONData() {
         // Insert user data if we have any
         if (lastRide || note) {
           await client.query(`
-            INSERT INTO user_railway_data (user_id, track_id, last_ride, note)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (user_id, track_id) DO UPDATE SET
-              last_ride = EXCLUDED.last_ride,
-              note = EXCLUDED.note,
-              updated_at = CURRENT_TIMESTAMP
-          `, [1, properties.track_id, lastRide, note]);
+              INSERT INTO user_railway_data (user_id, track_id, last_ride, note)
+              VALUES ($1, $2, $3, $4)
+              ON CONFLICT (user_id, track_id) DO UPDATE SET
+                last_ride = EXCLUDED.last_ride,
+                note = EXCLUDED.note,
+                updated_at = CURRENT_TIMESTAMP
+            `, [1, properties.track_id, lastRide, note]);
 
           userDataCount++;
         }
@@ -130,8 +166,4 @@ async function loadGeoJSONData() {
 }
 
 // Run the script
-if (require.main === module) {
-  loadGeoJSONData().catch(console.error);
-}
-
-module.exports = { loadGeoJSONData };
+loadGeoJSONData().catch(console.error);

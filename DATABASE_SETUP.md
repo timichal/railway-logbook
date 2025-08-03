@@ -26,20 +26,17 @@ This will:
 ### 2. Load Data from GeoJSON
 
 ```bash
-# Install dependencies for the loading script
-cd scripts
-npm install
-
-# Load merged-only.geojson into the database
-npm run load-data
+# Load merged-only.geojson into the database (from root directory)
+npm run populateDb
 ```
 
-The loading script will:
-- Parse the GeoJSON file
-- Extract objective data (routes, stations, operators, usage types)
-- Extract user data (last_ride dates and notes from descriptions)
-- Store everything with proper separation in the database
+The loading script (`scripts/populateDb.ts`) will:
+- Parse the GeoJSON file from data/merged-only.geojson
+- Extract objective data (routes, stations, usage types, primary operators)
+- Extract user data (last_ride dates and notes from properties)
+- Store everything with proper data separation in the database
 - Use track_id as the primary key for railway routes
+- Handle usage types as enum arrays (stored as numbers in database)
 
 ### 3. Frontend Database Integration
 
@@ -64,24 +61,27 @@ Update the database connection settings if needed.
 
 1. **users** - User accounts
    - `id` (serial primary key)
-   - `username`, `email`
+   - `email` (unique, used as username)
+   - `password` (for future authentication)
 
 2. **stations** - Railway stations (Point features)
    - `id` (OSM @id, primary key)
-   - `name`, `railway_type`
-   - `coordinates` (PostGIS Point)
+   - `name`
+   - `coordinates` (PostGIS Point with SRID 4326)
 
 3. **railway_routes** - Railway lines (objective data)
    - `track_id` (unique identifier, primary key)
-   - `name`, `from_station`, `to_station`
-   - `usage_types[]`, `primary_operator`
-   - `geometry` (PostGIS LineString)
-   - `color`, `weight` (display properties)
+   - `name`
+   - `description` (optional custom description)
+   - `usage_types[]` (array of Usage enum numbers)
+   - `primary_operator`
+   - `geometry` (PostGIS LineString with SRID 4326)
 
 4. **user_railway_data** - User-specific annotations
    - `user_id` → `users.id`
    - `track_id` → `railway_routes.track_id`
-   - `last_ride`, `note`
+   - `last_ride` (date)
+   - `note` (text)
 
 ### Key Features
 
@@ -95,29 +95,35 @@ Update the database connection settings if needed.
 ### Querying Data
 
 ```typescript
-// Get all railway routes with user data for user ID 1
-const routes = await getAllRailwayRoutes(1);
+// Get all stations
+const stations = await getAllStations();
 
-// Get data formatted as GeoJSON for map display
+// Get data formatted as GeoJSON for map display (includes dynamic styling)
 const geoJson = await getRailwayDataAsGeoJSON(1);
 
 // Update user's railway data
 await updateUserRailwayData(1, "track_123", "2024-01-15", "Great scenic route!");
 ```
 
+The frontend automatically handles:
+- **Dynamic Styling**: Route colors (DarkGreen for visited, Crimson for unvisited)
+- **Usage Translation**: Enum numbers converted to Czech descriptions
+- **Weight Calculation**: Thinner lines (weight=2) for Special usage routes
+
 ### Adding New Users
 
 ```sql
-INSERT INTO users (username, email) VALUES ('newuser', 'user@example.com');
+INSERT INTO users (email) VALUES ('user@example.com');
 ```
 
 Then use the returned user ID for all user-specific operations.
 
 ## Development
 
-- **Database Changes**: Update `database/init/01-schema.sql` and rebuild containers
-- **Data Reloading**: Run `npm run load-data` in the scripts directory
-- **Frontend Changes**: Server actions automatically provide type-safe database access
+- **Database Changes**: Update `database/init/01-schema.sql` and rebuild containers with `docker-compose down && docker-compose up -d`
+- **Data Reloading**: Run `npm run populateDb` from the root directory
+- **Frontend Changes**: Server actions in `frontend/src/lib/railway-actions.ts` provide type-safe database access
+- **TypeScript**: All scripts are now TypeScript with proper type checking
 
 ## Production Considerations
 
