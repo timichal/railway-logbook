@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GeoJSONFeature, GeoJSONFeatureCollection } from '@/lib/types';
+import { updateUserRailwayData, getRailwayDataAsGeoJSON } from '@/lib/railway-actions';
 
 const usageMap: Record<number, string> = {
   0: 'Pravidelný provoz', // Regular
@@ -18,12 +19,21 @@ const usageMap: Record<number, string> = {
 interface RailwayMapProps {
   className?: string;
   geoJsonData: GeoJSONFeatureCollection;
+  onDataRefresh?: (newData: GeoJSONFeatureCollection) => void;
 }
 
-export default function RailwayMap({ className = '', geoJsonData }: RailwayMapProps) {
+export default function RailwayMap({ className = '', geoJsonData, onDataRefresh }: RailwayMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const stationLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const railwayLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const [editingFeature, setEditingFeature] = useState<GeoJSONFeature | null>(null);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [lastRide, setLastRide] = useState('');
+  const [note, setNote] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
+  // Initialize map once
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
@@ -40,13 +50,52 @@ export default function RailwayMap({ className = '', geoJsonData }: RailwayMapPr
     // Create layer groups for different zoom levels
     const stationLayerGroup = L.layerGroup();
     const railwayLayerGroup = L.layerGroup();
+    
+    stationLayerGroupRef.current = stationLayerGroup;
+    railwayLayerGroupRef.current = railwayLayerGroup;
 
     // Add layer groups to map
     railwayLayerGroup.addTo(map);
 
+    // Add zoom-based visibility handler for stations
+    const handleZoomEnd = () => {
+      const currentZoom = map.getZoom();
+      if (currentZoom >= 10) {
+        if (!map.hasLayer(stationLayerGroup)) {
+          map.addLayer(stationLayerGroup);
+        }
+      } else {
+        if (map.hasLayer(stationLayerGroup)) {
+          map.removeLayer(stationLayerGroup);
+        }
+      }
+    };
+
+    map.on('zoomend', handleZoomEnd);
+    handleZoomEnd(); // Set initial visibility
+
+    // Cleanup function
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        stationLayerGroupRef.current = null;
+        railwayLayerGroupRef.current = null;
+      }
+    };
+  }, []);
+
+  // Function to render GeoJSON data on existing map
+  const renderGeoJSONData = (data: GeoJSONFeatureCollection) => {
+    if (!mapInstanceRef.current || !stationLayerGroupRef.current || !railwayLayerGroupRef.current) return;
+
+    // Clear existing layers
+    stationLayerGroupRef.current.clearLayers();
+    railwayLayerGroupRef.current.clearLayers();
+
     // Display GeoJSON data
-    if (geoJsonData) {
-      L.geoJSON(geoJsonData, {
+    if (data) {
+      L.geoJSON(data, {
         pointToLayer: (feature, latlng) => {
           // Create small circle markers for stations instead of default markers
           return L.circleMarker(latlng, {
@@ -77,9 +126,21 @@ export default function RailwayMap({ className = '', geoJsonData }: RailwayMapPr
         onEachFeature: (feature, layer) => {
           // Add to appropriate layer group based on geometry type
           if (feature.geometry.type === 'Point') {
-            stationLayerGroup.addLayer(layer);
+            stationLayerGroupRef.current!.addLayer(layer);
           } else {
-            railwayLayerGroup.addLayer(layer);
+            railwayLayerGroupRef.current!.addLayer(layer);
+          }
+
+          // Add double-click handler for railway lines to show edit form
+          if (feature.geometry.type === 'LineString' && feature.properties) {
+            layer.on('dblclick', (e) => {
+              L.DomEvent.stopPropagation(e);
+              setEditingFeature(feature);
+              setLastRide(feature.properties?.custom?.last_ride ? 
+                new Date(feature.properties.custom.last_ride).toISOString().split('T')[0] : '');
+              setNote(feature.properties?.custom?.note || '');
+              setShowEditForm(true);
+            });
           }
 
           // Add popup with railway information
@@ -113,44 +174,130 @@ export default function RailwayMap({ className = '', geoJsonData }: RailwayMapPr
           }
         }
       });
-
-      // Add zoom-based visibility for stations
-      const handleZoomEnd = () => {
-        const currentZoom = map.getZoom();
-        if (currentZoom >= 10) {
-          // Show stations at zoom level 10 and above
-          if (!map.hasLayer(stationLayerGroup)) {
-            map.addLayer(stationLayerGroup);
-          }
-        } else {
-          // Hide stations at lower zoom levels
-          if (map.hasLayer(stationLayerGroup)) {
-            map.removeLayer(stationLayerGroup);
-          }
-        }
-      };
-
-      // Set initial station visibility
-      handleZoomEnd();
-
-      // Listen for zoom changes
-      map.on('zoomend', handleZoomEnd);
     }
+  };
 
-    // Cleanup function
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
+  // Effect to render data when geoJsonData changes
+  useEffect(() => {
+    renderGeoJSONData(geoJsonData);
   }, [geoJsonData]);
 
+  const handleSave = async (trackId: string, lastRideDate: string, noteText: string) => {
+    setIsLoading(true);
+    try {
+      await updateUserRailwayData(1, trackId, lastRideDate || null, noteText || null);
+      
+      // Refresh data and update map layers without changing view
+      const newData = await getRailwayDataAsGeoJSON(1);
+      renderGeoJSONData(newData);
+      
+      // Also update parent if needed
+      if (onDataRefresh) {
+        onDataRefresh(newData);
+      }
+      
+      setShowEditForm(false);
+      setEditingFeature(null);
+    } catch (error) {
+      console.error('Error updating railway data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingFeature?.properties?.track_id) {
+      await handleSave(editingFeature.properties.track_id, lastRide, note);
+    }
+  };
+
   return (
-    <div
-      ref={mapRef}
-      className={`w-full h-full ${className}`}
-      style={{ height: '100%', minHeight: '400px' }}
-    />
+    <div className="relative w-full h-full">
+      <div
+        ref={mapRef}
+        className={`w-full h-full ${className}`}
+        style={{ height: '100%', minHeight: '400px' }}
+      />
+      
+      {/* Edit Form Modal */}
+      {showEditForm && editingFeature && (
+        <div className="absolute inset-0 flex items-center justify-center z-[9999] text-black">
+          <div className="bg-white p-6 rounded-lg shadow-xl border max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold mb-4">
+              {editingFeature.properties?.name || 'Editace tratě'}
+            </h3>
+            
+            <form onSubmit={handleFormSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="lastRide" className="block text-sm font-medium mb-1">
+                  Naposledy projeto:
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    id="lastRide"
+                    value={lastRide}
+                    onChange={(e) => setLastRide(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {lastRide && (
+                    <button
+                      type="button"
+                      onClick={() => setLastRide('')}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                      title="Vymazat datum"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              <div>
+                <label htmlFor="note" className="block text-sm font-medium mb-1">
+                  Poznámka:
+                </label>
+                <textarea
+                  id="note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Volitelná poznámka..."
+                />
+              </div>
+              
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditForm(false);
+                    setEditingFeature(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 cursor-pointer"
+                >
+                  Zrušit
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className={`px-4 py-2 text-white rounded cursor-pointer flex items-center gap-2 ${
+                    isLoading 
+                      ? 'bg-blue-400 cursor-not-allowed' 
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {isLoading && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  )}
+                  {isLoading ? 'Ukládám...' : 'Uložit'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

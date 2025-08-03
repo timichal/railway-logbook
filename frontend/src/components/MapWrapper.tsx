@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useState } from 'react';
 import { GeoJSONFeatureCollection } from '@/lib/types';
 
 // Dynamically import RailwayMap with no SSR to avoid window reference errors
@@ -22,5 +23,17 @@ interface MapWrapperProps {
 }
 
 export default function MapWrapper({ className, geoJsonData }: MapWrapperProps) {
-  return <RailwayMap className={className} geoJsonData={geoJsonData} />;
+  const [currentData, setCurrentData] = useState(geoJsonData);
+
+  const handleDataRefresh = (newData: GeoJSONFeatureCollection) => {
+    setCurrentData(newData);
+  };
+
+  return (
+    <RailwayMap 
+      className={className} 
+      geoJsonData={currentData} 
+      onDataRefresh={handleDataRefresh}
+    />
+  );
 }

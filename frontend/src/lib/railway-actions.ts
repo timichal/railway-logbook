@@ -88,16 +88,16 @@ export async function getRailwayDataAsGeoJSON(userId: number = 1): Promise<GeoJS
 export async function updateUserRailwayData(
   userId: number,
   trackId: string,
-  lastRide?: string,
-  note?: string
+  lastRide?: string | null,
+  note?: string | null
 ): Promise<void> {
   await query(`
     INSERT INTO user_railway_data (user_id, track_id, last_ride, note)
     VALUES ($1, $2, $3, $4)
     ON CONFLICT (user_id, track_id) 
     DO UPDATE SET
-      last_ride = COALESCE(EXCLUDED.last_ride, user_railway_data.last_ride),
-      note = COALESCE(EXCLUDED.note, user_railway_data.note),
+      last_ride = EXCLUDED.last_ride,
+      note = EXCLUDED.note,
       updated_at = CURRENT_TIMESTAMP
-  `, [userId, trackId, lastRide, note]);
+  `, [userId, trackId, lastRide || null, note || null]);
 }
