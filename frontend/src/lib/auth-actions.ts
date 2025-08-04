@@ -12,10 +12,11 @@ const COOKIE_NAME = 'railway-auth';
 export interface User {
   id: number;
   email: string;
+  name?: string;
 }
 
 export async function createToken(user: User): Promise<string> {
-  return new SignJWT({ userId: user.id, email: user.email })
+  return new SignJWT({ userId: user.id, email: user.email, name: user.name })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('7d')
     .sign(JWT_SECRET);
@@ -27,6 +28,7 @@ export async function verifyToken(token: string): Promise<User | null> {
     return {
       id: payload.userId as number,
       email: payload.email as string,
+      name: payload.name as string,
     };
   } catch {
     return null;
@@ -54,7 +56,7 @@ export async function login(formData: FormData) {
 
   // Get user from database
   const result = await query(
-    'SELECT id, email, password FROM users WHERE email = $1',
+    'SELECT id, email, name, password FROM users WHERE email = $1',
     [email]
   );
 
@@ -72,7 +74,7 @@ export async function login(formData: FormData) {
   }
 
   // Create JWT token
-  const token = await createToken({ id: user.id, email: user.email });
+  const token = await createToken({ id: user.id, email: user.email, name: user.name });
   
   // Set cookie
   const cookieStore = await cookies();
@@ -87,6 +89,7 @@ export async function login(formData: FormData) {
 }
 
 export async function register(formData: FormData) {
+  const name = formData.get('name') as string;
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
   const confirmPassword = formData.get('confirmPassword') as string;
@@ -118,14 +121,14 @@ export async function register(formData: FormData) {
 
   // Insert user
   const result = await query(
-    'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email',
-    [email, hashedPassword]
+    'INSERT INTO users (email, name, password) VALUES ($1, $2, $3) RETURNING id, email, name',
+    [email, name || null, hashedPassword]
   );
 
   const user = result.rows[0];
 
   // Create JWT token
-  const token = await createToken({ id: user.id, email: user.email });
+  const token = await createToken({ id: user.id, email: user.email, name: user.name });
   
   // Set cookie
   const cookieStore = await cookies();

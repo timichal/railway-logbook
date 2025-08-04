@@ -7,12 +7,16 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255), -- Optional display name
     password VARCHAR(255), -- To be used later for authentication
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Insert default user for existing data
-INSERT INTO users (id, email) VALUES (1, 'admin@example.com');
+INSERT INTO users (id, email, name, password) VALUES (1, 'osm@zlatkovsky.cz', 'Michal', '$2b$12$71HlDo/fgRFXvin5VZ4t5uMRfsUkkREuusSG9z13BGs00vi2AUZIe');
+
+-- Fix the sequence to start from the next available ID
+SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
 
 -- Railway stations (Point features from GeoJSON)
 CREATE TABLE stations (
