@@ -1,6 +1,7 @@
 'use server';
 
 import { query } from './db';
+import { getUser } from './auth-actions';
 import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
 
 export async function getAllStations(): Promise<Station[]> {
@@ -19,7 +20,13 @@ export async function getAllStations(): Promise<Station[]> {
   }));
 }
 
-export async function getRailwayDataAsGeoJSON(userId: number = 1): Promise<GeoJSONFeatureCollection> {
+export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollection> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  
+  const userId = user.id;
   // Get stations
   const stationsResult = await query(`
     SELECT id, name,
@@ -86,11 +93,16 @@ export async function getRailwayDataAsGeoJSON(userId: number = 1): Promise<GeoJS
 }
 
 export async function updateUserRailwayData(
-  userId: number,
   trackId: string,
   lastRide?: string | null,
   note?: string | null
 ): Promise<void> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  
+  const userId = user.id;
   await query(`
     INSERT INTO user_railway_data (user_id, track_id, last_ride, note)
     VALUES ($1, $2, $3, $4)

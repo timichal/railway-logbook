@@ -12,7 +12,7 @@ export default async function Home() {
   }
 
   // Fetch railway data for the authenticated user
-  const geoJsonData = await getRailwayDataAsGeoJSON(user.id);
+  const geoJsonData = await getRailwayDataAsGeoJSON();
 
   async function handleLogout() {
     'use server';

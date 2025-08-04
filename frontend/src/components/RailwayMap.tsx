@@ -185,10 +185,10 @@ export default function RailwayMap({ className = '', geoJsonData, onDataRefresh 
   const handleSave = async (trackId: string, lastRideDate: string, noteText: string) => {
     setIsLoading(true);
     try {
-      await updateUserRailwayData(1, trackId, lastRideDate || null, noteText || null);
+      await updateUserRailwayData(trackId, lastRideDate || null, noteText || null);
       
       // Refresh data and update map layers without changing view
-      const newData = await getRailwayDataAsGeoJSON(1);
+      const newData = await getRailwayDataAsGeoJSON();
       renderGeoJSONData(newData);
       
       // Also update parent if needed
