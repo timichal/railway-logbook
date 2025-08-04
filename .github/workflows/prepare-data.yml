@@ -68,6 +68,7 @@ jobs:
           
           # Transfer necessary scripts and configs
           scp -i ~/.ssh/id_rsa package.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          scp -i ~/.ssh/id_rsa package-lock.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           scp -i ~/.ssh/id_rsa tsconfig.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           scp -i ~/.ssh/id_rsa docker-compose.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           scp -i ~/.ssh/id_rsa -r scripts/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
