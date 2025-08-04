@@ -103,6 +103,10 @@ jobs:
             # Install dependencies
             npm ci
             
+            # Create data directory and move the GeoJSON file to expected location
+            mkdir -p data
+            mv merged-only.geojson data/
+            
             # Ensure database is running
             docker-compose up -d postgres
             
