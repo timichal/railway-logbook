@@ -39,6 +39,7 @@ jobs:
         run: mkdir -p data
         
       - name: Prepare data pipeline
+        shell: bash
         run: |
           # Download and process OSM data
           npm run prepareData

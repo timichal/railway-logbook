@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 sorted_countries=($(echo "$@" | tr ' ' '\n' | sort))
 
