@@ -9,8 +9,15 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
+      SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      SSH_KEY_PATH: ${{ github.workspace }}/../private.key
       DOCKER_TAG: railmap
+      SERVER_IP: ${{ secrets.SERVER_HOST }}
+      SERVER_USERNAME: ${{ secrets.SERVER_USER }}
       POSTGRES_DB: railmap
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
     
     steps:
       - name: Checkout code
@@ -19,51 +26,34 @@ jobs:
       - name: Create frontend .env file
         run: |
           cat > frontend/.env << EOF
-          DB_USER=${{ secrets.DB_USER }}
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          DB_USER=$DB_USER
+          DB_PASSWORD=$DB_PASSWORD
+          JWT_SECRET=$JWT_SECRET
           EOF
         
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Build the frontend Docker image
+        run: docker build frontend --file frontend/Dockerfile --no-cache --tag $DOCKER_TAG
         
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: ghcr.io/${{ github.repository }}/railmap:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd /opt/railmap
-            
-            # Pull latest image
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/${{ github.repository }}/railmap:latest
-            
-            # Set environment variables
-            export DB_USER="${{ secrets.DB_USER }}"
-            export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
-            export POSTGRES_DB="railmap"
-            export JWT_SECRET="${{ secrets.JWT_SECRET }}"
-            
-            # Update and restart services
-            docker-compose up -d
-            
-            # Clean up old images
-            docker image prune -f
+      - name: Create SSH key
+        run: |
+          mkdir -p ~/.ssh/
+          echo "$SSH_PRIVATE_KEY" > ../private.key
+          sudo chmod 600 ../private.key
+          ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+        shell: bash
+        
+      - name: Save, compress and push the Docker image
+        run: docker save $DOCKER_TAG | gzip | ssh -i $SSH_KEY_PATH $SERVER_USERNAME@$SERVER_IP docker load
+        
+      - name: Upload docker-compose
+        run: scp -i $SSH_KEY_PATH docker-compose.yml $SERVER_USERNAME@$SERVER_IP:/home/$SERVER_USERNAME/$DOCKER_TAG.yml
+        
+      - name: Reload container
+        run: |
+          ssh -i $SSH_KEY_PATH $SERVER_USERNAME@$SERVER_IP "
+            export DB_USER='$DB_USER'
+            export DB_PASSWORD='$DB_PASSWORD'
+            export POSTGRES_DB='$POSTGRES_DB'
+            export JWT_SECRET='$JWT_SECRET'
+            docker compose -f $DOCKER_TAG.yml up -d && docker image prune --force
+          "
