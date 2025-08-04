@@ -3,8 +3,7 @@ import { Client } from 'pg';
 import { Usage } from '../enums';
 import dotenv from 'dotenv';
 
-// Load environment variables from frontend/.env.local
-dotenv.config({ path: './frontend/.env.local' });
+dotenv.config({ path: './frontend/.env' });
 
 // Database connection configuration
 interface DbConfig {

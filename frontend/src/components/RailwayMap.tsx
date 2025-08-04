@@ -135,7 +135,7 @@ export default function RailwayMap({ className = '', geoJsonData, onDataRefresh 
           if (feature.geometry.type === 'LineString' && feature.properties) {
             layer.on('dblclick', (e) => {
               L.DomEvent.stopPropagation(e);
-              setEditingFeature(feature);
+              setEditingFeature(feature as GeoJSONFeature);
               setLastRide(feature.properties?.custom?.last_ride ? 
                 new Date(feature.properties.custom.last_ride).toISOString().split('T')[0] : '');
               setNote(feature.properties?.custom?.note || '');

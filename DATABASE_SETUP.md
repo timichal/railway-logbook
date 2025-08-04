@@ -50,7 +50,7 @@ The frontend now uses:
 Copy the database configuration:
 ```bash
 cd frontend
-cp .env.local.example .env.local
+cp .env.example .env
 ```
 
 Update the database connection settings if needed.
