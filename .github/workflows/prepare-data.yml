@@ -1,0 +1,84 @@
+name: Prepare Railway Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      country:
+        description: 'Country code to process (default: cz)'
+        required: false
+        default: 'cz'
+        type: choice
+        options:
+          - cz
+          - at
+          - at-cz
+
+jobs:
+  prepare-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Install osmium-tool
+        run: |
+          wget -qO- https://osmcode.org/osmium-tool/install.sh | bash
+          sudo cp osmium /usr/local/bin/
+          
+      - name: Create data directory
+        run: mkdir -p data
+        
+      - name: Prepare data pipeline
+        run: |
+          # Download and process OSM data
+          npm run prepareData
+          
+          # Apply railway definitions for specified country
+          npm run apply ${{ github.event.inputs.country }}
+          
+          # Merge all country files
+          npm run merge
+          
+      - name: Deploy and populate database
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /opt/railmap
+            
+            # Set environment variables
+            export DB_USER="${{ secrets.DB_USER }}"
+            export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+            export POSTGRES_DB="railmap"
+            
+            # Ensure database is running
+            docker-compose up -d postgres
+            
+            # Wait for database to be ready
+            sleep 10
+            
+            # Run population script
+            npm run populateDb
+            
+            echo "Data preparation completed for country: ${{ github.event.inputs.country }}"
+            
+      - name: Upload processed data as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: railway-data-${{ github.event.inputs.country }}-${{ github.run_number }}
+          path: |
+            data/merged-only.geojson
+            data/*-combined.geojson
+          retention-days: 30
