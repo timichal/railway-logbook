@@ -85,7 +85,7 @@ export async function login(formData: FormData) {
     maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 
-  redirect('/');
+  return { success: true, user: { id: user.id, email: user.email, name: user.name } };
 }
 
 export async function register(formData: FormData) {
@@ -139,7 +139,7 @@ export async function register(formData: FormData) {
     maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 
-  redirect('/');
+  return { success: true, user: { id: user.id, email: user.email, name: user.name } };
 }
 
 export async function logout() {

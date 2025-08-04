@@ -1,9 +1,9 @@
 import { Pool } from 'pg';
 
 const dbConfig = {
-  host: 'localhost',
+  host: process.env.DB_HOST || 'localhost',
   port: 5432,
-  database: 'railmap',
+  database: process.env.POSTGRES_DB || 'railmap',
   user: process.env.DB_USER || '',
   password: process.env.DB_PASSWORD || ''
 };

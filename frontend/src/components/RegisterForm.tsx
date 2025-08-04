@@ -1,22 +1,23 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { register } from '@/lib/auth-actions';
 import Link from 'next/link';
 
 export default function RegisterForm() {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   async function handleSubmit(formData: FormData) {
-    setLoading(true);
     setError('');
-    
+
     try {
       await register(formData);
+      router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
       setLoading(false);
     }
   }
@@ -32,7 +33,11 @@ export default function RegisterForm() {
             Join us to track your railway journeys
           </p>
         </div>
-        <form className="mt-8 space-y-6" action={handleSubmit}>
+        <form 
+          className="mt-8 space-y-6" 
+          action={handleSubmit}
+          onSubmit={() => setLoading(true)}
+        >
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="name" className="sr-only">
@@ -101,7 +106,7 @@ export default function RegisterForm() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 cursor-pointer"
             >
               {loading ? 'Creating account...' : 'Create account'}
             </button>
