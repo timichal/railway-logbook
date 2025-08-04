@@ -50,6 +50,29 @@ jobs:
           # Merge all country files
           npm run merge
           
+      - name: Create SSH key for file transfers
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+          sudo chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+        shell: bash
+        
+      - name: Transfer processed data and scripts to server
+        run: |
+          # Create remote directory
+          ssh -i ~/.ssh/id_rsa ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p /tmp/railmap-data"
+          
+          # Transfer processed data
+          scp -i ~/.ssh/id_rsa data/merged-only.geojson ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          
+          # Transfer necessary scripts and configs
+          scp -i ~/.ssh/id_rsa package.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          scp -i ~/.ssh/id_rsa tsconfig.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          scp -i ~/.ssh/id_rsa docker-compose.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          scp -i ~/.ssh/id_rsa -r scripts/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          scp -i ~/.ssh/id_rsa -r database/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          
       - name: Deploy and populate database
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -57,23 +80,32 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            cd /opt/railmap
+            cd /tmp/railmap-data
             
             # Set environment variables
             export DB_USER="${{ secrets.DB_USER }}"
             export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
             export POSTGRES_DB="railmap"
             
+            # Install dependencies if node_modules doesn't exist
+            if [ ! -d "node_modules" ]; then
+              npm ci
+            fi
+            
             # Ensure database is running
             docker-compose up -d postgres
             
             # Wait for database to be ready
-            sleep 10
+            sleep 15
             
             # Run population script
             npm run populateDb
             
             echo "Data preparation completed for country: ${{ github.event.inputs.country }}"
+            
+            # Cleanup
+            cd /
+            rm -rf /tmp/railmap-data
             
       - name: Upload processed data as artifact
         uses: actions/upload-artifact@v4
