@@ -113,6 +113,10 @@ jobs:
             # Wait for database to be ready
             sleep 15
             
+            # Apply database schema if tables don't exist
+            docker exec osm-railways-db psql -U $DB_USER -d $POSTGRES_DB -c "\dt" | grep -q "user_railway_data" || \
+            docker exec -i osm-railways-db psql -U $DB_USER -d $POSTGRES_DB < database/init/01-schema.sql
+            
             # Run population script
             npm run populateDb
             
