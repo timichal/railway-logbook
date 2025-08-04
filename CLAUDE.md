@@ -17,11 +17,11 @@ This is a complete OSM (OpenStreetMap) railway data processing and visualization
 - `npm run check <country_code>` - Validates railway definitions for a country (e.g., `npm run check cz`)
 - `npm run apply <country_code>` - Applies railway definitions to create combined GeoJSON (e.g., `npm run apply cz`)
 - `npm run merge` - Combines all `-combined.geojson` files into `merged-only.geojson`
-- `npm run loadData` - Loads processed GeoJSON data into PostgreSQL database
+- `npm run populateDb` - Loads processed GeoJSON data into PostgreSQL database
 
 ### Database Operations
 - `docker-compose up -d postgres` - Start PostgreSQL database with PostGIS
-- `npm run loadData` - Load GeoJSON data into database tables
+- `npm run populateDb` - Load GeoJSON data into database tables
 
 ### Frontend Development
 - `cd frontend && npm run dev` - Start Next.js development server with Turbopack

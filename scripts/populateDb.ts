@@ -1,6 +1,10 @@
 import fs from 'fs';
 import { Client } from 'pg';
 import { Usage } from '../enums';
+import dotenv from 'dotenv';
+
+// Load environment variables from frontend/.env.local
+dotenv.config({ path: './frontend/.env.local' });
 
 // Database connection configuration
 interface DbConfig {
@@ -14,9 +18,9 @@ interface DbConfig {
 const dbConfig: DbConfig = {
   host: 'localhost',
   port: 5432,
-  database: 'railways',
-  user: 'railways_user',
-  password: 'railways_pass'
+  database: 'railmap',
+  user: process.env.DB_USER || '',
+  password: process.env.DB_PASSWORD || '',
 };
 
 // GeoJSON types

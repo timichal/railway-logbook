@@ -1,11 +1,11 @@
 import { Pool } from 'pg';
 
 const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'railways',
-  user: process.env.DB_USER || 'railways_user',
-  password: process.env.DB_PASSWORD || 'railways_pass'
+  host: 'localhost',
+  port: 5432,
+  database: 'railmap',
+  user: process.env.DB_USER || '',
+  password: process.env.DB_PASSWORD || ''
 };
 
 // Create a connection pool for better performance

@@ -3,7 +3,7 @@ services:
     image: postgis/postgis:16-3.5-alpine
     container_name: osm-railways-db
     environment:
-      POSTGRES_DB: railways
+      POSTGRES_DB: railmap
       POSTGRES_USER: railways_user
       POSTGRES_PASSWORD: railways_pass
     ports:
