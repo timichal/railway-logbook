@@ -17,12 +17,16 @@ const AdminMap = dynamic(() => import('./AdminMap'), {
 
 interface AdminMapWrapperProps {
   className?: string;
+  selectedRouteId?: string | null;
+  onRouteSelect?: (routeId: string) => void;
 }
 
-export default function AdminMapWrapper({ className }: AdminMapWrapperProps) {
+export default function AdminMapWrapper({ className, selectedRouteId, onRouteSelect }: AdminMapWrapperProps) {
   return (
     <AdminMap 
-      className={className} 
+      className={className}
+      selectedRouteId={selectedRouteId}
+      onRouteSelect={onRouteSelect}
     />
   );
 }

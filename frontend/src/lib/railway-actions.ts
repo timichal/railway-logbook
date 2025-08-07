@@ -116,6 +116,92 @@ export async function updateUserRailwayData(
 
 
 
+// Admin functions for managing railway routes
+export async function getAllRailwayRoutes() {
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
+  const result = await query(`
+    SELECT track_id, name, description, usage_types, primary_operator
+    FROM railway_routes
+    ORDER BY name
+  `);
+
+  return result.rows;
+}
+
+export async function getRailwayRoute(trackId: string) {
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
+  const result = await query(`
+    SELECT track_id, name, description, usage_types, primary_operator, 
+           ST_AsGeoJSON(geometry) as geometry
+    FROM railway_routes
+    WHERE track_id = $1
+  `, [trackId]);
+
+  if (result.rows.length === 0) {
+    throw new Error('Route not found');
+  }
+
+  return result.rows[0];
+}
+
+export async function updateRailwayRoute(
+  trackId: string,
+  name: string,
+  description: string | null,
+  usageTypes: string[],
+  primaryOperator: string
+) {
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
+  await query(`
+    UPDATE railway_routes
+    SET name = $2, description = $3, usage_types = $4, primary_operator = $5, updated_at = CURRENT_TIMESTAMP
+    WHERE track_id = $1
+  `, [trackId, name, description, usageTypes, primaryOperator]);
+}
+
+export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
+  const result = await query(`
+    SELECT track_id, name, description, usage_types, primary_operator,
+           ST_AsGeoJSON(geometry) as geometry
+    FROM railway_routes
+    ORDER BY name
+  `);
+
+  const features: GeoJSONFeature[] = result.rows.map(row => ({
+    type: 'Feature' as const,
+    geometry: JSON.parse(row.geometry),
+    properties: {
+      track_id: row.track_id,
+      name: row.name,
+      description: row.description,
+      usage: row.usage_types,
+      primary_operator: row.primary_operator
+    }
+  }));
+
+  return {
+    type: 'FeatureCollection',
+    features
+  };
+}
+
 export async function getRailwayPartsByBounds(
   bounds: {
     north: number;
