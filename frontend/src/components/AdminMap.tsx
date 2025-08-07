@@ -1,109 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { GeoJSONFeatureCollection } from '@/lib/types';
-// Remove the import since we'll define it locally
+import { GeoJSONFeatureCollection, GeoJSONFeature } from '@/lib/types';
+import { getRailwayPartsByBounds } from '@/lib/railway-actions';
 
 interface AdminMapProps {
   className?: string;
-}
-
-// Helper function to convert lat/lng to tile coordinates
-function latLngToTile(lat: number, lng: number, zoom: number) {
-  const n = Math.pow(2, zoom);
-  const x = Math.floor((lng + 180) / 360 * n);
-  const y = Math.floor((1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * n);
-  return { x, y };
-}
-
-// Helper function to convert lat/lng bounds to tile coordinates (client-side only)
-function boundsToTiles(bounds: { north: number; south: number; east: number; west: number }, zoom: number) {
-  const tiles: Array<{z: number, x: number, y: number}> = [];
-  
-  console.log('Converting bounds to tiles for zoom', zoom, 'bounds:', bounds);
-  
-  // Convert bounds to tile coordinates using standard web mercator projection
-  const topLeft = latLngToTile(bounds.north, bounds.west, zoom);
-  const bottomRight = latLngToTile(bounds.south, bounds.east, zoom);
-  
-  // Ensure we have the correct min/max values (y is inverted in tile coordinates)
-  const minTileX = Math.min(topLeft.x, bottomRight.x);
-  const maxTileX = Math.max(topLeft.x, bottomRight.x);
-  const minTileY = Math.min(topLeft.y, bottomRight.y);
-  const maxTileY = Math.max(topLeft.y, bottomRight.y);
-  
-  console.log(`Tile coordinates: X range ${minTileX}-${maxTileX}, Y range ${minTileY}-${maxTileY}`);
-  
-  // Generate list of tiles needed
-  for (let x = minTileX; x <= maxTileX; x++) {
-    for (let y = minTileY; y <= maxTileY; y++) {
-      tiles.push({ z: zoom, x, y });
-    }
-  }
-  
-  console.log(`Generated ${tiles.length} tiles:`, tiles);
-  
-  return tiles;
-}
-
-// Client-side tile fetching function
-async function getRailwayPartsByTiles(
-  bounds: {
-    north: number;
-    south: number;
-    east: number;
-    west: number;
-  },
-  zoom: number
-): Promise<GeoJSONFeatureCollection> {
-  console.log('getRailwayPartsByTiles called with bounds:', bounds, 'zoom:', zoom);
-  
-  // Get required tiles for the bounds
-  const tiles = boundsToTiles(bounds, zoom);
-  
-  // Use all tiles needed to cover the viewport (no arbitrary limit)
-  // The tile calculation should now be accurate for the full viewport
-  console.log('Tiles to fetch:', tiles.length, 'tiles for current viewport');
-  
-  // Fetch data from each tile
-  const tilePromises = tiles.map(async ({ z, x, y }) => {
-    try {
-      const url = `/api/admin/tiles/${z}/${x}/${y}`;
-      console.log('Fetching tile:', url);
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Tile fetch failed: ${response.status}`);
-      const data = await response.json();
-      console.log(`Tile ${z}/${x}/${y} returned ${data.features?.length || 0} features`);
-      return data;
-    } catch (error) {
-      console.error(`Error fetching tile ${z}/${x}/${y}:`, error);
-      return { type: 'FeatureCollection', features: [] };
-    }
-  });
-  
-  const tileResults = await Promise.all(tilePromises);
-  
-  // Combine all features from all tiles
-  const allFeatures: any[] = [];
-  for (const tileData of tileResults) {
-    if (tileData.features) {
-      allFeatures.push(...tileData.features);
-    }
-  }
-  
-  // Remove duplicate features (same @id)
-  const uniqueFeatures = allFeatures.filter((feature, index, arr) => 
-    arr.findIndex(f => f.properties?.['@id'] === feature.properties?.['@id']) === index
-  );
-  
-  console.log('Final result:', uniqueFeatures.length, 'unique features');
-  
-  return {
-    type: 'FeatureCollection',
-    features: uniqueFeatures
-  };
 }
 
 export default function AdminMap({ className = '' }: AdminMapProps) {
@@ -112,11 +16,16 @@ export default function AdminMap({ className = '' }: AdminMapProps) {
   const railwayLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const isLoadingRef = useRef<boolean>(false);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  
+  // Cache for features outside current viewport + current viewport data
+  const cachedFeatures = useRef<Map<string, GeoJSONFeature>>(new Map()); // Features outside current viewport
+  const MAX_CACHED_FEATURES = 5000;
+  
   const [isLoading, setIsLoading] = useState(false);
-  const [currentData, setCurrentData] = useState<GeoJSONFeatureCollection | null>(null);
+  const [currentViewportData, setCurrentViewportData] = useState<GeoJSONFeatureCollection | null>(null);
 
   // Function to load data for current viewport
-  const loadDataForViewport = async () => {
+  const loadDataForViewport = useCallback(async () => {
     if (!mapInstanceRef.current || isLoadingRef.current) return;
 
     isLoadingRef.current = true;
@@ -124,40 +33,85 @@ export default function AdminMap({ className = '' }: AdminMapProps) {
 
     try {
       const map = mapInstanceRef.current;
-      const bounds = map.getBounds();
+      const bounds = {
+        north: map.getBounds().getNorth(),
+        south: map.getBounds().getSouth(),
+        east: map.getBounds().getEast(),
+        west: map.getBounds().getWest()
+      };
       const zoom = map.getZoom();
-      console.log("blep")
-      const geoJsonData = await getRailwayPartsByTiles({
-        north: bounds.getNorth(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        west: bounds.getWest()
-      }, zoom);
 
-      setCurrentData(geoJsonData);
+      console.log('Loading data for viewport');
+      const geoJsonData = await getRailwayPartsByBounds(bounds, zoom);
+
+      // Set current viewport data (this will always be displayed)
+      setCurrentViewportData(geoJsonData);
+
+      // Add current viewport features to cache for when they move outside viewport
+      for (const feature of geoJsonData.features) {
+        const featureId = feature.properties?.['@id'];
+        if (featureId) {
+          // If cache is at limit, remove oldest features (FIFO)
+          if (cachedFeatures.current.size >= MAX_CACHED_FEATURES) {
+            const keysToDelete = Array.from(cachedFeatures.current.keys()).slice(0, 1000); // Remove 1000 oldest
+            keysToDelete.forEach(key => cachedFeatures.current.delete(key));
+            console.log('Cache limit reached, removed', keysToDelete.length, 'oldest features');
+          }
+          
+          cachedFeatures.current.set(featureId.toString(), feature);
+        }
+      }
+
+      console.log('Cache now contains', cachedFeatures.current.size, 'features');
     } catch (error) {
       console.error('Error loading railway parts:', error);
     } finally {
       isLoadingRef.current = false;
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Debounced version of loadDataForViewport
-  const debouncedLoadData = () => {
+  const debouncedLoadData = useCallback(() => {
     clearTimeout(debounceTimeoutRef.current);
     debounceTimeoutRef.current = setTimeout(loadDataForViewport, 500);
-  };
+  }, [loadDataForViewport]);
 
-  // Function to render railway parts data on existing map
-  const renderRailwayParts = (data: GeoJSONFeatureCollection) => {
+  // Function to render current viewport + cached features
+  const renderAllFeatures = (viewportData: GeoJSONFeatureCollection | null) => {
     if (!mapInstanceRef.current || !railwayLayerGroupRef.current) return;
 
     // Clear existing layers
     railwayLayerGroupRef.current.clearLayers();
 
-    // Display railway parts GeoJSON data
-    if (data && data.features.length > 0) {
+    // Combine current viewport features + cached features
+    const allFeatures: GeoJSONFeature[] = [];
+    
+    // Add current viewport features (highest priority - always show)
+    if (viewportData && viewportData.features) {
+      allFeatures.push(...viewportData.features);
+    }
+    
+    // Add cached features (features from previous viewports)
+    const cachedFeaturesArray = Array.from(cachedFeatures.current.values());
+    
+    // Remove duplicates (current viewport features take precedence)
+    const viewportIds = new Set(viewportData?.features.map(f => f.properties?.['@id']?.toString()) || []);
+    const uniqueCachedFeatures = cachedFeaturesArray.filter(f => 
+      !viewportIds.has(f.properties?.['@id']?.toString())
+    );
+    
+    allFeatures.push(...uniqueCachedFeatures);
+    
+    console.log(`Rendering ${viewportData?.features.length || 0} viewport features + ${uniqueCachedFeatures.length} cached features`);
+
+    if (allFeatures.length > 0) {
+      const data = {
+        type: 'FeatureCollection' as const,
+        features: allFeatures
+      };
+
+      // Display railway parts GeoJSON data
       L.geoJSON(data, {
         style: (feature) => {
           // Dynamic styling based on zoom level
@@ -257,14 +211,12 @@ export default function AdminMap({ className = '' }: AdminMapProps) {
         railwayLayerGroupRef.current = null;
       }
     };
-  }, []); // Empty dependency array - only run once
+  }, [debouncedLoadData, loadDataForViewport]); // Include dependencies
 
-  // Re-render data when currentData changes
+  // Re-render when viewport data changes
   useEffect(() => {
-    if (currentData) {
-      renderRailwayParts(currentData);
-    }
-  }, [currentData]);
+    renderAllFeatures(currentViewportData);
+  }, [currentViewportData]);
 
   return (
     <div className={`${className} relative`}>
