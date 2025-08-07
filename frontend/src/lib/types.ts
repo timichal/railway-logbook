@@ -24,11 +24,12 @@ export interface GeoJSONFeature {
   };
   properties: {
     '@id'?: number;
-    name: string;
+    name?: string;
     track_id?: string;
     primary_operator?: string;
     usage?: number[];
     description?: string;
+    zoom_level?: number;
     custom?: {
       last_ride?: Date;
       note?: string;

@@ -27,6 +27,14 @@ CREATE TABLE stations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Railway parts/segments (original line data from OSM)
+CREATE TABLE railway_parts (
+    id BIGINT PRIMARY KEY, -- OSM @id
+    geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Railway lines/routes (objective data only)
 CREATE TABLE railway_routes (
     track_id VARCHAR(255) PRIMARY KEY, -- Unique track identifier
@@ -53,6 +61,7 @@ CREATE TABLE user_railway_data (
 
 -- Create indexes for better performance
 CREATE INDEX idx_stations_coordinates ON stations USING GIST (coordinates);
+CREATE INDEX idx_railway_parts_geometry ON railway_parts USING GIST (geometry);
 CREATE INDEX idx_railway_routes_geometry ON railway_routes USING GIST (geometry);
 CREATE INDEX idx_railway_routes_name ON railway_routes (name);
 CREATE INDEX idx_railway_routes_operator ON railway_routes (primary_operator);

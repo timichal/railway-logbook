@@ -1,19 +1,19 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import MapWrapper from '@/components/MapWrapper';
-import { getRailwayDataAsGeoJSON } from '@/lib/railway-actions';
+import AdminMapWrapper from '@/components/AdminMapWrapper';
 import { getUser, logout } from '@/lib/auth-actions';
 
-export default async function Home() {
-  // Check if user is authenticated
+export default async function AdminPage() {
+  // Check if user is authenticated and is admin
   const user = await getUser();
   
   if (!user) {
     redirect('/login');
   }
 
-  // Fetch railway data for the authenticated user
-  const geoJsonData = await getRailwayDataAsGeoJSON();
+  if (user.id !== 1) {
+    redirect('/'); // Redirect non-admin users to main page
+  }
 
   async function handleLogout() {
     'use server';
@@ -26,21 +26,19 @@ export default async function Home() {
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              OSM Railway Map
+              Admin - Railway Parts Map
             </h1>
             <p className="text-gray-600 mt-1">
-              Welcome, {user.name || user.email} - Interactive railway map of Czech Republic and Austria
+              Welcome, {user.name || user.email} - Dynamic loading of railway segments with zoom-based optimization
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {user.id === 1 && (
-              <Link 
-                href="/admin"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm"
-              >
-                Admin
-              </Link>
-            )}
+            <Link 
+              href="/"
+              className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md text-sm"
+            >
+              Back to Main Map
+            </Link>
             <form action={handleLogout}>
               <button
                 type="submit"
@@ -54,7 +52,7 @@ export default async function Home() {
       </header>
       
       <main className="flex-1 overflow-hidden">
-        <MapWrapper className="w-full h-full" geoJsonData={geoJsonData} />
+        <AdminMapWrapper className="w-full h-full" />
       </main>
     </div>
   );

@@ -113,3 +113,55 @@ export async function updateUserRailwayData(
       updated_at = CURRENT_TIMESTAMP
   `, [userId, trackId, lastRide || null, note || null]);
 }
+
+
+export async function getRailwayPartsByBounds(
+  bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  },
+  zoom: number
+): Promise<GeoJSONFeatureCollection> {
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
+  // Limit features based on zoom level to improve performance
+  const limit = zoom < 8 ? 1000 : zoom < 10 ? 3000 : zoom < 12 ? 10000 : 50000;
+
+  // Get railway parts within bounds (original geometry only)
+  const partsResult = await query(`
+    SELECT 
+      id,
+      ST_AsGeoJSON(geometry) as geometry
+    FROM railway_parts
+    WHERE ST_Intersects(
+      geometry, 
+      ST_MakeEnvelope($1, $2, $3, $4, 4326)
+    )
+    ORDER BY ST_Length(geometry) DESC
+    LIMIT $5
+  `, [bounds.west, bounds.south, bounds.east, bounds.north, limit]);
+
+  const features: GeoJSONFeature[] = [];
+
+  // Add railway parts features
+  for (const part of partsResult.rows) {
+    features.push({
+      type: 'Feature' as const,
+      geometry: JSON.parse(part.geometry),
+      properties: {
+        '@id': part.id,
+        zoom_level: zoom
+      }
+    });
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features
+  };
+}
