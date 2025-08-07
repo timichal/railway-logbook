@@ -66,6 +66,7 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
   - `users` - User accounts and authentication (email as username, password field for future auth)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
   - `railway_routes` - Railway lines with description, usage_types array, primary_operator, and PostGIS geometry
+  - `railway_parts` - Raw railway segments from OSM data (original line data before route definitions applied)
   - `user_railway_data` - User-specific ride history (last_ride dates) and personal notes
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 
@@ -76,6 +77,17 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
 - **Dynamic Styling** - Route colors based on user data (green=visited, crimson=unvisited), weight based on usage type
 - **Usage Enum Translation** - Frontend translates database enum numbers to Czech strings
 - **Connection Pooling** - PostgreSQL pool for database performance
+- **Admin Interface** - Admin-only page (`/admin`) for viewing raw railway parts with performance optimizations
+
+### 5. Admin System Architecture
+- **Admin Access Control** - Restricted to user_id=1 with authentication checks
+- **Railway Parts Visualization** - Real-time map display of raw OSM railway segments
+- **Performance Optimization**:
+  - Viewport-based loading (single DB query per viewport change)
+  - 5000 feature cache limit with FIFO eviction strategy
+  - Current viewport features always displayed, cached features fill background
+  - Hover effects (railway parts turn red on mouse hover)
+- **Data Sources**: Uses `railway_parts` table populated from `cz-pruned.geojson`
 
 ## Key File Structure
 
@@ -112,14 +124,18 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
 
 ### Database Schema
 - `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes
-- Contains tables for users, stations, railway_routes, and user_railway_data
+- Contains tables for users, stations, railway_routes, railway_parts, and user_railway_data
 
 ### Frontend Application (`frontend/`)
 - `src/app/` - Next.js App Router pages (layout.tsx, page.tsx)
-- `src/components/` - React components (MapWrapper.tsx, RailwayMap.tsx)  
+  - `src/app/admin/` - Admin-only pages (page.tsx)
+  - `src/app/api/admin/tiles/[...tile]/` - Tile-based API endpoints (legacy, unused)
+- `src/components/` - React components (MapWrapper.tsx, RailwayMap.tsx, AdminMap.tsx)
+  - `AdminMap.tsx` - High-performance railway parts visualization with caching
+  - `AdminMapWrapper.tsx` - Wrapper component for admin map
 - `src/lib/` - Database utilities and server actions
   - `db.ts` - PostgreSQL connection pool
-  - `railway-actions.ts` - Server actions for database queries
+  - `railway-actions.ts` - Server actions for database queries (includes getRailwayPartsByBounds)
   - `types.ts` - Frontend type definitions
 
 ### Output Data (`data/`)
@@ -159,6 +175,9 @@ Railway definitions in `definitions/` files follow this schema:
 - Custom filters applied in `pruneData.ts` remove subway and unwanted railway types
 - Cross-border routes require merged datasets from multiple countries
 - Railway definitions use OSM way IDs to reconstruct complete routes from segmented data
+- `populateDb.ts` uses batch inserts for performance and populates:
+  - `stations` and `railway_parts` from `cz-pruned.geojson`
+  - `railway_routes` from `merged-only.geojson`
 
 ### Output Format
 Final GeoJSON includes custom properties for visualization:
