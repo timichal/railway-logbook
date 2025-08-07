@@ -115,6 +115,7 @@ export async function updateUserRailwayData(
 }
 
 
+
 export async function getRailwayPartsByBounds(
   bounds: {
     north: number;
@@ -129,22 +130,42 @@ export async function getRailwayPartsByBounds(
     throw new Error('Admin access required');
   }
 
-  // Limit features based on zoom level to improve performance
-  const limit = zoom < 8 ? 1000 : zoom < 10 ? 3000 : zoom < 12 ? 10000 : 50000;
-
   // Get railway parts within bounds (original geometry only)
-  const partsResult = await query(`
-    SELECT 
-      id,
-      ST_AsGeoJSON(geometry) as geometry
-    FROM railway_parts
-    WHERE ST_Intersects(
-      geometry, 
-      ST_MakeEnvelope($1, $2, $3, $4, 4326)
-    )
-    ORDER BY ST_Length(geometry) DESC
-    LIMIT $5
-  `, [bounds.west, bounds.south, bounds.east, bounds.north, limit]);
+  // Use different strategies based on zoom level to avoid gaps
+  let partsResult;
+  
+  if (zoom < 8) {
+    // For very low zoom, show only major railway segments (longer ones)
+    // Use a higher limit to avoid gaps in main lines
+    partsResult = await query(`
+      SELECT 
+        id,
+        ST_AsGeoJSON(geometry) as geometry
+      FROM railway_parts
+      WHERE ST_Intersects(
+        geometry, 
+        ST_MakeEnvelope($1, $2, $3, $4, 4326)
+      )
+      AND ST_Length(geometry) > 0.001  -- Filter out very short segments
+      ORDER BY ST_Length(geometry) DESC
+      LIMIT 10000
+    `, [bounds.west, bounds.south, bounds.east, bounds.north]);
+  } else {
+    // For higher zoom levels, show more detail with reasonable limits
+    const limit = zoom < 10 ? 20000 : zoom < 12 ? 40000 : 50000;
+    partsResult = await query(`
+      SELECT 
+        id,
+        ST_AsGeoJSON(geometry) as geometry
+      FROM railway_parts
+      WHERE ST_Intersects(
+        geometry, 
+        ST_MakeEnvelope($1, $2, $3, $4, 4326)
+      )
+      ORDER BY ST_Length(geometry) DESC
+      LIMIT $5
+    `, [bounds.west, bounds.south, bounds.east, bounds.north, limit]);
+  }
 
   const features: GeoJSONFeature[] = [];
 

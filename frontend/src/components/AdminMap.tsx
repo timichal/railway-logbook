@@ -4,10 +4,106 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GeoJSONFeatureCollection } from '@/lib/types';
-import { getRailwayPartsByBounds } from '@/lib/railway-actions';
+// Remove the import since we'll define it locally
 
 interface AdminMapProps {
   className?: string;
+}
+
+// Helper function to convert lat/lng to tile coordinates
+function latLngToTile(lat: number, lng: number, zoom: number) {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor((lng + 180) / 360 * n);
+  const y = Math.floor((1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+  return { x, y };
+}
+
+// Helper function to convert lat/lng bounds to tile coordinates (client-side only)
+function boundsToTiles(bounds: { north: number; south: number; east: number; west: number }, zoom: number) {
+  const tiles: Array<{z: number, x: number, y: number}> = [];
+  
+  console.log('Converting bounds to tiles for zoom', zoom, 'bounds:', bounds);
+  
+  // Convert bounds to tile coordinates using standard web mercator projection
+  const topLeft = latLngToTile(bounds.north, bounds.west, zoom);
+  const bottomRight = latLngToTile(bounds.south, bounds.east, zoom);
+  
+  // Ensure we have the correct min/max values (y is inverted in tile coordinates)
+  const minTileX = Math.min(topLeft.x, bottomRight.x);
+  const maxTileX = Math.max(topLeft.x, bottomRight.x);
+  const minTileY = Math.min(topLeft.y, bottomRight.y);
+  const maxTileY = Math.max(topLeft.y, bottomRight.y);
+  
+  console.log(`Tile coordinates: X range ${minTileX}-${maxTileX}, Y range ${minTileY}-${maxTileY}`);
+  
+  // Generate list of tiles needed
+  for (let x = minTileX; x <= maxTileX; x++) {
+    for (let y = minTileY; y <= maxTileY; y++) {
+      tiles.push({ z: zoom, x, y });
+    }
+  }
+  
+  console.log(`Generated ${tiles.length} tiles:`, tiles);
+  
+  return tiles;
+}
+
+// Client-side tile fetching function
+async function getRailwayPartsByTiles(
+  bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  },
+  zoom: number
+): Promise<GeoJSONFeatureCollection> {
+  console.log('getRailwayPartsByTiles called with bounds:', bounds, 'zoom:', zoom);
+  
+  // Get required tiles for the bounds
+  const tiles = boundsToTiles(bounds, zoom);
+  
+  // Use all tiles needed to cover the viewport (no arbitrary limit)
+  // The tile calculation should now be accurate for the full viewport
+  console.log('Tiles to fetch:', tiles.length, 'tiles for current viewport');
+  
+  // Fetch data from each tile
+  const tilePromises = tiles.map(async ({ z, x, y }) => {
+    try {
+      const url = `/api/admin/tiles/${z}/${x}/${y}`;
+      console.log('Fetching tile:', url);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Tile fetch failed: ${response.status}`);
+      const data = await response.json();
+      console.log(`Tile ${z}/${x}/${y} returned ${data.features?.length || 0} features`);
+      return data;
+    } catch (error) {
+      console.error(`Error fetching tile ${z}/${x}/${y}:`, error);
+      return { type: 'FeatureCollection', features: [] };
+    }
+  });
+  
+  const tileResults = await Promise.all(tilePromises);
+  
+  // Combine all features from all tiles
+  const allFeatures: any[] = [];
+  for (const tileData of tileResults) {
+    if (tileData.features) {
+      allFeatures.push(...tileData.features);
+    }
+  }
+  
+  // Remove duplicate features (same @id)
+  const uniqueFeatures = allFeatures.filter((feature, index, arr) => 
+    arr.findIndex(f => f.properties?.['@id'] === feature.properties?.['@id']) === index
+  );
+  
+  console.log('Final result:', uniqueFeatures.length, 'unique features');
+  
+  return {
+    type: 'FeatureCollection',
+    features: uniqueFeatures
+  };
 }
 
 export default function AdminMap({ className = '' }: AdminMapProps) {
@@ -25,19 +121,19 @@ export default function AdminMap({ className = '' }: AdminMapProps) {
 
     isLoadingRef.current = true;
     setIsLoading(true);
-    
+
     try {
       const map = mapInstanceRef.current;
       const bounds = map.getBounds();
       const zoom = map.getZoom();
-      
-      const geoJsonData = await getRailwayPartsByBounds({
+      console.log("blep")
+      const geoJsonData = await getRailwayPartsByTiles({
         north: bounds.getNorth(),
         south: bounds.getSouth(),
         east: bounds.getEast(),
         west: bounds.getWest()
       }, zoom);
-      
+
       setCurrentData(geoJsonData);
     } catch (error) {
       console.error('Error loading railway parts:', error);
@@ -67,10 +163,10 @@ export default function AdminMap({ className = '' }: AdminMapProps) {
           // Dynamic styling based on zoom level
           if (feature?.geometry?.type === 'LineString') {
             const zoomLevel = feature.properties?.zoom_level || 7;
-            
+
             return {
               color: '#2563eb', // Blue for all railway parts
-              weight: zoomLevel < 10 ? 1 : zoomLevel < 12 ? 2 : 3,
+              weight: zoomLevel < 12 ? 2 : 3,
               opacity: 0.7,
               fillOpacity: 0.6
             };
@@ -81,12 +177,32 @@ export default function AdminMap({ className = '' }: AdminMapProps) {
           // Add to railway layer group
           if (feature.geometry.type === 'LineString') {
             railwayLayerGroupRef.current!.addLayer(layer);
+
+            // Add hover effects
+            layer.on('mouseover', function(e) {
+              const layer = e.target;
+              layer.setStyle({
+                color: '#dc2626', // Red on hover
+                weight: 4,
+                opacity: 0.9
+              });
+            });
+
+            layer.on('mouseout', function(e) {
+              const layer = e.target;
+              const zoomLevel = feature.properties?.zoom_level || 7;
+              layer.setStyle({
+                color: '#2563eb', // Back to blue
+                weight: zoomLevel < 12 ? 2 : 3,
+                opacity: 0.7
+              });
+            });
           }
 
           // Add simple popup with basic info
           if (feature.properties) {
             const zoomLevel = feature.properties.zoom_level;
-            
+
             const popupContent = `
               <div class="railway-popup">
                 <h3 class="font-bold text-lg mb-2">Railway Part</h3>
