@@ -33,44 +33,87 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
   const [showRoutesLayer, setShowRoutesLayer] = useState(true);
 
 
-  // Layer visibility toggle functions
-  const togglePartsLayer = () => {
-    const newVisibility = !showPartsLayer;
-    setShowPartsLayer(newVisibility);
+  // Generic layer visibility toggle function
+  const toggleLayer = useCallback((layerRef: React.RefObject<L.LayerGroup | null>, isVisible: boolean, setVisibility: (visible: boolean) => void) => {
+    const newVisibility = !isVisible;
+    setVisibility(newVisibility);
     
-    if (railwayLayerGroupRef.current && mapInstanceRef.current) {
+    if (layerRef.current && mapInstanceRef.current) {
       if (newVisibility) {
-        // Only add if not already on map
-        if (!mapInstanceRef.current.hasLayer(railwayLayerGroupRef.current)) {
-          mapInstanceRef.current.addLayer(railwayLayerGroupRef.current);
+        if (!mapInstanceRef.current.hasLayer(layerRef.current)) {
+          mapInstanceRef.current.addLayer(layerRef.current);
         }
       } else {
-        // Only remove if currently on map
-        if (mapInstanceRef.current.hasLayer(railwayLayerGroupRef.current)) {
-          mapInstanceRef.current.removeLayer(railwayLayerGroupRef.current);
+        if (mapInstanceRef.current.hasLayer(layerRef.current)) {
+          mapInstanceRef.current.removeLayer(layerRef.current);
         }
       }
     }
-  };
+  }, []);
 
-  const toggleRoutesLayer = () => {
-    const newVisibility = !showRoutesLayer;
-    setShowRoutesLayer(newVisibility);
+  // Specific toggle functions
+  const togglePartsLayer = useCallback(() => {
+    toggleLayer(railwayLayerGroupRef, showPartsLayer, setShowPartsLayer);
+  }, [toggleLayer, showPartsLayer]);
+
+  const toggleRoutesLayer = useCallback(() => {
+    toggleLayer(routesLayerGroupRef, showRoutesLayer, setShowRoutesLayer);
+  }, [toggleLayer, showRoutesLayer]);
+
+  // Styling functions
+  const getRailwayPartsStyle = useCallback((feature?: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!feature || feature?.geometry?.type !== 'LineString') return {};
+    const zoomLevel = feature.properties?.zoom_level || 7;
     
-    if (routesLayerGroupRef.current && mapInstanceRef.current) {
-      if (newVisibility) {
-        // Only add if not already on map
-        if (!mapInstanceRef.current.hasLayer(routesLayerGroupRef.current)) {
-          mapInstanceRef.current.addLayer(routesLayerGroupRef.current);
-        }
+    return {
+      color: '#2563eb', // Blue for railway parts
+      weight: zoomLevel < 12 ? 2 : 3,
+      opacity: 0.7,
+      fillOpacity: 0.6
+    };
+  }, []);
+
+  const getRouteStyle = useCallback((feature?: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!feature || feature?.geometry?.type !== 'LineString') return {};
+    const isSelected = selectedRouteId === feature.properties?.track_id;
+    
+    return {
+      color: isSelected ? '#ff6b35' : '#dc2626', // Orange for selected, red for others
+      weight: isSelected ? 5 : 3,
+      opacity: isSelected ? 1 : 0.8,
+      fillOpacity: 0.7
+    };
+  }, [selectedRouteId]);
+
+  // Common hover effect function
+  const addHoverEffects = useCallback((layer: L.Layer, feature: any, isRoute = false) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    layer.on('mouseover', function(e) {
+      const layer = e.target;
+      layer.setStyle({
+        color: isRoute ? undefined : '#dc2626', // Red on hover for parts
+        weight: isRoute ? 6 : 4,
+        opacity: 1
+      });
+    });
+
+    layer.on('mouseout', function(e) {
+      const layer = e.target;
+      if (isRoute) {
+        const isSelected = selectedRouteId === feature.properties?.track_id;
+        layer.setStyle({
+          weight: isSelected ? 5 : 3,
+          opacity: isSelected ? 1 : 0.8
+        });
       } else {
-        // Only remove if currently on map
-        if (mapInstanceRef.current.hasLayer(routesLayerGroupRef.current)) {
-          mapInstanceRef.current.removeLayer(routesLayerGroupRef.current);
-        }
+        const zoomLevel = feature.properties?.zoom_level || 7;
+        layer.setStyle({
+          color: '#2563eb', // Back to blue
+          weight: zoomLevel < 12 ? 2 : 3,
+          opacity: 0.7
+        });
       }
-    }
-  };
+    });
+  }, [selectedRouteId]);
 
   // Function to load all railway routes
   const loadAllRoutes = useCallback(async () => {
@@ -138,7 +181,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
   }, [loadDataForViewport]);
 
   // Function to render current viewport + cached features
-  const renderAllFeatures = (viewportData: GeoJSONFeatureCollection | null) => {
+  const renderAllFeatures = useCallback((viewportData: GeoJSONFeatureCollection | null) => {
     if (!mapInstanceRef.current || !railwayLayerGroupRef.current) return;
 
     // Clear existing layers
@@ -173,44 +216,11 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
 
       // Display railway parts GeoJSON data
       L.geoJSON(data, {
-        style: (feature) => {
-          // Dynamic styling based on zoom level
-          if (feature?.geometry?.type === 'LineString') {
-            const zoomLevel = feature.properties?.zoom_level || 7;
-
-            return {
-              color: '#2563eb', // Blue for all railway parts
-              weight: zoomLevel < 12 ? 2 : 3,
-              opacity: 0.7,
-              fillOpacity: 0.6
-            };
-          }
-          return {};
-        },
+        style: getRailwayPartsStyle,
         onEachFeature: (feature, layer) => {
-          // Add to railway layer group
           if (feature.geometry.type === 'LineString') {
             railwayLayerGroupRef.current!.addLayer(layer);
-
-            // Add hover effects
-            layer.on('mouseover', function(e) {
-              const layer = e.target;
-              layer.setStyle({
-                color: '#dc2626', // Red on hover
-                weight: 4,
-                opacity: 0.9
-              });
-            });
-
-            layer.on('mouseout', function(e) {
-              const layer = e.target;
-              const zoomLevel = feature.properties?.zoom_level || 7;
-              layer.setStyle({
-                color: '#2563eb', // Back to blue
-                weight: zoomLevel < 12 ? 2 : 3,
-                opacity: 0.7
-              });
-            });
+            addHoverEffects(layer, feature, false);
           }
 
           // Add simple popup with basic info
@@ -232,10 +242,10 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         }
       });
     }
-  };
+  }, [getRailwayPartsStyle, addHoverEffects]);
 
   // Function to render routes layer
-  const renderRoutesLayer = (routes: GeoJSONFeatureCollection) => {
+  const renderRoutesLayer = useCallback((routes: GeoJSONFeatureCollection) => {
     if (!mapInstanceRef.current || !routesLayerGroupRef.current) return;
 
     // Clear existing route layers
@@ -243,19 +253,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
 
     if (routes && routes.features.length > 0) {
       L.geoJSON(routes, {
-        style: (feature) => {
-          if (feature?.geometry?.type === 'LineString') {
-            const isSelected = selectedRouteId === feature.properties?.track_id;
-            
-            return {
-              color: isSelected ? '#ff6b35' : '#dc2626', // Orange for selected, red for others
-              weight: isSelected ? 5 : 3,
-              opacity: isSelected ? 1 : 0.8,
-              fillOpacity: 0.7
-            };
-          }
-          return {};
-        },
+        style: getRouteStyle,
         onEachFeature: (feature, layer) => {
           if (feature.geometry.type === 'LineString') {
             routesLayerGroupRef.current!.addLayer(layer);
@@ -269,22 +267,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
             });
 
             // Add hover effects
-            layer.on('mouseover', function(e) {
-              const layer = e.target;
-              layer.setStyle({
-                weight: 6,
-                opacity: 1
-              });
-            });
-
-            layer.on('mouseout', function(e) {
-              const layer = e.target;
-              const isSelected = selectedRouteId === feature.properties?.track_id;
-              layer.setStyle({
-                weight: isSelected ? 5 : 3,
-                opacity: isSelected ? 1 : 0.8
-              });
-            });
+            addHoverEffects(layer, feature, true);
 
             // Add popup with route info
             if (feature.properties) {
@@ -305,10 +288,10 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         }
       });
     }
-  };
+  }, [getRouteStyle, addHoverEffects, onRouteSelect]);
 
   // Function to focus map on selected route
-  const focusOnRoute = (routeId: string) => {
+  const focusOnRoute = useCallback((routeId: string) => {
     if (!mapInstanceRef.current || !routesData) return;
 
     const route = routesData.features.find(f => f.properties?.track_id === routeId);
@@ -327,7 +310,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         });
       }
     }
-  };
+  }, [routesData]);
 
   // Initialize map once
   useEffect(() => {
@@ -378,55 +361,51 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         routesLayerGroupRef.current = null;
       }
     };
-  }, [debouncedLoadData, loadDataForViewport, loadAllRoutes]); // Include dependencies
+  }, [debouncedLoadData, loadDataForViewport, loadAllRoutes, showPartsLayer, showRoutesLayer]); // Include dependencies
 
   // Re-render when viewport data changes
   useEffect(() => {
     renderAllFeatures(currentViewportData);
-  }, [currentViewportData]);
+  }, [currentViewportData, renderAllFeatures]);
 
   // Re-render routes when routes data changes
   useEffect(() => {
     if (routesData) {
       renderRoutesLayer(routesData);
     }
-  }, [routesData, selectedRouteId]);
+  }, [routesData, selectedRouteId, renderRoutesLayer]);
 
   // Focus on route when selectedRouteId changes
   useEffect(() => {
     if (selectedRouteId && routesData) {
       focusOnRoute(selectedRouteId);
     }
-  }, [selectedRouteId, routesData]);
+  }, [selectedRouteId, routesData, focusOnRoute]);
 
   // Handle layer visibility changes after map is initialized
   useEffect(() => {
-    if (!mapInstanceRef.current || !railwayLayerGroupRef.current) return;
+    if (!mapInstanceRef.current) return;
 
-    if (showPartsLayer) {
-      if (!mapInstanceRef.current.hasLayer(railwayLayerGroupRef.current)) {
+    // Update railway parts layer visibility
+    if (railwayLayerGroupRef.current) {
+      const hasPartsLayer = mapInstanceRef.current.hasLayer(railwayLayerGroupRef.current);
+      if (showPartsLayer && !hasPartsLayer) {
         mapInstanceRef.current.addLayer(railwayLayerGroupRef.current);
-      }
-    } else {
-      if (mapInstanceRef.current.hasLayer(railwayLayerGroupRef.current)) {
+      } else if (!showPartsLayer && hasPartsLayer) {
         mapInstanceRef.current.removeLayer(railwayLayerGroupRef.current);
       }
     }
-  }, [showPartsLayer]);
 
-  useEffect(() => {
-    if (!mapInstanceRef.current || !routesLayerGroupRef.current) return;
-
-    if (showRoutesLayer) {
-      if (!mapInstanceRef.current.hasLayer(routesLayerGroupRef.current)) {
+    // Update routes layer visibility
+    if (routesLayerGroupRef.current) {
+      const hasRoutesLayer = mapInstanceRef.current.hasLayer(routesLayerGroupRef.current);
+      if (showRoutesLayer && !hasRoutesLayer) {
         mapInstanceRef.current.addLayer(routesLayerGroupRef.current);
-      }
-    } else {
-      if (mapInstanceRef.current.hasLayer(routesLayerGroupRef.current)) {
+      } else if (!showRoutesLayer && hasRoutesLayer) {
         mapInstanceRef.current.removeLayer(routesLayerGroupRef.current);
       }
     }
-  }, [showRoutesLayer]);
+  }, [showPartsLayer, showRoutesLayer]);
 
   return (
     <div className={`${className} relative`}>
