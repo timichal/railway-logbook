@@ -7,9 +7,10 @@ import AdminCreateRouteTab from './AdminCreateRouteTab';
 interface AdminSidebarProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
+  selectedPartId?: string | null;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   
   // State for create route form IDs
@@ -17,6 +18,24 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect }: AdminSi
     startingId: '',
     endingId: ''
   });
+
+  // Handle selectedPartId to auto-fill form inputs
+  React.useEffect(() => {
+    if (selectedPartId && activeTab === 'create') {
+      setCreateFormIds(prev => {
+        // If both are empty or only first is empty, fill starting ID
+        if (!prev.startingId) {
+          return { ...prev, startingId: selectedPartId };
+        }
+        // If only ending ID is empty, fill ending ID
+        else if (!prev.endingId) {
+          return { ...prev, endingId: selectedPartId };
+        }
+        // Both are filled, do nothing
+        return prev;
+      });
+    }
+  }, [selectedPartId, activeTab]);
 
   return (
     <div className="w-96 bg-white border-r border-gray-200 flex flex-col">

@@ -10,9 +10,10 @@ interface AdminMapProps {
   className?: string;
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
+  onPartClick?: (partId: string) => void;
 }
 
-export default function AdminMap({ className = '', selectedRouteId, onRouteSelect }: AdminMapProps) {
+export default function AdminMap({ className = '', selectedRouteId, onRouteSelect, onPartClick }: AdminMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const railwayLayerGroupRef = useRef<L.LayerGroup | null>(null); // Railway parts layer
@@ -223,7 +224,14 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
             railwayLayerGroupRef.current!.addLayer(layer);
             addHoverEffects(layer, feature, false);
             
-            // Railway parts are clickable but no handler is set up yet
+            // Add click handler for railway part selection
+            layer.on('click', function(e) {
+              if (onPartClick && feature.properties?.['@id']) {
+                const partId = feature.properties['@id'].toString();
+                onPartClick(partId);
+              }
+              L.DomEvent.stopPropagation(e);
+            });
           }
 
           // Add simple popup with basic info
@@ -245,7 +253,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         }
       });
     }
-  }, [getRailwayPartsStyle, addHoverEffects]);
+  }, [getRailwayPartsStyle, addHoverEffects, onPartClick]);
 
   // Function to render routes layer
   const renderRoutesLayer = useCallback((routes: GeoJSONFeatureCollection) => {

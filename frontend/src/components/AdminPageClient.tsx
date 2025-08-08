@@ -16,9 +16,14 @@ interface AdminPageClientProps {
 
 export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
 
   const handleRouteSelect = (routeId: string) => {
     setSelectedRouteId(routeId);
+  };
+
+  const handlePartClick = (partId: string) => {
+    setSelectedPartId(partId);
   };
 
   async function handleLogout() {
@@ -60,12 +65,14 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
         <AdminSidebar
           selectedRouteId={selectedRouteId}
           onRouteSelect={handleRouteSelect}
+          selectedPartId={selectedPartId}
         />
         <div className="flex-1 overflow-hidden">
           <AdminMapWrapper
             className="w-full h-full"
             selectedRouteId={selectedRouteId}
             onRouteSelect={handleRouteSelect}
+            onPartClick={handlePartClick}
           />
         </div>
       </main>
