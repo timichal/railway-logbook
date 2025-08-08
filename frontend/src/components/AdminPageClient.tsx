@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import AdminMapWrapper from '@/components/AdminMapWrapper';
 import AdminSidebar from '@/components/AdminSidebar';
@@ -38,7 +38,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <Link 
+            <Link
               href="/"
               className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md text-sm"
             >
@@ -55,15 +55,15 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           </div>
         </div>
       </header>
-      
+
       <main className="flex-1 overflow-hidden flex">
-        <AdminSidebar 
+        <AdminSidebar
           selectedRouteId={selectedRouteId}
           onRouteSelect={handleRouteSelect}
         />
         <div className="flex-1 overflow-hidden">
-          <AdminMapWrapper 
-            className="w-full h-full" 
+          <AdminMapWrapper
+            className="w-full h-full"
             selectedRouteId={selectedRouteId}
             onRouteSelect={handleRouteSelect}
           />

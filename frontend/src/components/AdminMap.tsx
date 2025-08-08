@@ -101,6 +101,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
       if (isRoute) {
         const isSelected = selectedRouteId === feature.properties?.track_id;
         layer.setStyle({
+          color: "#dc2626",
           weight: isSelected ? 5 : 3,
           opacity: isSelected ? 1 : 0.8
         });
@@ -221,6 +222,8 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
           if (feature.geometry.type === 'LineString') {
             railwayLayerGroupRef.current!.addLayer(layer);
             addHoverEffects(layer, feature, false);
+            
+            // Railway parts are clickable but no handler is set up yet
           }
 
           // Add simple popup with basic info
