@@ -5,6 +5,8 @@ import Link from 'next/link';
 import AdminMapWrapper from '@/components/AdminMapWrapper';
 import AdminSidebar from '@/components/AdminSidebar';
 import { logout } from '@/lib/auth-actions';
+import { saveRailwayRoute } from '@/lib/route-save-actions';
+import type { RailwayPart } from '@/lib/types';
 
 interface AdminPageClientProps {
   user: {
@@ -17,8 +19,9 @@ interface AdminPageClientProps {
 export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
-  const [previewRoute, setPreviewRoute] = useState<{partIds: string[], coordinates: [number, number][]} | null>(null);
+  const [previewRoute, setPreviewRoute] = useState<{partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]} | null>(null);
   const [createFormIds, setCreateFormIds] = useState<{startingId: string, endingId: string}>({startingId: '', endingId: ''});
+  const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
 
   const handleRouteSelect = (routeId: string) => {
     setSelectedRouteId(routeId);
@@ -28,11 +31,47 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setSelectedPartId(partId);
   };
 
-  const handlePreviewRoute = (partIds: string[], coordinates: [number, number][]) => {
+  const handlePreviewRoute = (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => {
     console.log('AdminPageClient: Preview route requested');
     console.log('Part IDs:', partIds);
     console.log('Coordinates count:', coordinates.length);
-    setPreviewRoute({ partIds, coordinates });
+    console.log('Railway parts:', railwayParts.length);
+    setPreviewRoute({ partIds, coordinates, railwayParts });
+    setIsPreviewMode(true);
+  };
+
+  const handleCancelPreview = () => {
+    console.log('AdminPageClient: Preview cancelled');
+    setPreviewRoute(null);
+    setIsPreviewMode(false);
+  };
+
+  const handleSaveRoute = async (routeData: {track_id: string, name: string, description: string, usage_types: string[], primary_operator: string}) => {
+    console.log('AdminPageClient: Save route requested', routeData);
+    
+    if (!previewRoute) {
+      console.error('AdminPageClient: No preview route to save');
+      alert('Error: No route preview available to save');
+      return;
+    }
+    
+    try {
+      const trackId = await saveRailwayRoute(routeData, previewRoute, previewRoute.railwayParts);
+      console.log('AdminPageClient: Route saved successfully with track_id:', trackId);
+      
+      // Clear preview mode and show success message
+      setPreviewRoute(null);
+      setIsPreviewMode(false);
+      
+      alert(`Route "${routeData.name}" saved successfully!\nTrack ID: ${trackId}`);
+      
+      // Optionally clear the form or redirect
+      // You might want to reset form fields here
+      
+    } catch (error) {
+      console.error('AdminPageClient: Error saving route:', error);
+      alert(`Error saving route: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const handleCreateFormIdsChange = (ids: {startingId: string, endingId: string}) => {
@@ -81,6 +120,9 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           selectedPartId={selectedPartId}
           onPreviewRoute={handlePreviewRoute}
           onCreateFormIdsChange={handleCreateFormIdsChange}
+          isPreviewMode={isPreviewMode}
+          onCancelPreview={handleCancelPreview}
+          onSaveRoute={handleSaveRoute}
         />
         <div className="flex-1 overflow-hidden">
           <AdminMapWrapper
@@ -90,6 +132,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             onPartClick={handlePartClick}
             previewRoute={previewRoute}
             selectedParts={{startingId: createFormIds.startingId, endingId: createFormIds.endingId}}
+            isPreviewMode={isPreviewMode}
           />
         </div>
       </main>

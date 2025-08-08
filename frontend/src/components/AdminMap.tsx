@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { GeoJSONFeatureCollection, GeoJSONFeature } from '@/lib/types';
+import { GeoJSONFeatureCollection, GeoJSONFeature, RailwayPart } from '@/lib/types';
 import { getRailwayPartsByBounds, getAllRailwayRoutesWithGeometry } from '@/lib/railway-actions';
 
 interface AdminMapProps {
@@ -11,11 +11,12 @@ interface AdminMapProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
   onPartClick?: (partId: string) => void;
-  previewRoute?: {partIds: string[], coordinates: [number, number][]} | null;
+  previewRoute?: {partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]} | null;
   selectedParts?: {startingId: string, endingId: string};
+  isPreviewMode?: boolean;
 }
 
-export default function AdminMap({ className = '', selectedRouteId, onRouteSelect, onPartClick, previewRoute, selectedParts }: AdminMapProps) {
+export default function AdminMap({ className = '', selectedRouteId, onRouteSelect, onPartClick, previewRoute, selectedParts, isPreviewMode }: AdminMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const railwayLayerGroupRef = useRef<L.LayerGroup | null>(null); // Railway parts layer
@@ -160,7 +161,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         }
       }
     });
-  }, [selectedRouteId, selectedParts]);
+  }, [selectedRouteId, selectedParts?.startingId, selectedParts?.endingId]);
 
   // Function to load all railway routes
   const loadAllRoutes = useCallback(async () => {
@@ -309,7 +310,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         }
       });
     }
-  }, [getRailwayPartsStyle, addHoverEffects, onPartClick]);
+  }, [getRailwayPartsStyle, addHoverEffects, onPartClick, selectedParts]);
 
   // Function to render routes layer
   const renderRoutesLayer = useCallback((routes: GeoJSONFeatureCollection) => {
@@ -358,47 +359,60 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
   }, [getRouteStyle, addHoverEffects, onRouteSelect]);
 
   // Function to render preview route
-  const renderPreviewRoute = useCallback((preview: {partIds: string[], coordinates: [number, number][]}) => {
+  const renderPreviewRoute = useCallback((preview: {partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]}) => {
     if (!mapInstanceRef.current || !previewLayerGroupRef.current) return;
 
     // Clear existing preview layers
     previewLayerGroupRef.current.clearLayers();
 
-    console.log('AdminMap: Rendering preview route with', preview.coordinates.length, 'coordinates');
+    console.log('AdminMap: Rendering preview route with', preview.partIds.length, 'part IDs and', preview.railwayParts.length, 'railway parts');
 
-    if (preview.coordinates.length > 1) {
-      // Create a LineString feature for the preview route
-      const previewLineString = L.polyline(preview.coordinates.map(coord => [coord[1], coord[0]]), {
-        color: '#ff6600', // Orange color for preview
-        weight: 5,
-        opacity: 0.8,
-        dashArray: '10, 5' // Dashed line to distinguish from regular routes
+    if (preview.railwayParts && preview.railwayParts.length > 0) {
+      const allCoordinates: [number, number][] = [];
+      
+      // Render each railway part individually (no connecting lines)
+      preview.railwayParts.forEach((part, index) => {
+        if (part.geometry && part.geometry.type === 'LineString') {
+          const coords = part.geometry.coordinates as [number, number][];
+          allCoordinates.push(...coords);
+          
+          // Create individual polyline for each railway part in the path
+          const partLine = L.polyline(coords.map(coord => [coord[1], coord[0]]), {
+            color: '#ff6600', // Orange color for preview
+            weight: 6,
+            opacity: 0.9,
+            dashArray: '8, 4' // Dashed line to distinguish from regular routes
+          });
+
+          previewLayerGroupRef.current!.addLayer(partLine);
+          
+          const partId = part.properties['@id']?.toString() || 'unknown';
+          
+          // Add popup for individual parts
+          partLine.bindPopup(`
+            <div class="preview-part-popup">
+              <h4 class="font-bold text-md mb-2">🟠 Preview Route Part</h4>
+              <div class="mb-2">
+                <strong>Part ID:</strong> ${partId}<br/>
+                <strong>Position in route:</strong> ${index + 1} of ${preview.railwayParts.length}<br/>
+                <span class="text-sm text-gray-600">This railway part is included in the route</span>
+              </div>
+            </div>
+          `);
+        }
       });
 
-      previewLayerGroupRef.current.addLayer(previewLineString);
-
-      // Add popup with route info
-      previewLineString.bindPopup(`
-        <div class="preview-route-popup">
-          <h3 class="font-bold text-lg mb-2">Preview Route</h3>
-          <div class="mb-2">
-            <strong>Part IDs:</strong> ${preview.partIds.join(' → ')}<br/>
-            <strong>Segments:</strong> ${preview.partIds.length}<br/>
-            <strong>Total coordinates:</strong> ${preview.coordinates.length}<br/>
-            <span class="text-sm text-gray-600">Click "Preview Route" to generate this route</span>
-          </div>
-        </div>
-      `);
-
       // Fit map to preview route bounds with padding
-      if (preview.coordinates.length > 0) {
-        const latLngs = preview.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+      if (allCoordinates.length > 0) {
+        const latLngs = allCoordinates.map(coord => L.latLng(coord[1], coord[0]));
         const bounds = L.latLngBounds(latLngs);
         mapInstanceRef.current.fitBounds(bounds, { 
           padding: [50, 50],
           maxZoom: 14
         });
       }
+      
+      console.log('AdminMap: Highlighted', preview.railwayParts.length, 'individual railway parts for preview (no connecting lines)');
     }
   }, []);
 
@@ -525,12 +539,14 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
   useEffect(() => {
     if (!mapInstanceRef.current) return;
 
-    // Update railway parts layer visibility
+    // Update railway parts layer visibility - hide when in preview mode
     if (railwayLayerGroupRef.current) {
       const hasPartsLayer = mapInstanceRef.current.hasLayer(railwayLayerGroupRef.current);
-      if (showPartsLayer && !hasPartsLayer) {
+      const shouldShowParts = showPartsLayer && !isPreviewMode;
+      
+      if (shouldShowParts && !hasPartsLayer) {
         mapInstanceRef.current.addLayer(railwayLayerGroupRef.current);
-      } else if (!showPartsLayer && hasPartsLayer) {
+      } else if (!shouldShowParts && hasPartsLayer) {
         mapInstanceRef.current.removeLayer(railwayLayerGroupRef.current);
       }
     }
@@ -544,7 +560,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         mapInstanceRef.current.removeLayer(routesLayerGroupRef.current);
       }
     }
-  }, [showPartsLayer, showRoutesLayer]);
+  }, [showPartsLayer, showRoutesLayer, isPreviewMode]);
 
   return (
     <div className={`${className} relative`}>

@@ -41,3 +41,15 @@ export interface GeoJSONFeatureCollection {
   type: 'FeatureCollection';
   features: GeoJSONFeature[];
 }
+
+export interface RailwayPart {
+  type: 'Feature';
+  geometry: {
+    type: 'LineString';
+    coordinates: [number, number][];
+  };
+  properties: {
+    '@id': number;
+    [key: string]: unknown;
+  };
+}

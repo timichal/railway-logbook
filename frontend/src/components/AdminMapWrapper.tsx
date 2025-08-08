@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import type { RailwayPart } from '@/lib/types';
 
 // Dynamically import AdminMap with no SSR to avoid window reference errors
 const AdminMap = dynamic(() => import('./AdminMap'), {
@@ -20,11 +21,12 @@ interface AdminMapWrapperProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
   onPartClick?: (partId: string) => void;
-  previewRoute?: {partIds: string[], coordinates: [number, number][]} | null;
+  previewRoute?: {partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]} | null;
   selectedParts?: {startingId: string, endingId: string};
+  isPreviewMode?: boolean;
 }
 
-export default function AdminMapWrapper({ className, selectedRouteId, onRouteSelect, onPartClick, previewRoute, selectedParts }: AdminMapWrapperProps) {
+export default function AdminMapWrapper({ className, selectedRouteId, onRouteSelect, onPartClick, previewRoute, selectedParts, isPreviewMode }: AdminMapWrapperProps) {
   return (
     <AdminMap 
       className={className}
@@ -33,6 +35,7 @@ export default function AdminMapWrapper({ className, selectedRouteId, onRouteSel
       onPartClick={onPartClick}
       previewRoute={previewRoute}
       selectedParts={selectedParts}
+      isPreviewMode={isPreviewMode}
     />
   );
 }

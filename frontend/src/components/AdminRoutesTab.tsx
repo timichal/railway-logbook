@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getAllRailwayRoutes, getRailwayRoute, updateRailwayRoute } from '@/lib/railway-actions';
+import { deleteRailwayRoute } from '@/lib/route-delete-actions';
 import { getAllUsageOptions } from '@/lib/constants';
 
 interface RailwayRoute {
@@ -119,6 +120,40 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect }: Admin
     if (!editForm) return;
     const newUsageTypes = editForm.usage_types.filter((_, i) => i !== index);
     setEditForm({ ...editForm, usage_types: newUsageTypes });
+  };
+
+  const handleDeleteRoute = async () => {
+    if (!selectedRoute) return;
+
+    const confirmDelete = confirm(
+      `Are you sure you want to delete the route "${selectedRoute.name}"?\n\n` +
+      `Track ID: ${selectedRoute.track_id}\n` +
+      `This action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      setIsLoading(true);
+      await deleteRailwayRoute(selectedRoute.track_id);
+      
+      console.log('Route deleted successfully');
+      
+      // Refresh the routes list
+      await loadRoutes();
+      
+      // Clear the selected route
+      setSelectedRoute(null);
+      setEditForm(null);
+      
+      alert(`Route "${selectedRoute.name}" has been deleted successfully.`);
+      
+    } catch (error) {
+      console.error('Error deleting route:', error);
+      alert(`Error deleting route: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -257,8 +292,8 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect }: Admin
                   </div>
                 </div>
 
-                {/* Save Button */}
-                <div className="pt-4 border-t border-gray-200">
+                {/* Save and Delete Buttons */}
+                <div className="pt-4 border-t border-gray-200 space-y-2">
                   <button
                     onClick={handleSaveRoute}
                     disabled={isLoading}
@@ -266,6 +301,18 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect }: Admin
                   >
                     {isLoading ? 'Saving...' : 'Save Changes'}
                   </button>
+                  
+                  <button
+                    onClick={handleDeleteRoute}
+                    disabled={isLoading}
+                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm"
+                  >
+                    {isLoading ? 'Deleting...' : 'Delete Route'}
+                  </button>
+                  
+                  <p className="text-xs text-gray-500 text-center">
+                    Deletion is permanent and cannot be undone
+                  </p>
                 </div>
               </div>
             )}

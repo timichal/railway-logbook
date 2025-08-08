@@ -3,16 +3,20 @@
 import React, { useState } from 'react';
 import AdminRoutesTab from './AdminRoutesTab';
 import AdminCreateRouteTab from './AdminCreateRouteTab';
+import type { RailwayPart } from '@/lib/types';
 
 interface AdminSidebarProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
   selectedPartId?: string | null;
-  onPreviewRoute?: (partIds: string[], coordinates: [number, number][]) => void;
+  onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   onCreateFormIdsChange?: (ids: {startingId: string, endingId: string}) => void;
+  isPreviewMode?: boolean;
+  onCancelPreview?: () => void;
+  onSaveRoute?: (routeData: {track_id: string, name: string, description: string, usage_types: string[], primary_operator: string}) => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   
   // State for create route form IDs
@@ -88,6 +92,9 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             onStartingIdChange={(id) => setCreateFormIds(prev => ({ ...prev, startingId: id }))}
             onEndingIdChange={(id) => setCreateFormIds(prev => ({ ...prev, endingId: id }))}
             onPreviewRoute={onPreviewRoute}
+            isPreviewMode={isPreviewMode}
+            onCancelPreview={onCancelPreview}
+            onSaveRoute={onSaveRoute}
           />
         )}
       </div>
