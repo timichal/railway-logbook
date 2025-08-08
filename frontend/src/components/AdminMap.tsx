@@ -11,13 +11,16 @@ interface AdminMapProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
   onPartClick?: (partId: string) => void;
+  previewRoute?: {partIds: string[], coordinates: [number, number][]} | null;
+  selectedParts?: {startingId: string, endingId: string};
 }
 
-export default function AdminMap({ className = '', selectedRouteId, onRouteSelect, onPartClick }: AdminMapProps) {
+export default function AdminMap({ className = '', selectedRouteId, onRouteSelect, onPartClick, previewRoute, selectedParts }: AdminMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const railwayLayerGroupRef = useRef<L.LayerGroup | null>(null); // Railway parts layer
   const routesLayerGroupRef = useRef<L.LayerGroup | null>(null);  // Railway routes layer
+  const previewLayerGroupRef = useRef<L.LayerGroup | null>(null); // Preview route layer
   const isLoadingRef = useRef<boolean>(false);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   
@@ -65,6 +68,29 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
   const getRailwayPartsStyle = useCallback((feature?: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (!feature || feature?.geometry?.type !== 'LineString') return {};
     const zoomLevel = feature.properties?.zoom_level || 7;
+    const partId = feature.properties?.['@id']?.toString();
+    
+    // Check if this part is selected as starting or ending ID
+    const isStartingPart = selectedParts?.startingId && partId === selectedParts.startingId;
+    const isEndingPart = selectedParts?.endingId && partId === selectedParts.endingId;
+    
+    if (isStartingPart) {
+      return {
+        color: '#16a34a', // Green for starting part
+        weight: 6,
+        opacity: 1.0,
+        fillOpacity: 0.8
+      };
+    }
+    
+    if (isEndingPart) {
+      return {
+        color: '#dc2626', // Red for ending part
+        weight: 6,
+        opacity: 1.0,
+        fillOpacity: 0.8
+      };
+    }
     
     return {
       color: '#2563eb', // Blue for railway parts
@@ -72,7 +98,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
       opacity: 0.7,
       fillOpacity: 0.6
     };
-  }, []);
+  }, [selectedParts]);
 
   const getRouteStyle = useCallback((feature?: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (!feature || feature?.geometry?.type !== 'LineString') return {};
@@ -107,15 +133,34 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
           opacity: isSelected ? 1 : 0.8
         });
       } else {
+        // Restore original styling for railway parts (including selected part highlighting)
+        const partId = feature.properties?.['@id']?.toString();
+        const isStartingPart = selectedParts?.startingId && partId === selectedParts.startingId;
+        const isEndingPart = selectedParts?.endingId && partId === selectedParts.endingId;
         const zoomLevel = feature.properties?.zoom_level || 7;
-        layer.setStyle({
-          color: '#2563eb', // Back to blue
-          weight: zoomLevel < 12 ? 2 : 3,
-          opacity: 0.7
-        });
+        
+        if (isStartingPart) {
+          layer.setStyle({
+            color: '#16a34a', // Green for starting part
+            weight: 6,
+            opacity: 1.0
+          });
+        } else if (isEndingPart) {
+          layer.setStyle({
+            color: '#dc2626', // Red for ending part
+            weight: 6,
+            opacity: 1.0
+          });
+        } else {
+          layer.setStyle({
+            color: '#2563eb', // Back to blue
+            weight: zoomLevel < 12 ? 2 : 3,
+            opacity: 0.7
+          });
+        }
       }
     });
-  }, [selectedRouteId]);
+  }, [selectedRouteId, selectedParts]);
 
   // Function to load all railway routes
   const loadAllRoutes = useCallback(async () => {
@@ -237,10 +282,21 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
           // Add simple popup with basic info
           if (feature.properties) {
             const zoomLevel = feature.properties.zoom_level;
+            const partId = feature.properties['@id']?.toString();
+            const isStartingPart = selectedParts?.startingId && partId === selectedParts.startingId;
+            const isEndingPart = selectedParts?.endingId && partId === selectedParts.endingId;
+            
+            let roleInfo = '';
+            if (isStartingPart) {
+              roleInfo = '<div class="mb-2 p-2 bg-green-100 border border-green-300 rounded"><strong class="text-green-800">🟢 STARTING PART</strong><br/><span class="text-sm text-green-700">Selected as route starting point</span></div>';
+            } else if (isEndingPart) {
+              roleInfo = '<div class="mb-2 p-2 bg-red-100 border border-red-300 rounded"><strong class="text-red-800">🔴 ENDING PART</strong><br/><span class="text-sm text-red-700">Selected as route ending point</span></div>';
+            }
 
             const popupContent = `
               <div class="railway-popup">
                 <h3 class="font-bold text-lg mb-2">Railway Part</h3>
+                ${roleInfo}
                 <div class="mb-2">
                   <strong>OSM ID:</strong> ${feature.properties['@id']}<br/>
                   <strong>Zoom Level:</strong> ${zoomLevel}<br/>
@@ -301,6 +357,58 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
     }
   }, [getRouteStyle, addHoverEffects, onRouteSelect]);
 
+  // Function to render preview route
+  const renderPreviewRoute = useCallback((preview: {partIds: string[], coordinates: [number, number][]}) => {
+    if (!mapInstanceRef.current || !previewLayerGroupRef.current) return;
+
+    // Clear existing preview layers
+    previewLayerGroupRef.current.clearLayers();
+
+    console.log('AdminMap: Rendering preview route with', preview.coordinates.length, 'coordinates');
+
+    if (preview.coordinates.length > 1) {
+      // Create a LineString feature for the preview route
+      const previewLineString = L.polyline(preview.coordinates.map(coord => [coord[1], coord[0]]), {
+        color: '#ff6600', // Orange color for preview
+        weight: 5,
+        opacity: 0.8,
+        dashArray: '10, 5' // Dashed line to distinguish from regular routes
+      });
+
+      previewLayerGroupRef.current.addLayer(previewLineString);
+
+      // Add popup with route info
+      previewLineString.bindPopup(`
+        <div class="preview-route-popup">
+          <h3 class="font-bold text-lg mb-2">Preview Route</h3>
+          <div class="mb-2">
+            <strong>Part IDs:</strong> ${preview.partIds.join(' → ')}<br/>
+            <strong>Segments:</strong> ${preview.partIds.length}<br/>
+            <strong>Total coordinates:</strong> ${preview.coordinates.length}<br/>
+            <span class="text-sm text-gray-600">Click "Preview Route" to generate this route</span>
+          </div>
+        </div>
+      `);
+
+      // Fit map to preview route bounds with padding
+      if (preview.coordinates.length > 0) {
+        const latLngs = preview.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+        const bounds = L.latLngBounds(latLngs);
+        mapInstanceRef.current.fitBounds(bounds, { 
+          padding: [50, 50],
+          maxZoom: 14
+        });
+      }
+    }
+  }, []);
+
+  // Clear preview route
+  const clearPreviewRoute = useCallback(() => {
+    if (previewLayerGroupRef.current) {
+      previewLayerGroupRef.current.clearLayers();
+    }
+  }, []);
+
   // Function to focus map on selected route
   const focusOnRoute = useCallback((routeId: string) => {
     if (!mapInstanceRef.current || !routesData) return;
@@ -351,6 +459,11 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
       routesLayerGroup.addTo(map);
     }
 
+    // Create layer group for preview route (orange layer, highest)
+    const previewLayerGroup = L.layerGroup();
+    previewLayerGroupRef.current = previewLayerGroup;
+    previewLayerGroup.addTo(map); // Always add preview layer
+
     // Add event listeners for viewport changes
     map.on('moveend', debouncedLoadData);
     map.on('zoomend', debouncedLoadData);
@@ -370,6 +483,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         mapInstanceRef.current = null;
         railwayLayerGroupRef.current = null;
         routesLayerGroupRef.current = null;
+        previewLayerGroupRef.current = null;
       }
     };
   }, [debouncedLoadData, loadDataForViewport, loadAllRoutes, showPartsLayer, showRoutesLayer]); // Include dependencies
@@ -378,6 +492,11 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
   useEffect(() => {
     renderAllFeatures(currentViewportData);
   }, [currentViewportData, renderAllFeatures]);
+
+  // Re-render when selected parts change (to update highlighting)
+  useEffect(() => {
+    renderAllFeatures(currentViewportData);
+  }, [selectedParts, currentViewportData, renderAllFeatures]);
 
   // Re-render routes when routes data changes
   useEffect(() => {
@@ -392,6 +511,15 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
       focusOnRoute(selectedRouteId);
     }
   }, [selectedRouteId, routesData, focusOnRoute]);
+
+  // Handle preview route changes
+  useEffect(() => {
+    if (previewRoute) {
+      renderPreviewRoute(previewRoute);
+    } else {
+      clearPreviewRoute();
+    }
+  }, [previewRoute, renderPreviewRoute, clearPreviewRoute]);
 
   // Handle layer visibility changes after map is initialized
   useEffect(() => {

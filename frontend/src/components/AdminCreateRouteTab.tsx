@@ -2,15 +2,17 @@
 
 import React, { useState } from 'react';
 import { getAllUsageOptions } from '@/lib/constants';
+import { findRailwayPathDB } from '@/lib/db-path-actions';
 
 interface AdminCreateRouteTabProps {
   startingId: string;
   endingId: string;
   onStartingIdChange: (id: string) => void;
   onEndingIdChange: (id: string) => void;
+  onPreviewRoute?: (partIds: string[], coordinates: [number, number][]) => void;
 }
 
-export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange }: AdminCreateRouteTabProps) {
+export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute }: AdminCreateRouteTabProps) {
   
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
@@ -44,6 +46,34 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   const removeCreateUsageType = (index: number) => {
     const newUsageTypes = createForm.usage_types.filter((_, i) => i !== index);
     setCreateForm({ ...createForm, usage_types: newUsageTypes });
+  };
+
+  // Handle preview route functionality
+  const handlePreviewRoute = async () => {
+    if (!startingId || !endingId || !onPreviewRoute) {
+      console.error('Preview: Missing starting ID, ending ID, or preview callback');
+      return;
+    }
+
+    try {
+      console.log('Preview: Finding path from', startingId, 'to', endingId);
+
+      // Use database-based server action to find path
+      const result = await findRailwayPathDB(startingId, endingId);
+
+      if (result) {
+        console.log('Preview: Path found!');
+        console.log('Part IDs:', result.partIds);
+        console.log('Coordinates count:', result.coordinates.length);
+        onPreviewRoute(result.partIds, result.coordinates);
+      } else {
+        console.error('Preview: No path found between', startingId, 'and', endingId);
+        alert('No path found between the selected railway parts. Make sure both parts are connected through the railway network.');
+      }
+    } catch (error) {
+      console.error('Preview: Error finding path:', error);
+      alert(`Error finding path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   return (
@@ -185,12 +215,15 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
         {/* Preview Button */}
         <div className="pt-4 border-t border-gray-200">
           <button
-            onClick={() => {/* TODO: implement preview functionality */}}
-            disabled={!startingId || !endingId || !createForm.name || !createForm.primary_operator}
+            onClick={handlePreviewRoute}
+            disabled={!startingId || !endingId}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm"
           >
             Preview Route
           </button>
+          <p className="text-xs text-gray-500 mt-2">
+            Click to find and preview the route between the selected railway parts
+          </p>
         </div>
       </div>
     </div>

@@ -8,9 +8,11 @@ interface AdminSidebarProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
   selectedPartId?: string | null;
+  onPreviewRoute?: (partIds: string[], coordinates: [number, number][]) => void;
+  onCreateFormIdsChange?: (ids: {startingId: string, endingId: string}) => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   
   // State for create route form IDs
@@ -36,6 +38,13 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
       });
     }
   }, [selectedPartId, activeTab]);
+
+  // Notify parent when form IDs change
+  React.useEffect(() => {
+    if (onCreateFormIdsChange) {
+      onCreateFormIdsChange(createFormIds);
+    }
+  }, [createFormIds, onCreateFormIdsChange]);
 
   return (
     <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
@@ -78,6 +87,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             endingId={createFormIds.endingId}
             onStartingIdChange={(id) => setCreateFormIds(prev => ({ ...prev, startingId: id }))}
             onEndingIdChange={(id) => setCreateFormIds(prev => ({ ...prev, endingId: id }))}
+            onPreviewRoute={onPreviewRoute}
           />
         )}
       </div>

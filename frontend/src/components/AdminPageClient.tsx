@@ -17,6 +17,8 @@ interface AdminPageClientProps {
 export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
+  const [previewRoute, setPreviewRoute] = useState<{partIds: string[], coordinates: [number, number][]} | null>(null);
+  const [createFormIds, setCreateFormIds] = useState<{startingId: string, endingId: string}>({startingId: '', endingId: ''});
 
   const handleRouteSelect = (routeId: string) => {
     setSelectedRouteId(routeId);
@@ -24,6 +26,17 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
   const handlePartClick = (partId: string) => {
     setSelectedPartId(partId);
+  };
+
+  const handlePreviewRoute = (partIds: string[], coordinates: [number, number][]) => {
+    console.log('AdminPageClient: Preview route requested');
+    console.log('Part IDs:', partIds);
+    console.log('Coordinates count:', coordinates.length);
+    setPreviewRoute({ partIds, coordinates });
+  };
+
+  const handleCreateFormIdsChange = (ids: {startingId: string, endingId: string}) => {
+    setCreateFormIds(ids);
   };
 
   async function handleLogout() {
@@ -66,6 +79,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           selectedRouteId={selectedRouteId}
           onRouteSelect={handleRouteSelect}
           selectedPartId={selectedPartId}
+          onPreviewRoute={handlePreviewRoute}
+          onCreateFormIdsChange={handleCreateFormIdsChange}
         />
         <div className="flex-1 overflow-hidden">
           <AdminMapWrapper
@@ -73,6 +88,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             selectedRouteId={selectedRouteId}
             onRouteSelect={handleRouteSelect}
             onPartClick={handlePartClick}
+            previewRoute={previewRoute}
+            selectedParts={{startingId: createFormIds.startingId, endingId: createFormIds.endingId}}
           />
         </div>
       </main>

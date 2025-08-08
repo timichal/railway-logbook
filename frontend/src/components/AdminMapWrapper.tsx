@@ -20,15 +20,19 @@ interface AdminMapWrapperProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
   onPartClick?: (partId: string) => void;
+  previewRoute?: {partIds: string[], coordinates: [number, number][]} | null;
+  selectedParts?: {startingId: string, endingId: string};
 }
 
-export default function AdminMapWrapper({ className, selectedRouteId, onRouteSelect, onPartClick }: AdminMapWrapperProps) {
+export default function AdminMapWrapper({ className, selectedRouteId, onRouteSelect, onPartClick, previewRoute, selectedParts }: AdminMapWrapperProps) {
   return (
     <AdminMap 
       className={className}
       selectedRouteId={selectedRouteId}
       onRouteSelect={onRouteSelect}
       onPartClick={onPartClick}
+      previewRoute={previewRoute}
+      selectedParts={selectedParts}
     />
   );
 }
