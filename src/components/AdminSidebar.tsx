@@ -77,16 +77,16 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
         {activeTab === 'routes' && (
-          <AdminRoutesTab 
+          <AdminRoutesTab
             selectedRouteId={selectedRouteId}
             onRouteSelect={onRouteSelect}
           />
         )}
 
         {activeTab === 'create' && (
-          <AdminCreateRouteTab 
+          <AdminCreateRouteTab
             startingId={createFormIds.startingId}
             endingId={createFormIds.endingId}
             onStartingIdChange={(id) => setCreateFormIds(prev => ({ ...prev, startingId: id }))}
