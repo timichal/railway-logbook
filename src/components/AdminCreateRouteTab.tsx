@@ -15,9 +15,10 @@ interface AdminCreateRouteTabProps {
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
   onSaveRoute?: (routeData: {track_id: string, name: string, description: string, usage_types: string[], primary_operator: string}) => void;
+  onFormReset?: () => void;
 }
 
-export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute }: AdminCreateRouteTabProps) {
+export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset }: AdminCreateRouteTabProps) {
   
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
@@ -27,6 +28,21 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     usage_types: [''] as string[],
     primary_operator: ''
   });
+
+  // Reset form function
+  const resetForm = () => {
+    setCreateForm({
+      track_id: '',
+      name: '',
+      description: '',
+      usage_types: [''],
+      primary_operator: ''
+    });
+    // Clear the IDs managed by parent via callback
+    if (onFormReset) {
+      onFormReset();
+    }
+  };
 
   // Clear starting ID
   const clearStartingId = () => {
@@ -88,16 +104,19 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   };
 
   // Handle save route functionality
-  const handleSaveRoute = () => {
+  const handleSaveRoute = async () => {
     if (!onSaveRoute) return;
-    
-    onSaveRoute({
+
+    await onSaveRoute({
       track_id: createForm.track_id,
       name: createForm.name,
       description: createForm.description,
       usage_types: createForm.usage_types.filter(usage => usage !== ''), // Remove empty usage types
       primary_operator: createForm.primary_operator
     });
+
+    // Reset form after successful save
+    resetForm();
   };
 
   return (

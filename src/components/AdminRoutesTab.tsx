@@ -20,9 +20,10 @@ interface RouteDetail extends RailwayRoute {
 interface AdminRoutesTabProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
+  onRouteDeleted?: () => void;
 }
 
-export default function AdminRoutesTab({ selectedRouteId, onRouteSelect }: AdminRoutesTabProps) {
+export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRouteDeleted }: AdminRoutesTabProps) {
   const [routes, setRoutes] = useState<RailwayRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -141,11 +142,16 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect }: Admin
       
       // Refresh the routes list
       await loadRoutes();
-      
+
       // Clear the selected route
       setSelectedRoute(null);
       setEditForm(null);
-      
+
+      // Notify parent to refresh map layer
+      if (onRouteDeleted) {
+        onRouteDeleted();
+      }
+
       alert(`Route "${selectedRoute.name}" has been deleted successfully.`);
       
     } catch (error) {
@@ -194,8 +200,20 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect }: Admin
       <div className="w-1/2 overflow-y-auto">
         {selectedRoute ? (
           <div className="p-4">
-            <div className="mb-4">
-              <h4 className="font-semibold text-gray-900 mb-2">Edit Route</h4>
+            <div className="mb-4 flex justify-between items-center">
+              <h4 className="font-semibold text-gray-900">Edit Route</h4>
+              <button
+                onClick={() => {
+                  setSelectedRoute(null);
+                  setEditForm(null);
+                  if (onRouteSelect) {
+                    onRouteSelect('');
+                  }
+                }}
+                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md border border-gray-300"
+              >
+                Unselect
+              </button>
             </div>
             
             {editForm && (

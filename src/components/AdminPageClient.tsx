@@ -22,6 +22,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [previewRoute, setPreviewRoute] = useState<{partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]} | null>(null);
   const [createFormIds, setCreateFormIds] = useState<{startingId: string, endingId: string}>({startingId: '', endingId: ''});
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   const handleRouteSelect = (routeId: string) => {
     setSelectedRouteId(routeId);
@@ -48,30 +49,43 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
   const handleSaveRoute = async (routeData: {track_id: string, name: string, description: string, usage_types: string[], primary_operator: string}) => {
     console.log('AdminPageClient: Save route requested', routeData);
-    
+
     if (!previewRoute) {
       console.error('AdminPageClient: No preview route to save');
       alert('Error: No route preview available to save');
       return;
     }
-    
+
     try {
       const trackId = await saveRailwayRoute(routeData, previewRoute, previewRoute.railwayParts);
       console.log('AdminPageClient: Route saved successfully with track_id:', trackId);
-      
-      // Clear preview mode and show success message
+
+      // Clear preview mode
       setPreviewRoute(null);
       setIsPreviewMode(false);
-      
+
+      // Clear the form IDs (unselect start/end points)
+      setCreateFormIds({startingId: '', endingId: ''});
+
+      // Trigger routes layer refresh
+      setRefreshTrigger(prev => prev + 1);
+
       alert(`Route "${routeData.name}" saved successfully!\nTrack ID: ${trackId}`);
-      
-      // Optionally clear the form or redirect
-      // You might want to reset form fields here
-      
+
     } catch (error) {
       console.error('AdminPageClient: Error saving route:', error);
       alert(`Error saving route: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  };
+
+  const handleFormReset = () => {
+    // Clear the form IDs
+    setCreateFormIds({startingId: '', endingId: ''});
+  };
+
+  const handleRouteDeleted = () => {
+    // Trigger routes layer refresh after deletion
+    setRefreshTrigger(prev => prev + 1);
   };
 
   const handleCreateFormIdsChange = (ids: {startingId: string, endingId: string}) => {
@@ -123,6 +137,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           isPreviewMode={isPreviewMode}
           onCancelPreview={handleCancelPreview}
           onSaveRoute={handleSaveRoute}
+          onFormReset={handleFormReset}
+          onRouteDeleted={handleRouteDeleted}
         />
         <div className="flex-1 overflow-hidden">
           <AdminMapWrapper
@@ -133,6 +149,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             previewRoute={previewRoute}
             selectedParts={{startingId: createFormIds.startingId, endingId: createFormIds.endingId}}
             isPreviewMode={isPreviewMode}
+            refreshTrigger={refreshTrigger}
           />
         </div>
       </main>

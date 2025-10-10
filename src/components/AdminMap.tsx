@@ -14,9 +14,10 @@ interface AdminMapProps {
   previewRoute?: {partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]} | null;
   selectedParts?: {startingId: string, endingId: string};
   isPreviewMode?: boolean;
+  refreshTrigger?: number;
 }
 
-export default function AdminMap({ className = '', selectedRouteId, onRouteSelect, onPartClick, previewRoute, selectedParts, isPreviewMode }: AdminMapProps) {
+export default function AdminMap({ className = '', selectedRouteId, onRouteSelect, onPartClick, previewRoute, selectedParts, isPreviewMode, refreshTrigger }: AdminMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const railwayLayerGroupRef = useRef<L.LayerGroup | null>(null); // Railway parts layer
@@ -237,23 +238,23 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
 
     // Combine current viewport features + cached features
     const allFeatures: GeoJSONFeature[] = [];
-    
+
     // Add current viewport features (highest priority - always show)
     if (viewportData && viewportData.features) {
       allFeatures.push(...viewportData.features);
     }
-    
+
     // Add cached features (features from previous viewports)
     const cachedFeaturesArray = Array.from(cachedFeatures.current.values());
-    
+
     // Remove duplicates (current viewport features take precedence)
     const viewportIds = new Set(viewportData?.features.map(f => f.properties?.['@id']?.toString()) || []);
-    const uniqueCachedFeatures = cachedFeaturesArray.filter(f => 
+    const uniqueCachedFeatures = cachedFeaturesArray.filter(f =>
       !viewportIds.has(f.properties?.['@id']?.toString())
     );
-    
+
     allFeatures.push(...uniqueCachedFeatures);
-    
+
     console.log(`Rendering ${viewportData?.features.length || 0} viewport features + ${uniqueCachedFeatures.length} cached features`);
 
     if (allFeatures.length > 0) {
@@ -269,7 +270,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
           if (feature.geometry.type === 'LineString') {
             railwayLayerGroupRef.current!.addLayer(layer);
             addHoverEffects(layer, feature, false);
-            
+
             // Add click handler for railway part selection
             layer.on('click', function(e) {
               if (onPartClick && feature.properties?.['@id']) {
@@ -286,7 +287,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
             const partId = feature.properties['@id']?.toString();
             const isStartingPart = selectedParts?.startingId && partId === selectedParts.startingId;
             const isEndingPart = selectedParts?.endingId && partId === selectedParts.endingId;
-            
+
             let roleInfo = '';
             if (isStartingPart) {
               roleInfo = '<div class="mb-2 p-2 bg-green-100 border border-green-300 rounded"><strong class="text-green-800">🟢 STARTING PART</strong><br/><span class="text-sm text-green-700">Selected as route starting point</span></div>';
@@ -309,6 +310,17 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
           }
         }
       });
+    }
+
+    // After rendering parts, ensure correct z-order by re-adding layers in order
+    // LayerGroups don't have bringToFront(), so we remove and re-add to change z-order
+    if (routesLayerGroupRef.current && mapInstanceRef.current.hasLayer(routesLayerGroupRef.current)) {
+      mapInstanceRef.current.removeLayer(routesLayerGroupRef.current);
+      mapInstanceRef.current.addLayer(routesLayerGroupRef.current);
+    }
+    if (previewLayerGroupRef.current && mapInstanceRef.current.hasLayer(previewLayerGroupRef.current)) {
+      mapInstanceRef.current.removeLayer(previewLayerGroupRef.current);
+      mapInstanceRef.current.addLayer(previewLayerGroupRef.current);
     }
   }, [getRailwayPartsStyle, addHoverEffects, onPartClick, selectedParts]);
 
@@ -355,6 +367,13 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
           }
         }
       });
+    }
+
+    // After rendering routes, ensure correct z-order by re-adding preview layer
+    // LayerGroups don't have bringToFront(), so we remove and re-add to change z-order
+    if (previewLayerGroupRef.current && mapInstanceRef.current.hasLayer(previewLayerGroupRef.current)) {
+      mapInstanceRef.current.removeLayer(previewLayerGroupRef.current);
+      mapInstanceRef.current.addLayer(previewLayerGroupRef.current);
     }
   }, [getRouteStyle, addHoverEffects, onRouteSelect]);
 
@@ -459,24 +478,28 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
 
     mapInstanceRef.current = map;
 
-    // Create layer group for railway parts (blue layer, bottom)
+    // Create layer groups (order matters for z-index - last added appears on top)
+
+    // Railway parts layer (blue layer, bottom)
     const railwayLayerGroup = L.layerGroup();
     railwayLayerGroupRef.current = railwayLayerGroup;
+
+    // Railway routes layer (red layer, middle)
+    const routesLayerGroup = L.layerGroup();
+    routesLayerGroupRef.current = routesLayerGroup;
+
+    // Preview route layer (orange layer, top)
+    const previewLayerGroup = L.layerGroup();
+    previewLayerGroupRef.current = previewLayerGroup;
+
+    // Add layers in order: parts (bottom), routes (middle), preview (top)
     if (showPartsLayer) {
       railwayLayerGroup.addTo(map);
     }
-
-    // Create layer group for railway routes (red layer, top)
-    const routesLayerGroup = L.layerGroup();
-    routesLayerGroupRef.current = routesLayerGroup;
     if (showRoutesLayer) {
       routesLayerGroup.addTo(map);
     }
-
-    // Create layer group for preview route (orange layer, highest)
-    const previewLayerGroup = L.layerGroup();
-    previewLayerGroupRef.current = previewLayerGroup;
-    previewLayerGroup.addTo(map); // Always add preview layer
+    previewLayerGroup.addTo(map); // Always add preview layer last (on top)
 
     // Add event listeners for viewport changes
     map.on('moveend', debouncedLoadData);
@@ -500,7 +523,7 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
         previewLayerGroupRef.current = null;
       }
     };
-  }, [debouncedLoadData, loadDataForViewport, loadAllRoutes, showPartsLayer, showRoutesLayer]); // Include dependencies
+  }, [debouncedLoadData, loadDataForViewport, loadAllRoutes]); // Removed showPartsLayer, showRoutesLayer to prevent map re-initialization
 
   // Re-render when viewport data changes
   useEffect(() => {
@@ -543,9 +566,18 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
     if (railwayLayerGroupRef.current) {
       const hasPartsLayer = mapInstanceRef.current.hasLayer(railwayLayerGroupRef.current);
       const shouldShowParts = showPartsLayer && !isPreviewMode;
-      
+
       if (shouldShowParts && !hasPartsLayer) {
         mapInstanceRef.current.addLayer(railwayLayerGroupRef.current);
+        // Ensure correct z-order by re-adding routes and preview on top
+        if (routesLayerGroupRef.current && mapInstanceRef.current.hasLayer(routesLayerGroupRef.current)) {
+          mapInstanceRef.current.removeLayer(routesLayerGroupRef.current);
+          mapInstanceRef.current.addLayer(routesLayerGroupRef.current);
+        }
+        if (previewLayerGroupRef.current && mapInstanceRef.current.hasLayer(previewLayerGroupRef.current)) {
+          mapInstanceRef.current.removeLayer(previewLayerGroupRef.current);
+          mapInstanceRef.current.addLayer(previewLayerGroupRef.current);
+        }
       } else if (!shouldShowParts && hasPartsLayer) {
         mapInstanceRef.current.removeLayer(railwayLayerGroupRef.current);
       }
@@ -556,11 +588,24 @@ export default function AdminMap({ className = '', selectedRouteId, onRouteSelec
       const hasRoutesLayer = mapInstanceRef.current.hasLayer(routesLayerGroupRef.current);
       if (showRoutesLayer && !hasRoutesLayer) {
         mapInstanceRef.current.addLayer(routesLayerGroupRef.current);
+        // Ensure preview stays on top
+        if (previewLayerGroupRef.current && mapInstanceRef.current.hasLayer(previewLayerGroupRef.current)) {
+          mapInstanceRef.current.removeLayer(previewLayerGroupRef.current);
+          mapInstanceRef.current.addLayer(previewLayerGroupRef.current);
+        }
       } else if (!showRoutesLayer && hasRoutesLayer) {
         mapInstanceRef.current.removeLayer(routesLayerGroupRef.current);
       }
     }
   }, [showPartsLayer, showRoutesLayer, isPreviewMode]);
+
+  // Refresh routes when refreshTrigger changes
+  useEffect(() => {
+    if (refreshTrigger !== undefined && refreshTrigger > 0) {
+      console.log('Refreshing routes layer due to trigger:', refreshTrigger);
+      loadAllRoutes();
+    }
+  }, [refreshTrigger, loadAllRoutes]);
 
   return (
     <div className={`${className} relative`}>

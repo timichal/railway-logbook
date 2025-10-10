@@ -14,9 +14,11 @@ interface AdminSidebarProps {
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
   onSaveRoute?: (routeData: {track_id: string, name: string, description: string, usage_types: string[], primary_operator: string}) => void;
+  onFormReset?: () => void;
+  onRouteDeleted?: () => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   
   // State for create route form IDs
@@ -50,6 +52,15 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
     }
   }, [createFormIds, onCreateFormIdsChange]);
 
+  // Create a callback to handle resetting IDs that the child can call
+  const handleResetIds = React.useCallback(() => {
+    setCreateFormIds({ startingId: '', endingId: '' });
+    // Also notify parent if needed
+    if (onFormReset) {
+      onFormReset();
+    }
+  }, [onFormReset]);
+
   return (
     <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
       {/* Tab Headers */}
@@ -82,6 +93,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
           <AdminRoutesTab
             selectedRouteId={selectedRouteId}
             onRouteSelect={onRouteSelect}
+            onRouteDeleted={onRouteDeleted}
           />
         )}
 
@@ -95,6 +107,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             isPreviewMode={isPreviewMode}
             onCancelPreview={onCancelPreview}
             onSaveRoute={onSaveRoute}
+            onFormReset={handleResetIds}
           />
         )}
       </div>
