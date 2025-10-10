@@ -1,5 +1,5 @@
 import fs from "fs";
-import { EntryData, Feature } from "../types";
+import { EntryData, Feature } from "../lib/types";
 
 if (process.argv.length < 3) {
   console.error('Usage: npm run prune country_code1 [country_code ...]');

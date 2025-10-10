@@ -4,11 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a complete OSM (OpenStreetMap) railway data processing and visualization system that fetches, processes, and serves railway data from Czech Republic and Austria. The project consists of three main components:
+This is a unified OSM (OpenStreetMap) railway data processing and visualization system that fetches, processes, and serves railway data from Czech Republic and Austria. Built as a single Next.js application with integrated data processing capabilities.
 
-1. **Data Processing Pipeline** - Converts OpenStreetMap data into structured GeoJSON format
-2. **Database System** - PostgreSQL/PostGIS database for storing railway routes and user data
-3. **Frontend Application** - Next.js web application with interactive Leaflet maps
+### Architecture Benefits
+- **Unified Dependencies** - Single `package.json` and `node_modules`
+- **Shared Types** - Common type definitions between frontend and data processing
+- **Simplified Deployment** - One build process, one container
+- **Standard Structure** - Follows Next.js conventions with `src/` directory
+- **Environment Consolidation** - Single `.env` file for all configuration
 
 ## Core Commands
 
@@ -24,15 +27,17 @@ This is a complete OSM (OpenStreetMap) railway data processing and visualization
 - `npm run populateDb` - Load GeoJSON data into database tables
 
 ### Frontend Development
-- `cd frontend && npm run dev` - Start Next.js development server with Turbopack
-- `cd frontend && npm run build` - Build production frontend
-- `cd frontend && npm run start` - Start production frontend server
+- `npm run dev` - Start Next.js development server with Turbopack
+- `npm run build` - Build production application
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint checks
 
 ### Prerequisites
 - **Osmium Tool** required for data processing: `conda install conda-forge::osmium-tool`
 - **TypeScript execution**: Uses `tsx` for running TypeScript files directly
 - **Docker** for PostgreSQL database: `docker-compose up -d postgres`
-- **Node.js** for both root and frontend projects
+- **Node.js** for the unified application
+- **Environment Setup**: Copy `.env.example` to `.env` and configure database credentials
 
 ## System Architecture
 
@@ -54,10 +59,10 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
 2. **Filter** (`osmium-scripts/filterRailFeatures.sh`) - Applies OpenRailwayMap filter to extract railway features
 3. **Merge** (`osmium-scripts/merge.sh`) - Combines data from multiple countries for cross-border routes
 4. **Convert** (`osmium-scripts/convertToGeojson.sh`) - Converts filtered OSM data to GeoJSON format
-5. **Prune** (`scripts/pruneData.ts`) - Applies custom filters to remove unwanted features (subways, etc.)
-6. **Apply Definitions** (`scripts/applyRailwayDefinitions.ts`) - Merges railway segments according to definitions
-7. **Final Merge** (`scripts/mergeCountryFiles.ts`) - Combines all country data into single output
-8. **Database Load** (`scripts/populateDb.ts`) - Imports processed data into PostgreSQL with user separation
+5. **Prune** (`src/scripts/pruneData.ts`) - Applies custom filters to remove unwanted features (subways, etc.)
+6. **Apply Definitions** (`src/scripts/applyRailwayDefinitions.ts`) - Merges railway segments according to definitions
+7. **Final Merge** (`src/scripts/mergeCountryFiles.ts`) - Combines all country data into single output
+8. **Database Load** (`src/scripts/populateDb.ts`) - Imports processed data into PostgreSQL with user separation
 
 ### 3. Database Architecture
 - **PostgreSQL 16 with PostGIS** - Spatial database for geographic data
@@ -73,7 +78,7 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
 ### 4. Frontend Application
 - **Next.js 15** with React 19 - Modern web application framework
 - **Leaflet** - Interactive mapping library for route visualization with zoom-based station visibility
-- **Server Actions** - Type-safe database operations (`railway-actions.ts`)
+- **Server Actions** - Type-safe database operations (`src/lib/railway-actions.ts`)
 - **Dynamic Styling** - Route colors based on user data (green=visited, crimson=unvisited), weight based on usage type
 - **Usage Enum Translation** - Frontend translates database enum numbers to Czech strings
 - **Connection Pooling** - PostgreSQL pool for database performance
@@ -89,22 +94,35 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
   - Hover effects (railway parts turn red on mouse hover)
 - **Data Sources**: Uses `railway_parts` table populated from `cz-pruned.geojson`
 
-## Key File Structure
+## Simplified Project Structure
 
 ### Root Level
-- `package.json` - Main project dependencies and scripts
+- `package.json` - Unified dependencies and scripts (Next.js + data processing)
 - `docker-compose.yml` - PostgreSQL database configuration
-- `tsconfig.json` - TypeScript configuration for processing scripts
-- `enums.ts` - Usage patterns and operator definitions
-- `types.ts` - Core type definitions for the data processing pipeline
+- `tsconfig.json` - TypeScript configuration
+- `next.config.ts` - Next.js configuration with standalone output
+- `Dockerfile` - Production container build
+- `.env` - Environment variables (single file)
+- `.gitignore` - Comprehensive ignore patterns
 
-### Processing Scripts (`scripts/`)
-- `checkRailwayDefinitions.ts` - Validates railway definitions against OSM data
-- `applyRailwayDefinitions.ts` - Combines railway segments into complete routes
-- `mergeCountryFiles.ts` - Merges multiple country datasets
-- `pruneData.ts` - Filters unwanted railway features (removes subways, keeps rail/light_rail)
-- `mergeCoordinateLists.ts` - Utility for combining coordinate arrays
-- `populateDb.ts` - Database loading script (TypeScript with proper type safety)
+### Source Code (`src/`)
+- `src/app/` - Next.js App Router pages (layout.tsx, page.tsx)
+  - `src/app/admin/` - Admin-only pages (page.tsx)
+- `src/components/` - React components (MapWrapper.tsx, RailwayMap.tsx, AdminMap.tsx)
+  - `AdminMap.tsx` - High-performance railway parts visualization with caching
+  - `AdminMapWrapper.tsx` - Wrapper component for admin map
+- `src/lib/` - Shared utilities, types, and database operations
+  - `db.ts` - PostgreSQL connection pool
+  - `railway-actions.ts` - Server actions for database queries
+  - `enums.ts` - Usage patterns and operator definitions
+  - `types.ts` - Core type definitions
+- `src/scripts/` - Data processing scripts
+  - `checkRailwayDefinitions.ts` - Validates railway definitions against OSM data
+  - `applyRailwayDefinitions.ts` - Combines railway segments into complete routes
+  - `mergeCountryFiles.ts` - Merges multiple country datasets
+  - `pruneData.ts` - Filters unwanted railway features
+  - `mergeCoordinateLists.ts` - Utility for combining coordinate arrays
+  - `populateDb.ts` - Database loading script
 
 ### OSM Processing Scripts (`osmium-scripts/`)
 - `prepare.sh` - Master script that orchestrates the entire pipeline
@@ -118,25 +136,20 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
 - `definitions/at.ts` - Austrian railway route definitions  
 - `definitions/at-cz.ts` - Cross-border route definitions
 
-### Type System
+### Shared Libraries (`src/lib/`)
 - `types.ts` - Core type definitions for GeoJSON features and railway data
 - `enums.ts` - Usage patterns (Regular, OnceDaily, Seasonal, etc.) and operators (ČD, ÖBB, etc.)
+- `db.ts` - Database connection pool and utilities
+- `railway-actions.ts` - Server actions for type-safe database operations
 
 ### Database Schema
 - `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes
 - Contains tables for users, stations, railway_routes, railway_parts, and user_railway_data
 
-### Frontend Application (`frontend/`)
-- `src/app/` - Next.js App Router pages (layout.tsx, page.tsx)
-  - `src/app/admin/` - Admin-only pages (page.tsx)
-  - `src/app/api/admin/tiles/[...tile]/` - Tile-based API endpoints (legacy, unused)
-- `src/components/` - React components (MapWrapper.tsx, RailwayMap.tsx, AdminMap.tsx)
-  - `AdminMap.tsx` - High-performance railway parts visualization with caching
-  - `AdminMapWrapper.tsx` - Wrapper component for admin map
-- `src/lib/` - Database utilities and server actions
-  - `db.ts` - PostgreSQL connection pool
-  - `railway-actions.ts` - Server actions for database queries (includes getRailwayPartsByBounds)
-  - `types.ts` - Frontend type definitions
+### Configuration Files
+- `eslint.config.mjs` - ESLint configuration
+- `postcss.config.mjs` - PostCSS configuration for Tailwind
+- `public/` - Static assets served by Next.js
 
 ### Output Data (`data/`)
 - `<country>.tmp.osm.pbf` - Downloaded OSM data
@@ -175,7 +188,7 @@ Railway definitions in `definitions/` files follow this schema:
 - Custom filters applied in `pruneData.ts` remove subway and unwanted railway types
 - Cross-border routes require merged datasets from multiple countries
 - Railway definitions use OSM way IDs to reconstruct complete routes from segmented data
-- `populateDb.ts` uses batch inserts for performance and populates:
+- `src/scripts/populateDb.ts` uses batch inserts for performance and populates:
   - `stations` and `railway_parts` from `cz-pruned.geojson`
   - `railway_routes` from `merged-only.geojson`
 

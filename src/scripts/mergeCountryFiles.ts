@@ -1,5 +1,5 @@
 import fs from "fs";
-import { ProcessedData, ProcessedFeature } from "../types";
+import { ProcessedData, ProcessedFeature } from "../lib/types";
 
 const features: ProcessedFeature[] = [];
 const featureIds: (string | number)[] = [];

@@ -1,9 +1,9 @@
 import fs from 'fs';
 import { Client } from 'pg';
-import { Usage } from '../enums';
+import { Usage } from '../lib/enums';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: './frontend/.env' });
+dotenv.config();
 
 // Database connection configuration
 interface DbConfig {

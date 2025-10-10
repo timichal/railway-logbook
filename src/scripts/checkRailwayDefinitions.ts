@@ -1,6 +1,6 @@
 import fs from "fs";
 import mergeCoordinateLists from "./mergeCoordinateLists";
-import { Coord, EntryData, Feature, ProcessedFeature, RailwayData } from "../types";
+import { Coord, EntryData, Feature, ProcessedFeature, RailwayData } from "../lib/types";
 
 if (process.argv.length !== 3) {
   console.error('Usage: npm run check country_code');
