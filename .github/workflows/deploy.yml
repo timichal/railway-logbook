@@ -22,17 +22,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: Create frontend .env file
+
+      - name: Create .env file
         run: |
-          cat > frontend/.env << EOF
+          cat > .env << EOF
           DB_USER=$DB_USER
           DB_PASSWORD=$DB_PASSWORD
           JWT_SECRET=$JWT_SECRET
           EOF
-        
-      - name: Build the frontend Docker image
-        run: docker build frontend --file frontend/Dockerfile --no-cache --tag $DOCKER_TAG
+
+      - name: Build the Docker image
+        run: docker build . --file Dockerfile --no-cache --tag $DOCKER_TAG
         
       - name: Create SSH key
         run: |
