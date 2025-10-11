@@ -1,6 +1,5 @@
 import fs from 'fs';
 import { Client } from 'pg';
-import { Usage } from '../lib/enums';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -33,7 +32,7 @@ interface GeoJSONProperties {
   name?: string;
   track_id?: string;
   description?: string;
-  usage?: Usage[];
+  usage?: number[];
   primary_operator?: string;
   last_ride?: string;
   note?: string;
@@ -56,11 +55,6 @@ async function loadGeoJSONData(): Promise<void> {
   try {
     await client.connect();
     console.log('Connected to database');
-
-    // Read the GeoJSON file
-    const geoJsonPath = './data/merged-only.geojson';
-    console.log('Reading GeoJSON file...');
-    const geoJsonData: GeoJSONFeatureCollection = JSON.parse(fs.readFileSync(geoJsonPath, 'utf8'));
 
     // Clear existing data
     console.log('Clearing existing data...');

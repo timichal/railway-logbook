@@ -6,7 +6,7 @@ import { MAP_CONFIG, TIMING } from './mapConstants';
  * Custom hook for map initialization
  */
 export function useMapInitialization(
-  mapRef: React.RefObject<HTMLDivElement>,
+  mapRef: React.RefObject<HTMLDivElement | null>,
   showPartsLayer: boolean,
   showRoutesLayer: boolean,
   onViewportChange: () => void,
@@ -60,6 +60,8 @@ export function useMapInitialization(
 
     // Cleanup function
     return () => {
+      // Safe to use ref.current in cleanup - refs are designed to be mutable
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       clearTimeout(debounceTimeoutRef.current);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();

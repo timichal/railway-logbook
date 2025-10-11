@@ -11,7 +11,7 @@ export default function mergeLinearChain(sublists: Coord[][]) {
   });
 
   // Step 2: Find the starting sublist
-  let startingSublistIndex = sublists.findIndex(sublist => {
+  const startingSublistIndex = sublists.findIndex(sublist => {
     const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
     const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
     return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
@@ -22,7 +22,7 @@ export default function mergeLinearChain(sublists: Coord[][]) {
   }
 
   // Extract the starting sublist
-  let mergedChain = [...sublists[startingSublistIndex]];
+  const mergedChain = [...sublists[startingSublistIndex]];
   sublists.splice(startingSublistIndex, 1); // Remove the starting sublist
 
   // Step 2.1: Ensure the starting sublist is oriented correctly
@@ -45,7 +45,7 @@ export default function mergeLinearChain(sublists: Coord[][]) {
     }
 
     // Extract the next sublist and reverse it if necessary
-    let nextSublist = sublists[nextIndex];
+    const nextSublist = sublists[nextIndex];
     const overlapIndex = nextSublist.findIndex(([x, y]) => x === lastCoord[0] && y === lastCoord[1]);
 
     if (overlapIndex !== 0) {

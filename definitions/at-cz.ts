@@ -1,5 +1,5 @@
-import { Usage } from "../enums";
-import { RailwayData } from "../types";
+import { Usage } from "../src/lib/enums";
+import { RailwayData } from "../src/lib/types";
 
 export const railwayData: RailwayData[] = [
   {

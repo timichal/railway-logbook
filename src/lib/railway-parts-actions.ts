@@ -24,7 +24,7 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
     `;
     
     const result = await client.query(query, partIds);
-    
+
     const features: RailwayPart[] = result.rows
       .map(row => {
         const geom = JSON.parse(row.geometry_json);
@@ -36,7 +36,7 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
             properties: {
               '@id': parseInt(row.id)
             }
-          };
+          } as RailwayPart;
         }
         return null;
       })

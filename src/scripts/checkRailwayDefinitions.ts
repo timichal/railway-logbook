@@ -23,11 +23,11 @@ const getRailwayData = async () => {
 
 fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
   const parsedData: EntryData = JSON.parse(data.toString());
-  let prunedFeatures = parsedData.features;
+  const prunedFeatures = parsedData.features;
 
   const railwayData = await getRailwayData();
 
-  let lineFeatures: (Feature | ProcessedFeature)[] = prunedFeatures.filter((f) => f.geometry.type === "LineString");
+  const lineFeatures: (Feature | ProcessedFeature)[] = prunedFeatures.filter((f) => f.geometry.type === "LineString");
 
   console.log(`Total railways: ${railwayData.length}`);
 
@@ -44,7 +44,7 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
     try {
       mergeCoordinateLists(coordinatesToMerge);
       console.log(`${index + 1}/${railwayData.length}: ${railway.local_number} ${railway.from} - ${railway.to}: OK`);
-    } catch (e) {
+    } catch {
       console.log(`${index + 1}/${railwayData.length}: ${railway.local_number} ${railway.from} - ${railway.to}: Error!`);
       indexesToComment.push(index);
       commentedRailways.push(`${railway.local_number} ${railway.from} - ${railway.to}`);
@@ -61,7 +61,8 @@ fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
   const fileContent = fs.readFileSync(path, 'utf-8');
   const railwayDataRegex = /(export const railwayData: RailwayData\[\] = \[)([\s\S]*?)(\];)/;
   const match = fileContent.match(railwayDataRegex);
-  const [_, beforeData, dataBody, afterData] = match as RegExpMatchArray;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_fullMatch, beforeData, dataBody, afterData] = match as RegExpMatchArray;
 
   // Split the array elements based on the pattern `}, {`
   const elements = dataBody.split(/\},\s*\{/).map((el, idx, arr) => {

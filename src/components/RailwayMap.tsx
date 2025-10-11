@@ -160,7 +160,7 @@ export default function RailwayMap({ className = '', geoJsonData, onDataRefresh 
               }
 
               if (props.custom?.last_ride) {
-                formattedDescription += `<br /><br />Naposledy projeto: ${new Intl.DateTimeFormat("cs-CZ").format(props.custom.last_ride)}`;
+                formattedDescription += `<br /><br />Naposledy projeto: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(props.custom.last_ride))}`;
               }
               if (props.custom?.note) {
                 formattedDescription += `<br /><br />${props.custom.note}`;

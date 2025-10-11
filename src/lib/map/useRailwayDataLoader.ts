@@ -133,8 +133,8 @@ export function useRailwayDataLoader(
           if (feature.properties) {
             const zoomLevel = feature.properties.zoom_level;
             const partId = feature.properties['@id']?.toString();
-            const isStartingPart = selectedParts?.startingId && partId === selectedParts.startingId;
-            const isEndingPart = selectedParts?.endingId && partId === selectedParts.endingId;
+            const isStartingPart = !!(selectedParts?.startingId && partId === selectedParts.startingId);
+            const isEndingPart = !!(selectedParts?.endingId && partId === selectedParts.endingId);
 
             const popupContent = getRailwayPartPopup(
               feature.properties['@id'],

@@ -1,6 +1,5 @@
 import fs from "fs";
 import mergeCoordinateLists from "./mergeCoordinateLists";
-import { Usage } from "../lib/enums";
 import { Coord, EntryData, Feature, ProcessedFeature, RailwayData } from "../lib/types";
 
 if (process.argv.length !== 3) {
@@ -22,7 +21,7 @@ const getRailwayData = async (countryCode: string) => {
 
 fs.readFile(`data/${countryCode}-pruned.geojson`, async function (err, data) {
   const parsedData: EntryData = JSON.parse(data.toString());
-  let prunedFeatures = parsedData.features;
+  const prunedFeatures = parsedData.features;
 
   const railwayData =  await getRailwayData(countryCode);
 

@@ -34,10 +34,10 @@ countryCodes.forEach((countryCode, index) => {
       }
       return false;
     })
-    .map((feat, index) => ({
+    .map((feat) => ({
       ...feat,
       properties: Object.fromEntries(Object.entries(feat.properties)
-        .filter(([key, val]) => {
+        .filter(([key]) => {
           if (key === "@id") return true;
           if (feat.geometry.type === "Point") {
             if (["name", "railway"].includes(key)) return true;

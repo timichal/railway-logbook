@@ -11,7 +11,7 @@ interface Feature {
   };
   properties: {
     '@id': number;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 

@@ -74,13 +74,13 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
       geometry: JSON.parse(route.geometry),
       properties: {
         name: route.name,
-        description: route.description,
+        description: route.description ?? undefined,
         track_id: route.track_id,
         primary_operator: route.primary_operator,
         usage: route.usage_types.map(Number),
         custom: {
-          last_ride: route.last_ride,
-          note: route.note,
+          last_ride: route.last_ride ?? undefined,
+          note: route.note ?? undefined,
         }
       }
     });
@@ -190,7 +190,7 @@ export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureC
     properties: {
       track_id: row.track_id,
       name: row.name,
-      description: row.description,
+      description: row.description ?? undefined,
       usage: row.usage_types,
       primary_operator: row.primary_operator
     }
