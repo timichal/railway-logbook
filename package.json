@@ -31,13 +31,12 @@
     "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.3",
     "jose": "^6.1.0",
-    "leaflet": "^1.9.4",
+    "maplibre-gl": "^5.0.0",
     "next": "^15.5.4",
     "pg": "^8.16.3",
     "postcss": "^8.5.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-leaflet": "^5.0.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   },
@@ -45,17 +44,10 @@
     "@eslint/eslintrc": "^3.3.1",
     "@tailwindcss/postcss": "^4.1.14",
     "@types/bcryptjs": "^2.4.6",
-    "@types/leaflet": "^1.9.20",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
     "eslint": "^9.37.0",
     "eslint-config-next": "^15.5.4",
     "tailwindcss": "^4.1.14"
-  },
-  "overrides": {
-    "react-leaflet": {
-      "react": "19.2.0",
-      "react-dom": "19.2.0"
-    }
   }
 }

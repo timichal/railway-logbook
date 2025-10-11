@@ -21,9 +21,10 @@ interface AdminRoutesTabProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
   onRouteDeleted?: () => void;
+  onRouteUpdated?: () => void;
 }
 
-export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRouteDeleted }: AdminRoutesTabProps) {
+export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRouteDeleted, onRouteUpdated }: AdminRoutesTabProps) {
   const [routes, setRoutes] = useState<RailwayRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,6 +39,13 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   useEffect(() => {
     loadRoutes();
   }, []);
+
+  // Load route details when selectedRouteId changes (from map click)
+  useEffect(() => {
+    if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
+      handleRouteClick(selectedRouteId);
+    }
+  }, [selectedRouteId]);
 
   const loadRoutes = async () => {
     try {
@@ -86,17 +94,22 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
         editForm.usage_types,
         editForm.primary_operator
       );
-      
+
       // Refresh the routes list
       await loadRoutes();
-      
+
       // Update selected route
       setSelectedRoute({
         ...selectedRoute,
         ...editForm,
         description: editForm.description || null
       });
-      
+
+      // Notify parent to refresh map tiles
+      if (onRouteUpdated) {
+        onRouteUpdated();
+      }
+
       console.log('Route updated successfully');
     } catch (error) {
       console.error('Error updating route:', error);

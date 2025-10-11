@@ -1,0 +1,51 @@
+# Martin Tile Server Configuration
+# Configuration for serving vector tiles from PostgreSQL/PostGIS
+
+# PostgreSQL connection (from environment variable)
+postgres:
+  connection_string: ${DATABASE_URL}
+
+  # Connection pool settings for performance
+  pool_size: 20
+
+  # Disable auto-discovery of tables/functions
+  # We explicitly define our tile sources below
+  auto_publish: false
+
+  # Function sources - PostgreSQL functions that generate vector tiles
+  functions:
+    # Railway parts (raw OSM segments)
+    railway_parts_tile:
+      schema: public
+      function: railway_parts_tile
+      minzoom: 0
+      maxzoom: 14
+      # This function accepts z, x, y parameters
+
+    # Railway routes (combined lines with metadata)
+    railway_routes_tile:
+      schema: public
+      function: railway_routes_tile
+      minzoom: 7
+      maxzoom: 14
+      # This function accepts z, x, y, and query_params (for user_id)
+      # Explicitly declare query parameters that Martin should accept
+      query_params:
+        - user_id
+
+    # Stations (point features)
+    stations_tile:
+      schema: public
+      function: stations_tile
+      minzoom: 10
+      maxzoom: 14
+      # This function accepts z, x, y parameters
+
+# Server configuration
+listen_addresses: "0.0.0.0:3000"
+
+# Disable automatic bounds calculation on startup (improves startup time)
+auto_bounds: skip
+
+# Enable CORS for web access
+cors: true

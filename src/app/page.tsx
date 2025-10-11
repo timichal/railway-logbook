@@ -1,19 +1,15 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import MapWrapper from '@/components/MapWrapper';
-import { getRailwayDataAsGeoJSON } from '@/lib/railway-actions';
+import VectorMapWrapper from '@/components/VectorMapWrapper';
 import { getUser, logout } from '@/lib/auth-actions';
 
 export default async function Home() {
   // Check if user is authenticated
   const user = await getUser();
-  
+
   if (!user) {
     redirect('/login');
   }
-
-  // Fetch railway data for the authenticated user
-  const geoJsonData = await getRailwayDataAsGeoJSON();
 
   async function handleLogout() {
     'use server';
@@ -54,7 +50,7 @@ export default async function Home() {
       </header>
       
       <main className="flex-1 overflow-hidden">
-        <MapWrapper className="w-full h-full" geoJsonData={geoJsonData} />
+        <VectorMapWrapper className="w-full h-full" userId={user.id} />
       </main>
     </div>
   );

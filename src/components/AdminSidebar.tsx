@@ -16,10 +16,27 @@ interface AdminSidebarProps {
   onSaveRoute?: (routeData: {track_id: string, name: string, description: string, usage_types: string[], primary_operator: string}) => void;
   onFormReset?: () => void;
   onRouteDeleted?: () => void;
+  onRouteUpdated?: () => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
+
+  // Switch to create tab when a part is clicked
+  React.useEffect(() => {
+    if (selectedPartId) {
+      setActiveTab('create');
+    }
+  }, [selectedPartId]);
+
+  // Switch to routes tab when a route is selected
+  React.useEffect(() => {
+    if (selectedRouteId) {
+      setActiveTab('routes');
+      // Clear the local form IDs when switching to routes
+      setCreateFormIds({ startingId: '', endingId: '' });
+    }
+  }, [selectedRouteId]);
   
   // State for create route form IDs
   const [createFormIds, setCreateFormIds] = useState({
@@ -29,7 +46,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
 
   // Handle selectedPartId to auto-fill form inputs
   React.useEffect(() => {
-    if (selectedPartId && activeTab === 'create') {
+    if (selectedPartId) {
       setCreateFormIds(prev => {
         // If both are empty or only first is empty, fill starting ID
         if (!prev.startingId) {
@@ -43,7 +60,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
         return prev;
       });
     }
-  }, [selectedPartId, activeTab]);
+  }, [selectedPartId]);
 
   // Notify parent when form IDs change
   React.useEffect(() => {
@@ -66,7 +83,11 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
       {/* Tab Headers */}
       <div className="flex border-b border-gray-200">
         <button
-          onClick={() => setActiveTab('routes')}
+          onClick={() => {
+            setActiveTab('routes');
+            // Clear form IDs when manually switching to Railway Routes
+            setCreateFormIds({ startingId: '', endingId: '' });
+          }}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
             activeTab === 'routes'
               ? 'border-blue-500 text-blue-600 bg-blue-50'
@@ -76,7 +97,13 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
           Railway Routes
         </button>
         <button
-          onClick={() => setActiveTab('create')}
+          onClick={() => {
+            setActiveTab('create');
+            // Unselect any selected route when switching to Create New
+            if (onRouteSelect) {
+              onRouteSelect('');
+            }
+          }}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
             activeTab === 'create'
               ? 'border-blue-500 text-blue-600 bg-blue-50'
@@ -94,6 +121,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             selectedRouteId={selectedRouteId}
             onRouteSelect={onRouteSelect}
             onRouteDeleted={onRouteDeleted}
+            onRouteUpdated={onRouteUpdated}
           />
         )}
 

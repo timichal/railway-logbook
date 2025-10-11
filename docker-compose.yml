@@ -13,6 +13,19 @@ services:
       - ./database/init:/docker-entrypoint-initdb.d
     restart: unless-stopped
 
+  martin:
+    image: ghcr.io/maplibre/martin:latest
+    restart: always
+    ports:
+      - 3001:3000
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./martin:/config
+    command: --config /config/configuration.yml
+    depends_on:
+      - postgres
+
   railmap:
     image: railmap
     restart: always
@@ -24,8 +37,10 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - JWT_SECRET=${JWT_SECRET}
+      - MARTIN_URL=http://martin:3000
     depends_on:
       - postgres
+      - martin
 
 volumes:
   postgres_data:

@@ -47,7 +47,10 @@ jobs:
         
       - name: Upload docker-compose
         run: scp -i $SSH_KEY_PATH docker-compose.yml $SERVER_USERNAME@$SERVER_IP:/home/$SERVER_USERNAME/$DOCKER_TAG.yml
-        
+
+      - name: Upload martin configuration
+        run: scp -i $SSH_KEY_PATH -r martin $SERVER_USERNAME@$SERVER_IP:/home/$SERVER_USERNAME/
+
       - name: Reload container
         run: |
           ssh -i $SSH_KEY_PATH $SERVER_USERNAME@$SERVER_IP "

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import AdminMapWrapper from '@/components/AdminMapWrapper';
+import VectorAdminMapWrapper from '@/components/VectorAdminMapWrapper';
 import AdminSidebar from '@/components/AdminSidebar';
 import { logout } from '@/lib/auth-actions';
 import { saveRailwayRoute } from '@/lib/route-save-actions';
@@ -26,10 +26,17 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
   const handleRouteSelect = (routeId: string) => {
     setSelectedRouteId(routeId);
+    // Clear any selected parts when viewing a route
+    setCreateFormIds({startingId: '', endingId: ''});
+    // Clear preview mode
+    setPreviewRoute(null);
+    setIsPreviewMode(false);
   };
 
   const handlePartClick = (partId: string) => {
     setSelectedPartId(partId);
+    // Unselect any selected route when clicking a part
+    setSelectedRouteId(null);
   };
 
   const handlePreviewRoute = (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => {
@@ -88,6 +95,11 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setRefreshTrigger(prev => prev + 1);
   };
 
+  const handleRouteUpdated = () => {
+    // Trigger routes layer refresh after update
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   const handleCreateFormIdsChange = (ids: {startingId: string, endingId: string}) => {
     setCreateFormIds(ids);
   };
@@ -139,16 +151,16 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           onSaveRoute={handleSaveRoute}
           onFormReset={handleFormReset}
           onRouteDeleted={handleRouteDeleted}
+          onRouteUpdated={handleRouteUpdated}
         />
         <div className="flex-1 overflow-hidden">
-          <AdminMapWrapper
+          <VectorAdminMapWrapper
             className="w-full h-full"
             selectedRouteId={selectedRouteId}
             onRouteSelect={handleRouteSelect}
             onPartClick={handlePartClick}
             previewRoute={previewRoute}
             selectedParts={{startingId: createFormIds.startingId, endingId: createFormIds.endingId}}
-            isPreviewMode={isPreviewMode}
             refreshTrigger={refreshTrigger}
           />
         </div>
