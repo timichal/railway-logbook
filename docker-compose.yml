@@ -14,7 +14,7 @@ services:
     restart: unless-stopped
 
   railmap:
-    build: .
+    image: railmap
     restart: always
     ports:
       - 3000:3000
