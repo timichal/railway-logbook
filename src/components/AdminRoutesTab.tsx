@@ -29,6 +29,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [editForm, setEditForm] = useState<{
+    track_id: string;
     name: string;
     description: string;
     usage_types: string[];
@@ -53,6 +54,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       const routeDetail = await getRailwayRoute(trackId);
       setSelectedRoute(routeDetail);
       setEditForm({
+        track_id: routeDetail.track_id,
         name: routeDetail.name,
         description: routeDetail.description || '',
         usage_types: routeDetail.usage_types,
@@ -85,10 +87,13 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   const handleSaveRoute = async () => {
     if (!selectedRoute || !editForm) return;
 
+    const trackIdChanged = selectedRoute.track_id !== editForm.track_id;
+
     try {
       setIsLoading(true);
       await updateRailwayRoute(
-        selectedRoute.track_id,
+        selectedRoute.track_id,  // old track_id
+        editForm.track_id,        // new track_id
         editForm.name,
         editForm.description || null,
         editForm.usage_types,
@@ -98,12 +103,17 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       // Refresh the routes list
       await loadRoutes();
 
-      // Update selected route
+      // Update selected route with new data
       setSelectedRoute({
         ...selectedRoute,
         ...editForm,
         description: editForm.description || null
       });
+
+      // If track_id changed, notify parent about the new ID
+      if (trackIdChanged && onRouteSelect) {
+        onRouteSelect(editForm.track_id);
+      }
 
       // Notify parent to refresh map tiles
       if (onRouteUpdated) {
@@ -231,16 +241,16 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
             
             {editForm && (
               <div className="space-y-4">
-                {/* Track ID (readonly) */}
+                {/* Track ID */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Track ID
+                    Track ID *
                   </label>
                   <input
                     type="text"
-                    value={selectedRoute.track_id}
-                    readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm text-black"
+                    value={editForm.track_id}
+                    onChange={(e) => setEditForm({ ...editForm, track_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
                   />
                 </div>
 
