@@ -170,6 +170,11 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       setSelectedRoute(null);
       setEditForm(null);
 
+      // Clear parent's selected route ID to prevent "Route not found" error
+      if (onRouteSelect) {
+        onRouteSelect('');
+      }
+
       // Notify parent to refresh map layer
       if (onRouteDeleted) {
         onRouteDeleted();
