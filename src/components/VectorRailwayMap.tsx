@@ -2,8 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import { updateUserRailwayData } from '@/lib/railway-actions';
+import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
+import {
+  createRailwayRoutesSource,
+  createRailwayRoutesLayer,
+  createStationsSource,
+  createStationsLayer,
+  closeAllPopups,
+  COLORS,
+} from '@/lib/map';
 
 const usageMap: Record<number, string> = {
   0: 'Pravidelný provoz',
@@ -32,7 +40,6 @@ interface EditingFeature {
 
 export default function VectorRailwayMap({ className = '', userId }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<maplibregl.Map | null>(null);
   const [editingFeature, setEditingFeature] = useState<EditingFeature | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [lastRide, setLastRide] = useState('');
@@ -40,90 +47,43 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   const [isLoading, setIsLoading] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
 
-  // Initialize map
-  useEffect(() => {
-    if (!mapContainer.current || map.current) return;
-
-    // Create map instance
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: {
-        version: 8,
-        sources: {
-          'osm': {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          },
-          'railway_routes': {
-            type: 'vector',
-            tiles: [`${window.location.protocol}//${window.location.hostname}:3001/railway_routes_tile/{z}/{x}/{y}?user_id=${userId}&v=${cacheBuster}`],
-            minzoom: 7,
-            maxzoom: 14
-          },
-          'stations': {
-            type: 'vector',
-            tiles: [`${window.location.protocol}//${window.location.hostname}:3001/stations_tile/{z}/{x}/{y}`],
-            minzoom: 10,
-            maxzoom: 14
-          }
-        },
-        layers: [
-          {
-            'id': 'background',
-            'type': 'raster',
-            'source': 'osm',
-            'minzoom': 0,
-            'maxzoom': 22
-          },
-          {
-            'id': 'railway_routes',
-            'type': 'line',
-            'source': 'railway_routes',
-            'source-layer': 'railway_routes',
-            'minzoom': 7,
-            'paint': {
-              'line-color': [
-                'case',
-                ['has', 'last_ride'],
-                'DarkGreen',
-                'Crimson'
-              ],
-              'line-width': [
-                'case',
-                ['in', 6, ['get', 'usage_types']],
-                2,  // Special usage = thinner
-                3   // Normal = standard width
-              ],
-              'line-opacity': 0.8
-            }
-          },
-          {
-            'id': 'stations',
-            'type': 'circle',
-            'source': 'stations',
-            'source-layer': 'stations',
-            'minzoom': 10,
-            'paint': {
-              'circle-radius': 4,
-              'circle-color': '#ff7800',
-              'circle-stroke-color': '#000',
-              'circle-stroke-width': 1,
-              'circle-opacity': 0.8
-            }
-          }
-        ]
+  // Initialize map with shared hook
+  const { map } = useMapLibre(
+    mapContainer,
+    {
+      sources: {
+        railway_routes: createRailwayRoutesSource({ userId, cacheBuster }),
+        stations: createStationsSource(),
       },
-      center: [14.5, 49.2], // Czech Republic/Austria border region
-      zoom: 7
-    });
+      layers: [
+        createRailwayRoutesLayer({
+          colorExpression: [
+            'case',
+            ['has', 'last_ride'],
+            COLORS.railwayRoutes.visited,
+            COLORS.railwayRoutes.unvisited
+          ],
+          widthExpression: [
+            'case',
+            ['in', 6, ['get', 'usage_types']],
+            2,  // Special usage = thinner
+            3   // Normal = standard width
+          ],
+        }),
+        createStationsLayer(),
+      ],
+    },
+    [userId] // Recreate map when userId changes
+  );
 
-    // Add navigation controls
-    map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+  // Add event handlers after map loads
+  useEffect(() => {
+    if (!map.current) return;
+
+    const mapInstance = map.current;
 
     // Add double-click handler for railway routes
-    map.current.on('dblclick', 'railway_routes', (e) => {
+    const handleDoubleClick = (e: maplibregl.MapLayerMouseEvent) => {
       if (!e.features || e.features.length === 0) return;
 
       const feature = e.features[0];
@@ -135,10 +95,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       e.preventDefault();
 
       // Close any open popups
-      const popups = document.getElementsByClassName('maplibregl-popup');
-      if (popups.length) {
-        Array.from(popups).forEach(popup => popup.remove());
-      }
+      closeAllPopups();
 
       setEditingFeature({
         track_id: properties.track_id,
@@ -154,10 +111,10 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         new Date(properties.last_ride).toISOString().split('T')[0] : '');
       setNote(properties.note || '');
       setShowEditForm(true);
-    });
+    };
 
     // Add click handler for popups
-    map.current.on('click', 'railway_routes', (e) => {
+    const handleClick = (e: maplibregl.MapLayerMouseEvent) => {
       if (!e.features || e.features.length === 0) return;
 
       const feature = e.features[0];
@@ -172,21 +129,16 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
         if (properties.usage_types) {
           if (Array.isArray(properties.usage_types)) {
-            // Already an array
             usageTypes = properties.usage_types;
           } else if (typeof properties.usage_types === 'string') {
-            // Try to parse PostgreSQL array format: "{0,1,2}" or JSON format: "[0,1,2]"
             const str = properties.usage_types.trim();
             if (str.startsWith('{') && str.endsWith('}')) {
-              // PostgreSQL array format
               const inner = str.slice(1, -1).trim();
               usageTypes = (inner && inner.length > 0) ? inner.split(',').map((s: string) => parseInt(s.trim())) : [];
             } else if (str.startsWith('[') && str.endsWith(']')) {
-              // JSON array format
               usageTypes = JSON.parse(str);
             }
           } else if (typeof properties.usage_types === 'number') {
-            // Single number
             usageTypes = [properties.usage_types];
           }
         }
@@ -220,33 +172,31 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       new maplibregl.Popup()
         .setLngLat(e.lngLat)
         .setHTML(popupContent)
-        .addTo(map.current!);
-    });
-
-    // Change cursor on hover
-    map.current.on('mouseenter', 'railway_routes', () => {
-      if (map.current) {
-        map.current.getCanvas().style.cursor = 'pointer';
-      }
-    });
-
-    map.current.on('mouseleave', 'railway_routes', () => {
-      if (map.current) {
-        map.current.getCanvas().style.cursor = '';
-      }
-    });
-
-    // Cleanup on unmount
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
+        .addTo(mapInstance);
     };
-  // Note: cacheBuster is used in map initialization but should not be a dependency
-  // as we only want this effect to run when userId changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+
+    // Add cursor change on hover
+    const handleMouseEnter = () => {
+      mapInstance.getCanvas().style.cursor = 'pointer';
+    };
+
+    const handleMouseLeave = () => {
+      mapInstance.getCanvas().style.cursor = '';
+    };
+
+    mapInstance.on('dblclick', 'railway_routes', handleDoubleClick);
+    mapInstance.on('click', 'railway_routes', handleClick);
+    mapInstance.on('mouseenter', 'railway_routes', handleMouseEnter);
+    mapInstance.on('mouseleave', 'railway_routes', handleMouseLeave);
+
+    // Cleanup
+    return () => {
+      mapInstance.off('dblclick', 'railway_routes', handleDoubleClick);
+      mapInstance.off('click', 'railway_routes', handleClick);
+      mapInstance.off('mouseenter', 'railway_routes', handleMouseEnter);
+      mapInstance.off('mouseleave', 'railway_routes', handleMouseLeave);
+    };
+  }, [map]);
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,62 +218,44 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           map.current.removeLayer('railway_routes');
           map.current.removeSource('railway_routes');
 
-          map.current.addSource('railway_routes', {
-            type: 'vector',
-            tiles: [`${window.location.protocol}//${window.location.hostname}:3001/railway_routes_tile/{z}/{x}/{y}?user_id=${userId}&v=${newCacheBuster}`],
-            minzoom: 7,
-            maxzoom: 14
-          });
+          map.current.addSource('railway_routes', createRailwayRoutesSource({ userId, cacheBuster: newCacheBuster }));
 
-          map.current.addLayer({
-            'id': 'railway_routes',
-            'type': 'line',
-            'source': 'railway_routes',
-            'source-layer': 'railway_routes',
-            'minzoom': 7,
-            'paint': {
-              'line-color': [
+          map.current.addLayer(
+            createRailwayRoutesLayer({
+              colorExpression: [
                 'case',
                 ['has', 'last_ride'],
-                'DarkGreen',
-                'Crimson'
+                COLORS.railwayRoutes.visited,
+                COLORS.railwayRoutes.unvisited
               ],
-              'line-width': [
+              widthExpression: [
                 'case',
                 ['in', 6, ['get', 'usage_types']],
                 2,
                 3
               ],
-              'line-opacity': 0.8
-            }
-          }, 'stations');
+            }),
+            'stations'
+          );
 
           // Wait for the source to load new tiles before closing the form
           await new Promise<void>((resolve) => {
             const checkSourceLoaded = () => {
               const newSource = map.current?.getSource('railway_routes') as maplibregl.VectorTileSource;
               if (newSource) {
-                // Give tiles a moment to start loading
                 setTimeout(() => resolve(), 300);
               } else {
                 resolve();
               }
             };
 
-            // Use sourcedata event to detect when tiles are loading
             map.current?.once('sourcedata', checkSourceLoaded);
-            // Fallback timeout in case event doesn't fire
             setTimeout(() => resolve(), 500);
           });
         }
       }
 
-      // Close any open popups before closing the form
-      const popups = document.getElementsByClassName('maplibregl-popup');
-      if (popups.length) {
-        Array.from(popups).forEach(popup => popup.remove());
-      }
-
+      closeAllPopups();
       setShowEditForm(false);
       setEditingFeature(null);
     } catch (error) {
@@ -393,11 +325,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                 <button
                   type="button"
                   onClick={() => {
-                    // Close any open popups
-                    const popups = document.getElementsByClassName('maplibregl-popup');
-                    if (popups.length) {
-                      Array.from(popups).forEach(popup => popup.remove());
-                    }
+                    closeAllPopups();
                     setShowEditForm(false);
                     setEditingFeature(null);
                   }}
