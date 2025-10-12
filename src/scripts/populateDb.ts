@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import { Client } from 'pg';
 import dotenv from 'dotenv';
 
@@ -49,12 +50,44 @@ interface GeoJSONFeatureCollection {
   features: GeoJSONFeature[];
 }
 
+async function executeSQLFile(client: Client, filePath: string): Promise<void> {
+  console.log(`Executing SQL file: ${path.basename(filePath)}`);
+  try {
+    const sqlContent = fs.readFileSync(filePath, 'utf8');
+    await client.query(sqlContent);
+    console.log(`✓ Successfully executed ${path.basename(filePath)}`);
+  } catch (error) {
+    console.error(`✗ Error executing ${path.basename(filePath)}:`, error);
+    throw error;
+  }
+}
+
+async function initializeDatabase(client: Client): Promise<void> {
+  console.log('Initializing database with SQL files...');
+  
+  // Execute SQL files in order
+  const sqlFiles = [
+    './database/init/02-vector-tiles.sql'
+  ];
+
+  for (const sqlFile of sqlFiles) {
+    if (fs.existsSync(sqlFile)) {
+      await executeSQLFile(client, sqlFile);
+    } else {
+      console.warn(`⚠ SQL file not found: ${sqlFile}`);
+    }
+  }
+}
+
 async function loadGeoJSONData(): Promise<void> {
   const client = new Client(dbConfig);
 
   try {
     await client.connect();
     console.log('Connected to database');
+
+    // Initialize database with SQL files (vector tile functions, etc.)
+    await initializeDatabase(client);
 
     // Clear existing data
     console.log('Clearing existing data...');
@@ -64,18 +97,18 @@ async function loadGeoJSONData(): Promise<void> {
     let stationsCount = 0;
     let partsCount = 0;
 
-    // First, process cz-pruned.geojson for stations and railway_parts
-    console.log('Processing cz-pruned.geojson for stations and railway parts...');
-    const czPrunedPath = './data/cz-pruned.geojson';
-    const czPrunedData: GeoJSONFeatureCollection = JSON.parse(fs.readFileSync(czPrunedPath, 'utf8'));
+    // First, process pruned geojson data for stations and railway_parts
+    console.log('Processing europe-pruned.geojson for stations and railway parts...');
+    const prunedDataPath = './data/europe-pruned.geojson';
+    const prunedData: GeoJSONFeatureCollection = JSON.parse(fs.readFileSync(prunedDataPath, 'utf8'));
 
     // Collect data for batch inserts
     const stationRows: string[] = [];
     const partRows: string[] = [];
 
-    console.log(`Processing ${czPrunedData.features.length} features...`);
+    console.log(`Processing ${prunedData.features.length} features...`);
 
-    for (const feature of czPrunedData.features) {
+    for (const feature of prunedData.features) {
       const { geometry, properties } = feature;
 
       if (geometry.type === 'Point') {

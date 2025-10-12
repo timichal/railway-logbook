@@ -20,11 +20,11 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `npm run check <country_code>` - Validates railway definitions for a country (e.g., `npm run check cz`)
 - `npm run apply <country_code>` - Applies railway definitions to create combined GeoJSON (e.g., `npm run apply cz`)
 - `npm run merge` - Combines all `-combined.geojson` files into `merged-only.geojson`
-- `npm run populateDb` - Loads processed GeoJSON data into PostgreSQL database
+- `npm run populateDb` - Loads processed GeoJSON data into PostgreSQL database and initializes vector tile functions
 
 ### Database Operations
 - `docker-compose up -d postgres` - Start PostgreSQL database with PostGIS
-- `npm run populateDb` - Load GeoJSON data into database tables
+- `npm run populateDb` - Load GeoJSON data into database tables and initialize vector tile functions
 
 ### Frontend Development
 - `npm run dev` - Start Next.js development server with Turbopack
@@ -203,9 +203,10 @@ Railway definitions in `definitions/` files follow this schema:
 - Custom filters applied in `pruneData.ts` remove subway and unwanted railway types
 - Cross-border routes require merged datasets from multiple countries
 - Railway definitions use OSM way IDs to reconstruct complete routes from segmented data
-- `src/scripts/populateDb.ts` uses batch inserts for performance and populates:
-  - `stations` and `railway_parts` from `cz-pruned.geojson`
-  - `railway_routes` from `merged-only.geojson`
+- `src/scripts/populateDb.ts` uses batch inserts for performance and:
+  - Executes database initialization SQL files (vector tile functions, Web Mercator columns)
+  - Populates `stations` and `railway_parts` from `cz-pruned.geojson`
+  - Populates `railway_routes` from `merged-only.geojson`
 
 ### Output Format
 Final GeoJSON includes custom properties for visualization:
