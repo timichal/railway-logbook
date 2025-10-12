@@ -77,22 +77,27 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
 
 ### 4. Frontend Application
 - **Next.js 15** with React 19 - Modern web application framework
-- **Leaflet** - Interactive mapping library for route visualization with zoom-based station visibility
+- **MapLibre GL JS** - Vector tile rendering for high-performance map visualization
+- **Martin Tile Server** - PostGIS vector tile server (port 3001) serving railway_routes, railway_parts, and stations
 - **Server Actions** - Type-safe database operations (`src/lib/railway-actions.ts`)
 - **Dynamic Styling** - Route colors based on user data (green=visited, crimson=unvisited), weight based on usage type
 - **Usage Enum Translation** - Frontend translates database enum numbers to Czech strings
 - **Connection Pooling** - PostgreSQL pool for database performance
-- **Admin Interface** - Admin-only page (`/admin`) for viewing raw railway parts with performance optimizations
+- **Shared Map Utilities** - Common map initialization and configuration in `src/lib/map/`
 
 ### 5. Admin System Architecture
 - **Admin Access Control** - Restricted to user_id=1 with authentication checks
-- **Railway Parts Visualization** - Real-time map display of raw OSM railway segments
-- **Performance Optimization**:
-  - Viewport-based loading (single DB query per viewport change)
-  - 5000 feature cache limit with FIFO eviction strategy
-  - Current viewport features always displayed, cached features fill background
-  - Hover effects (railway parts turn red on mouse hover)
-- **Data Sources**: Uses `railway_parts` table populated from `cz-pruned.geojson`
+- **Vector Tile Architecture**:
+  - `railway_routes` and `railway_parts` served via Martin tile server (PostGIS → MVT tiles)
+  - Efficient rendering of large datasets through tile-based loading
+  - MapLibre GL JS handles tile caching and viewport management automatically
+- **Interactive Features**:
+  - Click railway parts to select start/end points for route creation
+  - Click railway routes to view/edit details
+  - Route preview with geometry visualization
+  - Hover effects on railway parts
+- **Route Management**: Create, edit, update (including track_id), and delete railway routes
+- **Components**: `AdminPageClient` → `VectorAdminMapWrapper` → `VectorAdminMap`
 
 ## Simplified Project Structure
 
@@ -108,14 +113,24 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
 ### Source Code (`src/`)
 - `src/app/` - Next.js App Router pages (layout.tsx, page.tsx)
   - `src/app/admin/` - Admin-only pages (page.tsx)
-- `src/components/` - React components (MapWrapper.tsx, RailwayMap.tsx, AdminMap.tsx)
-  - `AdminMap.tsx` - High-performance railway parts visualization with caching
-  - `AdminMapWrapper.tsx` - Wrapper component for admin map
+- `src/components/` - React components
+  - `VectorRailwayMap.tsx` - User-facing map with ride tracking
+  - `VectorMapWrapper.tsx` - Wrapper for user map
+  - `VectorAdminMap.tsx` - Admin map for route management
+  - `VectorAdminMapWrapper.tsx` - Wrapper for admin map
+  - `AdminPageClient.tsx` - Admin page container with state management
+  - `AdminSidebar.tsx` - Admin interface sidebar with route creation/editing forms
+  - `AdminRoutesTab.tsx` - Route list and edit interface
 - `src/lib/` - Shared utilities, types, and database operations
   - `db.ts` - PostgreSQL connection pool
   - `railway-actions.ts` - Server actions for database queries
+  - `route-save-actions.ts` - Server actions for saving new routes
+  - `route-delete-actions.ts` - Server actions for deleting routes
   - `enums.ts` - Usage patterns and operator definitions
   - `types.ts` - Core type definitions
+  - `src/lib/map/` - Shared map utilities
+    - `index.ts` - Constants, layer factories, popup utilities
+    - `hooks/useMapLibre.ts` - Base hook for MapLibre initialization
 - `src/scripts/` - Data processing scripts
   - `checkRailwayDefinitions.ts` - Validates railway definitions against OSM data
   - `applyRailwayDefinitions.ts` - Combines railway segments into complete routes
