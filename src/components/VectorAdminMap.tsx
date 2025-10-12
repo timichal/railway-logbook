@@ -3,17 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-
-interface RailwayPart {
-  properties: {
-    '@id': string | number;
-    [key: string]: any;
-  };
-  geometry: {
-    type: 'LineString';
-    coordinates: [number, number][];
-  };
-}
+import type { RailwayPart } from '@/lib/types';
 
 interface VectorAdminMapProps {
   className?: string;
@@ -46,6 +36,7 @@ export default function VectorAdminMap({
   const onRouteSelectRef = useRef(onRouteSelect);
   const selectedPartsRef = useRef(selectedParts);
   const previewRouteRef = useRef(previewRoute);
+  const updatePartsStyleRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     onPartClickRef.current = onPartClick;
@@ -206,64 +197,68 @@ export default function VectorAdminMap({
       const hasAnyCondition = !isPreviewActive && !!(hoveredPartId || startingId || endingId);
 
       // Build color expression
-      let colorExpr: any;
+      type MapLibreExpression = string | number | unknown[];
+      let colorExpr: MapLibreExpression;
       if (hasAnyCondition) {
-        colorExpr = ['case'];
+        const expr: unknown[] = ['case'];
 
         // Hover state (highest priority)
         if (hoveredPartId) {
-          colorExpr.push(['==', ['get', 'id'], hoveredPartId], '#dc2626');
+          expr.push(['==', ['get', 'id'], hoveredPartId], '#dc2626');
         }
 
         // Starting part (green)
         if (startingId) {
-          colorExpr.push(['==', ['get', 'id'], parseInt(startingId)], '#16a34a');
+          expr.push(['==', ['get', 'id'], parseInt(startingId)], '#16a34a');
         }
 
         // Ending part (red)
         if (endingId) {
-          colorExpr.push(['==', ['get', 'id'], parseInt(endingId)], '#dc2626');
+          expr.push(['==', ['get', 'id'], parseInt(endingId)], '#dc2626');
         }
 
         // Default blue
-        colorExpr.push('#2563eb');
+        expr.push('#2563eb');
+        colorExpr = expr;
       } else {
         colorExpr = '#2563eb'; // Simple default value when no conditions
       }
 
       // Build weight expression
-      let weightExpr: any;
+      let weightExpr: MapLibreExpression;
       if (hasAnyCondition) {
-        weightExpr = ['case'];
+        const expr: unknown[] = ['case'];
 
         if (startingId) {
-          weightExpr.push(['==', ['get', 'id'], parseInt(startingId)], 6);
+          expr.push(['==', ['get', 'id'], parseInt(startingId)], 6);
         }
         if (endingId) {
-          weightExpr.push(['==', ['get', 'id'], parseInt(endingId)], 6);
+          expr.push(['==', ['get', 'id'], parseInt(endingId)], 6);
         }
         if (hoveredPartId) {
-          weightExpr.push(['==', ['get', 'id'], hoveredPartId], 4);
+          expr.push(['==', ['get', 'id'], hoveredPartId], 4);
         }
 
-        weightExpr.push(3); // Default (thicker)
+        expr.push(3); // Default (thicker)
+        weightExpr = expr;
       } else {
         weightExpr = 3; // Simple default value when no conditions (thicker)
       }
 
       // Build opacity expression
-      let opacityExpr: any;
+      let opacityExpr: MapLibreExpression;
       if (startingId || endingId) {
-        opacityExpr = ['case'];
+        const expr: unknown[] = ['case'];
 
         if (startingId) {
-          opacityExpr.push(['==', ['get', 'id'], parseInt(startingId)], 1.0);
+          expr.push(['==', ['get', 'id'], parseInt(startingId)], 1.0);
         }
         if (endingId) {
-          opacityExpr.push(['==', ['get', 'id'], parseInt(endingId)], 1.0);
+          expr.push(['==', ['get', 'id'], parseInt(endingId)], 1.0);
         }
 
-        opacityExpr.push(0.7); // Default
+        expr.push(0.7); // Default
+        opacityExpr = expr;
       } else {
         opacityExpr = 0.7; // Simple default value when no conditions
       }
@@ -327,6 +322,9 @@ export default function VectorAdminMap({
       }
     });
 
+    // Store updatePartsStyle in ref to be called when selectedParts changes
+    updatePartsStyleRef.current = updatePartsStyle;
+
     // Cleanup on unmount
     return () => {
       if (map.current) {
@@ -334,22 +332,18 @@ export default function VectorAdminMap({
         map.current = null;
       }
     };
-
-    // Expose updatePartsStyle to be called when selectedParts changes
-    (map.current as any)._updatePartsStyle = updatePartsStyle;
-
+  // Note: routesCacheBuster is used in map initialization but should not be a dependency
+  // as we only want this effect to run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
   // Update parts styling when selectedParts changes
   useEffect(() => {
-    if (map.current && mapLoaded) {
-      const updateFn = (map.current as any)._updatePartsStyle;
-      if (updateFn) {
-        // Use requestAnimationFrame to defer the update and avoid blocking
-        requestAnimationFrame(() => {
-          updateFn();
-        });
-      }
+    if (map.current && mapLoaded && updatePartsStyleRef.current) {
+      // Use requestAnimationFrame to defer the update and avoid blocking
+      requestAnimationFrame(() => {
+        updatePartsStyleRef.current?.();
+      });
     }
   }, [selectedParts?.startingId, selectedParts?.endingId, mapLoaded]);
 
@@ -488,7 +482,11 @@ export default function VectorAdminMap({
 
     if (previewRoute && previewRoute.coordinates && previewRoute.coordinates.length > 0) {
       // Build a FeatureCollection from all railway parts to show actual track geometry
-      const features: any[] = [];
+      const features: Array<{
+        type: 'Feature';
+        geometry: { type: 'LineString'; coordinates: [number, number][] };
+        properties: Record<string, never>;
+      }> = [];
 
       // If we have railwayParts, use their actual geometries
       if (previewRoute.railwayParts && previewRoute.railwayParts.length > 0) {
@@ -546,10 +544,9 @@ export default function VectorAdminMap({
     }
 
     // Update parts styling when preview changes
-    const updateFn = (map.current as any)._updatePartsStyle;
-    if (updateFn) {
+    if (updatePartsStyleRef.current) {
       requestAnimationFrame(() => {
-        updateFn();
+        updatePartsStyleRef.current?.();
       });
     }
   }, [previewRoute, mapLoaded]);

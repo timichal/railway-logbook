@@ -20,10 +20,20 @@ interface VectorRailwayMapProps {
   userId: number;
 }
 
+interface EditingFeature {
+  track_id: string;
+  name: string;
+  description: string;
+  primary_operator: string;
+  usage_types: string;
+  last_ride: string | null;
+  note: string | null;
+}
+
 export default function VectorRailwayMap({ className = '', userId }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const [editingFeature, setEditingFeature] = useState<any | null>(null);
+  const [editingFeature, setEditingFeature] = useState<EditingFeature | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [lastRide, setLastRide] = useState('');
   const [note, setNote] = useState('');
@@ -233,6 +243,9 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         map.current = null;
       }
     };
+  // Note: cacheBuster is used in map initialization but should not be a dependency
+  // as we only want this effect to run when userId changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -347,13 +360,13 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                     id="lastRide"
                     value={lastRide}
                     onChange={(e) => setLastRide(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full pl-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${lastRide ? 'pr-6' : 'pr-3'}`}
                   />
                   {lastRide && (
                     <button
                       type="button"
                       onClick={() => setLastRide('')}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm cursor-pointer"
                       title="Vymazat datum"
                     >
                       ✕

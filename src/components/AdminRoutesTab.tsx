@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getAllRailwayRoutes, getRailwayRoute, updateRailwayRoute } from '@/lib/railway-actions';
 import { deleteRailwayRoute } from '@/lib/route-delete-actions';
 import { getAllUsageOptions } from '@/lib/constants';
@@ -35,18 +35,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
     primary_operator: string;
   } | null>(null);
 
-  // Load all routes on component mount
-  useEffect(() => {
-    loadRoutes();
-  }, []);
-
-  // Load route details when selectedRouteId changes (from map click)
-  useEffect(() => {
-    if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
-      handleRouteClick(selectedRouteId);
-    }
-  }, [selectedRouteId]);
-
   const loadRoutes = async () => {
     try {
       setIsLoading(true);
@@ -59,7 +47,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
     }
   };
 
-  const handleRouteClick = async (trackId: string) => {
+  const handleRouteClick = useCallback(async (trackId: string) => {
     try {
       setIsLoading(true);
       const routeDetail = await getRailwayRoute(trackId);
@@ -70,7 +58,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
         usage_types: routeDetail.usage_types,
         primary_operator: routeDetail.primary_operator
       });
-      
+
       // Notify parent component about route selection
       if (onRouteSelect) {
         onRouteSelect(trackId);
@@ -80,7 +68,19 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [onRouteSelect]);
+
+  // Load all routes on component mount
+  useEffect(() => {
+    loadRoutes();
+  }, []);
+
+  // Load route details when selectedRouteId changes (from map click)
+  useEffect(() => {
+    if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
+      handleRouteClick(selectedRouteId);
+    }
+  }, [selectedRouteId, selectedRoute?.track_id, handleRouteClick]);
 
   const handleSaveRoute = async () => {
     if (!selectedRoute || !editForm) return;
