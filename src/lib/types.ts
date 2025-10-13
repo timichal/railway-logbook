@@ -14,9 +14,12 @@ export type Feature = {
   type: "Feature"
   geometry: Geometry
   properties: {
-    "@id": number
-    railway: string
-    subway: string
+    "@id"?: number
+    railway?: string
+    subway?: string
+    name?: string
+    usage?: string
+    [key: string]: string | number | undefined
   }
 }
 

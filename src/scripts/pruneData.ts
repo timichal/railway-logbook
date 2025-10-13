@@ -13,11 +13,11 @@ console.log(`Processing ${countryCodes.length} files...`);
 
 function filterFeature(feat: Feature): boolean {
   if (feat.geometry.type === "Point") {
-    if (!["station", "halt"].includes(feat.properties.railway) || feat.properties.subway) return false;
+    if (!feat.properties.railway || !["station", "halt"].includes(feat.properties.railway) || feat.properties.subway) return false;
     return true;
   }
   if (feat.geometry.type === "LineString") {
-    if (["rail", "narrow_gauge", "light_rail"].includes(feat.properties.railway)) return true;
+    if (feat.properties.railway && ["rail", "narrow_gauge", "light_rail"].includes(feat.properties.railway)) return true;
     return false;
   }
   return false;
@@ -133,7 +133,7 @@ async function processLargeFile(inputFilePath: string, outputFilePath: string) {
         if (featureCount % 10000 === 0) {
           console.log(`  Processed ${featureCount} features, kept ${processedCount}`);
         }
-      } catch (e) {
+      } catch (_e) {
         // Skip malformed features
       }
       
