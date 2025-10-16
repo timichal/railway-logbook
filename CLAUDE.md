@@ -64,7 +64,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
   - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, usage_types array, primary_operator, length_km, and PostGIS geometry
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation)
-  - `user_railway_data` - User-specific ride history (last_ride dates) and personal notes
+  - `user_railway_data` - User-specific ride history (date field) and personal notes
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 - **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
 

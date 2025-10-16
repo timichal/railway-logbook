@@ -89,7 +89,7 @@ PARALLEL SAFE;
 
 -- Function: railway_routes_tile
 -- Serves railway routes (combined lines with metadata) as vector tiles
--- Includes user-specific data (last_ride) for styling
+-- Includes user-specific data (date) for styling
 CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
 RETURNS bytea AS $$
 DECLARE
@@ -113,7 +113,7 @@ BEGIN
             rr.usage_types,
             rr.primary_operator,
             -- Include user-specific data for client-side styling
-            urd.last_ride,
+            urd.date,
             urd.note,
             -- Simplify geometry for tile display
             ST_AsMVTGeom(
@@ -134,7 +134,7 @@ BEGIN
             AND z >= 7
         ORDER BY
             -- Render order: unvisited routes first (so visited are on top)
-            CASE WHEN urd.last_ride IS NULL THEN 0 ELSE 1 END,
+            CASE WHEN urd.date IS NULL THEN 0 ELSE 1 END,
             rr.name
     ) AS mvtgeom
     WHERE geom IS NOT NULL;

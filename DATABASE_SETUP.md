@@ -6,7 +6,7 @@ This guide explains how to set up the database system for storing and serving ra
 
 The system separates data into two categories:
 - **Objective Data**: Railway routes, stations, operators, usage types (stored in `railway_routes` and `stations` tables)
-- **User Data**: Personal annotations like last ride dates and notes (stored in `user_railway_data` table with user_id)
+- **User Data**: Personal annotations like ride dates and notes (stored in `user_railway_data` table with user_id)
 
 ## Setup Instructions
 
@@ -31,12 +31,10 @@ npm run populateDb
 ```
 
 The loading script (`scripts/populateDb.ts`) will:
-- Parse the GeoJSON file from data/merged-only.geojson
-- Extract objective data (routes, stations, usage types, primary operators)
-- Extract user data (last_ride dates and notes from properties)
-- Store everything with proper data separation in the database
-- Use track_id as the primary key for railway routes
-- Handle usage types as enum arrays (stored as numbers in database)
+- Parse the GeoJSON file from data/europe-pruned.geojson
+- Load stations and railway_parts into the database
+- Note: Railway routes are created via the admin interface, not loaded from files
+- Handle geometry data with PostGIS spatial types
 
 ### 3. Frontend Database Integration
 
@@ -70,17 +68,18 @@ Update the database connection settings if needed.
    - `coordinates` (PostGIS Point with SRID 4326)
 
 3. **railway_routes** - Railway lines (objective data)
-   - `track_id` (unique identifier, primary key)
+   - `track_id` (auto-generated SERIAL primary key)
    - `name`
    - `description` (optional custom description)
    - `usage_types[]` (array of Usage enum numbers)
    - `primary_operator`
    - `geometry` (PostGIS LineString with SRID 4326)
+   - `length_km` (calculated automatically from geometry)
 
 4. **user_railway_data** - User-specific annotations
    - `user_id` → `users.id`
    - `track_id` → `railway_routes.track_id`
-   - `last_ride` (date)
+   - `date` (date of ride)
    - `note` (text)
 
 ### Key Features

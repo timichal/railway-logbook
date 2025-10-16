@@ -53,8 +53,8 @@ CREATE TABLE user_railway_data (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE CASCADE,
-    last_ride DATE, -- custom.last_ride
-    note TEXT, -- custom.note
+    date DATE, -- Date of ride
+    note TEXT, -- User note
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, track_id)

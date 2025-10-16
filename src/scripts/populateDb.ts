@@ -35,7 +35,7 @@ interface GeoJSONProperties {
   description?: string;
   usage?: number[];
   primary_operator?: string;
-  last_ride?: string;
+  date?: string;
   note?: string;
 }
 

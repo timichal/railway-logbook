@@ -34,7 +34,7 @@ interface EditingFeature {
   description: string;
   primary_operator: string;
   usage_types: string;
-  last_ride: string | null;
+  date: string | null;
   note: string | null;
 }
 
@@ -42,7 +42,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   const mapContainer = useRef<HTMLDivElement>(null);
   const [editingFeature, setEditingFeature] = useState<EditingFeature | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
-  const [lastRide, setLastRide] = useState('');
+  const [date, setDate] = useState('');
   const [note, setNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
@@ -60,7 +60,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         createRailwayRoutesLayer({
           colorExpression: [
             'case',
-            ['has', 'last_ride'],
+            ['has', 'date'],
             COLORS.railwayRoutes.visited,
             COLORS.railwayRoutes.unvisited
           ],
@@ -118,12 +118,12 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         description: properties.description,
         primary_operator: properties.primary_operator,
         usage_types: properties.usage_types,
-        last_ride: properties.last_ride,
+        date: properties.date,
         note: properties.note
       });
 
-      setLastRide(properties.last_ride ?
-        new Date(properties.last_ride).toISOString().split('T')[0] : '');
+      setDate(properties.date ?
+        new Date(properties.date).toISOString().split('T')[0] : '');
       setNote(properties.note || '');
       setShowEditForm(true);
     };
@@ -174,8 +174,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         formattedDescription += `<br /><br /><span style="color: black;">${properties.description}</span>`;
       }
 
-      if (properties.last_ride) {
-        formattedDescription += `<br /><br /><span style="color: black;">Naposledy projeto: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.last_ride))}</span>`;
+      if (properties.date) {
+        formattedDescription += `<br /><br /><span style="color: black;">Date: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span>`;
       }
       if (properties.note) {
         formattedDescription += `<br /><br /><span style="color: black;">${properties.note}</span>`;
@@ -219,7 +219,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
     setIsLoading(true);
     try {
-      await updateUserRailwayData(editingFeature.track_id, lastRide || null, note || null);
+      await updateUserRailwayData(editingFeature.track_id, date || null, note || null);
 
       // Update cache buster to force tile reload
       const newCacheBuster = Date.now();
@@ -239,7 +239,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
             createRailwayRoutesLayer({
               colorExpression: [
                 'case',
-                ['has', 'last_ride'],
+                ['has', 'date'],
                 COLORS.railwayRoutes.visited,
                 COLORS.railwayRoutes.unvisited
               ],
@@ -322,23 +322,23 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
             <form onSubmit={handleFormSubmit} className="space-y-4">
               <div>
-                <label htmlFor="lastRide" className="block text-sm font-medium mb-1">
+                <label htmlFor="date" className="block text-sm font-medium mb-1">
                   Date:
                 </label>
                 <div className="relative">
                   <input
                     type="date"
-                    id="lastRide"
-                    value={lastRide}
-                    onChange={(e) => setLastRide(e.target.value)}
-                    className={`w-full pl-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${lastRide ? 'pr-6' : 'pr-3'}`}
+                    id="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className={`w-full pl-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${date ? 'pr-6' : 'pr-3'}`}
                   />
-                  {lastRide && (
+                  {date && (
                     <button
                       type="button"
-                      onClick={() => setLastRide('')}
+                      onClick={() => setDate('')}
                       className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm cursor-pointer"
-                      title="Vymazat datum"
+                      title="Clear date"
                     >
                       ✕
                     </button>

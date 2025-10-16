@@ -1,18 +1,10 @@
-// Types only, no enum imports needed (enums are used in definitions/ files)
-
-export type Coord = [x: number, y: number];
-
-type Geometry = {
-  type: "Point"
-  coordinates: Coord
-} | {
-  type: "LineString"
-  coordinates: Coord[]
-}
-
+// Types for pruneData.ts script
 export type Feature = {
   type: "Feature"
-  geometry: Geometry
+  geometry: {
+    type: "Point" | "LineString"
+    coordinates: [number, number] | [number, number][]
+  }
   properties: {
     "@id"?: number
     railway?: string
@@ -25,37 +17,6 @@ export type Feature = {
 
 export type EntryData = {
   features: Feature[]
-}
-
-export type ProcessedFeature = {
-  type: "Feature"
-  geometry: Geometry
-  properties: {
-    "@id": number | string
-    name: string
-    description: string
-    track_id: string
-    usage: number[]
-    primary_operator: string
-  }
-}
-
-export type ProcessedData = {
-  features: ProcessedFeature[]
-}
-
-export type RailwayData = {
-  from: string
-  to: string
-  local_number: string
-  usage: number[]
-  primary_operator: string
-  ways: string
-  description?: string
-  custom?: {
-    last_ride?: string
-    note?: string
-  }
 }
 
 // GeoJSON types for database queries
@@ -77,7 +38,7 @@ export type GeoJSONFeature = {
     primary_operator?: string
     zoom_level?: number
     custom?: {
-      last_ride?: string
+      date?: string
       note?: string
     }
     [key: string]: unknown
@@ -117,6 +78,6 @@ export type RailwayRoute = {
   usage_types: string[]
   primary_operator: string
   geometry: string // GeoJSON string
-  last_ride?: string | null
+  date?: string | null
   note?: string | null
 }

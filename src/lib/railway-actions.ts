@@ -37,14 +37,14 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
 
   // Get railway routes with user data
   const routesResult = await query(`
-    SELECT 
+    SELECT
       rr.track_id,
       rr.name,
       rr.description,
       rr.usage_types,
       rr.primary_operator,
       ST_AsGeoJSON(rr.geometry) as geometry,
-      urd.last_ride,
+      urd.date,
       urd.note
     FROM railway_routes rr
     LEFT JOIN user_railway_data urd ON rr.track_id = urd.track_id AND urd.user_id = $1
@@ -79,7 +79,7 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
         primary_operator: route.primary_operator,
         usage: route.usage_types.map(Number),
         custom: {
-          last_ride: route.last_ride ?? undefined,
+          date: route.date ?? undefined,
           note: route.note ?? undefined,
         }
       }
@@ -94,7 +94,7 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
 
 export async function updateUserRailwayData(
   trackId: string,
-  lastRide?: string | null,
+  date?: string | null,
   note?: string | null
 ): Promise<void> {
   const user = await getUser();
@@ -104,14 +104,14 @@ export async function updateUserRailwayData(
 
   const userId = user.id;
   await query(`
-    INSERT INTO user_railway_data (user_id, track_id, last_ride, note)
+    INSERT INTO user_railway_data (user_id, track_id, date, note)
     VALUES ($1, $2, $3, $4)
     ON CONFLICT (user_id, track_id)
     DO UPDATE SET
-      last_ride = EXCLUDED.last_ride,
+      date = EXCLUDED.date,
       note = EXCLUDED.note,
       updated_at = CURRENT_TIMESTAMP
-  `, [userId, trackId, lastRide || null, note || null]);
+  `, [userId, trackId, date || null, note || null]);
 }
 
 export interface UserProgress {
@@ -139,7 +139,7 @@ export async function getUserProgress(): Promise<UserProgress> {
     WHERE length_km IS NOT NULL
   `);
 
-  // Get completed distance and count (routes with last_ride date)
+  // Get completed distance and count (routes with date)
   const completedResult = await query(`
     SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
@@ -147,7 +147,7 @@ export async function getUserProgress(): Promise<UserProgress> {
     FROM railway_routes rr
     INNER JOIN user_railway_data urd ON rr.track_id = urd.track_id
     WHERE urd.user_id = $1
-      AND urd.last_ride IS NOT NULL
+      AND urd.date IS NOT NULL
       AND rr.length_km IS NOT NULL
   `, [userId]);
 
