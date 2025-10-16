@@ -40,6 +40,7 @@ export type GeoJSONFeature = {
     custom?: {
       date?: string
       note?: string
+      partial?: boolean
     }
     [key: string]: unknown
   }
