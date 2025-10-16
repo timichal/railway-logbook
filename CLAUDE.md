@@ -16,10 +16,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 ## Core Commands
 
 ### Data Processing Pipeline
-- `npm run prepareData` - Complete data preparation pipeline (downloads OSM data, filters rail features, merges countries, converts to GeoJSON, and prunes data)
-- `npm run check <country_code>` - Validates railway definitions for a country (e.g., `npm run check cz`)
-- `npm run apply <country_code>` - Applies railway definitions to create combined GeoJSON (e.g., `npm run apply cz`)
-- `npm run merge` - Combines all `-combined.geojson` files into `merged-only.geojson`
+- `npm run prepareData` - Complete data preparation pipeline (filters rail features, converts to GeoJSON, and prunes data)
 - `npm run populateDb` - Loads processed GeoJSON data into PostgreSQL database and initializes vector tile functions
 
 ### Database Operations
@@ -43,37 +40,33 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 
 ### Complete Data Flow
 ```
-OSM PBF Files → Filtered OSM → GeoJSON → Combined Routes → Database → Frontend Map
-     ↓              ↓           ↓           ↓             ↓           ↓
-Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
-   Data         Features     + Stations   Definitions   + PostGIS    Leaflet Map
+OSM PBF Files → Filtered OSM → GeoJSON → Pruned Data → Database → Frontend Map
+     ↓              ↓           ↓           ↓            ↓           ↓
+Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
+   Data         Features     Rail Parts   Features    + PostGIS    MapLibre Map
 ```
 
 ### 1. Data Sources
 - OpenStreetMap data from https://download.geofabrik.de/europe.html
 - Country-specific OSM PBF files (stable dumps from 2025-01-01)
-- Railway definitions in TypeScript files (`definitions/*.ts`)
 
 ### 2. Processing Pipeline
-1. **Download** (`osmium-scripts/download.sh`) - Downloads OSM PBF data for specified countries
-2. **Filter** (`osmium-scripts/filterRailFeatures.sh`) - Applies OpenRailwayMap filter to extract railway features
-3. **Merge** (`osmium-scripts/merge.sh`) - Combines data from multiple countries for cross-border routes
-4. **Convert** (`osmium-scripts/convertToGeojson.sh`) - Converts filtered OSM data to GeoJSON format
-5. **Prune** (`src/scripts/pruneData.ts`) - Applies custom filters to remove unwanted features (subways, etc.)
-6. **Apply Definitions** (`src/scripts/applyRailwayDefinitions.ts`) - Merges railway segments according to definitions
-7. **Final Merge** (`src/scripts/mergeCountryFiles.ts`) - Combines all country data into single output
-8. **Database Load** (`src/scripts/populateDb.ts`) - Imports processed data into PostgreSQL with user separation
+1. **Filter** (`osmium-scripts/filterRailFeatures.sh`) - Applies OpenRailwayMap filter to extract railway features
+2. **Convert** (`osmium-scripts/convertToGeojson.sh`) - Converts filtered OSM data to GeoJSON format
+3. **Prune** (`src/scripts/pruneData.ts`) - Applies custom filters to remove unwanted features (subways, etc.)
+4. **Database Load** (`src/scripts/populateDb.ts`) - Imports processed data into PostgreSQL with user separation
 
 ### 3. Database Architecture
 - **PostgreSQL 16 with PostGIS** - Spatial database for geographic data
 - **Data Separation**: Objective railway data vs. user-specific annotations
 - **Tables**:
-  - `users` - User accounts and authentication (email as username, password field for future auth)
+  - `users` - User accounts and authentication (email as username, password field for bcrypt hashes)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
-  - `railway_routes` - Railway lines with description, usage_types array, primary_operator, and PostGIS geometry
-  - `railway_parts` - Raw railway segments from OSM data (original line data before route definitions applied)
+  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, usage_types array, primary_operator, length_km, and PostGIS geometry
+  - `railway_parts` - Raw railway segments from OSM data (used for admin route creation)
   - `user_railway_data` - User-specific ride history (last_ride dates) and personal notes
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
+- **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
 
 ### 4. Frontend Application
 - **Next.js 15** with React 19 - Modern web application framework
@@ -96,7 +89,7 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
   - Click railway routes to view/edit details
   - Route preview with geometry visualization
   - Hover effects on railway parts
-- **Route Management**: Create, edit, update (including track_id), and delete railway routes
+- **Route Management**: Create, edit, update, and delete railway routes (track_id is auto-generated)
 - **Components**: `AdminPageClient` → `VectorAdminMapWrapper` → `VectorAdminMap`
 
 ## Simplified Project Structure
@@ -129,27 +122,16 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
   - `enums.ts` - Usage patterns and operator definitions
   - `types.ts` - Core type definitions
   - `src/lib/map/` - Shared map utilities
-    - `index.ts` - Constants, layer factories, popup utilities
+    - `index.ts` - Constants, layer factories, closeAllPopups utility
     - `hooks/useMapLibre.ts` - Base hook for MapLibre initialization
 - `src/scripts/` - Data processing scripts
-  - `checkRailwayDefinitions.ts` - Validates railway definitions against OSM data
-  - `applyRailwayDefinitions.ts` - Combines railway segments into complete routes
-  - `mergeCountryFiles.ts` - Merges multiple country datasets
-  - `pruneData.ts` - Filters unwanted railway features
-  - `mergeCoordinateLists.ts` - Utility for combining coordinate arrays
-  - `populateDb.ts` - Database loading script
+  - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
+  - `populateDb.ts` - Database loading script (loads stations, railway_parts, and railway_routes)
 
 ### OSM Processing Scripts (`osmium-scripts/`)
 - `prepare.sh` - Master script that orchestrates the entire pipeline
-- `download.sh` - Downloads OSM PBF files from Geofabrik (stable 2025-01-01 dumps)
 - `filterRailFeatures.sh` - Applies OpenRailwayMap filter using osmium tags-filter
-- `merge.sh` - Combines multiple country datasets for cross-border routes
 - `convertToGeojson.sh` - Converts OSM PBF to GeoJSON format
-
-### Data Definitions
-- `definitions/cz.ts` - Czech railway route definitions (~265KB file with ~1000+ routes)
-- `definitions/at.ts` - Austrian railway route definitions  
-- `definitions/at-cz.ts` - Cross-border route definitions
 
 ### Shared Libraries (`src/lib/`)
 - `types.ts` - Core type definitions for GeoJSON features and railway data
@@ -170,28 +152,7 @@ Raw Railway    Railway Only  Pruned Data  Applied     PostgreSQL   Interactive
 - `<country>.tmp.osm.pbf` - Downloaded OSM data
 - `<country>-rail.tmp.osm.pbf` - Filtered railway data
 - `<country>-rail.tmp.geojson` - Converted to GeoJSON
-- `<country>-pruned.geojson` - Custom filtered data
-- `<country>-combined.geojson` - Routes with definitions applied
-- `merged-only.geojson` - Final combined dataset for database loading
-
-## Railway Definition Structure
-
-Railway definitions in `definitions/` files follow this schema:
-```typescript
-{
-  from: string,           // Starting station
-  to: string,             // Ending station  
-  local_number: string,   // Railway line number
-  description?: string,   // Optional custom description (new field)
-  usage: Usage[],         // Service frequency pattern (stored as enum numbers in DB)
-  primary_operator: Operator, // Main railway operator
-  ways: string,           // Semicolon-separated OSM way IDs
-  custom?: {              // Optional metadata
-    last_ride?: string,   // Date of last service
-    note?: string         // Additional notes
-  }
-}
-```
+- `<country>-pruned.geojson` - Custom filtered data (ready for database loading)
 
 ## Development Notes
 
@@ -201,19 +162,20 @@ Railway definitions in `definitions/` files follow this schema:
 
 ### Data Processing
 - Custom filters applied in `pruneData.ts` remove subway and unwanted railway types
-- Cross-border routes require merged datasets from multiple countries
-- Railway definitions use OSM way IDs to reconstruct complete routes from segmented data
 - `src/scripts/populateDb.ts` uses batch inserts for performance and:
   - Executes database initialization SQL files (vector tile functions, Web Mercator columns)
   - Populates `stations` and `railway_parts` from `cz-pruned.geojson`
-  - Populates `railway_routes` from `merged-only.geojson`
+  - Admin users create `railway_routes` manually via the web interface
 
-### Output Format
-Final GeoJSON includes custom properties for visualization:
-- `track_id` - Unique identifier for railway routes
-- `usage` - Usage enum array (stored directly in properties, not generated from description)
-- `primary_operator` - Operator stored directly in properties
-- `description` - Custom description field when provided in definitions
-- `last_ride`/`note` - User data stored directly in properties when available
-- Dynamic styling: Frontend generates colors (green/crimson) based on user visit history
-- Usage enum translation: Database stores enum numbers, frontend translates to Czech strings
+### Admin Route Creation
+- Admin interface allows creating new routes by clicking railway parts on the map
+- Routes are built by selecting start/end points from `railway_parts`
+- Database pathfinding (PostGIS spatial queries) finds connecting segments within 50km
+- Route length is automatically calculated using ST_Length with geography cast
+- track_id is auto-generated using PostgreSQL SERIAL
+
+### User Progress Tracking
+- User-specific data stored in `user_railway_data` table
+- Progress calculated from `length_km` column in `railway_routes`
+- Progress stats show completed/total km and percentage
+- Frontend displays: green for visited routes, crimson for unvisited routes

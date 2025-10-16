@@ -1,37 +1,80 @@
-K filtraci a exportu dat je potřeba [Osmium Tool](https://osmcode.org/osmium-tool/). Na Windowsu se stáhne přes [conda-forge](https://conda-forge.org/download/): `conda install conda-forge::osmium-tool`
+# OSM Railway Tracker
 
-Zdrojová data z OpenStreetMap: https://download.geofabrik.de/europe.html
+A web application for tracking railway journeys using OpenStreetMap data. Still very much in development. (Also an experiment in vibe coding, almost everything was coded by Claude Code.)
 
-Stabilní dumpy z 1. 1. 2025
+Currently live at https://railmap.zlatkovsky.cz/
 
-Zatím procesování dat z Česka. Používá se [defaultní OpenRailwayMap filtr](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md#load-osm-data-into-the-database) pro všechna vlaková data, až následně se osekává geojson - OSM formát se špatně filtruje vzhledem k relacím dat.
+## Tech Stack
 
-Proces:
-- `npm run prepareData` stáhne a připraví data
-- `npm run check cz` zkontroluje definice tratí a zakomentuje neplatné
-- `npm run apply cz` aplikuje definice tratí (spojí definované úseky) a uloží do `cz-combined.geojson`
-- `npm run merge` zkombinuje všechna data ze souborů `-combined.geojson` do `merged-only.geojson`
+- **Frontend**: Next.js 15 + React 19 + MapLibre GL JS
+- **Backend**: PostgreSQL 16 + PostGIS + Martin tile server
+- **Data**: OpenStreetMap (stable dumps from 2025-01-01)
 
-Skripty v `osmium-scripts` volané při `npm run prepare`:
-- `prepare.sh` volá přímo npm. Zatím natvrdo vepsané parametry
-- `download.sh` stáhne aktuální kompletní data pro dané země v osm.pbf formátu, výstup např. `cz.osm.pbf`
-- `filterRailFeatures.sh` uplatní na data filtr z OpenRailwayMap, výstup např. `cz-rail.osm.pbf`
-- `merge.sh` mergne data z různých zemí kvůli mezinárodním tratím, výstup např. `at-cz-rail.osm.pbf`
-- `convertToGeojson.sh` převede data do geojsonu, výstup např. `cz-rail.geojson`
-- `pruneData.ts` aplikuje custom filtry a uloží do `cz-pruned.geojson`
+## Prerequisites
 
+- **Node.js** (for Next.js application)
+- **Docker** (for PostgreSQL database)
+- **Osmium Tool** (for data processing): `conda install conda-forge::osmium-tool`
 
-- JOSM si s moc velkými daty neporadí
-- vždycky export jedné země pro tratě v rámci jedné země
-- pro mezinárodní tratě merge daných zemí
+## Quick Start
 
-Mapy tratí + řády:
-- ČD: https://www.cd.cz/jizdni-rad/tratove-jizdni-rady
-- ÖBB: https://www.oebb.at/en/fahrplan/fahrplanbilder
+1. **Start database and tile server**
+```bash
+docker compose up -d postgres martin
+```
 
-Stav:
-- ČR: hotovo
-- Rakousko: rozpracováno
+2. **Process data**
+```bash
+npm run prepareData  # Downloads and transforms OSM data
+npm run populateDb   # Loads data (no routes!) into database 
+```
 
+3. **Run application**
+```bash
+npm run dev
+```
 
-Aktuálně se pak výsledný geojson vkládá sem, kde se vykreslí na mapě (po loginu edit link): https://umap.openstreetmap.fr/en/map/railroad-map_1140579#9/49.9290/13.9595
+Application runs at `http://localhost:3000`
+
+## Architecture
+
+### Data Flow
+```
+OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
+```
+
+### Data Processing Scripts
+- `osmium-scripts/filterRailFeatures.sh` - Applies OpenRailwayMap filter
+- `osmium-scripts/convertToGeojson.sh` - Converts to GeoJSON
+- `src/scripts/pruneData.ts` - Removes subways and unwanted features
+- `src/scripts/populateDb.ts` - Loads data into database
+
+### Database Tables
+- `users` - User accounts with authentication
+- `stations` - Railway stations (Point features)
+- `railway_parts` - Raw railway segments from OSM
+- `railway_routes` - Defined routes (created by admin via UI)
+- `user_railway_data` - User ride history (dates, notes)
+
+### Features
+
+**For Users:**
+- Map of all routes (green = visited, red = unvisited)
+- Progress tracking (km/% of total distance)
+- Click routes to mark ride date and add notes
+
+**For Admin (user_id=1):**
+- Create routes by clicking railway_parts on map
+- Automatic pathfinding between points (PostGIS, 50km buffer)
+- Edit and delete routes
+- Auto-generated track_id and automatic length calculation
+
+## Data Sources
+
+- OpenStreetMap: https://download.geofabrik.de/europe.html
+- Using stable dump from 2025-01-01
+- Filter: [OpenRailwayMap standard](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md)
+
+## Development
+
+See `CLAUDE.md` for detailed documentation.

@@ -9,9 +9,6 @@
     "start": "next start",
     "lint": "next lint",
     "prepareData": "sh ./osmium-scripts/prepare.sh",
-    "check": "tsx src/scripts/checkRailwayDefinitions.ts",
-    "apply": "tsx src/scripts/applyRailwayDefinitions.ts",
-    "merge": "tsx src/scripts/mergeCountryFiles.ts",
     "populateDb": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/populateDb.ts"
   },
   "repository": {

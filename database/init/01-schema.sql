@@ -37,7 +37,7 @@ CREATE TABLE railway_parts (
 
 -- Railway lines/routes (objective data only)
 CREATE TABLE railway_routes (
-    track_id VARCHAR(255) PRIMARY KEY, -- Unique track identifier
+    track_id SERIAL PRIMARY KEY, -- Auto-generated unique track identifier
     name VARCHAR(255) NOT NULL,
     description TEXT, -- Route description
     usage_types TEXT[], -- Array of usage types
@@ -52,7 +52,7 @@ CREATE TABLE railway_routes (
 CREATE TABLE user_railway_data (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    track_id VARCHAR(255) REFERENCES railway_routes(track_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE CASCADE,
     last_ride DATE, -- custom.last_ride
     note TEXT, -- custom.note
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

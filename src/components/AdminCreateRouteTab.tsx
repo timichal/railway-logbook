@@ -14,7 +14,7 @@ interface AdminCreateRouteTabProps {
   onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { track_id: string, name: string, description: string, usage_types: string[], primary_operator: string }) => void;
+  onSaveRoute?: (routeData: { name: string, description: string, usage_types: string[], primary_operator: string }) => void;
   onFormReset?: () => void;
 }
 
@@ -22,7 +22,6 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
-    track_id: '',
     name: '',
     description: '',
     usage_types: [''] as string[],
@@ -32,7 +31,6 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   // Reset form function
   const resetForm = () => {
     setCreateForm({
-      track_id: '',
       name: '',
       description: '',
       usage_types: [''],
@@ -109,7 +107,6 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     if (!onSaveRoute) return;
 
     await onSaveRoute({
-      track_id: createForm.track_id,
       name: createForm.name,
       description: createForm.description,
       usage_types: createForm.usage_types.filter(usage => usage !== ''), // Remove empty usage types
@@ -184,23 +181,6 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               ×
             </button>
           </div>
-        </div>
-
-        {/* Track ID */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Track ID *
-          </label>
-          <input
-            type="text"
-            value={createForm.track_id}
-            onChange={(e) => setCreateForm({ ...createForm, track_id: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-            placeholder="e.g., cz010a, at120"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Unique identifier for the railway line (manually assigned)
-          </p>
         </div>
 
         {/* Route Name */}
@@ -289,7 +269,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
         <div className="pt-4 border-t border-gray-200">
           <button
             onClick={handleSaveRoute}
-            disabled={!isPreviewMode || !createForm.track_id || !createForm.name || !createForm.primary_operator}
+            disabled={!isPreviewMode || !createForm.name || !createForm.primary_operator}
             className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
           >
             Save Route to Database

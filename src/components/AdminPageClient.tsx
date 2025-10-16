@@ -54,7 +54,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setIsPreviewMode(false);
   };
 
-  const handleSaveRoute = async (routeData: {track_id: string, name: string, description: string, usage_types: string[], primary_operator: string}) => {
+  const handleSaveRoute = async (routeData: {name: string, description: string, usage_types: string[], primary_operator: string}) => {
     console.log('AdminPageClient: Save route requested', routeData);
 
     if (!previewRoute) {
@@ -65,7 +65,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
     try {
       const trackId = await saveRailwayRoute(routeData, previewRoute, previewRoute.railwayParts);
-      console.log('AdminPageClient: Route saved successfully with track_id:', trackId);
+      console.log('AdminPageClient: Route saved successfully with auto-generated track_id:', trackId);
 
       // Clear preview mode
       setPreviewRoute(null);

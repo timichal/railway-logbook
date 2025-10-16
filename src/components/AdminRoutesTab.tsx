@@ -29,7 +29,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [editForm, setEditForm] = useState<{
-    track_id: string;
     name: string;
     description: string;
     usage_types: string[];
@@ -54,7 +53,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       const routeDetail = await getRailwayRoute(trackId);
       setSelectedRoute(routeDetail);
       setEditForm({
-        track_id: routeDetail.track_id,
         name: routeDetail.name,
         description: routeDetail.description || '',
         usage_types: routeDetail.usage_types,
@@ -87,13 +85,10 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   const handleSaveRoute = async () => {
     if (!selectedRoute || !editForm) return;
 
-    const trackIdChanged = selectedRoute.track_id !== editForm.track_id;
-
     try {
       setIsLoading(true);
       await updateRailwayRoute(
-        selectedRoute.track_id,  // old track_id
-        editForm.track_id,        // new track_id
+        selectedRoute.track_id,
         editForm.name,
         editForm.description || null,
         editForm.usage_types,
@@ -109,11 +104,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
         ...editForm,
         description: editForm.description || null
       });
-
-      // If track_id changed, notify parent about the new ID
-      if (trackIdChanged && onRouteSelect) {
-        onRouteSelect(editForm.track_id);
-      }
 
       // Notify parent to refresh map tiles
       if (onRouteUpdated) {
@@ -212,10 +202,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                 <div className="font-medium text-sm text-gray-900 truncate">
                   {route.name}
                 </div>
-                <div className="text-xs text-gray-500 mt-1 truncate">
-                  ID: {route.track_id}
-                </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 mt-1">
                   {route.primary_operator}
                 </div>
               </button>
@@ -246,19 +233,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
             
             {editForm && (
               <div className="space-y-4">
-                {/* Track ID */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Track ID *
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.track_id}
-                    onChange={(e) => setEditForm({ ...editForm, track_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                  />
-                </div>
-
                 {/* Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -206,8 +206,7 @@ export async function getRailwayRoute(trackId: string) {
 }
 
 export async function updateRailwayRoute(
-  oldTrackId: string,
-  newTrackId: string,
+  trackId: string,
   name: string,
   description: string | null,
   usageTypes: string[],
@@ -220,9 +219,9 @@ export async function updateRailwayRoute(
 
   await query(`
     UPDATE railway_routes
-    SET track_id = $2, name = $3, description = $4, usage_types = $5, primary_operator = $6, updated_at = CURRENT_TIMESTAMP
+    SET name = $2, description = $3, usage_types = $4, primary_operator = $5, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [oldTrackId, newTrackId, name, description, usageTypes, primaryOperator]);
+  `, [trackId, name, description, usageTypes, primaryOperator]);
 }
 
 export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {

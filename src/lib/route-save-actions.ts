@@ -5,7 +5,6 @@ import { PathResult } from './db-path-actions';
 import type { RailwayPart } from './types';
 
 export interface SaveRouteData {
-  track_id: string;
   name: string;
   description: string;
   usage_types: string[];
@@ -87,7 +86,6 @@ export async function saveRailwayRoute(
   
   try {
     console.log('Saving railway route:', routeData.name);
-    console.log('Track ID:', routeData.track_id);
     console.log('Path segments:', pathResult.partIds.length);
 
     let sortedCoordinates: Coord[];
@@ -119,11 +117,10 @@ export async function saveRailwayRoute(
     // Create LineString geometry from sorted coordinates
     const geometryWKT = `LINESTRING(${sortedCoordinates.map(coord => `${coord[0]} ${coord[1]}`).join(',')})`;
     
-    // Insert into railway_routes table using the manual track_id
+    // Insert into railway_routes table with auto-generated track_id
     // Calculate length using ST_Length with geography cast for accurate geodesic distance
     const insertQuery = `
       INSERT INTO railway_routes (
-        track_id,
         name,
         description,
         usage_types,
@@ -135,15 +132,13 @@ export async function saveRailwayRoute(
         $2,
         $3,
         $4,
-        $5,
-        ST_GeomFromText($6, 4326),
-        ST_Length(ST_GeomFromText($6, 4326)::geography) / 1000
+        ST_GeomFromText($5, 4326),
+        ST_Length(ST_GeomFromText($5, 4326)::geography) / 1000
       )
       RETURNING track_id, length_km
     `;
-    
+
     const values = [
-      routeData.track_id, // Use the manually entered track_id
       routeData.name,
       routeData.description || null,
       routeData.usage_types,
@@ -155,10 +150,10 @@ export async function saveRailwayRoute(
     const savedTrackId = result.rows[0].track_id;
     const lengthKm = result.rows[0].length_km;
 
-    console.log('Successfully saved railway route with track_id:', savedTrackId);
+    console.log('Successfully saved railway route with auto-generated track_id:', savedTrackId);
     console.log('Final geometry has', sortedCoordinates.length, 'coordinate points');
     console.log('Calculated route length:', lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : 'N/A');
-    return savedTrackId;
+    return String(savedTrackId);
     
   } catch (error) {
     console.error('Error saving railway route:', error);

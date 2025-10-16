@@ -323,7 +323,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
             <form onSubmit={handleFormSubmit} className="space-y-4">
               <div>
                 <label htmlFor="lastRide" className="block text-sm font-medium mb-1">
-                  Naposledy projeto:
+                  Date:
                 </label>
                 <div className="relative">
                   <input
@@ -348,7 +348,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
               <div>
                 <label htmlFor="note" className="block text-sm font-medium mb-1">
-                  Poznámka:
+                  Note:
                 </label>
                 <textarea
                   id="note"
