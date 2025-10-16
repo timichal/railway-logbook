@@ -63,6 +63,10 @@ export function createOSMBackgroundLayer(): maplibregl.RasterLayerSpecification 
     source: 'osm',
     minzoom: 0,
     maxzoom: 22,
+    paint: {
+      'raster-fade-duration': 0,
+      'raster-opacity': 1,
+    },
   };
 }
 
