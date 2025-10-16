@@ -120,6 +120,7 @@ export async function saveRailwayRoute(
     const geometryWKT = `LINESTRING(${sortedCoordinates.map(coord => `${coord[0]} ${coord[1]}`).join(',')})`;
     
     // Insert into railway_routes table using the manual track_id
+    // Calculate length using ST_Length with geography cast for accurate geodesic distance
     const insertQuery = `
       INSERT INTO railway_routes (
         track_id,
@@ -127,9 +128,18 @@ export async function saveRailwayRoute(
         description,
         usage_types,
         primary_operator,
-        geometry
-      ) VALUES ($1, $2, $3, $4, $5, ST_GeomFromText($6, 4326))
-      RETURNING track_id
+        geometry,
+        length_km
+      ) VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        ST_GeomFromText($6, 4326),
+        ST_Length(ST_GeomFromText($6, 4326)::geography) / 1000
+      )
+      RETURNING track_id, length_km
     `;
     
     const values = [
@@ -143,9 +153,11 @@ export async function saveRailwayRoute(
     
     const result = await client.query(insertQuery, values);
     const savedTrackId = result.rows[0].track_id;
-    
+    const lengthKm = result.rows[0].length_km;
+
     console.log('Successfully saved railway route with track_id:', savedTrackId);
     console.log('Final geometry has', sortedCoordinates.length, 'coordinate points');
+    console.log('Calculated route length:', lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : 'N/A');
     return savedTrackId;
     
   } catch (error) {

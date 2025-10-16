@@ -25,7 +25,7 @@ export default async function Home() {
               OSM Railway Map
             </h1>
             <p className="text-gray-600 mt-1">
-              Welcome, {user.name || user.email} - Interactive railway map of Czech Republic and Austria
+              Welcome, {user.name || user.email} - Interactive railway map of Europe
             </p>
           </div>
           <div className="flex items-center gap-4">

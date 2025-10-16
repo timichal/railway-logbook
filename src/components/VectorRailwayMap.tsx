@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import { updateUserRailwayData } from '@/lib/railway-actions';
+import { updateUserRailwayData, getUserProgress, type UserProgress } from '@/lib/railway-actions';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
 import {
   createRailwayRoutesSource,
@@ -46,6 +46,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   const [note, setNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
+  const [progress, setProgress] = useState<UserProgress | null>(null);
 
   // Initialize map with shared hook
   const { map } = useMapLibre(
@@ -75,6 +76,20 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     },
     [userId] // Recreate map when userId changes
   );
+
+  // Fetch progress stats on component mount
+  useEffect(() => {
+    const fetchProgress = async () => {
+      try {
+        const progressData = await getUserProgress();
+        setProgress(progressData);
+      } catch (error) {
+        console.error('Error fetching progress:', error);
+      }
+    };
+
+    fetchProgress();
+  }, []);
 
   // Add event handlers after map loads
   useEffect(() => {
@@ -258,6 +273,14 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       closeAllPopups();
       setShowEditForm(false);
       setEditingFeature(null);
+
+      // Refresh progress stats
+      try {
+        const progressData = await getUserProgress();
+        setProgress(progressData);
+      } catch (error) {
+        console.error('Error refreshing progress:', error);
+      }
     } catch (error) {
       console.error('Error updating railway data:', error);
     } finally {
@@ -272,6 +295,22 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         className={`w-full h-full ${className}`}
         style={{ height: '100%', minHeight: '400px' }}
       />
+
+      {/* Progress Stats Box */}
+      {progress && (
+        <div className="absolute top-4 left-4 bg-white p-3 rounded shadow-lg text-black z-10">
+          <h3 className="font-bold mb-2 text-sm">Completed</h3>
+          <div className="text-lg font-semibold">
+            {progress.completedKm}/{progress.totalKm} km
+          </div>
+          <div className="text-2xl font-bold text-green-600">
+            {progress.percentage}%
+          </div>
+          <div className="text-xs text-gray-600 mt-1">
+            {progress.completedRoutes}/{progress.totalRoutes} routes
+          </div>
+        </div>
+      )}
 
       {/* Edit Form Modal */}
       {showEditForm && editingFeature && (

@@ -101,17 +101,70 @@ export async function updateUserRailwayData(
   if (!user) {
     throw new Error('User not authenticated');
   }
-  
+
   const userId = user.id;
   await query(`
     INSERT INTO user_railway_data (user_id, track_id, last_ride, note)
     VALUES ($1, $2, $3, $4)
-    ON CONFLICT (user_id, track_id) 
+    ON CONFLICT (user_id, track_id)
     DO UPDATE SET
       last_ride = EXCLUDED.last_ride,
       note = EXCLUDED.note,
       updated_at = CURRENT_TIMESTAMP
   `, [userId, trackId, lastRide || null, note || null]);
+}
+
+export interface UserProgress {
+  totalKm: number;
+  completedKm: number;
+  percentage: number;
+  totalRoutes: number;
+  completedRoutes: number;
+}
+
+export async function getUserProgress(): Promise<UserProgress> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const userId = user.id;
+
+  // Get total distance and count of all routes
+  const totalResult = await query(`
+    SELECT
+      COALESCE(SUM(length_km), 0) as total_km,
+      COUNT(*) as total_routes
+    FROM railway_routes
+    WHERE length_km IS NOT NULL
+  `);
+
+  // Get completed distance and count (routes with last_ride date)
+  const completedResult = await query(`
+    SELECT
+      COALESCE(SUM(rr.length_km), 0) as completed_km,
+      COUNT(*) as completed_routes
+    FROM railway_routes rr
+    INNER JOIN user_railway_data urd ON rr.track_id = urd.track_id
+    WHERE urd.user_id = $1
+      AND urd.last_ride IS NOT NULL
+      AND rr.length_km IS NOT NULL
+  `, [userId]);
+
+  const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
+  const completedKm = parseFloat(completedResult.rows[0].completed_km) || 0;
+  const totalRoutes = parseInt(totalResult.rows[0].total_routes) || 0;
+  const completedRoutes = parseInt(completedResult.rows[0].completed_routes) || 0;
+
+  const percentage = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
+
+  return {
+    totalKm: Math.round(totalKm * 10) / 10,
+    completedKm: Math.round(completedKm * 10) / 10,
+    percentage: Math.round(percentage),
+    totalRoutes,
+    completedRoutes
+  };
 }
 
 

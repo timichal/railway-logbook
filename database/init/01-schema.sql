@@ -43,6 +43,7 @@ CREATE TABLE railway_routes (
     usage_types TEXT[], -- Array of usage types
     primary_operator VARCHAR(255),
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
+    length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
