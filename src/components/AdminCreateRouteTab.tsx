@@ -77,29 +77,24 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       return;
     }
 
-    try {
-      console.log('Preview: Finding path from', startingId, 'to', endingId);
+    console.log('Preview: Finding path from', startingId, 'to', endingId);
 
-      // Use database-based server action to find path
-      const result = await findRailwayPathDB(startingId, endingId);
+    // Use database-based server action to find path
+    const result = await findRailwayPathDB(startingId, endingId);
 
-      if (result) {
-        console.log('Preview: Path found!');
-        console.log('Part IDs:', result.partIds);
-        
-        // Fetch the actual railway part geometries from the database
-        const railwayParts = await getRailwayPartsByIds(result.partIds);
-        console.log('Preview: Fetched', railwayParts.length, 'railway part geometries');
-        
-        // Pass both the path result and the individual railway parts
-        onPreviewRoute(result.partIds, result.coordinates, railwayParts);
-      } else {
-        console.error('Preview: No path found between', startingId, 'and', endingId);
-        alert('No path found between the selected railway parts. Make sure both parts are connected through the railway network.');
-      }
-    } catch (error) {
-      console.error('Preview: Error finding path:', error);
-      alert(`Error finding path: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    if (result) {
+      console.log('Preview: Path found!');
+      console.log('Part IDs:', result.partIds);
+
+      // Fetch the actual railway part geometries from the database
+      const railwayParts = await getRailwayPartsByIds(result.partIds);
+      console.log('Preview: Fetched', railwayParts.length, 'railway part geometries');
+
+      // Pass both the path result and the individual railway parts
+      onPreviewRoute(result.partIds, result.coordinates, railwayParts);
+    } else {
+      console.error('Preview: No path found between', startingId, 'and', endingId);
+      alert('No path found between the selected railway parts within 50km. Make sure both parts are connected through the railway network.');
     }
   };
 

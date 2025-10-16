@@ -18,24 +18,43 @@ class DatabasePathFinder {
   private parts: Map<string, RailwayPart> = new Map();
   private coordToPartIds: Map<string, string[]> = new Map();
 
-  async loadRailwayParts(): Promise<void> {
-    console.log('DatabasePathFinder: Loading railway parts from database');
-    
+  async loadRailwayParts(startId: string, endId: string): Promise<void> {
+    console.log('DatabasePathFinder: Loading railway parts within search area');
+
     const client = await pool.connect();
     try {
-      // Get all railway parts with their geometries
-      const result = await client.query(`
-        SELECT 
-          id,
-          ST_AsGeoJSON(geometry) as geometry_json
-        FROM railway_parts 
-        WHERE geometry IS NOT NULL
-      `);
+      // Create a buffer around start and end points to limit search space
+      // Using 50km buffer in Web Mercator (meters)
+      const bufferMeters = 50000;
 
-      console.log(`DatabasePathFinder: Loaded ${result.rows.length} railway parts from database`);
+      const result = await client.query(`
+        WITH endpoints AS (
+          SELECT geometry
+          FROM railway_parts
+          WHERE id = $1 OR id = $2
+        ),
+        search_area AS (
+          SELECT ST_Transform(
+            ST_Buffer(
+              ST_Transform(ST_Collect(geometry), 3857),
+              $3
+            ),
+            4326
+          ) as buffer_geom
+          FROM endpoints
+        )
+        SELECT
+          rp.id,
+          ST_AsGeoJSON(rp.geometry) as geometry_json
+        FROM railway_parts rp, search_area
+        WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
+          AND rp.geometry IS NOT NULL
+      `, [startId, endId, bufferMeters]);
+
+      console.log(`DatabasePathFinder: Loaded ${result.rows.length} railway parts within 50km (spatial index optimization)`);
 
       for (const row of result.rows) {
-        const id = row.id.toString();
+        const id = String(row.id); // Use String() to safely convert any type
         const geom = JSON.parse(row.geometry_json);
         
         if (geom.type === 'LineString' && geom.coordinates.length >= 2) {
@@ -106,10 +125,12 @@ class DatabasePathFinder {
 
   public findPath(startId: string, endId: string): PathResult | null {
     if (!this.parts.has(startId)) {
-      throw new Error(`Start railway part ID ${startId} not found in database`);
+      console.error(`Start railway part ID ${startId} not found in loaded parts`);
+      return null;
     }
     if (!this.parts.has(endId)) {
-      throw new Error(`End railway part ID ${endId} not found in database`);
+      console.error(`End railway part ID ${endId} not found in loaded parts`);
+      return null;
     }
 
     if (startId === endId) {
@@ -128,17 +149,17 @@ class DatabasePathFinder {
 
     while (queue.length > 0) {
       const current = queue.shift()!;
-      
+
       // Get all connected parts
       const connected = this.getConnectedPartIds(current.id);
-      
+
       for (const connectedId of connected) {
         if (connectedId === endId) {
           // Found the target!
           const pathIds = [...current.path, connectedId];
           return this.buildPathResult(pathIds);
         }
-        
+
         if (!visited.has(connectedId)) {
           visited.add(connectedId);
           queue.push({
@@ -154,7 +175,7 @@ class DatabasePathFinder {
 
   private buildPathResult(partIds: string[]): PathResult {
     const coordinates: [number, number][] = [];
-    
+
     for (let i = 0; i < partIds.length; i++) {
       const part = this.parts.get(partIds[i]);
       if (!part) continue;
@@ -194,23 +215,18 @@ class DatabasePathFinder {
 }
 
 export async function findRailwayPathDB(startId: string, endId: string): Promise<PathResult | null> {
-  try {
-    console.log('Database path finder: Finding path from', startId, 'to', endId);
-    
-    const pathFinder = new DatabasePathFinder();
-    await pathFinder.loadRailwayParts();
-    
-    const result = pathFinder.findPath(startId, endId);
-    
-    if (result) {
-      console.log('Database path finder: Path found with', result.partIds.length, 'segments and', result.coordinates.length, 'coordinates');
-    } else {
-      console.log('Database path finder: No path found');
-    }
-    
-    return result;
-  } catch (error) {
-    console.error('Database path finder error:', error);
-    throw error;
+  console.log('Database path finder: Finding path from', startId, 'to', endId);
+
+  const pathFinder = new DatabasePathFinder();
+  await pathFinder.loadRailwayParts(startId, endId);
+
+  const result = pathFinder.findPath(startId, endId);
+
+  if (result) {
+    console.log('Database path finder: Path found with', result.partIds.length, 'segments and', result.coordinates.length, 'coordinates');
+  } else {
+    console.log('Database path finder: No path found');
   }
+
+  return result;
 }
