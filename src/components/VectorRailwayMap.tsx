@@ -100,9 +100,10 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     if (!map.current) return;
 
     const mapInstance = map.current;
+    let currentPopup: maplibregl.Popup | null = null;
 
-    // Add double-click handler for railway routes
-    const handleDoubleClick = (e: maplibregl.MapLayerMouseEvent) => {
+    // Add click handler for editing
+    const handleClick = (e: maplibregl.MapLayerMouseEvent) => {
       if (!e.features || e.features.length === 0) return;
 
       const feature = e.features[0];
@@ -110,11 +111,12 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
       if (!properties) return;
 
-      // Prevent default map zoom
-      e.preventDefault();
-
       // Close any open popups
       closeAllPopups();
+      if (currentPopup) {
+        currentPopup.remove();
+        currentPopup = null;
+      }
 
       setEditingFeature({
         track_id: properties.track_id,
@@ -134,9 +136,15 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       setShowEditForm(true);
     };
 
-    // Add click handler for popups
-    const handleClick = (e: maplibregl.MapLayerMouseEvent) => {
-      if (!e.features || e.features.length === 0) return;
+    // Add hover handler for popups
+    const handleMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
+      if (!e.features || e.features.length === 0) {
+        if (currentPopup) {
+          currentPopup.remove();
+          currentPopup = null;
+        }
+        return;
+      }
 
       const feature = e.features[0];
       const properties = feature.properties;
@@ -190,7 +198,13 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       popupContent += `<div class="mb-2">${formattedDescription}</div>`;
       popupContent += `</div>`;
 
-      new maplibregl.Popup()
+      // Remove old popup if exists
+      if (currentPopup) {
+        currentPopup.remove();
+      }
+
+      // Create new popup
+      currentPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
         .setLngLat(e.lngLat)
         .setHTML(popupContent)
         .addTo(mapInstance);
@@ -203,17 +217,25 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
     const handleMouseLeave = () => {
       mapInstance.getCanvas().style.cursor = '';
+      // Remove popup when leaving the route
+      if (currentPopup) {
+        currentPopup.remove();
+        currentPopup = null;
+      }
     };
 
-    mapInstance.on('dblclick', 'railway_routes', handleDoubleClick);
     mapInstance.on('click', 'railway_routes', handleClick);
+    mapInstance.on('mousemove', 'railway_routes', handleMouseMove);
     mapInstance.on('mouseenter', 'railway_routes', handleMouseEnter);
     mapInstance.on('mouseleave', 'railway_routes', handleMouseLeave);
 
     // Cleanup
     return () => {
-      mapInstance.off('dblclick', 'railway_routes', handleDoubleClick);
+      if (currentPopup) {
+        currentPopup.remove();
+      }
       mapInstance.off('click', 'railway_routes', handleClick);
+      mapInstance.off('mousemove', 'railway_routes', handleMouseMove);
       mapInstance.off('mouseenter', 'railway_routes', handleMouseEnter);
       mapInstance.off('mouseleave', 'railway_routes', handleMouseLeave);
     };
@@ -331,7 +353,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
             <form onSubmit={handleFormSubmit} className="space-y-4">
               <div>
                 <label htmlFor="date" className="block text-sm font-medium mb-1">
-                  Date:
+                  Date
                 </label>
                 <div className="relative">
                   <input
@@ -356,7 +378,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
               <div>
                 <label htmlFor="note" className="block text-sm font-medium mb-1">
-                  Note:
+                  Note
                 </label>
                 <textarea
                   id="note"

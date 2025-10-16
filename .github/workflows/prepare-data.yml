@@ -2,16 +2,6 @@ name: Prepare Railway Data
 
 on:
   workflow_dispatch:
-    inputs:
-      country:
-        description: 'Country code to process (default: cz)'
-        required: false
-        default: 'cz'
-        type: choice
-        options:
-          - cz
-          - at
-          - at-cz
 
 jobs:
   prepare-data:
@@ -41,14 +31,8 @@ jobs:
       - name: Prepare data pipeline
         shell: bash
         run: |
-          # Download and process OSM data
+          # Download and process OSM data for all of Europe
           npm run prepareData
-          
-          # Apply railway definitions for specified country
-          npm run apply ${{ github.event.inputs.country }}
-          
-          # Merge all country files
-          npm run merge
           
       - name: Create SSH key for file transfers
         run: |
@@ -64,14 +48,14 @@ jobs:
           ssh -i ~/.ssh/id_rsa ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p /tmp/railmap-data"
           
           # Transfer processed data
-          scp -i ~/.ssh/id_rsa data/merged-only.geojson ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          scp -i ~/.ssh/id_rsa data/europe-pruned.geojson ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           
           # Transfer necessary scripts and configs
           scp -i ~/.ssh/id_rsa package.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           scp -i ~/.ssh/id_rsa package-lock.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           scp -i ~/.ssh/id_rsa tsconfig.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           scp -i ~/.ssh/id_rsa docker-compose.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
-          scp -i ~/.ssh/id_rsa -r scripts/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
+          scp -i ~/.ssh/id_rsa -r src/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           scp -i ~/.ssh/id_rsa -r database/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/railmap-data/
           
       - name: Deploy and populate database
@@ -105,7 +89,7 @@ jobs:
             
             # Create data directory and move the GeoJSON file to expected location
             mkdir -p data
-            mv merged-only.geojson data/
+            mv europe-pruned.geojson data/
             
             # Ensure database is running
             docker-compose up -d postgres
@@ -119,8 +103,8 @@ jobs:
             
             # Run population script
             npm run populateDb
-            
-            echo "Data preparation completed for country: ${{ github.event.inputs.country }}"
+
+            echo "Data preparation completed for Europe"
             
             # Cleanup
             cd /
@@ -129,8 +113,7 @@ jobs:
       - name: Upload processed data as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: railway-data-${{ github.event.inputs.country }}-${{ github.run_number }}
+          name: railway-data-europe-${{ github.run_number }}
           path: |
-            data/merged-only.geojson
-            data/*-combined.geojson
+            data/europe-pruned.geojson
           retention-days: 30
