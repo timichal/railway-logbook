@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getAllUsageOptions } from '@/lib/constants';
 import { findRailwayPathDB } from '@/lib/db-path-actions';
 import { getRailwayPartsByIds } from '@/lib/railway-parts-actions';
@@ -14,12 +14,12 @@ interface AdminCreateRouteTabProps {
   onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: {track_id: string, name: string, description: string, usage_types: string[], primary_operator: string}) => void;
+  onSaveRoute?: (routeData: { track_id: string, name: string, description: string, usage_types: string[], primary_operator: string }) => void;
   onFormReset?: () => void;
 }
 
 export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset }: AdminCreateRouteTabProps) {
-  
+
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
     track_id: '',
@@ -47,11 +47,17 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   // Clear starting ID
   const clearStartingId = () => {
     onStartingIdChange('');
+    if (onCancelPreview) {
+      onCancelPreview();
+    }
   };
 
   // Clear ending ID
   const clearEndingId = () => {
     onEndingIdChange('');
+    if (onCancelPreview) {
+      onCancelPreview();
+    }
   };
 
   // Handle create form usage types
@@ -114,13 +120,21 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     resetForm();
   };
 
+  // Automatically preview route when both IDs are filled
+  useEffect(() => {
+    if (startingId && endingId && !isPreviewMode) {
+      handlePreviewRoute();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startingId, endingId, isPreviewMode]);
+
   return (
     <div className="p-4 overflow-y-auto">
       <h3 className="font-semibold text-gray-900 mb-4">Create New Route</h3>
       <p className="text-sm text-gray-600 mb-4">
-        Click on railway parts in the map to set starting and ending points.
+        Click on railway parts in the map to set starting and ending points. The route will be automatically previewed on the map.
       </p>
-      
+
       <div className="space-y-4">
         {/* Starting ID */}
         <div>
@@ -134,16 +148,12 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               onChange={(e) => onStartingIdChange(e.target.value)}
               placeholder="Click a railway part on the map"
               disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
-                isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : ''
-              }`}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
             />
             <button
               onClick={clearStartingId}
-              disabled={isPreviewMode}
-              className={`px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300 ${
-                isPreviewMode ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
+              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
               title="Clear starting ID"
             >
               ×
@@ -163,16 +173,12 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               onChange={(e) => onEndingIdChange(e.target.value)}
               placeholder="Click a railway part on the map"
               disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
-                isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : ''
-              }`}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
             />
             <button
               onClick={clearEndingId}
-              disabled={isPreviewMode}
-              className={`px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300 ${
-                isPreviewMode ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
+              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
               title="Clear ending ID"
             >
               ×
@@ -279,53 +285,19 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
           </div>
         </div>
 
-        {/* Preview/Cancel/Save Buttons */}
+        {/* Save Button */}
         <div className="pt-4 border-t border-gray-200">
-          {!isPreviewMode ? (
-            <>
-              <button
-                onClick={handlePreviewRoute}
-                disabled={!startingId || !endingId}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm"
-              >
-                Preview Route
-              </button>
-              <p className="text-xs text-gray-500 mt-2">
-                Click to find and preview the route between the selected railway parts
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="mb-4 p-3 bg-orange-100 border border-orange-300 rounded-md">
-                <h4 className="font-medium text-orange-800 mb-1">🔍 Route Preview Active</h4>
-                <p className="text-sm text-orange-700">
-                  The route is displayed on the map as an orange dashed line. 
-                  Railway parts layer is hidden for better visibility.
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <button
-                  onClick={onCancelPreview}
-                  className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md text-sm"
-                >
-                  Cancel Preview
-                </button>
-                
-                <button
-                  onClick={handleSaveRoute}
-                  disabled={!createForm.track_id || !createForm.name || !createForm.primary_operator}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm"
-                >
-                  Save Route to Database
-                </button>
-                
-                <p className="text-xs text-gray-500">
-                  Save will create a new railway route with the previewed path and form data.
-                </p>
-              </div>
-            </>
-          )}
+          <button
+            onClick={handleSaveRoute}
+            disabled={!isPreviewMode || !createForm.track_id || !createForm.name || !createForm.primary_operator}
+            className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+          >
+            Save Route to Database
+          </button>
+
+          <p className="text-xs text-gray-500 mt-2">
+            Fill in all required fields and click Save to create the railway route.
+          </p>
         </div>
       </div>
     </div>

@@ -429,16 +429,6 @@ export default function VectorAdminMap({
           'line-opacity': 1.0
         }
       });
-
-      // Fit map to preview route bounds
-      const coordinates = previewRoute.coordinates;
-      const bounds = coordinates.reduce((bounds, coord) => {
-        return bounds.extend(coord as [number, number]);
-      }, new maplibregl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number]));
-
-      map.current.fitBounds(bounds, {
-        padding: 50
-      });
     }
 
     // Update parts styling when preview changes
