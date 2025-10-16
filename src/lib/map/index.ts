@@ -26,6 +26,7 @@ export const COLORS = {
     selected: '#ff6b35',
     visited: 'DarkGreen',
     unvisited: 'Crimson',
+    partial: '#d97706', // Dark orange/amber
   },
   stations: {
     fill: '#ff7800',

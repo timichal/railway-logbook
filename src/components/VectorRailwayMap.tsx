@@ -36,6 +36,7 @@ interface EditingFeature {
   usage_types: string;
   date: string | null;
   note: string | null;
+  partial: boolean | null;
 }
 
 export default function VectorRailwayMap({ className = '', userId }: VectorRailwayMapProps) {
@@ -44,6 +45,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   const [showEditForm, setShowEditForm] = useState(false);
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
+  const [partial, setPartial] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [progress, setProgress] = useState<UserProgress | null>(null);
@@ -60,6 +62,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         createRailwayRoutesLayer({
           colorExpression: [
             'case',
+            ['==', ['get', 'partial'], true],
+            COLORS.railwayRoutes.partial,
             ['has', 'date'],
             COLORS.railwayRoutes.visited,
             COLORS.railwayRoutes.unvisited
@@ -119,12 +123,14 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         primary_operator: properties.primary_operator,
         usage_types: properties.usage_types,
         date: properties.date,
-        note: properties.note
+        note: properties.note,
+        partial: properties.partial
       });
 
       setDate(properties.date ?
         new Date(properties.date).toISOString().split('T')[0] : '');
       setNote(properties.note || '');
+      setPartial(properties.partial || false);
       setShowEditForm(true);
     };
 
@@ -219,7 +225,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
     setIsLoading(true);
     try {
-      await updateUserRailwayData(editingFeature.track_id, date || null, note || null);
+      await updateUserRailwayData(editingFeature.track_id, date || null, note || null, partial);
 
       // Update cache buster to force tile reload
       const newCacheBuster = Date.now();
@@ -239,6 +245,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
             createRailwayRoutesLayer({
               colorExpression: [
                 'case',
+                ['==', ['get', 'partial'], true],
+                COLORS.railwayRoutes.partial,
                 ['has', 'date'],
                 COLORS.railwayRoutes.visited,
                 COLORS.railwayRoutes.unvisited
@@ -356,8 +364,20 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                   onChange={(e) => setNote(e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Volitelná poznámka..."
+                  placeholder="Optional note..."
                 />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={partial}
+                    onChange={(e) => setPartial(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span className="text-sm font-medium">Partial</span>
+                </label>
               </div>
 
               <div className="flex gap-2 justify-end">

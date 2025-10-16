@@ -45,7 +45,8 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
       rr.primary_operator,
       ST_AsGeoJSON(rr.geometry) as geometry,
       urd.date,
-      urd.note
+      urd.note,
+      urd.partial
     FROM railway_routes rr
     LEFT JOIN user_railway_data urd ON rr.track_id = urd.track_id AND urd.user_id = $1
   `, [userId]);
@@ -81,6 +82,7 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
         custom: {
           date: route.date ?? undefined,
           note: route.note ?? undefined,
+          partial: route.partial ?? undefined,
         }
       }
     });
@@ -95,7 +97,8 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
 export async function updateUserRailwayData(
   trackId: string,
   date?: string | null,
-  note?: string | null
+  note?: string | null,
+  partial?: boolean | null
 ): Promise<void> {
   const user = await getUser();
   if (!user) {
@@ -104,14 +107,15 @@ export async function updateUserRailwayData(
 
   const userId = user.id;
   await query(`
-    INSERT INTO user_railway_data (user_id, track_id, date, note)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO user_railway_data (user_id, track_id, date, note, partial)
+    VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT (user_id, track_id)
     DO UPDATE SET
       date = EXCLUDED.date,
       note = EXCLUDED.note,
+      partial = EXCLUDED.partial,
       updated_at = CURRENT_TIMESTAMP
-  `, [userId, trackId, date || null, note || null]);
+  `, [userId, trackId, date || null, note || null, partial ?? false]);
 }
 
 export interface UserProgress {
@@ -139,7 +143,7 @@ export async function getUserProgress(): Promise<UserProgress> {
     WHERE length_km IS NOT NULL
   `);
 
-  // Get completed distance and count (routes with date)
+  // Get completed distance and count (routes with date AND not partial)
   const completedResult = await query(`
     SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
@@ -148,6 +152,7 @@ export async function getUserProgress(): Promise<UserProgress> {
     INNER JOIN user_railway_data urd ON rr.track_id = urd.track_id
     WHERE urd.user_id = $1
       AND urd.date IS NOT NULL
+      AND (urd.partial IS NULL OR urd.partial = FALSE)
       AND rr.length_km IS NOT NULL
   `, [userId]);
 

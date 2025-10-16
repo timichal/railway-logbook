@@ -115,6 +115,7 @@ BEGIN
             -- Include user-specific data for client-side styling
             urd.date,
             urd.note,
+            urd.partial,
             -- Simplify geometry for tile display
             ST_AsMVTGeom(
                 rr.geometry_3857,

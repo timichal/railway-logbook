@@ -80,4 +80,5 @@ export type RailwayRoute = {
   geometry: string // GeoJSON string
   date?: string | null
   note?: string | null
+  partial?: boolean | null
 }

@@ -55,6 +55,7 @@ CREATE TABLE user_railway_data (
     track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE CASCADE,
     date DATE, -- Date of ride
     note TEXT, -- User note
+    partial BOOLEAN DEFAULT FALSE, -- Partial completion flag
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, track_id)
