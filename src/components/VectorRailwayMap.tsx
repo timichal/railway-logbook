@@ -130,8 +130,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       setShowEditForm(true);
     };
 
-    // Add hover handler for popups
-    const handleMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
+    // Add hover handler for route popups
+    const handleRouteMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
       if (!e.features || e.features.length === 0) {
         if (currentPopup) {
           currentPopup.remove();
@@ -182,12 +182,44 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         .addTo(mapInstance);
     };
 
-    // Add cursor change on hover
-    const handleMouseEnter = () => {
+    // Add hover handler for station popups (takes precedence)
+    const handleStationMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
+      if (!e.features || e.features.length === 0) {
+        return;
+      }
+
+      const feature = e.features[0];
+      const properties = feature.properties;
+
+      if (!properties) return;
+
+      let popupContent = `<div class="station-popup" style="color: black;">`;
+
+      if (properties.name) {
+        popupContent += `<h3 class="font-bold text-base mb-1" style="color: black;">${properties.name}</h3>`;
+        popupContent += `<div class="text-xs text-gray-600">Station</div>`;
+      }
+
+      popupContent += `</div>`;
+
+      // Remove old popup if exists
+      if (currentPopup) {
+        currentPopup.remove();
+      }
+
+      // Create new popup for station
+      currentPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
+        .setLngLat(e.lngLat)
+        .setHTML(popupContent)
+        .addTo(mapInstance);
+    };
+
+    // Add cursor change on hover for routes
+    const handleRouteMouseEnter = () => {
       mapInstance.getCanvas().style.cursor = 'pointer';
     };
 
-    const handleMouseLeave = () => {
+    const handleRouteMouseLeave = () => {
       mapInstance.getCanvas().style.cursor = '';
       // Remove popup when leaving the route
       if (currentPopup) {
@@ -196,20 +228,45 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       }
     };
 
+    // Add cursor change on hover for stations
+    const handleStationMouseEnter = () => {
+      mapInstance.getCanvas().style.cursor = 'pointer';
+    };
+
+    const handleStationMouseLeave = () => {
+      mapInstance.getCanvas().style.cursor = '';
+      // Remove popup when leaving the station
+      if (currentPopup) {
+        currentPopup.remove();
+        currentPopup = null;
+      }
+    };
+
+    // Attach route handlers
     mapInstance.on('click', 'railway_routes', handleClick);
-    mapInstance.on('mousemove', 'railway_routes', handleMouseMove);
-    mapInstance.on('mouseenter', 'railway_routes', handleMouseEnter);
-    mapInstance.on('mouseleave', 'railway_routes', handleMouseLeave);
+    mapInstance.on('mousemove', 'railway_routes', handleRouteMouseMove);
+    mapInstance.on('mouseenter', 'railway_routes', handleRouteMouseEnter);
+    mapInstance.on('mouseleave', 'railway_routes', handleRouteMouseLeave);
+
+    // Attach station handlers (added after routes, so they take precedence due to layer order)
+    mapInstance.on('mousemove', 'stations', handleStationMouseMove);
+    mapInstance.on('mouseenter', 'stations', handleStationMouseEnter);
+    mapInstance.on('mouseleave', 'stations', handleStationMouseLeave);
 
     // Cleanup
     return () => {
       if (currentPopup) {
         currentPopup.remove();
       }
+      // Remove route handlers
       mapInstance.off('click', 'railway_routes', handleClick);
-      mapInstance.off('mousemove', 'railway_routes', handleMouseMove);
-      mapInstance.off('mouseenter', 'railway_routes', handleMouseEnter);
-      mapInstance.off('mouseleave', 'railway_routes', handleMouseLeave);
+      mapInstance.off('mousemove', 'railway_routes', handleRouteMouseMove);
+      mapInstance.off('mouseenter', 'railway_routes', handleRouteMouseEnter);
+      mapInstance.off('mouseleave', 'railway_routes', handleRouteMouseLeave);
+      // Remove station handlers
+      mapInstance.off('mousemove', 'stations', handleStationMouseMove);
+      mapInstance.off('mouseenter', 'stations', handleStationMouseEnter);
+      mapInstance.off('mouseleave', 'stations', handleStationMouseLeave);
     };
   }, [map]);
 
