@@ -10,9 +10,9 @@ export const TILE_SERVER_PORT = 3001;
 export const OSM_TILES_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export const ZOOM_RANGES = {
-  railwayRoutes: { min: 7, max: 14 },
-  railwayParts: { min: 0, max: 14 },
-  stations: { min: 10, max: 14 },
+  railwayRoutes: { min: 4, max: 18 }, // Matches Martin configuration
+  railwayParts: { min: 4, max: 18 }, // Matches Martin configuration
+  stations: { min: 10, max: 18 }, // Matches Martin configuration
 } as const;
 
 export const COLORS = {
@@ -63,8 +63,8 @@ export function createOSMBackgroundLayer(): maplibregl.RasterLayerSpecification 
     id: 'background',
     type: 'raster',
     source: 'osm',
-    minzoom: 0,
-    maxzoom: 22,
+    minzoom: 4,
+    maxzoom: 19, // has to be higher than the map max zoom
     paint: {
       'raster-fade-duration': 0,
       'raster-opacity': 1,

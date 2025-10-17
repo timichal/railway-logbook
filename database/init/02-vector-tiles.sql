@@ -134,8 +134,7 @@ BEGIN
         WHERE
             -- Spatial filter using index
             rr.geometry_3857 && tile_envelope
-            -- Only show routes at zoom 7+
-            AND z >= 7
+            -- Show routes at all zoom levels (no zoom restriction)
         ORDER BY
             -- Render order: unvisited routes first (so visited are on top)
             CASE WHEN urd.date IS NULL THEN 0 ELSE 1 END,

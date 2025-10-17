@@ -157,7 +157,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 ### Database Schema
 - `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes, route validity tracking fields
-- `database/init/02-vector-tiles.sql` - Vector tile functions (railway_routes_tile, railway_parts_tile, stations_tile) with is_valid field
+- `database/init/02-vector-tiles.sql` - Vector tile functions (railway_routes_tile shows routes at all zoom levels, railway_parts_tile with zoom filtering, stations_tile at zoom 10+) with is_valid field
 - Contains tables for users, stations, railway_routes (with starting_part_id, ending_part_id, is_valid, error_message), railway_parts, and user_railway_data
 
 ### Configuration Files

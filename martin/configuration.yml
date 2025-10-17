@@ -18,16 +18,16 @@ postgres:
     railway_parts_tile:
       schema: public
       function: railway_parts_tile
-      minzoom: 0
-      maxzoom: 14
+      minzoom: 4
+      maxzoom: 18
       # This function accepts z, x, y parameters
 
     # Railway routes (combined lines with metadata)
     railway_routes_tile:
       schema: public
       function: railway_routes_tile
-      minzoom: 7
-      maxzoom: 14
+      minzoom: 4
+      maxzoom: 18
       # This function accepts z, x, y, and query_params (for user_id)
       # Explicitly declare query parameters that Martin should accept
       query_params:
@@ -38,7 +38,7 @@ postgres:
       schema: public
       function: stations_tile
       minzoom: 10
-      maxzoom: 14
+      maxzoom: 18
       # This function accepts z, x, y parameters
 
 # Server configuration

@@ -65,6 +65,10 @@ export function useMapLibre(
       },
       center,
       zoom,
+      minZoom: 4, // Limit minimum zoom
+      maxZoom: 18, // Limit maximum zoom
+      pitchWithRotate: false, // Disable rotation on right-click drag
+      dragRotate: false, // Disable rotation with Ctrl+drag
     });
 
     // Add navigation controls
