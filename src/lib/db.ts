@@ -1,12 +1,5 @@
 import { Pool } from 'pg';
-
-const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  port: 5432,
-  database: process.env.POSTGRES_DB || 'railmap',
-  user: process.env.DB_USER || '',
-  password: process.env.DB_PASSWORD || ''
-};
+import { dbConfig } from './db-config';
 
 // Create a connection pool for better performance
 const pool = new Pool(dbConfig);

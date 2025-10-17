@@ -3,25 +3,12 @@ import path from 'path';
 import { Client } from 'pg';
 import dotenv from 'dotenv';
 import { loadStationsAndParts } from './lib/loadRailwayData';
+import { getDbConfig } from '../lib/db-config';
 
 dotenv.config();
 
-// Database connection configuration
-interface DbConfig {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
-}
-
-const dbConfig: DbConfig = {
-  host: 'localhost',
-  port: 5432,
-  database: 'railmap',
-  user: process.env.DB_USER || '',
-  password: process.env.DB_PASSWORD || '',
-};
+// Get database config after dotenv loads environment variables
+const dbConfig = getDbConfig();
 
 async function executeSQLFile(client: Client, filePath: string): Promise<void> {
   console.log(`Executing SQL file: ${path.basename(filePath)}`);
