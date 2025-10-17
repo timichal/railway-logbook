@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
 import type { RailwayPart } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
+import { useRouteLength } from '@/lib/map/hooks/useRouteLength';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
@@ -11,6 +11,7 @@ import {
   createRailwayPartsLayer,
   COLORS,
 } from '@/lib/map';
+import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapInteractions';
 
 interface VectorAdminMapProps {
   className?: string;
@@ -35,6 +36,9 @@ export default function VectorAdminMap({
   const [showPartsLayer, setShowPartsLayer] = useState(true);
   const [showRoutesLayer, setShowRoutesLayer] = useState(true);
   const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
+
+  // Use custom hook for route length management
+  const { previewLength, selectedRouteLength } = useRouteLength(previewRoute, selectedRouteId);
 
   // Store callbacks and props in refs to avoid map recreation on changes
   const onPartClickRef = useRef(onPartClick);
@@ -63,193 +67,17 @@ export default function VectorAdminMap({
         createRailwayRoutesLayer(),
       ],
       onLoad: (mapInstance) => {
-        setupMapInteractions(mapInstance);
+        setupAdminMapInteractions(mapInstance, {
+          onPartClickRef,
+          onRouteSelectRef,
+          selectedPartsRef,
+          previewRouteRef,
+          updatePartsStyleRef,
+        });
       },
     },
     [] // Only initialize once
   );
-
-  // Setup all map interactions
-  function setupMapInteractions(mapInstance: maplibregl.Map) {
-    // Click handler for railway parts
-    mapInstance.on('click', 'railway_parts', (e) => {
-      if (!e.features || e.features.length === 0) return;
-
-      // Don't handle part clicks if we also clicked on a route
-      const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ['railway_routes']
-      });
-      if (routeFeatures && routeFeatures.length > 0) {
-        return;
-      }
-
-      const feature = e.features[0];
-      const properties = feature.properties;
-
-      if (!properties || !onPartClickRef.current) return;
-
-      const partId = properties.id.toString();
-      onPartClickRef.current(partId);
-    });
-
-    // Click handler for railway routes
-    mapInstance.on('click', 'railway_routes', (e) => {
-      if (!e.features || e.features.length === 0) return;
-      const feature = e.features[0];
-      const properties = feature.properties;
-
-      if (!properties || !onRouteSelectRef.current) return;
-
-      const trackId = properties.track_id;
-      onRouteSelectRef.current(trackId);
-    });
-
-    // Hover effects for railway parts
-    let hoveredPartId: string | null = null;
-
-    mapInstance.on('mouseenter', 'railway_parts', (e) => {
-      mapInstance.getCanvas().style.cursor = 'pointer';
-      hoveredPartId = e.features?.[0]?.properties?.id?.toString() || null;
-      updatePartsStyle();
-    });
-
-    mapInstance.on('mouseleave', 'railway_parts', () => {
-      mapInstance.getCanvas().style.cursor = '';
-      hoveredPartId = null;
-      updatePartsStyle();
-    });
-
-    // Function to update parts styling based on selection and hover state
-    const updatePartsStyle = () => {
-      // Don't apply selection styling when preview is active
-      const isPreviewActive = previewRouteRef.current !== null;
-
-      const selectedParts = selectedPartsRef.current;
-      const startingId = selectedParts?.startingId;
-      const endingId = selectedParts?.endingId;
-
-      const hasAnyCondition = !isPreviewActive && !!(hoveredPartId || startingId || endingId);
-
-      // Build color expression
-      type MapLibreExpression = string | number | unknown[];
-      let colorExpr: MapLibreExpression;
-      if (hasAnyCondition) {
-        const expr: unknown[] = ['case'];
-
-        // Hover state (highest priority)
-        if (hoveredPartId) {
-          expr.push(['==', ['get', 'id'], hoveredPartId], COLORS.railwayParts.hover);
-        }
-
-        // Starting part (green)
-        if (startingId) {
-          expr.push(['==', ['get', 'id'], parseInt(startingId)], COLORS.railwayParts.selected);
-        }
-
-        // Ending part (red)
-        if (endingId) {
-          expr.push(['==', ['get', 'id'], parseInt(endingId)], COLORS.railwayParts.hover);
-        }
-
-        // Default blue
-        expr.push(COLORS.railwayParts.default);
-        colorExpr = expr;
-      } else {
-        colorExpr = COLORS.railwayParts.default;
-      }
-
-      // Build weight expression
-      let weightExpr: MapLibreExpression;
-      if (hasAnyCondition) {
-        const expr: unknown[] = ['case'];
-
-        if (startingId) {
-          expr.push(['==', ['get', 'id'], parseInt(startingId)], 6);
-        }
-        if (endingId) {
-          expr.push(['==', ['get', 'id'], parseInt(endingId)], 6);
-        }
-        if (hoveredPartId) {
-          expr.push(['==', ['get', 'id'], hoveredPartId], 4);
-        }
-
-        expr.push(3); // Default
-        weightExpr = expr;
-      } else {
-        weightExpr = 3;
-      }
-
-      // Build opacity expression
-      let opacityExpr: MapLibreExpression;
-      if (startingId || endingId) {
-        const expr: unknown[] = ['case'];
-
-        if (startingId) {
-          expr.push(['==', ['get', 'id'], parseInt(startingId)], 1.0);
-        }
-        if (endingId) {
-          expr.push(['==', ['get', 'id'], parseInt(endingId)], 1.0);
-        }
-
-        expr.push(0.7); // Default
-        opacityExpr = expr;
-      } else {
-        opacityExpr = 0.7;
-      }
-
-      mapInstance.setPaintProperty('railway_parts', 'line-color', colorExpr);
-      mapInstance.setPaintProperty('railway_parts', 'line-width', weightExpr);
-      mapInstance.setPaintProperty('railway_parts', 'line-opacity', opacityExpr);
-    };
-
-    // Hover effects for railway routes with popup
-    let routeHoverPopup: maplibregl.Popup | null = null;
-
-    mapInstance.on('mouseenter', 'railway_routes', (e) => {
-      mapInstance.getCanvas().style.cursor = 'pointer';
-
-      if (e.features && e.features.length > 0) {
-        const feature = e.features[0];
-        const properties = feature.properties;
-
-        if (properties) {
-          const trackId = properties.track_id;
-
-          if (routeHoverPopup) {
-            routeHoverPopup.remove();
-          }
-
-          routeHoverPopup = new maplibregl.Popup({
-            closeButton: false,
-            closeOnClick: false,
-            offset: 10,
-            className: 'railway-route-hover-popup'
-          })
-            .setLngLat(e.lngLat)
-            .setHTML(`
-              <div style="color: black;">
-                <h3 style="font-weight: bold; margin-bottom: 4px;">${properties.name || 'Unnamed Route'}</h3>
-                <p style="margin: 2px 0;">Track ID: ${trackId}</p>
-                ${properties.description ? `<p style="margin: 2px 0;">${properties.description}</p>` : ''}
-              </div>
-            `)
-            .addTo(mapInstance);
-        }
-      }
-    });
-
-    mapInstance.on('mouseleave', 'railway_routes', () => {
-      mapInstance.getCanvas().style.cursor = '';
-
-      if (routeHoverPopup) {
-        routeHoverPopup.remove();
-        routeHoverPopup = null;
-      }
-    });
-
-    // Store updatePartsStyle in ref
-    updatePartsStyleRef.current = updatePartsStyle;
-  }
 
   // Update parts styling when selectedParts changes
   useEffect(() => {
@@ -466,6 +294,23 @@ export default function VectorAdminMap({
           </label>
         </div>
       </div>
+
+      {/* Route Length Display */}
+      {(previewLength !== null || selectedRouteLength !== null) && (
+        <div className="absolute top-4 right-4 bg-white p-3 rounded shadow-lg text-black z-10">
+          <h3 className="font-bold mb-2">Route Length</h3>
+          {previewLength !== null && (
+            <div className="text-sm">
+              Preview: <span className="font-semibold">{previewLength.toFixed(1)} km</span>
+            </div>
+          )}
+          {selectedRouteLength !== null && previewLength === null && (
+            <div className="text-sm">
+              Selected: <span className="font-semibold">{selectedRouteLength.toFixed(1)} km</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -221,7 +221,7 @@ export async function getRailwayRoute(trackId: string) {
 
   const result = await query(`
     SELECT track_id, name, description, usage_type,
-           ST_AsGeoJSON(geometry) as geometry
+           ST_AsGeoJSON(geometry) as geometry, length_km
     FROM railway_routes
     WHERE track_id = $1
   `, [trackId]);
