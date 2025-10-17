@@ -261,7 +261,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                   onClick={routeEditor.closeEditForm}
                   className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 cursor-pointer"
                 >
-                  Zrušit
+                  Cancel
                 </button>
                 <button
                   type="submit"
@@ -275,7 +275,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                   {routeEditor.isLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   )}
-                  {routeEditor.isLoading ? 'Ukládám...' : 'Uložit'}
+                  {routeEditor.isLoading ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </form>
