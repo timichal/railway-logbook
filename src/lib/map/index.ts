@@ -9,6 +9,12 @@ export const MAP_ZOOM = 7;
 export const TILE_SERVER_PORT = 3001;
 export const OSM_TILES_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
+// Europe bounds: [west, south, east, north]
+export const EUROPE_BOUNDS: [[number, number], [number, number]] = [
+  [-10, 35], // Southwest corner (Portugal/Spain)
+  [40, 71],  // Northeast corner (Western Russia/Scandinavia)
+];
+
 export const ZOOM_RANGES = {
   railwayRoutes: { min: 4, max: 18 }, // Matches Martin configuration
   railwayParts: { min: 4, max: 18 }, // Matches Martin configuration
@@ -194,3 +200,9 @@ export function closeAllPopups(): void {
     Array.from(popups).forEach(popup => popup.remove());
   }
 }
+
+// ============================================================================
+// MAP STATE PERSISTENCE
+// ============================================================================
+
+export { loadMapState, saveMapState, clearMapState, type MapState } from './mapState';

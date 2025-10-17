@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { MAP_CENTER, MAP_ZOOM, createOSMBackgroundSource, createOSMBackgroundLayer } from '../index';
+import { MAP_CENTER, MAP_ZOOM, EUROPE_BOUNDS, createOSMBackgroundSource, createOSMBackgroundLayer } from '../index';
+import { loadMapState, saveMapState } from '../mapState';
 
 export interface UseMapLibreOptions {
   center?: [number, number];
@@ -43,6 +44,11 @@ export function useMapLibre(
   useEffect(() => {
     if (!containerRef.current || map.current) return;
 
+    // Load saved map state or use defaults
+    const savedState = loadMapState();
+    const initialCenter = savedState?.center || center;
+    const initialZoom = savedState?.zoom || zoom;
+
     // Build sources object (OSM + custom sources)
     const allSources: Record<string, maplibregl.SourceSpecification> = {
       osm: createOSMBackgroundSource(),
@@ -63,16 +69,33 @@ export function useMapLibre(
         sources: allSources,
         layers: allLayers,
       },
-      center,
-      zoom,
+      center: initialCenter,
+      zoom: initialZoom,
       minZoom: 4, // Limit minimum zoom
       maxZoom: 18, // Limit maximum zoom
+      maxBounds: EUROPE_BOUNDS, // Restrict panning to Europe
       pitchWithRotate: false, // Disable rotation on right-click drag
       dragRotate: false, // Disable rotation with Ctrl+drag
     });
 
     // Add navigation controls
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    // Save map state on move or zoom
+    const saveState = () => {
+      if (map.current) {
+        const center = map.current.getCenter();
+        const zoom = map.current.getZoom();
+        saveMapState({
+          center: [center.lng, center.lat],
+          zoom,
+        });
+      }
+    };
+
+    // Listen for map movements
+    map.current.on('moveend', saveState);
+    map.current.on('zoomend', saveState);
 
     // Wait for style to load
     map.current.on('load', () => {
@@ -85,6 +108,8 @@ export function useMapLibre(
     // Cleanup on unmount
     return () => {
       if (map.current) {
+        map.current.off('moveend', saveState);
+        map.current.off('zoomend', saveState);
         map.current.remove();
         map.current = null;
         setMapLoaded(false);
