@@ -18,10 +18,12 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 ### Data Processing Pipeline
 - `npm run prepareData` - Complete data preparation pipeline (downloads OSM data, filters rail features, converts to GeoJSON, and prunes data)
 - `npm run populateDb` - Loads processed GeoJSON data into PostgreSQL database and initializes vector tile functions
+- `npm run updateDb` - Reloads railway data and recalculates all routes (marks invalid routes when pathfinding fails)
 
 ### Database Operations
 - `docker-compose up -d postgres` - Start PostgreSQL database with PostGIS
 - `npm run populateDb` - Load GeoJSON data into database tables and initialize vector tile functions
+- `npm run updateDb` - Update railway_parts with new OSM data and recalculate all railway_routes
 
 ### Frontend Development
 - `npm run dev` - Start Next.js development server with Turbopack
@@ -62,11 +64,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Tables**:
   - `users` - User accounts and authentication (email as username, password field for bcrypt hashes)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
-  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, single required usage_type (0=Regular, 1=Seasonal, 2=Special), length_km, and PostGIS geometry
-  - `railway_parts` - Raw railway segments from OSM data (used for admin route creation)
+  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, usage_type, length_km, PostGIS geometry, starting_part_id, ending_part_id, is_valid flag, and error_message
+  - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and recalculation)
   - `user_railway_data` - User-specific ride history (date field), personal notes, and partial flag for incomplete rides
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 - **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
+- **Route Validity Tracking**: Routes store starting_part_id and ending_part_id for recalculation; is_valid flag marks routes that can't be recalculated after OSM updates
 
 ### 4. Frontend Application
 - **Next.js 15** with React 19 - Modern web application framework
@@ -90,7 +93,9 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Click railway routes to view/edit details
   - Route preview with geometry visualization
   - Hover effects on railway parts
-- **Route Management**: Create, edit, update, and delete railway routes (track_id is auto-generated)
+- **Route Management**: Create, edit geometry, update, and delete railway routes (track_id is auto-generated)
+- **Route Validity Display**: Invalid routes (is_valid=false) shown in grey when unselected, with alert banner in edit panel
+- **Edit Geometry Feature**: Allows fixing invalid routes by selecting new start/end points with same pathfinding mechanism
 - **Components**: `AdminPageClient` → `VectorAdminMapWrapper` → `VectorAdminMap`
 
 ## Simplified Project Structure
@@ -118,7 +123,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `src/lib/` - Shared utilities, types, and database operations
   - `db.ts` - PostgreSQL connection pool
   - `railway-actions.ts` - Server actions for database queries
-  - `route-save-actions.ts` - Server actions for saving new routes (admin-only)
+  - `route-save-actions.ts` - Server actions for creating/updating routes with mergeLinearChain coordinate ordering (admin-only)
   - `route-delete-actions.ts` - Server actions for deleting routes (admin-only)
   - `db-path-actions.ts` - Database pathfinding for route creation (admin-only)
   - `railway-parts-actions.ts` - Fetch railway parts by IDs (admin-only)
@@ -129,7 +134,11 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
     - `hooks/useMapLibre.ts` - Base hook for MapLibre initialization
 - `src/scripts/` - Data processing scripts
   - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
-  - `populateDb.ts` - Database loading script (loads stations, railway_parts, and railway_routes)
+  - `populateDb.ts` - Database loading script (loads stations and railway_parts)
+  - `updateDb.ts` - Reloads railway data and recalculates all routes
+  - `src/scripts/lib/` - Shared script utilities
+    - `loadRailwayData.ts` - Shared data loading logic for populateDb and updateDb
+    - `railwayPathFinder.ts` - Shared BFS pathfinding class for route creation/recalculation
 
 ### OSM Processing Scripts (`osmium-scripts/`)
 - `prepare.sh` - Unified pipeline script that downloads OSM data, filters rail features, and converts to GeoJSON
@@ -139,14 +148,15 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `constants.ts` - Usage type options (Regular=0, Seasonal=1, Special=2)
 - `db.ts` - Database connection pool and utilities
 - `railway-actions.ts` - Server actions for type-safe database operations
-- `route-save-actions.ts` - Admin-only route creation with security checks
+- `route-save-actions.ts` - Admin-only route creation/update with security checks and mergeLinearChain
 - `route-delete-actions.ts` - Admin-only route deletion with security checks
-- `db-path-actions.ts` - Admin-only database pathfinding
+- `db-path-actions.ts` - Admin-only database pathfinding using RailwayPathFinder
 - `railway-parts-actions.ts` - Admin-only railway parts fetching
 
 ### Database Schema
-- `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes
-- Contains tables for users, stations, railway_routes, railway_parts, and user_railway_data
+- `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes, route validity tracking fields
+- `database/init/02-vector-tiles.sql` - Vector tile functions (railway_routes_tile, railway_parts_tile, stations_tile) with is_valid field
+- Contains tables for users, stations, railway_routes (with starting_part_id, ending_part_id, is_valid, error_message), railway_parts, and user_railway_data
 
 ### Configuration Files
 - `eslint.config.mjs` - ESLint configuration
@@ -172,12 +182,22 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Populates `stations` and `railway_parts` from `cz-pruned.geojson`
   - Admin users create `railway_routes` manually via the web interface
 
-### Admin Route Creation
+### Admin Route Creation and Management
 - Admin interface allows creating new routes by clicking railway parts on the map
 - Routes are built by selecting start/end points from `railway_parts`
-- Database pathfinding (PostGIS spatial queries) finds connecting segments within 50km
+- Shared pathfinding (`RailwayPathFinder` class) uses BFS with PostGIS spatial queries within 50km
 - Route length is automatically calculated using ST_Length with geography cast
 - track_id is auto-generated using PostgreSQL SERIAL
+- Routes store starting_part_id and ending_part_id for recalculation after OSM updates
+- `saveRailwayRoute` handles both INSERT (new routes) and UPDATE (edit geometry) with optional trackId parameter
+- Uses `mergeLinearChain` algorithm to properly order and connect coordinate sublists
+
+### Database Updates and Route Recalculation
+- `npm run updateDb` reloads railway_parts from pruned GeoJSON and recalculates all routes
+- Recalculation uses stored starting_part_id and ending_part_id with shared `RailwayPathFinder`
+- Routes that can't be recalculated are marked with is_valid=false and error_message
+- Invalid routes displayed in grey on admin map (orange when selected)
+- Admin can fix invalid routes using "Edit Route Geometry" to select new start/end points
 
 ### User Progress Tracking
 - User-specific data stored in `user_railway_data` table with date, note, and partial fields

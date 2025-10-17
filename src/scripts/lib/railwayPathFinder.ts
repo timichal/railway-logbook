@@ -25,12 +25,14 @@ export class RailwayPathFinder {
     let client: Client | PoolClient;
     let shouldRelease = false;
 
-    if ('connect' in dbClient) {
+    // Check if it's a Pool by checking for the 'totalCount' property
+    // which is unique to Pool and not present on Client
+    if ('totalCount' in dbClient) {
       // It's a Pool
       client = await (dbClient as Pool).connect();
       shouldRelease = true;
     } else {
-      // It's already a Client
+      // It's already a Client or PoolClient
       client = dbClient as Client;
     }
 
