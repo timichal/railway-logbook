@@ -2,6 +2,7 @@ import type maplibreglType from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import type { MutableRefObject } from 'react';
 import { applyRailwayPartsStyling } from '../utils/railwayPartsStyling';
+import { getUsageLabel } from '@/lib/constants';
 
 interface AdminMapCallbacks {
   onPartClickRef: MutableRefObject<((partId: string) => void) | undefined>;
@@ -94,7 +95,6 @@ export function setupAdminMapInteractions(
       const properties = feature.properties;
 
       if (properties) {
-        const trackId = properties.track_id;
 
         if (routeHoverPopup) {
           routeHoverPopup.remove();
@@ -110,8 +110,8 @@ export function setupAdminMapInteractions(
           .setHTML(`
             <div style="color: black;">
               <h3 style="font-weight: bold; margin-bottom: 4px;">${properties.name || 'Unnamed Route'}</h3>
-              <p style="margin: 2px 0;">Track ID: ${trackId}</p>
               ${properties.description ? `<p style="margin: 2px 0;">${properties.description}</p>` : ''}
+              <p style="margin: 2px 0;">Usage: ${getUsageLabel(properties.usage_type)}</p>
             </div>
           `)
           .addTo(mapInstance);

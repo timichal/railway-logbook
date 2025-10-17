@@ -1,334 +1,67 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
-import { updateUserRailwayData, getUserProgress, searchStations, type UserProgress } from '@/lib/railway-actions';
+import { useEffect, useRef } from 'react';
 import type { Station } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
+import { useStationSearch } from '@/lib/map/hooks/useStationSearch';
+import { useRouteEditor } from '@/lib/map/hooks/useRouteEditor';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
   createStationsSource,
   createStationsLayer,
-  closeAllPopups,
-  COLORS,
 } from '@/lib/map';
-
-const usageMap: Record<number, string> = {
-  0: 'Regular',
-  1: 'Seasonal',
-  2: 'Special'
-};
+import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
+import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
 
 interface VectorRailwayMapProps {
   className?: string;
   userId: number;
 }
 
-interface EditingFeature {
-  track_id: string;
-  name: string;
-  description: string;
-  usage_types: string;
-  date: string | null;
-  note: string | null;
-  partial: boolean | null;
-}
-
 export default function VectorRailwayMap({ className = '', userId }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const [editingFeature, setEditingFeature] = useState<EditingFeature | null>(null);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [date, setDate] = useState('');
-  const [note, setNote] = useState('');
-  const [partial, setPartial] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [cacheBuster, setCacheBuster] = useState(Date.now());
-  const [progress, setProgress] = useState<UserProgress | null>(null);
 
-  // Station search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Station[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedStationIndex, setSelectedStationIndex] = useState(-1);
-  const [isSearching, setIsSearching] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Station search hook
+  const stationSearch = useStationSearch();
 
   // Initialize map with shared hook
   const { map } = useMapLibre(
     mapContainer,
     {
       sources: {
-        railway_routes: createRailwayRoutesSource({ userId, cacheBuster }),
+        railway_routes: createRailwayRoutesSource({ userId, cacheBuster: Date.now() }),
         stations: createStationsSource(),
       },
       layers: [
         createRailwayRoutesLayer({
-          colorExpression: [
-            'case',
-            ['==', ['get', 'partial'], true],
-            COLORS.railwayRoutes.partial,
-            ['has', 'date'],
-            COLORS.railwayRoutes.visited,
-            COLORS.railwayRoutes.unvisited
-          ],
-          widthExpression: [
-            'case',
-            ['==', ['get', 'usage'], 2],
-            2,  // Special usage = thinner
-            3   // Normal = standard width
-          ],
+          colorExpression: getUserRouteColorExpression(),
+          widthExpression: getUserRouteWidthExpression(),
         }),
         createStationsLayer(),
       ],
     },
-    [userId] // Recreate map when userId changes
+    [userId]
   );
 
-  // Fetch progress stats on component mount
-  useEffect(() => {
-    const fetchProgress = async () => {
-      try {
-        const progressData = await getUserProgress();
-        setProgress(progressData);
-      } catch (error) {
-        console.error('Error fetching progress:', error);
-      }
-    };
+  // Route editor hook (needs map ref)
+  const routeEditor = useRouteEditor(userId, map);
 
-    fetchProgress();
-  }, []);
-
-  // Debounced station search
-  const performSearch = useCallback(async (query: string) => {
-    if (query.trim().length < 2) {
-      setSearchResults([]);
-      setShowSuggestions(false);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const results = await searchStations(query);
-      setSearchResults(results);
-      setShowSuggestions(results.length > 0);
-      setSelectedStationIndex(-1);
-    } catch (error) {
-      console.error('Error searching stations:', error);
-      setSearchResults([]);
-      setShowSuggestions(false);
-    } finally {
-      setIsSearching(false);
-    }
-  }, []);
-
-  // Debounce search queries
-  useEffect(() => {
-    // Clear existing timeout
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    // Set new timeout for search
-    if (searchQuery.trim().length >= 2) {
-      searchTimeoutRef.current = setTimeout(() => {
-        performSearch(searchQuery);
-      }, 300); // 300ms debounce
-    } else {
-      setSearchResults([]);
-      setShowSuggestions(false);
-      setIsSearching(false);
-    }
-
-    // Cleanup
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchQuery, performSearch]);
-
-  // Add event handlers after map loads
+  // Setup map interactions after map loads
   useEffect(() => {
     if (!map.current) return;
 
-    const mapInstance = map.current;
-    let currentPopup: maplibregl.Popup | null = null;
+    const cleanup = setupUserMapInteractions(map.current, {
+      onRouteClick: routeEditor.openEditForm,
+    });
 
-    // Add click handler for editing
-    const handleClick = (e: maplibregl.MapLayerMouseEvent) => {
-      if (!e.features || e.features.length === 0) return;
+    return cleanup;
+  }, [map, routeEditor.openEditForm]);
 
-      const feature = e.features[0];
-      const properties = feature.properties;
-
-      if (!properties) return;
-
-      // Close any open popups
-      closeAllPopups();
-      if (currentPopup) {
-        currentPopup.remove();
-        currentPopup = null;
-      }
-
-      setEditingFeature({
-        track_id: properties.track_id,
-        name: properties.name,
-        description: properties.description,
-        usage_types: properties.usage_types,
-        date: properties.date,
-        note: properties.note,
-        partial: properties.partial
-      });
-
-      setDate(properties.date ?
-        new Date(properties.date).toISOString().split('T')[0] : '');
-      setNote(properties.note || '');
-      setPartial(properties.partial || false);
-      setShowEditForm(true);
-    };
-
-    // Add hover handler for route popups
-    const handleRouteMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
-      if (!e.features || e.features.length === 0) {
-        if (currentPopup) {
-          currentPopup.remove();
-          currentPopup = null;
-        }
-        return;
-      }
-
-      const feature = e.features[0];
-      const properties = feature.properties;
-
-      if (!properties) return;
-
-      let popupContent = `<div class="railway-popup" style="color: black;">`;
-
-      if (properties.name) {
-        popupContent += `<h3 class="font-bold text-lg mb-2" style="color: black;">${properties.name}</h3>`;
-      }
-
-      let formattedDescription = "";
-      if (properties.description) {
-        formattedDescription += `<i style="color: black;">${properties.description}</i><br />`;
-      }
-      formattedDescription += `Usage: ${usageMap[properties.usage_type]}`;
-
-      if (properties.date || properties.note) {
-        formattedDescription += `<hr class="my-2" />`;
-      }
-      if (properties.date) {
-        formattedDescription += `<span style="color: black;">Date: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span>`;
-      }
-      if (properties.note) {
-        formattedDescription += `<br /><span style="color: black;">${properties.note}</span>`;
-      }
-
-      popupContent += `<div class="mb-2">${formattedDescription}</div>`;
-      popupContent += `</div>`;
-
-      // Remove old popup if exists
-      if (currentPopup) {
-        currentPopup.remove();
-      }
-
-      // Create new popup
-      currentPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
-        .setLngLat(e.lngLat)
-        .setHTML(popupContent)
-        .addTo(mapInstance);
-    };
-
-    // Add hover handler for station popups (takes precedence)
-    const handleStationMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
-      if (!e.features || e.features.length === 0) {
-        return;
-      }
-
-      const feature = e.features[0];
-      const properties = feature.properties;
-
-      if (!properties) return;
-
-      let popupContent = `<div class="station-popup" style="color: black;">`;
-
-      if (properties.name) {
-        popupContent += `<h3 class="font-bold text-base mb-1" style="color: black;">${properties.name}</h3>`;
-        popupContent += `<div class="text-xs text-gray-600">Station</div>`;
-      }
-
-      popupContent += `</div>`;
-
-      // Remove old popup if exists
-      if (currentPopup) {
-        currentPopup.remove();
-      }
-
-      // Create new popup for station
-      currentPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
-        .setLngLat(e.lngLat)
-        .setHTML(popupContent)
-        .addTo(mapInstance);
-    };
-
-    // Add cursor change on hover for routes
-    const handleRouteMouseEnter = () => {
-      mapInstance.getCanvas().style.cursor = 'pointer';
-    };
-
-    const handleRouteMouseLeave = () => {
-      mapInstance.getCanvas().style.cursor = '';
-      // Remove popup when leaving the route
-      if (currentPopup) {
-        currentPopup.remove();
-        currentPopup = null;
-      }
-    };
-
-    // Add cursor change on hover for stations
-    const handleStationMouseEnter = () => {
-      mapInstance.getCanvas().style.cursor = 'pointer';
-    };
-
-    const handleStationMouseLeave = () => {
-      mapInstance.getCanvas().style.cursor = '';
-      // Remove popup when leaving the station
-      if (currentPopup) {
-        currentPopup.remove();
-        currentPopup = null;
-      }
-    };
-
-    // Attach route handlers
-    mapInstance.on('click', 'railway_routes', handleClick);
-    mapInstance.on('mousemove', 'railway_routes', handleRouteMouseMove);
-    mapInstance.on('mouseenter', 'railway_routes', handleRouteMouseEnter);
-    mapInstance.on('mouseleave', 'railway_routes', handleRouteMouseLeave);
-
-    // Attach station handlers (added after routes, so they take precedence due to layer order)
-    mapInstance.on('mousemove', 'stations', handleStationMouseMove);
-    mapInstance.on('mouseenter', 'stations', handleStationMouseEnter);
-    mapInstance.on('mouseleave', 'stations', handleStationMouseLeave);
-
-    // Cleanup
-    return () => {
-      if (currentPopup) {
-        currentPopup.remove();
-      }
-      // Remove route handlers
-      mapInstance.off('click', 'railway_routes', handleClick);
-      mapInstance.off('mousemove', 'railway_routes', handleRouteMouseMove);
-      mapInstance.off('mouseenter', 'railway_routes', handleRouteMouseEnter);
-      mapInstance.off('mouseleave', 'railway_routes', handleRouteMouseLeave);
-      // Remove station handlers
-      mapInstance.off('mousemove', 'stations', handleStationMouseMove);
-      mapInstance.off('mouseenter', 'stations', handleStationMouseEnter);
-      mapInstance.off('mouseleave', 'stations', handleStationMouseLeave);
-    };
-  }, [map]);
+  // Fetch progress stats on component mount
+  useEffect(() => {
+    routeEditor.fetchProgress();
+  }, []);
 
   // Handle station selection from search
   const handleStationSelect = (station: Station) => {
@@ -344,113 +77,36 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     });
 
     // Clear search
-    setSearchQuery('');
-    setShowSuggestions(false);
-    setSelectedStationIndex(-1);
+    stationSearch.setSearchQuery('');
+    stationSearch.setShowSuggestions(false);
+    stationSearch.setSelectedStationIndex(-1);
   };
 
   // Handle keyboard navigation in search
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showSuggestions || searchResults.length === 0) return;
+    if (!stationSearch.showSuggestions || stationSearch.searchResults.length === 0) return;
 
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedStationIndex(prev =>
-          prev < searchResults.length - 1 ? prev + 1 : prev
+        stationSearch.setSelectedStationIndex(prev =>
+          prev < stationSearch.searchResults.length - 1 ? prev + 1 : prev
         );
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedStationIndex(prev => prev > 0 ? prev - 1 : -1);
+        stationSearch.setSelectedStationIndex(prev => prev > 0 ? prev - 1 : -1);
         break;
       case 'Enter':
         e.preventDefault();
-        if (selectedStationIndex >= 0 && selectedStationIndex < searchResults.length) {
-          handleStationSelect(searchResults[selectedStationIndex]);
+        if (stationSearch.selectedStationIndex >= 0 && stationSearch.selectedStationIndex < stationSearch.searchResults.length) {
+          handleStationSelect(stationSearch.searchResults[stationSearch.selectedStationIndex]);
         }
         break;
       case 'Escape':
-        setShowSuggestions(false);
-        setSelectedStationIndex(-1);
+        stationSearch.setShowSuggestions(false);
+        stationSearch.setSelectedStationIndex(-1);
         break;
-    }
-  };
-
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingFeature?.track_id) return;
-
-    setIsLoading(true);
-    try {
-      await updateUserRailwayData(editingFeature.track_id, date || null, note || null, partial);
-
-      // Update cache buster to force tile reload
-      const newCacheBuster = Date.now();
-      setCacheBuster(newCacheBuster);
-
-      // Refresh the map by reloading the railway routes layer with cache buster
-      if (map.current) {
-        const source = map.current.getSource('railway_routes') as maplibregl.VectorTileSource;
-        if (source) {
-          // Force reload by removing and re-adding the source with new cache buster
-          map.current.removeLayer('railway_routes');
-          map.current.removeSource('railway_routes');
-
-          map.current.addSource('railway_routes', createRailwayRoutesSource({ userId, cacheBuster: newCacheBuster }));
-
-          map.current.addLayer(
-            createRailwayRoutesLayer({
-              colorExpression: [
-                'case',
-                ['==', ['get', 'partial'], true],
-                COLORS.railwayRoutes.partial,
-                ['has', 'date'],
-                COLORS.railwayRoutes.visited,
-                COLORS.railwayRoutes.unvisited
-              ],
-              widthExpression: [
-                'case',
-                ['==', ['get', 'usage'], 2],
-                2,
-                3
-              ],
-            }),
-            'stations'
-          );
-
-          // Wait for the source to load new tiles before closing the form
-          await new Promise<void>((resolve) => {
-            const checkSourceLoaded = () => {
-              const newSource = map.current?.getSource('railway_routes') as maplibregl.VectorTileSource;
-              if (newSource) {
-                setTimeout(() => resolve(), 300);
-              } else {
-                resolve();
-              }
-            };
-
-            map.current?.once('sourcedata', checkSourceLoaded);
-            setTimeout(() => resolve(), 500);
-          });
-        }
-      }
-
-      closeAllPopups();
-      setShowEditForm(false);
-      setEditingFeature(null);
-
-      // Refresh progress stats
-      try {
-        const progressData = await getUserProgress();
-        setProgress(progressData);
-      } catch (error) {
-        console.error('Error refreshing progress:', error);
-      }
-    } catch (error) {
-      console.error('Error updating railway data:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -463,17 +119,17 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       />
 
       {/* Progress Stats Box */}
-      {progress && (
+      {routeEditor.progress && (
         <div className="absolute top-4 left-4 bg-white p-3 rounded shadow-lg text-black z-10">
           <h3 className="font-bold mb-2 text-sm">Completed</h3>
           <div className="text-lg font-semibold">
-            {progress.completedKm}/{progress.totalKm} km
+            {routeEditor.progress.completedKm}/{routeEditor.progress.totalKm} km
           </div>
           <div className="text-2xl font-bold text-green-600">
-            {progress.percentage}%
+            {routeEditor.progress.percentage}%
           </div>
           <div className="text-xs text-gray-600 mt-1">
-            {progress.completedRoutes}/{progress.totalRoutes} ({progress.routePercentage}%) routes
+            {routeEditor.progress.completedRoutes}/{routeEditor.progress.totalRoutes} ({routeEditor.progress.routePercentage}%) routes
           </div>
         </div>
       )}
@@ -482,13 +138,13 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       <div className="absolute top-4 right-16 w-80 z-10">
         <div className="relative">
           <input
-            ref={searchInputRef}
+            ref={stationSearch.searchInputRef}
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={stationSearch.searchQuery}
+            onChange={(e) => stationSearch.setSearchQuery(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            onFocus={() => searchQuery.length >= 2 && setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            onFocus={() => stationSearch.searchQuery.length >= 2 && stationSearch.setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => stationSearch.setShowSuggestions(false), 200)}
             placeholder="Search stations..."
             className="w-full px-4 py-2 pr-10 bg-white border border-gray-300 rounded-lg shadow-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
@@ -507,15 +163,15 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           </svg>
 
           {/* Search Suggestions Dropdown */}
-          {showSuggestions && !isSearching && searchResults.length > 0 && (
+          {stationSearch.showSuggestions && !stationSearch.isSearching && stationSearch.searchResults.length > 0 && (
             <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto z-20">
-              {searchResults.map((station, index) => (
+              {stationSearch.searchResults.map((station, index) => (
                 <button
                   key={station.id}
                   onClick={() => handleStationSelect(station)}
-                  onMouseEnter={() => setSelectedStationIndex(index)}
+                  onMouseEnter={() => stationSearch.setSelectedStationIndex(index)}
                   className={`w-full px-4 py-2 text-left text-sm text-black hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 ${
-                    selectedStationIndex === index ? 'bg-blue-50' : ''
+                    stationSearch.selectedStationIndex === index ? 'bg-blue-50' : ''
                   }`}
                 >
                   <div className="font-medium">{station.name}</div>
@@ -528,7 +184,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           )}
 
           {/* Loading indicator */}
-          {isSearching && (
+          {stationSearch.isSearching && (
             <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl p-3 z-20">
               <div className="flex items-center justify-center text-sm text-gray-500">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
@@ -540,14 +196,14 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       </div>
 
       {/* Edit Form Modal */}
-      {showEditForm && editingFeature && (
+      {routeEditor.showEditForm && routeEditor.editingFeature && (
         <div className="absolute inset-0 flex items-center justify-center z-[9999] text-black">
           <div className="bg-white p-6 rounded-lg shadow-xl border max-w-md w-full mx-4">
             <h3 className="text-lg font-bold mb-4">
-              {editingFeature.name || 'Editace tratě'}
+              {routeEditor.editingFeature.name || 'Editace tratě'}
             </h3>
 
-            <form onSubmit={handleFormSubmit} className="space-y-4">
+            <form onSubmit={routeEditor.submitForm} className="space-y-4">
               <div>
                 <label htmlFor="date" className="block text-sm font-medium mb-1">
                   Date
@@ -556,14 +212,14 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                   <input
                     type="date"
                     id="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className={`w-full pl-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${date ? 'pr-6' : 'pr-3'}`}
+                    value={routeEditor.date}
+                    onChange={(e) => routeEditor.setDate(e.target.value)}
+                    className={`w-full pl-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${routeEditor.date ? 'pr-6' : 'pr-3'}`}
                   />
-                  {date && (
+                  {routeEditor.date && (
                     <button
                       type="button"
-                      onClick={() => setDate('')}
+                      onClick={() => routeEditor.setDate('')}
                       className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm cursor-pointer"
                       title="Clear date"
                     >
@@ -579,8 +235,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                 </label>
                 <textarea
                   id="note"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
+                  value={routeEditor.note}
+                  onChange={(e) => routeEditor.setNote(e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Optional note..."
@@ -591,8 +247,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={partial}
-                    onChange={(e) => setPartial(e.target.checked)}
+                    checked={routeEditor.partial}
+                    onChange={(e) => routeEditor.setPartial(e.target.checked)}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   />
                   <span className="text-sm font-medium">Partial</span>
@@ -602,28 +258,24 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
-                  onClick={() => {
-                    closeAllPopups();
-                    setShowEditForm(false);
-                    setEditingFeature(null);
-                  }}
+                  onClick={routeEditor.closeEditForm}
                   className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 cursor-pointer"
                 >
                   Zrušit
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={routeEditor.isLoading}
                   className={`px-4 py-2 text-white rounded cursor-pointer flex items-center gap-2 ${
-                    isLoading
+                    routeEditor.isLoading
                       ? 'bg-blue-400 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700'
                   }`}
                 >
-                  {isLoading && (
+                  {routeEditor.isLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   )}
-                  {isLoading ? 'Ukládám...' : 'Uložit'}
+                  {routeEditor.isLoading ? 'Ukládám...' : 'Uložit'}
                 </button>
               </div>
             </form>

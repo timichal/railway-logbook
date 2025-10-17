@@ -1,7 +1,7 @@
 /**
  * Railway usage patterns
  */
-export const USAGE_OPTIONS = [
+export const usageOptions = [
   {
     id: 0,
     key: 'REGULAR',
@@ -19,13 +19,8 @@ export const USAGE_OPTIONS = [
   }
 ] as const;
 
-export const getAllUsageOptions = () => USAGE_OPTIONS;
-
-export const getUsageById = (id: number) => {
-  return USAGE_OPTIONS.find(usage => usage.id === id);
+export const getUsageLabel = (usageType: number): string => {
+  const option = usageOptions.find(opt => opt.id === usageType);
+  return option ? option.label : 'Unknown';
 };
 
-export const getUsageLabel = (id: number) => {
-  const usage = getUsageById(id);
-  return usage ? usage.label : `Unknown usage (${id})`;
-};

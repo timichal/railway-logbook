@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAllRailwayRoutes, getRailwayRoute, updateRailwayRoute } from '@/lib/railway-actions';
 import { deleteRailwayRoute } from '@/lib/route-delete-actions';
-import { getAllUsageOptions } from '@/lib/constants';
+import { usageOptions } from '@/lib/constants';
 
 interface RailwayRoute {
   track_id: string;
@@ -246,7 +246,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
                   >
                     <option value="">Select usage type</option>
-                    {getAllUsageOptions().map((option) => (
+                    {usageOptions.map((option) => (
                       <option key={option.key} value={option.id.toString()}>
                         {option.label}
                       </option>

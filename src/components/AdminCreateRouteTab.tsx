@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getAllUsageOptions } from '@/lib/constants';
+import { usageOptions } from '@/lib/constants';
 import { findRailwayPathDB } from '@/lib/db-path-actions';
 import { getRailwayPartsByIds } from '@/lib/railway-parts-actions';
 import type { RailwayPart } from '@/lib/types';
@@ -204,7 +204,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
           >
             <option value="">Select usage type</option>
-            {getAllUsageOptions().map((option) => (
+            {usageOptions.map((option) => (
               <option key={option.key} value={option.id.toString()}>
                 {option.label}
               </option>
