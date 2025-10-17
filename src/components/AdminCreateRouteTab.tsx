@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { usageOptions } from '@/lib/constants';
 import { findRailwayPathDB } from '@/lib/db-path-actions';
 import { getRailwayPartsByIds } from '@/lib/railway-parts-actions';
+import { saveRailwayRoute } from '@/lib/route-save-actions';
 import type { RailwayPart } from '@/lib/types';
 
 interface AdminCreateRouteTabProps {
@@ -16,9 +17,11 @@ interface AdminCreateRouteTabProps {
   onCancelPreview?: () => void;
   onSaveRoute?: (routeData: { name: string, description: string, usage_type: string }) => void;
   onFormReset?: () => void;
+  editingGeometryForTrackId?: string | null;
+  onGeometryEditComplete?: () => void;
 }
 
-export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset }: AdminCreateRouteTabProps) {
+export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, editingGeometryForTrackId, onGeometryEditComplete }: AdminCreateRouteTabProps) {
 
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
@@ -26,6 +29,9 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     description: '',
     usage_type: ''
   });
+
+  // Store the current path result and railway parts for geometry updates
+  const [currentPathResult, setCurrentPathResult] = useState<{ partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[] } | null>(null);
 
   // Reset form function
   const resetForm = () => {
@@ -77,6 +83,9 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       const railwayParts = await getRailwayPartsByIds(result.partIds);
       console.log('Preview: Fetched', railwayParts.length, 'railway part geometries');
 
+      // Store the path result for potential geometry updates
+      setCurrentPathResult({ partIds: result.partIds, coordinates: result.coordinates, railwayParts });
+
       // Pass both the path result and the individual railway parts
       onPreviewRoute(result.partIds, result.coordinates, railwayParts);
     } else {
@@ -99,6 +108,38 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     resetForm();
   };
 
+  // Handle save geometry for existing route
+  const handleSaveGeometry = async () => {
+    if (!editingGeometryForTrackId || !currentPathResult) {
+      console.error('Cannot save geometry: missing track ID or path result');
+      return;
+    }
+
+    try {
+      // Use saveRailwayRoute with trackId to trigger UPDATE mode
+      // Metadata (name, description, usage_type) won't be used in update mode
+      await saveRailwayRoute(
+        { name: '', description: '', usage_type: '' }, // Dummy data, not used in UPDATE mode
+        { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates },
+        currentPathResult.railwayParts,
+        editingGeometryForTrackId // Pass track ID to trigger UPDATE query
+      );
+
+      alert('Route geometry updated successfully!');
+
+      // Reset and complete editing
+      resetForm();
+      setCurrentPathResult(null);
+
+      if (onGeometryEditComplete) {
+        onGeometryEditComplete();
+      }
+    } catch (error) {
+      console.error('Error updating route geometry:', error);
+      alert(`Error updating route geometry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   // Automatically preview route when both IDs are filled
   useEffect(() => {
     if (startingId && endingId && !isPreviewMode) {
@@ -107,11 +148,16 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startingId, endingId, isPreviewMode]);
 
+  const isEditMode = !!editingGeometryForTrackId;
+
   return (
     <div className="p-4 overflow-y-auto">
-      <h3 className="font-semibold text-gray-900 mb-4">Create New Route</h3>
+      <h3 className="font-semibold text-gray-900 mb-4">
+        {isEditMode ? `Edit Route Geometry (Track ID: ${editingGeometryForTrackId})` : 'Create New Route'}
+      </h3>
       <p className="text-sm text-gray-600 mb-4">
         Click on railway parts in the map to set starting and ending points. The route will be automatically previewed on the map.
+        {isEditMode && ' The route metadata (name, description) will remain unchanged.'}
       </p>
 
       <div className="space-y-4">
@@ -165,66 +211,89 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
           </div>
         </div>
 
-        {/* Route Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Route Name *
-          </label>
-          <input
-            type="text"
-            value={createForm.name}
-            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-            placeholder="Enter route name"
-          />
-        </div>
+        {/* Only show metadata fields in create mode */}
+        {!isEditMode && (
+          <>
+            {/* Route Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Route Name *
+              </label>
+              <input
+                type="text"
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter route name"
+              />
+            </div>
 
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Description
-          </label>
-          <textarea
-            value={createForm.description}
-            onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-            placeholder="Enter route description"
-          />
-        </div>
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                value={createForm.description}
+                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter route description"
+              />
+            </div>
 
-        {/* Usage Type */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Usage Type *
-          </label>
-          <select
-            value={createForm.usage_type}
-            onChange={(e) => setCreateForm({ ...createForm, usage_type: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
-          >
-            <option value="">Select usage type</option>
-            {usageOptions.map((option) => (
-              <option key={option.key} value={option.id.toString()}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+            {/* Usage Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Usage Type *
+              </label>
+              <select
+                value={createForm.usage_type}
+                onChange={(e) => setCreateForm({ ...createForm, usage_type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
+              >
+                <option value="">Select usage type</option>
+                {usageOptions.map((option) => (
+                  <option key={option.key} value={option.id.toString()}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
 
         {/* Save Button */}
         <div className="pt-4 border-t border-gray-200">
-          <button
-            onClick={handleSaveRoute}
-            disabled={!isPreviewMode || !createForm.name || !createForm.usage_type}
-            className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
-          >
-            Save Route to Database
-          </button>
+          {isEditMode ? (
+            <>
+              <button
+                onClick={handleSaveGeometry}
+                disabled={!isPreviewMode}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+              >
+                Save New Geometry
+              </button>
 
-          <p className="text-xs text-gray-500 mt-2">
-            Fill in all required fields and click Save to create the railway route.
-          </p>
+              <p className="text-xs text-gray-500 mt-2">
+                Select new starting and ending points on the map, then click Save to update the route geometry.
+              </p>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleSaveRoute}
+                disabled={!isPreviewMode || !createForm.name || !createForm.usage_type}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+              >
+                Save Route to Database
+              </button>
+
+              <p className="text-xs text-gray-500 mt-2">
+                Fill in all required fields and click Save to create the railway route.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

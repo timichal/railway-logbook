@@ -21,6 +21,7 @@ interface AdminSidebarProps {
 
 export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
+  const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
 
   // Switch to create tab when a part is clicked
   React.useEffect(() => {
@@ -78,6 +79,18 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
     }
   }, [onFormReset]);
 
+  // Handle edit geometry button click
+  const handleEditGeometry = React.useCallback((trackId: string) => {
+    console.log('Edit geometry for track:', trackId);
+    setEditingGeometryForTrackId(trackId);
+    setActiveTab('create');
+    setCreateFormIds({ startingId: '', endingId: '' });
+    // Unselect the route so it doesn't interfere with the map
+    if (onRouteSelect) {
+      onRouteSelect('');
+    }
+  }, [onRouteSelect]);
+
   return (
     <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
       {/* Tab Headers */}
@@ -122,6 +135,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             onRouteSelect={onRouteSelect}
             onRouteDeleted={onRouteDeleted}
             onRouteUpdated={onRouteUpdated}
+            onEditGeometry={handleEditGeometry}
           />
         )}
 
@@ -136,6 +150,11 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             onCancelPreview={onCancelPreview}
             onSaveRoute={onSaveRoute}
             onFormReset={handleResetIds}
+            editingGeometryForTrackId={editingGeometryForTrackId}
+            onGeometryEditComplete={() => {
+              setEditingGeometryForTrackId(null);
+              setActiveTab('routes');
+            }}
           />
         )}
       </div>

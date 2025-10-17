@@ -80,7 +80,8 @@ function mergeLinearChain(sublists: Coord[][]): Coord[] {
 export async function saveRailwayRoute(
   routeData: SaveRouteData,
   pathResult: PathResult,
-  railwayParts?: RailwayPart[]
+  railwayParts?: RailwayPart[],
+  trackId?: string
 ): Promise<string> {
   // Admin check
   const user = await getUser();
@@ -127,46 +128,76 @@ export async function saveRailwayRoute(
     const startingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[0] : null;
     const endingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[pathResult.partIds.length - 1] : null;
 
-    // Insert into railway_routes table with auto-generated track_id
-    // Calculate length using ST_Length with geography cast for accurate geodesic distance
-    // Store starting and ending part IDs for future recalculation
-    const insertQuery = `
-      INSERT INTO railway_routes (
-        name,
-        description,
-        usage_type,
-        geometry,
-        length_km,
-        starting_part_id,
-        ending_part_id,
-        is_valid
-      ) VALUES (
-        $1,
-        $2,
-        $3,
-        ST_GeomFromText($4, 4326),
-        ST_Length(ST_GeomFromText($4, 4326)::geography) / 1000,
-        $5,
-        $6,
-        TRUE
-      )
-      RETURNING track_id, length_km
-    `;
+    let query: string;
+    let values: (string | number | null)[];
 
-    const values = [
-      routeData.name,
-      routeData.description || null,
-      parseInt(routeData.usage_type),
-      geometryWKT,
-      startingPartId,
-      endingPartId
-    ];
-    
-    const result = await client.query(insertQuery, values);
+    if (trackId) {
+      // Update existing route - only update geometry, length, part IDs, and validity
+      // Keep name, description, usage_type unchanged
+      query = `
+        UPDATE railway_routes
+        SET
+          geometry = ST_GeomFromText($1, 4326),
+          length_km = ST_Length(ST_GeomFromText($1, 4326)::geography) / 1000,
+          starting_part_id = $2,
+          ending_part_id = $3,
+          is_valid = TRUE,
+          error_message = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE track_id = $4
+        RETURNING track_id, length_km
+      `;
+
+      values = [
+        geometryWKT,
+        startingPartId,
+        endingPartId,
+        trackId
+      ];
+    } else {
+      // Insert new route with auto-generated track_id
+      query = `
+        INSERT INTO railway_routes (
+          name,
+          description,
+          usage_type,
+          geometry,
+          length_km,
+          starting_part_id,
+          ending_part_id,
+          is_valid
+        ) VALUES (
+          $1,
+          $2,
+          $3,
+          ST_GeomFromText($4, 4326),
+          ST_Length(ST_GeomFromText($4, 4326)::geography) / 1000,
+          $5,
+          $6,
+          TRUE
+        )
+        RETURNING track_id, length_km
+      `;
+
+      values = [
+        routeData.name,
+        routeData.description || null,
+        parseInt(routeData.usage_type),
+        geometryWKT,
+        startingPartId,
+        endingPartId
+      ];
+    }
+
+    const result = await client.query(query, values);
     const savedTrackId = result.rows[0].track_id;
     const lengthKm = result.rows[0].length_km;
 
-    console.log('Successfully saved railway route with auto-generated track_id:', savedTrackId);
+    if (trackId) {
+      console.log('Successfully updated railway route geometry:', trackId);
+    } else {
+      console.log('Successfully saved railway route with auto-generated track_id:', savedTrackId);
+    }
     console.log('Final geometry has', sortedCoordinates.length, 'coordinate points');
     console.log('Calculated route length:', lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : 'N/A');
     console.log('Stored part IDs:', startingPartId, 'to', endingPartId);

@@ -27,6 +27,7 @@ export const COLORS = {
     visited: 'DarkGreen',
     unvisited: 'Crimson',
     partial: '#d97706', // Dark orange/amber
+    invalid: '#9ca3af', // Grey for invalid routes
   },
   stations: {
     fill: '#ff7800',

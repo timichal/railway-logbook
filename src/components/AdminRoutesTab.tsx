@@ -10,10 +10,15 @@ interface RailwayRoute {
   name: string;
   description: string | null;
   usage_type: string;
+  starting_part_id?: string | null;
+  ending_part_id?: string | null;
+  is_valid?: boolean;
+  error_message?: string | null;
 }
 
 interface RouteDetail extends RailwayRoute {
   geometry: string;
+  length_km?: number;
 }
 
 interface AdminRoutesTabProps {
@@ -21,9 +26,10 @@ interface AdminRoutesTabProps {
   onRouteSelect?: (routeId: string) => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
+  onEditGeometry?: (trackId: string) => void;
 }
 
-export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRouteDeleted, onRouteUpdated }: AdminRoutesTabProps) {
+export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRouteDeleted, onRouteUpdated, onEditGeometry }: AdminRoutesTabProps) {
   const [routes, setRoutes] = useState<RailwayRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -129,9 +135,9 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
     try {
       setIsLoading(true);
       await deleteRailwayRoute(selectedRoute.track_id);
-      
+
       console.log('Route deleted successfully');
-      
+
       // Refresh the routes list
       await loadRoutes();
 
@@ -150,7 +156,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       }
 
       alert(`Route "${selectedRoute.name}" has been deleted successfully.`);
-      
+
     } catch (error) {
       console.error('Error deleting route:', error);
       alert(`Error deleting route: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -174,9 +180,8 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
               <button
                 key={route.track_id}
                 onClick={() => handleRouteClick(route.track_id)}
-                className={`w-full p-3 text-left hover:bg-gray-50 focus:bg-blue-50 focus:outline-none ${
-                  selectedRouteId === route.track_id ? 'bg-blue-50' : ''
-                }`}
+                className={`w-full p-3 text-left hover:bg-gray-50 focus:bg-blue-50 focus:outline-none ${selectedRouteId === route.track_id ? 'bg-blue-50' : ''
+                  }`}
               >
                 <div className="font-medium text-sm text-gray-900 truncate">
                   {route.name}
@@ -206,9 +211,32 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                 Unselect
               </button>
             </div>
-            
+
             {editForm && (
               <div className="space-y-4">
+                {/* Invalid Route Alert */}
+                {selectedRoute.is_valid === false && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-red-800">
+                          Invalid Route
+                        </h3>
+                        {selectedRoute.error_message && (
+                          <div className="mt-2 text-sm text-red-700">
+                            <p className="mt-1 font-mono text-xs">{selectedRoute.error_message}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -261,9 +289,17 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                     disabled={isLoading}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
                   >
-                    {isLoading ? 'Saving...' : 'Save Changes'}
+                    {isLoading ? 'Saving...' : 'Save Metadata'}
                   </button>
-                  
+
+                  <button
+                    onClick={() => onEditGeometry && onEditGeometry(selectedRoute.track_id)}
+                    disabled={isLoading}
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+                  >
+                    Edit Route Geometry
+                  </button>
+
                   <button
                     onClick={handleDeleteRoute}
                     disabled={isLoading}
@@ -271,7 +307,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                   >
                     {isLoading ? 'Deleting...' : 'Delete Route'}
                   </button>
-                  
+
                   <p className="text-xs text-gray-500 text-center">
                     Deletion is permanent and cannot be undone
                   </p>

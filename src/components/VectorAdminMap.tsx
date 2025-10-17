@@ -117,7 +117,9 @@ export default function VectorAdminMap({
       map.current.setPaintProperty('railway_routes', 'line-color', [
         'case',
         ['==', ['get', 'track_id'], selectedRouteId],
-        COLORS.railwayRoutes.selected,
+        COLORS.railwayRoutes.selected, // Selected routes always orange
+        ['==', ['get', 'is_valid'], false],
+        COLORS.railwayRoutes.invalid, // Unselected invalid routes are grey
         COLORS.railwayRoutes.default
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
@@ -133,7 +135,12 @@ export default function VectorAdminMap({
         0.8
       ]);
     } else {
-      map.current.setPaintProperty('railway_routes', 'line-color', COLORS.railwayRoutes.default);
+      map.current.setPaintProperty('railway_routes', 'line-color', [
+        'case',
+        ['==', ['get', 'is_valid'], false],
+        COLORS.railwayRoutes.invalid,
+        COLORS.railwayRoutes.default
+      ]);
       map.current.setPaintProperty('railway_routes', 'line-width', 3);
       map.current.setPaintProperty('railway_routes', 'line-opacity', 0.8);
     }
@@ -175,7 +182,9 @@ export default function VectorAdminMap({
       map.current.setPaintProperty('railway_routes', 'line-color', [
         'case',
         ['==', ['get', 'track_id'], selectedRouteId],
-        COLORS.railwayRoutes.selected,
+        COLORS.railwayRoutes.selected, // Selected routes always orange
+        ['==', ['get', 'is_valid'], false],
+        COLORS.railwayRoutes.invalid, // Unselected invalid routes are grey
         COLORS.railwayRoutes.default
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
@@ -189,6 +198,14 @@ export default function VectorAdminMap({
         ['==', ['get', 'track_id'], selectedRouteId],
         1.0,
         0.8
+      ]);
+    } else {
+      // Also apply invalid styling when no route is selected
+      map.current.setPaintProperty('railway_routes', 'line-color', [
+        'case',
+        ['==', ['get', 'is_valid'], false],
+        COLORS.railwayRoutes.invalid,
+        COLORS.railwayRoutes.default
       ]);
     }
   }, [refreshTrigger, mapLoaded, showRoutesLayer, selectedRouteId, map]);

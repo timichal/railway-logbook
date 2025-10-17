@@ -111,6 +111,10 @@ BEGIN
             rr.name,
             rr.description,
             rr.usage_type,
+            rr.is_valid,
+            rr.error_message,
+            rr.starting_part_id,
+            rr.ending_part_id,
             -- Include user-specific data for client-side styling
             urd.date,
             urd.note,
