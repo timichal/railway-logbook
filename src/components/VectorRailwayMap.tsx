@@ -14,13 +14,9 @@ import {
 } from '@/lib/map';
 
 const usageMap: Record<number, string> = {
-  0: 'Pravidelný provoz',
-  1: 'Provoz jednou denně',
-  2: 'Sezónní provoz',
-  3: 'Provoz jednou týdně',
-  4: 'Provoz o pracovních dnech',
-  5: 'Provoz o víkendech',
-  6: 'Provoz při zvláštních příležitostech'
+  0: 'Regular',
+  1: 'Seasonal',
+  2: 'Special'
 };
 
 interface VectorRailwayMapProps {
@@ -70,7 +66,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           ],
           widthExpression: [
             'case',
-            ['in', 6, ['get', 'usage_types']],
+            ['in', 2, ['get', 'usage_types']],
             2,  // Special usage = thinner
             3   // Normal = standard width
           ],
@@ -275,7 +271,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
               ],
               widthExpression: [
                 'case',
-                ['in', 6, ['get', 'usage_types']],
+                ['in', 2, ['get', 'usage_types']],
                 2,
                 3
               ],

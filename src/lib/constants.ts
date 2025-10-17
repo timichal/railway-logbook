@@ -1,49 +1,21 @@
 /**
- * Railway usage patterns with Czech translations
- * This mirrors the USAGE constant from the root enums.ts
+ * Railway usage patterns
  */
 export const USAGE_OPTIONS = [
   {
     id: 0,
     key: 'REGULAR',
-    label: 'Pravidelný provoz',
-    description: 'Regular service'
+    label: 'Regular'
   },
   {
     id: 1,
-    key: 'ONCE_DAILY',
-    label: 'Provoz jednou denně',
-    description: 'Service once daily'
+    key: 'SEASONAL',
+    label: 'Seasonal'
   },
   {
     id: 2,
-    key: 'SEASONAL',
-    label: 'Sezónní provoz',
-    description: 'Seasonal service'
-  },
-  {
-    id: 3,
-    key: 'ONCE_WEEKLY',
-    label: 'Provoz jednou týdně',
-    description: 'Service once weekly'
-  },
-  {
-    id: 4,
-    key: 'WEEKDAYS',
-    label: 'Provoz o pracovních dnech',
-    description: 'Weekdays service'
-  },
-  {
-    id: 5,
-    key: 'WEEKENDS',
-    label: 'Provoz o víkendech',
-    description: 'Weekends service'
-  },
-  {
-    id: 6,
     key: 'SPECIAL',
-    label: 'Provoz při zvláštních příležitostech',
-    description: 'Special occasions service'
+    label: 'Special'
   }
 ] as const;
 

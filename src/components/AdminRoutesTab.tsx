@@ -290,7 +290,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                             <option value="">Select usage type</option>
                             {usageOptions.map((option) => (
                               <option key={option.key} value={option.id.toString()}>
-                                {option.label} - {option.description}
+                                {option.label}
                               </option>
                             ))}
                           </select>
