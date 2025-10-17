@@ -111,7 +111,6 @@ BEGIN
             rr.name,
             rr.description,
             rr.usage_type,
-            rr.primary_operator,
             -- Include user-specific data for client-side styling
             urd.date,
             urd.note,

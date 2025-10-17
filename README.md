@@ -53,7 +53,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - `users` - User accounts with authentication
 - `stations` - Railway stations (Point features)
 - `railway_parts` - Raw railway segments from OSM
-- `railway_routes` - Defined routes with usage type (Regular/Seasonal/Special) and operator
+- `railway_routes` - Defined routes with usage type (Regular/Seasonal/Special)
 - `user_railway_data` - User ride history (dates, notes, partial flag)
 
 ### Features
@@ -70,7 +70,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 **For Admin (user_id=1):**
 - Create routes by clicking railway_parts on map
 - Automatic pathfinding between points (PostGIS, 50km buffer)
-- Assign usage type (Regular/Seasonal/Special) and primary operator
+- Assign usage type (Regular/Seasonal/Special)
 - Edit and delete routes with security checks
 - Auto-generated track_id and automatic length calculation
 

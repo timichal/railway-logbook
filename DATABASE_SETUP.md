@@ -72,7 +72,6 @@ Update the database connection settings if needed.
    - `name`
    - `description` (optional custom description)
    - `usage_type` (INTEGER NOT NULL: 0=Regular, 1=Seasonal, 2=Special)
-   - `primary_operator`
    - `geometry` (PostGIS LineString with SRID 4326)
    - `length_km` (calculated automatically from geometry)
 

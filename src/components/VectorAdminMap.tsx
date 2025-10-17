@@ -231,7 +231,6 @@ export default function VectorAdminMap({
                 <h3 style="font-weight: bold; margin-bottom: 4px;">${properties.name || 'Unnamed Route'}</h3>
                 <p style="margin: 2px 0;">Track ID: ${trackId}</p>
                 ${properties.description ? `<p style="margin: 2px 0;">${properties.description}</p>` : ''}
-                <p style="margin: 2px 0;">Operator: ${properties.primary_operator}</p>
               </div>
             `)
             .addTo(mapInstance);

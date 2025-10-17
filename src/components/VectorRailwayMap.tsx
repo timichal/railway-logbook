@@ -28,7 +28,6 @@ interface EditingFeature {
   track_id: string;
   name: string;
   description: string;
-  primary_operator: string;
   usage_types: string;
   date: string | null;
   note: string | null;
@@ -118,7 +117,6 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         track_id: properties.track_id,
         name: properties.name,
         description: properties.description,
-        primary_operator: properties.primary_operator,
         usage_types: properties.usage_types,
         date: properties.date,
         note: properties.note,
@@ -147,33 +145,26 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
       if (!properties) return;
 
-      // Parse usage type
-      let usage = 'N/A';
-      try {
-        if (properties.usage !== undefined && properties.usage !== null) {
-          const usageType = typeof properties.usage === 'number' ? properties.usage : parseInt(properties.usage);
-          usage = usageMap[usageType] || 'N/A';
-        }
-      } catch (e) {
-        console.error('Error parsing usage:', e, 'Value:', properties.usage);
-      }
-
       let popupContent = `<div class="railway-popup" style="color: black;">`;
 
       if (properties.name) {
         popupContent += `<h3 class="font-bold text-lg mb-2" style="color: black;">${properties.name}</h3>`;
       }
 
-      let formattedDescription = `<i style="color: black;">${usage}, ${properties.primary_operator}</i>`;
+      let formattedDescription = "";
       if (properties.description) {
-        formattedDescription += `<br /><br /><span style="color: black;">${properties.description}</span>`;
+        formattedDescription += `<i style="color: black;">${properties.description}</i><br />`;
       }
+      formattedDescription += `Usage: ${usageMap[properties.usage_type]}`;
 
+      if (properties.date || properties.note) {
+        formattedDescription += `<hr class="my-2" />`;
+      }
       if (properties.date) {
-        formattedDescription += `<br /><br /><span style="color: black;">Date: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span>`;
+        formattedDescription += `<span style="color: black;">Date: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span>`;
       }
       if (properties.note) {
-        formattedDescription += `<br /><br /><span style="color: black;">${properties.note}</span>`;
+        formattedDescription += `<br /><span style="color: black;">${properties.note}</span>`;
       }
 
       popupContent += `<div class="mb-2">${formattedDescription}</div>`;

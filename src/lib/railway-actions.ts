@@ -42,7 +42,6 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
       rr.name,
       rr.description,
       rr.usage_type,
-      rr.primary_operator,
       ST_AsGeoJSON(rr.geometry) as geometry,
       urd.date,
       urd.note,
@@ -77,7 +76,6 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
         name: route.name,
         description: route.description ?? undefined,
         track_id: route.track_id,
-        primary_operator: route.primary_operator,
         usage: route.usage_type,
         custom: {
           date: route.date ?? undefined,
@@ -182,7 +180,7 @@ export async function getAllRailwayRoutes() {
   }
 
   const result = await query(`
-    SELECT track_id, name, description, usage_type, primary_operator
+    SELECT track_id, name, description, usage_type
     FROM railway_routes
     ORDER BY name
   `);
@@ -197,7 +195,7 @@ export async function getRailwayRoute(trackId: string) {
   }
 
   const result = await query(`
-    SELECT track_id, name, description, usage_type, primary_operator,
+    SELECT track_id, name, description, usage_type,
            ST_AsGeoJSON(geometry) as geometry
     FROM railway_routes
     WHERE track_id = $1
@@ -214,8 +212,7 @@ export async function updateRailwayRoute(
   trackId: string,
   name: string,
   description: string | null,
-  usageType: string,
-  primaryOperator: string
+  usageType: string
 ) {
   const user = await getUser();
   if (!user || user.id !== 1) {
@@ -224,9 +221,9 @@ export async function updateRailwayRoute(
 
   await query(`
     UPDATE railway_routes
-    SET name = $2, description = $3, usage_type = $4, primary_operator = $5, updated_at = CURRENT_TIMESTAMP
+    SET name = $2, description = $3, usage_type = $4, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [trackId, name, description, parseInt(usageType), primaryOperator]);
+  `, [trackId, name, description, parseInt(usageType)]);
 }
 
 export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {
@@ -236,7 +233,7 @@ export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureC
   }
 
   const result = await query(`
-    SELECT track_id, name, description, usage_type, primary_operator,
+    SELECT track_id, name, description, usage_type,
            ST_AsGeoJSON(geometry) as geometry
     FROM railway_routes
     ORDER BY name
@@ -249,8 +246,7 @@ export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureC
       track_id: row.track_id,
       name: row.name,
       description: row.description ?? undefined,
-      usage: row.usage_type,
-      primary_operator: row.primary_operator
+      usage: row.usage_type
     }
   }));
 

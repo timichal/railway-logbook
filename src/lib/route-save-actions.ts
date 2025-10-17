@@ -9,7 +9,6 @@ export interface SaveRouteData {
   name: string;
   description: string;
   usage_type: string;
-  primary_operator: string;
 }
 
 type Coord = [number, number];
@@ -131,16 +130,14 @@ export async function saveRailwayRoute(
         name,
         description,
         usage_type,
-        primary_operator,
         geometry,
         length_km
       ) VALUES (
         $1,
         $2,
         $3,
-        $4,
-        ST_GeomFromText($5, 4326),
-        ST_Length(ST_GeomFromText($5, 4326)::geography) / 1000
+        ST_GeomFromText($4, 4326),
+        ST_Length(ST_GeomFromText($4, 4326)::geography) / 1000
       )
       RETURNING track_id, length_km
     `;
@@ -149,7 +146,6 @@ export async function saveRailwayRoute(
       routeData.name,
       routeData.description || null,
       parseInt(routeData.usage_type),
-      routeData.primary_operator,
       geometryWKT
     ];
     

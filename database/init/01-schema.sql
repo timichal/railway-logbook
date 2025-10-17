@@ -41,7 +41,6 @@ CREATE TABLE railway_routes (
     name VARCHAR(255) NOT NULL,
     description TEXT, -- Route description
     usage_type INTEGER NOT NULL, -- Single usage type (0=Regular, 1=Seasonal, 2=Special)
-    primary_operator VARCHAR(255),
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -66,6 +65,5 @@ CREATE INDEX idx_stations_coordinates ON stations USING GIST (coordinates);
 CREATE INDEX idx_railway_parts_geometry ON railway_parts USING GIST (geometry);
 CREATE INDEX idx_railway_routes_geometry ON railway_routes USING GIST (geometry);
 CREATE INDEX idx_railway_routes_name ON railway_routes (name);
-CREATE INDEX idx_railway_routes_operator ON railway_routes (primary_operator);
 CREATE INDEX idx_user_railway_data_user_id ON user_railway_data (user_id);
 CREATE INDEX idx_user_railway_data_track_id ON user_railway_data (track_id);

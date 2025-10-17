@@ -14,7 +14,7 @@ interface AdminCreateRouteTabProps {
   onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { name: string, description: string, usage_type: string, primary_operator: string }) => void;
+  onSaveRoute?: (routeData: { name: string, description: string, usage_type: string }) => void;
   onFormReset?: () => void;
 }
 
@@ -24,8 +24,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   const [createForm, setCreateForm] = useState({
     name: '',
     description: '',
-    usage_type: '',
-    primary_operator: ''
+    usage_type: ''
   });
 
   // Reset form function
@@ -33,8 +32,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     setCreateForm({
       name: '',
       description: '',
-      usage_type: '',
-      primary_operator: ''
+      usage_type: ''
     });
     // Clear the IDs managed by parent via callback
     if (onFormReset) {
@@ -94,8 +92,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     await onSaveRoute({
       name: createForm.name,
       description: createForm.description,
-      usage_type: createForm.usage_type,
-      primary_operator: createForm.primary_operator
+      usage_type: createForm.usage_type
     });
 
     // Reset form after successful save
@@ -196,20 +193,6 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
           />
         </div>
 
-        {/* Primary Operator */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Primary Operator *
-          </label>
-          <input
-            type="text"
-            value={createForm.primary_operator}
-            onChange={(e) => setCreateForm({ ...createForm, primary_operator: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-            placeholder="e.g., ČD, ÖBB"
-          />
-        </div>
-
         {/* Usage Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -233,7 +216,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
         <div className="pt-4 border-t border-gray-200">
           <button
             onClick={handleSaveRoute}
-            disabled={!isPreviewMode || !createForm.name || !createForm.primary_operator || !createForm.usage_type}
+            disabled={!isPreviewMode || !createForm.name || !createForm.usage_type}
             className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
           >
             Save Route to Database

@@ -10,7 +10,6 @@ interface RailwayRoute {
   name: string;
   description: string | null;
   usage_type: string;
-  primary_operator: string;
 }
 
 interface RouteDetail extends RailwayRoute {
@@ -32,7 +31,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
     name: string;
     description: string;
     usage_type: string;
-    primary_operator: string;
   } | null>(null);
 
   const loadRoutes = async () => {
@@ -55,8 +53,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       setEditForm({
         name: routeDetail.name,
         description: routeDetail.description || '',
-        usage_type: routeDetail.usage_type,
-        primary_operator: routeDetail.primary_operator
+        usage_type: routeDetail.usage_type
       });
 
       // Notify parent component about route selection
@@ -91,8 +88,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
         selectedRoute.track_id,
         editForm.name,
         editForm.description || null,
-        editForm.usage_type,
-        editForm.primary_operator
+        editForm.usage_type
       );
 
       // Refresh the routes list
@@ -185,9 +181,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                 <div className="font-medium text-sm text-gray-900 truncate">
                   {route.name}
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {route.primary_operator}
-                </div>
               </button>
             ))}
           </div>
@@ -238,19 +231,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                     value={editForm.description}
                     onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                  />
-                </div>
-
-                {/* Primary Operator */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Primary Operator *
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.primary_operator}
-                    onChange={(e) => setEditForm({ ...editForm, primary_operator: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
                   />
                 </div>

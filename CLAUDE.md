@@ -62,7 +62,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Tables**:
   - `users` - User accounts and authentication (email as username, password field for bcrypt hashes)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
-  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, single required usage_type (0=Regular, 1=Seasonal, 2=Special), primary_operator, length_km, and PostGIS geometry
+  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, single required usage_type (0=Regular, 1=Seasonal, 2=Special), length_km, and PostGIS geometry
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation)
   - `user_railway_data` - User-specific ride history (date field), personal notes, and partial flag for incomplete rides
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
