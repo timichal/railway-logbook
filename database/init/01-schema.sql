@@ -43,6 +43,10 @@ CREATE TABLE railway_routes (
     usage_type INTEGER NOT NULL, -- Single usage type (0=Regular, 1=Seasonal, 2=Special)
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
+    starting_part_id BIGINT, -- Reference to starting railway_part for recalculation
+    ending_part_id BIGINT, -- Reference to ending railway_part for recalculation
+    is_valid BOOLEAN DEFAULT TRUE, -- Route validity flag (for recalculation errors)
+    error_message TEXT, -- Error details if route recalculation fails
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -65,5 +69,7 @@ CREATE INDEX idx_stations_coordinates ON stations USING GIST (coordinates);
 CREATE INDEX idx_railway_parts_geometry ON railway_parts USING GIST (geometry);
 CREATE INDEX idx_railway_routes_geometry ON railway_routes USING GIST (geometry);
 CREATE INDEX idx_railway_routes_name ON railway_routes (name);
+CREATE INDEX idx_railway_routes_starting_part ON railway_routes (starting_part_id);
+CREATE INDEX idx_railway_routes_ending_part ON railway_routes (ending_part_id);
 CREATE INDEX idx_user_railway_data_user_id ON user_railway_data (user_id);
 CREATE INDEX idx_user_railway_data_track_id ON user_railway_data (track_id);

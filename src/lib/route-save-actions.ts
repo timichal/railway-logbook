@@ -2,7 +2,7 @@
 
 import pool from './db';
 import { getUser } from './auth-actions';
-import { PathResult } from './db-path-actions';
+import type { PathResult } from './pathfinding-types';
 import type { RailwayPart } from './types';
 
 export interface SaveRouteData {
@@ -123,21 +123,32 @@ export async function saveRailwayRoute(
     // Create LineString geometry from sorted coordinates
     const geometryWKT = `LINESTRING(${sortedCoordinates.map(coord => `${coord[0]} ${coord[1]}`).join(',')})`;
     
+    // Get starting and ending part IDs from the path
+    const startingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[0] : null;
+    const endingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[pathResult.partIds.length - 1] : null;
+
     // Insert into railway_routes table with auto-generated track_id
     // Calculate length using ST_Length with geography cast for accurate geodesic distance
+    // Store starting and ending part IDs for future recalculation
     const insertQuery = `
       INSERT INTO railway_routes (
         name,
         description,
         usage_type,
         geometry,
-        length_km
+        length_km,
+        starting_part_id,
+        ending_part_id,
+        is_valid
       ) VALUES (
         $1,
         $2,
         $3,
         ST_GeomFromText($4, 4326),
-        ST_Length(ST_GeomFromText($4, 4326)::geography) / 1000
+        ST_Length(ST_GeomFromText($4, 4326)::geography) / 1000,
+        $5,
+        $6,
+        TRUE
       )
       RETURNING track_id, length_km
     `;
@@ -146,7 +157,9 @@ export async function saveRailwayRoute(
       routeData.name,
       routeData.description || null,
       parseInt(routeData.usage_type),
-      geometryWKT
+      geometryWKT,
+      startingPartId,
+      endingPartId
     ];
     
     const result = await client.query(insertQuery, values);
@@ -156,6 +169,7 @@ export async function saveRailwayRoute(
     console.log('Successfully saved railway route with auto-generated track_id:', savedTrackId);
     console.log('Final geometry has', sortedCoordinates.length, 'coordinate points');
     console.log('Calculated route length:', lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : 'N/A');
+    console.log('Stored part IDs:', startingPartId, 'to', endingPartId);
     return String(savedTrackId);
     
   } catch (error) {

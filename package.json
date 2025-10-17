@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "prepareData": "sh ./osmium-scripts/prepare.sh",
-    "populateDb": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/populateDb.ts"
+    "populateDb": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/populateDb.ts",
+    "updateDb": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/updateDb.ts"
   },
   "repository": {
     "type": "git",

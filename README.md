@@ -7,7 +7,7 @@ Currently live at https://railmap.zlatkovsky.cz/
 ## Tech Stack
 
 - **Frontend**: Next.js 15 + React 19 + MapLibre GL JS
-- **Backend**: PostgreSQL 16 + PostGIS + Martin tile server
+- **Backend**: PostgreSQL 18 + PostGIS + Martin tile server
 - **Data**: OpenStreetMap (stable dumps from 2025-01-01)
 
 ## Prerequisites
