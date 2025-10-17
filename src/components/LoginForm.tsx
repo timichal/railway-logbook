@@ -30,7 +30,7 @@ export default function LoginForm() {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Access your railway map data
+            Access your railway logs
           </p>
         </div>
         <form 

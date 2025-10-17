@@ -22,10 +22,10 @@ export default async function Home() {
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              OSM Railway Map
+              The Railway Logbook
             </h1>
             <p className="text-gray-600 mt-1">
-              Welcome, {user.name || user.email} - Interactive railway map of Europe
+              Welcome, {user.name || user.email}! Log your rail journeys around Europe.
             </p>
           </div>
           <div className="flex items-center gap-4">

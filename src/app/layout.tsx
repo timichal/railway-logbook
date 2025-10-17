@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Railway Map",
-  description: "Mark your rail trips",
+  title: "The Railway Logbook",
+  description: "Log your rail journeys around Europe",
 };
 
 export default function RootLayout({
