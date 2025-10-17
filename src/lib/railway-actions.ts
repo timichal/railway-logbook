@@ -138,6 +138,45 @@ export async function updateUserRailwayData(
   `, [userId, trackId, date || null, note || null, partial ?? false]);
 }
 
+export async function quickLogRoute(trackId: string): Promise<void> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const userId = user.id;
+  const today = new Date().toISOString().split('T')[0];
+
+  await query(`
+    INSERT INTO user_railway_data (user_id, track_id, date, note, partial)
+    VALUES ($1, $2, $3, NULL, FALSE)
+    ON CONFLICT (user_id, track_id)
+    DO UPDATE SET
+      date = EXCLUDED.date,
+      partial = FALSE,
+      updated_at = CURRENT_TIMESTAMP
+  `, [userId, trackId, today]);
+}
+
+export async function quickUnlogRoute(trackId: string): Promise<void> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const userId = user.id;
+
+  await query(`
+    INSERT INTO user_railway_data (user_id, track_id, date, note, partial)
+    VALUES ($1, $2, NULL, NULL, FALSE)
+    ON CONFLICT (user_id, track_id)
+    DO UPDATE SET
+      date = NULL,
+      partial = FALSE,
+      updated_at = CURRENT_TIMESTAMP
+  `, [userId, trackId]);
+}
+
 export interface UserProgress {
   totalKm: number;
   completedKm: number;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type maplibreglType from 'maplibre-gl';
-import { updateUserRailwayData, getUserProgress, type UserProgress } from '@/lib/railway-actions';
+import { updateUserRailwayData, getUserProgress, quickLogRoute, quickUnlogRoute, type UserProgress } from '@/lib/railway-actions';
 import { createRailwayRoutesSource, createRailwayRoutesLayer, closeAllPopups } from '@/lib/map';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '../utils/userRouteStyling';
 
@@ -43,6 +43,34 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     setEditingFeature(null);
   };
 
+  // Refresh map and progress stats
+  const refreshMapAndProgress = async () => {
+    // Refresh progress stats
+    try {
+      const progressData = await getUserProgress();
+      setProgress(progressData);
+    } catch (error) {
+      console.error('Error refreshing progress:', error);
+    }
+
+    // Update cache buster to force tile reload
+    const newCacheBuster = Date.now();
+    setCacheBuster(newCacheBuster);
+
+    if (map.current && map.current.getSource('railway_routes')) {
+      map.current.removeLayer('railway_routes');
+      map.current.removeSource('railway_routes');
+      map.current.addSource('railway_routes', createRailwayRoutesSource({ userId, cacheBuster: newCacheBuster }));
+      map.current.addLayer(
+        createRailwayRoutesLayer({
+          colorExpression: getUserRouteColorExpression(),
+          widthExpression: getUserRouteWidthExpression(),
+        }),
+        'stations'
+      );
+    }
+  };
+
   // Submit form and update route data
   const submitForm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,55 +79,8 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     setIsLoading(true);
     try {
       await updateUserRailwayData(editingFeature.track_id, date || null, note || null, partial);
-
-      // Update cache buster to force tile reload
-      const newCacheBuster = Date.now();
-      setCacheBuster(newCacheBuster);
-
-      // Refresh the map by reloading the railway routes layer with cache buster
-      if (map.current) {
-        const source = map.current.getSource('railway_routes');
-        if (source) {
-          // Force reload by removing and re-adding the source with new cache buster
-          map.current.removeLayer('railway_routes');
-          map.current.removeSource('railway_routes');
-
-          map.current.addSource('railway_routes', createRailwayRoutesSource({ userId, cacheBuster: newCacheBuster }));
-
-          map.current.addLayer(
-            createRailwayRoutesLayer({
-              colorExpression: getUserRouteColorExpression(),
-              widthExpression: getUserRouteWidthExpression(),
-            }),
-            'stations'
-          );
-
-          // Wait for the source to load new tiles before closing the form
-          await new Promise<void>((resolve) => {
-            const checkSourceLoaded = () => {
-              const newSource = map.current?.getSource('railway_routes');
-              if (newSource) {
-                setTimeout(() => resolve(), 300);
-              } else {
-                resolve();
-              }
-            };
-
-            map.current?.once('sourcedata', checkSourceLoaded);
-            setTimeout(() => resolve(), 500);
-          });
-        }
-      }
-
+      await refreshMapAndProgress();
       closeEditForm();
-
-      // Refresh progress stats
-      try {
-        const progressData = await getUserProgress();
-        setProgress(progressData);
-      } catch (error) {
-        console.error('Error refreshing progress:', error);
-      }
     } catch (error) {
       console.error('Error updating railway data:', error);
     } finally {
@@ -114,6 +95,26 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
       setProgress(progressData);
     } catch (error) {
       console.error('Error fetching progress:', error);
+    }
+  };
+
+  // Quick log route with current date (preserves note)
+  const quickLog = async (trackId: string) => {
+    try {
+      await quickLogRoute(trackId);
+      await refreshMapAndProgress();
+    } catch (error) {
+      console.error('Error quick logging route:', error);
+    }
+  };
+
+  // Quick unlog route (remove date, preserves note)
+  const quickUnlog = async (trackId: string) => {
+    try {
+      await quickUnlogRoute(trackId);
+      await refreshMapAndProgress();
+    } catch (error) {
+      console.error('Error quick unlogging route:', error);
     }
   };
 
@@ -133,5 +134,7 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     closeEditForm,
     submitForm,
     fetchProgress,
+    quickLog,
+    quickUnlog,
   };
 }

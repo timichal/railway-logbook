@@ -53,10 +53,12 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
     const cleanup = setupUserMapInteractions(map.current, {
       onRouteClick: routeEditor.openEditForm,
+      onQuickLog: routeEditor.quickLog,
+      onQuickUnlog: routeEditor.quickUnlog,
     });
 
     return cleanup;
-  }, [map, routeEditor.openEditForm]);
+  }, [map, routeEditor.openEditForm, routeEditor.quickLog, routeEditor.quickUnlog]);
 
   // Fetch progress stats on component mount
   useEffect(() => {
