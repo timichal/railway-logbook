@@ -26,25 +26,38 @@ This will:
 ### 2. Load Data from GeoJSON
 
 ```bash
-# Load merged-only.geojson into the database (from root directory)
+# Load pruned GeoJSON into the database (from root directory)
 npm run populateDb
 ```
 
 The loading script (`src/scripts/populateDb.ts`) will:
-- Parse the GeoJSON file from data/europe-pruned.geojson
+- Parse the GeoJSON file from data/czech-republic-pruned-*.geojson
 - Load stations and railway_parts into the database
 - Note: Railway routes are created via the admin interface, not loaded from files
 - Handle geometry data with PostGIS spatial types
 - Initialize vector tile functions for Martin tile server
 
-### 3. Frontend Database Integration
+### 3. Update Database with New OSM Data (Optional)
+
+```bash
+# Reload railway parts and recalculate all routes
+npm run updateDb
+```
+
+The update script (`src/scripts/updateDb.ts`) will:
+- Reload stations and railway_parts from latest pruned GeoJSON
+- Recalculate all railway routes using stored starting_part_id and ending_part_id
+- Mark routes as invalid (is_valid=false) if they can't be recalculated
+- Invalid routes can be fixed via the admin interface "Edit Route Geometry" feature
+
+### 4. Frontend Database Integration
 
 The frontend now uses:
 - **Server Actions** (`src/lib/railway-actions.ts`) to query the database
 - **Database connection** (`src/lib/db.ts`) using PostgreSQL connection pooling
 - **Type definitions** (`src/lib/types.ts`) for type-safe database operations
 
-### 4. Environment Configuration
+### 5. Environment Configuration
 
 Copy the database configuration:
 ```bash
@@ -74,6 +87,10 @@ Update the database connection settings if needed.
    - `usage_type` (INTEGER NOT NULL: 0=Regular, 1=Seasonal, 2=Special)
    - `geometry` (PostGIS LineString with SRID 4326)
    - `length_km` (calculated automatically from geometry)
+   - `starting_part_id` (BIGINT, reference to starting railway_part for recalculation)
+   - `ending_part_id` (BIGINT, reference to ending railway_part for recalculation)
+   - `is_valid` (BOOLEAN, marks routes that can't be recalculated after OSM updates)
+   - `error_message` (TEXT, stores error details for invalid routes)
 
 4. **railway_parts** - Raw OSM railway segments
    - `id` (OSM @id, primary key)

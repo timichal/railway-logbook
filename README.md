@@ -26,7 +26,8 @@ docker compose up -d postgres martin
 2. **Process data**
 ```bash
 npm run prepareData  # Downloads and transforms OSM data
-npm run populateDb   # Loads data (no routes!) into database 
+npm run populateDb   # Loads data (no routes!) into database
+npm run updateDb     # (Optional) Update railway parts and recalculate routes
 ```
 
 3. **Run application**
@@ -46,7 +47,8 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 ### Data Processing Scripts
 - `osmium-scripts/prepare.sh` - Complete pipeline: downloads OSM data, filters rail features, converts to GeoJSON
 - `src/scripts/pruneData.ts` - Removes subways and unwanted features
-- `src/scripts/populateDb.ts` - Loads data into database
+- `src/scripts/populateDb.ts` - Loads stations and railway_parts into database
+- `src/scripts/updateDb.ts` - Reloads railway data and recalculates all routes
 
 ### Database Tables
 - `users` - User accounts with authentication
@@ -68,10 +70,12 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 
 **For Admin (user_id=1):**
 - Create routes by clicking railway_parts on map
-- Automatic pathfinding between points (PostGIS, 50km buffer)
+- Automatic pathfinding between points (50km buffer, BFS algorithm)
 - Assign usage type (Regular/Seasonal/Special)
-- Edit and delete routes with security checks
+- Edit route geometry to fix invalid routes after OSM updates
+- Delete routes with security checks
 - Auto-generated track_id and automatic length calculation
+- Route validity tracking (is_valid flag, grey color for invalid routes)
 
 ## Data Sources
 
