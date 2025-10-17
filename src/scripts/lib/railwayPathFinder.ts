@@ -190,36 +190,16 @@ export class RailwayPathFinder {
   }
 
   private buildPathResult(partIds: string[]): PathResult {
+    // Build a simple coordinate list by concatenating all part coordinates
+    // Note: This is a fallback. In practice, the caller should use mergeLinearChain
+    // from coordinate-utils.ts for proper coordinate ordering by fetching the actual
+    // railway part geometries from the database.
     const coordinates: [number, number][] = [];
 
-    for (let i = 0; i < partIds.length; i++) {
-      const part = this.parts.get(partIds[i]);
-      if (!part) continue;
-
-      if (i === 0) {
-        // First segment - add all coordinates
+    for (const partId of partIds) {
+      const part = this.parts.get(partId);
+      if (part) {
         coordinates.push(...part.coordinates);
-      } else {
-        // Subsequent segments - check connection and add coordinates
-        const prevPart = this.parts.get(partIds[i - 1]);
-        if (!prevPart) continue;
-
-        const prevEndKey = this.coordinateToKey(prevPart.endPoint);
-        const currStartKey = this.coordinateToKey(part.startPoint);
-        const currEndKey = this.coordinateToKey(part.endPoint);
-
-        if (prevEndKey === currStartKey) {
-          // Connected at current start, add from index 1 (skip duplicate)
-          coordinates.push(...part.coordinates.slice(1));
-        } else if (prevEndKey === currEndKey) {
-          // Connected at current end, reverse and add from index 1
-          const reversedCoords = [...part.coordinates].reverse();
-          coordinates.push(...reversedCoords.slice(1));
-        } else {
-          console.warn(`RailwayPathFinder: No connection found between ${partIds[i-1]} and ${partIds[i]}`);
-          // Add all coordinates anyway
-          coordinates.push(...part.coordinates);
-        }
       }
     }
 
