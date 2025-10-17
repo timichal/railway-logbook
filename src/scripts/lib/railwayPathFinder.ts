@@ -1,4 +1,4 @@
-import { Client, Pool } from 'pg';
+import { Client, Pool, PoolClient } from 'pg';
 import type { PathResult } from '../../lib/pathfinding-types';
 
 export type { PathResult };
@@ -22,8 +22,17 @@ export class RailwayPathFinder {
     console.log('RailwayPathFinder: Loading railway parts within search area');
 
     // Handle both Pool and Client - get a client if needed
-    const client = 'connect' in dbClient ? await dbClient.connect() : dbClient;
-    const shouldRelease = 'connect' in dbClient;
+    let client: Client | PoolClient;
+    let shouldRelease = false;
+
+    if ('connect' in dbClient) {
+      // It's a Pool
+      client = await (dbClient as Pool).connect();
+      shouldRelease = true;
+    } else {
+      // It's already a Client
+      client = dbClient as Client;
+    }
 
     try {
       // Create a buffer around start and end points to limit search space
@@ -94,8 +103,8 @@ export class RailwayPathFinder {
 
       console.log(`RailwayPathFinder: Built coordinate mapping for ${this.coordToPartIds.size} unique coordinates`);
     } finally {
-      if (shouldRelease) {
-        (client as any).release();
+      if (shouldRelease && 'release' in client) {
+        client.release();
       }
     }
   }
