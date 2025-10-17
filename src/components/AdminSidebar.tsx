@@ -154,6 +154,10 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             onGeometryEditComplete={() => {
               setEditingGeometryForTrackId(null);
               setActiveTab('routes');
+              // Trigger map refresh after geometry edit
+              if (onRouteUpdated) {
+                onRouteUpdated();
+              }
             }}
           />
         )}
