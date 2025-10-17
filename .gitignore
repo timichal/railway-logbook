@@ -1,6 +1,5 @@
 # OSM Data Files
-*.pbf
-*.geojson
+data/*
 
 # Dependencies
 node_modules/

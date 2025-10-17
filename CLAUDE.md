@@ -24,6 +24,8 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d postgres` - Start PostgreSQL database with PostGIS
 - `npm run populateDb` - Load GeoJSON data into database tables and initialize vector tile functions
 - `npm run updateDb` - Update railway_parts with new OSM data and recalculate all railway_routes
+- `npm run exportRoutes` - Export railway_routes table to JSON file (saved to `data/railway_routes_YYYY-MM-DD.json`)
+- `npm run importRoutes <filename>` - Import railway_routes from JSON file (e.g., `npm run importRoutes railway_routes_2025-01-15.json`)
 
 ### Frontend Development
 - `npm run dev` - Start Next.js development server with Turbopack
@@ -137,6 +139,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
   - `populateDb.ts` - Database loading script (loads stations and railway_parts)
   - `updateDb.ts` - Reloads railway data and recalculates all routes
+  - `exportRoutes.ts` - Export railway_routes table to JSON file
+  - `importRoutes.ts` - Import railway_routes from JSON file
   - `src/scripts/lib/` - Shared script utilities
     - `loadRailwayData.ts` - Shared data loading logic for populateDb and updateDb
     - `railwayPathFinder.ts` - Shared BFS pathfinding class for route creation/recalculation
@@ -170,6 +174,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `<country>-rail.tmp.osm.pbf` - Filtered railway data
 - `<country>-rail.tmp.geojson` - Converted to GeoJSON
 - `<country>-pruned.geojson` - Custom filtered data (ready for database loading)
+- `railway_routes_YYYY-MM-DD.json` - Exported route data (from `npm run exportRoutes`)
 
 ## Development Notes
 
