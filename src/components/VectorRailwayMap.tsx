@@ -66,7 +66,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           ],
           widthExpression: [
             'case',
-            ['in', 2, ['get', 'usage_types']],
+            ['==', ['get', 'usage'], 2],
             2,  // Special usage = thinner
             3   // Normal = standard width
           ],
@@ -147,30 +147,15 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
       if (!properties) return;
 
-      // Parse usage_types array
+      // Parse usage type
       let usage = 'N/A';
       try {
-        let usageTypes: number[] = [];
-
-        if (properties.usage_types) {
-          if (Array.isArray(properties.usage_types)) {
-            usageTypes = properties.usage_types;
-          } else if (typeof properties.usage_types === 'string') {
-            const str = properties.usage_types.trim();
-            if (str.startsWith('{') && str.endsWith('}')) {
-              const inner = str.slice(1, -1).trim();
-              usageTypes = (inner && inner.length > 0) ? inner.split(',').map((s: string) => parseInt(s.trim())) : [];
-            } else if (str.startsWith('[') && str.endsWith(']')) {
-              usageTypes = JSON.parse(str);
-            }
-          } else if (typeof properties.usage_types === 'number') {
-            usageTypes = [properties.usage_types];
-          }
+        if (properties.usage !== undefined && properties.usage !== null) {
+          const usageType = typeof properties.usage === 'number' ? properties.usage : parseInt(properties.usage);
+          usage = usageMap[usageType] || 'N/A';
         }
-
-        usage = usageTypes.map((type: number) => usageMap[type] || type).join(', ') || 'N/A';
       } catch (e) {
-        console.error('Error parsing usage_types:', e, 'Value:', properties.usage_types);
+        console.error('Error parsing usage:', e, 'Value:', properties.usage);
       }
 
       let popupContent = `<div class="railway-popup" style="color: black;">`;
@@ -271,7 +256,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
               ],
               widthExpression: [
                 'case',
-                ['in', 2, ['get', 'usage_types']],
+                ['==', ['get', 'usage'], 2],
                 2,
                 3
               ],

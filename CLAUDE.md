@@ -62,9 +62,9 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Tables**:
   - `users` - User accounts and authentication (email as username, password field for bcrypt hashes)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
-  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, usage_types array, primary_operator, length_km, and PostGIS geometry
+  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, single required usage_type (0=Regular, 1=Seasonal, 2=Special), primary_operator, length_km, and PostGIS geometry
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation)
-  - `user_railway_data` - User-specific ride history (date field) and personal notes
+  - `user_railway_data` - User-specific ride history (date field), personal notes, and partial flag for incomplete rides
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 - **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
 
@@ -73,13 +73,14 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **MapLibre GL JS** - Vector tile rendering for high-performance map visualization
 - **Martin Tile Server** - PostGIS vector tile server (port 3001) serving railway_routes, railway_parts, and stations
 - **Server Actions** - Type-safe database operations (`src/lib/railway-actions.ts`)
-- **Dynamic Styling** - Route colors based on user data (green=visited, crimson=unvisited), weight based on usage type
-- **Usage Enum Translation** - Frontend translates database enum numbers to Czech strings
+- **Dynamic Styling** - Three-way route colors based on user data (dark green=fully completed, dark orange=partial, crimson=unvisited), weight based on usage type (thinner for Special)
+- **Usage Type Display** - Frontend displays enum numbers (0=Regular, 1=Seasonal, 2=Special) in popups
 - **Connection Pooling** - PostgreSQL pool for database performance
 - **Shared Map Utilities** - Common map initialization and configuration in `src/lib/map/`
 
 ### 5. Admin System Architecture
-- **Admin Access Control** - Restricted to user_id=1 with authentication checks
+- **Admin Access Control** - Restricted to user_id=1 with server-side authentication checks in all admin actions
+- **Security**: All admin operations (create, update, delete routes, pathfinding) require `user.id === 1` check
 - **Vector Tile Architecture**:
   - `railway_routes` and `railway_parts` served via Martin tile server (PostGIS → MVT tiles)
   - Efficient rendering of large datasets through tile-based loading
@@ -117,9 +118,11 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `src/lib/` - Shared utilities, types, and database operations
   - `db.ts` - PostgreSQL connection pool
   - `railway-actions.ts` - Server actions for database queries
-  - `route-save-actions.ts` - Server actions for saving new routes
-  - `route-delete-actions.ts` - Server actions for deleting routes
-  - `enums.ts` - Usage patterns and operator definitions
+  - `route-save-actions.ts` - Server actions for saving new routes (admin-only)
+  - `route-delete-actions.ts` - Server actions for deleting routes (admin-only)
+  - `db-path-actions.ts` - Database pathfinding for route creation (admin-only)
+  - `railway-parts-actions.ts` - Fetch railway parts by IDs (admin-only)
+  - `constants.ts` - Usage type options (Regular/Seasonal/Special)
   - `types.ts` - Core type definitions
   - `src/lib/map/` - Shared map utilities
     - `index.ts` - Constants, layer factories, closeAllPopups utility
@@ -135,9 +138,13 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 ### Shared Libraries (`src/lib/`)
 - `types.ts` - Core type definitions for GeoJSON features and railway data
-- `enums.ts` - Usage patterns (Regular, OnceDaily, Seasonal, etc.) and operators (ČD, ÖBB, etc.)
+- `constants.ts` - Usage type options (Regular=0, Seasonal=1, Special=2)
 - `db.ts` - Database connection pool and utilities
 - `railway-actions.ts` - Server actions for type-safe database operations
+- `route-save-actions.ts` - Admin-only route creation with security checks
+- `route-delete-actions.ts` - Admin-only route deletion with security checks
+- `db-path-actions.ts` - Admin-only database pathfinding
+- `railway-parts-actions.ts` - Admin-only railway parts fetching
 
 ### Database Schema
 - `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes
@@ -175,7 +182,14 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - track_id is auto-generated using PostgreSQL SERIAL
 
 ### User Progress Tracking
-- User-specific data stored in `user_railway_data` table
+- User-specific data stored in `user_railway_data` table with date, note, and partial fields
 - Progress calculated from `length_km` column in `railway_routes`
-- Progress stats show completed/total km and percentage
-- Frontend displays: green for visited routes, crimson for unvisited routes
+- Only fully completed routes (date exists AND partial=false) count toward completion stats
+- Progress stats show completed/total km and percentage (excludes partial routes)
+- Frontend displays three-way color coding:
+  - Dark green (#006400 / DarkGreen) for fully completed routes
+  - Dark orange (#d97706) for partially completed routes
+  - Crimson for unvisited routes
+- Map interactions:
+  - Hover over routes shows popup with details
+  - Click routes opens edit form for date/note/partial flag

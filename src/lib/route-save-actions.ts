@@ -8,7 +8,7 @@ import type { RailwayPart } from './types';
 export interface SaveRouteData {
   name: string;
   description: string;
-  usage_types: string[];
+  usage_type: string;
   primary_operator: string;
 }
 
@@ -130,7 +130,7 @@ export async function saveRailwayRoute(
       INSERT INTO railway_routes (
         name,
         description,
-        usage_types,
+        usage_type,
         primary_operator,
         geometry,
         length_km
@@ -148,7 +148,7 @@ export async function saveRailwayRoute(
     const values = [
       routeData.name,
       routeData.description || null,
-      routeData.usage_types,
+      parseInt(routeData.usage_type),
       routeData.primary_operator,
       geometryWKT
     ];

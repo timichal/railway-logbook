@@ -53,20 +53,25 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - `users` - User accounts with authentication
 - `stations` - Railway stations (Point features)
 - `railway_parts` - Raw railway segments from OSM
-- `railway_routes` - Defined routes (created by admin via UI)
-- `user_railway_data` - User ride history (dates, notes)
+- `railway_routes` - Defined routes with usage type (Regular/Seasonal/Special) and operator
+- `user_railway_data` - User ride history (dates, notes, partial flag)
 
 ### Features
 
 **For Users:**
-- Map of all routes (green = visited, red = unvisited)
-- Progress tracking (km/% of total distance)
-- Click routes to mark ride date and add notes
+- Interactive map with hover popups showing route details
+- Three-way color coding:
+  - Dark green = fully completed routes
+  - Dark orange = partially completed routes
+  - Red = unvisited routes
+- Progress tracking (km/% of total distance, excludes partial routes)
+- Click routes to mark ride date, add notes, and flag partial completion
 
 **For Admin (user_id=1):**
 - Create routes by clicking railway_parts on map
 - Automatic pathfinding between points (PostGIS, 50km buffer)
-- Edit and delete routes
+- Assign usage type (Regular/Seasonal/Special) and primary operator
+- Edit and delete routes with security checks
 - Auto-generated track_id and automatic length calculation
 
 ## Data Sources

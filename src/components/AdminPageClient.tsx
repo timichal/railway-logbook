@@ -54,7 +54,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setIsPreviewMode(false);
   };
 
-  const handleSaveRoute = async (routeData: {name: string, description: string, usage_types: string[], primary_operator: string}) => {
+  const handleSaveRoute = async (routeData: {name: string, description: string, usage_type: string, primary_operator: string}) => {
     console.log('AdminPageClient: Save route requested', routeData);
 
     if (!previewRoute) {

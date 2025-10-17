@@ -9,7 +9,7 @@ interface RailwayRoute {
   track_id: string;
   name: string;
   description: string | null;
-  usage_types: string[];
+  usage_type: string;
   primary_operator: string;
 }
 
@@ -31,7 +31,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   const [editForm, setEditForm] = useState<{
     name: string;
     description: string;
-    usage_types: string[];
+    usage_type: string;
     primary_operator: string;
   } | null>(null);
 
@@ -55,7 +55,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       setEditForm({
         name: routeDetail.name,
         description: routeDetail.description || '',
-        usage_types: routeDetail.usage_types,
+        usage_type: routeDetail.usage_type,
         primary_operator: routeDetail.primary_operator
       });
 
@@ -91,7 +91,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
         selectedRoute.track_id,
         editForm.name,
         editForm.description || null,
-        editForm.usage_types,
+        editForm.usage_type,
         editForm.primary_operator
       );
 
@@ -118,23 +118,6 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
     }
   };
 
-  const handleUsageTypeChange = (index: number, value: string) => {
-    if (!editForm) return;
-    const newUsageTypes = [...editForm.usage_types];
-    newUsageTypes[index] = value;
-    setEditForm({ ...editForm, usage_types: newUsageTypes });
-  };
-
-  const addUsageType = () => {
-    if (!editForm) return;
-    setEditForm({ ...editForm, usage_types: [...editForm.usage_types, ''] });
-  };
-
-  const removeUsageType = (index: number) => {
-    if (!editForm) return;
-    const newUsageTypes = editForm.usage_types.filter((_, i) => i !== index);
-    setEditForm({ ...editForm, usage_types: newUsageTypes });
-  };
 
   const handleDeleteRoute = async () => {
     if (!selectedRoute) return;
@@ -272,44 +255,23 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                   />
                 </div>
 
-                {/* Usage Types */}
+                {/* Usage Type */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Usage Types
+                    Usage Type *
                   </label>
-                  <div className="space-y-2">
-                    {editForm.usage_types.map((usage, index) => {
-                      const usageOptions = getAllUsageOptions();
-                      return (
-                        <div key={index} className="flex gap-2">
-                          <select
-                            value={usage}
-                            onChange={(e) => handleUsageTypeChange(index, e.target.value)}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
-                          >
-                            <option value="">Select usage type</option>
-                            {usageOptions.map((option) => (
-                              <option key={option.key} value={option.id.toString()}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => removeUsageType(index)}
-                            className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      );
-                    })}
-                    <button
-                      onClick={addUsageType}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      + Add Usage Type
-                    </button>
-                  </div>
+                  <select
+                    value={editForm.usage_type}
+                    onChange={(e) => setEditForm({ ...editForm, usage_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
+                  >
+                    <option value="">Select usage type</option>
+                    {getAllUsageOptions().map((option) => (
+                      <option key={option.key} value={option.id.toString()}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Save and Delete Buttons */}
@@ -317,7 +279,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                   <button
                     onClick={handleSaveRoute}
                     disabled={isLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm"
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
                   >
                     {isLoading ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -325,7 +287,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                   <button
                     onClick={handleDeleteRoute}
                     disabled={isLoading}
-                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm"
+                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
                   >
                     {isLoading ? 'Deleting...' : 'Delete Route'}
                   </button>

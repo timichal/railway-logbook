@@ -30,11 +30,12 @@ This will:
 npm run populateDb
 ```
 
-The loading script (`scripts/populateDb.ts`) will:
+The loading script (`src/scripts/populateDb.ts`) will:
 - Parse the GeoJSON file from data/europe-pruned.geojson
 - Load stations and railway_parts into the database
 - Note: Railway routes are created via the admin interface, not loaded from files
 - Handle geometry data with PostGIS spatial types
+- Initialize vector tile functions for Martin tile server
 
 ### 3. Frontend Database Integration
 
@@ -47,7 +48,6 @@ The frontend now uses:
 
 Copy the database configuration:
 ```bash
-cd frontend
 cp .env.example .env
 ```
 
@@ -71,16 +71,22 @@ Update the database connection settings if needed.
    - `track_id` (auto-generated SERIAL primary key)
    - `name`
    - `description` (optional custom description)
-   - `usage_types[]` (array of Usage enum numbers)
+   - `usage_type` (INTEGER NOT NULL: 0=Regular, 1=Seasonal, 2=Special)
    - `primary_operator`
    - `geometry` (PostGIS LineString with SRID 4326)
    - `length_km` (calculated automatically from geometry)
 
-4. **user_railway_data** - User-specific annotations
+4. **railway_parts** - Raw OSM railway segments
+   - `id` (OSM @id, primary key)
+   - `geometry` (PostGIS LineString with SRID 4326)
+   - Used for creating new routes via admin interface
+
+5. **user_railway_data** - User-specific annotations
    - `user_id` → `users.id`
    - `track_id` → `railway_routes.track_id`
    - `date` (date of ride)
    - `note` (text)
+   - `partial` (boolean, marks incomplete rides)
 
 ### Key Features
 
@@ -100,14 +106,21 @@ const stations = await getAllStations();
 // Get data formatted as GeoJSON for map display (includes dynamic styling)
 const geoJson = await getRailwayDataAsGeoJSON(1);
 
-// Update user's railway data
-await updateUserRailwayData(1, "track_123", "2024-01-15", "Great scenic route!");
+// Update user's railway data (including partial flag)
+await updateUserRailwayData("track_123", "2024-01-15", "Great scenic route!", false);
+
+// Update with partial completion
+await updateUserRailwayData("track_456", "2024-01-20", "Only rode part of this route", true);
 ```
 
 The frontend automatically handles:
-- **Dynamic Styling**: Route colors (DarkGreen for visited, Crimson for unvisited)
-- **Usage Translation**: Enum numbers converted to Czech descriptions
-- **Weight Calculation**: Thinner lines (weight=2) for Special usage routes
+- **Dynamic Styling**: Route colors based on completion status
+  - DarkGreen (#006400) for fully visited routes (date exists and not partial)
+  - Dark orange (#d97706) for partially completed routes
+  - Crimson for unvisited routes
+- **Usage Type Display**: Enum numbers (0=Regular, 1=Seasonal, 2=Special) displayed in popups
+- **Weight Calculation**: Thinner lines (weight=2) for Special usage routes (usage_type=2)
+- **Completion Stats**: Only fully completed routes (not partial) count toward progress percentage
 
 ### Adding New Users
 
@@ -119,10 +132,11 @@ Then use the returned user ID for all user-specific operations.
 
 ## Development
 
-- **Database Changes**: Update `database/init/01-schema.sql` and rebuild containers with `docker-compose down && docker-compose up -d`
+- **Database Changes**: Update `database/init/01-schema.sql` and rebuild containers with `docker-compose down -v && docker-compose up -d postgres`
 - **Data Reloading**: Run `npm run populateDb` from the root directory
-- **Frontend Changes**: Server actions in `frontend/src/lib/railway-actions.ts` provide type-safe database access
+- **Frontend Changes**: Server actions in `src/lib/railway-actions.ts` provide type-safe database access
 - **TypeScript**: All scripts are now TypeScript with proper type checking
+- **Admin Security**: All admin-only operations (create, update, delete routes) require user.id === 1
 
 ## Production Considerations
 

@@ -40,7 +40,7 @@ CREATE TABLE railway_routes (
     track_id SERIAL PRIMARY KEY, -- Auto-generated unique track identifier
     name VARCHAR(255) NOT NULL,
     description TEXT, -- Route description
-    usage_types TEXT[], -- Array of usage types
+    usage_type INTEGER NOT NULL, -- Single usage type (0=Regular, 1=Seasonal, 2=Special)
     primary_operator VARCHAR(255),
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)

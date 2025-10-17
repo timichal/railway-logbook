@@ -14,7 +14,7 @@ interface AdminCreateRouteTabProps {
   onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { name: string, description: string, usage_types: string[], primary_operator: string }) => void;
+  onSaveRoute?: (routeData: { name: string, description: string, usage_type: string, primary_operator: string }) => void;
   onFormReset?: () => void;
 }
 
@@ -24,7 +24,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   const [createForm, setCreateForm] = useState({
     name: '',
     description: '',
-    usage_types: [''] as string[],
+    usage_type: '',
     primary_operator: ''
   });
 
@@ -33,7 +33,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     setCreateForm({
       name: '',
       description: '',
-      usage_types: [''],
+      usage_type: '',
       primary_operator: ''
     });
     // Clear the IDs managed by parent via callback
@@ -58,21 +58,6 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     }
   };
 
-  // Handle create form usage types
-  const handleCreateUsageTypeChange = (index: number, value: string) => {
-    const newUsageTypes = [...createForm.usage_types];
-    newUsageTypes[index] = value;
-    setCreateForm({ ...createForm, usage_types: newUsageTypes });
-  };
-
-  const addCreateUsageType = () => {
-    setCreateForm({ ...createForm, usage_types: [...createForm.usage_types, ''] });
-  };
-
-  const removeCreateUsageType = (index: number) => {
-    const newUsageTypes = createForm.usage_types.filter((_, i) => i !== index);
-    setCreateForm({ ...createForm, usage_types: newUsageTypes });
-  };
 
   // Handle preview route functionality
   const handlePreviewRoute = async () => {
@@ -109,7 +94,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     await onSaveRoute({
       name: createForm.name,
       description: createForm.description,
-      usage_types: createForm.usage_types.filter(usage => usage !== ''), // Remove empty usage types
+      usage_type: createForm.usage_type,
       primary_operator: createForm.primary_operator
     });
 
@@ -225,51 +210,30 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
           />
         </div>
 
-        {/* Usage Types */}
+        {/* Usage Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Usage Types
+            Usage Type *
           </label>
-          <div className="space-y-2">
-            {createForm.usage_types.map((usage, index) => {
-              const usageOptions = getAllUsageOptions();
-              return (
-                <div key={index} className="flex gap-2">
-                  <select
-                    value={usage}
-                    onChange={(e) => handleCreateUsageTypeChange(index, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
-                  >
-                    <option value="">Select usage type</option>
-                    {usageOptions.map((option) => (
-                      <option key={option.key} value={option.id.toString()}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => removeCreateUsageType(index)}
-                    className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm"
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })}
-            <button
-              onClick={addCreateUsageType}
-              className="text-sm text-blue-600 hover:text-blue-800"
-            >
-              + Add Usage Type
-            </button>
-          </div>
+          <select
+            value={createForm.usage_type}
+            onChange={(e) => setCreateForm({ ...createForm, usage_type: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
+          >
+            <option value="">Select usage type</option>
+            {getAllUsageOptions().map((option) => (
+              <option key={option.key} value={option.id.toString()}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Save Button */}
         <div className="pt-4 border-t border-gray-200">
           <button
             onClick={handleSaveRoute}
-            disabled={!isPreviewMode || !createForm.name || !createForm.primary_operator}
+            disabled={!isPreviewMode || !createForm.name || !createForm.primary_operator || !createForm.usage_type}
             className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
           >
             Save Route to Database

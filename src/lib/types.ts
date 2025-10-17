@@ -34,7 +34,7 @@ export type GeoJSONFeature = {
     name?: string
     track_id?: string
     description?: string
-    usage?: number[]
+    usage?: number
     primary_operator?: string
     zoom_level?: number
     custom?: {
@@ -76,7 +76,7 @@ export type RailwayRoute = {
   track_id: string
   name: string
   description: string | null
-  usage_types: string[]
+  usage_type: number
   primary_operator: string
   geometry: string // GeoJSON string
   date?: string | null
