@@ -43,6 +43,18 @@ async function loadGeoJSONData(): Promise<void> {
   const client = new Client(dbConfig);
 
   try {
+    // Get data file path from command line argument (required)
+    const dataPath = process.argv[2];
+
+    if (!dataPath) {
+      console.error('Error: Data file path is required');
+      console.error('Usage: npm run populateDb <filepath>');
+      console.error('Example: npm run populateDb ./data/cz-pruned.geojson');
+      process.exit(1);
+    }
+
+    console.log(`Using data file: ${dataPath}`);
+
     await client.connect();
     console.log('Connected to database');
 
@@ -50,8 +62,7 @@ async function loadGeoJSONData(): Promise<void> {
     await initializeDatabase(client);
 
     // Load stations and railway parts from pruned GeoJSON
-    const prunedDataPath = './data/czech-republic-pruned-250101.geojson';
-    await loadStationsAndParts(client, prunedDataPath);
+    await loadStationsAndParts(client, dataPath);
 
   } catch (error) {
     console.error('Error loading data:', error);

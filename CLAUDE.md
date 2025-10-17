@@ -16,14 +16,19 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 ## Core Commands
 
 ### Data Processing Pipeline
-- `npm run prepareData` - Complete data preparation pipeline (downloads OSM data, filters rail features, converts to GeoJSON, and prunes data)
-- `npm run populateDb` - Loads processed GeoJSON data into PostgreSQL database and initializes vector tile functions
-- `npm run updateDb` - Reloads railway data and recalculates all routes (marks invalid routes when pathfinding fails)
+- `npm run prepareData -- <version>` - Complete data preparation pipeline (downloads OSM data, filters rail features, converts to GeoJSON, and prunes data)
+  - Required argument: OSM data version (format: YYMMDD)
+  - Example: `npm run prepareData -- 251016`
+  - Output: `./data/europe-pruned-<version>.geojson`
+- `npm run populateDb <filepath>` - Loads processed GeoJSON data into PostgreSQL database and initializes vector tile functions
+  - Required argument: path to GeoJSON file
+  - Example: `npm run populateDb ./data/europe-pruned-251016.geojson`
+- `npm run updateDb <filepath>` - Reloads railway data and recalculates all routes (marks invalid routes when pathfinding fails)
+  - Required argument: path to GeoJSON file
+  - Example: `npm run updateDb ./data/europe-pruned-251016.geojson`
 
 ### Database Operations
 - `docker-compose up -d postgres` - Start PostgreSQL database with PostGIS
-- `npm run populateDb` - Load GeoJSON data into database tables and initialize vector tile functions
-- `npm run updateDb` - Update railway_parts with new OSM data and recalculate all railway_routes
 - `npm run exportRoutes` - Export railway_routes table to JSON file (saved to `data/railway_routes_YYYY-MM-DD.json`)
 - `npm run importRoutes <filename>` - Import railway_routes from JSON file (e.g., `npm run importRoutes railway_routes_2025-01-15.json`)
 

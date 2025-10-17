@@ -2,15 +2,23 @@
 
 # OSM Railway Data Processing Pipeline
 # This script downloads, filters, and converts OSM data for railway tracking
-# All processing is done via pipes - no intermediate files!
 
 set -e  # Exit on error
 
-COUNTRY_CODE="czech-republic"
+# Check for required VERSION argument
+if [ -z "$1" ]; then
+    echo "Error: VERSION argument is required"
+    echo "Usage: sh ./osmium-scripts/prepare.sh <version>"
+    echo "Example: sh ./osmium-scripts/prepare.sh 251016"
+    exit 1
+fi
+
+COUNTRY_CODE="europe"
 DATA_DIR="data"
-VERSION="251016"
+VERSION="$1"
 
 echo "=== Starting OSM Railway Data Processing ==="
+echo "Version: ${VERSION}"
 echo ""
 
 # Create data directory if it doesn't exist
@@ -22,7 +30,7 @@ DOWNLOAD_FILE="${DATA_DIR}/${COUNTRY_CODE}-${VERSION}.osm.pbf"
 if [ -f "${DOWNLOAD_FILE}" ]; then
     echo "  File already exists, skipping download"
 else
-    curl -o "${DOWNLOAD_FILE}" "https://download.geofabrik.de/europe/${COUNTRY_CODE}-${VERSION}.osm.pbf" || {
+    curl -o "${DOWNLOAD_FILE}" "https://download.geofabrik.de/${COUNTRY_CODE}-${VERSION}.osm.pbf" || {
         echo "ERROR: Failed to download ${COUNTRY_CODE}-${VERSION}.osm.pbf"
         exit 1
     }
