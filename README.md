@@ -44,8 +44,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 ```
 
 ### Data Processing Scripts
-- `osmium-scripts/filterRailFeatures.sh` - Applies OpenRailwayMap filter
-- `osmium-scripts/convertToGeojson.sh` - Converts to GeoJSON
+- `osmium-scripts/prepare.sh` - Complete pipeline: downloads OSM data, filters rail features, converts to GeoJSON
 - `src/scripts/pruneData.ts` - Removes subways and unwanted features
 - `src/scripts/populateDb.ts` - Loads data into database
 

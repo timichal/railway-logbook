@@ -16,7 +16,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 ## Core Commands
 
 ### Data Processing Pipeline
-- `npm run prepareData` - Complete data preparation pipeline (filters rail features, converts to GeoJSON, and prunes data)
+- `npm run prepareData` - Complete data preparation pipeline (downloads OSM data, filters rail features, converts to GeoJSON, and prunes data)
 - `npm run populateDb` - Loads processed GeoJSON data into PostgreSQL database and initializes vector tile functions
 
 ### Database Operations
@@ -51,8 +51,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - Country-specific OSM PBF files (stable dumps from 2025-01-01)
 
 ### 2. Processing Pipeline
-1. **Filter** (`osmium-scripts/filterRailFeatures.sh`) - Applies OpenRailwayMap filter to extract railway features
-2. **Convert** (`osmium-scripts/convertToGeojson.sh`) - Converts filtered OSM data to GeoJSON format
+1. **Download & Filter** (`osmium-scripts/prepare.sh`) - Downloads OSM PBF data and applies OpenRailwayMap filter to extract railway features
+2. **Convert** (`osmium-scripts/prepare.sh`) - Converts filtered OSM data to GeoJSON format
 3. **Prune** (`src/scripts/pruneData.ts`) - Applies custom filters to remove unwanted features (subways, etc.)
 4. **Database Load** (`src/scripts/populateDb.ts`) - Imports processed data into PostgreSQL with user separation
 
@@ -132,9 +132,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `populateDb.ts` - Database loading script (loads stations, railway_parts, and railway_routes)
 
 ### OSM Processing Scripts (`osmium-scripts/`)
-- `prepare.sh` - Master script that orchestrates the entire pipeline
-- `filterRailFeatures.sh` - Applies OpenRailwayMap filter using osmium tags-filter
-- `convertToGeojson.sh` - Converts OSM PBF to GeoJSON format
+- `prepare.sh` - Unified pipeline script that downloads OSM data, filters rail features, and converts to GeoJSON
 
 ### Shared Libraries (`src/lib/`)
 - `types.ts` - Core type definitions for GeoJSON features and railway data

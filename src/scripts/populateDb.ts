@@ -95,7 +95,7 @@ async function loadGeoJSONData(): Promise<void> {
 
     // First, process pruned geojson data for stations and railway_parts
     console.log('Processing europe-pruned.geojson for stations and railway parts...');
-    const prunedDataPath = './data/europe-pruned.geojson';
+    const prunedDataPath = './data/czech-republic-pruned-250101.geojson';
 
     // Process file in streaming fashion to avoid memory issues
     console.log('Reading GeoJSON file...');
@@ -232,8 +232,6 @@ async function loadGeoJSONData(): Promise<void> {
         ON CONFLICT (id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
       `);
     }
-
-    console.log('Railway routes population removed - will be managed via admin interface');
 
     console.log(`Data loading completed successfully!`);
     console.log(`- Stations loaded: ${stationsCount}`);
