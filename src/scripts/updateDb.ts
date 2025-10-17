@@ -2,6 +2,7 @@ import { Client } from 'pg';
 import dotenv from 'dotenv';
 import { loadStationsAndParts } from './lib/loadRailwayData';
 import { RailwayPathFinder } from './lib/railwayPathFinder';
+import { mergeLinearChain, coordinatesToWKT, type Coord } from '../lib/coordinate-utils';
 
 dotenv.config();
 
@@ -37,7 +38,7 @@ async function recalculateRoute(
   trackId: number,
   startingPartId: string,
   endingPartId: string
-): Promise<{ success: boolean; coordinates?: [number, number][]; error?: string }> {
+): Promise<{ success: boolean; coordinates?: Coord[]; error?: string }> {
   try {
     const pathFinder = new RailwayPathFinder();
     await pathFinder.loadRailwayParts(client, startingPartId, endingPartId);
@@ -48,7 +49,39 @@ async function recalculateRoute(
       return { success: false, error: 'No path found between starting and ending parts' };
     }
 
-    return { success: true, coordinates: result.coordinates };
+    // Fetch the actual railway part geometries from the database
+    const railwayPartsQuery = await client.query(`
+      SELECT id, ST_AsGeoJSON(geometry) as geometry_json
+      FROM railway_parts
+      WHERE id = ANY($1)
+      ORDER BY array_position($1, id)
+    `, [result.partIds]);
+
+    let sortedCoordinates: Coord[];
+
+    if (railwayPartsQuery.rows.length > 0) {
+      // Extract coordinate lists from each railway part
+      const coordinateLists: Coord[][] = railwayPartsQuery.rows
+        .map(row => {
+          const geom = JSON.parse(row.geometry_json);
+          return geom.type === 'LineString' ? geom.coordinates as Coord[] : null;
+        })
+        .filter((coords): coords is Coord[] => coords !== null);
+
+      try {
+        // Use the mergeLinearChain function to properly sort and connect coordinates
+        sortedCoordinates = mergeLinearChain(coordinateLists);
+        console.log(`  Successfully sorted ${sortedCoordinates.length} coordinates for route ${trackId}`);
+      } catch (error) {
+        console.warn(`  Coordinate sorting failed for route ${trackId}, falling back to path result coordinates:`, error);
+        sortedCoordinates = result.coordinates;
+      }
+    } else {
+      // No railway parts found, use path result coordinates
+      sortedCoordinates = result.coordinates;
+    }
+
+    return { success: true, coordinates: sortedCoordinates };
 
   } catch (error) {
     return {
@@ -94,11 +127,8 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
     );
 
     if (recalcResult.success && recalcResult.coordinates) {
-      // Convert coordinates to LineString WKT format
-      const coordsStr = recalcResult.coordinates
-        .map(coord => `${coord[0]} ${coord[1]}`)
-        .join(',');
-      const lineString = `LINESTRING(${coordsStr})`;
+      // Convert coordinates to LineString WKT format using shared utility
+      const lineString = coordinatesToWKT(recalcResult.coordinates);
 
       // Update route with new geometry
       await client.query(`

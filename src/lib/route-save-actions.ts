@@ -4,77 +4,12 @@ import pool from './db';
 import { getUser } from './auth-actions';
 import type { PathResult } from './pathfinding-types';
 import type { RailwayPart } from './types';
+import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinate-utils';
 
 export interface SaveRouteData {
   name: string;
   description: string;
   usage_type: string;
-}
-
-type Coord = [number, number];
-
-// Coordinate merging logic from mergeCoordinateLists.ts
-function mergeLinearChain(sublists: Coord[][]): Coord[] {
-  if (sublists.length === 0) return [];
-  if (sublists.length === 1) return sublists[0];
-
-  // Step 1: Create a map of coordinate frequencies
-  const coordCount = new Map<string, number>();
-  sublists.flat().forEach(([x, y]) => {
-    const key = `${x},${y}`;
-    coordCount.set(key, (coordCount.get(key) || 0) + 1);
-  });
-
-  // Step 2: Find the starting sublist
-  const startingSublistIndex = sublists.findIndex(sublist => {
-    const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
-    const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
-    return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
-  });
-
-  if (startingSublistIndex === -1) {
-    throw new Error("No valid starting sublist found.");
-  }
-
-  // Extract the starting sublist
-  const mergedChain = [...sublists[startingSublistIndex]];
-  sublists.splice(startingSublistIndex, 1); // Remove the starting sublist
-
-  // Step 2.1: Ensure the starting sublist is oriented correctly
-  const lastCoord = `${mergedChain[mergedChain.length - 1][0]},${mergedChain[mergedChain.length - 1][1]}`;
-  if (coordCount.get(lastCoord) === 1) {
-    mergedChain.reverse(); // Reverse if the starting point is at the "end"
-  }
-
-  // Step 3: Build the chain incrementally
-  while (sublists.length > 0) {
-    const lastCoordInChain = mergedChain[mergedChain.length - 1];
-
-    // Find the next sublist that connects to the current chain
-    const nextIndex = sublists.findIndex(sublist =>
-      sublist.some(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1])
-    );
-
-    if (nextIndex === -1) {
-      throw new Error("Chain is broken; no connecting sublist found.");
-    }
-
-    // Extract the next sublist and reverse it if necessary
-    const nextSublist = [...sublists[nextIndex]];
-    const overlapIndex = nextSublist.findIndex(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1]);
-
-    if (overlapIndex !== 0) {
-      nextSublist.reverse(); // Reverse if the overlap is not at the start
-    }
-
-    // Add the non-overlapping part of the sublist to the chain
-    mergedChain.push(...nextSublist.slice(1));
-
-    // Remove the processed sublist
-    sublists.splice(nextIndex, 1);
-  }
-
-  return mergedChain;
 }
 
 export async function saveRailwayRoute(
@@ -122,7 +57,7 @@ export async function saveRailwayRoute(
     }
     
     // Create LineString geometry from sorted coordinates
-    const geometryWKT = `LINESTRING(${sortedCoordinates.map(coord => `${coord[0]} ${coord[1]}`).join(',')})`;
+    const geometryWKT = coordinatesToWKT(sortedCoordinates);
     
     // Get starting and ending part IDs from the path
     const startingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[0] : null;

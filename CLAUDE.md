@@ -123,10 +123,11 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `src/lib/` - Shared utilities, types, and database operations
   - `db.ts` - PostgreSQL connection pool
   - `railway-actions.ts` - Server actions for database queries
-  - `route-save-actions.ts` - Server actions for creating/updating routes with mergeLinearChain coordinate ordering (admin-only)
+  - `route-save-actions.ts` - Server actions for creating/updating routes (admin-only)
   - `route-delete-actions.ts` - Server actions for deleting routes (admin-only)
   - `db-path-actions.ts` - Database pathfinding for route creation (admin-only)
   - `railway-parts-actions.ts` - Fetch railway parts by IDs (admin-only)
+  - `coordinate-utils.ts` - Shared coordinate utilities (mergeLinearChain, coordinatesToWKT)
   - `constants.ts` - Usage type options (Regular/Seasonal/Special)
   - `types.ts` - Core type definitions
   - `src/lib/map/` - Shared map utilities
@@ -148,10 +149,11 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `constants.ts` - Usage type options (Regular=0, Seasonal=1, Special=2)
 - `db.ts` - Database connection pool and utilities
 - `railway-actions.ts` - Server actions for type-safe database operations
-- `route-save-actions.ts` - Admin-only route creation/update with security checks and mergeLinearChain
+- `route-save-actions.ts` - Admin-only route creation/update with security checks
 - `route-delete-actions.ts` - Admin-only route deletion with security checks
 - `db-path-actions.ts` - Admin-only database pathfinding using RailwayPathFinder
 - `railway-parts-actions.ts` - Admin-only railway parts fetching
+- `coordinate-utils.ts` - Shared coordinate utilities (mergeLinearChain algorithm, coordinatesToWKT converter)
 
 ### Database Schema
 - `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes, route validity tracking fields
@@ -195,6 +197,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 ### Database Updates and Route Recalculation
 - `npm run updateDb` reloads railway_parts from pruned GeoJSON and recalculates all routes
 - Recalculation uses stored starting_part_id and ending_part_id with shared `RailwayPathFinder`
+- Fetches railway part geometries and uses shared `mergeLinearChain` for proper coordinate ordering (same as route creation)
 - Routes that can't be recalculated are marked with is_valid=false and error_message
 - Invalid routes displayed in grey on admin map (orange when selected)
 - Admin can fix invalid routes using "Edit Route Geometry" to select new start/end points
