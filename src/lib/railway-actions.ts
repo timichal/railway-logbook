@@ -6,12 +6,34 @@ import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from 
 
 export async function getAllStations(): Promise<Station[]> {
   const result = await query(`
-    SELECT id, name, 
-           ST_X(coordinates) as lon, 
+    SELECT id, name,
+           ST_X(coordinates) as lon,
            ST_Y(coordinates) as lat
     FROM stations
     ORDER BY name
   `);
+
+  return result.rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    coordinates: [row.lon, row.lat]
+  }));
+}
+
+export async function searchStations(searchQuery: string): Promise<Station[]> {
+  if (searchQuery.trim().length < 2) {
+    return [];
+  }
+
+  const result = await query(`
+    SELECT id, name,
+           ST_X(coordinates) as lon,
+           ST_Y(coordinates) as lat
+    FROM stations
+    WHERE name ILIKE $1
+    ORDER BY name
+    LIMIT 10
+  `, [`%${searchQuery}%`]);
 
   return result.rows.map(row => ({
     id: row.id,
@@ -25,7 +47,7 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
   if (!user) {
     throw new Error('User not authenticated');
   }
-  
+
   const userId = user.id;
   // Get stations
   const stationsResult = await query(`
@@ -120,6 +142,7 @@ export interface UserProgress {
   totalKm: number;
   completedKm: number;
   percentage: number;
+  routePercentage: number;
   totalRoutes: number;
   completedRoutes: number;
 }
@@ -160,11 +183,13 @@ export async function getUserProgress(): Promise<UserProgress> {
   const completedRoutes = parseInt(completedResult.rows[0].completed_routes) || 0;
 
   const percentage = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
+  const routePercentage = totalRoutes > 0 ? (completedRoutes / totalRoutes) * 100 : 0;
 
   return {
     totalKm: Math.round(totalKm * 10) / 10,
     completedKm: Math.round(completedKm * 10) / 10,
     percentage: Math.round(percentage),
+    routePercentage: Math.round(routePercentage),
     totalRoutes,
     completedRoutes
   };
@@ -273,7 +298,7 @@ export async function getRailwayPartsByBounds(
   // Get railway parts within bounds (original geometry only)
   // Use different strategies based on zoom level to avoid gaps
   let partsResult;
-  
+
   if (zoom < 8) {
     // For very low zoom, show only major railway segments (longer ones)
     // Use a higher limit to avoid gaps in main lines

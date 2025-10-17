@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
-import { updateUserRailwayData, getUserProgress, type UserProgress } from '@/lib/railway-actions';
+import { updateUserRailwayData, getUserProgress, searchStations, type UserProgress } from '@/lib/railway-actions';
+import type { Station } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
 import {
   createRailwayRoutesSource,
@@ -44,6 +45,15 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   const [isLoading, setIsLoading] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [progress, setProgress] = useState<UserProgress | null>(null);
+
+  // Station search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Station[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedStationIndex, setSelectedStationIndex] = useState(-1);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize map with shared hook
   const { map } = useMapLibre(
@@ -89,6 +99,56 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
     fetchProgress();
   }, []);
+
+  // Debounced station search
+  const performSearch = useCallback(async (query: string) => {
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      setShowSuggestions(false);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await searchStations(query);
+      setSearchResults(results);
+      setShowSuggestions(results.length > 0);
+      setSelectedStationIndex(-1);
+    } catch (error) {
+      console.error('Error searching stations:', error);
+      setSearchResults([]);
+      setShowSuggestions(false);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  // Debounce search queries
+  useEffect(() => {
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set new timeout for search
+    if (searchQuery.trim().length >= 2) {
+      searchTimeoutRef.current = setTimeout(() => {
+        performSearch(searchQuery);
+      }, 300); // 300ms debounce
+    } else {
+      setSearchResults([]);
+      setShowSuggestions(false);
+      setIsSearching(false);
+    }
+
+    // Cleanup
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, performSearch]);
 
   // Add event handlers after map loads
   useEffect(() => {
@@ -270,6 +330,53 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     };
   }, [map]);
 
+  // Handle station selection from search
+  const handleStationSelect = (station: Station) => {
+    if (!map.current) return;
+
+    const [lon, lat] = station.coordinates;
+
+    // Fly to the station
+    map.current.flyTo({
+      center: [lon, lat],
+      zoom: 14,
+      duration: 1500
+    });
+
+    // Clear search
+    setSearchQuery('');
+    setShowSuggestions(false);
+    setSelectedStationIndex(-1);
+  };
+
+  // Handle keyboard navigation in search
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || searchResults.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedStationIndex(prev =>
+          prev < searchResults.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedStationIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedStationIndex >= 0 && selectedStationIndex < searchResults.length) {
+          handleStationSelect(searchResults[selectedStationIndex]);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedStationIndex(-1);
+        break;
+    }
+  };
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingFeature?.track_id) return;
@@ -366,10 +473,71 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
             {progress.percentage}%
           </div>
           <div className="text-xs text-gray-600 mt-1">
-            {progress.completedRoutes}/{progress.totalRoutes} routes
+            {progress.completedRoutes}/{progress.totalRoutes} ({progress.routePercentage}%) routes
           </div>
         </div>
       )}
+
+      {/* Station Search Box */}
+      <div className="absolute top-4 right-16 w-80 z-10">
+        <div className="relative">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            onFocus={() => searchQuery.length >= 2 && setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            placeholder="Search stations..."
+            className="w-full px-4 py-2 pr-10 bg-white border border-gray-300 rounded-lg shadow-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+          <svg
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+
+          {/* Search Suggestions Dropdown */}
+          {showSuggestions && !isSearching && searchResults.length > 0 && (
+            <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto z-20">
+              {searchResults.map((station, index) => (
+                <button
+                  key={station.id}
+                  onClick={() => handleStationSelect(station)}
+                  onMouseEnter={() => setSelectedStationIndex(index)}
+                  className={`w-full px-4 py-2 text-left text-sm text-black hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 ${
+                    selectedStationIndex === index ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <div className="font-medium">{station.name}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {station.coordinates[1].toFixed(4)}, {station.coordinates[0].toFixed(4)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Loading indicator */}
+          {isSearching && (
+            <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl p-3 z-20">
+              <div className="flex items-center justify-center text-sm text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                Searching...
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Edit Form Modal */}
       {showEditForm && editingFeature && (
