@@ -1,10 +1,17 @@
 'use server';
 
 import pool from './db';
+import { getUser } from './auth-actions';
 
 export async function deleteRailwayRoute(trackId: string): Promise<void> {
+  // Admin check
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
   const client = await pool.connect();
-  
+
   try {
     console.log('Deleting railway route with track_id:', trackId);
 

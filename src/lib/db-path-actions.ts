@@ -1,6 +1,7 @@
 'use server';
 
 import pool from './db';
+import { getUser } from './auth-actions';
 
 export interface PathResult {
   partIds: string[];
@@ -215,6 +216,12 @@ class DatabasePathFinder {
 }
 
 export async function findRailwayPathDB(startId: string, endId: string): Promise<PathResult | null> {
+  // Admin check
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
   console.log('Database path finder: Finding path from', startId, 'to', endId);
 
   const pathFinder = new DatabasePathFinder();

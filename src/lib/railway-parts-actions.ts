@@ -1,13 +1,20 @@
 'use server';
 
 import pool from './db';
+import { getUser } from './auth-actions';
 import { RailwayPart } from './types';
 
 export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPart[]> {
+  // Admin check
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
   if (partIds.length === 0) return [];
-  
+
   const client = await pool.connect();
-  
+
   try {
     console.log('Fetching railway parts for IDs:', partIds);
     

@@ -1,6 +1,7 @@
 'use server';
 
 import pool from './db';
+import { getUser } from './auth-actions';
 import { PathResult } from './db-path-actions';
 import type { RailwayPart } from './types';
 
@@ -82,8 +83,14 @@ export async function saveRailwayRoute(
   pathResult: PathResult,
   railwayParts?: RailwayPart[]
 ): Promise<string> {
+  // Admin check
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
   const client = await pool.connect();
-  
+
   try {
     console.log('Saving railway route:', routeData.name);
     console.log('Path segments:', pathResult.partIds.length);
