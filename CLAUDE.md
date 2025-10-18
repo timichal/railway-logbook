@@ -29,8 +29,12 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 
 ### Database Operations
 - `docker-compose up -d postgres` - Start PostgreSQL database with PostGIS
-- `npm run exportRoutes` - Export railway_routes table to JSON file (saved to `data/railway_routes_YYYY-MM-DD.json`)
-- `npm run importRoutes <filename>` - Import railway_routes from JSON file (e.g., `npm run importRoutes railway_routes_2025-01-15.json`)
+- `npm run exportRoutes` - Export railway_routes and user_railway_data (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
+  - Requires `osm-railways-db` container to be running
+  - Uses `docker exec` to run `pg_dump` inside the container
+- `npm run importRoutes <filename>` - Import railway data from SQL dump using Docker (e.g., `npm run importRoutes railway_data_2025-01-15.sql`)
+  - Requires `osm-railways-db` container to be running
+  - Uses `docker exec` to run `psql` inside the container
 
 ### Frontend Development
 - `npm run dev` - Start Next.js development server with Turbopack
@@ -179,7 +183,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `<country>-rail.tmp.osm.pbf` - Filtered railway data
 - `<country>-rail.tmp.geojson` - Converted to GeoJSON
 - `<country>-pruned.geojson` - Custom filtered data (ready for database loading)
-- `railway_routes_YYYY-MM-DD.json` - Exported route data (from `npm run exportRoutes`)
+- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes and user_railway_data (from `npm run exportRoutes`)
 
 ## Development Notes
 

@@ -1,10 +1,9 @@
 import 'dotenv/config';
-import { query } from '../lib/db';
 import * as fs from 'fs';
-import * as path from 'path';
+import { execSync } from 'child_process';
 
 /**
- * Import railway_routes from JSON file
+ * Import railway_routes and user_railway_data from SQL dump
  */
 async function importRoutes() {
   // Get filename from command line arguments
@@ -12,71 +11,91 @@ async function importRoutes() {
 
   if (!filename) {
     console.error('Usage: npm run importRoutes <filename>');
-    console.error('Example: npm run importRoutes railway_routes_2025-01-15.json');
+    console.error('Example: npm run importRoutes railway_data_2025-01-15.sql');
     process.exit(1);
   }
 
-  const filepath = path.join(process.cwd(), 'data', filename);
-
-  if (!fs.existsSync(filepath)) {
-    console.error(`File not found: ${filepath}`);
+  if (!fs.existsSync(filename)) {
+    console.error(`File not found: ${filename}`);
     process.exit(1);
   }
 
-  console.log(`Importing routes from ${filepath}...`);
+  // Verify it's a SQL file
+  if (!filename.endsWith('.sql')) {
+    console.error('Error: File must be a .sql file');
+    process.exit(1);
+  }
+
+  console.log(`Importing railway data from ${filename}...`);
 
   try {
-    const routesData = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
+    // Get database credentials from environment
+    const dbName = process.env.POSTGRES_DB || 'railmap';
+    const dbUser = process.env.DB_USER || 'postgres';
 
-    if (!Array.isArray(routesData)) {
-      throw new Error('Invalid data format: expected an array of routes');
+    console.log('Copying SQL file to container...');
+
+    const containerName = 'osm-railways-db';
+    const containerPath = '/tmp/import.sql';
+
+    // Copy file to container
+    try {
+      execSync(`docker cp "${filename}" ${containerName}:${containerPath}`, {
+        encoding: 'utf-8'
+      });
+      console.log('✓ File copied to container');
+    } catch (error) {
+      console.error('Error copying file to container:', error);
+      throw error;
     }
 
-    console.log(`Found ${routesData.length} routes in file`);
+    console.log('Executing SQL dump...');
 
-    // Clear existing routes (optional - comment out if you want to preserve existing data)
-    console.log('Clearing existing routes...');
-    await query('DELETE FROM railway_routes');
+    // Execute the SQL file inside the container
+    const psqlCmd = `docker exec ${containerName} psql -U ${dbUser} -d ${dbName} -f ${containerPath}`;
 
-    // Import routes
-    let imported = 0;
-    for (const route of routesData) {
-      try {
-        await query(`
-          INSERT INTO railway_routes (
-            track_id,
-            name,
-            description,
-            usage_type,
-            geometry,
-            length_km,
-            starting_part_id,
-            ending_part_id,
-            is_valid,
-            error_message
-          ) VALUES ($1, $2, $3, $4, ST_GeomFromGeoJSON($5), $6, $7, $8, $9, $10)
-        `, [
-          route.track_id,
-          route.name,
-          route.description,
-          route.usage_type,
-          JSON.stringify(route.geometry),
-          route.length_km,
-          route.starting_part_id,
-          route.ending_part_id,
-          route.is_valid,
-          route.error_message
-        ]);
-        imported++;
-      } catch (error) {
-        console.error(`Error importing route ${route.track_id} (${route.name}):`, error);
+    try {
+      const output = execSync(psqlCmd, {
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      });
+
+      // Count successful operations from output
+      const deleteMatches = output.match(/DELETE \d+/g) || [];
+      const insertMatches = output.match(/INSERT 0 1/g) || [];
+
+      console.log(`✓ SQL dump executed successfully`);
+      if (deleteMatches.length > 0) {
+        console.log(`✓ Deleted entries: ${deleteMatches.join(', ')}`);
       }
-    }
+      if (insertMatches.length > 0) {
+        console.log(`✓ Inserted rows: ${insertMatches.length}`);
+      }
 
-    console.log(`✓ Imported ${imported}/${routesData.length} routes successfully`);
-    process.exit(0);
+      // Clean up temp file in container
+      try {
+        execSync(`docker exec ${containerName} rm ${containerPath}`, {
+          encoding: 'utf-8'
+        });
+      } catch {
+        // Ignore cleanup errors
+      }
+
+      console.log(`✓ Import completed`);
+
+      process.exit(0);
+    } catch (error) {
+      console.error('Error executing psql command:');
+      if (error && typeof error === 'object' && 'stderr' in error) {
+        console.error(String(error.stderr));
+      }
+      if (error && typeof error === 'object' && 'stdout' in error) {
+        console.log('Output:', String(error.stdout));
+      }
+      throw error;
+    }
   } catch (error) {
-    console.error('Error importing routes:', error);
+    console.error('Error importing data:', error);
     process.exit(1);
   }
 }
