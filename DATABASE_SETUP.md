@@ -27,37 +27,29 @@ This will:
 
 ```bash
 # Load pruned GeoJSON into the database (from root directory)
-npm run populateDb
+npm run populateDb <filepath>
 ```
 
 The loading script (`src/scripts/populateDb.ts`) will:
-- Parse the GeoJSON file from data/czech-republic-pruned-*.geojson
+- Parse the GeoJSON file (e.g., data/cz-pruned.geojson)
 - Load stations and railway_parts into the database
-- Note: Railway routes are created via the admin interface, not loaded from files
+- Automatically recalculate existing routes if any are found
+- Skip recalculation on initial setup (no routes exist yet)
 - Handle geometry data with PostGIS spatial types
-- Initialize vector tile functions for Martin tile server
 
-### 3. Update Database with New OSM Data (Optional)
-
-```bash
-# Reload railway parts and recalculate all routes
-npm run updateDb
-```
-
-The update script (`src/scripts/updateDb.ts`) will:
-- Reload stations and railway_parts from latest pruned GeoJSON
-- Recalculate all railway routes using stored starting_part_id and ending_part_id
-- Mark routes as invalid (is_valid=false) if they can't be recalculated
+When recalculating routes (on subsequent runs):
+- Uses stored starting_part_id and ending_part_id for each route
+- Marks routes as invalid (is_valid=false) if they can't be recalculated
 - Invalid routes can be fixed via the admin interface "Edit Route Geometry" feature
 
-### 4. Frontend Database Integration
+### 3. Frontend Database Integration
 
 The frontend now uses:
 - **Server Actions** (`src/lib/railway-actions.ts`) to query the database
 - **Database connection** (`src/lib/db.ts`) using PostgreSQL connection pooling
 - **Type definitions** (`src/lib/types.ts`) for type-safe database operations
 
-### 5. Environment Configuration
+### 4. Environment Configuration
 
 Copy the database configuration:
 ```bash

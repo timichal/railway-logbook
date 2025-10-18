@@ -26,8 +26,7 @@ docker compose up -d db tiles
 2. **Process data**
 ```bash
 npm run prepareData  # Downloads and transforms OSM data
-npm run populateDb   # Loads data (no routes!) into database
-npm run updateDb     # (Optional) Update railway parts and recalculate routes
+npm run populateDb   # Loads data and recalculates routes (if any exist)
 ```
 
 3. **Run application**
@@ -47,8 +46,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 ### Data Processing Scripts
 - `osmium-scripts/prepare.sh` - Complete pipeline: downloads OSM data, filters rail features, converts to GeoJSON
 - `src/scripts/pruneData.ts` - Removes subways and unwanted features
-- `src/scripts/populateDb.ts` - Loads stations and railway_parts into database
-- `src/scripts/updateDb.ts` - Reloads railway data and recalculates all routes
+- `src/scripts/populateDb.ts` - Loads stations and railway_parts into database, recalculates existing routes
 
 ### Database Tables
 - `users` - User accounts with authentication

@@ -20,12 +20,11 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
   - Required argument: OSM data version (format: YYMMDD)
   - Example: `npm run prepareData -- 251016`
   - Output: `./data/europe-pruned-<version>.geojson`
-- `npm run populateDb <filepath>` - Loads processed GeoJSON data into PostgreSQL database and initializes vector tile functions
+- `npm run populateDb <filepath>` - Loads processed GeoJSON data into PostgreSQL database
   - Required argument: path to GeoJSON file
   - Example: `npm run populateDb ./data/europe-pruned-251016.geojson`
-- `npm run updateDb <filepath>` - Reloads railway data and recalculates all routes (marks invalid routes when pathfinding fails)
-  - Required argument: path to GeoJSON file
-  - Example: `npm run updateDb ./data/europe-pruned-251016.geojson`
+  - Automatically recalculates existing routes if any are found
+  - On initial load with no routes, skips recalculation step
 
 ### Database Operations
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
@@ -146,12 +145,11 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
     - `hooks/useMapLibre.ts` - Base hook for MapLibre initialization
 - `src/scripts/` - Data processing scripts
   - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
-  - `populateDb.ts` - Database loading script (loads stations and railway_parts)
-  - `updateDb.ts` - Reloads railway data and recalculates all routes
+  - `populateDb.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
   - `exportRoutes.ts` - Export railway_routes table to JSON file
   - `importRoutes.ts` - Import railway_routes from JSON file
   - `src/scripts/lib/` - Shared script utilities
-    - `loadRailwayData.ts` - Shared data loading logic for populateDb and updateDb
+    - `loadRailwayData.ts` - Shared data loading logic
     - `railwayPathFinder.ts` - Shared BFS pathfinding class for route creation/recalculation
 
 ### OSM Processing Scripts (`osmium-scripts/`)
@@ -209,7 +207,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - Uses `mergeLinearChain` algorithm to properly order and connect coordinate sublists
 
 ### Database Updates and Route Recalculation
-- `npm run updateDb` reloads railway_parts from pruned GeoJSON and recalculates all routes
+- `npm run populateDb` automatically reloads railway_parts from pruned GeoJSON and recalculates all existing routes
+- If no routes exist (initial setup), recalculation is skipped
 - Recalculation uses stored starting_part_id and ending_part_id with shared `RailwayPathFinder`
 - Fetches railway part geometries and uses shared `mergeLinearChain` for proper coordinate ordering (same as route creation)
 - Routes that can't be recalculated are marked with is_valid=false and error_message
