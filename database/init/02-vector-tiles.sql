@@ -109,6 +109,7 @@ BEGIN
         SELECT
             rr.track_id,
             rr.name,
+            rr.track_number,
             rr.description,
             rr.usage_type,
             rr.is_valid,
