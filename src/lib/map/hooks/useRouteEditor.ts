@@ -6,6 +6,7 @@ import { getUserRouteColorExpression, getUserRouteWidthExpression } from '../uti
 
 interface EditingFeature {
   track_id: string;
+  track_number: string | null;
   name: string;
   description: string;
   usage_types: string;

@@ -8,6 +8,7 @@ import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinate-uti
 
 export interface SaveRouteData {
   name: string;
+  track_number: string;
   description: string;
   usage_type: string;
 }
@@ -94,6 +95,7 @@ export async function saveRailwayRoute(
       query = `
         INSERT INTO railway_routes (
           name,
+          track_number,
           description,
           usage_type,
           geometry,
@@ -105,10 +107,11 @@ export async function saveRailwayRoute(
           $1,
           $2,
           $3,
-          ST_GeomFromText($4, 4326),
-          ST_Length(ST_GeomFromText($4, 4326)::geography) / 1000,
-          $5,
+          $4,
+          ST_GeomFromText($5, 4326),
+          ST_Length(ST_GeomFromText($5, 4326)::geography) / 1000,
           $6,
+          $7,
           TRUE
         )
         RETURNING track_id, length_km
@@ -116,6 +119,7 @@ export async function saveRailwayRoute(
 
       values = [
         routeData.name,
+        routeData.track_number || null,
         routeData.description || null,
         parseInt(routeData.usage_type),
         geometryWKT,

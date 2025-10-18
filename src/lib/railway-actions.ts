@@ -244,7 +244,7 @@ export async function getAllRailwayRoutes() {
   }
 
   const result = await query(`
-    SELECT track_id, name, description, usage_type,
+    SELECT track_id, name, track_number, description, usage_type,
            starting_part_id, ending_part_id, is_valid, error_message
     FROM railway_routes
     ORDER BY name
@@ -260,7 +260,7 @@ export async function getRailwayRoute(trackId: string) {
   }
 
   const result = await query(`
-    SELECT track_id, name, description, usage_type,
+    SELECT track_id, name, track_number, description, usage_type,
            ST_AsGeoJSON(geometry) as geometry, length_km,
            starting_part_id, ending_part_id, is_valid, error_message
     FROM railway_routes
@@ -277,6 +277,7 @@ export async function getRailwayRoute(trackId: string) {
 export async function updateRailwayRoute(
   trackId: string,
   name: string,
+  trackNumber: string | null,
   description: string | null,
   usageType: string
 ) {
@@ -287,9 +288,9 @@ export async function updateRailwayRoute(
 
   await query(`
     UPDATE railway_routes
-    SET name = $2, description = $3, usage_type = $4, updated_at = CURRENT_TIMESTAMP
+    SET name = $2, track_number = $3, description = $4, usage_type = $5, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [trackId, name, description, parseInt(usageType)]);
+  `, [trackId, name, trackNumber, description, parseInt(usageType)]);
 }
 
 export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {
@@ -299,7 +300,7 @@ export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureC
   }
 
   const result = await query(`
-    SELECT track_id, name, description, usage_type,
+    SELECT track_id, name, track_number, description, usage_type,
            ST_AsGeoJSON(geometry) as geometry,
            starting_part_id, ending_part_id, is_valid, error_message
     FROM railway_routes

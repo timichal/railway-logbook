@@ -14,7 +14,7 @@ interface AdminSidebarProps {
   onCreateFormIdsChange?: (ids: {startingId: string, endingId: string}) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: {name: string, description: string, usage_type: string}) => void;
+  onSaveRoute?: (routeData: {name: string, description: string, usage_type: string, track_number: string}) => void;
   onFormReset?: () => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;

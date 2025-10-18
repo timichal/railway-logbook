@@ -172,9 +172,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                   key={station.id}
                   onClick={() => handleStationSelect(station)}
                   onMouseEnter={() => stationSearch.setSelectedStationIndex(index)}
-                  className={`w-full px-4 py-2 text-left text-sm text-black hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 ${
-                    stationSearch.selectedStationIndex === index ? 'bg-blue-50' : ''
-                  }`}
+                  className={`w-full px-4 py-2 text-left text-sm text-black hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 ${stationSearch.selectedStationIndex === index ? 'bg-blue-50' : ''
+                    }`}
                 >
                   <div className="font-medium">{station.name}</div>
                   <div className="text-xs text-gray-500 mt-0.5">
@@ -202,7 +201,9 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         <div className="absolute inset-0 flex items-center justify-center z-[9999] text-black">
           <div className="bg-white p-6 rounded-lg shadow-xl border max-w-md w-full mx-4">
             <h3 className="text-lg font-bold mb-4">
-              {routeEditor.editingFeature.name || 'Editace tratě'}
+              {routeEditor.editingFeature.track_number}
+              {' '}
+              {routeEditor.editingFeature.name}
             </h3>
 
             <form onSubmit={routeEditor.submitForm} className="space-y-4">
@@ -268,11 +269,10 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
                 <button
                   type="submit"
                   disabled={routeEditor.isLoading}
-                  className={`px-4 py-2 text-white rounded cursor-pointer flex items-center gap-2 ${
-                    routeEditor.isLoading
+                  className={`px-4 py-2 text-white rounded cursor-pointer flex items-center gap-2 ${routeEditor.isLoading
                       ? 'bg-blue-400 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
+                    }`}
                 >
                   {routeEditor.isLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>

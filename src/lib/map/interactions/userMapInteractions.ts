@@ -6,6 +6,7 @@ import { getUsageLabel } from '@/lib/constants';
 interface EditingFeature {
   track_id: string;
   name: string;
+  track_number: string | null;
   description: string;
   usage_types: string;
   date: string | null;
@@ -51,12 +52,7 @@ export function setupUserMapInteractions(
     }
 
     // Build click menu popup content
-    let popupContent = `<div class="railway-click-menu" style="color: black; min-width: 200px;">`;
-
-    // Route information section (same as hover popup)
-    if (properties.name) {
-      popupContent += `<h3 class="font-bold text-lg mb-2" style="color: black;">${properties.name}</h3>`;
-    }
+    let popupContent = `<div class="railway-click-menu" style="color: black; min-width: 200px;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.name}</h3>`;
 
     let formattedDescription = "";
     if (properties.description) {
@@ -163,6 +159,7 @@ export function setupUserMapInteractions(
           onRouteClick({
             track_id: properties.track_id,
             name: properties.name,
+            track_number: properties.track_number || null,
             description: properties.description,
             usage_types: properties.usage_types,
             date: properties.date,
@@ -189,11 +186,7 @@ export function setupUserMapInteractions(
 
     if (!properties) return;
 
-    let popupContent = `<div class="railway-popup" style="color: black;">`;
-
-    if (properties.name) {
-      popupContent += `<h3 class="font-bold text-lg mb-2" style="color: black;">${properties.name}</h3>`;
-    }
+    let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.name}</h3>`;
 
     let formattedDescription = "";
     if (properties.description) {

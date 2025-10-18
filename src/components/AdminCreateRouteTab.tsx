@@ -15,7 +15,7 @@ interface AdminCreateRouteTabProps {
   onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { name: string, description: string, usage_type: string }) => void;
+  onSaveRoute?: (routeData: { name: string, track_number: string, description: string, usage_type: string }) => void;
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
   onGeometryEditComplete?: () => void;
@@ -27,6 +27,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
     name: '',
+    track_number: '',
     description: '',
     usage_type: ''
   });
@@ -38,6 +39,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   const resetForm = () => {
     setCreateForm({
       name: '',
+      track_number: '',
       description: '',
       usage_type: ''
     });
@@ -101,6 +103,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
     await onSaveRoute({
       name: createForm.name,
+      track_number: createForm.track_number,
       description: createForm.description,
       usage_type: createForm.usage_type
     });
@@ -118,9 +121,9 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
-      // Metadata (name, description, usage_type) won't be used in update mode
+      // Metadata (name, description, usage_type, track_number) won't be used in update mode
       await saveRailwayRoute(
-        { name: '', description: '', usage_type: '' }, // Dummy data, not used in UPDATE mode
+        { name: '', description: '', usage_type: '', track_number: '' }, // Dummy data, not used in UPDATE mode
         { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates },
         currentPathResult.railwayParts,
         editingGeometryForTrackId // Pass track ID to trigger UPDATE query
@@ -237,6 +240,20 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
         {/* Only show metadata fields in create mode */}
         {!isEditMode && (
           <>
+            {/* Track Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Local route number(s)
+              </label>
+              <input
+                type="text"
+                value={createForm.track_number}
+                onChange={(e) => setCreateForm({ ...createForm, track_number: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="e.g., 310, 102"
+              />
+            </div>
+
             {/* Route Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

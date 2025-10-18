@@ -131,7 +131,7 @@ export function setupAdminMapInteractions(
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="color: black;">
-              <h3 style="font-weight: bold; margin-bottom: 4px;">${properties.name || 'Unnamed Route'}</h3>
+              <h3 style="font-weight: bold; margin-bottom: 4px;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.name}</h3>
               ${properties.description ? `<p style="margin: 2px 0;">${properties.description}</p>` : ''}
               <p style="margin: 2px 0;">Usage: ${getUsageLabel(properties.usage_type)}</p>
             </div>

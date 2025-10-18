@@ -8,6 +8,7 @@ import { usageOptions } from '@/lib/constants';
 interface RailwayRoute {
   track_id: string;
   name: string;
+  track_number?: string | null;
   description: string | null;
   usage_type: string;
   starting_part_id?: string | null;
@@ -35,6 +36,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   const [isLoading, setIsLoading] = useState(false);
   const [editForm, setEditForm] = useState<{
     name: string;
+    track_number: string;
     description: string;
     usage_type: string;
   } | null>(null);
@@ -58,6 +60,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       setSelectedRoute(routeDetail);
       setEditForm({
         name: routeDetail.name,
+        track_number: routeDetail.track_number || '',
         description: routeDetail.description || '',
         usage_type: routeDetail.usage_type
       });
@@ -97,6 +100,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       await updateRailwayRoute(
         selectedRoute.track_id,
         editForm.name,
+        editForm.track_number || null,
         editForm.description || null,
         editForm.usage_type
       );
@@ -108,6 +112,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       setSelectedRoute({
         ...selectedRoute,
         ...editForm,
+        track_number: editForm.track_number || null,
         description: editForm.description || null
       });
 
@@ -240,6 +245,20 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                     </div>
                   </div>
                 )}
+
+                {/* Track Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Local route number(s)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.track_number}
+                    onChange={(e) => setEditForm({ ...editForm, track_number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                    placeholder="e.g., 310, 102"
+                  />
+                </div>
 
                 {/* Name */}
                 <div>
