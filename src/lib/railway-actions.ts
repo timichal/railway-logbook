@@ -194,16 +194,17 @@ export async function getUserProgress(): Promise<UserProgress> {
 
   const userId = user.id;
 
-  // Get total distance and count of all routes
+  // Get total distance and count of all routes (excluding Special usage_type=2)
   const totalResult = await query(`
     SELECT
       COALESCE(SUM(length_km), 0) as total_km,
       COUNT(*) as total_routes
     FROM railway_routes
     WHERE length_km IS NOT NULL
+      AND usage_type != 2
   `);
 
-  // Get completed distance and count (routes with date AND not partial)
+  // Get completed distance and count (routes with date AND not partial, excluding Special usage_type=2)
   const completedResult = await query(`
     SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
@@ -214,6 +215,7 @@ export async function getUserProgress(): Promise<UserProgress> {
       AND urd.date IS NOT NULL
       AND (urd.partial IS NULL OR urd.partial = FALSE)
       AND rr.length_km IS NOT NULL
+      AND rr.usage_type != 2
   `, [userId]);
 
   const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;

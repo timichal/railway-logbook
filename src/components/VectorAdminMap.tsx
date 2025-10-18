@@ -158,7 +158,9 @@ export default function VectorAdminMap({
         'case',
         ['==', ['get', 'track_id'], selectedRouteId],
         5,
-        3
+        ['==', ['get', 'usage_type'], 2],
+        2, // Special routes = thinner
+        3  // Normal routes = standard width
       ]);
       map.current.setPaintProperty('railway_routes', 'line-opacity', [
         'case',
@@ -173,7 +175,12 @@ export default function VectorAdminMap({
         COLORS.railwayRoutes.invalid,
         COLORS.railwayRoutes.default
       ]);
-      map.current.setPaintProperty('railway_routes', 'line-width', 3);
+      map.current.setPaintProperty('railway_routes', 'line-width', [
+        'case',
+        ['==', ['get', 'usage_type'], 2],
+        2, // Special routes = thinner
+        3  // Normal routes = standard width
+      ]);
       map.current.setPaintProperty('railway_routes', 'line-opacity', 0.8);
     }
   }, [selectedRouteId, mapLoaded, map]);
@@ -223,7 +230,9 @@ export default function VectorAdminMap({
         'case',
         ['==', ['get', 'track_id'], selectedRouteId],
         5,
-        3
+        ['==', ['get', 'usage_type'], 2],
+        2, // Special routes = thinner
+        3  // Normal routes = standard width
       ]);
       map.current.setPaintProperty('railway_routes', 'line-opacity', [
         'case',
@@ -238,6 +247,12 @@ export default function VectorAdminMap({
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid,
         COLORS.railwayRoutes.default
+      ]);
+      map.current.setPaintProperty('railway_routes', 'line-width', [
+        'case',
+        ['==', ['get', 'usage_type'], 2],
+        2, // Special routes = thinner
+        3  // Normal routes = standard width
       ]);
     }
   }, [refreshTrigger, mapLoaded, showRoutesLayer, selectedRouteId, map]);

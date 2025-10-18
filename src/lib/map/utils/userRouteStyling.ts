@@ -20,7 +20,7 @@ export function getUserRouteColorExpression() {
 export function getUserRouteWidthExpression() {
   return [
     'case',
-    ['==', ['get', 'usage'], 2],
+    ['==', ['get', 'usage_type'], 2],
     2,  // Special usage = thinner
     3   // Normal = standard width
   ];

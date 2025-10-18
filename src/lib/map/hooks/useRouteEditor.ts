@@ -35,6 +35,27 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     setNote(feature.note || '');
     setPartial(feature.partial || false);
     setShowEditForm(true);
+
+    // Highlight selected route with increased width
+    if (map.current && map.current.getLayer('railway_routes')) {
+      map.current.setPaintProperty('railway_routes', 'line-width', [
+        'case',
+        ['==', ['get', 'track_id'], parseInt(feature.track_id)],
+        [
+          'case',
+          ['==', ['get', 'usage_type'], 2],
+          4, // Special routes: 2 + 2 = 4
+          5  // Normal routes: 3 + 2 = 5
+        ],
+        // Default width for non-selected routes
+        [
+          'case',
+          ['==', ['get', 'usage_type'], 2],
+          2, // Special routes = thinner
+          3  // Normal routes = standard width
+        ]
+      ]);
+    }
   };
 
   // Close edit form
@@ -42,6 +63,11 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     closeAllPopups();
     setShowEditForm(false);
     setEditingFeature(null);
+
+    // Reset route width styling to default
+    if (map.current && map.current.getLayer('railway_routes')) {
+      map.current.setPaintProperty('railway_routes', 'line-width', getUserRouteWidthExpression());
+    }
   };
 
   // Refresh map and progress stats
@@ -69,6 +95,27 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
         }),
         'stations'
       );
+
+      // Re-apply selection highlighting if a route is being edited
+      if (editingFeature) {
+        map.current.setPaintProperty('railway_routes', 'line-width', [
+          'case',
+          ['==', ['get', 'track_id'], parseInt(editingFeature.track_id)],
+          [
+            'case',
+            ['==', ['get', 'usage_type'], 2],
+            4, // Special routes: 2 + 2 = 4
+            5  // Normal routes: 3 + 2 = 5
+          ],
+          // Default width for non-selected routes
+          [
+            'case',
+            ['==', ['get', 'usage_type'], 2],
+            2, // Special routes = thinner
+            3  // Normal routes = standard width
+          ]
+        ]);
+      }
     }
   };
 

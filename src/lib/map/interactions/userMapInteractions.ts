@@ -2,6 +2,7 @@ import type maplibreglType from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import { closeAllPopups } from '@/lib/map';
 import { getUsageLabel } from '@/lib/constants';
+import { getUserRouteWidthExpression } from '../utils/userRouteStyling';
 
 interface EditingFeature {
   track_id: string;
@@ -50,6 +51,25 @@ export function setupUserMapInteractions(
       clickPopup.remove();
       clickPopup = null;
     }
+
+    // Highlight clicked route with increased width
+    mapInstance.setPaintProperty('railway_routes', 'line-width', [
+      'case',
+      ['==', ['get', 'track_id'], properties.track_id],
+      [
+        'case',
+        ['==', ['get', 'usage_type'], 2],
+        4, // Special routes: 2 + 2 = 4
+        5  // Normal routes: 3 + 2 = 5
+      ],
+      // Default width for non-selected routes
+      [
+        'case',
+        ['==', ['get', 'usage_type'], 2],
+        2, // Special routes = thinner
+        3  // Normal routes = standard width
+      ]
+    ]);
 
     // Build click menu popup content
     let popupContent = `<div class="railway-click-menu" style="color: black; min-width: 200px;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.name}</h3>`;
@@ -117,6 +137,12 @@ export function setupUserMapInteractions(
       .setLngLat(e.lngLat)
       .setHTML(popupContent)
       .addTo(mapInstance);
+
+    // Reset route width when popup is closed (via X button or clicking another route)
+    // Note: If edit form is opened, openEditForm will immediately re-highlight
+    clickPopup.on('close', () => {
+      mapInstance.setPaintProperty('railway_routes', 'line-width', getUserRouteWidthExpression());
+    });
 
     // Add event listeners to buttons after popup is added to DOM
     setTimeout(() => {
@@ -283,10 +309,13 @@ export function setupUserMapInteractions(
       layers: ['railway_routes']
     });
 
-    // If not clicking on a route, close the click popup
+    // If not clicking on a route, close the click popup and reset highlight
     if (features.length === 0 && clickPopup) {
       clickPopup.remove();
       clickPopup = null;
+
+      // Reset route width to default
+      mapInstance.setPaintProperty('railway_routes', 'line-width', getUserRouteWidthExpression());
     }
   };
 
