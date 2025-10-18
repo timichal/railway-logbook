@@ -1,4 +1,4 @@
-# Database Setup for OSM Railway Map
+# Database Setup for Railway Logbook
 
 This guide explains how to set up the database system for storing and serving railway data.
 
@@ -14,7 +14,7 @@ The system separates data into two categories:
 
 ```bash
 # Start PostgreSQL with PostGIS in Docker
-docker-compose up -d postgres
+docker-compose up -d db
 ```
 
 This will:
@@ -148,7 +148,7 @@ Then use the returned user ID for all user-specific operations.
 
 ## Development
 
-- **Database Changes**: Update `database/init/01-schema.sql` and rebuild containers with `docker-compose down -v && docker-compose up -d postgres`
+- **Database Changes**: Update `database/init/01-schema.sql` and rebuild containers with `docker-compose down -v && docker-compose up -d db`
 - **Data Reloading**: Run `npm run populateDb` from the root directory
 - **Frontend Changes**: Server actions in `src/lib/railway-actions.ts` provide type-safe database access
 - **TypeScript**: All scripts are now TypeScript with proper type checking

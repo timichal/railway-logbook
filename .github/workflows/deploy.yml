@@ -11,10 +11,10 @@ jobs:
     env:
       SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
       SSH_KEY_PATH: ${{ github.workspace }}/../private.key
-      DOCKER_TAG: railmap
+      DOCKER_TAG: railway-logbook
       SERVER_IP: ${{ secrets.SERVER_HOST }}
       SERVER_USERNAME: ${{ secrets.SERVER_USER }}
-      POSTGRES_DB: railmap
+      POSTGRES_DB: railway-logbook
       DB_USER: ${{ secrets.DB_USER }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       JWT_SECRET: ${{ secrets.JWT_SECRET }}

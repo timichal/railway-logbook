@@ -23,13 +23,13 @@ async function exportRoutes() {
     const filepath = path.join(dataDir, filename);
 
     // Get database credentials from environment
-    const dbName = process.env.POSTGRES_DB || 'railmap';
-    const dbUser = process.env.DB_USER || 'postgres';
+    const dbName = process.env.POSTGRES_DB || '';
+    const dbUser = process.env.DB_USER || '';
 
     console.log('Exporting railway_routes table...');
 
     // Use docker exec to run pg_dump inside the container
-    const containerName = 'osm-railways-db';
+    const containerName = 'db';
     const pgDumpCmd = `docker exec ${containerName} pg_dump -U ${dbUser} -d ${dbName} --table=railway_routes --data-only --column-inserts`;
 
     let sqlDump = '';

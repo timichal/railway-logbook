@@ -28,12 +28,12 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
   - Example: `npm run updateDb ./data/europe-pruned-251016.geojson`
 
 ### Database Operations
-- `docker-compose up -d postgres` - Start PostgreSQL database with PostGIS
+- `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run exportRoutes` - Export railway_routes and user_railway_data (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
-  - Requires `osm-railways-db` container to be running
+  - Requires `railway-logbook-db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
 - `npm run importRoutes <filename>` - Import railway data from SQL dump using Docker (e.g., `npm run importRoutes railway_data_2025-01-15.sql`)
-  - Requires `osm-railways-db` container to be running
+  - Requires `railway-logbook-db` container to be running
   - Uses `docker exec` to run `psql` inside the container
 
 ### Frontend Development
@@ -45,7 +45,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 ### Prerequisites
 - **Osmium Tool** required for data processing: `conda install conda-forge::osmium-tool`
 - **TypeScript execution**: Uses `tsx` for running TypeScript files directly
-- **Docker** for PostgreSQL database: `docker-compose up -d postgres`
+- **Docker** for PostgreSQL database: `docker-compose up -d db`
 - **Node.js** for the unified application
 - **Environment Setup**: Copy `.env.example` to `.env` and configure database credentials
 

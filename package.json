@@ -1,7 +1,7 @@
 {
-  "name": "osm-trains",
-  "version": "1.0.0",
-  "description": "OSM railway data processing and visualization system",
+  "name": "railway-logbook",
+  "version": "0.0.0",
+  "description": "A map application for logging rail journeys",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -16,14 +16,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/timichal/osm-trains.git"
+    "url": "git+https://github.com/timichal/railway-logbook.git"
   },
   "author": "Michal Zlatkovský",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/timichal/osm-trains/issues"
+    "url": "https://github.com/timichal/railway-logbook/issues"
   },
-  "homepage": "https://github.com/timichal/osm-trains#readme",
+  "homepage": "https://github.com/timichal/railway-logbook#readme",
   "dependencies": {
     "@types/node": "^24.8.1",
     "@types/pg": "^8.15.5",

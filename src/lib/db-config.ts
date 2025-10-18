@@ -19,7 +19,7 @@ export function getDbConfig(): DbConfig {
   return {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
-    database: process.env.POSTGRES_DB || 'railmap',
+    database: process.env.POSTGRES_DB || '',
     user: process.env.DB_USER || '',
     password: process.env.DB_PASSWORD || ''
   };

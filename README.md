@@ -1,4 +1,4 @@
-# OSM Railway Tracker
+# Railway Logbook
 
 A web application for tracking railway journeys using OpenStreetMap data. Still very much in development. (Also an experiment in vibe coding, almost everything was coded by Claude Code.)
 
@@ -20,7 +20,7 @@ Currently live at https://railmap.zlatkovsky.cz/
 
 1. **Start database and tile server**
 ```bash
-docker compose up -d postgres martin
+docker compose up -d db tiles
 ```
 
 2. **Process data**

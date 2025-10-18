@@ -30,12 +30,12 @@ async function importRoutes() {
 
   try {
     // Get database credentials from environment
-    const dbName = process.env.POSTGRES_DB || 'railmap';
-    const dbUser = process.env.DB_USER || 'postgres';
+    const dbName = process.env.POSTGRES_DB || '';
+    const dbUser = process.env.DB_USER || '';
 
     console.log('Copying SQL file to container...');
 
-    const containerName = 'osm-railways-db';
+    const containerName = 'db';
     const containerPath = '/tmp/import.sql';
 
     // Copy file to container
