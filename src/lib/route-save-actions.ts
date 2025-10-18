@@ -28,7 +28,10 @@ export async function saveRailwayRoute(
   const client = await pool.connect();
 
   try {
-    console.log('Saving railway route:', routeData.name);
+    // Replace double hyphens with bidirectional arrow in route name
+    const cleanedName = routeData.name.replace(/--/g, '⟷');
+
+    console.log('Saving railway route:', cleanedName);
     console.log('Path segments:', pathResult.partIds.length);
 
     let sortedCoordinates: Coord[];
@@ -118,7 +121,7 @@ export async function saveRailwayRoute(
       `;
 
       values = [
-        routeData.name,
+        cleanedName,
         routeData.track_number || null,
         routeData.description || null,
         parseInt(routeData.usage_type),

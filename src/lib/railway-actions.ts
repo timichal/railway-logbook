@@ -288,11 +288,14 @@ export async function updateRailwayRoute(
     throw new Error('Admin access required');
   }
 
+  // Replace double hyphens with bidirectional arrow in route name
+  const cleanedName = name.replace(/--/g, '⟷');
+
   await query(`
     UPDATE railway_routes
     SET name = $2, track_number = $3, description = $4, usage_type = $5, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [trackId, name, trackNumber, description, parseInt(usageType)]);
+  `, [trackId, cleanedName, trackNumber, description, parseInt(usageType)]);
 }
 
 export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {

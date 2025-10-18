@@ -43,6 +43,7 @@ export const COLORS = {
   },
   railwayRoutes: {
     default: '#dc2626',
+    created: '#dc2626',
     selected: '#ff6b35',
     visited: 'DarkGreen',
     unvisited: 'Crimson',

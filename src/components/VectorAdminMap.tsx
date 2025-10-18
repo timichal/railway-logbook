@@ -152,7 +152,7 @@ export default function VectorAdminMap({
         COLORS.railwayRoutes.selected, // Selected routes always orange
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid, // Unselected invalid routes are grey
-        COLORS.railwayRoutes.default
+        COLORS.railwayRoutes.created
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
@@ -173,7 +173,7 @@ export default function VectorAdminMap({
         'case',
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid,
-        COLORS.railwayRoutes.default
+        COLORS.railwayRoutes.created
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
@@ -224,7 +224,7 @@ export default function VectorAdminMap({
         COLORS.railwayRoutes.selected, // Selected routes always orange
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid, // Unselected invalid routes are grey
-        COLORS.railwayRoutes.default
+        COLORS.railwayRoutes.created
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
@@ -246,7 +246,7 @@ export default function VectorAdminMap({
         'case',
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid,
-        COLORS.railwayRoutes.default
+        COLORS.railwayRoutes.created
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
