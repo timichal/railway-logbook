@@ -30,7 +30,7 @@ services:
       - db
 
   frontend:
-    image: railway-logbook-frontend
+    image: railway-logbook
     container_name: frontend
     restart: always
     ports:
