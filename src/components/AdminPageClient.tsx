@@ -19,12 +19,19 @@ interface AdminPageClientProps {
 export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
+  const [partClickTrigger, setPartClickTrigger] = useState<number>(0); // Trigger to force effect to run
   const [previewRoute, setPreviewRoute] = useState<{partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]} | null>(null);
   const [createFormIds, setCreateFormIds] = useState<{startingId: string, endingId: string}>({startingId: '', endingId: ''});
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   const handleRouteSelect = (routeId: string) => {
+    // If empty string, unselect the route
+    if (routeId === '') {
+      setSelectedRouteId(null);
+      return;
+    }
+
     setSelectedRouteId(routeId);
     // Clear any selected parts when viewing a route
     setCreateFormIds({startingId: '', endingId: ''});
@@ -35,6 +42,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
   const handlePartClick = (partId: string) => {
     setSelectedPartId(partId);
+    setPartClickTrigger(prev => prev + 1); // Increment to force effect to run
     // Unselect any selected route when clicking a part
     setSelectedRouteId(null);
   };
@@ -144,6 +152,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           selectedRouteId={selectedRouteId}
           onRouteSelect={handleRouteSelect}
           selectedPartId={selectedPartId}
+          partClickTrigger={partClickTrigger}
           onPreviewRoute={handlePreviewRoute}
           onCreateFormIdsChange={handleCreateFormIdsChange}
           isPreviewMode={isPreviewMode}

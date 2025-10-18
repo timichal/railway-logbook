@@ -9,6 +9,7 @@ interface AdminSidebarProps {
   selectedRouteId?: string | null;
   onRouteSelect?: (routeId: string) => void;
   selectedPartId?: string | null;
+  partClickTrigger?: number;
   onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   onCreateFormIdsChange?: (ids: {startingId: string, endingId: string}) => void;
   isPreviewMode?: boolean;
@@ -19,7 +20,7 @@ interface AdminSidebarProps {
   onRouteUpdated?: () => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
 
@@ -28,7 +29,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
     if (selectedPartId) {
       setActiveTab('create');
     }
-  }, [selectedPartId]);
+  }, [selectedPartId, partClickTrigger]);
 
   // Switch to routes tab when a route is selected
   React.useEffect(() => {
@@ -61,7 +62,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
         return prev;
       });
     }
-  }, [selectedPartId]);
+  }, [selectedPartId, partClickTrigger]); // Added partClickTrigger to force effect to run
 
   // Notify parent when form IDs change
   React.useEffect(() => {

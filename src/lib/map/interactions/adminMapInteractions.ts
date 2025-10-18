@@ -52,6 +52,28 @@ export function setupAdminMapInteractions(
 
     const trackId = properties.track_id;
     onRouteSelectRef.current(trackId);
+
+    // Stop event propagation to prevent map click handler from firing
+    e.preventDefault();
+  });
+
+  // Click handler for map (when clicking outside features) to unselect route
+  mapInstance.on('click', (e) => {
+    // Check if we clicked on any features
+    const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
+      layers: ['railway_routes']
+    });
+    const partFeatures = mapInstance.queryRenderedFeatures(e.point, {
+      layers: ['railway_parts']
+    });
+
+    // If we didn't click on any features, unselect the route
+    if ((!routeFeatures || routeFeatures.length === 0) &&
+        (!partFeatures || partFeatures.length === 0)) {
+      if (onRouteSelectRef.current) {
+        onRouteSelectRef.current('');  // Empty string to unselect
+      }
+    }
   });
 
   // Hover effects for railway parts

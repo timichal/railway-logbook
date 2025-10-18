@@ -82,6 +82,10 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   useEffect(() => {
     if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
       handleRouteClick(selectedRouteId);
+    } else if (!selectedRouteId) {
+      // Clear selection when selectedRouteId is null (clicked outside)
+      setSelectedRoute(null);
+      setEditForm(null);
     }
   }, [selectedRouteId, selectedRoute?.track_id, handleRouteClick]);
 
