@@ -11,7 +11,7 @@ export const OSM_TILES_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 // Europe bounds: [west, south, east, north]
 export const EUROPE_BOUNDS: [[number, number], [number, number]] = [
-  [-10, 35], // Southwest corner (Portugal/Spain)
+  [-12, 35], // Southwest corner (Portugal/Spain)
   [40, 71],  // Northeast corner (Western Russia/Scandinavia)
 ];
 
