@@ -19,9 +19,10 @@ interface AdminCreateRouteTabProps {
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
   onGeometryEditComplete?: () => void;
+  onCancelGeometryEdit?: () => void;
 }
 
-export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, editingGeometryForTrackId, onGeometryEditComplete }: AdminCreateRouteTabProps) {
+export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, editingGeometryForTrackId, onGeometryEditComplete, onCancelGeometryEdit }: AdminCreateRouteTabProps) {
 
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
@@ -127,6 +128,11 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
       alert('Route geometry updated successfully!');
 
+      // Clear preview route
+      if (onCancelPreview) {
+        onCancelPreview();
+      }
+
       // Reset and complete editing
       resetForm();
       setCurrentPathResult(null);
@@ -137,6 +143,23 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     } catch (error) {
       console.error('Error updating route geometry:', error);
       alert(`Error updating route geometry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Handle cancel geometry edit
+  const handleCancelGeometryEdit = () => {
+    // Clear preview route
+    if (onCancelPreview) {
+      onCancelPreview();
+    }
+
+    // Reset form and path result
+    resetForm();
+    setCurrentPathResult(null);
+
+    // Call parent callback to exit edit mode
+    if (onCancelGeometryEdit) {
+      onCancelGeometryEdit();
     }
   };
 
@@ -267,6 +290,13 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
         <div className="pt-4 border-t border-gray-200">
           {isEditMode ? (
             <>
+              <button
+                onClick={handleCancelGeometryEdit}
+                className="w-full bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer mb-2"
+              >
+                Cancel
+              </button>
+
               <button
                 onClick={handleSaveGeometry}
                 disabled={!isPreviewMode}

@@ -21,6 +21,7 @@ interface VectorAdminMapProps {
   previewRoute?: { partIds: string[], coordinates: [number, number][], railwayParts?: RailwayPart[] } | null;
   selectedParts?: { startingId: string, endingId: string };
   refreshTrigger?: number;
+  isEditingGeometry?: boolean;
 }
 
 export default function VectorAdminMap({
@@ -30,12 +31,14 @@ export default function VectorAdminMap({
   selectedRouteId,
   previewRoute,
   selectedParts,
-  refreshTrigger
+  refreshTrigger,
+  isEditingGeometry
 }: VectorAdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [showPartsLayer, setShowPartsLayer] = useState(true);
   const [showRoutesLayer, setShowRoutesLayer] = useState(true);
   const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
+  const previousShowRoutesLayerRef = useRef(true); // Track previous state before editing geometry
 
   // Use custom hook for route length management
   const { previewLength, selectedRouteLength } = useRouteLength(previewRoute, selectedRouteId);
@@ -108,6 +111,35 @@ export default function VectorAdminMap({
       showRoutesLayer ? 'visible' : 'none'
     );
   }, [showRoutesLayer, mapLoaded, map]);
+
+  // Sync Railway Routes checkbox with edit geometry mode
+  useEffect(() => {
+    if (isEditingGeometry) {
+      // Save current state and uncheck the checkbox
+      previousShowRoutesLayerRef.current = showRoutesLayer;
+      setShowRoutesLayer(false);
+    } else {
+      // Restore previous state when exiting edit mode
+      setShowRoutesLayer(previousShowRoutesLayerRef.current);
+    }
+  }, [isEditingGeometry]); // Don't include showRoutesLayer to avoid infinite loop
+
+  // Hide railway routes layer when editing geometry
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    if (isEditingGeometry) {
+      // Hide the railway_routes layer
+      map.current.setLayoutProperty('railway_routes', 'visibility', 'none');
+    } else {
+      // Restore the layer visibility based on showRoutesLayer
+      map.current.setLayoutProperty(
+        'railway_routes',
+        'visibility',
+        showRoutesLayer ? 'visible' : 'none'
+      );
+    }
+  }, [isEditingGeometry, showRoutesLayer, mapLoaded, map]);
 
   // Handle selected route highlighting
   useEffect(() => {

@@ -21,6 +21,7 @@ interface VectorAdminMapWrapperProps {
   previewRoute?: { partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[] } | null;
   selectedParts?: { startingId: string, endingId: string };
   refreshTrigger?: number;
+  isEditingGeometry?: boolean;
 }
 
 export default function VectorAdminMapWrapper({
@@ -30,7 +31,8 @@ export default function VectorAdminMapWrapper({
   selectedRouteId,
   previewRoute,
   selectedParts,
-  refreshTrigger
+  refreshTrigger,
+  isEditingGeometry
 }: VectorAdminMapWrapperProps) {
   return (
     <VectorAdminMap
@@ -41,6 +43,7 @@ export default function VectorAdminMapWrapper({
       previewRoute={previewRoute}
       selectedParts={selectedParts}
       refreshTrigger={refreshTrigger}
+      isEditingGeometry={isEditingGeometry}
     />
   );
 }

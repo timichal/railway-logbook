@@ -24,6 +24,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [createFormIds, setCreateFormIds] = useState<{startingId: string, endingId: string}>({startingId: '', endingId: ''});
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+  const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
 
   const handleRouteSelect = (routeId: string) => {
     // If empty string, unselect the route
@@ -112,6 +113,10 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setCreateFormIds(ids);
   };
 
+  const handleEditingGeometryChange = (trackId: string | null) => {
+    setEditingGeometryForTrackId(trackId);
+  };
+
   async function handleLogout() {
     await logout();
   }
@@ -161,6 +166,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           onFormReset={handleFormReset}
           onRouteDeleted={handleRouteDeleted}
           onRouteUpdated={handleRouteUpdated}
+          onEditingGeometryChange={handleEditingGeometryChange}
         />
         <div className="flex-1 overflow-hidden">
           <VectorAdminMapWrapper
@@ -171,6 +177,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             previewRoute={previewRoute}
             selectedParts={{startingId: createFormIds.startingId, endingId: createFormIds.endingId}}
             refreshTrigger={refreshTrigger}
+            isEditingGeometry={!!editingGeometryForTrackId}
           />
         </div>
       </main>

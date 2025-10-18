@@ -18,9 +18,10 @@ interface AdminSidebarProps {
   onFormReset?: () => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
+  onEditingGeometryChange?: (trackId: string | null) => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
 
@@ -71,6 +72,13 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
     }
   }, [createFormIds, onCreateFormIdsChange]);
 
+  // Notify parent when editing geometry state changes
+  React.useEffect(() => {
+    if (onEditingGeometryChange) {
+      onEditingGeometryChange(editingGeometryForTrackId);
+    }
+  }, [editingGeometryForTrackId, onEditingGeometryChange]);
+
   // Create a callback to handle resetting IDs that the child can call
   const handleResetIds = React.useCallback(() => {
     setCreateFormIds({ startingId: '', endingId: '' });
@@ -81,16 +89,43 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
   }, [onFormReset]);
 
   // Handle edit geometry button click
-  const handleEditGeometry = React.useCallback((trackId: string) => {
+  const handleEditGeometry = React.useCallback(async (trackId: string) => {
     console.log('Edit geometry for track:', trackId);
     setEditingGeometryForTrackId(trackId);
     setActiveTab('create');
-    setCreateFormIds({ startingId: '', endingId: '' });
+
+    // Fetch the route details to get starting_part_id and ending_part_id
+    try {
+      const { getRailwayRoute } = await import('@/lib/railway-actions');
+      const routeDetail = await getRailwayRoute(trackId);
+
+      // Prefill the starting/ending part IDs if they exist
+      if (routeDetail.starting_part_id && routeDetail.ending_part_id) {
+        setCreateFormIds({
+          startingId: routeDetail.starting_part_id.toString(),
+          endingId: routeDetail.ending_part_id.toString()
+        });
+      } else {
+        setCreateFormIds({ startingId: '', endingId: '' });
+      }
+    } catch (error) {
+      console.error('Error fetching route details for geometry edit:', error);
+      setCreateFormIds({ startingId: '', endingId: '' });
+    }
+
     // Unselect the route so it doesn't interfere with the map
     if (onRouteSelect) {
       onRouteSelect('');
     }
   }, [onRouteSelect]);
+
+  // Handle cancel geometry edit
+  const handleCancelGeometryEdit = React.useCallback(() => {
+    console.log('Cancel geometry edit');
+    setEditingGeometryForTrackId(null);
+    setActiveTab('routes');
+    setCreateFormIds({ startingId: '', endingId: '' });
+  }, []);
 
   return (
     <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
@@ -160,6 +195,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
                 onRouteUpdated();
               }
             }}
+            onCancelGeometryEdit={handleCancelGeometryEdit}
           />
         )}
       </div>
