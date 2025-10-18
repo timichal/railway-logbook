@@ -39,6 +39,7 @@ CREATE TABLE railway_parts (
 CREATE TABLE railway_routes (
     track_id SERIAL PRIMARY KEY, -- Auto-generated unique track identifier
     name VARCHAR(255) NOT NULL,
+    track_number VARCHAR(100), -- Local track number(s) - optional
     description TEXT, -- Route description
     usage_type INTEGER NOT NULL, -- Single usage type (0=Regular, 1=Seasonal, 2=Special)
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
