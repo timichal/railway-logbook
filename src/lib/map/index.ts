@@ -9,6 +9,20 @@ export const MAP_ZOOM = 7;
 export const TILE_SERVER_PORT = 3001;
 export const OSM_TILES_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
+// Use /tiles/ path in production (proxied through nginx), direct port in development
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const getTileBaseUrl = () => {
+  if (typeof window === 'undefined') {
+    // Server-side rendering
+    return IS_PRODUCTION ? 'https://localhost/tiles' : 'http://localhost:3001';
+  }
+  // Client-side
+  return IS_PRODUCTION
+    ? `${window.location.protocol}//${window.location.hostname}/tiles`
+    : `${window.location.protocol}//${window.location.hostname}:${TILE_SERVER_PORT}`;
+};
+const TILE_BASE_URL = getTileBaseUrl();
+
 // Europe bounds: [west, south, east, north]
 export const EUROPE_BOUNDS: [[number, number], [number, number]] = [
   [-12, 35], // Southwest corner (Portugal/Spain)
@@ -91,7 +105,7 @@ export function createRailwayRoutesSource(
   options: RailwayRoutesSourceOptions = {}
 ): maplibregl.VectorSourceSpecification {
   const { userId, cacheBuster } = options;
-  const baseUrl = `${window.location.protocol}//${window.location.hostname}:${TILE_SERVER_PORT}/railway_routes_tile/{z}/{x}/{y}`;
+  const baseUrl = `${TILE_BASE_URL}/railway_routes_tile/{z}/{x}/{y}`;
   const params = new URLSearchParams();
 
   if (userId !== undefined) params.append('user_id', userId.toString());
@@ -140,7 +154,7 @@ export function createRailwayRoutesLayer(
 export function createStationsSource(): maplibregl.VectorSourceSpecification {
   return {
     type: 'vector',
-    tiles: [`${window.location.protocol}//${window.location.hostname}:${TILE_SERVER_PORT}/stations_tile/{z}/{x}/{y}`],
+    tiles: [`${TILE_BASE_URL}/stations_tile/{z}/{x}/{y}`],
     minzoom: ZOOM_RANGES.stations.min,
     maxzoom: ZOOM_RANGES.stations.max,
   };
@@ -166,7 +180,7 @@ export function createStationsLayer(): maplibregl.CircleLayerSpecification {
 export function createRailwayPartsSource(): maplibregl.VectorSourceSpecification {
   return {
     type: 'vector',
-    tiles: [`${window.location.protocol}//${window.location.hostname}:${TILE_SERVER_PORT}/railway_parts_tile/{z}/{x}/{y}`],
+    tiles: [`${TILE_BASE_URL}/railway_parts_tile/{z}/{x}/{y}`],
     minzoom: ZOOM_RANGES.railwayParts.min,
     maxzoom: ZOOM_RANGES.railwayParts.max,
   };
