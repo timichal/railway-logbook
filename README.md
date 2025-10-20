@@ -77,8 +77,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 
 ## Data Sources
 
-- OpenStreetMap: https://download.geofabrik.de/europe.html
-- Using stable dump from 2025-01-01
+- Using rolling OpenStreetMap dumps: https://download.geofabrik.de/europe.html
 - Filter: [OpenRailwayMap standard](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md)
 
 ## Development
