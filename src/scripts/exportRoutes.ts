@@ -18,7 +18,8 @@ async function exportRoutes() {
     }
 
     // Generate filename with timestamp
-    const timestamp = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/:/g, '-').split('.')[0];
     const filename = `railway_data_${timestamp}.sql`;
     const filepath = path.join(dataDir, filename);
 
