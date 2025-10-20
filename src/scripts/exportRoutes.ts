@@ -34,7 +34,10 @@ async function exportRoutes() {
 
     let sqlDump = '';
     try {
-      sqlDump = execSync(pgDumpCmd, { encoding: 'utf-8' });
+      sqlDump = execSync(pgDumpCmd, {
+        encoding: 'utf-8',
+        maxBuffer: 50 * 1024 * 1024 // 50MB buffer (default is 1MB)
+      });
     } catch (error) {
       console.error('Error running pg_dump:', error);
       throw error;
