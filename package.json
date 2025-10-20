@@ -11,7 +11,9 @@
     "prepareData": "sh ./osmium-scripts/prepare.sh",
     "populateDb": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/populateDb.ts",
     "exportRoutes": "tsx src/scripts/exportRoutes.ts",
-    "importRoutes": "tsx src/scripts/importRoutes.ts"
+    "importRoutes": "tsx src/scripts/importRoutes.ts",
+    "uploadData": "pscp ./data/* railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/",
+    "downloadData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/* ./data/"
   },
   "repository": {
     "type": "git",
