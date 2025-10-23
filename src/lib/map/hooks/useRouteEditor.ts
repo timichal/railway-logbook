@@ -27,6 +27,7 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
   const [isLoading, setIsLoading] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [progress, setProgress] = useState<UserProgress | null>(null);
+  const [showSpecialLines, setShowSpecialLines] = useState(false);
 
   // Open edit form with route data
   const openEditForm = (feature: EditingFeature) => {
@@ -178,6 +179,8 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     isLoading,
     cacheBuster,
     progress,
+    showSpecialLines,
+    setShowSpecialLines,
     openEditForm,
     closeEditForm,
     submitForm,

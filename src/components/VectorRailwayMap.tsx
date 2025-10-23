@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import type { FilterSpecification } from 'maplibre-gl';
 import type { Station } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
 import { useStationSearch } from '@/lib/map/hooks/useStationSearch';
@@ -64,6 +65,17 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   useEffect(() => {
     routeEditor.fetchProgress();
   }, []);
+
+  // Update layer filter when showSpecialLines changes
+  useEffect(() => {
+    if (!map.current || !map.current.getLayer('railway_routes')) return;
+
+    const filter: FilterSpecification | null = routeEditor.showSpecialLines
+      ? null // Show all routes
+      : ['!=', ['get', 'usage_type'], 2]; // Hide special routes (usage_type === 2)
+
+    map.current.setFilter('railway_routes', filter);
+  }, [map, routeEditor.showSpecialLines]);
 
   // Handle station selection from search
   const handleStationSelect = (station: Station) => {
@@ -132,6 +144,17 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           </div>
           <div className="text-xs text-gray-600 mt-1">
             {routeEditor.progress.completedRoutes}/{routeEditor.progress.totalRoutes} ({routeEditor.progress.routePercentage}%) routes
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-200">
+            <label className="flex items-center gap-2 cursor-pointer text-xs">
+              <input
+                type="checkbox"
+                checked={routeEditor.showSpecialLines}
+                onChange={(e) => routeEditor.setShowSpecialLines(e.target.checked)}
+                className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+              <span>Show special lines</span>
+            </label>
           </div>
         </div>
       )}
