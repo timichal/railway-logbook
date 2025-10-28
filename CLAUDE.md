@@ -29,10 +29,10 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 ### Database Operations
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run exportRoutes` - Export railway_routes and user_railway_data (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
-  - Requires `railway-logbook-db` container to be running
+  - Requires `db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
 - `npm run importRoutes <filename>` - Import railway data from SQL dump using Docker (e.g., `npm run importRoutes railway_data_2025-01-15.sql`)
-  - Requires `railway-logbook-db` container to be running
+  - Requires `db` container to be running
   - Uses `docker exec` to run `psql` inside the container
 
 ### Frontend Development
