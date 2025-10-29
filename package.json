@@ -12,7 +12,6 @@
     "populateDb": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/populateDb.ts",
     "exportRoutes": "tsx src/scripts/exportRoutes.ts",
     "importRoutes": "tsx src/scripts/importRoutes.ts",
-    "migrate": "tsx src/scripts/migrations/001_split_route_name.ts",
     "uploadData": "pscp ./data/* railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/",
     "downloadData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/* ./data/"
   },
