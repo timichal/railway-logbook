@@ -67,13 +67,13 @@ export interface RailwayRoutesSourceOptions {
 }
 
 export interface RailwayRoutesPaintConfig {
-  colorExpression?: unknown[];
-  widthExpression?: unknown[];
-  opacityExpression?: unknown[];
+  colorExpression?: maplibregl.ExpressionSpecification;
+  widthExpression?: maplibregl.ExpressionSpecification;
+  opacityExpression?: maplibregl.ExpressionSpecification;
   defaultColor?: string;
   defaultWidth?: number;
   defaultOpacity?: number;
-  filter?: unknown[] | null;
+  filter?: maplibregl.FilterSpecification | null;
 }
 
 // ============================================================================
