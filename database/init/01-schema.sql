@@ -38,7 +38,8 @@ CREATE TABLE railway_parts (
 -- Railway lines/routes (objective data only)
 CREATE TABLE railway_routes (
     track_id SERIAL PRIMARY KEY, -- Auto-generated unique track identifier
-    name VARCHAR(255) NOT NULL,
+    from_station TEXT NOT NULL, -- Starting station/location
+    to_station TEXT NOT NULL, -- Ending station/location
     track_number VARCHAR(100), -- Local track number(s) - optional
     description TEXT, -- Route description
     usage_type INTEGER NOT NULL, -- Single usage type (0=Regular, 1=Seasonal, 2=Special)
@@ -69,7 +70,8 @@ CREATE TABLE user_railway_data (
 CREATE INDEX idx_stations_coordinates ON stations USING GIST (coordinates);
 CREATE INDEX idx_railway_parts_geometry ON railway_parts USING GIST (geometry);
 CREATE INDEX idx_railway_routes_geometry ON railway_routes USING GIST (geometry);
-CREATE INDEX idx_railway_routes_name ON railway_routes (name);
+CREATE INDEX idx_railway_routes_from_station ON railway_routes (from_station);
+CREATE INDEX idx_railway_routes_to_station ON railway_routes (to_station);
 CREATE INDEX idx_railway_routes_starting_part ON railway_routes (starting_part_id);
 CREATE INDEX idx_railway_routes_ending_part ON railway_routes (ending_part_id);
 CREATE INDEX idx_user_railway_data_user_id ON user_railway_data (user_id);

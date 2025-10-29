@@ -6,7 +6,8 @@ import { getUserRouteWidthExpression } from '../utils/userRouteStyling';
 
 interface EditingFeature {
   track_id: string;
-  name: string;
+  from_station: string;
+  to_station: string;
   track_number: string | null;
   description: string;
   usage_types: string;
@@ -72,7 +73,7 @@ export function setupUserMapInteractions(
     ]);
 
     // Build click menu popup content
-    let popupContent = `<div class="railway-click-menu" style="color: black; min-width: 200px;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.name}</h3>`;
+    let popupContent = `<div class="railway-click-menu" style="color: black; min-width: 200px;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.from_station} ⟷ ${properties.to_station}</h3>`;
 
     let formattedDescription = "";
     if (properties.description) {
@@ -184,7 +185,8 @@ export function setupUserMapInteractions(
           }
           onRouteClick({
             track_id: properties.track_id,
-            name: properties.name,
+            from_station: properties.from_station,
+            to_station: properties.to_station,
             track_number: properties.track_number || null,
             description: properties.description,
             usage_types: properties.usage_types,
@@ -212,7 +214,7 @@ export function setupUserMapInteractions(
 
     if (!properties) return;
 
-    let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.name}</h3>`;
+    let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.from_station} ⟷ ${properties.to_station}</h3>`;
 
     let formattedDescription = "";
     if (properties.description) {

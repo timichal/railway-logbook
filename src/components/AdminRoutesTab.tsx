@@ -7,7 +7,8 @@ import { usageOptions } from '@/lib/constants';
 
 interface RailwayRoute {
   track_id: string;
-  name: string;
+  from_station: string;
+  to_station: string;
   track_number?: string | null;
   description: string | null;
   usage_type: string;
@@ -35,7 +36,8 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [editForm, setEditForm] = useState<{
-    name: string;
+    from_station: string;
+    to_station: string;
     track_number: string;
     description: string;
     usage_type: string;
@@ -59,7 +61,8 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       const routeDetail = await getRailwayRoute(trackId);
       setSelectedRoute(routeDetail);
       setEditForm({
-        name: routeDetail.name,
+        from_station: routeDetail.from_station,
+        to_station: routeDetail.to_station,
         track_number: routeDetail.track_number || '',
         description: routeDetail.description || '',
         usage_type: routeDetail.usage_type
@@ -99,7 +102,8 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       setIsLoading(true);
       await updateRailwayRoute(
         selectedRoute.track_id,
-        editForm.name,
+        editForm.from_station,
+        editForm.to_station,
         editForm.track_number || null,
         editForm.description || null,
         editForm.usage_type
@@ -134,7 +138,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
     if (!selectedRoute) return;
 
     const confirmDelete = confirm(
-      `Are you sure you want to delete the route "${selectedRoute.name}"?\n\n` +
+      `Are you sure you want to delete the route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}"?\n\n` +
       `Track ID: ${selectedRoute.track_id}\n` +
       `This action cannot be undone.`
     );
@@ -164,7 +168,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
         onRouteDeleted();
       }
 
-      alert(`Route "${selectedRoute.name}" has been deleted successfully.`);
+      alert(`Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" has been deleted successfully.`);
 
     } catch (error) {
       console.error('Error deleting route:', error);
@@ -193,7 +197,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                   }`}
               >
                 <div className="font-medium text-sm text-gray-900 truncate">
-                  {route.name}
+                  {route.from_station} ⟷ {route.to_station}
                 </div>
               </button>
             ))}
@@ -260,15 +264,28 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                   />
                 </div>
 
-                {/* Name */}
+                {/* From Station */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Name *
+                    From *
                   </label>
                   <input
                     type="text"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    value={editForm.from_station}
+                    onChange={(e) => setEditForm({ ...editForm, from_station: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                  />
+                </div>
+
+                {/* To Station */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    To *
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.to_station}
+                    onChange={(e) => setEditForm({ ...editForm, to_station: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
                   />
                 </div>

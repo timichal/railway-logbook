@@ -15,7 +15,7 @@ interface AdminCreateRouteTabProps {
   onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { name: string, track_number: string, description: string, usage_type: string }) => void;
+  onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: string }) => void;
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
   onGeometryEditComplete?: () => void;
@@ -26,7 +26,8 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
-    name: '',
+    from_station: '',
+    to_station: '',
     track_number: '',
     description: '',
     usage_type: ''
@@ -38,7 +39,8 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   // Reset form function
   const resetForm = () => {
     setCreateForm({
-      name: '',
+      from_station: '',
+      to_station: '',
       track_number: '',
       description: '',
       usage_type: ''
@@ -102,7 +104,8 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     if (!onSaveRoute) return;
 
     await onSaveRoute({
-      name: createForm.name,
+      from_station: createForm.from_station,
+      to_station: createForm.to_station,
       track_number: createForm.track_number,
       description: createForm.description,
       usage_type: createForm.usage_type
@@ -123,7 +126,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
       // Metadata (name, description, usage_type, track_number) won't be used in update mode
       await saveRailwayRoute(
-        { name: '', description: '', usage_type: '', track_number: '' }, // Dummy data, not used in UPDATE mode
+        { from_station: '', to_station: '', description: '', usage_type: '', track_number: '' }, // Dummy data, not used in UPDATE mode
         { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates },
         currentPathResult.railwayParts,
         editingGeometryForTrackId // Pass track ID to trigger UPDATE query
@@ -254,17 +257,31 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               />
             </div>
 
-            {/* Route Name */}
+            {/* From Station */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Route Name *
+                From *
               </label>
               <input
                 type="text"
-                value={createForm.name}
-                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                value={createForm.from_station}
+                onChange={(e) => setCreateForm({ ...createForm, from_station: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="Enter route name"
+                placeholder="Starting station"
+              />
+            </div>
+
+            {/* To Station */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                To *
+              </label>
+              <input
+                type="text"
+                value={createForm.to_station}
+                onChange={(e) => setCreateForm({ ...createForm, to_station: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Ending station"
               />
             </div>
 
@@ -330,7 +347,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
             <>
               <button
                 onClick={handleSaveRoute}
-                disabled={!isPreviewMode || !createForm.name || !createForm.usage_type}
+                disabled={!isPreviewMode || !createForm.from_station || !createForm.to_station || !createForm.usage_type}
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
               >
                 Save Route to Database

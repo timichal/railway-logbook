@@ -73,7 +73,8 @@ export type Station = {
 // Railway route from database (with geometry as JSON string)
 export type RailwayRoute = {
   track_id: string
-  name: string
+  from_station: string
+  to_station: string
   description: string | null
   usage_type: number
   geometry: string // GeoJSON string

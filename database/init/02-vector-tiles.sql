@@ -108,7 +108,8 @@ BEGIN
     FROM (
         SELECT
             rr.track_id,
-            rr.name,
+            rr.from_station,
+            rr.to_station,
             rr.track_number,
             rr.description,
             rr.usage_type,
@@ -139,7 +140,8 @@ BEGIN
         ORDER BY
             -- Render order: unvisited routes first (so visited are on top)
             CASE WHEN urd.date IS NULL THEN 0 ELSE 1 END,
-            rr.name
+            rr.from_station,
+            rr.to_station
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
 

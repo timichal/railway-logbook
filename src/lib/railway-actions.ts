@@ -61,7 +61,8 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
   const routesResult = await query(`
     SELECT
       rr.track_id,
-      rr.name,
+      rr.from_station,
+      rr.to_station,
       rr.description,
       rr.usage_type,
       ST_AsGeoJSON(rr.geometry) as geometry,
@@ -95,7 +96,7 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
       type: 'Feature' as const,
       geometry: JSON.parse(route.geometry),
       properties: {
-        name: route.name,
+        name: `${route.from_station} ⟷ ${route.to_station}`,
         description: route.description ?? undefined,
         track_id: route.track_id,
         usage: route.usage_type,
@@ -246,10 +247,10 @@ export async function getAllRailwayRoutes() {
   }
 
   const result = await query(`
-    SELECT track_id, name, track_number, description, usage_type,
+    SELECT track_id, from_station, to_station, track_number, description, usage_type,
            starting_part_id, ending_part_id, is_valid, error_message
     FROM railway_routes
-    ORDER BY name
+    ORDER BY from_station, to_station
   `);
 
   return result.rows;
@@ -262,7 +263,7 @@ export async function getRailwayRoute(trackId: string) {
   }
 
   const result = await query(`
-    SELECT track_id, name, track_number, description, usage_type,
+    SELECT track_id, from_station, to_station, track_number, description, usage_type,
            ST_AsGeoJSON(geometry) as geometry, length_km,
            starting_part_id, ending_part_id, is_valid, error_message
     FROM railway_routes
@@ -278,7 +279,8 @@ export async function getRailwayRoute(trackId: string) {
 
 export async function updateRailwayRoute(
   trackId: string,
-  name: string,
+  fromStation: string,
+  toStation: string,
   trackNumber: string | null,
   description: string | null,
   usageType: string
@@ -288,14 +290,11 @@ export async function updateRailwayRoute(
     throw new Error('Admin access required');
   }
 
-  // Replace double hyphens with bidirectional arrow in route name
-  const cleanedName = name.replace(/--/g, '⟷');
-
   await query(`
     UPDATE railway_routes
-    SET name = $2, track_number = $3, description = $4, usage_type = $5, updated_at = CURRENT_TIMESTAMP
+    SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [trackId, cleanedName, trackNumber, description, parseInt(usageType)]);
+  `, [trackId, fromStation, toStation, trackNumber, description, parseInt(usageType)]);
 }
 
 export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {
@@ -305,11 +304,11 @@ export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureC
   }
 
   const result = await query(`
-    SELECT track_id, name, track_number, description, usage_type,
+    SELECT track_id, from_station, to_station, track_number, description, usage_type,
            ST_AsGeoJSON(geometry) as geometry,
            starting_part_id, ending_part_id, is_valid, error_message
     FROM railway_routes
-    ORDER BY name
+    ORDER BY from_station, to_station
   `);
 
   const features: GeoJSONFeature[] = result.rows.map(row => ({
@@ -317,7 +316,7 @@ export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureC
     geometry: JSON.parse(row.geometry),
     properties: {
       track_id: row.track_id,
-      name: row.name,
+      name: `${row.from_station} ⟷ ${row.to_station}`,
       description: row.description ?? undefined,
       usage: row.usage_type,
       starting_part_id: row.starting_part_id,

@@ -227,7 +227,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
             <h3 className="text-lg font-bold mb-4">
               {routeEditor.editingFeature.track_number}
               {' '}
-              {routeEditor.editingFeature.name}
+              {routeEditor.editingFeature.from_station} ⟷ {routeEditor.editingFeature.to_station}
             </h3>
 
             <form onSubmit={routeEditor.submitForm} className="space-y-4">

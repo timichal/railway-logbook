@@ -63,7 +63,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setIsPreviewMode(false);
   };
 
-  const handleSaveRoute = async (routeData: {name: string, track_number: string, description: string, usage_type: string}) => {
+  const handleSaveRoute = async (routeData: {from_station: string, to_station: string, track_number: string, description: string, usage_type: string}) => {
     console.log('AdminPageClient: Save route requested', routeData);
 
     if (!previewRoute) {
@@ -86,7 +86,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
       // Trigger routes layer refresh
       setRefreshTrigger(prev => prev + 1);
 
-      alert(`Route "${routeData.name}" saved successfully!\nTrack ID: ${trackId}`);
+      alert(`Route "${routeData.from_station} ⟷ ${routeData.to_station}" saved successfully!\nTrack ID: ${trackId}`);
 
     } catch (error) {
       console.error('AdminPageClient: Error saving route:', error);

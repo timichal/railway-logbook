@@ -7,7 +7,8 @@ import type { RailwayPart } from './types';
 import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinate-utils';
 
 export interface SaveRouteData {
-  name: string;
+  from_station: string;
+  to_station: string;
   track_number: string;
   description: string;
   usage_type: string;
@@ -28,10 +29,7 @@ export async function saveRailwayRoute(
   const client = await pool.connect();
 
   try {
-    // Replace double hyphens with bidirectional arrow in route name
-    const cleanedName = routeData.name.replace(/--/g, '⟷');
-
-    console.log('Saving railway route:', cleanedName);
+    console.log('Saving railway route:', `${routeData.from_station} ⟷ ${routeData.to_station}`);
     console.log('Path segments:', pathResult.partIds.length);
 
     let sortedCoordinates: Coord[];
@@ -97,7 +95,8 @@ export async function saveRailwayRoute(
       // Insert new route with auto-generated track_id
       query = `
         INSERT INTO railway_routes (
-          name,
+          from_station,
+          to_station,
           track_number,
           description,
           usage_type,
@@ -111,17 +110,19 @@ export async function saveRailwayRoute(
           $2,
           $3,
           $4,
-          ST_GeomFromText($5, 4326),
-          ST_Length(ST_GeomFromText($5, 4326)::geography) / 1000,
-          $6,
+          $5,
+          ST_GeomFromText($6, 4326),
+          ST_Length(ST_GeomFromText($6, 4326)::geography) / 1000,
           $7,
+          $8,
           TRUE
         )
         RETURNING track_id, length_km
       `;
 
       values = [
-        cleanedName,
+        routeData.from_station,
+        routeData.to_station,
         routeData.track_number || null,
         routeData.description || null,
         parseInt(routeData.usage_type),
