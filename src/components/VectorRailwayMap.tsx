@@ -27,7 +27,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   const stationSearch = useStationSearch();
 
   // Initialize map with shared hook
-  const { map, mapLoaded } = useMapLibre(
+  const { map } = useMapLibre(
     mapContainer,
     {
       sources: {
@@ -38,6 +38,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         createRailwayRoutesLayer({
           colorExpression: getUserRouteColorExpression(),
           widthExpression: getUserRouteWidthExpression(),
+          filter: ['!=', ['get', 'usage_type'], 2], // Hide special routes by default (matches showSpecialLines initial state)
         }),
         createStationsLayer(),
       ],
@@ -66,7 +67,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     routeEditor.fetchProgress();
   }, []);
 
-  // Update layer filter when showSpecialLines changes or map loads
+  // Update layer filter when showSpecialLines changes
   useEffect(() => {
     if (!map.current || !map.current.getLayer('railway_routes')) return;
 
@@ -75,7 +76,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       : ['!=', ['get', 'usage_type'], 2]; // Hide special routes (usage_type === 2)
 
     map.current.setFilter('railway_routes', filter);
-  }, [map, mapLoaded, routeEditor.showSpecialLines]);
+  }, [map, routeEditor.showSpecialLines]);
 
   // Handle station selection from search
   const handleStationSelect = (station: Station) => {

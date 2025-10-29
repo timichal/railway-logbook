@@ -73,6 +73,7 @@ export interface RailwayRoutesPaintConfig {
   defaultColor?: string;
   defaultWidth?: number;
   defaultOpacity?: number;
+  filter?: unknown[] | null;
 }
 
 // ============================================================================
@@ -133,9 +134,10 @@ export function createRailwayRoutesLayer(
     defaultColor = COLORS.railwayRoutes.default,
     defaultWidth = 3,
     defaultOpacity = 0.8,
+    filter,
   } = config;
 
-  return {
+  const layer: maplibregl.LineLayerSpecification = {
     id: 'railway_routes',
     type: 'line',
     source: 'railway_routes',
@@ -149,7 +151,14 @@ export function createRailwayRoutesLayer(
       'line-width': widthExpression || defaultWidth,
       'line-opacity': opacityExpression || defaultOpacity,
     },
-  } as maplibregl.LineLayerSpecification;
+  };
+
+  // Add filter if provided
+  if (filter !== undefined) {
+    layer.filter = filter as maplibregl.FilterSpecification;
+  }
+
+  return layer;
 }
 
 export function createStationsSource(): maplibregl.VectorSourceSpecification {

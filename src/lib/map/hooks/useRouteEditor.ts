@@ -93,6 +93,7 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
         createRailwayRoutesLayer({
           colorExpression: getUserRouteColorExpression(),
           widthExpression: getUserRouteWidthExpression(),
+          filter: showSpecialLines ? null : ['!=', ['get', 'usage_type'], 2], // Re-apply filter based on current state
         }),
         'stations'
       );
