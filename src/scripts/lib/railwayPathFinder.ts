@@ -19,8 +19,6 @@ export class RailwayPathFinder {
     startId: string,
     endId: string
   ): Promise<void> {
-    console.log('RailwayPathFinder: Loading railway parts within search area');
-
     // Handle both Pool and Client - get a client if needed
     let client: Client | PoolClient;
     let shouldRelease = false;
@@ -63,9 +61,8 @@ export class RailwayPathFinder {
         FROM railway_parts rp, search_area
         WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
           AND rp.geometry IS NOT NULL
+        ORDER BY rp.id
       `, [startId, endId, bufferMeters]);
-
-      console.log(`RailwayPathFinder: Loaded ${result.rows.length} railway parts within 50km (spatial index optimization)`);
 
       for (const row of result.rows) {
         const id = String(row.id);
@@ -102,8 +99,6 @@ export class RailwayPathFinder {
           }
         }
       }
-
-      console.log(`RailwayPathFinder: Built coordinate mapping for ${this.coordToPartIds.size} unique coordinates`);
     } finally {
       if (shouldRelease && 'release' in client) {
         client.release();
@@ -136,16 +131,19 @@ export class RailwayPathFinder {
       if (id !== partId) connected.add(id);
     });
 
-    return Array.from(connected);
+    // Sort for deterministic BFS ordering
+    return Array.from(connected).sort((a, b) => {
+      const numA = parseInt(a);
+      const numB = parseInt(b);
+      return numA - numB;
+    });
   }
 
   public findPath(startId: string, endId: string): PathResult | null {
     if (!this.parts.has(startId)) {
-      console.error(`Start railway part ID ${startId} not found in loaded parts`);
       return null;
     }
     if (!this.parts.has(endId)) {
-      console.error(`End railway part ID ${endId} not found in loaded parts`);
       return null;
     }
 
@@ -156,8 +154,6 @@ export class RailwayPathFinder {
         coordinates: part.coordinates
       };
     }
-
-    console.log(`RailwayPathFinder: Finding path from ${startId} to ${endId}...`);
 
     // BFS to find shortest path
     const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
