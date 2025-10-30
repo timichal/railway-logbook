@@ -25,8 +25,8 @@ docker compose up -d db tiles
 
 2. **Process data**
 ```bash
-npm run prepareData  # Downloads and transforms OSM data
-npm run populateDb   # Loads data and recalculates routes (if any exist)
+npm run prepareMapData  # Downloads and transforms OSM data
+npm run importMapData   # Loads data and recalculates routes (if any exist)
 ```
 
 3. **Run application**

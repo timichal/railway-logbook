@@ -27,7 +27,7 @@ This will:
 
 ```bash
 # Load pruned GeoJSON into the database (from root directory)
-npm run populateDb <filepath>
+npm run importMapData <filepath>
 ```
 
 The loading script (`src/scripts/populateDb.ts`) will:
@@ -141,7 +141,7 @@ Then use the returned user ID for all user-specific operations.
 ## Development
 
 - **Database Changes**: Update `database/init/01-schema.sql` and rebuild containers with `docker-compose down -v && docker-compose up -d db`
-- **Data Reloading**: Run `npm run populateDb` from the root directory
+- **Data Reloading**: Run `npm run importMapData` from the root directory
 - **Frontend Changes**: Server actions in `src/lib/railway-actions.ts` provide type-safe database access
 - **TypeScript**: All scripts are now TypeScript with proper type checking
 - **Admin Security**: All admin-only operations (create, update, delete routes) require user.id === 1

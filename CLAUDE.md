@@ -16,24 +16,29 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 ## Core Commands
 
 ### Data Processing Pipeline
-- `npm run prepareData -- <version>` - Complete data preparation pipeline (downloads OSM data, filters rail features, converts to GeoJSON, and prunes data)
+- `npm run prepareMapData -- <version>` - Complete data preparation pipeline (downloads OSM data, filters rail features, converts to GeoJSON, and prunes data)
   - Required argument: OSM data version (format: YYMMDD)
-  - Example: `npm run prepareData -- 251016`
+  - Example: `npm run prepareMapData -- 251016`
   - Output: `./data/europe-pruned-<version>.geojson`
-- `npm run populateDb <filepath>` - Loads processed GeoJSON data into PostgreSQL database
+- `npm run importMapData <filepath>` - Loads processed GeoJSON data into PostgreSQL database
   - Required argument: path to GeoJSON file
-  - Example: `npm run populateDb ./data/europe-pruned-251016.geojson`
+  - Example: `npm run importMapData ./data/europe-pruned-251016.geojson`
   - Automatically recalculates existing routes if any are found
   - On initial load with no routes, skips recalculation step
 
 ### Database Operations
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
-- `npm run exportRoutes` - Export railway_routes and user_railway_data (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
+- `npm run exportRouteData` - Export railway_routes and user_railway_data (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
-- `npm run importRoutes <filename>` - Import railway data from SQL dump using Docker (e.g., `npm run importRoutes railway_data_2025-01-15.sql`)
+- `npm run importRouteData <filename>` - Import railway data from SQL dump using Docker (e.g., `npm run importRouteData railway_data_2025-01-15.sql`)
   - Requires `db` container to be running
   - Uses `docker exec` to run `psql` inside the container
+
+### Data Transfer Operations
+- `npm run uploadMapData` - Upload GeoJSON files from `./data/` to remote server via pscp
+- `npm run downloadMapData` - Download GeoJSON files from remote server to `./data/` via pscp
+- `npm run downloadRouteData` - Download SQL dump files from remote server to `./data/` via pscp
 
 ### Frontend Development
 - `npm run dev` - Start Next.js development server with Turbopack
@@ -181,7 +186,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `<country>-rail.tmp.osm.pbf` - Filtered railway data
 - `<country>-rail.tmp.geojson` - Converted to GeoJSON
 - `<country>-pruned.geojson` - Custom filtered data (ready for database loading)
-- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes and user_railway_data (from `npm run exportRoutes`)
+- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes and user_railway_data (from `npm run exportRouteData`)
 
 ## Development Notes
 
@@ -207,11 +212,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - Uses `mergeLinearChain` algorithm to properly order and connect coordinate sublists
 
 ### Database Updates and Route Recalculation
-- `npm run populateDb` automatically reloads railway_parts from pruned GeoJSON and recalculates all existing routes
+- `npm run importMapData` automatically reloads railway_parts from pruned GeoJSON and recalculates all existing routes
 - If no routes exist (initial setup), recalculation is skipped
 - Recalculation uses stored starting_part_id and ending_part_id with shared `RailwayPathFinder`
 - Fetches railway part geometries and uses shared `mergeLinearChain` for proper coordinate ordering (same as route creation)
 - Routes that can't be recalculated are marked with is_valid=false and error_message
+- Routes with distance mismatches (>0.1 km AND >1% difference) are marked invalid with detailed error message
 - Invalid routes displayed in grey on admin map (orange when selected)
 - Admin can fix invalid routes using "Edit Route Geometry" to select new start/end points
 
