@@ -15,9 +15,7 @@ export async function findRailwayPathDB(startId: string, endId: string): Promise
   console.log('Database path finder: Finding path from', startId, 'to', endId);
 
   const pathFinder = new RailwayPathFinder();
-  await pathFinder.loadRailwayParts(pool, startId, endId);
-
-  const result = pathFinder.findPath(startId, endId);
+  const result = await pathFinder.findPathWithRetry(pool, startId, endId);
 
   if (result) {
     console.log('Database path finder: Path found with', result.partIds.length, 'segments and', result.coordinates.length, 'coordinates');

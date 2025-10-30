@@ -17,7 +17,8 @@ export class RailwayPathFinder {
   async loadRailwayParts(
     dbClient: Client | Pool,
     startId: string,
-    endId: string
+    endId: string,
+    bufferMeters: number = 50000
   ): Promise<void> {
     // Handle both Pool and Client - get a client if needed
     let client: Client | PoolClient;
@@ -36,8 +37,7 @@ export class RailwayPathFinder {
 
     try {
       // Create a buffer around start and end points to limit search space
-      // Using 50km buffer in Web Mercator (meters)
-      const bufferMeters = 50000;
+      // Default: 50km buffer in Web Mercator (meters)
 
       const result = await client.query(`
         WITH endpoints AS (
@@ -137,6 +137,46 @@ export class RailwayPathFinder {
       const numB = parseInt(b);
       return numA - numB;
     });
+  }
+
+  /**
+   * Find path with automatic retry using larger buffer if initial search fails
+   */
+  async findPathWithRetry(
+    dbClient: Client | Pool,
+    startId: string,
+    endId: string
+  ): Promise<PathResult | null> {
+    // First attempt with 50km buffer
+    await this.loadRailwayParts(dbClient, startId, endId, 50000);
+    let result = this.findPath(startId, endId);
+
+    if (result) {
+      console.log('Path found with 50km buffer');
+      return result;
+    }
+
+    // Second attempt with 100km buffer
+    console.log('Path not found with 50km buffer, retrying with 100km buffer...');
+    this.clear(); // Clear previous data
+    await this.loadRailwayParts(dbClient, startId, endId, 100000);
+    result = this.findPath(startId, endId);
+
+    if (result) {
+      console.log('Path found with 100km buffer');
+    } else {
+      console.log('Path not found even with 100km buffer');
+    }
+
+    return result;
+  }
+
+  /**
+   * Clear all loaded railway parts data
+   */
+  clear(): void {
+    this.parts.clear();
+    this.coordToPartIds.clear();
   }
 
   public findPath(startId: string, endId: string): PathResult | null {

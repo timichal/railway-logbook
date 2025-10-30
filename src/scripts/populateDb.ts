@@ -28,9 +28,7 @@ async function recalculateRoute(
 ): Promise<{ success: boolean; coordinates?: Coord[]; error?: string }> {
   try {
     const pathFinder = new RailwayPathFinder();
-    await pathFinder.loadRailwayParts(client, startingPartId, endingPartId);
-
-    const result = pathFinder.findPath(startingPartId, endingPartId);
+    const result = await pathFinder.findPathWithRetry(client, startingPartId, endingPartId);
 
     if (!result) {
       return { success: false, error: 'No path found between starting and ending parts' };
