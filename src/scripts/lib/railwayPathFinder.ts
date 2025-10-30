@@ -164,8 +164,19 @@ export class RailwayPathFinder {
 
     if (result) {
       console.log('Path found with 100km buffer');
+      return result;
+    }
+
+    // Third attempt with 150km buffer
+    console.log('Path not found with 100km buffer, retrying with 150km buffer...');
+    this.clear(); // Clear previous data
+    await this.loadRailwayParts(dbClient, startId, endId, 150000);
+    result = this.findPath(startId, endId);
+
+    if (result) {
+      console.log('Path found with 150km buffer');
     } else {
-      console.log('Path not found even with 100km buffer');
+      console.log('Path not found even with 150km buffer');
     }
 
     return result;
