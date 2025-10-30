@@ -3,7 +3,7 @@
 import pool from './db';
 import { getUser } from './auth-actions';
 import { RailwayPathFinder } from '../scripts/lib/railwayPathFinder';
-import type { PathResult } from './pathfinding-types';
+import type { PathResult } from './types';
 
 export async function findRailwayPathDB(startId: string, endId: string): Promise<PathResult | null> {
   // Admin check

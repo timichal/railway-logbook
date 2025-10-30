@@ -2,8 +2,7 @@
 
 import pool from './db';
 import { getUser } from './auth-actions';
-import type { PathResult } from './pathfinding-types';
-import type { RailwayPart } from './types';
+import type { PathResult, RailwayPart } from './types';
 import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinate-utils';
 
 export interface SaveRouteData {

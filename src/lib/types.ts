@@ -82,3 +82,9 @@ export type RailwayRoute = {
   note?: string | null
   partial?: boolean | null
 }
+
+// Pathfinding result (from railway pathfinder)
+export interface PathResult {
+  partIds: string[];
+  coordinates: [number, number][];
+}

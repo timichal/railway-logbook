@@ -1,5 +1,5 @@
 import { Client, Pool, PoolClient } from 'pg';
-import type { PathResult } from '../../lib/pathfinding-types';
+import type { PathResult } from '../../lib/types';
 
 export type { PathResult };
 
