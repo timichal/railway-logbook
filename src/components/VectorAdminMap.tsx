@@ -22,6 +22,7 @@ interface VectorAdminMapProps {
   selectedParts?: { startingId: string, endingId: string };
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
+  focusGeometry?: string | null;
 }
 
 export default function VectorAdminMap({
@@ -32,7 +33,8 @@ export default function VectorAdminMap({
   previewRoute,
   selectedParts,
   refreshTrigger,
-  isEditingGeometry
+  isEditingGeometry,
+  focusGeometry
 }: VectorAdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [showPartsLayer, setShowPartsLayer] = useState(true);
@@ -329,6 +331,38 @@ export default function VectorAdminMap({
       });
     }
   }, [previewRoute, mapLoaded, map]);
+
+  // Handle focus on route geometry (fly to route when selected)
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !focusGeometry) return;
+
+    try {
+      // Parse the WKT geometry string (should be in format "LINESTRING(...)")
+      const geojson = JSON.parse(focusGeometry);
+
+      if (geojson && geojson.type === 'LineString' && geojson.coordinates) {
+        const coordinates = geojson.coordinates as [number, number][];
+
+        // Calculate bounds from coordinates
+        const lngs = coordinates.map(coord => coord[0]);
+        const lats = coordinates.map(coord => coord[1]);
+
+        const bounds: [[number, number], [number, number]] = [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)]
+        ];
+
+        // Fly to the bounds with padding
+        map.current.fitBounds(bounds, {
+          padding: 80,
+          duration: 1000,
+          maxZoom: 13
+        });
+      }
+    } catch (error) {
+      console.error('Error parsing geometry for focus:', error);
+    }
+  }, [focusGeometry, mapLoaded, map]);
 
   return (
     <div className={`${className} relative`}>

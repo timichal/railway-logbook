@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAllRailwayRoutes, getRailwayRoute, updateRailwayRoute } from '@/lib/railway-actions';
 import { deleteRailwayRoute } from '@/lib/route-delete-actions';
 import { usageOptions } from '@/lib/constants';
@@ -29,12 +29,17 @@ interface AdminRoutesTabProps {
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
   onEditGeometry?: (trackId: string) => void;
+  onRouteFocus?: (geometry: string) => void;
 }
 
-export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRouteDeleted, onRouteUpdated, onEditGeometry }: AdminRoutesTabProps) {
+export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRouteDeleted, onRouteUpdated, onEditGeometry, onRouteFocus }: AdminRoutesTabProps) {
   const [routes, setRoutes] = useState<RailwayRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showInvalidOnly, setShowInvalidOnly] = useState(false);
+  const itemsPerPage = 100;
   const [editForm, setEditForm] = useState<{
     from_station: string;
     to_station: string;
@@ -55,6 +60,40 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
     }
   };
 
+  // Filter and paginate routes
+  const filteredRoutes = useMemo(() => {
+    let filtered = routes;
+
+    // Apply invalid-only filter
+    if (showInvalidOnly) {
+      filtered = filtered.filter(route => route.is_valid === false);
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((route) => {
+        const trackIdMatch = route.track_number?.toLowerCase().includes(query);
+        const fromMatch = route.from_station.toLowerCase().includes(query);
+        const toMatch = route.to_station.toLowerCase().includes(query);
+        return trackIdMatch || fromMatch || toMatch;
+      });
+    }
+
+    return filtered;
+  }, [routes, searchQuery, showInvalidOnly]);
+
+  const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
+  const paginatedRoutes = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredRoutes.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredRoutes, currentPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, showInvalidOnly]);
+
   const handleRouteClick = useCallback(async (trackId: string) => {
     try {
       setIsLoading(true);
@@ -72,12 +111,17 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
       if (onRouteSelect) {
         onRouteSelect(trackId);
       }
+
+      // Focus on the route on the map
+      if (onRouteFocus && routeDetail.geometry) {
+        onRouteFocus(routeDetail.geometry);
+      }
     } catch (error) {
       console.error('Error loading route detail:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [onRouteSelect]);
+  }, [onRouteSelect, onRouteFocus]);
 
   // Load all routes on component mount
   useEffect(() => {
@@ -181,32 +225,88 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
   return (
     <div className="h-full flex">
       {/* Routes List */}
-      <div className="w-1/2 border-r border-gray-200 overflow-y-auto">
-        <div className="p-3 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Routes ({routes.length})</h3>
-        </div>
-        {isLoading && !selectedRoute ? (
-          <div className="p-4 text-center text-gray-500">Loading...</div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {routes.map((route) => (
-              <button
-                key={route.track_id}
-                onClick={() => handleRouteClick(route.track_id)}
-                className={`w-full p-3 text-left hover:bg-gray-50 focus:bg-blue-50 focus:outline-none ${selectedRouteId === route.track_id ? 'bg-blue-50' : ''
-                  }`}
-              >
-                <div className="font-medium text-sm text-gray-900 truncate">
-                  {route.from_station} ⟷ {route.to_station}
-                </div>
-              </button>
-            ))}
+      <div className="flex-1 border-r border-gray-200 flex flex-col overflow-hidden">
+        <div className="p-3 border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-gray-900">Routes ({routes.length})</h3>
+            {/* Invalid Only Filter */}
+            <div>
+              <label className="flex justify-center items-center cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={showInvalidOnly}
+                  onChange={(e) => setShowInvalidOnly(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-gray-700">Invalid only ({routes.filter(route => route.is_valid === false).length})</span>
+              </label>
+            </div>
           </div>
-        )}
+          {/* Search Box */}
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by route #, from, or to..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+          />
+          {searchQuery && (
+            <div className="text-xs text-gray-500 mt-1">
+              Found {filteredRoutes.length} route{filteredRoutes.length !== 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+
+        {/* Routes List */}
+        <div className="flex-1 overflow-y-auto">
+          {isLoading && !selectedRoute ? (
+            <div className="p-4 text-center text-gray-500">Loading...</div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {paginatedRoutes.map((route) => (
+                <button
+                  key={route.track_id}
+                  onClick={() => handleRouteClick(route.track_id)}
+                  className={`w-full p-3 text-left hover:bg-gray-50 focus:bg-blue-50 focus:outline-none ${selectedRouteId === route.track_id ? 'bg-blue-50' : ''
+                    }`}
+                >
+                  <div className="font-medium text-sm text-gray-900 truncate">
+                    {route.from_station} ⟷ {route.to_station} [{route.track_number}]
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Pagination and Filter Controls */}
+        <div className="border-t border-gray-100 flex-shrink-0">
+          {totalPages > 1 && (
+            <div className="p-3 flex items-center justify-between text-sm">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-black"
+              >
+                Previous
+              </button>
+              <span className="text-gray-600">
+                {currentPage}/{totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-black"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Route Detail */}
-      <div className="w-1/2 overflow-y-auto">
+      {/* Route Detail - Fixed Width */}
+      <div style={{ width: '250px' }} className="overflow-y-auto flex-shrink-0">
         {selectedRoute ? (
           <div className="p-4">
             <div className="mb-4 flex justify-between items-center">
@@ -298,7 +398,7 @@ export default function AdminRoutesTab({ selectedRouteId, onRouteSelect, onRoute
                   <textarea
                     value={editForm.description}
                     onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                    rows={3}
+                    rows={5}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
                   />
                 </div>

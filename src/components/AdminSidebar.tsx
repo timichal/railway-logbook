@@ -19,9 +19,11 @@ interface AdminSidebarProps {
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
   onEditingGeometryChange?: (trackId: string | null) => void;
+  onRouteFocus?: (geometry: string) => void;
+  sidebarWidth?: number;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth = 400 }: AdminSidebarProps) {
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
 
@@ -128,7 +130,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
   }, []);
 
   return (
-    <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
+    <div style={{ width: `${sidebarWidth}px` }} className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
       {/* Tab Headers */}
       <div className="flex border-b border-gray-200">
         <button
@@ -172,6 +174,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             onRouteDeleted={onRouteDeleted}
             onRouteUpdated={onRouteUpdated}
             onEditGeometry={handleEditGeometry}
+            onRouteFocus={onRouteFocus}
           />
         )}
 

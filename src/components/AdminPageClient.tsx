@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import VectorAdminMapWrapper from '@/components/VectorAdminMapWrapper';
 import AdminSidebar from '@/components/AdminSidebar';
@@ -25,6 +25,9 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
+  const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(600); // Sidebar width in pixels
+  const [isResizing, setIsResizing] = useState<boolean>(false);
 
   const handleRouteSelect = (routeId: string) => {
     // If empty string, unselect the route
@@ -117,6 +120,39 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setEditingGeometryForTrackId(trackId);
   };
 
+  const handleRouteFocus = (geometry: string) => {
+    setFocusGeometry(geometry);
+  };
+
+  const handleMouseDown = () => {
+    setIsResizing(true);
+  };
+
+  // Handle resize drag
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = e.clientX;
+      // Constrain between 400px and 1200px
+      if (newWidth >= 400 && newWidth <= 1200) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   async function handleLogout() {
     await logout();
   }
@@ -152,7 +188,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden flex">
+      <main className="flex-1 overflow-hidden flex relative">
         <AdminSidebar
           selectedRouteId={selectedRouteId}
           onRouteSelect={handleRouteSelect}
@@ -167,7 +203,17 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           onRouteDeleted={handleRouteDeleted}
           onRouteUpdated={handleRouteUpdated}
           onEditingGeometryChange={handleEditingGeometryChange}
+          onRouteFocus={handleRouteFocus}
+          sidebarWidth={sidebarWidth}
         />
+
+        {/* Resizer */}
+        <div
+          onMouseDown={handleMouseDown}
+          className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? 'bg-blue-400' : ''}`}
+          style={{ userSelect: 'none' }}
+        />
+
         <div className="flex-1 overflow-hidden">
           <VectorAdminMapWrapper
             className="w-full h-full"
@@ -178,6 +224,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             selectedParts={{startingId: createFormIds.startingId, endingId: createFormIds.endingId}}
             refreshTrigger={refreshTrigger}
             isEditingGeometry={!!editingGeometryForTrackId}
+            focusGeometry={focusGeometry}
           />
         </div>
       </main>

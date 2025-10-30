@@ -14,7 +14,7 @@ interface RecalculationResult {
   totalRoutes: number;
   successfulRoutes: number;
   invalidRoutes: number;
-  errors: Array<{ track_id: number; name: string; error: string }>;
+  errors: Array<{ track_id: number; from_station: string; to_station: string; error: string }>;
 }
 
 /**
@@ -93,7 +93,7 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
 
   // Get all routes with starting and ending part IDs
   const routes = await client.query(`
-    SELECT track_id, name, starting_part_id, ending_part_id, length_km
+    SELECT track_id, from_station, to_station, starting_part_id, ending_part_id, length_km
     FROM railway_routes
     WHERE starting_part_id IS NOT NULL
       AND ending_part_id IS NOT NULL
@@ -104,7 +104,8 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
   console.log(`Found ${result.totalRoutes} routes to recalculate`);
 
   for (const route of routes.rows) {
-    const { track_id, name, starting_part_id, ending_part_id, length_km: originalLength } = route;
+    const { track_id, from_station, to_station, starting_part_id, ending_part_id, length_km } = route;
+    const originalLength = parseFloat(length_km);
 
     const recalcResult = await recalculateRoute(
       client,
@@ -131,7 +132,7 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
       if (lengthDiff > 0.1 && lengthDiffPercent > 1) {
         const errorMsg = `Distance mismatch: original ${originalLength.toFixed(2)} km, recalculated ${newLength.toFixed(2)} km (diff: ${lengthDiff.toFixed(2)} km, ${lengthDiffPercent.toFixed(1)}%)`;
 
-        console.log(`  [${track_id}] ${name}: ${errorMsg}`);
+        console.log(`  [${track_id}] ${from_station} → ${to_station}: ${errorMsg}`);
 
         // Mark route as invalid due to distance mismatch
         await client.query(`
@@ -146,7 +147,8 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
         result.invalidRoutes++;
         result.errors.push({
           track_id,
-          name,
+          from_station,
+          to_station,
           error: errorMsg
         });
       } else {
@@ -182,7 +184,8 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
       result.invalidRoutes++;
       result.errors.push({
         track_id,
-        name,
+        from_station,
+        to_station,
         error: recalcResult.error || 'Unknown error'
       });
     }
@@ -200,8 +203,8 @@ async function loadGeoJSONData(): Promise<void> {
 
     if (!dataPath) {
       console.error('Error: Data file path is required');
-      console.error('Usage: npm run populateDb <filepath>');
-      console.error('Example: npm run populateDb ./data/europe-pruned-251027.geojson');
+      console.error('Usage: npm run importMapData <filepath>');
+      console.error('Example: npm run importMapData ./data/europe-pruned-251027.geojson');
       process.exit(1);
     }
 
@@ -238,7 +241,7 @@ async function loadGeoJSONData(): Promise<void> {
         console.log('');
         console.log('=== Invalid Routes ===');
         for (const error of recalcResult.errors) {
-          console.log(`  [${error.track_id}] ${error.name}: ${error.error}`);
+          console.log(`  [${error.track_id}] ${error.from_station} → ${error.to_station}: ${error.error}`);
         }
       }
     } else {

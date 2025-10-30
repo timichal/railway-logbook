@@ -22,6 +22,7 @@ interface VectorAdminMapWrapperProps {
   selectedParts?: { startingId: string, endingId: string };
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
+  focusGeometry?: string | null;
 }
 
 export default function VectorAdminMapWrapper({
@@ -32,7 +33,8 @@ export default function VectorAdminMapWrapper({
   previewRoute,
   selectedParts,
   refreshTrigger,
-  isEditingGeometry
+  isEditingGeometry,
+  focusGeometry
 }: VectorAdminMapWrapperProps) {
   return (
     <VectorAdminMap
@@ -44,6 +46,7 @@ export default function VectorAdminMapWrapper({
       selectedParts={selectedParts}
       refreshTrigger={refreshTrigger}
       isEditingGeometry={isEditingGeometry}
+      focusGeometry={focusGeometry}
     />
   );
 }
