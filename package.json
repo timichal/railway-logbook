@@ -10,10 +10,11 @@
     "lint": "next lint",
     "prepareData": "sh ./osmium-scripts/prepare.sh",
     "populateDb": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/populateDb.ts",
-    "exportRoutes": "tsx src/scripts/exportRoutes.ts",
-    "importRoutes": "tsx src/scripts/importRoutes.ts",
-    "uploadData": "pscp ./data/* railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/",
-    "downloadData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/* ./data/"
+    "exportRouteData": "tsx src/scripts/exportRoutes.ts",
+    "importRouteData": "tsx src/scripts/importRoutes.ts",
+    "uploadMapData": "pscp ./data/*.geojson railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/",
+    "downloadMapData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.geojson ./data/",
+    "downloadRouteData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.sql ./data/"
   },
   "repository": {
     "type": "git",
@@ -26,14 +27,14 @@
   },
   "homepage": "https://github.com/timichal/railway-logbook#readme",
   "dependencies": {
-    "@types/node": "^24.8.1",
-    "@types/pg": "^8.15.5",
+    "@types/node": "^24.9.2",
+    "@types/pg": "^8.15.6",
     "autoprefixer": "^10.4.21",
     "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.3",
     "jose": "^6.1.0",
-    "maplibre-gl": "^5.0.0",
-    "next": "^15.5.6",
+    "maplibre-gl": "^5.10.0",
+    "next": "^16.0.1",
     "pg": "^8.16.3",
     "postcss": "^8.5.6",
     "react": "^19.2.0",
@@ -43,12 +44,12 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
-    "@tailwindcss/postcss": "^4.1.14",
+    "@tailwindcss/postcss": "^4.1.16",
     "@types/bcryptjs": "^2.4.6",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "eslint": "^9.37.0",
-    "eslint-config-next": "^15.5.6",
-    "tailwindcss": "^4.1.14"
+    "eslint": "^9.38.0",
+    "eslint-config-next": "^16.0.1",
+    "tailwindcss": "^4.1.16"
   }
 }

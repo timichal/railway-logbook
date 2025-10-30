@@ -93,7 +93,7 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
 
   // Get all routes with starting and ending part IDs
   const routes = await client.query(`
-    SELECT track_id, name, starting_part_id, ending_part_id
+    SELECT track_id, name, starting_part_id, ending_part_id, length_km
     FROM railway_routes
     WHERE starting_part_id IS NOT NULL
       AND ending_part_id IS NOT NULL
@@ -104,7 +104,7 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
   console.log(`Found ${result.totalRoutes} routes to recalculate`);
 
   for (const route of routes.rows) {
-    const { track_id, name, starting_part_id, ending_part_id } = route;
+    const { track_id, name, starting_part_id, ending_part_id, length_km: originalLength } = route;
 
     const recalcResult = await recalculateRoute(
       client,
@@ -117,22 +117,56 @@ async function recalculateAllRoutes(client: Client): Promise<RecalculationResult
       // Convert coordinates to LineString WKT format using shared utility
       const lineString = coordinatesToWKT(recalcResult.coordinates);
 
-      // Update route with new geometry
-      await client.query(`
-        UPDATE railway_routes
-        SET
-          geometry = ST_GeomFromText($1, 4326),
-          length_km = ST_Length(ST_GeomFromText($1, 4326)::geography) / 1000,
-          is_valid = TRUE,
-          error_message = NULL,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE track_id = $2
-      `, [lineString, track_id]);
+      // Calculate the new length
+      const lengthQuery = await client.query(`
+        SELECT ST_Length(ST_GeomFromText($1, 4326)::geography) / 1000 as new_length_km
+      `, [lineString]);
 
-      result.successfulRoutes++;
+      const newLength = parseFloat(lengthQuery.rows[0].new_length_km);
+      const lengthDiff = Math.abs(newLength - originalLength);
+      const lengthDiffPercent = (lengthDiff / originalLength) * 100;
 
-      if (result.successfulRoutes % 100 === 0) {
-        console.log(`  Recalculated ${result.successfulRoutes}/${result.totalRoutes} routes...`);
+      // Check if the new length differs significantly from the original
+      // Consider invalid if difference is more than 0.1 km OR more than 1%
+      if (lengthDiff > 0.1 && lengthDiffPercent > 1) {
+        const errorMsg = `Distance mismatch: original ${originalLength.toFixed(2)} km, recalculated ${newLength.toFixed(2)} km (diff: ${lengthDiff.toFixed(2)} km, ${lengthDiffPercent.toFixed(1)}%)`;
+
+        console.log(`  [${track_id}] ${name}: ${errorMsg}`);
+
+        // Mark route as invalid due to distance mismatch
+        await client.query(`
+          UPDATE railway_routes
+          SET
+            is_valid = FALSE,
+            error_message = $1,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE track_id = $2
+        `, [errorMsg, track_id]);
+
+        result.invalidRoutes++;
+        result.errors.push({
+          track_id,
+          name,
+          error: errorMsg
+        });
+      } else {
+        // Update route with new geometry
+        await client.query(`
+          UPDATE railway_routes
+          SET
+            geometry = ST_GeomFromText($1, 4326),
+            length_km = $2,
+            is_valid = TRUE,
+            error_message = NULL,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE track_id = $3
+        `, [lineString, newLength, track_id]);
+
+        result.successfulRoutes++;
+
+        if (result.successfulRoutes % 100 === 0) {
+          console.log(`  Recalculated ${result.successfulRoutes}/${result.totalRoutes} routes...`);
+        }
       }
     } else {
       // Mark route as invalid
@@ -167,7 +201,7 @@ async function loadGeoJSONData(): Promise<void> {
     if (!dataPath) {
       console.error('Error: Data file path is required');
       console.error('Usage: npm run populateDb <filepath>');
-      console.error('Example: npm run populateDb ./data/cz-pruned.geojson');
+      console.error('Example: npm run populateDb ./data/europe-pruned-251027.geojson');
       process.exit(1);
     }
 
