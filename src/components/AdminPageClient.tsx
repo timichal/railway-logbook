@@ -7,6 +7,7 @@ import AdminSidebar from '@/components/AdminSidebar';
 import { logout } from '@/lib/auth-actions';
 import { saveRailwayRoute } from '@/lib/route-save-actions';
 import type { RailwayPart } from '@/lib/types';
+import { useToast } from '@/lib/toast';
 
 interface AdminPageClientProps {
   user: {
@@ -17,6 +18,7 @@ interface AdminPageClientProps {
 }
 
 export default function AdminPageClient({ user }: AdminPageClientProps) {
+  const { showError, showSuccess } = useToast();
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [partClickTrigger, setPartClickTrigger] = useState<number>(0); // Trigger to force effect to run
@@ -71,7 +73,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
     if (!previewRoute) {
       console.error('AdminPageClient: No preview route to save');
-      alert('Error: No route preview available to save');
+      showError('Error: No route preview available to save');
       return;
     }
 
@@ -89,11 +91,11 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
       // Trigger routes layer refresh
       setRefreshTrigger(prev => prev + 1);
 
-      alert(`Route "${routeData.from_station} ⟷ ${routeData.to_station}" saved successfully!\nTrack ID: ${trackId}`);
+      showSuccess(`Route "${routeData.from_station} ⟷ ${routeData.to_station}" saved successfully! Track ID: ${trackId}`);
 
     } catch (error) {
       console.error('AdminPageClient: Error saving route:', error);
-      alert(`Error saving route: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(`Error saving route: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

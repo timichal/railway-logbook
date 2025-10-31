@@ -54,7 +54,7 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
     
   } catch (error) {
     console.error('Error fetching railway parts by IDs:', error);
-    throw error;
+    throw new Error(`Failed to fetch railway parts: ${error instanceof Error ? error.message : 'Unknown error'}`);
   } finally {
     client.release();
   }

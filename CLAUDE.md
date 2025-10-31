@@ -204,7 +204,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 ### Admin Route Creation and Management
 - Admin interface allows creating new routes by clicking railway parts on the map
 - Routes are built by selecting start/end points from `railway_parts`
-- Shared pathfinding (`RailwayPathFinder` class) uses BFS with PostGIS spatial queries within 50km
+- Shared pathfinding (`RailwayPathFinder` class) uses BFS with PostGIS spatial queries within 150km
 - Route length is automatically calculated using ST_Length with geography cast
 - track_id is auto-generated using PostgreSQL SERIAL
 - Routes store starting_part_id and ending_part_id for recalculation after OSM updates

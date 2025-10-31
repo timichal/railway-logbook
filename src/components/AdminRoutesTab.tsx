@@ -5,6 +5,7 @@ import { getAllRailwayRoutes, getRailwayRoute, updateRailwayRoute } from '@/lib/
 import { deleteRailwayRoute } from '@/lib/route-delete-actions';
 import RoutesList from './RoutesList';
 import RouteEditForm from './RouteEditForm';
+import { useToast, ConfirmDialog } from '@/lib/toast';
 
 interface RailwayRoute {
   track_id: string;
@@ -41,6 +42,8 @@ export default function AdminRoutesTab({
   onEditGeometry,
   onRouteFocus
 }: AdminRoutesTabProps) {
+  const { showError, showSuccess } = useToast();
+
   // State
   const [routes, setRoutes] = useState<RailwayRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
@@ -48,6 +51,7 @@ export default function AdminRoutesTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showInvalidOnly, setShowInvalidOnly] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const itemsPerPage = 100;
   const [editForm, setEditForm] = useState<{
     from_station: string;
@@ -64,7 +68,8 @@ export default function AdminRoutesTab({
       const routesData = await getAllRailwayRoutes();
       setRoutes(routesData);
     } catch (error) {
-      // Error loading routes
+      console.error('Error loading routes:', error);
+      showError(`Failed to load routes: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -129,11 +134,12 @@ export default function AdminRoutesTab({
         onRouteFocus(routeDetail.geometry);
       }
     } catch (error) {
-      // Error loading route detail
+      console.error('Error loading route detail:', error);
+      showError(`Failed to load route details: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
-  }, [onRouteSelect, onRouteFocus]);
+  }, [onRouteSelect, onRouteFocus, showError]);
 
   useEffect(() => {
     if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
@@ -171,8 +177,11 @@ export default function AdminRoutesTab({
       if (onRouteUpdated) {
         onRouteUpdated();
       }
+
+      showSuccess('Route updated successfully!');
     } catch (error) {
-      // Error updating route
+      console.error('Error updating route:', error);
+      showError(`Failed to update route: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -180,14 +189,12 @@ export default function AdminRoutesTab({
 
   const handleDeleteRoute = async () => {
     if (!selectedRoute) return;
+    setDeleteConfirmOpen(true);
+  };
 
-    const confirmDelete = confirm(
-      `Are you sure you want to delete the route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}"?\n\n` +
-      `Track ID: ${selectedRoute.track_id}\n` +
-      `This action cannot be undone.`
-    );
-
-    if (!confirmDelete) return;
+  const confirmDeleteRoute = async () => {
+    if (!selectedRoute) return;
+    setDeleteConfirmOpen(false);
 
     try {
       setIsLoading(true);
@@ -206,9 +213,10 @@ export default function AdminRoutesTab({
         onRouteDeleted();
       }
 
-      alert(`Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" has been deleted successfully.`);
+      showSuccess(`Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" has been deleted successfully.`);
     } catch (error) {
-      alert(`Error deleting route: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error deleting route:', error);
+      showError(`Error deleting route: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -223,8 +231,23 @@ export default function AdminRoutesTab({
   };
 
   return (
-    <div className="h-full flex">
-      <RoutesList
+    <>
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        title="Delete Railway Route"
+        message={selectedRoute ?
+          `Are you sure you want to delete the route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}"?\n\nTrack ID: ${selectedRoute.track_id}\n\nThis action cannot be undone.`
+          : ''
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={confirmDeleteRoute}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
+
+      <div className="h-full flex">
+        <RoutesList
         routes={routes}
         paginatedRoutes={paginatedRoutes}
         totalRoutes={routes.length}
@@ -252,6 +275,7 @@ export default function AdminRoutesTab({
         onEditGeometry={onEditGeometry || (() => {})}
         onUnselect={handleUnselect}
       />
-    </div>
+      </div>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import AdminRoutesTab from './AdminRoutesTab';
 import AdminCreateRouteTab from './AdminCreateRouteTab';
 import type { RailwayPart } from '@/lib/types';
+import { useToast } from '@/lib/toast';
 
 interface AdminSidebarProps {
   selectedRouteId?: string | null;
@@ -24,6 +25,7 @@ interface AdminSidebarProps {
 }
 
 export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth = 400 }: AdminSidebarProps) {
+  const { showError } = useToast();
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
 
@@ -112,6 +114,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
       }
     } catch (error) {
       console.error('Error fetching route details for geometry edit:', error);
+      showError(`Failed to load route details: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setCreateFormIds({ startingId: '', endingId: '' });
     }
 

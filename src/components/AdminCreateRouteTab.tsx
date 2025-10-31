@@ -6,6 +6,7 @@ import { findRailwayPathDB } from '@/lib/db-path-actions';
 import { getRailwayPartsByIds } from '@/lib/railway-parts-actions';
 import { saveRailwayRoute } from '@/lib/route-save-actions';
 import type { RailwayPart } from '@/lib/types';
+import { useToast } from '@/lib/toast';
 
 interface AdminCreateRouteTabProps {
   startingId: string;
@@ -23,6 +24,7 @@ interface AdminCreateRouteTabProps {
 }
 
 export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, editingGeometryForTrackId, onGeometryEditComplete, onCancelGeometryEdit }: AdminCreateRouteTabProps) {
+  const { showError, showSuccess } = useToast();
 
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
@@ -95,7 +97,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       onPreviewRoute(result.partIds, result.coordinates, railwayParts);
     } else {
       console.error('Preview: No path found between', startingId, 'and', endingId);
-      alert('No path found between the selected railway parts within 50km. Make sure both parts are connected through the railway network.');
+      showError('No path found between the selected railway parts within 150km. Make sure both parts are connected through the railway network.');
     }
   };
 
@@ -132,7 +134,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
         editingGeometryForTrackId // Pass track ID to trigger UPDATE query
       );
 
-      alert('Route geometry updated successfully!');
+      showSuccess('Route geometry updated successfully!');
 
       // Clear preview route
       if (onCancelPreview) {
@@ -148,7 +150,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       }
     } catch (error) {
       console.error('Error updating route geometry:', error);
-      alert(`Error updating route geometry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(`Error updating route geometry: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
