@@ -15,9 +15,14 @@ export async function searchStations(searchQuery: string): Promise<Station[]> {
            ST_Y(coordinates) as lat
     FROM stations
     WHERE name ILIKE $1
-    ORDER BY name
+    ORDER BY
+      CASE
+        WHEN name ILIKE $2 THEN 0  -- Exact start match first
+        ELSE 1                      -- Contains match second
+      END,
+      name
     LIMIT 10
-  `, [`%${searchQuery}%`]);
+  `, [`%${searchQuery}%`, `${searchQuery}%`]);
 
   return result.rows.map(row => ({
     id: row.id,

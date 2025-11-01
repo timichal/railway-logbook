@@ -17,6 +17,8 @@ interface SelectedStation {
   name: string;
 }
 
+type MaybeStation = SelectedStation | null;
+
 interface MultiRouteLoggerProps {
   onHighlightRoutes?: (routeIds: number[]) => void;
   onClose?: () => void;
@@ -24,8 +26,8 @@ interface MultiRouteLoggerProps {
 
 export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRouteLoggerProps) {
   const [fromStation, setFromStation] = useState<SelectedStation | null>(null);
+  const [viaStations, setViaStations] = useState<MaybeStation[]>([]);
   const [toStation, setToStation] = useState<SelectedStation | null>(null);
-  const [viaStations, setViaStations] = useState<SelectedStation[]>([]);
 
   const [foundPath, setFoundPath] = useState<RouteNode[]>([]);
   const [totalDistance, setTotalDistance] = useState(0);
@@ -38,12 +40,11 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
   const [isSaving, setIsSaving] = useState(false);
 
   // Station search for each input
-  const [activeSearch, setActiveSearch] = useState<'from' | 'to' | 'via' | null>(null);
+  const [activeSearch, setActiveSearch] = useState<'from' | 'to' | number | null>(null); // number for via index
   const [fromSearchQuery, setFromSearchQuery] = useState('');
+  const [viaSearchQueries, setViaSearchQueries] = useState<string[]>([]);
   const [toSearchQuery, setToSearchQuery] = useState('');
-  const [viaSearchQuery, setViaSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Station[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -51,27 +52,44 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
   const performSearch = useCallback(async (query: string) => {
     if (query.trim().length < 2) {
       setSearchResults([]);
-      setIsSearching(false);
       return;
     }
 
-    setIsSearching(true);
     try {
       const results = await searchStations(query);
       setSearchResults(results);
     } catch (error) {
       console.error('Error searching stations:', error);
       setSearchResults([]);
-    } finally {
-      setIsSearching(false);
     }
   }, []);
 
   // Handle search input change
-  const handleSearchChange = (field: 'from' | 'to' | 'via', value: string) => {
-    if (field === 'from') setFromSearchQuery(value);
-    else if (field === 'to') setToSearchQuery(value);
-    else if (field === 'via') setViaSearchQuery(value);
+  const handleSearchChange = (field: 'from' | 'to' | number, value: string) => {
+    if (field === 'from') {
+      setFromSearchQuery(value);
+      // Clear selection when user edits
+      if (value !== fromStation?.name) {
+        setFromStation(null);
+      }
+    } else if (field === 'to') {
+      setToSearchQuery(value);
+      // Clear selection when user edits
+      if (value !== toStation?.name) {
+        setToStation(null);
+      }
+    } else {
+      // Via station (field is the index)
+      const newQueries = [...viaSearchQueries];
+      newQueries[field] = value;
+      setViaSearchQueries(newQueries);
+      // Clear selection when user edits
+      if (value !== viaStations[field]?.name) {
+        const newStations = [...viaStations];
+        newStations[field] = null; // Mark as unselected but keep the slot
+        setViaStations(newStations);
+      }
+    }
 
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -97,9 +115,14 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
     } else if (activeSearch === 'to') {
       setToStation(selected);
       setToSearchQuery(station.name);
-    } else if (activeSearch === 'via') {
-      setViaStations([...viaStations, selected]);
-      setViaSearchQuery('');
+    } else if (typeof activeSearch === 'number') {
+      // Via station
+      const newStations = [...viaStations];
+      newStations[activeSearch] = selected;
+      setViaStations(newStations);
+      const newQueries = [...viaSearchQueries];
+      newQueries[activeSearch] = station.name;
+      setViaSearchQueries(newQueries);
     }
 
     setSearchResults([]);
@@ -139,15 +162,24 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
       return;
     }
 
+    // Check if all via stations are filled
+    const hasEmptyVia = viaStations.some(s => s === null);
+    if (hasEmptyVia) {
+      setPathError('Please select all via stations or remove empty ones');
+      return;
+    }
+
     setIsSearchingPath(true);
     setPathError(null);
     setFoundPath([]);
 
     try {
-      // Convert station IDs to numbers
+      // Convert station IDs to numbers, filtering out nulls
       const fromId = typeof fromStation.id === 'string' ? parseInt(fromStation.id) : fromStation.id;
       const toId = typeof toStation.id === 'string' ? parseInt(toStation.id) : toStation.id;
-      const viaIds = viaStations.map(s => typeof s.id === 'string' ? parseInt(s.id) : s.id);
+      const viaIds = viaStations
+        .filter((s): s is SelectedStation => s !== null) // Filter out nulls
+        .map(s => typeof s.id === 'string' ? parseInt(s.id) : s.id);
 
       const result = await findRoutePathBetweenStations(fromId, toId, viaIds);
 
@@ -207,9 +239,16 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
     }
   };
 
+  // Add new via station
+  const addViaStation = () => {
+    setViaStations([...viaStations, null]);
+    setViaSearchQueries([...viaSearchQueries, '']);
+  };
+
   // Remove via station
   const removeViaStation = (index: number) => {
     setViaStations(viaStations.filter((_, i) => i !== index));
+    setViaSearchQueries(viaSearchQueries.filter((_, i) => i !== index));
   };
 
   return (
@@ -279,6 +318,64 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
         </div>
       </div>
 
+      {/* Via Stations */}
+      {viaStations.map((station, viaIndex) => (
+        <div key={viaIndex} className="mb-3">
+          <label className="block text-sm font-medium mb-1">Via Station {viaIndex + 1}</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={viaSearchQueries[viaIndex] || ''}
+              onChange={(e) => handleSearchChange(viaIndex, e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={() => {
+                setActiveSearch(viaIndex);
+                if ((viaSearchQueries[viaIndex] || '').length >= 2) performSearch(viaSearchQueries[viaIndex] || '');
+              }}
+              onBlur={() => setTimeout(() => {
+                setActiveSearch(null);
+                setSearchResults([]);
+                setSelectedIndex(-1);
+              }, 200)}
+              placeholder={`Search via station ${viaIndex + 1}...`}
+              className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                station ? 'border-green-300 bg-green-50' : 'border-gray-300'
+              }`}
+            />
+            <button
+              onClick={() => removeViaStation(viaIndex)}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+            >
+              ×
+            </button>
+            {activeSearch === viaIndex && searchResults.length > 0 && (
+              <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
+                {searchResults.map((searchStation, index) => (
+                  <button
+                    key={searchStation.id}
+                    onClick={() => handleStationSelect(searchStation)}
+                    onMouseEnter={() => setSelectedIndex(index)}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
+                      selectedIndex === index ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    {searchStation.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* Add Via Station Button */}
+      <button
+        onClick={addViaStation}
+        className="w-full mb-3 px-3 py-2 border-2 border-dashed border-gray-300 rounded text-sm text-gray-600 hover:border-gray-400 hover:text-gray-800"
+      >
+        + Add via station
+      </button>
+
       {/* To Station */}
       <div className="mb-3">
         <label className="block text-sm font-medium mb-1">To Station</label>
@@ -314,61 +411,6 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
             </button>
           )}
           {activeSearch === 'to' && searchResults.length > 0 && (
-            <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
-              {searchResults.map((station, index) => (
-                <button
-                  key={station.id}
-                  onClick={() => handleStationSelect(station)}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                    selectedIndex === index ? 'bg-blue-50' : ''
-                  }`}
-                >
-                  {station.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Via Stations */}
-      <div className="mb-3">
-        <label className="block text-sm font-medium mb-1">Via Stations (optional)</label>
-        {viaStations.length > 0 && (
-          <div className="mb-2 space-y-1">
-            {viaStations.map((station, index) => (
-              <div key={index} className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded">
-                <span className="flex-1 text-sm">{station.name}</span>
-                <button
-                  onClick={() => removeViaStation(index)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="relative">
-          <input
-            type="text"
-            value={viaSearchQuery}
-            onChange={(e) => handleSearchChange('via', e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              setActiveSearch('via');
-              if (viaSearchQuery.length >= 2) performSearch(viaSearchQuery);
-            }}
-            onBlur={() => setTimeout(() => {
-              setActiveSearch(null);
-              setSearchResults([]);
-              setSelectedIndex(-1);
-            }, 200)}
-            placeholder="Add via station..."
-            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {activeSearch === 'via' && searchResults.length > 0 && (
             <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
               {searchResults.map((station, index) => (
                 <button
