@@ -150,6 +150,48 @@ export function setupAdminMapInteractions(
     }
   });
 
+  // Hover effects for stations with popup
+  let stationHoverPopup: maplibregl.Popup | null = null;
+
+  mapInstance.on('mouseenter', 'stations', (e) => {
+    mapInstance.getCanvas().style.cursor = 'pointer';
+
+    if (e.features && e.features.length > 0) {
+      const feature = e.features[0];
+      const properties = feature.properties;
+
+      if (properties) {
+        if (stationHoverPopup) {
+          stationHoverPopup.remove();
+        }
+
+        stationHoverPopup = new maplibregl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 10,
+          className: 'station-hover-popup'
+        })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div style="color: black;">
+              <h3 style="font-weight: bold; margin-bottom: 2px;">${properties.name || 'Unknown Station'}</h3>
+              <div style="font-size: 0.75rem; color: #6b7280;">Station</div>
+            </div>
+          `)
+          .addTo(mapInstance);
+      }
+    }
+  });
+
+  mapInstance.on('mouseleave', 'stations', () => {
+    mapInstance.getCanvas().style.cursor = '';
+
+    if (stationHoverPopup) {
+      stationHoverPopup.remove();
+      stationHoverPopup = null;
+    }
+  });
+
   // Store updatePartsStyle in ref
   updatePartsStyleRef.current = updatePartsStyle;
 }
