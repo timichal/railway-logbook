@@ -87,14 +87,17 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Route Validity Tracking**: Routes store starting_part_id and ending_part_id for recalculation; is_valid flag marks routes that can't be recalculated after OSM updates
 
 ### 4. Frontend Application
-- **Next.js 15** with React 19 - Modern web application framework
+- **Next.js 15** with React 19 - Modern web application framework with App Router
 - **MapLibre GL JS** - Vector tile rendering for high-performance map visualization
-- **Martin Tile Server** - PostGIS vector tile server (port 3001) serving railway_routes, railway_parts, and stations
-- **Server Actions** - Type-safe database operations (`src/lib/railway-actions.ts`)
+- **Martin Tile Server** - PostGIS vector tile server (port 3001) serving railway_routes, railway_parts, and stations as MVT tiles
+- **Server Actions** - Type-safe database operations with automatic serialization
+- **Authentication** - Email/password authentication with bcrypt, session management
 - **Dynamic Styling** - Three-way route colors based on user data (dark green=fully completed, dark orange=partial, crimson=unvisited), weight based on usage type (thinner for Special)
 - **Usage Type Display** - Frontend displays enum numbers (0=Regular, 1=Seasonal, 2=Special) in popups
 - **Connection Pooling** - PostgreSQL pool for database performance
-- **Shared Map Utilities** - Common map initialization and configuration in `src/lib/map/`
+- **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
+- **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension)
+- **Multi-Route Logger** - Journey planner for logging entire trips spanning multiple routes (see dedicated section below)
 
 ### 5. Admin System Architecture
 - **Admin Access Control** - Restricted to user_id=1 with server-side authentication checks in all admin actions
@@ -125,51 +128,89 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `.gitignore` - Comprehensive ignore patterns
 
 ### Source Code (`src/`)
-- `src/app/` - Next.js App Router pages (layout.tsx, page.tsx)
-  - `src/app/admin/` - Admin-only pages (page.tsx)
-- `src/components/` - React components
-  - `VectorRailwayMap.tsx` - User-facing map with ride tracking
-  - `VectorMapWrapper.tsx` - Wrapper for user map
-  - `VectorAdminMap.tsx` - Admin map for route management
-  - `VectorAdminMapWrapper.tsx` - Wrapper for admin map
-  - `AdminPageClient.tsx` - Admin page container with state management
-  - `AdminSidebar.tsx` - Admin interface sidebar with route creation/editing forms
-  - `AdminRoutesTab.tsx` - Route list and edit interface
-- `src/lib/` - Shared utilities, types, and database operations
-  - `db.ts` - PostgreSQL connection pool
-  - `railway-actions.ts` - Server actions for database queries
-  - `route-save-actions.ts` - Server actions for creating/updating routes (admin-only)
-  - `route-delete-actions.ts` - Server actions for deleting routes (admin-only)
-  - `db-path-actions.ts` - Database pathfinding for route creation (admin-only)
-  - `railway-parts-actions.ts` - Fetch railway parts by IDs (admin-only)
-  - `coordinate-utils.ts` - Shared coordinate utilities (mergeLinearChain, coordinatesToWKT)
-  - `constants.ts` - Usage type options (Regular/Seasonal/Special)
-  - `types.ts` - Core type definitions
-  - `src/lib/map/` - Shared map utilities
-    - `index.ts` - Constants, layer factories, closeAllPopups utility
-    - `hooks/useMapLibre.ts` - Base hook for MapLibre initialization
-- `src/scripts/` - Data processing scripts
-  - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
-  - `populateDb.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
-  - `exportRoutes.ts` - Export railway_routes table to JSON file
-  - `importRoutes.ts` - Import railway_routes from JSON file
-  - `src/scripts/lib/` - Shared script utilities
-    - `loadRailwayData.ts` - Shared data loading logic
-    - `railwayPathFinder.ts` - Shared BFS pathfinding class for route creation/recalculation
+
+#### App Pages (`src/app/`)
+- `layout.tsx` - Root layout with authentication
+- `page.tsx` - Main user map page
+- `login/page.tsx` - Login page
+- `register/page.tsx` - Registration page
+- `admin/page.tsx` - Admin route management page (user_id=1 only)
+
+#### Components (`src/components/`)
+
+**User Map Components:**
+- `VectorRailwayMap.tsx` - Main user map with ride tracking, station search, and multi-route logger
+- `VectorMapWrapper.tsx` - Wrapper for user map with authentication
+- `MultiRouteLogger.tsx` - Journey planner UI for logging multiple routes (from → via → to stations)
+
+**Admin Map Components:**
+- `VectorAdminMap.tsx` - Admin map for route management with railway parts selection
+- `VectorAdminMapWrapper.tsx` - Wrapper for admin map
+- `AdminPageClient.tsx` - Admin page container with state management
+- `AdminSidebar.tsx` - Tab-based sidebar (Create Route / Routes List)
+- `AdminCreateRouteTab.tsx` - Route creation interface with start/end point selection
+- `AdminRoutesTab.tsx` - Route list with search and edit functionality
+- `RoutesList.tsx` - Paginated route table with validity indicators
+- `RouteEditForm.tsx` - Form for editing route metadata (from/to/track/description/usage)
+
+**Shared Components:**
+- `LoginForm.tsx` - Login form with email/password
+- `RegisterForm.tsx` - Registration form
+- `LayerControls.tsx` - Map layer toggle controls
+
+#### Library (`src/lib/`)
+
+**Database & Actions:**
+- `db.ts` - PostgreSQL connection pool (exports pool as default)
+- `db-config.ts` - Database configuration utilities
+- `railway-actions.ts` - User-facing server actions (search stations, get GeoJSON data, update user data, get progress, bulk update routes)
+- `route-save-actions.ts` - Admin-only route creation/update with security checks
+- `route-delete-actions.ts` - Admin-only route deletion with security checks
+- `db-path-actions.ts` - Admin-only railway parts pathfinding using RailwayPathFinder
+- `railway-parts-actions.ts` - Admin-only railway parts fetching by IDs
+- `route-path-finder.ts` - Route-level pathfinding for multi-route journeys (user-facing)
+- `auth-actions.ts` - Authentication actions (login, register, logout, getUser)
+
+**Utilities:**
+- `types.ts` - Core TypeScript type definitions (Station, GeoJSONFeature, RailwayRoute, etc.)
+- `constants.ts` - Usage type options (Regular=0, Seasonal=1, Special=2)
+- `coordinate-utils.ts` - Coordinate utilities (mergeLinearChain algorithm, coordinatesToWKT)
+
+#### Map Library (`src/lib/map/`)
+
+**Core:**
+- `index.ts` - Map constants (MAPLIBRE_STYLE, MARTIN_URL), layer factories (createRailwayRoutesSource/Layer, createStationsSource/Layer), closeAllPopups utility
+- `mapState.ts` - Shared map state management
+
+**Hooks:**
+- `hooks/useMapLibre.ts` - Base hook for MapLibre GL initialization with sources and layers
+- `hooks/useRouteEditor.ts` - Hook for route editing functionality (edit form state, quick log/unlog, progress tracking)
+- `hooks/useStationSearch.ts` - Hook for station search with debouncing and keyboard navigation
+- `hooks/useRouteLength.ts` - Hook for calculating route length display
+
+**Interactions:**
+- `interactions/userMapInteractions.ts` - User map click handlers (route click, quick log/unlog)
+- `interactions/adminMapInteractions.ts` - Admin map click handlers (railway parts selection, route editing)
+
+**Utilities:**
+- `utils/userRouteStyling.ts` - User route color/width expressions (three-way colors: dark green=completed, dark orange=partial, crimson=unvisited)
+- `utils/railwayPartsStyling.ts` - Railway parts styling for admin map
+- `utils/distance.ts` - Distance calculation utilities
+
+#### Scripts (`src/scripts/`)
+
+**Data Processing:**
+- `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
+- `populateDb.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
+- `exportRoutes.ts` - Export railway_routes table to JSON file
+- `importRoutes.ts` - Import railway_routes from JSON file
+
+**Script Utilities (`src/scripts/lib/`):**
+- `loadRailwayData.ts` - Shared data loading logic
+- `railwayPathFinder.ts` - Shared BFS pathfinding class for admin route creation and recalculation
 
 ### OSM Processing Scripts (`osmium-scripts/`)
 - `prepare.sh` - Unified pipeline script that downloads OSM data, filters rail features, and converts to GeoJSON
-
-### Shared Libraries (`src/lib/`)
-- `types.ts` - Core type definitions for GeoJSON features and railway data
-- `constants.ts` - Usage type options (Regular=0, Seasonal=1, Special=2)
-- `db.ts` - Database connection pool and utilities
-- `railway-actions.ts` - Server actions for type-safe database operations
-- `route-save-actions.ts` - Admin-only route creation/update with security checks
-- `route-delete-actions.ts` - Admin-only route deletion with security checks
-- `db-path-actions.ts` - Admin-only database pathfinding using RailwayPathFinder
-- `railway-parts-actions.ts` - Admin-only railway parts fetching
-- `coordinate-utils.ts` - Shared coordinate utilities (mergeLinearChain algorithm, coordinatesToWKT converter)
 
 ### Database Schema
 - `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes, route validity tracking fields
@@ -233,3 +274,34 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - Map interactions:
   - Hover over routes shows popup with details
   - Click routes opens edit form for date/note/partial flag
+
+### Multi-Route Logger (Journey Planner)
+- **Purpose**: Log entire journeys spanning multiple railway routes at once
+- **Location**: Side panel accessible via "Log Journey" button on user map
+- **UI Features**:
+  - From/To station selection with autocomplete search
+  - Multiple optional "via" stations (add/remove dynamically)
+  - All inputs support arrow key navigation and keyboard shortcuts
+  - Diacritic-insensitive search (e.g., "bialystok" finds "Białystok")
+  - Search prioritizes name-start matches over contains matches
+  - Auto-clear station selection when user edits input
+- **Pathfinding** (`route-path-finder.ts`):
+  - Sequential segment pathfinding (A→B, B→C, C→D for via stations)
+  - In-memory BFS graph search for performance
+  - Progressive buffer search: 50km → 100km → 200km → 500km → 1000km
+  - Route connection tolerance: 2000m between route endpoints
+  - Station-to-route tolerance: 2000m for finding nearby routes
+  - Continues from previous segment's end route for path continuity
+  - Supports unlimited journey length through via stations
+- **Route Highlighting**:
+  - Found routes highlighted in gold (#FFD700) on map
+  - Uses separate `highlighted_routes` layer with vector tile source
+- **Bulk Logging**:
+  - Preview shows all routes in journey (from_station ⟷ to_station format)
+  - Displays total distance calculation
+  - Single form to add date, note, and partial flag to all routes
+  - Uses `updateMultipleRoutes` server action for efficient bulk insert/update
+- **Error Handling**:
+  - Validates all via stations are selected before pathfinding
+  - Shows helpful errors if stations/routes not found
+  - Suggests adding via stations for segments >1000km
