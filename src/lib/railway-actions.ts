@@ -14,11 +14,11 @@ export async function searchStations(searchQuery: string): Promise<Station[]> {
            ST_X(coordinates) as lon,
            ST_Y(coordinates) as lat
     FROM stations
-    WHERE name ILIKE $1
+    WHERE unaccent(name) ILIKE unaccent($1)
     ORDER BY
       CASE
-        WHEN name ILIKE $2 THEN 0  -- Exact start match first
-        ELSE 1                      -- Contains match second
+        WHEN unaccent(name) ILIKE unaccent($2) THEN 0  -- Exact start match first
+        ELSE 1                                          -- Contains match second
       END,
       name
     LIMIT 10

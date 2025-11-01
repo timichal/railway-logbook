@@ -1,7 +1,8 @@
 -- Railway Management Database Schema
 
--- Enable PostGIS extension first
+-- Enable PostGIS and unaccent extensions first
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS unaccent;
 
 -- Users table
 CREATE TABLE users (
