@@ -9,6 +9,8 @@ import {
   createRailwayRoutesLayer,
   createRailwayPartsSource,
   createRailwayPartsLayer,
+  createStationsSource,
+  createStationsLayer,
   COLORS,
 } from '@/lib/map';
 import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapInteractions';
@@ -39,6 +41,7 @@ export default function VectorAdminMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const [showPartsLayer, setShowPartsLayer] = useState(true);
   const [showRoutesLayer, setShowRoutesLayer] = useState(true);
+  const [showStationsLayer, setShowStationsLayer] = useState(true);
   const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
   const previousShowRoutesLayerRef = useRef(true); // Track previous state before editing geometry
 
@@ -66,10 +69,12 @@ export default function VectorAdminMap({
       sources: {
         railway_parts: createRailwayPartsSource(),
         railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBuster }),
+        stations: createStationsSource(),
       },
       layers: [
         createRailwayPartsLayer(),
         createRailwayRoutesLayer(),
+        createStationsLayer(),
       ],
       onLoad: (mapInstance) => {
         setupAdminMapInteractions(mapInstance, {
@@ -113,6 +118,16 @@ export default function VectorAdminMap({
       showRoutesLayer ? 'visible' : 'none'
     );
   }, [showRoutesLayer, mapLoaded, map]);
+
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    map.current.setLayoutProperty(
+      'stations',
+      'visibility',
+      showStationsLayer ? 'visible' : 'none'
+    );
+  }, [showStationsLayer, mapLoaded, map]);
 
   // Sync Railway Routes checkbox with edit geometry mode
   useEffect(() => {
@@ -389,6 +404,15 @@ export default function VectorAdminMap({
               className="mr-2"
             />
             Railway Routes
+          </label>
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showStationsLayer}
+              onChange={() => setShowStationsLayer(!showStationsLayer)}
+              className="mr-2"
+            />
+            Stations
           </label>
         </div>
       </div>
