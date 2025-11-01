@@ -108,9 +108,6 @@ Update the database connection settings if needed.
 ### Querying Data
 
 ```typescript
-// Get all stations
-const stations = await getAllStations();
-
 // Get data formatted as GeoJSON for map display (includes dynamic styling)
 const geoJson = await getRailwayDataAsGeoJSON(1);
 

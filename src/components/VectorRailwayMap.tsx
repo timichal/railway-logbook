@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FilterSpecification } from 'maplibre-gl';
 import type { Station } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
@@ -14,6 +14,7 @@ import {
 } from '@/lib/map';
 import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
+import MultiRouteLogger from './MultiRouteLogger';
 
 interface VectorRailwayMapProps {
   className?: string;
@@ -22,6 +23,10 @@ interface VectorRailwayMapProps {
 
 export default function VectorRailwayMap({ className = '', userId }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
+
+  // Multi-route logger state
+  const [showMultiRouteLogger, setShowMultiRouteLogger] = useState(false);
+  const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
 
   // Station search hook
   const stationSearch = useStationSearch();
@@ -77,6 +82,40 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
     map.current.setFilter('railway_routes', filter);
   }, [map, routeEditor.showSpecialLines]);
+
+  // Highlight selected routes from multi-route logger
+  useEffect(() => {
+    if (!map.current || !map.current.getLayer('railway_routes')) return;
+
+    if (highlightedRoutes.length > 0) {
+      // Add a highlight layer for the selected routes
+      if (!map.current.getLayer('highlighted_routes')) {
+        map.current.addLayer({
+          id: 'highlighted_routes',
+          type: 'line',
+          source: 'railway_routes',
+          'source-layer': 'railway_routes', // Required for vector tile sources
+          paint: {
+            'line-color': '#FFD700', // Gold color for highlight
+            'line-width': 6,
+            'line-opacity': 0.8,
+          },
+          filter: ['in', ['get', 'track_id'], ['literal', highlightedRoutes]],
+        });
+      } else {
+        map.current.setFilter('highlighted_routes', [
+          'in',
+          ['get', 'track_id'],
+          ['literal', highlightedRoutes],
+        ]);
+      }
+    } else {
+      // Remove highlight layer when no routes are highlighted
+      if (map.current.getLayer('highlighted_routes')) {
+        map.current.removeLayer('highlighted_routes');
+      }
+    }
+  }, [map, highlightedRoutes]);
 
   // Handle station selection from search
   const handleStationSelect = (station: Station) => {
@@ -160,8 +199,18 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         </div>
       )}
 
+      {/* Multi-Route Logger Toggle Button */}
+      <button
+        onClick={() => setShowMultiRouteLogger(!showMultiRouteLogger)}
+        className={`absolute top-4 right-4 px-4 py-2 rounded shadow-lg text-white font-medium z-10 cursor-pointer ${
+          showMultiRouteLogger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+        }`}
+      >
+        {showMultiRouteLogger ? 'Close Logger' : 'Log Journey'}
+      </button>
+
       {/* Station Search Box */}
-      <div className="absolute top-4 right-16 w-80 z-10">
+      <div className="absolute top-16 right-4 w-80 z-10">
         <div className="relative">
           <input
             ref={stationSearch.searchInputRef}
@@ -219,6 +268,17 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           )}
         </div>
       </div>
+
+      {/* Multi-Route Logger Panel */}
+      {showMultiRouteLogger && (
+        <MultiRouteLogger
+          onHighlightRoutes={setHighlightedRoutes}
+          onClose={() => {
+            setShowMultiRouteLogger(false);
+            setHighlightedRoutes([]);
+          }}
+        />
+      )}
 
       {/* Edit Form Modal */}
       {routeEditor.showEditForm && routeEditor.editingFeature && (

@@ -4,22 +4,6 @@ import { query } from './db';
 import { getUser } from './auth-actions';
 import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
 
-export async function getAllStations(): Promise<Station[]> {
-  const result = await query(`
-    SELECT id, name,
-           ST_X(coordinates) as lon,
-           ST_Y(coordinates) as lat
-    FROM stations
-    ORDER BY name
-  `);
-
-  return result.rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    coordinates: [row.lon, row.lat]
-  }));
-}
-
 export async function searchStations(searchQuery: string): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
     return [];
@@ -176,6 +160,45 @@ export async function quickUnlogRoute(trackId: string): Promise<void> {
       partial = FALSE,
       updated_at = CURRENT_TIMESTAMP
   `, [userId, trackId]);
+}
+
+export async function updateMultipleRoutes(
+  trackIds: number[],
+  date?: string | null,
+  note?: string | null,
+  partial?: boolean | null
+): Promise<void> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const userId = user.id;
+
+  // Insert/update all routes with the same data
+  const values = trackIds.map((trackId, idx) => {
+    const offset = idx * 5;
+    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`;
+  }).join(', ');
+
+  const params = trackIds.flatMap(trackId => [
+    userId,
+    trackId,
+    date || null,
+    note || null,
+    partial ?? false
+  ]);
+
+  await query(`
+    INSERT INTO user_railway_data (user_id, track_id, date, note, partial)
+    VALUES ${values}
+    ON CONFLICT (user_id, track_id)
+    DO UPDATE SET
+      date = EXCLUDED.date,
+      note = EXCLUDED.note,
+      partial = EXCLUDED.partial,
+      updated_at = CURRENT_TIMESTAMP
+  `, params);
 }
 
 export interface UserProgress {
