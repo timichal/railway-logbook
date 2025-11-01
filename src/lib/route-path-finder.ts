@@ -268,8 +268,9 @@ export async function findRoutePathBetweenStations(
 
       let segmentPath: number[] | null = null;
 
-      // Try with increasing buffer sizes (50km, 100km, 150km)
-      const bufferSizes = [50000, 100000, 150000];
+      // Try with increasing buffer sizes until we find a path
+      // Start with reasonable sizes and go up to very large for long journeys
+      const bufferSizes = [50000, 100000, 200000, 500000, 1000000]; // 50km, 100km, 200km, 500km, 1000km
 
       for (const bufferSize of bufferSizes) {
         const graph = await buildRouteGraphInBuffer(segmentFromStation, segmentToStation, bufferSize);
@@ -282,7 +283,7 @@ export async function findRoutePathBetweenStations(
         return {
           routes: [],
           totalDistance: 0,
-          error: `No path found for segment ${i + 1}`
+          error: `No path found for segment ${i + 1}. The stations might be too far apart (tried up to 1000km). Try adding via stations to break up the journey.`
         };
       }
 
