@@ -8,6 +8,8 @@ import { updateMultipleRoutes } from '@/lib/railway-actions';
 
 interface RouteNode {
   track_id: number;
+  from_station: string;
+  to_station: string;
   description: string;
   length_km: number;
 }
@@ -465,7 +467,7 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
             {foundPath.map((route, index) => (
               <div key={route.track_id} className="p-2 bg-gray-50 border border-gray-200 rounded text-xs">
                 <div className="font-medium">
-                  {index + 1}. {route.description}
+                  {index + 1}. {route.from_station} ⟷ {route.to_station}
                 </div>
                 <div className="text-gray-600">
                   {route.length_km.toFixed(1)} km

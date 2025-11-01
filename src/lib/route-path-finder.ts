@@ -4,6 +4,8 @@ import pool from './db';
 
 interface RouteNode {
   track_id: number;
+  from_station: string;
+  to_station: string;
   description: string;
   length_km: number;
 }
@@ -15,7 +17,7 @@ interface PathResult {
 }
 
 const STATION_TO_ROUTE_TOLERANCE_M = 2000; // Station can be 2000m from route
-const ROUTE_CONNECTION_TOLERANCE_M = 500; // Route endpoints can be 500m apart
+const ROUTE_CONNECTION_TOLERANCE_M = 2000; // Route endpoints can be 2000m apart (increased from 500m)
 
 /**
  * In-memory route graph for fast pathfinding
@@ -59,7 +61,6 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
       `,
       [stationId, STATION_TO_ROUTE_TOLERANCE_M]
     );
-    console.log(`[findRoutesNearStation] Station ${stationId}: found ${result.rows.length} routes`, result.rows.map(r => r.track_id));
     return result.rows.map(row => row.track_id);
   } finally {
     client.release();
@@ -129,7 +130,6 @@ async function buildRouteGraphInBuffer(
       graph.addConnection(row.from_route, row.to_route);
     }
 
-    console.log(`[buildRouteGraphInBuffer] Loaded ${result.rows.length} connections with ${bufferMeters}m buffer`);
     return graph;
   } finally {
     client.release();
@@ -142,68 +142,43 @@ async function buildRouteGraphInBuffer(
 function findShortestPath(
   graph: RouteGraph,
   startRoutes: number[],
-  endRoutes: number[],
-  viaRouteSets: number[][]
+  endRoutes: number[]
 ): number[] | null {
   if (startRoutes.length === 0 || endRoutes.length === 0) {
     return null;
   }
 
   const endSet = new Set(endRoutes);
-  const queue: { route: number; path: number[]; viaIndex: number }[] = [];
-  const visited = new Map<string, boolean>(); // Key: "route:viaIndex"
+  const queue: { route: number; path: number[] }[] = [];
+  const visited = new Set<number>();
 
   // Initialize queue with start routes
   for (const route of startRoutes) {
-    const key = `${route}:0`;
-    queue.push({ route, path: [route], viaIndex: 0 });
-    visited.set(key, true);
+    queue.push({ route, path: [route] });
+    visited.add(route);
   }
 
-  let iterations = 0;
-  const maxIterations = 10000; // Safety limit
-
-  while (queue.length > 0 && iterations < maxIterations) {
-    iterations++;
+  while (queue.length > 0) {
     const current = queue.shift()!;
 
-    // Check if we've passed through all required via stations
-    const allViaPassed = current.viaIndex >= viaRouteSets.length;
-
     // Check if we reached the end
-    if (endSet.has(current.route) && allViaPassed) {
-      console.log(`[findShortestPath] Found path after ${iterations} iterations`);
+    if (endSet.has(current.route)) {
       return current.path;
     }
 
-    // Get next via routes to check (if any)
-    const nextViaRoutes = current.viaIndex < viaRouteSets.length
-      ? new Set(viaRouteSets[current.viaIndex])
-      : null;
-
-    // Get neighbors from in-memory graph (FAST!)
+    // Explore neighbors
     const neighbors = graph.getNeighbors(current.route);
-
     for (const neighbor of neighbors) {
-      // Check if this neighbor passes through the next via station
-      let newViaIndex = current.viaIndex;
-      if (nextViaRoutes && nextViaRoutes.has(neighbor)) {
-        newViaIndex = current.viaIndex + 1;
-      }
-
-      const key = `${neighbor}:${newViaIndex}`;
-      if (!visited.get(key)) {
-        visited.set(key, true);
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
         queue.push({
           route: neighbor,
           path: [...current.path, neighbor],
-          viaIndex: newViaIndex
         });
       }
     }
   }
 
-  console.log(`[findShortestPath] No path found after ${iterations} iterations`);
   return null; // No path found
 }
 
@@ -215,9 +190,15 @@ async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
 
   const client = await pool.connect();
   try {
-    const result = await client.query<{ track_id: number; description: string; length_km: string | number }>(
+    const result = await client.query<{
+      track_id: number;
+      from_station: string;
+      to_station: string;
+      description: string;
+      length_km: string | number
+    }>(
       `
-      SELECT track_id, description, length_km
+      SELECT track_id, from_station, to_station, description, length_km
       FROM railway_routes
       WHERE track_id = ANY($1)
       ORDER BY array_position($1, track_id)
@@ -227,6 +208,8 @@ async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
     // Convert length_km to number (PostgreSQL returns it as string)
     return result.rows.map(row => ({
       track_id: row.track_id,
+      from_station: row.from_station,
+      to_station: row.to_station,
       description: row.description,
       length_km: typeof row.length_km === 'string' ? parseFloat(row.length_km) : row.length_km
     }));
@@ -244,8 +227,6 @@ export async function findRoutePathBetweenStations(
   viaStationIds: number[] = []
 ): Promise<PathResult> {
   try {
-    console.log('[RoutePathFinder] Finding path from station', fromStationId, 'to station', toStationId);
-
     // Find routes near each station
     const fromRoutes = await findRoutesNearStation(fromStationId);
     const toRoutes = await findRoutesNearStation(toStationId);
@@ -253,10 +234,7 @@ export async function findRoutePathBetweenStations(
       viaStationIds.map(id => findRoutesNearStation(id))
     );
 
-    console.log('[RoutePathFinder] Routes near from station:', fromRoutes);
-    console.log('[RoutePathFinder] Routes near to station:', toRoutes);
-    console.log('[RoutePathFinder] Routes near via stations:', viaRouteSets);
-
+    // Validate we found routes near all stations
     if (fromRoutes.length === 0) {
       return { routes: [], totalDistance: 0, error: 'No routes found near starting station' };
     }
@@ -275,57 +253,51 @@ export async function findRoutePathBetweenStations(
 
     // Find path sequentially between each pair of stations
     const allSegments: number[][] = [];
+    let previousEndRoute: number | null = null;
 
     for (let i = 0; i < stationSequence.length - 1; i++) {
       const segmentFromStation = stationSequence[i];
       const segmentToStation = stationSequence[i + 1];
-      const segmentFromRoutes = routeSequence[i];
+      let segmentFromRoutes = routeSequence[i];
       const segmentToRoutes = routeSequence[i + 1];
 
-      console.log(`[RoutePathFinder] Finding segment ${i + 1}/${stationSequence.length - 1}: station ${segmentFromStation} -> ${segmentToStation}`);
+      // Continue from the previous segment's end route if possible
+      if (previousEndRoute !== null && segmentFromRoutes.includes(previousEndRoute)) {
+        segmentFromRoutes = [previousEndRoute];
+      }
 
       let segmentPath: number[] | null = null;
 
-      // Try with increasing buffer sizes
-      const bufferSizes = [50000, 100000, 150000]; // 50km, 100km, 150km
+      // Try with increasing buffer sizes (50km, 100km, 150km)
+      const bufferSizes = [50000, 100000, 150000];
 
       for (const bufferSize of bufferSizes) {
-        console.log(`[RoutePathFinder] Attempting with ${bufferSize / 1000}km buffer...`);
-
-        // Build in-memory graph for this segment
         const graph = await buildRouteGraphInBuffer(segmentFromStation, segmentToStation, bufferSize);
+        segmentPath = findShortestPath(graph, segmentFromRoutes, segmentToRoutes);
 
-        // Run BFS (entirely in memory - FAST!)
-        segmentPath = findShortestPath(graph, segmentFromRoutes, segmentToRoutes, []);
-
-        if (segmentPath) {
-          console.log(`[RoutePathFinder] Segment found with ${bufferSize / 1000}km buffer`);
-          break;
-        }
-
-        console.log(`[RoutePathFinder] No segment path with ${bufferSize / 1000}km buffer, trying larger...`);
+        if (segmentPath) break;
       }
 
       if (!segmentPath) {
         return {
           routes: [],
           totalDistance: 0,
-          error: `No path found for segment ${i + 1}: station ${segmentFromStation} -> ${segmentToStation}`
+          error: `No path found for segment ${i + 1}`
         };
       }
 
       allSegments.push(segmentPath);
+      previousEndRoute = segmentPath[segmentPath.length - 1];
     }
 
-    // Concatenate all segments, removing duplicates at connection points
+    // Concatenate segments, removing duplicate routes at connection points
     const path: number[] = [];
     for (let i = 0; i < allSegments.length; i++) {
       const segment = allSegments[i];
       if (i === 0) {
-        // First segment: include all routes
         path.push(...segment);
       } else {
-        // Subsequent segments: skip first route if it's the same as the last route from previous segment
+        // Skip first route if it's the same as the last route from previous segment
         const startIdx = segment[0] === path[path.length - 1] ? 1 : 0;
         path.push(...segment.slice(startIdx));
       }
