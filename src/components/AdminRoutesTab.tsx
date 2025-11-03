@@ -6,24 +6,8 @@ import { deleteRailwayRoute } from '@/lib/route-delete-actions';
 import RoutesList from './RoutesList';
 import RouteEditForm from './RouteEditForm';
 import { useToast, ConfirmDialog } from '@/lib/toast';
-
-interface RailwayRoute {
-  track_id: string;
-  from_station: string;
-  to_station: string;
-  track_number?: string | null;
-  description: string | null;
-  usage_type: string;
-  starting_part_id?: string | null;
-  ending_part_id?: string | null;
-  is_valid?: boolean;
-  error_message?: string | null;
-}
-
-interface RouteDetail extends RailwayRoute {
-  geometry: string;
-  length_km?: number;
-}
+import type { RailwayRoute } from '@/lib/types';
+import type { UsageType } from '@/lib/constants';
 
 interface AdminRoutesTabProps {
   selectedRouteId?: string | null;
@@ -46,7 +30,7 @@ export default function AdminRoutesTab({
 
   // State
   const [routes, setRoutes] = useState<RailwayRoute[]>([]);
-  const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<RailwayRoute | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -58,7 +42,9 @@ export default function AdminRoutesTab({
     to_station: string;
     track_number: string;
     description: string;
-    usage_type: string;
+    usage_type: UsageType;
+    frequency: string[];
+    link: string;
   } | null>(null);
 
   // Data loading
@@ -123,7 +109,9 @@ export default function AdminRoutesTab({
         to_station: routeDetail.to_station,
         track_number: routeDetail.track_number || '',
         description: routeDetail.description || '',
-        usage_type: routeDetail.usage_type
+        usage_type: routeDetail.usage_type,
+        frequency: routeDetail.frequency || [],
+        link: routeDetail.link || ''
       });
 
       if (onRouteSelect) {
@@ -162,7 +150,9 @@ export default function AdminRoutesTab({
         editForm.to_station,
         editForm.track_number || null,
         editForm.description || null,
-        editForm.usage_type
+        editForm.usage_type,
+        editForm.frequency,
+        editForm.link || null
       );
 
       await loadRoutes();

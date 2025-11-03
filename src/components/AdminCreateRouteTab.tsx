@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { usageOptions } from '@/lib/constants';
+import { usageOptions, frequencyOptions, type UsageType } from '@/lib/constants';
 import { findRailwayPathDB } from '@/lib/db-path-actions';
 import { getRailwayPartsByIds } from '@/lib/railway-parts-actions';
 import { saveRailwayRoute } from '@/lib/route-save-actions';
@@ -16,7 +16,7 @@ interface AdminCreateRouteTabProps {
   onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: string }) => void;
+  onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: UsageType, frequency: string[], link: string }) => void;
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
   onGeometryEditComplete?: () => void;
@@ -32,7 +32,9 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     to_station: '',
     track_number: '',
     description: '',
-    usage_type: ''
+    usage_type: undefined as UsageType | undefined,
+    frequency: [] as string[],
+    link: ''
   });
 
   // Store the current path result and railway parts for geometry updates
@@ -45,7 +47,9 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       to_station: '',
       track_number: '',
       description: '',
-      usage_type: ''
+      usage_type: undefined,
+      frequency: [],
+      link: ''
     });
     // Clear the IDs managed by parent via callback
     if (onFormReset) {
@@ -103,14 +107,16 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
   // Handle save route functionality
   const handleSaveRoute = async () => {
-    if (!onSaveRoute) return;
+    if (!onSaveRoute || createForm.usage_type === undefined) return;
 
     await onSaveRoute({
       from_station: createForm.from_station,
       to_station: createForm.to_station,
       track_number: createForm.track_number,
       description: createForm.description,
-      usage_type: createForm.usage_type
+      usage_type: createForm.usage_type,
+      frequency: createForm.frequency,
+      link: createForm.link
     });
 
     // Reset form after successful save
@@ -126,9 +132,9 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
-      // Metadata (name, description, usage_type, track_number) won't be used in update mode
+      // Metadata (name, description, usage_type, track_number, frequency, link) won't be used in update mode
       await saveRailwayRoute(
-        { from_station: '', to_station: '', description: '', usage_type: '', track_number: '' }, // Dummy data, not used in UPDATE mode
+        { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '' }, // Dummy data, not used in UPDATE mode
         { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates },
         currentPathResult.railwayParts,
         editingGeometryForTrackId // Pass track ID to trigger UPDATE query
@@ -303,21 +309,64 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
             {/* Usage Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Usage Type *
               </label>
-              <select
-                value={createForm.usage_type}
-                onChange={(e) => setCreateForm({ ...createForm, usage_type: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
-              >
-                <option value="">Select usage type</option>
+              <div className="space-y-2">
                 {usageOptions.map((option) => (
-                  <option key={option.key} value={option.id.toString()}>
-                    {option.label}
-                  </option>
+                  <label key={option.key} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="usage_type"
+                      value={option.id}
+                      checked={createForm.usage_type === option.id}
+                      onChange={(e) => setCreateForm({ ...createForm, usage_type: Number(e.target.value) as UsageType })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-700">{option.label}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
+            </div>
+
+            {/* Link */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Link (URL)
+              </label>
+              <input
+                type="url"
+                value={createForm.link}
+                onChange={(e) => setCreateForm({ ...createForm, link: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="https://example.com"
+              />
+            </div>
+
+            {/* Frequency Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Frequency Tags
+              </label>
+              <div className="space-y-2">
+                {frequencyOptions.map((option) => (
+                  <label key={option.key} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={createForm.frequency.includes(option.key)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setCreateForm({ ...createForm, frequency: [...createForm.frequency, option.key] });
+                        } else {
+                          setCreateForm({ ...createForm, frequency: createForm.frequency.filter(f => f !== option.key) });
+                        }
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-700">{option.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -349,7 +398,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
             <>
               <button
                 onClick={handleSaveRoute}
-                disabled={!isPreviewMode || !createForm.from_station || !createForm.to_station || !createForm.usage_type}
+                disabled={!isPreviewMode || !createForm.from_station || !createForm.to_station || createForm.usage_type === undefined}
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
               >
                 Save Route to Database

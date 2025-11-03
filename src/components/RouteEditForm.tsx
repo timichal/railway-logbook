@@ -1,29 +1,20 @@
 'use client';
 
-import { usageOptions } from '@/lib/constants';
-
-interface RouteDetail {
-  track_id: string;
-  from_station: string;
-  to_station: string;
-  track_number?: string | null;
-  description: string | null;
-  usage_type: string;
-  is_valid?: boolean;
-  error_message?: string | null;
-  length_km?: number;
-}
+import { usageOptions, frequencyOptions, type UsageType } from '@/lib/constants';
+import type { RailwayRoute } from '@/lib/types';
 
 interface EditFormData {
   from_station: string;
   to_station: string;
   track_number: string;
   description: string;
-  usage_type: string;
+  usage_type: UsageType;
+  frequency: string[];
+  link: string;
 }
 
 interface RouteEditFormProps {
-  selectedRoute: RouteDetail | null;
+  selectedRoute: RailwayRoute | null;
   editForm: EditFormData | null;
   isLoading: boolean;
   onEditFormChange: (form: EditFormData) => void;
@@ -148,21 +139,64 @@ export default function RouteEditForm({
 
           {/* Usage Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Usage Type *
             </label>
-            <select
-              value={editForm.usage_type}
-              onChange={(e) => onEditFormChange({ ...editForm, usage_type: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
-            >
-              <option value="">Select usage type</option>
+            <div className="space-y-2">
               {usageOptions.map((option) => (
-                <option key={option.key} value={option.id.toString()}>
-                  {option.label}
-                </option>
+                <label key={option.key} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="usage_type"
+                    value={option.id}
+                    checked={editForm.usage_type === option.id}
+                    onChange={(e) => onEditFormChange({ ...editForm, usage_type: Number(e.target.value) as UsageType })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-700">{option.label}</span>
+                </label>
               ))}
-            </select>
+            </div>
+          </div>
+
+          {/* Link */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Link (URL)
+            </label>
+            <input
+              type="url"
+              value={editForm.link}
+              onChange={(e) => onEditFormChange({ ...editForm, link: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+              placeholder="https://example.com"
+            />
+          </div>
+
+          {/* Frequency Tags */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Frequency Tags
+            </label>
+            <div className="space-y-2">
+              {frequencyOptions.map((option) => (
+                <label key={option.key} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editForm.frequency.includes(option.key)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onEditFormChange({ ...editForm, frequency: [...editForm.frequency, option.key] });
+                      } else {
+                        onEditFormChange({ ...editForm, frequency: editForm.frequency.filter(f => f !== option.key) });
+                      }
+                    }}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-700">{option.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
 
           {/* Action Buttons */}

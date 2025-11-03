@@ -1,3 +1,5 @@
+import type { UsageType } from './constants'
+
 // Types for pruneData.ts script
 export type Feature = {
   type: "Feature"
@@ -75,12 +77,32 @@ export type RailwayRoute = {
   track_id: string
   from_station: string
   to_station: string
+  track_number?: string | null
   description: string | null
-  usage_type: number
+  usage_type: UsageType // 0=Regular, 1=Special
+  frequency: string[] // Array of frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
+  link?: string | null // External URL/link for the route
   geometry: string // GeoJSON string
-  date?: string | null
-  note?: string | null
-  partial?: boolean | null
+  length_km?: number
+  starting_part_id?: string | null
+  ending_part_id?: string | null
+  is_valid?: boolean
+  error_message?: string | null
+  date?: string | null // From user_trips join
+  note?: string | null // From user_trips join
+  partial?: boolean | null // From user_trips join
+}
+
+// User trip from database
+export type UserTrip = {
+  id: number
+  user_id: number
+  track_id: number
+  date: string | null
+  note: string | null
+  partial: boolean
+  created_at: string
+  updated_at: string
 }
 
 // Pathfinding result (from railway pathfinder)

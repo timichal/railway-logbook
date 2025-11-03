@@ -1,14 +1,7 @@
 'use client';
 
 import React from 'react';
-
-interface RailwayRoute {
-  track_id: string;
-  from_station: string;
-  to_station: string;
-  track_number?: string | null;
-  is_valid?: boolean;
-}
+import type { RailwayRoute } from '@/lib/types';
 
 interface RoutesListProps {
   routes: RailwayRoute[];

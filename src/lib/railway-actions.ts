@@ -3,6 +3,7 @@
 import { query } from './db';
 import { getUser } from './auth-actions';
 import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
+import type { UsageType } from './constants';
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
@@ -46,7 +47,7 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
     FROM stations
   `);
 
-  // Get railway routes with user data
+  // Get railway routes with user data (most recent trip per route)
   const routesResult = await query(`
     SELECT
       rr.track_id,
@@ -54,12 +55,19 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
       rr.to_station,
       rr.description,
       rr.usage_type,
+      rr.frequency,
       ST_AsGeoJSON(rr.geometry) as geometry,
-      urd.date,
-      urd.note,
-      urd.partial
+      ut.date,
+      ut.note,
+      ut.partial
     FROM railway_routes rr
-    LEFT JOIN user_railway_data urd ON rr.track_id = urd.track_id AND urd.user_id = $1
+    LEFT JOIN LATERAL (
+      SELECT date, note, partial
+      FROM user_trips
+      WHERE track_id = rr.track_id AND user_id = $1
+      ORDER BY date DESC NULLS LAST, created_at DESC
+      LIMIT 1
+    ) ut ON true
   `, [userId]);
 
   const features: GeoJSONFeature[] = [];
@@ -116,16 +124,37 @@ export async function updateUserRailwayData(
   }
 
   const userId = user.id;
-  await query(`
-    INSERT INTO user_railway_data (user_id, track_id, date, note, partial)
-    VALUES ($1, $2, $3, $4, $5)
-    ON CONFLICT (user_id, track_id)
-    DO UPDATE SET
-      date = EXCLUDED.date,
-      note = EXCLUDED.note,
-      partial = EXCLUDED.partial,
-      updated_at = CURRENT_TIMESTAMP
-  `, [userId, trackId, date || null, note || null, partial ?? false]);
+
+  // For single route updates, we update the most recent trip or create a new one
+  // If date is null, we're "unlogging" - delete all trips for this route
+  if (date === null) {
+    await query(`
+      DELETE FROM user_trips
+      WHERE user_id = $1 AND track_id = $2
+    `, [userId, trackId]);
+  } else {
+    // Check if there's an existing trip for today
+    const existingTrip = await query(`
+      SELECT id FROM user_trips
+      WHERE user_id = $1 AND track_id = $2 AND date = $3
+      LIMIT 1
+    `, [userId, trackId, date]);
+
+    if (existingTrip.rows.length > 0) {
+      // Update existing trip for this date
+      await query(`
+        UPDATE user_trips
+        SET note = $1, partial = $2, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3
+      `, [note || null, partial ?? false, existingTrip.rows[0].id]);
+    } else {
+      // Create new trip
+      await query(`
+        INSERT INTO user_trips (user_id, track_id, date, note, partial)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [userId, trackId, date, note || null, partial ?? false]);
+    }
+  }
 }
 
 export async function quickLogRoute(trackId: string): Promise<void> {
@@ -137,15 +166,21 @@ export async function quickLogRoute(trackId: string): Promise<void> {
   const userId = user.id;
   const today = new Date().toISOString().split('T')[0];
 
-  await query(`
-    INSERT INTO user_railway_data (user_id, track_id, date, note, partial)
-    VALUES ($1, $2, $3, NULL, FALSE)
-    ON CONFLICT (user_id, track_id)
-    DO UPDATE SET
-      date = EXCLUDED.date,
-      partial = FALSE,
-      updated_at = CURRENT_TIMESTAMP
+  // Check if there's already a trip for today
+  const existingTrip = await query(`
+    SELECT id FROM user_trips
+    WHERE user_id = $1 AND track_id = $2 AND date = $3
+    LIMIT 1
   `, [userId, trackId, today]);
+
+  if (existingTrip.rows.length === 0) {
+    // Create new trip for today
+    await query(`
+      INSERT INTO user_trips (user_id, track_id, date, note, partial)
+      VALUES ($1, $2, $3, NULL, FALSE)
+    `, [userId, trackId, today]);
+  }
+  // If trip already exists for today, do nothing
 }
 
 export async function quickUnlogRoute(trackId: string): Promise<void> {
@@ -156,14 +191,10 @@ export async function quickUnlogRoute(trackId: string): Promise<void> {
 
   const userId = user.id;
 
+  // Delete all trips for this route
   await query(`
-    INSERT INTO user_railway_data (user_id, track_id, date, note, partial)
-    VALUES ($1, $2, NULL, NULL, FALSE)
-    ON CONFLICT (user_id, track_id)
-    DO UPDATE SET
-      date = NULL,
-      partial = FALSE,
-      updated_at = CURRENT_TIMESTAMP
+    DELETE FROM user_trips
+    WHERE user_id = $1 AND track_id = $2
   `, [userId, trackId]);
 }
 
@@ -180,7 +211,12 @@ export async function updateMultipleRoutes(
 
   const userId = user.id;
 
-  // Insert/update all routes with the same data
+  // For bulk logging (e.g., multi-route logger), create a new trip for each route
+  // This allows users to log the same journey multiple times
+  if (!date) {
+    throw new Error('Date is required for bulk logging');
+  }
+
   const values = trackIds.map((trackId, idx) => {
     const offset = idx * 5;
     return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`;
@@ -189,20 +225,14 @@ export async function updateMultipleRoutes(
   const params = trackIds.flatMap(trackId => [
     userId,
     trackId,
-    date || null,
+    date,
     note || null,
     partial ?? false
   ]);
 
   await query(`
-    INSERT INTO user_railway_data (user_id, track_id, date, note, partial)
+    INSERT INTO user_trips (user_id, track_id, date, note, partial)
     VALUES ${values}
-    ON CONFLICT (user_id, track_id)
-    DO UPDATE SET
-      date = EXCLUDED.date,
-      note = EXCLUDED.note,
-      partial = EXCLUDED.partial,
-      updated_at = CURRENT_TIMESTAMP
   `, params);
 }
 
@@ -223,28 +253,28 @@ export async function getUserProgress(): Promise<UserProgress> {
 
   const userId = user.id;
 
-  // Get total distance and count of all routes (excluding Special usage_type=2)
+  // Get total distance and count of all routes (excluding Special usage_type=1)
   const totalResult = await query(`
     SELECT
       COALESCE(SUM(length_km), 0) as total_km,
       COUNT(*) as total_routes
     FROM railway_routes
     WHERE length_km IS NOT NULL
-      AND usage_type != 2
+      AND usage_type != 1
   `);
 
-  // Get completed distance and count (routes with date AND not partial, excluding Special usage_type=2)
+  // Get completed distance and count (routes with date AND not partial, excluding Special usage_type=1)
   const completedResult = await query(`
     SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
-      COUNT(*) as completed_routes
+      COUNT(DISTINCT rr.track_id) as completed_routes
     FROM railway_routes rr
-    INNER JOIN user_railway_data urd ON rr.track_id = urd.track_id
-    WHERE urd.user_id = $1
-      AND urd.date IS NOT NULL
-      AND (urd.partial IS NULL OR urd.partial = FALSE)
+    INNER JOIN user_trips ut ON rr.track_id = ut.track_id
+    WHERE ut.user_id = $1
+      AND ut.date IS NOT NULL
+      AND (ut.partial IS NULL OR ut.partial = FALSE)
       AND rr.length_km IS NOT NULL
-      AND rr.usage_type != 2
+      AND rr.usage_type != 1
   `, [userId]);
 
   const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
@@ -291,7 +321,7 @@ export async function getRailwayRoute(trackId: string) {
   }
 
   const result = await query(`
-    SELECT track_id, from_station, to_station, track_number, description, usage_type,
+    SELECT track_id, from_station, to_station, track_number, description, usage_type, frequency, link,
            ST_AsGeoJSON(geometry) as geometry, length_km,
            starting_part_id, ending_part_id, is_valid, error_message
     FROM railway_routes
@@ -311,7 +341,9 @@ export async function updateRailwayRoute(
   toStation: string,
   trackNumber: string | null,
   description: string | null,
-  usageType: string
+  usageType: UsageType,
+  frequency: string[],
+  link: string | null
 ) {
   const user = await getUser();
   if (!user || user.id !== 1) {
@@ -320,9 +352,9 @@ export async function updateRailwayRoute(
 
   await query(`
     UPDATE railway_routes
-    SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, updated_at = CURRENT_TIMESTAMP
+    SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, frequency = $7, link = $8, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [trackId, fromStation, toStation, trackNumber, description, parseInt(usageType)]);
+  `, [trackId, fromStation, toStation, trackNumber, description, usageType, frequency || [], link]);
 }
 
 export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {

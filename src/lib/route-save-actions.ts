@@ -4,13 +4,16 @@ import pool from './db';
 import { getUser } from './auth-actions';
 import type { PathResult, RailwayPart } from './types';
 import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinate-utils';
+import type { UsageType } from './constants';
 
 export interface SaveRouteData {
   from_station: string;
   to_station: string;
   track_number: string;
   description: string;
-  usage_type: string;
+  usage_type: UsageType;
+  frequency: string[]; // Array of frequency tags
+  link: string; // External URL/link
 }
 
 export async function saveRailwayRoute(
@@ -65,7 +68,7 @@ export async function saveRailwayRoute(
     const endingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[pathResult.partIds.length - 1] : null;
 
     let query: string;
-    let values: (string | number | null)[];
+    let values: (string | number | string[] | null)[];
 
     if (trackId) {
       // Update existing route - only update geometry, length, part IDs, and validity
@@ -99,6 +102,8 @@ export async function saveRailwayRoute(
           track_number,
           description,
           usage_type,
+          frequency,
+          link,
           geometry,
           length_km,
           starting_part_id,
@@ -110,10 +115,12 @@ export async function saveRailwayRoute(
           $3,
           $4,
           $5,
-          ST_GeomFromText($6, 4326),
-          ST_Length(ST_GeomFromText($6, 4326)::geography) / 1000,
+          $6,
           $7,
-          $8,
+          ST_GeomFromText($8, 4326),
+          ST_Length(ST_GeomFromText($8, 4326)::geography) / 1000,
+          $9,
+          $10,
           TRUE
         )
         RETURNING track_id, length_km
@@ -124,7 +131,9 @@ export async function saveRailwayRoute(
         routeData.to_station,
         routeData.track_number || null,
         routeData.description || null,
-        parseInt(routeData.usage_type),
+        routeData.usage_type,
+        routeData.frequency || [],
+        routeData.link || null,
         geometryWKT,
         startingPartId,
         endingPartId

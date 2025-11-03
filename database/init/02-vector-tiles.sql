@@ -89,7 +89,7 @@ PARALLEL SAFE;
 
 -- Function: railway_routes_tile
 -- Serves railway routes (combined lines with metadata) as vector tiles
--- Includes user-specific data (date) for styling
+-- Includes user-specific trip data for styling (most recent trip's date/note/partial)
 CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
 RETURNS bytea AS $$
 DECLARE
@@ -113,14 +113,17 @@ BEGIN
             rr.track_number,
             rr.description,
             rr.usage_type,
+            rr.frequency,
+            rr.link,
             rr.is_valid,
             rr.error_message,
             rr.starting_part_id,
             rr.ending_part_id,
-            -- Include user-specific data for client-side styling
-            urd.date,
-            urd.note,
-            urd.partial,
+            -- Include most recent trip data for client-side styling
+            -- Use latest trip (by date, then by created_at) for route coloring
+            ut.date,
+            ut.note,
+            ut.partial,
             -- Simplify geometry for tile display
             ST_AsMVTGeom(
                 rr.geometry_3857,
@@ -130,16 +133,23 @@ BEGIN
                 true
             ) AS geom
         FROM railway_routes rr
-        LEFT JOIN user_railway_data urd
-            ON rr.track_id = urd.track_id
-            AND (user_id_param IS NULL OR urd.user_id = user_id_param)
+        LEFT JOIN LATERAL (
+            SELECT date, note, partial
+            FROM user_trips
+            WHERE track_id = rr.track_id
+                AND (user_id_param IS NULL OR user_id = user_id_param)
+            ORDER BY
+                date DESC NULLS LAST,
+                created_at DESC
+            LIMIT 1
+        ) ut ON true
         WHERE
             -- Spatial filter using index
             rr.geometry_3857 && tile_envelope
             -- Show routes at all zoom levels (no zoom restriction)
         ORDER BY
             -- Render order: unvisited routes first (so visited are on top)
-            CASE WHEN urd.date IS NULL THEN 0 ELSE 1 END,
+            CASE WHEN ut.date IS NULL THEN 0 ELSE 1 END,
             rr.from_station,
             rr.to_station
     ) AS mvtgeom

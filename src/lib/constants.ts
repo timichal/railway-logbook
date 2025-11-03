@@ -1,5 +1,5 @@
 /**
- * Railway usage patterns
+ * Railway usage types (simplified to 2 types)
  */
 export const usageOptions = [
   {
@@ -9,18 +9,47 @@ export const usageOptions = [
   },
   {
     id: 1,
-    key: 'SEASONAL',
-    label: 'Seasonal'
-  },
-  {
-    id: 2,
     key: 'SPECIAL',
     label: 'Special'
   }
 ] as const;
 
-export const getUsageLabel = (usageType: number): string => {
+// Extract the usage type ID as a union type (0 | 1)
+export type UsageType = typeof usageOptions[number]['id'];
+
+export const getUsageLabel = (usageType: UsageType): string => {
   const option = usageOptions.find(opt => opt.id === usageType);
   return option ? option.label : 'Unknown';
+};
+
+/**
+ * Frequency tags for routes
+ */
+export const frequencyOptions = [
+  {
+    key: 'Daily',
+    label: 'Daily'
+  },
+  {
+    key: 'Weekdays',
+    label: 'Weekdays'
+  },
+  {
+    key: 'Weekends',
+    label: 'Weekends'
+  },
+  {
+    key: 'Once a week',
+    label: 'Once a week'
+  },
+  {
+    key: 'Seasonal',
+    label: 'Seasonal'
+  }
+] as const;
+
+export const getFrequencyLabel = (frequency: string): string => {
+  const option = frequencyOptions.find(opt => opt.key === frequency);
+  return option ? option.label : frequency;
 };
 

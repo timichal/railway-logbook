@@ -43,7 +43,9 @@ CREATE TABLE railway_routes (
     to_station TEXT NOT NULL, -- Ending station/location
     track_number VARCHAR(100), -- Local track number(s) - optional
     description TEXT, -- Route description
-    usage_type INTEGER NOT NULL, -- Single usage type (0=Regular, 1=Seasonal, 2=Special)
+    usage_type INTEGER NOT NULL, -- Usage type (0=Regular, 1=Special)
+    frequency TEXT[] DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
+    link TEXT, -- External URL/link for the route
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
     starting_part_id BIGINT, -- Reference to starting railway_part for recalculation
@@ -54,17 +56,16 @@ CREATE TABLE railway_routes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- User-specific data for railway routes
-CREATE TABLE user_railway_data (
+-- User trips (replaces user_railway_data, supports multiple trips per route)
+CREATE TABLE user_trips (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE CASCADE,
-    date DATE, -- Date of ride
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    track_id INTEGER NOT NULL REFERENCES railway_routes(track_id) ON DELETE CASCADE,
+    date DATE, -- Date of trip (can be null for unlogged routes)
     note TEXT, -- User note
     partial BOOLEAN DEFAULT FALSE, -- Partial completion flag
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, track_id)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for better performance
@@ -75,5 +76,6 @@ CREATE INDEX idx_railway_routes_from_station ON railway_routes (from_station);
 CREATE INDEX idx_railway_routes_to_station ON railway_routes (to_station);
 CREATE INDEX idx_railway_routes_starting_part ON railway_routes (starting_part_id);
 CREATE INDEX idx_railway_routes_ending_part ON railway_routes (ending_part_id);
-CREATE INDEX idx_user_railway_data_user_id ON user_railway_data (user_id);
-CREATE INDEX idx_user_railway_data_track_id ON user_railway_data (track_id);
+CREATE INDEX idx_user_trips_user_id ON user_trips (user_id);
+CREATE INDEX idx_user_trips_track_id ON user_trips (track_id);
+CREATE INDEX idx_user_trips_date ON user_trips (date);
