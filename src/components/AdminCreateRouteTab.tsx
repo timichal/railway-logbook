@@ -312,7 +312,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Usage Type *
               </label>
-              <div className="space-y-2">
+              <div className="flex gap-4">
                 {usageOptions.map((option) => (
                   <label key={option.key} className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -348,9 +348,9 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Frequency Tags
               </label>
-              <div className="space-y-2">
+              <div className="flex flex-wrap gap-4">
                 {frequencyOptions.map((option) => (
-                  <label key={option.key} className="flex items-center gap-2 cursor-pointer">
+                  <label key={option.key} className="flex  flex-[0_1_30%] items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={createForm.frequency.includes(option.key)}
