@@ -24,17 +24,13 @@ echo ""
 # Create data directory if it doesn't exist
 mkdir -p "${DATA_DIR}"
 
-# 1. Download OSM data
+# 1. Download OSM data (with resume support)
 echo "[1/3] Downloading ${COUNTRY_CODE}-${VERSION}.osm.pbf..."
 DOWNLOAD_FILE="${DATA_DIR}/${COUNTRY_CODE}-${VERSION}.osm.pbf"
-if [ -f "${DOWNLOAD_FILE}" ]; then
-    echo "  File already exists, skipping download"
-else
-    curl -o "${DOWNLOAD_FILE}" "https://download.geofabrik.de/${COUNTRY_CODE}-${VERSION}.osm.pbf" || {
-        echo "ERROR: Failed to download ${COUNTRY_CODE}-${VERSION}.osm.pbf"
-        exit 1
-    }
-fi
+curl -C - -o "${DOWNLOAD_FILE}" "https://download.geofabrik.de/${COUNTRY_CODE}-${VERSION}.osm.pbf" || {
+    echo "ERROR: Failed to download ${COUNTRY_CODE}-${VERSION}.osm.pbf"
+    exit 1
+}
 echo "✓ Download complete"
 echo ""
 
