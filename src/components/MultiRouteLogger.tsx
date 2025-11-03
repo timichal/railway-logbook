@@ -2,9 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react';
 import type { Station } from '@/lib/types';
-import { searchStations } from '@/lib/railway-actions';
+import { searchStations, updateMultipleRoutes } from '@/lib/user-actions';
 import { findRoutePathBetweenStations } from '@/lib/route-path-finder';
-import { updateMultipleRoutes } from '@/lib/railway-actions';
 
 interface RouteNode {
   track_id: number;

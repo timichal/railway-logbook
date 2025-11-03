@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getAllRailwayRoutes, getRailwayRoute, updateRailwayRoute } from '@/lib/railway-actions';
-import { deleteRailwayRoute } from '@/lib/route-delete-actions';
+import { getAllRailwayRoutes, getRailwayRoute, updateRailwayRoute, deleteRailwayRoute } from '@/lib/admin-route-actions';
 import RoutesList from './RoutesList';
 import RouteEditForm from './RouteEditForm';
 import { useToast, ConfirmDialog } from '@/lib/toast';

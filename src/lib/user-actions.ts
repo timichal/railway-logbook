@@ -3,7 +3,6 @@
 import { query } from './db';
 import { getUser } from './auth-actions';
 import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
-import type { UsageType } from './constants';
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
@@ -42,7 +41,7 @@ export async function getRailwayDataAsGeoJSON(): Promise<GeoJSONFeatureCollectio
   // Get stations
   const stationsResult = await query(`
     SELECT id, name,
-           ST_X(coordinates) as lon, 
+           ST_X(coordinates) as lon,
            ST_Y(coordinates) as lat
     FROM stations
   `);
@@ -292,174 +291,5 @@ export async function getUserProgress(): Promise<UserProgress> {
     routePercentage: Math.round(routePercentage),
     totalRoutes,
     completedRoutes
-  };
-}
-
-
-
-// Admin functions for managing railway routes
-export async function getAllRailwayRoutes() {
-  const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
-  }
-
-  const result = await query(`
-    SELECT track_id, from_station, to_station, track_number, description, usage_type,
-           starting_part_id, ending_part_id, is_valid, error_message
-    FROM railway_routes
-    ORDER BY from_station, to_station
-  `);
-
-  return result.rows;
-}
-
-export async function getRailwayRoute(trackId: string) {
-  const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
-  }
-
-  const result = await query(`
-    SELECT track_id, from_station, to_station, track_number, description, usage_type, frequency, link,
-           ST_AsGeoJSON(geometry) as geometry, length_km,
-           starting_part_id, ending_part_id, is_valid, error_message
-    FROM railway_routes
-    WHERE track_id = $1
-  `, [trackId]);
-
-  if (result.rows.length === 0) {
-    throw new Error('Route not found');
-  }
-
-  return result.rows[0];
-}
-
-export async function updateRailwayRoute(
-  trackId: string,
-  fromStation: string,
-  toStation: string,
-  trackNumber: string | null,
-  description: string | null,
-  usageType: UsageType,
-  frequency: string[],
-  link: string | null
-) {
-  const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
-  }
-
-  await query(`
-    UPDATE railway_routes
-    SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, frequency = $7, link = $8,
-        is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
-    WHERE track_id = $1
-  `, [trackId, fromStation, toStation, trackNumber, description, usageType, frequency || [], link]);
-}
-
-export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {
-  const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
-  }
-
-  const result = await query(`
-    SELECT track_id, from_station, to_station, track_number, description, usage_type,
-           ST_AsGeoJSON(geometry) as geometry,
-           starting_part_id, ending_part_id, is_valid, error_message
-    FROM railway_routes
-    ORDER BY from_station, to_station
-  `);
-
-  const features: GeoJSONFeature[] = result.rows.map(row => ({
-    type: 'Feature' as const,
-    geometry: JSON.parse(row.geometry),
-    properties: {
-      track_id: row.track_id,
-      name: `${row.from_station} ⟷ ${row.to_station}`,
-      description: row.description ?? undefined,
-      usage: row.usage_type,
-      starting_part_id: row.starting_part_id,
-      ending_part_id: row.ending_part_id,
-      is_valid: row.is_valid,
-      error_message: row.error_message ?? undefined
-    }
-  }));
-
-  return {
-    type: 'FeatureCollection',
-    features
-  };
-}
-
-export async function getRailwayPartsByBounds(
-  bounds: {
-    north: number;
-    south: number;
-    east: number;
-    west: number;
-  },
-  zoom: number
-): Promise<GeoJSONFeatureCollection> {
-  const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
-  }
-
-  // Get railway parts within bounds (original geometry only)
-  // Use different strategies based on zoom level to avoid gaps
-  let partsResult;
-
-  if (zoom < 8) {
-    // For very low zoom, show only major railway segments (longer ones)
-    // Use a higher limit to avoid gaps in main lines
-    partsResult = await query(`
-      SELECT 
-        id,
-        ST_AsGeoJSON(geometry) as geometry
-      FROM railway_parts
-      WHERE ST_Intersects(
-        geometry, 
-        ST_MakeEnvelope($1, $2, $3, $4, 4326)
-      )
-      AND ST_Length(geometry) > 0.001  -- Filter out very short segments
-      ORDER BY ST_Length(geometry) DESC
-      LIMIT 10000
-    `, [bounds.west, bounds.south, bounds.east, bounds.north]);
-  } else {
-    // For higher zoom levels, show more detail with reasonable limits
-    const limit = zoom < 10 ? 20000 : zoom < 12 ? 40000 : 50000;
-    partsResult = await query(`
-      SELECT 
-        id,
-        ST_AsGeoJSON(geometry) as geometry
-      FROM railway_parts
-      WHERE ST_Intersects(
-        geometry, 
-        ST_MakeEnvelope($1, $2, $3, $4, 4326)
-      )
-      ORDER BY ST_Length(geometry) DESC
-      LIMIT $5
-    `, [bounds.west, bounds.south, bounds.east, bounds.north, limit]);
-  }
-
-  const features: GeoJSONFeature[] = [];
-
-  // Add railway parts features
-  for (const part of partsResult.rows) {
-    features.push({
-      type: 'Feature' as const,
-      geometry: JSON.parse(part.geometry),
-      properties: {
-        '@id': part.id,
-        zoom_level: zoom
-      }
-    });
-  }
-
-  return {
-    type: 'FeatureCollection',
-    features
   };
 }

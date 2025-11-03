@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { usageOptions, frequencyOptions, type UsageType } from '@/lib/constants';
-import { findRailwayPathDB } from '@/lib/db-path-actions';
-import { getRailwayPartsByIds } from '@/lib/railway-parts-actions';
-import { saveRailwayRoute } from '@/lib/route-save-actions';
+import { findRailwayPathDB, getRailwayPartsByIds } from '@/lib/admin-map-actions';
+import { saveRailwayRoute } from '@/lib/admin-route-actions';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 

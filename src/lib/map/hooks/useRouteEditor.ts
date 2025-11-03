@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type maplibreglType from 'maplibre-gl';
-import { updateUserRailwayData, getUserProgress, quickLogRoute, quickUnlogRoute, type UserProgress } from '@/lib/railway-actions';
+import { updateUserRailwayData, getUserProgress, quickLogRoute, quickUnlogRoute, type UserProgress } from '@/lib/user-actions';
 import { createRailwayRoutesSource, createRailwayRoutesLayer, closeAllPopups } from '@/lib/map';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '../utils/userRouteStyling';
 

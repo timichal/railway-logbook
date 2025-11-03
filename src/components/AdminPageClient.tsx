@@ -5,7 +5,7 @@ import Link from 'next/link';
 import VectorAdminMapWrapper from '@/components/VectorAdminMapWrapper';
 import AdminSidebar from '@/components/AdminSidebar';
 import { logout } from '@/lib/auth-actions';
-import { saveRailwayRoute } from '@/lib/route-save-actions';
+import { saveRailwayRoute } from '@/lib/admin-route-actions';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 

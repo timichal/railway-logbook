@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Station } from '@/lib/types';
-import { searchStations } from '@/lib/railway-actions';
+import { searchStations } from '@/lib/user-actions';
 
 /**
  * Hook to manage station search with debouncing and keyboard navigation
