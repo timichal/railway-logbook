@@ -3,14 +3,21 @@ import { COLORS } from '@/lib/map';
 
 /**
  * Get color expression for user railway routes based on visit status
+ * Logic:
+ * - If has complete trip → dark green (visited)
+ * - Else if has any trip → dark orange (partial)
+ * - Else → crimson (unvisited)
  */
 export function getUserRouteColorExpression(): maplibregl.ExpressionSpecification {
   return [
     'case',
-    ['==', ['get', 'partial'], true],
-    COLORS.railwayRoutes.partial,
-    ['has', 'date'],
+    // Has at least one complete trip → dark green
+    ['all', ['has', 'date'], ['==', ['get', 'has_complete_trip'], true]],
     COLORS.railwayRoutes.visited,
+    // Has trips but no complete trip → dark orange
+    ['has', 'date'],
+    COLORS.railwayRoutes.partial,
+    // No trips → crimson
     COLORS.railwayRoutes.unvisited
   ] as maplibregl.ExpressionSpecification;
 }

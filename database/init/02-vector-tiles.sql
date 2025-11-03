@@ -124,6 +124,8 @@ BEGIN
             ut.date,
             ut.note,
             ut.partial,
+            -- Check if there's at least one complete trip for partial logic
+            CASE WHEN complete_trip.track_id IS NOT NULL THEN true ELSE false END AS has_complete_trip,
             -- Simplify geometry for tile display
             ST_AsMVTGeom(
                 rr.geometry_3857,
@@ -143,6 +145,14 @@ BEGIN
                 created_at DESC
             LIMIT 1
         ) ut ON true
+        LEFT JOIN LATERAL (
+            SELECT track_id
+            FROM user_trips
+            WHERE track_id = rr.track_id
+                AND (user_id_param IS NULL OR user_id = user_id_param)
+                AND (partial IS NULL OR partial = false)
+            LIMIT 1
+        ) complete_trip ON true
         WHERE
             -- Spatial filter using index
             rr.geometry_3857 && tile_envelope

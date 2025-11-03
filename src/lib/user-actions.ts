@@ -165,21 +165,11 @@ export async function quickLogRoute(trackId: string): Promise<void> {
   const userId = user.id;
   const today = new Date().toISOString().split('T')[0];
 
-  // Check if there's already a trip for today
-  const existingTrip = await query(`
-    SELECT id FROM user_trips
-    WHERE user_id = $1 AND track_id = $2 AND date = $3
-    LIMIT 1
-  `, [userId, trackId, today]);
-
-  if (existingTrip.rows.length === 0) {
-    // Create new trip for today
-    await query(`
-      INSERT INTO user_trips (user_id, track_id, date, note, partial)
-      VALUES ($1, $2, $3, NULL, FALSE)
-    `, [userId, trackId, today]);
-  }
-  // If trip already exists for today, do nothing
+  // Always create new trip (allow multiple trips on same day)
+  await query(`
+    INSERT INTO user_trips (user_id, track_id, date, note, partial)
+    VALUES ($1, $2, $3, NULL, FALSE)
+  `, [userId, parseInt(trackId), today]);
 }
 
 export async function quickUnlogRoute(trackId: string): Promise<void> {
@@ -262,18 +252,23 @@ export async function getUserProgress(): Promise<UserProgress> {
       AND usage_type != 1
   `);
 
-  // Get completed distance and count (routes with date AND not partial, excluding Special usage_type=1)
+  // Get completed distance and count (routes with at least one complete trip, excluding Special usage_type=1)
+  // Use EXISTS to ensure each route is only counted once regardless of number of trips
   const completedResult = await query(`
     SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
-      COUNT(DISTINCT rr.track_id) as completed_routes
+      COUNT(*) as completed_routes
     FROM railway_routes rr
-    INNER JOIN user_trips ut ON rr.track_id = ut.track_id
-    WHERE ut.user_id = $1
-      AND ut.date IS NOT NULL
-      AND (ut.partial IS NULL OR ut.partial = FALSE)
+    WHERE rr.usage_type != 1
       AND rr.length_km IS NOT NULL
-      AND rr.usage_type != 1
+      AND EXISTS (
+        SELECT 1
+        FROM user_trips ut
+        WHERE ut.track_id = rr.track_id
+          AND ut.user_id = $1
+          AND ut.date IS NOT NULL
+          AND (ut.partial IS NULL OR ut.partial = FALSE)
+      )
   `, [userId]);
 
   const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
@@ -292,4 +287,93 @@ export async function getUserProgress(): Promise<UserProgress> {
     totalRoutes,
     completedRoutes
   };
+}
+
+export interface UserTrip {
+  id: number;
+  track_id: number;
+  date: string;
+  note: string | null;
+  partial: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Get all trips for a specific route for the current user
+ */
+export async function getUserTrips(trackId: string): Promise<UserTrip[]> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const result = await query(`
+    SELECT id, track_id,
+           TO_CHAR(date, 'YYYY-MM-DD') as date,
+           note, partial, created_at, updated_at
+    FROM user_trips
+    WHERE user_id = $1 AND track_id = $2
+    ORDER BY date ASC NULLS FIRST, created_at ASC
+  `, [user.id, parseInt(trackId)]);
+
+  return result.rows;
+}
+
+/**
+ * Add a new trip for a route
+ */
+export async function addUserTrip(
+  trackId: string,
+  date: string,
+  note?: string | null,
+  partial?: boolean
+): Promise<void> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  await query(`
+    INSERT INTO user_trips (user_id, track_id, date, note, partial)
+    VALUES ($1, $2, $3, $4, $5)
+  `, [user.id, parseInt(trackId), date, note || null, partial ?? false]);
+}
+
+/**
+ * Update an existing trip
+ */
+export async function updateUserTrip(
+  tripId: number,
+  date: string,
+  note?: string | null,
+  partial?: boolean
+): Promise<void> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Verify the trip belongs to the current user
+  await query(`
+    UPDATE user_trips
+    SET date = $2, note = $3, partial = $4, updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1 AND user_id = $5
+  `, [tripId, date, note || null, partial ?? false, user.id]);
+}
+
+/**
+ * Delete a trip
+ */
+export async function deleteUserTrip(tripId: number): Promise<void> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Verify the trip belongs to the current user before deleting
+  await query(`
+    DELETE FROM user_trips
+    WHERE id = $1 AND user_id = $2
+  `, [tripId, user.id]);
 }

@@ -1,8 +1,18 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type maplibreglType from 'maplibre-gl';
-import { updateUserRailwayData, getUserProgress, quickLogRoute, quickUnlogRoute, type UserProgress } from '@/lib/user-actions';
+import {
+  getUserTrips,
+  addUserTrip,
+  updateUserTrip,
+  deleteUserTrip,
+  getUserProgress,
+  quickLogRoute,
+  type UserProgress,
+  type UserTrip
+} from '@/lib/user-actions';
 import { createRailwayRoutesSource, createRailwayRoutesLayer, closeAllPopups } from '@/lib/map';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '../utils/userRouteStyling';
+import { useToast } from '@/lib/toast';
 
 interface EditingFeature {
   track_id: string;
@@ -18,26 +28,31 @@ interface EditingFeature {
 }
 
 /**
- * Hook to manage route editing and form state
+ * Hook to manage route editing and trips management
  */
 export function useRouteEditor(userId: number, map: React.MutableRefObject<maplibreglType.Map | null>) {
+  const { showSuccess, showError } = useToast();
   const [editingFeature, setEditingFeature] = useState<EditingFeature | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
-  const [date, setDate] = useState('');
-  const [note, setNote] = useState('');
-  const [partial, setPartial] = useState(false);
+  const [trips, setTrips] = useState<UserTrip[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [showSpecialLines, setShowSpecialLines] = useState(false);
 
-  // Open edit form with route data
-  const openEditForm = (feature: EditingFeature) => {
+  // Open edit form with route data and fetch all trips
+  const openEditForm = useCallback(async (feature: EditingFeature) => {
     setEditingFeature(feature);
-    setDate(feature.date ? new Date(feature.date).toISOString().split('T')[0] : '');
-    setNote(feature.note || '');
-    setPartial(feature.partial || false);
     setShowEditForm(true);
+
+    // Fetch all trips for this route
+    try {
+      const tripsData = await getUserTrips(feature.track_id);
+      setTrips(tripsData);
+    } catch (error) {
+      console.error('Error fetching trips:', error);
+      setTrips([]);
+    }
 
     // Highlight selected route with increased width
     if (map.current && map.current.getLayer('railway_routes')) {
@@ -59,19 +74,20 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
         ]
       ]);
     }
-  };
+  }, [map]);
 
   // Close edit form
-  const closeEditForm = () => {
+  const closeEditForm = useCallback(() => {
     closeAllPopups();
     setShowEditForm(false);
     setEditingFeature(null);
+    setTrips([]);
 
     // Reset route width styling to default
     if (map.current && map.current.getLayer('railway_routes')) {
       map.current.setPaintProperty('railway_routes', 'line-width', getUserRouteWidthExpression());
     }
-  };
+  }, [map]);
 
   // Refresh map and progress stats
   const refreshMapAndProgress = async () => {
@@ -123,18 +139,72 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     }
   };
 
-  // Submit form and update route data
-  const submitForm = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Add a new trip (inline from table row)
+  const addTripInline = async (date: string, note: string | null, partial: boolean) => {
+    if (!editingFeature?.track_id || !date) return;
+
+    setIsLoading(true);
+    try {
+      await addUserTrip(editingFeature.track_id, date, note, partial);
+
+      // Refresh trips list to get the new trip with ID
+      const tripsData = await getUserTrips(editingFeature.track_id);
+      setTrips(tripsData);
+
+      await refreshMapAndProgress();
+      showSuccess('Trip added!');
+    } catch (error) {
+      console.error('Error adding trip:', error);
+      showError('Failed to add trip');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Update an existing trip
+  const updateTrip = async (tripId: number, date: string, note: string | null, partial: boolean) => {
     if (!editingFeature?.track_id) return;
 
     setIsLoading(true);
     try {
-      await updateUserRailwayData(editingFeature.track_id, date || null, note || null, partial);
+      await updateUserTrip(tripId, date, note, partial);
+
+      // Update local state without re-fetching (maintains order)
+      setTrips(prevTrips =>
+        prevTrips.map(trip =>
+          trip.id === tripId
+            ? { ...trip, date, note, partial, updated_at: new Date().toISOString() }
+            : trip
+        )
+      );
+
       await refreshMapAndProgress();
-      closeEditForm();
+      showSuccess('Trip updated!');
     } catch (error) {
-      console.error('Error updating railway data:', error);
+      console.error('Error updating trip:', error);
+      showError('Failed to update trip');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Delete a trip
+  const deleteTrip = async (tripId: number) => {
+    if (!editingFeature?.track_id) return;
+
+    setIsLoading(true);
+    try {
+      await deleteUserTrip(tripId);
+
+      // Refresh trips list
+      const tripsData = await getUserTrips(editingFeature.track_id);
+      setTrips(tripsData);
+
+      await refreshMapAndProgress();
+      showSuccess('Trip deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting trip:', error);
+      showError('Failed to delete trip');
     } finally {
       setIsLoading(false);
     }
@@ -150,35 +220,24 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     }
   };
 
-  // Quick log route with current date (preserves note)
-  const quickLog = async (trackId: string) => {
+  // Quick log route with current date (returns callback for refresh)
+  const quickLog = useCallback(async (trackId: string) => {
     try {
       await quickLogRoute(trackId);
-      await refreshMapAndProgress();
     } catch (error) {
       console.error('Error quick logging route:', error);
     }
-  };
+  }, []);
 
-  // Quick unlog route (remove date, preserves note)
-  const quickUnlog = async (trackId: string) => {
-    try {
-      await quickUnlogRoute(trackId);
-      await refreshMapAndProgress();
-    } catch (error) {
-      console.error('Error quick unlogging route:', error);
-    }
-  };
+  // Refresh map after quick log (call this after delay)
+  const refreshAfterQuickLog = useCallback(async () => {
+    await refreshMapAndProgress();
+  }, [editingFeature, userId, map, showSpecialLines]);
 
   return {
     editingFeature,
     showEditForm,
-    date,
-    setDate,
-    note,
-    setNote,
-    partial,
-    setPartial,
+    trips,
     isLoading,
     cacheBuster,
     progress,
@@ -186,9 +245,11 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     setShowSpecialLines,
     openEditForm,
     closeEditForm,
-    submitForm,
+    addTripInline,
+    updateTrip,
+    deleteTrip,
     fetchProgress,
     quickLog,
-    quickUnlog,
+    refreshAfterQuickLog,
   };
 }

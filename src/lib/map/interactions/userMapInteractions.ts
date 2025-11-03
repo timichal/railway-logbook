@@ -20,7 +20,7 @@ interface EditingFeature {
 interface UserMapInteractionCallbacks {
   onRouteClick: (feature: EditingFeature) => void;
   onQuickLog: (trackId: string) => void;
-  onQuickUnlog: (trackId: string) => void;
+  onRefreshAfterQuickLog: () => Promise<void>;
 }
 
 /**
@@ -30,7 +30,7 @@ export function setupUserMapInteractions(
   mapInstance: maplibreglType.Map,
   callbacks: UserMapInteractionCallbacks
 ) {
-  const { onRouteClick, onQuickLog, onQuickUnlog } = callbacks;
+  const { onRouteClick, onQuickLog, onRefreshAfterQuickLog } = callbacks;
   let currentPopup: maplibregl.Popup | null = null;
   let clickPopup: maplibregl.Popup | null = null;
 
@@ -40,7 +40,6 @@ export function setupUserMapInteractions(
 
     const feature = e.features[0];
     const properties = feature.properties;
-    console.log(properties)
     if (!properties) return;
 
     // Close any open popups
@@ -80,7 +79,6 @@ export function setupUserMapInteractions(
     formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
 
     if (properties.frequency !== "{}") {
-      console.log(properties.frequency)
       formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ")}<br />`
     }
     if (properties.description) {
@@ -105,38 +103,25 @@ export function setupUserMapInteractions(
     // Action buttons
     popupContent += `<div class="flex flex-col gap-2" style="border-top: 1px solid #e5e7eb; padding-top: 12px;">`;
 
-    // Quick log/unlog button
-    const isCompleted = properties.date && !properties.partial;
-    if (isCompleted) {
-      popupContent += `
-        <button
-          class="quick-unlog-btn px-3 py-2 text-sm bg-orange-500 text-white rounded hover:bg-orange-600 cursor-pointer"
-          data-track-id="${properties.track_id}"
-          style="border: none; cursor: pointer;"
-        >
-          Quick unlog
-        </button>
-      `;
-    } else {
-      popupContent += `
-        <button
-          class="quick-log-btn px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 cursor-pointer"
-          data-track-id="${properties.track_id}"
-          style="border: none; cursor: pointer;"
-        >
-          Quick log
-        </button>
-      `;
-    }
+    // Quick log button
+    popupContent += `
+      <button
+        class="quick-log-btn px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 cursor-pointer"
+        data-track-id="${properties.track_id}"
+        style="border: none; cursor: pointer;"
+      >
+        Quick log
+      </button>
+    `;
 
-    // Edit button
+    // Manage trips button
     popupContent += `
       <button
         class="edit-log-btn px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
         data-track-id="${properties.track_id}"
         style="border: none; cursor: pointer;"
       >
-        Edit my log
+        Manage trips
       </button>
     `;
 
@@ -157,31 +142,20 @@ export function setupUserMapInteractions(
     // Add event listeners to buttons after popup is added to DOM
     setTimeout(() => {
       const quickLogBtn = document.querySelector('.quick-log-btn');
-      const quickUnlogBtn = document.querySelector('.quick-unlog-btn');
       const editBtn = document.querySelector('.edit-log-btn');
 
       if (quickLogBtn) {
-        quickLogBtn.addEventListener('click', () => {
+        quickLogBtn.addEventListener('click', async () => {
           const trackId = quickLogBtn.getAttribute('data-track-id');
           if (trackId) {
-            onQuickLog(trackId);
-            if (clickPopup) {
-              clickPopup.remove();
-              clickPopup = null;
-            }
-          }
-        });
-      }
+            // Disable button and change text
+            quickLogBtn.setAttribute('disabled', 'true');
+            quickLogBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            quickLogBtn.classList.add('bg-green-400', 'cursor-not-allowed');
+            quickLogBtn.textContent = 'Logged!';
 
-      if (quickUnlogBtn) {
-        quickUnlogBtn.addEventListener('click', () => {
-          const trackId = quickUnlogBtn.getAttribute('data-track-id');
-          if (trackId) {
-            onQuickUnlog(trackId);
-            if (clickPopup) {
-              clickPopup.remove();
-              clickPopup = null;
-            }
+            await onQuickLog(trackId);
+            await onRefreshAfterQuickLog();
           }
         });
       }
@@ -230,7 +204,6 @@ export function setupUserMapInteractions(
     formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
 
     if (properties.frequency !== "{}") {
-      console.log(properties.frequency)
       formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ")}<br />`
     }
     if (properties.description) {

@@ -121,7 +121,6 @@ export function setupAdminMapInteractions(
         formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
 
         if (properties.frequency !== "{}") {
-          console.log(properties.frequency)
           formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ")}<br />`
         }
         if (properties.description) {

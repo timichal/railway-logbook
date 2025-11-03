@@ -15,6 +15,7 @@ import {
 import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
 import MultiRouteLogger from './MultiRouteLogger';
+import TripRow from './TripRow';
 
 interface VectorRailwayMapProps {
   className?: string;
@@ -61,11 +62,12 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     const cleanup = setupUserMapInteractions(map.current, {
       onRouteClick: routeEditor.openEditForm,
       onQuickLog: routeEditor.quickLog,
-      onQuickUnlog: routeEditor.quickUnlog,
+      onRefreshAfterQuickLog: routeEditor.refreshAfterQuickLog,
     });
 
     return cleanup;
-  }, [map, routeEditor.openEditForm, routeEditor.quickLog, routeEditor.quickUnlog]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]); // Callbacks are memoized with useCallback
 
   // Fetch progress stats on component mount
   useEffect(() => {
@@ -280,91 +282,58 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         />
       )}
 
-      {/* Edit Form Modal */}
+      {/* Manage Trips Modal */}
       {routeEditor.showEditForm && routeEditor.editingFeature && (
         <div className="absolute inset-0 flex items-center justify-center z-[9999] text-black">
-          <div className="bg-white p-6 rounded-lg shadow-xl border max-w-md w-full mx-4">
+          <div className="bg-white p-6 rounded-lg shadow-xl border max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold mb-4">
-              {routeEditor.editingFeature.track_number}
+              Manage Trips: {routeEditor.editingFeature.track_number}
               {' '}
               {routeEditor.editingFeature.from_station} ⟷ {routeEditor.editingFeature.to_station}
             </h3>
 
-            <form onSubmit={routeEditor.submitForm} className="space-y-4">
-              <div>
-                <label htmlFor="date" className="block text-sm font-medium mb-1">
-                  Date
-                </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    id="date"
-                    value={routeEditor.date}
-                    onChange={(e) => routeEditor.setDate(e.target.value)}
-                    className={`w-full pl-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${routeEditor.date ? 'pr-6' : 'pr-3'}`}
+            {/* Trips Table */}
+            <div className="mb-4 overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="text-left p-2">Date</th>
+                    <th className="text-left p-2">Note</th>
+                    <th className="text-center p-2">Partial</th>
+                    <th className="text-center p-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {routeEditor.trips.map((trip) => (
+                    <TripRow
+                      key={trip.id}
+                      trip={trip}
+                      onUpdate={routeEditor.updateTrip}
+                      onDelete={routeEditor.deleteTrip}
+                      onAdd={routeEditor.addTripInline}
+                    />
+                  ))}
+                  {/* Add new trip row */}
+                  <TripRow
+                    trip={null}
+                    onUpdate={routeEditor.updateTrip}
+                    onDelete={routeEditor.deleteTrip}
+                    onAdd={routeEditor.addTripInline}
+                    isNewRow={true}
                   />
-                  {routeEditor.date && (
-                    <button
-                      type="button"
-                      onClick={() => routeEditor.setDate('')}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm cursor-pointer"
-                      title="Clear date"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
+                </tbody>
+              </table>
+            </div>
 
-              <div>
-                <label htmlFor="note" className="block text-sm font-medium mb-1">
-                  Note
-                </label>
-                <textarea
-                  id="note"
-                  value={routeEditor.note}
-                  onChange={(e) => routeEditor.setNote(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Optional note..."
-                />
-              </div>
-
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={routeEditor.partial}
-                    onChange={(e) => routeEditor.setPartial(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <span className="text-sm font-medium">Partial</span>
-                </label>
-              </div>
-
-              <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={routeEditor.closeEditForm}
-                  className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={routeEditor.isLoading}
-                  className={`px-4 py-2 text-white rounded cursor-pointer flex items-center gap-2 ${routeEditor.isLoading
-                      ? 'bg-blue-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                    }`}
-                >
-                  {routeEditor.isLoading && (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  )}
-                  {routeEditor.isLoading ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </form>
+            {/* Close Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={routeEditor.closeEditForm}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
