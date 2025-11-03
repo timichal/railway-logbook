@@ -352,7 +352,8 @@ export async function updateRailwayRoute(
 
   await query(`
     UPDATE railway_routes
-    SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, frequency = $7, link = $8, updated_at = CURRENT_TIMESTAMP
+    SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, frequency = $7, link = $8,
+        is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
   `, [trackId, fromStation, toStation, trackNumber, description, usageType, frequency || [], link]);
 }
