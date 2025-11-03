@@ -11,6 +11,7 @@ interface EditingFeature {
   track_number: string | null;
   description: string;
   usage_types: string;
+  link: string | null;
   date: string | null;
   note: string | null;
   partial: boolean | null;
@@ -39,7 +40,7 @@ export function setupUserMapInteractions(
 
     const feature = e.features[0];
     const properties = feature.properties;
-
+    console.log(properties)
     if (!properties) return;
 
     // Close any open popups
@@ -76,10 +77,18 @@ export function setupUserMapInteractions(
     let popupContent = `<div class="railway-click-menu" style="color: black; min-width: 200px;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.from_station} ⟷ ${properties.to_station}</h3>`;
 
     let formattedDescription = "";
-    if (properties.description) {
-      formattedDescription += `<i style="color: black;">${properties.description}</i><br />`;
+    formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
+
+    if (properties.frequency !== "{}") {
+      console.log(properties.frequency)
+      formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ")}<br />`
     }
-    formattedDescription += `${getUsageLabel(properties.usage_type)} route`;
+    if (properties.description) {
+      formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
+    }
+    if (properties.link) {
+      formattedDescription += `<a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a><br />`;
+    }
 
     if (properties.date || properties.note) {
       formattedDescription += `<hr class="my-2" />`;
@@ -190,6 +199,7 @@ export function setupUserMapInteractions(
             track_number: properties.track_number || null,
             description: properties.description,
             usage_types: properties.usage_types,
+            link: properties.link || null,
             date: properties.date,
             note: properties.note,
             partial: properties.partial
@@ -217,8 +227,17 @@ export function setupUserMapInteractions(
     let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.from_station} ⟷ ${properties.to_station}</h3>`;
 
     let formattedDescription = "";
+    formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
+
+    if (properties.frequency !== "{}") {
+      console.log(properties.frequency)
+      formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ")}<br />`
+    }
     if (properties.description) {
-      formattedDescription += `<i style="color: black;">${properties.description}</i><br />`;
+      formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
+    }
+    if (properties.link) {
+      formattedDescription += `<a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a><br />`;
     }
 
     if (properties.date || properties.note) {

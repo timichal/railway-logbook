@@ -11,6 +11,7 @@ interface EditingFeature {
   to_station: string;
   description: string;
   usage_types: string;
+  link: string | null;
   date: string | null;
   note: string | null;
   partial: boolean | null;

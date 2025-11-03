@@ -69,7 +69,7 @@ export function setupAdminMapInteractions(
 
     // If we didn't click on any features, unselect the route
     if ((!routeFeatures || routeFeatures.length === 0) &&
-        (!partFeatures || partFeatures.length === 0)) {
+      (!partFeatures || partFeatures.length === 0)) {
       if (onRouteSelectRef.current) {
         onRouteSelectRef.current('');  // Empty string to unselect
       }
@@ -117,6 +117,19 @@ export function setupAdminMapInteractions(
       const properties = feature.properties;
 
       if (properties) {
+        let formattedDescription = "";
+        formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
+
+        if (properties.frequency !== "{}") {
+          console.log(properties.frequency)
+          formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ")}<br />`
+        }
+        if (properties.description) {
+          formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
+        }
+        if (properties.link) {
+          formattedDescription += `<a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a><br />`;
+        }
 
         if (routeHoverPopup) {
           routeHoverPopup.remove();
@@ -132,8 +145,7 @@ export function setupAdminMapInteractions(
           .setHTML(`
             <div style="color: black;">
               <h3 style="font-weight: bold; margin-bottom: 4px;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.from_station} ⟷ ${properties.to_station}</h3>
-              ${properties.description ? `<p style="margin: 2px 0;">${properties.description}</p>` : ''}
-              <p style="margin: 2px 0;">${getUsageLabel(properties.usage_type)} route</p>
+              ${formattedDescription}</p>
             </div>
           `)
           .addTo(mapInstance);
