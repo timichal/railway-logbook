@@ -1,11 +1,9 @@
 temp poznamky
 
 - dělení: special nejsou v běžných JŘ, seasonal jo
-- překopat na type + frequency?
 - junctions: aproximace (představit si jako kolečko)
-
+ 
 dodělat s aičkem:
-- procházení tratí uživatel
 - stats page, about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
