@@ -6,7 +6,7 @@ This guide explains how to set up the database system for storing and serving ra
 
 The system separates data into two categories:
 - **Objective Data**: Railway routes, stations, operators, usage types (stored in `railway_routes` and `stations` tables)
-- **User Data**: Personal annotations like ride dates and notes (stored in `user_railway_data` table with user_id)
+- **User Data**: Personal trip records with dates and notes (stored in `user_trips` table with user_id, supports multiple trips per route)
 
 ## Setup Instructions
 
@@ -20,7 +20,7 @@ docker-compose up -d db
 This will:
 - Create a PostgreSQL 16 database with PostGIS extension
 - Initialize the schema from `database/init/01-schema.sql`
-- Create tables for users, stations, railway_routes, and user_railway_data
+- Create tables for users, stations, railway_routes, railway_parts, and user_trips
 - Insert a default admin user (ID: 1)
 
 ### 2. Load Data from GeoJSON
@@ -74,11 +74,15 @@ Update the database connection settings if needed.
 
 3. **railway_routes** - Railway lines (objective data)
    - `track_id` (auto-generated SERIAL primary key)
-   - `name`
-   - `description` (optional custom description)
-   - `usage_type` (INTEGER NOT NULL: 0=Regular, 1=Seasonal, 2=Special)
+   - `from_station` (TEXT NOT NULL, starting station/location)
+   - `to_station` (TEXT NOT NULL, ending station/location)
+   - `track_number` (VARCHAR(100), local track number(s), optional)
+   - `description` (TEXT, optional custom description)
+   - `usage_type` (INTEGER NOT NULL: 0=Regular, 1=Special)
+   - `frequency` (TEXT[], array of frequency tags: Daily, Weekdays, Weekends, Once a week, Seasonal)
+   - `link` (TEXT, external URL/link for the route)
    - `geometry` (PostGIS LineString with SRID 4326)
-   - `length_km` (calculated automatically from geometry)
+   - `length_km` (NUMERIC, calculated automatically from geometry)
    - `starting_part_id` (BIGINT, reference to starting railway_part for recalculation)
    - `ending_part_id` (BIGINT, reference to ending railway_part for recalculation)
    - `is_valid` (BOOLEAN, marks routes that can't be recalculated after OSM updates)
@@ -89,12 +93,16 @@ Update the database connection settings if needed.
    - `geometry` (PostGIS LineString with SRID 4326)
    - Used for creating new routes via admin interface
 
-5. **user_railway_data** - User-specific annotations
+5. **user_trips** - User-specific trip records (supports multiple trips per route)
+   - `id` (SERIAL PRIMARY KEY)
    - `user_id` → `users.id`
    - `track_id` → `railway_routes.track_id`
-   - `date` (date of ride)
-   - `note` (text)
-   - `partial` (boolean, marks incomplete rides)
+   - `date` (DATE, date of trip)
+   - `note` (TEXT, trip notes)
+   - `partial` (BOOLEAN, marks incomplete trips)
+   - `created_at` (TIMESTAMP)
+   - `updated_at` (TIMESTAMP)
+   - Note: No UNIQUE constraint, allows logging the same route multiple times
 
 ### Key Features
 
@@ -119,13 +127,14 @@ await updateUserRailwayData("track_456", "2024-01-20", "Only rode part of this r
 ```
 
 The frontend automatically handles:
-- **Dynamic Styling**: Route colors based on completion status
+- **Dynamic Styling**: Route colors based on completion status (from most recent trip)
   - DarkGreen (#006400) for fully visited routes (date exists and not partial)
   - Dark orange (#d97706) for partially completed routes
   - Crimson for unvisited routes
-- **Usage Type Display**: Enum numbers (0=Regular, 1=Seasonal, 2=Special) displayed in popups
-- **Weight Calculation**: Thinner lines (weight=2) for Special usage routes (usage_type=2)
-- **Completion Stats**: Only fully completed routes (not partial) count toward progress percentage
+- **Usage Type Display**: Enum numbers (0=Regular, 1=Special) and frequency tags displayed in popups
+- **Weight Calculation**: Thinner lines (weight=2) for Special usage routes (usage_type=1)
+- **Multiple Trips**: Vector tiles show most recent trip data for route coloring
+- **Completion Stats**: Only fully completed trips (not partial) count toward progress percentage
 
 ### Adding New Users
 

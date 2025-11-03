@@ -28,7 +28,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 
 ### Database Operations
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
-- `npm run exportRouteData` - Export railway_routes and user_railway_data (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
+- `npm run exportRouteData` - Export railway_routes and user_trips (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
 - `npm run importRouteData <filename>` - Import railway data from SQL dump using Docker (e.g., `npm run importRouteData railway_data_2025-01-15.sql`)
@@ -79,12 +79,13 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Tables**:
   - `users` - User accounts and authentication (email as username, password field for bcrypt hashes)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
-  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), description, usage_type, length_km, PostGIS geometry, starting_part_id, ending_part_id, is_valid flag, and error_message
+  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), PostGIS geometry, length_km, starting_part_id, ending_part_id, is_valid flag, and error_message
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and recalculation)
-  - `user_railway_data` - User-specific ride history (date field), personal notes, and partial flag for incomplete rides
+  - `user_trips` - User-specific trip records (replaces user_railway_data); supports multiple trips per route with id, user_id, track_id, date, note, partial flag, created_at, updated_at; no UNIQUE constraint allows logging the same route multiple times
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 - **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
 - **Route Validity Tracking**: Routes store starting_part_id and ending_part_id for recalculation; is_valid flag marks routes that can't be recalculated after OSM updates
+- **Multiple Trips Support**: user_trips table allows users to log the same route multiple times (e.g., different dates); frontend displays most recent trip for route coloring
 
 ### 4. Frontend Application
 - **Next.js 15** with React 19 - Modern web application framework with App Router
@@ -93,7 +94,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Server Actions** - Type-safe database operations with automatic serialization
 - **Authentication** - Email/password authentication with bcrypt, session management
 - **Dynamic Styling** - Three-way route colors based on user data (dark green=fully completed, dark orange=partial, crimson=unvisited), weight based on usage type (thinner for Special)
-- **Usage Type Display** - Frontend displays enum numbers (0=Regular, 1=Seasonal, 2=Special) in popups
+- **Usage Type & Frequency Display** - Frontend displays usage_type (0=Regular, 1=Special) and frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal) in popups
 - **Connection Pooling** - PostgreSQL pool for database performance
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension)
@@ -172,8 +173,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `auth-actions.ts` - Authentication actions (login, register, logout, getUser)
 
 **Utilities:**
-- `types.ts` - Core TypeScript type definitions (Station, GeoJSONFeature, RailwayRoute, etc.)
-- `constants.ts` - Usage type options (Regular=0, Seasonal=1, Special=2)
+- `types.ts` - Core TypeScript type definitions (Station, GeoJSONFeature, RailwayRoute, UserTrip, etc.)
+- `constants.ts` - Usage type options (Regular=0, Special=1), frequency options (Daily, Weekdays, Weekends, Once a week, Seasonal), UsageType type export
 - `coordinate-utils.ts` - Coordinate utilities (mergeLinearChain algorithm, coordinatesToWKT)
 
 #### Map Library (`src/lib/map/`)
@@ -215,7 +216,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 ### Database Schema
 - `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes, route validity tracking fields
 - `database/init/02-vector-tiles.sql` - Vector tile functions (railway_routes_tile shows routes at all zoom levels, railway_parts_tile with zoom filtering, stations_tile at zoom 10+) with is_valid field
-- Contains tables for users, stations, railway_routes (with starting_part_id, ending_part_id, is_valid, error_message), railway_parts, and user_railway_data
+- Contains tables for users, stations, railway_routes (with frequency, link, starting_part_id, ending_part_id, is_valid, error_message), railway_parts, and user_trips (supports multiple trips per route)
 
 ### Configuration Files
 - `eslint.config.mjs` - ESLint configuration
@@ -227,7 +228,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `<country>-rail.tmp.osm.pbf` - Filtered railway data
 - `<country>-rail.tmp.geojson` - Converted to GeoJSON
 - `<country>-pruned.geojson` - Custom filtered data (ready for database loading)
-- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes and user_railway_data (from `npm run exportRouteData`)
+- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes and user_trips (from `npm run exportRouteData`)
 
 ## Development Notes
 
@@ -263,7 +264,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - Admin can fix invalid routes using "Edit Route Geometry" to select new start/end points
 
 ### User Progress Tracking
-- User-specific data stored in `user_railway_data` table with date, note, and partial fields
+- User-specific data stored in `user_trips` table with date, note, and partial fields; supports multiple trips per route
 - Progress calculated from `length_km` column in `railway_routes`
 - Only fully completed routes (date exists AND partial=false) count toward completion stats
 - Progress stats show completed/total km and percentage (excludes partial routes)
