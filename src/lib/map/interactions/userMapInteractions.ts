@@ -59,14 +59,14 @@ export function setupUserMapInteractions(
       ['==', ['get', 'track_id'], properties.track_id],
       [
         'case',
-        ['==', ['get', 'usage_type'], 2],
+        ['==', ['get', 'usage_type'], 1],
         4, // Special routes: 2 + 2 = 4
         5  // Normal routes: 3 + 2 = 5
       ],
       // Default width for non-selected routes
       [
         'case',
-        ['==', ['get', 'usage_type'], 2],
+        ['==', ['get', 'usage_type'], 1],
         2, // Special routes = thinner
         3  // Normal routes = standard width
       ]
@@ -79,7 +79,7 @@ export function setupUserMapInteractions(
     if (properties.description) {
       formattedDescription += `<i style="color: black;">${properties.description}</i><br />`;
     }
-    formattedDescription += `Usage: ${getUsageLabel(properties.usage_type)}`;
+    formattedDescription += `${getUsageLabel(properties.usage_type)} route`;
 
     if (properties.date || properties.note) {
       formattedDescription += `<hr class="my-2" />`;

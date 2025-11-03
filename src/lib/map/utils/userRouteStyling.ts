@@ -21,7 +21,7 @@ export function getUserRouteColorExpression(): maplibregl.ExpressionSpecificatio
 export function getUserRouteWidthExpression(): maplibregl.ExpressionSpecification {
   return [
     'case',
-    ['==', ['get', 'usage_type'], 2],
+    ['==', ['get', 'usage_type'], 1],
     2,  // Special usage = thinner
     3   // Normal = standard width
   ] as maplibregl.ExpressionSpecification;

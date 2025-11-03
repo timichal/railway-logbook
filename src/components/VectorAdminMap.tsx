@@ -175,7 +175,7 @@ export default function VectorAdminMap({
         'case',
         ['==', ['get', 'track_id'], selectedRouteId],
         5,
-        ['==', ['get', 'usage_type'], 2],
+        ['==', ['get', 'usage_type'], 1],
         2, // Special routes = thinner
         3  // Normal routes = standard width
       ]);
@@ -194,7 +194,7 @@ export default function VectorAdminMap({
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
-        ['==', ['get', 'usage_type'], 2],
+        ['==', ['get', 'usage_type'], 1],
         2, // Special routes = thinner
         3  // Normal routes = standard width
       ]);
@@ -247,7 +247,7 @@ export default function VectorAdminMap({
         'case',
         ['==', ['get', 'track_id'], selectedRouteId],
         5,
-        ['==', ['get', 'usage_type'], 2],
+        ['==', ['get', 'usage_type'], 1],
         2, // Special routes = thinner
         3  // Normal routes = standard width
       ]);
@@ -267,7 +267,7 @@ export default function VectorAdminMap({
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
-        ['==', ['get', 'usage_type'], 2],
+        ['==', ['get', 'usage_type'], 1],
         2, // Special routes = thinner
         3  // Normal routes = standard width
       ]);

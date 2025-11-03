@@ -43,7 +43,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         createRailwayRoutesLayer({
           colorExpression: getUserRouteColorExpression(),
           widthExpression: getUserRouteWidthExpression(),
-          filter: ['!=', ['get', 'usage_type'], 2], // Hide special routes by default (matches showSpecialLines initial state)
+          filter: ['!=', ['get', 'usage_type'], 1], // Hide special routes by default (matches showSpecialLines initial state)
         }),
         createStationsLayer(),
       ],
@@ -78,7 +78,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
 
     const filter: FilterSpecification | null = routeEditor.showSpecialLines
       ? null // Show all routes
-      : ['!=', ['get', 'usage_type'], 2]; // Hide special routes (usage_type === 2)
+      : ['!=', ['get', 'usage_type'], 1]; // Hide special routes (usage_type === 1)
 
     map.current.setFilter('railway_routes', filter);
   }, [map, routeEditor.showSpecialLines]);

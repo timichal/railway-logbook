@@ -133,7 +133,7 @@ export function setupAdminMapInteractions(
             <div style="color: black;">
               <h3 style="font-weight: bold; margin-bottom: 4px;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.from_station} ⟷ ${properties.to_station}</h3>
               ${properties.description ? `<p style="margin: 2px 0;">${properties.description}</p>` : ''}
-              <p style="margin: 2px 0;">Usage: ${getUsageLabel(properties.usage_type)}</p>
+              <p style="margin: 2px 0;">${getUsageLabel(properties.usage_type)} route</p>
             </div>
           `)
           .addTo(mapInstance);
