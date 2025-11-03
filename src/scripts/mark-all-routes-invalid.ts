@@ -35,7 +35,7 @@ async function markAllRoutesInvalid() {
 
     console.log(`✓ Marked ${result.rowCount} routes as invalid\n`);
 
-    if (result.rowCount > 0) {
+    if (result.rowCount! > 0) {
       console.log('Updated routes:');
       result.rows.forEach((row, index) => {
         console.log(`  ${index + 1}. Track ${row.track_id}: ${row.from_station} ⟷ ${row.to_station}`);
