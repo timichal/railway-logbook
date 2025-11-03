@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { execSync } from 'child_process';
 
 /**
- * Import railway_routes and user_railway_data from SQL dump
+ * Import railway_routes and user_trips from SQL dump
  */
 async function importRoutes() {
   // Get filename from command line arguments

@@ -56,7 +56,7 @@ CREATE TABLE railway_routes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- User trips (replaces user_railway_data, supports multiple trips per route)
+-- User trips (supports multiple trips per route)
 CREATE TABLE user_trips (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -5,10 +5,10 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 
 /**
- * Export railway_routes and user_railway_data (user_id=1) to SQL dump
+ * Export railway_routes and user_trips (user_id=1) to SQL dump
  */
 async function exportRoutes() {
-  console.log('Exporting railway_routes and user_railway_data...');
+  console.log('Exporting railway_routes and user_trips...');
 
   try {
     // Create data directory if it doesn't exist
@@ -44,8 +44,8 @@ async function exportRoutes() {
       throw error;
     }
 
-    // Get user_railway_data for user_id=1
-    console.log('Exporting user_railway_data for user_id=1...');
+    // Get user_trips for user_id=1
+    console.log('Exporting user_trips for user_id=1...');
     const userDataResult = await query(`
       SELECT
         user_id,
@@ -53,21 +53,21 @@ async function exportRoutes() {
         date,
         note,
         partial
-      FROM user_railway_data
+      FROM user_trips
       WHERE user_id = 1
       ORDER BY track_id
     `);
 
-    // Generate SQL INSERT statements for user_railway_data
+    // Generate SQL INSERT statements for user_trips
     let userDataSQL = '\n-- User railway data for user_id=1\n';
     if (userDataResult.rows.length > 0) {
-      userDataSQL += 'DELETE FROM public.user_railway_data WHERE user_id = 1;\n\n';
+      userDataSQL += 'DELETE FROM public.user_trips WHERE user_id = 1;\n\n';
       for (const row of userDataResult.rows) {
         const dateValue = row.date ? `'${row.date.toISOString().split('T')[0]}'` : 'NULL';
         const noteValue = row.note ? `'${row.note.replace(/'/g, "''")}'` : 'NULL';
         const partialValue = row.partial ? 'true' : 'false';
 
-        userDataSQL += `INSERT INTO public.user_railway_data (user_id, track_id, date, note, partial) VALUES (${row.user_id}, ${row.track_id}, ${dateValue}, ${noteValue}, ${partialValue});\n`;
+        userDataSQL += `INSERT INTO public.user_trips (user_id, track_id, date, note, partial) VALUES (${row.user_id}, ${row.track_id}, ${dateValue}, ${noteValue}, ${partialValue});\n`;
       }
     } else {
       userDataSQL += '-- No user data found for user_id=1\n';
@@ -77,7 +77,7 @@ async function exportRoutes() {
     const fullDump = `-- Railway Data Export (${timestamp})
 -- This file contains:
 --   1. railway_routes table (full export)
---   2. user_railway_data for user_id=1
+--   2. user_trips for user_id=1
 
 -- Clear existing railway_routes
 DELETE FROM public.railway_routes;
@@ -97,7 +97,7 @@ SET session_replication_role = DEFAULT;
     fs.writeFileSync(filepath, fullDump);
 
     console.log(`✓ Exported railway_routes (${sqlDump.split('\n').filter(l => l.startsWith('INSERT')).length} routes)`);
-    console.log(`✓ Exported user_railway_data (${userDataResult.rows.length} records)`);
+    console.log(`✓ Exported user_trips (${userDataResult.rows.length} records)`);
     console.log(`✓ Saved to ${filepath}`);
     process.exit(0);
   } catch (error) {

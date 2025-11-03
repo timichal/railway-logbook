@@ -15,7 +15,7 @@ export async function deleteRailwayRoute(trackId: string): Promise<void> {
   try {
     console.log('Deleting railway route with track_id:', trackId);
 
-    // Delete from railway_routes table (CASCADE will handle user_railway_data)
+    // Delete from railway_routes table (CASCADE will handle user_trips)
     const deleteQuery = 'DELETE FROM railway_routes WHERE track_id = $1';
     const result = await client.query(deleteQuery, [trackId]);
     

@@ -53,7 +53,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - `stations` - Railway stations (Point features)
 - `railway_parts` - Raw railway segments from OSM
 - `railway_routes` - Defined routes with usage type (Regular/Seasonal/Special)
-- `user_railway_data` - User ride history (dates, notes, partial flag)
+- `user_trips` - User ride history (dates, notes, partial flag)
 
 ### Features
 
