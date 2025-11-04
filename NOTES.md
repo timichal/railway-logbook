@@ -15,3 +15,6 @@ traťová mapa https://mapa.plk-sa.pl/
 SLOVENSKO
 traťové jř https://www.zssk.sk/cestovny-poriadok/
 traťová mapa 2020 https://www.zssk.sk/wp-content/uploads/2020/03/%C5%BDelezni%C4%8Dn%C3%A1-mapa-Slovenskej-republiky.pdf
+
+LITVA
+traťové jř https://www.stops.lt/traukiniai/#traukiniai/en

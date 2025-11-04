@@ -79,7 +79,7 @@ export function setupUserMapInteractions(
     formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
 
     if (properties.frequency !== "{}") {
-      formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ")}<br />`
+      formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ").replaceAll("\"", "")}<br />`
     }
     if (properties.description) {
       formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
@@ -204,7 +204,7 @@ export function setupUserMapInteractions(
     formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
 
     if (properties.frequency !== "{}") {
-      formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ")}<br />`
+      formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ").replaceAll("\"", "")}<br />`
     }
     if (properties.description) {
       formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
