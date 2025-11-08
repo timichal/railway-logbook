@@ -3,6 +3,9 @@ temp poznamky
 - dělení: special nejsou v běžných JŘ, seasonal jo
 - junctions: aproximace (představit si jako kolečko)
  
+nedodělané tratě
+- uhřice čejc: asi jen část, shady
+
 dodělat s aičkem:
 - stats page, about/faq
 - mapa bez loginu
