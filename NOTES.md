@@ -10,6 +10,18 @@ dodělat s aičkem:
 - stats page, about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
+- refresh map on group save
+- group save: set partial on first/last
+- preferred routing: save route presets (brno-praha)
+- switch vias
+- dont backtrack in pathfind
+- add by click to left tab
+- script to find duplicate routes?
+- correct utf8 sorting in admin routes
+
+ČESKO
+traťové jř https://www.cd.cz/jizdni-rad/tratove-jizdni-rady
+traťová mapa https://www.cd.cz/jizdni-rad/tratove-jizdni-rady/files/cz-mapa-trati-241215-01.pdf
 
 POLSKO
 traťové jř https://portalpasazera.pl/Tablice/TabliceWgLinii
@@ -21,3 +33,7 @@ traťová mapa 2020 https://www.zssk.sk/wp-content/uploads/2020/03/%C5%BDelezni%
 
 LITVA
 traťové jř https://www.stops.lt/traukiniai/#traukiniai/en
+
+RAKOUSKO
+traťové jř https://www.oebb.at/en/fahrplan/fahrplanbilder
+traťová mapa https://www.oebb.at/de/dam/jcr:7fc18e86-1c23-4cf0-b9e0-94eb05d32c3e/bahnnetz-oebb.pdf
