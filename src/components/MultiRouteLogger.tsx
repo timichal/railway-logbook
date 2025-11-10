@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import type { Station } from '@/lib/types';
-import { searchStations, updateMultipleRoutes } from '@/lib/user-actions';
+import { searchStations } from '@/lib/user-actions';
 import { findRoutePathBetweenStations } from '@/lib/route-path-finder';
 import { useToast } from '@/lib/toast';
 
@@ -24,11 +24,11 @@ type MaybeStation = SelectedStation | null;
 interface MultiRouteLoggerProps {
   onHighlightRoutes?: (routeIds: number[]) => void;
   onClose?: () => void;
-  onRefreshMap?: () => void;
+  onAddRoutesToSelection?: (routes: RouteNode[]) => void;
 }
 
-export default function MultiRouteLogger({ onHighlightRoutes, onClose, onRefreshMap }: MultiRouteLoggerProps) {
-  const { showSuccess, showError } = useToast();
+export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRoutesToSelection }: MultiRouteLoggerProps) {
+  const { showSuccess } = useToast();
   const [fromStation, setFromStation] = useState<SelectedStation | null>(null);
   const [viaStations, setViaStations] = useState<MaybeStation[]>([]);
   const [toStation, setToStation] = useState<SelectedStation | null>(null);
@@ -37,12 +37,6 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onRefresh
   const [totalDistance, setTotalDistance] = useState(0);
   const [pathError, setPathError] = useState<string | null>(null);
   const [isSearchingPath, setIsSearchingPath] = useState(false);
-
-  const [date, setDate] = useState('');
-  const [note, setNote] = useState('');
-  const [partialFirst, setPartialFirst] = useState(false);
-  const [partialLast, setPartialLast] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   // Station search for each input
@@ -212,43 +206,25 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onRefresh
     }
   };
 
-  // Save all routes
-  const handleSave = async () => {
-    if (foundPath.length === 0 || !date) return;
+  // Add routes to selection
+  const handleAddToSelection = () => {
+    if (foundPath.length === 0 || !onAddRoutesToSelection) return;
 
-    setIsSaving(true);
-    try {
-      await updateMultipleRoutes(
-        foundPath.map(r => r.track_id),
-        date,
-        note || null,
-        partialFirst,
-        partialLast
-      );
+    onAddRoutesToSelection(foundPath);
 
-      // Refresh map if callback provided
-      if (onRefreshMap) {
-        onRefreshMap();
-      }
+    // Reset form after adding to selection
+    setFoundPath([]);
+    setTotalDistance(0);
+    setFromStation(null);
+    setToStation(null);
+    setViaStations([]);
+    if (onHighlightRoutes) onHighlightRoutes([]);
 
-      // Reset form after successful save
-      setFoundPath([]);
-      setTotalDistance(0);
-      setFromStation(null);
-      setToStation(null);
-      setViaStations([]);
-      setDate('');
-      setNote('');
-      setPartialFirst(false);
-      setPartialLast(false);
-      if (onHighlightRoutes) onHighlightRoutes([]);
+    showSuccess(`${foundPath.length} route${foundPath.length !== 1 ? 's' : ''} added to selection!`);
 
-      showSuccess('Routes logged successfully!');
-    } catch (error) {
-      console.error('Error saving routes:', error);
-      showError('Failed to save routes');
-    } finally {
-      setIsSaving(false);
+    // Close the multi-route logger
+    if (onClose) {
+      onClose();
     }
   };
 
@@ -515,84 +491,29 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onRefresh
         <div className="mb-4">
           <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
             <span className="font-medium text-green-800">
-              {foundPath.length} route{foundPath.length !== 1 ? 's' : ''}, {totalDistance.toFixed(1)} km
+              Found {foundPath.length} route{foundPath.length !== 1 ? 's' : ''} ({totalDistance.toFixed(1)} km)
             </span>
           </div>
 
-          <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
+          <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
             {foundPath.map((route, index) => (
               <div key={route.track_id} className="p-2 bg-gray-50 border border-gray-200 rounded text-xs">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <div className="font-medium">
-                      {index + 1}. {route.from_station} ⟷ {route.to_station}
-                    </div>
-                    <div className="text-gray-600">
-                      {route.length_km.toFixed(1)} km
-                    </div>
-                  </div>
-                  {index === 0 && (
-                    <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={partialFirst}
-                        onChange={(e) => setPartialFirst(e.target.checked)}
-                        className="w-3 h-3 text-blue-600 border-gray-300 rounded"
-                      />
-                      <span className="text-xs text-gray-700">Partial</span>
-                    </label>
-                  )}
-                  {index === foundPath.length - 1 && foundPath.length > 1 && (
-                    <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={partialLast}
-                        onChange={(e) => setPartialLast(e.target.checked)}
-                        className="w-3 h-3 text-blue-600 border-gray-300 rounded"
-                      />
-                      <span className="text-xs text-gray-700">Partial</span>
-                    </label>
-                  )}
+                <div className="font-medium">
+                  {index + 1}. {route.from_station} ⟷ {route.to_station}
+                </div>
+                <div className="text-gray-600">
+                  {route.length_km.toFixed(1)} km
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Date/Note form */}
-          <div className="space-y-2 pt-2 border-t border-gray-200">
-            <div>
-              <label className="block text-sm font-medium mb-1">Date*</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Note</label>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Optional note for all routes..."
-              />
-            </div>
-
-            <button
-              onClick={handleSave}
-              disabled={isSaving || !date}
-              className={`w-full px-4 py-2 text-white rounded font-medium ${
-                isSaving || !date
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-700 cursor-pointer'
-              }`}
-            >
-              {isSaving ? 'Saving...' : `Log All ${foundPath.length} Routes`}
-            </button>
-          </div>
+          <button
+            onClick={handleAddToSelection}
+            className="w-full px-4 py-2 text-white rounded font-medium bg-blue-600 hover:bg-blue-700 cursor-pointer"
+          >
+            Add Routes to Selection
+          </button>
         </div>
       )}
     </div>

@@ -99,8 +99,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension)
 - **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
-- **Selected Routes Panel** - Left-side panel for route selection workflow (see dedicated section below)
-- **Multi-Route Logger** - Journey planner for logging entire trips spanning multiple routes (see dedicated section below)
+- **Selected Routes Panel** - Left-side panel for route selection and bulk logging workflow (see dedicated section below)
+- **Multi-Route Logger** - Journey planner that finds routes between stations and adds them to the selection panel (see dedicated section below)
 
 ### 5. Admin System Architecture
 - **Admin Access Control** - Restricted to user_id=1 with server-side authentication checks in all admin actions
@@ -145,7 +145,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `VectorRailwayMap.tsx` - Main user map with selected routes panel, station search, and multi-route logger
 - `VectorMapWrapper.tsx` - Wrapper for user map with authentication
 - `SelectedRoutesList.tsx` - Left-side panel for route selection and bulk logging
-- `MultiRouteLogger.tsx` - Journey planner UI for logging multiple routes (from → via → to stations with drag-and-drop reordering)
+- `MultiRouteLogger.tsx` - Journey planner UI for finding routes between stations (from → via → to with drag-and-drop reordering) and feeding them to SelectedRoutesList
 - `TripRow.tsx` - Individual trip row in Manage Trips modal (inline editing/deleting)
 
 **Admin Map Components:**
@@ -311,15 +311,16 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Real-time map refresh after add/update/delete operations
 
 ### Multi-Route Logger (Journey Planner)
-- **Purpose**: Log entire journeys spanning multiple railway routes at once
+- **Purpose**: Find routes between stations and add them to the selected routes panel for batch logging
 - **Location**: Side panel accessible via "Log Journey" button on user map
 - **UI Features**:
   - From/To station selection with autocomplete search
-  - Multiple optional "via" stations (add/remove dynamically)
+  - Multiple optional "via" stations (add/remove dynamically with drag-and-drop reordering)
   - All inputs support arrow key navigation and keyboard shortcuts
   - Diacritic-insensitive search (e.g., "bialystok" finds "Białystok")
   - Search prioritizes name-start matches over contains matches
   - Auto-clear station selection when user edits input
+  - Drag handle (☰) for reordering via stations
 - **Pathfinding** (`route-path-finder.ts`):
   - Sequential segment pathfinding (A→B, B→C, C→D for via stations)
   - In-memory BFS graph search for performance
@@ -331,13 +332,13 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Route Highlighting**:
   - Found routes highlighted in gold (#FFD700) on map
   - Uses separate `highlighted_routes` layer with vector tile source
-- **Bulk Logging**:
-  - Preview shows all routes in journey (from_station ⟷ to_station format) with compact display
-  - Displays total distance calculation in summary
-  - Inline "Partial" checkboxes next to first and last route segments only
-  - Single form with date (required) and note (optional)
-  - Via stations support drag-and-drop reordering with visual handles
-  - Uses `updateMultipleRoutes` server action with `firstPartial`/`lastPartial` parameters
+- **Results Display**:
+  - Shows found routes in compact list format (one route per line)
+  - Displays route sequence: "1. Station A ⟷ Station B"
+  - Shows individual route distance and total journey distance
+  - "Add Routes to Selection" button feeds routes to SelectedRoutesList
+  - Automatically filters out duplicates (routes already in selection)
+  - Resets form after adding routes
 - **Error Handling**:
   - Validates all via stations are selected before pathfinding
   - Shows helpful errors if stations/routes not found

@@ -7,7 +7,8 @@ nedodělané tratě
 - uhřice čejc: asi jen část, shady
 
 dodělat s aičkem:
-- teď je duplikátní route finder a levý tab, asi by jen finder měl vyhodit věci do tabu (+dát tam partial checkboxy do listu)
+- přejmenovat multiroutelogger na pathfinder nebo tak
+- partial checkboxy do selectedrouteslist
 - stats page, about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)

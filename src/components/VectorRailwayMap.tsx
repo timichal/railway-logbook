@@ -91,6 +91,30 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     setSelectedRoutes([]);
   };
 
+  // Handler to add routes from multi-route logger
+  const handleAddRoutesFromLogger = (routes: Array<{track_id: number; from_station: string; to_station: string; description: string; length_km: number}>) => {
+    // Convert RouteNode to SelectedRoute format
+    const newRoutes = routes.map(route => ({
+      track_id: route.track_id.toString(),
+      from_station: route.from_station,
+      to_station: route.to_station,
+      track_number: null, // Not available from pathfinding
+      description: route.description || '',
+      usage_types: '',
+      link: null,
+      date: null,
+      note: null,
+      partial: null
+    }));
+
+    // Filter out routes already in selection
+    const routesToAdd = newRoutes.filter(
+      newRoute => !selectedRoutes.some(existingRoute => existingRoute.track_id === newRoute.track_id)
+    );
+
+    setSelectedRoutes([...selectedRoutes, ...routesToAdd]);
+  };
+
   // Setup map interactions after map loads
   useEffect(() => {
     if (!map.current) return;
@@ -363,7 +387,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
             setShowMultiRouteLogger(false);
             setHighlightedRoutes([]);
           }}
-          onRefreshMap={routeEditor.refreshAfterQuickLog}
+          onAddRoutesToSelection={handleAddRoutesFromLogger}
         />
       )}
 
