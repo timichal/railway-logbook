@@ -85,11 +85,7 @@ export default function TripRow({ trip, onUpdate, onDelete, onAdd, isNewRow = fa
       <td className="p-2 text-center">
         {!isNewRow && trip && (
           <button
-            onClick={() => {
-              if (confirm('Delete this trip?')) {
-                onDelete(trip.id);
-              }
-            }}
+            onClick={() => onDelete(trip.id)}
             className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
           >
             Delete

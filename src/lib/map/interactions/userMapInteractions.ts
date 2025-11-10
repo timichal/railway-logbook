@@ -92,7 +92,7 @@ export function setupUserMapInteractions(
       formattedDescription += `<hr class="my-2" />`;
     }
     if (properties.date) {
-      formattedDescription += `<span style="color: black;">Date: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span>`;
+      formattedDescription += `<span style="color: black;">Last ride: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span>`;
     }
     if (properties.note) {
       formattedDescription += `<br /><span style="color: black;">${properties.note}</span>`;
@@ -217,7 +217,7 @@ export function setupUserMapInteractions(
       formattedDescription += `<hr class="my-2" />`;
     }
     if (properties.date) {
-      formattedDescription += `<span style="color: black;">Date: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span><br />`;
+      formattedDescription += `<span style="color: black;">Last ride: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span><br />`;
     }
     if (properties.note) {
       formattedDescription += `<span style="color: black;">${properties.note}</span>`;

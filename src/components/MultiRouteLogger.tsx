@@ -23,9 +23,10 @@ type MaybeStation = SelectedStation | null;
 interface MultiRouteLoggerProps {
   onHighlightRoutes?: (routeIds: number[]) => void;
   onClose?: () => void;
+  onRefreshMap?: () => void;
 }
 
-export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRouteLoggerProps) {
+export default function MultiRouteLogger({ onHighlightRoutes, onClose, onRefreshMap }: MultiRouteLoggerProps) {
   const [fromStation, setFromStation] = useState<SelectedStation | null>(null);
   const [viaStations, setViaStations] = useState<MaybeStation[]>([]);
   const [toStation, setToStation] = useState<SelectedStation | null>(null);
@@ -37,8 +38,10 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
 
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
-  const [partial, setPartial] = useState(false);
+  const [partialFirst, setPartialFirst] = useState(false);
+  const [partialLast, setPartialLast] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   // Station search for each input
   const [activeSearch, setActiveSearch] = useState<'from' | 'to' | number | null>(null); // number for via index
@@ -209,16 +212,22 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
 
   // Save all routes
   const handleSave = async () => {
-    if (foundPath.length === 0) return;
+    if (foundPath.length === 0 || !date) return;
 
     setIsSaving(true);
     try {
       await updateMultipleRoutes(
         foundPath.map(r => r.track_id),
-        date || null,
+        date,
         note || null,
-        partial
+        partialFirst,
+        partialLast
       );
+
+      // Refresh map if callback provided
+      if (onRefreshMap) {
+        onRefreshMap();
+      }
 
       // Reset form after successful save
       setFoundPath([]);
@@ -228,7 +237,8 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
       setViaStations([]);
       setDate('');
       setNote('');
-      setPartial(false);
+      setPartialFirst(false);
+      setPartialLast(false);
       if (onHighlightRoutes) onHighlightRoutes([]);
 
       alert('Routes logged successfully!');
@@ -250,6 +260,42 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
   const removeViaStation = (index: number) => {
     setViaStations(viaStations.filter((_, i) => i !== index));
     setViaSearchQueries(viaSearchQueries.filter((_, i) => i !== index));
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+
+    // Reorder via stations
+    const newViaStations = [...viaStations];
+    const [draggedStation] = newViaStations.splice(draggedIndex, 1);
+    newViaStations.splice(dropIndex, 0, draggedStation);
+    setViaStations(newViaStations);
+
+    // Reorder via search queries
+    const newViaQueries = [...viaSearchQueries];
+    const [draggedQuery] = newViaQueries.splice(draggedIndex, 1);
+    newViaQueries.splice(dropIndex, 0, draggedQuery);
+    setViaSearchQueries(newViaQueries);
+
+    setDraggedIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
   };
 
   return (
@@ -321,9 +367,21 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
 
       {/* Via Stations */}
       {viaStations.map((station, viaIndex) => (
-        <div key={viaIndex} className="mb-3">
-          <label className="block text-sm font-medium mb-1">Via Station {viaIndex + 1}</label>
-          <div className="relative">
+        <div
+          key={viaIndex}
+          className={`mb-3 flex items-center gap-2 ${draggedIndex === viaIndex ? 'opacity-50' : ''}`}
+        >
+          <div
+            draggable
+            onDragStart={() => handleDragStart(viaIndex)}
+            onDragOver={(e) => handleDragOver(e, viaIndex)}
+            onDrop={(e) => handleDrop(e, viaIndex)}
+            onDragEnd={handleDragEnd}
+            className="cursor-move text-gray-400 text-lg"
+          >
+            ☰
+          </div>
+          <div className="relative flex-1">
             <input
               type="text"
               value={viaSearchQueries[viaIndex] || ''}
@@ -453,32 +511,55 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
       {/* Found Path */}
       {foundPath.length > 0 && (
         <div className="mb-4">
-          <div className="mb-2 p-3 bg-green-50 border border-green-200 rounded">
-            <div className="text-sm font-medium text-green-800 mb-1">
-              Path found: {foundPath.length} route{foundPath.length !== 1 ? 's' : ''}
-            </div>
-            <div className="text-xs text-green-700">
-              Total distance: {totalDistance.toFixed(1)} km
-            </div>
+          <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+            <span className="font-medium text-green-800">
+              {foundPath.length} route{foundPath.length !== 1 ? 's' : ''}, {totalDistance.toFixed(1)} km
+            </span>
           </div>
 
-          <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+          <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
             {foundPath.map((route, index) => (
               <div key={route.track_id} className="p-2 bg-gray-50 border border-gray-200 rounded text-xs">
-                <div className="font-medium">
-                  {index + 1}. {route.from_station} ⟷ {route.to_station}
-                </div>
-                <div className="text-gray-600">
-                  {route.length_km.toFixed(1)} km
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="font-medium">
+                      {index + 1}. {route.from_station} ⟷ {route.to_station}
+                    </div>
+                    <div className="text-gray-600">
+                      {route.length_km.toFixed(1)} km
+                    </div>
+                  </div>
+                  {index === 0 && (
+                    <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={partialFirst}
+                        onChange={(e) => setPartialFirst(e.target.checked)}
+                        className="w-3 h-3 text-blue-600 border-gray-300 rounded"
+                      />
+                      <span className="text-xs text-gray-700">Partial</span>
+                    </label>
+                  )}
+                  {index === foundPath.length - 1 && foundPath.length > 1 && (
+                    <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={partialLast}
+                        onChange={(e) => setPartialLast(e.target.checked)}
+                        className="w-3 h-3 text-blue-600 border-gray-300 rounded"
+                      />
+                      <span className="text-xs text-gray-700">Partial</span>
+                    </label>
+                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Date/Note/Partial form */}
-          <div className="space-y-3 pt-3 border-t border-gray-200">
+          {/* Date/Note form */}
+          <div className="space-y-2 pt-2 border-t border-gray-200">
             <div>
-              <label className="block text-sm font-medium mb-1">Date</label>
+              <label className="block text-sm font-medium mb-1">Date*</label>
               <input
                 type="date"
                 value={date}
@@ -498,23 +579,11 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose }: MultiRo
               />
             </div>
 
-            <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={partial}
-                  onChange={(e) => setPartial(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium">Partial (all routes)</span>
-              </label>
-            </div>
-
             <button
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || !date}
               className={`w-full px-4 py-2 text-white rounded font-medium ${
-                isSaving
+                isSaving || !date
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-green-600 hover:bg-green-700 cursor-pointer'
               }`}

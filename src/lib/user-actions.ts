@@ -189,9 +189,10 @@ export async function quickUnlogRoute(trackId: string): Promise<void> {
 
 export async function updateMultipleRoutes(
   trackIds: number[],
-  date?: string | null,
-  note?: string | null,
-  partial?: boolean | null
+  date: string,
+  note: string | null = null,
+  firstPartial: boolean = false,
+  lastPartial: boolean = false
 ): Promise<void> {
   const user = await getUser();
   if (!user) {
@@ -200,24 +201,21 @@ export async function updateMultipleRoutes(
 
   const userId = user.id;
 
-  // For bulk logging (e.g., multi-route logger), create a new trip for each route
-  // This allows users to log the same journey multiple times
-  if (!date) {
-    throw new Error('Date is required for bulk logging');
-  }
-
   const values = trackIds.map((trackId, idx) => {
     const offset = idx * 5;
     return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`;
   }).join(', ');
 
-  const params = trackIds.flatMap(trackId => [
-    userId,
-    trackId,
-    date,
-    note || null,
-    partial ?? false
-  ]);
+  const params = trackIds.flatMap((trackId, idx) => {
+    const isPartial = (idx === 0 && firstPartial) || (idx === trackIds.length - 1 && lastPartial);
+    return [
+      userId,
+      trackId,
+      date,
+      note || null,
+      isPartial
+    ];
+  });
 
   await query(`
     INSERT INTO user_trips (user_id, track_id, date, note, partial)

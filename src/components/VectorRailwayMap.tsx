@@ -279,6 +279,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
             setShowMultiRouteLogger(false);
             setHighlightedRoutes([]);
           }}
+          onRefreshMap={routeEditor.refreshAfterQuickLog}
         />
       )}
 
