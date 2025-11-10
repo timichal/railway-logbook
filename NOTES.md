@@ -7,12 +7,12 @@ nedodělané tratě
 - uhřice čejc: asi jen část, shady
 
 dodělat s aičkem:
+- teď je duplikátní route finder a levý tab, asi by jen finder měl vyhodit věci do tabu (+dát tam partial checkboxy do listu)
 - stats page, about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
 - preferred routing: save route presets (brno-praha)
 - dont backtrack in pathfind
-- add by click to left tab
 - script to find duplicate routes?
 - correct utf8 sorting in admin routes
 

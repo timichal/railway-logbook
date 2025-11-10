@@ -81,6 +81,17 @@ export function useMapLibre(
     // Add navigation controls
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
 
+    // Add geolocation control (show current location)
+    map.current.addControl(
+      new maplibregl.GeolocateControl({
+        positionOptions: {
+          enableHighAccuracy: true
+        },
+        trackUserLocation: true,
+      }),
+      'top-right'
+    );
+
     // Save map state on move or zoom
     const saveState = () => {
       if (map.current) {

@@ -15,7 +15,21 @@ import {
 import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
 import MultiRouteLogger from './MultiRouteLogger';
+import SelectedRoutesList from './SelectedRoutesList';
 import TripRow from './TripRow';
+
+interface SelectedRoute {
+  track_id: string;
+  from_station: string;
+  to_station: string;
+  track_number: string | null;
+  description: string;
+  usage_types: string;
+  link: string | null;
+  date: string | null;
+  note: string | null;
+  partial: boolean | null;
+}
 
 interface VectorRailwayMapProps {
   className?: string;
@@ -28,6 +42,9 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   // Multi-route logger state
   const [showMultiRouteLogger, setShowMultiRouteLogger] = useState(false);
   const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
+
+  // Selected routes state
+  const [selectedRoutes, setSelectedRoutes] = useState<SelectedRoute[]>([]);
 
   // Station search hook
   const stationSearch = useStationSearch();
@@ -55,19 +72,36 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   // Route editor hook (needs map ref)
   const routeEditor = useRouteEditor(userId, map);
 
+  // Handler to add route to selection
+  const handleRouteClick = (route: SelectedRoute) => {
+    // Check if route is already selected
+    const isAlreadySelected = selectedRoutes.some(r => r.track_id === route.track_id);
+    if (!isAlreadySelected) {
+      setSelectedRoutes([...selectedRoutes, route]);
+    }
+  };
+
+  // Handler to remove route from selection
+  const handleRemoveRoute = (trackId: string) => {
+    setSelectedRoutes(selectedRoutes.filter(r => r.track_id !== trackId));
+  };
+
+  // Handler to clear all selected routes
+  const handleClearAll = () => {
+    setSelectedRoutes([]);
+  };
+
   // Setup map interactions after map loads
   useEffect(() => {
     if (!map.current) return;
 
     const cleanup = setupUserMapInteractions(map.current, {
-      onRouteClick: routeEditor.openEditForm,
-      onQuickLog: routeEditor.quickLog,
-      onRefreshAfterQuickLog: routeEditor.refreshAfterQuickLog,
+      onRouteClick: handleRouteClick,
     });
 
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map]); // Callbacks are memoized with useCallback
+  }, [map, selectedRoutes]); // Need selectedRoutes to check if already selected
 
   // Fetch progress stats on component mount
   useEffect(() => {
@@ -85,12 +119,12 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     map.current.setFilter('railway_routes', filter);
   }, [map, routeEditor.showSpecialLines]);
 
-  // Highlight selected routes from multi-route logger
+  // Highlight routes from multi-route logger (gold)
   useEffect(() => {
     if (!map.current || !map.current.getLayer('railway_routes')) return;
 
     if (highlightedRoutes.length > 0) {
-      // Add a highlight layer for the selected routes
+      // Add a highlight layer for the multi-route logger routes
       if (!map.current.getLayer('highlighted_routes')) {
         map.current.addLayer({
           id: 'highlighted_routes',
@@ -118,6 +152,47 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       }
     }
   }, [map, highlightedRoutes]);
+
+  // Highlight selected routes (green if logged, red if not)
+  useEffect(() => {
+    if (!map.current || !map.current.getLayer('railway_routes')) return;
+
+    const selectedTrackIds = selectedRoutes.map(r => parseInt(r.track_id));
+
+    if (selectedTrackIds.length > 0) {
+      // Add a highlight layer for the selected routes
+      if (!map.current.getLayer('selected_routes_highlight')) {
+        map.current.addLayer({
+          id: 'selected_routes_highlight',
+          type: 'line',
+          source: 'railway_routes',
+          'source-layer': 'railway_routes', // Required for vector tile sources
+          paint: {
+            'line-color': [
+              'case',
+              ['has', 'date'], // If route has a date (logged)
+              '#059669', // Green for logged routes (Tailwind green-600)
+              '#DC2626'  // Red for unlogged routes (Tailwind red-600)
+            ],
+            'line-width': 7,
+            'line-opacity': 0.9,
+          },
+          filter: ['in', ['get', 'track_id'], ['literal', selectedTrackIds]],
+        }, 'railway_routes'); // Insert before railway_routes layer so it's underneath
+      } else {
+        map.current.setFilter('selected_routes_highlight', [
+          'in',
+          ['get', 'track_id'],
+          ['literal', selectedTrackIds],
+        ]);
+      }
+    } else {
+      // Remove highlight layer when no routes are selected
+      if (map.current.getLayer('selected_routes_highlight')) {
+        map.current.removeLayer('selected_routes_highlight');
+      }
+    }
+  }, [map, selectedRoutes]);
 
   // Handle station selection from search
   const handleStationSelect = (station: Station) => {
@@ -174,9 +249,18 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         style={{ height: '100%', minHeight: '400px' }}
       />
 
+      {/* Selected Routes List */}
+      <SelectedRoutesList
+        selectedRoutes={selectedRoutes}
+        onRemoveRoute={handleRemoveRoute}
+        onManageTrips={routeEditor.openEditForm}
+        onClearAll={handleClearAll}
+        onRefreshMap={routeEditor.refreshAfterQuickLog}
+      />
+
       {/* Progress Stats Box */}
       {routeEditor.progress && (
-        <div className="absolute top-4 left-4 bg-white p-3 rounded shadow-lg text-black z-10">
+        <div className="absolute bottom-10 right-4 bg-white p-3 rounded shadow-lg text-black z-10">
           <h3 className="font-bold mb-2 text-sm">Completed</h3>
           <div className="text-lg font-semibold">
             {routeEditor.progress.completedKm}/{routeEditor.progress.totalKm} km
@@ -204,7 +288,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       {/* Multi-Route Logger Toggle Button */}
       <button
         onClick={() => setShowMultiRouteLogger(!showMultiRouteLogger)}
-        className={`absolute top-4 right-4 px-4 py-2 rounded shadow-lg text-white font-medium z-10 cursor-pointer ${
+        className={`absolute top-4 right-12 px-4 py-2 rounded shadow-lg text-white font-medium z-10 cursor-pointer ${
           showMultiRouteLogger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
         }`}
       >
@@ -212,7 +296,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       </button>
 
       {/* Station Search Box */}
-      <div className="absolute top-16 right-4 w-80 z-10">
+      <div className="absolute top-16 right-12 w-80 z-10">
         <div className="relative">
           <input
             ref={stationSearch.searchInputRef}

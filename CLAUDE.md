@@ -94,10 +94,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Server Actions** - Type-safe database operations with automatic serialization
 - **Authentication** - Email/password authentication with bcrypt, session management
 - **Dynamic Styling** - Three-way route colors based on user data (dark green=fully completed, dark orange=partial, crimson=unvisited), weight based on usage type (thinner for Special)
-- **Usage Type & Frequency Display** - Frontend displays usage_type (0=Regular, 1=Special) and frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal) in popups
+- **Usage Type & Frequency Display** - Frontend displays usage_type (0=Regular, 1=Special) and frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal) in hover popups
 - **Connection Pooling** - PostgreSQL pool for database performance
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension)
+- **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
+- **Selected Routes Panel** - Left-side panel for route selection workflow (see dedicated section below)
 - **Multi-Route Logger** - Journey planner for logging entire trips spanning multiple routes (see dedicated section below)
 
 ### 5. Admin System Architecture
@@ -140,9 +142,11 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### Components (`src/components/`)
 
 **User Map Components:**
-- `VectorRailwayMap.tsx` - Main user map with ride tracking, station search, and multi-route logger
+- `VectorRailwayMap.tsx` - Main user map with selected routes panel, station search, and multi-route logger
 - `VectorMapWrapper.tsx` - Wrapper for user map with authentication
-- `MultiRouteLogger.tsx` - Journey planner UI for logging multiple routes (from → via → to stations)
+- `SelectedRoutesList.tsx` - Left-side panel for route selection and bulk logging
+- `MultiRouteLogger.tsx` - Journey planner UI for logging multiple routes (from → via → to stations with drag-and-drop reordering)
+- `TripRow.tsx` - Individual trip row in Manage Trips modal (inline editing/deleting)
 
 **Admin Map Components:**
 - `VectorAdminMap.tsx` - Admin map for route management with railway parts selection
@@ -164,7 +168,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 **Database & Actions:**
 - `db.ts` - PostgreSQL connection pool (exports pool as default)
 - `db-config.ts` - Database configuration utilities
-- `railway-actions.ts` - User-facing server actions (search stations, get GeoJSON data, update user data, get progress, bulk update routes)
+- `user-actions.ts` - User-facing server actions (search stations, get GeoJSON data, update/delete user trips, get progress, bulk update routes with firstPartial/lastPartial)
 - `route-save-actions.ts` - Admin-only route creation/update with security checks
 - `route-delete-actions.ts` - Admin-only route deletion with security checks
 - `db-path-actions.ts` - Admin-only railway parts pathfinding using RailwayPathFinder
@@ -184,13 +188,13 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `mapState.ts` - Shared map state management
 
 **Hooks:**
-- `hooks/useMapLibre.ts` - Base hook for MapLibre GL initialization with sources and layers
-- `hooks/useRouteEditor.ts` - Hook for route editing functionality (edit form state, quick log/unlog, progress tracking)
+- `hooks/useMapLibre.ts` - Base hook for MapLibre GL initialization with sources, layers, navigation controls, and geolocation control
+- `hooks/useRouteEditor.ts` - Hook for route editing functionality (manage trips modal state, add/update/delete trips, progress tracking, map refresh)
 - `hooks/useStationSearch.ts` - Hook for station search with debouncing and keyboard navigation
 - `hooks/useRouteLength.ts` - Hook for calculating route length display
 
 **Interactions:**
-- `interactions/userMapInteractions.ts` - User map click handlers (route click, quick log/unlog)
+- `interactions/userMapInteractions.ts` - User map click handlers (route click to add to selection, hover popups)
 - `interactions/adminMapInteractions.ts` - Admin map click handlers (railway parts selection, route editing)
 
 **Utilities:**
@@ -274,7 +278,37 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Crimson for unvisited routes
 - Map interactions:
   - Hover over routes shows popup with details
-  - Click routes opens edit form for date/note/partial flag
+  - Click routes to add them to the selected routes panel (no popups)
+
+### Selected Routes Panel
+- **Purpose**: Build a selection of routes for batch logging or individual management
+- **Location**: Left-side panel, always visible on user map
+- **UI Features**:
+  - Click routes on the map to add them to the selection
+  - Each route shows: track number, stations, description, edit icon, remove button
+  - Compact single-line layout with text truncation for long names
+  - Drag handle (☰) for via stations in multi-route logger
+  - Edit icon (pencil) opens "Manage trips" modal for individual route
+  - Remove button (×) removes route from selection
+  - "Clear all" button to empty the entire selection
+- **Route Highlighting**:
+  - Selected routes highlighted with thick colored overlay (width: 7, opacity: 0.9)
+  - Green highlight (#059669) for logged routes (has date)
+  - Red highlight (#DC2626) for unlogged routes (no date)
+  - Highlights update automatically as routes are logged/unlogged
+- **Bulk Logging**:
+  - Date field (defaults to today's date, required)
+  - Note field (optional, shared across all routes)
+  - "Log All X Routes" button logs entire selection at once
+  - Uses `updateMultipleRoutes` with `firstPartial` and `lastPartial` parameters
+  - Automatically refreshes map data and clears selection after successful save
+- **Manage Trips Modal**:
+  - Opens via edit icon on individual routes
+  - Shows table of all trips for the selected route
+  - Add new trips inline (date, note, partial fields)
+  - Edit existing trips by changing fields (auto-saves on blur)
+  - Delete trips with single click (no confirmation)
+  - Real-time map refresh after add/update/delete operations
 
 ### Multi-Route Logger (Journey Planner)
 - **Purpose**: Log entire journeys spanning multiple railway routes at once
@@ -298,10 +332,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Found routes highlighted in gold (#FFD700) on map
   - Uses separate `highlighted_routes` layer with vector tile source
 - **Bulk Logging**:
-  - Preview shows all routes in journey (from_station ⟷ to_station format)
-  - Displays total distance calculation
-  - Single form to add date, note, and partial flag to all routes
-  - Uses `updateMultipleRoutes` server action for efficient bulk insert/update
+  - Preview shows all routes in journey (from_station ⟷ to_station format) with compact display
+  - Displays total distance calculation in summary
+  - Inline "Partial" checkboxes next to first and last route segments only
+  - Single form with date (required) and note (optional)
+  - Via stations support drag-and-drop reordering with visual handles
+  - Uses `updateMultipleRoutes` server action with `firstPartial`/`lastPartial` parameters
 - **Error Handling**:
   - Validates all via stations are selected before pathfinding
   - Shows helpful errors if stations/routes not found

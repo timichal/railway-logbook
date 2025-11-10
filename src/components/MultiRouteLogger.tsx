@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react';
 import type { Station } from '@/lib/types';
 import { searchStations, updateMultipleRoutes } from '@/lib/user-actions';
 import { findRoutePathBetweenStations } from '@/lib/route-path-finder';
+import { useToast } from '@/lib/toast';
 
 interface RouteNode {
   track_id: number;
@@ -27,6 +28,7 @@ interface MultiRouteLoggerProps {
 }
 
 export default function MultiRouteLogger({ onHighlightRoutes, onClose, onRefreshMap }: MultiRouteLoggerProps) {
+  const { showSuccess, showError } = useToast();
   const [fromStation, setFromStation] = useState<SelectedStation | null>(null);
   const [viaStations, setViaStations] = useState<MaybeStation[]>([]);
   const [toStation, setToStation] = useState<SelectedStation | null>(null);
@@ -241,10 +243,10 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onRefresh
       setPartialLast(false);
       if (onHighlightRoutes) onHighlightRoutes([]);
 
-      alert('Routes logged successfully!');
+      showSuccess('Routes logged successfully!');
     } catch (error) {
       console.error('Error saving routes:', error);
-      alert('Failed to save routes');
+      showError('Failed to save routes');
     } finally {
       setIsSaving(false);
     }

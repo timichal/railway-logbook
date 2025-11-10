@@ -104,8 +104,19 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
     setCacheBuster(newCacheBuster);
 
     if (map.current && map.current.getSource('railway_routes')) {
+      // Remove dependent layers first
+      const dependentLayers = ['selected_routes_highlight', 'highlighted_routes'];
+      dependentLayers.forEach(layerId => {
+        if (map.current && map.current.getLayer(layerId)) {
+          map.current.removeLayer(layerId);
+        }
+      });
+
+      // Now remove the main layer and source
       map.current.removeLayer('railway_routes');
       map.current.removeSource('railway_routes');
+
+      // Re-add source and layer
       map.current.addSource('railway_routes', createRailwayRoutesSource({ userId, cacheBuster: newCacheBuster }));
       map.current.addLayer(
         createRailwayRoutesLayer({
