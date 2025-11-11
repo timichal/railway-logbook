@@ -28,6 +28,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 
 ### Database Operations
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
+- `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
 - `npm run exportRouteData` - Export railway_routes and user_trips (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
@@ -312,7 +313,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 ### Multi-Route Logger (Journey Planner)
 - **Purpose**: Find routes between stations and add them to the selected routes panel for batch logging
-- **Location**: Side panel accessible via "Log Journey" button on user map
+- **Location**: Side panel accessible via "Find Path" button on user map
 - **UI Features**:
   - From/To station selection with autocomplete search
   - Multiple optional "via" stations (add/remove dynamically with drag-and-drop reordering)

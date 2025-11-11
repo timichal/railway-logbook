@@ -191,8 +191,7 @@ export async function updateMultipleRoutes(
   trackIds: number[],
   date: string,
   note: string | null = null,
-  firstPartial: boolean = false,
-  lastPartial: boolean = false
+  partialValues: boolean[] = []
 ): Promise<void> {
   const user = await getUser();
   if (!user) {
@@ -207,7 +206,8 @@ export async function updateMultipleRoutes(
   }).join(', ');
 
   const params = trackIds.flatMap((trackId, idx) => {
-    const isPartial = (idx === 0 && firstPartial) || (idx === trackIds.length - 1 && lastPartial);
+    const isPartial = partialValues[idx] ?? false;
+
     return [
       userId,
       trackId,

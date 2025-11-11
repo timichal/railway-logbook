@@ -279,7 +279,7 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
   return (
     <div className="absolute top-4 left-4 w-96 bg-white rounded-lg shadow-xl p-4 z-10 max-h-[90vh] overflow-y-auto text-black">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold">Log Multiple Routes</h3>
+        <h3 className="text-lg font-bold">Find Path</h3>
         {onClose && (
           <button
             onClick={onClose}
@@ -309,9 +309,8 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
               setSelectedIndex(-1);
             }, 200)}
             placeholder="Search from station..."
-            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              fromStation ? 'border-blue-300 bg-blue-50' : 'border-gray-300'
-            }`}
+            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${fromStation ? 'border-blue-300 bg-blue-50' : 'border-gray-300'
+              }`}
           />
           {fromStation && (
             <button
@@ -331,9 +330,8 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
                   key={station.id}
                   onClick={() => handleStationSelect(station)}
                   onMouseEnter={() => setSelectedIndex(index)}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                    selectedIndex === index ? 'bg-blue-50' : ''
-                  }`}
+                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${selectedIndex === index ? 'bg-blue-50' : ''
+                    }`}
                 >
                   {station.name}
                 </button>
@@ -375,9 +373,8 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
                 setSelectedIndex(-1);
               }, 200)}
               placeholder={`Search via station ${viaIndex + 1}...`}
-              className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                station ? 'border-green-300 bg-green-50' : 'border-gray-300'
-              }`}
+              className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${station ? 'border-green-300 bg-green-50' : 'border-gray-300'
+                }`}
             />
             <button
               onClick={() => removeViaStation(viaIndex)}
@@ -392,9 +389,8 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
                     key={searchStation.id}
                     onClick={() => handleStationSelect(searchStation)}
                     onMouseEnter={() => setSelectedIndex(index)}
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                      selectedIndex === index ? 'bg-blue-50' : ''
-                    }`}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${selectedIndex === index ? 'bg-blue-50' : ''
+                      }`}
                   >
                     {searchStation.name}
                   </button>
@@ -432,9 +428,8 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
               setSelectedIndex(-1);
             }, 200)}
             placeholder="Search to station..."
-            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              toStation ? 'border-blue-300 bg-blue-50' : 'border-gray-300'
-            }`}
+            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${toStation ? 'border-blue-300 bg-blue-50' : 'border-gray-300'
+              }`}
           />
           {toStation && (
             <button
@@ -454,9 +449,8 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
                   key={station.id}
                   onClick={() => handleStationSelect(station)}
                   onMouseEnter={() => setSelectedIndex(index)}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                    selectedIndex === index ? 'bg-blue-50' : ''
-                  }`}
+                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${selectedIndex === index ? 'bg-blue-50' : ''
+                    }`}
                 >
                   {station.name}
                 </button>
@@ -470,11 +464,10 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
       <button
         onClick={handleFindPath}
         disabled={!fromStation || !toStation || isSearchingPath}
-        className={`w-full px-4 py-2 text-white rounded font-medium mb-3 ${
-          !fromStation || !toStation || isSearchingPath
+        className={`w-full px-4 py-2 text-white rounded font-medium mb-3 ${!fromStation || !toStation || isSearchingPath
             ? 'bg-gray-400 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
-        }`}
+          }`}
       >
         {isSearchingPath ? 'Finding path...' : 'Find Path'}
       </button>
@@ -495,14 +488,12 @@ export default function MultiRouteLogger({ onHighlightRoutes, onClose, onAddRout
             </span>
           </div>
 
-          <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
+          <div className="space-y-1 mb-3 max-h-64 overflow-y-auto  bg-gray-50 border border-gray-200 rounded">
             {foundPath.map((route, index) => (
-              <div key={route.track_id} className="p-2 bg-gray-50 border border-gray-200 rounded text-xs">
+              <div key={route.track_id} className="p-2 text-xs">
                 <div className="font-medium">
                   {index + 1}. {route.from_station} ⟷ {route.to_station}
-                </div>
-                <div className="text-gray-600">
-                  {route.length_km.toFixed(1)} km
+                  <span className="text-gray-600"> {route.length_km.toFixed(1)} km</span>
                 </div>
               </div>
             ))}

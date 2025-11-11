@@ -12,6 +12,7 @@
     "importMapData": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/populateDb.ts",
     "exportRouteData": "tsx src/scripts/exportRoutes.ts",
     "importRouteData": "tsx src/scripts/importRoutes.ts",
+    "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "uploadMapData": "pscp ./data/*.geojson railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/",
     "downloadMapData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.geojson ./data/",
     "downloadRouteData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.sql ./data/"

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { FilterSpecification } from 'maplibre-gl';
-import type { Station } from '@/lib/types';
+import type { Station, SelectedRoute } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
 import { useStationSearch } from '@/lib/map/hooks/useStationSearch';
 import { useRouteEditor } from '@/lib/map/hooks/useRouteEditor';
@@ -17,19 +17,6 @@ import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/
 import MultiRouteLogger from './MultiRouteLogger';
 import SelectedRoutesList from './SelectedRoutesList';
 import TripRow from './TripRow';
-
-interface SelectedRoute {
-  track_id: string;
-  from_station: string;
-  to_station: string;
-  track_number: string | null;
-  description: string;
-  usage_types: string;
-  link: string | null;
-  date: string | null;
-  note: string | null;
-  partial: boolean | null;
-}
 
 interface VectorRailwayMapProps {
   className?: string;
@@ -72,11 +59,15 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   // Route editor hook (needs map ref)
   const routeEditor = useRouteEditor(userId, map);
 
-  // Handler to add route to selection
+  // Handler to toggle route selection
   const handleRouteClick = (route: SelectedRoute) => {
     // Check if route is already selected
     const isAlreadySelected = selectedRoutes.some(r => r.track_id === route.track_id);
-    if (!isAlreadySelected) {
+    if (isAlreadySelected) {
+      // Remove from selection
+      setSelectedRoutes(selectedRoutes.filter(r => r.track_id !== route.track_id));
+    } else {
+      // Add to selection
       setSelectedRoutes([...selectedRoutes, route]);
     }
   };
@@ -89,6 +80,13 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   // Handler to clear all selected routes
   const handleClearAll = () => {
     setSelectedRoutes([]);
+  };
+
+  // Handler to update partial status for a route
+  const handleUpdateRoutePartial = (trackId: string, partial: boolean) => {
+    setSelectedRoutes(routes =>
+      routes.map(r => r.track_id === trackId ? { ...r, partial } : r)
+    );
   };
 
   // Handler to add routes from multi-route logger
@@ -104,7 +102,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
       link: null,
       date: null,
       note: null,
-      partial: null
+      partial: null,
+      length_km: route.length_km
     }));
 
     // Filter out routes already in selection
@@ -280,6 +279,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         onManageTrips={routeEditor.openEditForm}
         onClearAll={handleClearAll}
         onRefreshMap={routeEditor.refreshAfterQuickLog}
+        onUpdateRoutePartial={handleUpdateRoutePartial}
       />
 
       {/* Progress Stats Box */}
@@ -316,7 +316,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           showMultiRouteLogger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
         }`}
       >
-        {showMultiRouteLogger ? 'Close Logger' : 'Log Journey'}
+        {showMultiRouteLogger ? 'Close Path Finder' : 'Open Path Finder'}
       </button>
 
       {/* Station Search Box */}

@@ -115,6 +115,7 @@ BEGIN
             rr.usage_type,
             rr.frequency,
             rr.link,
+            rr.length_km,
             rr.is_valid,
             rr.error_message,
             rr.starting_part_id,

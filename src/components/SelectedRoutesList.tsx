@@ -3,19 +3,7 @@
 import { useState } from 'react';
 import { updateMultipleRoutes } from '@/lib/user-actions';
 import { useToast } from '@/lib/toast';
-
-interface SelectedRoute {
-  track_id: string;
-  from_station: string;
-  to_station: string;
-  track_number: string | null;
-  description: string;
-  usage_types: string;
-  link: string | null;
-  date: string | null;
-  note: string | null;
-  partial: boolean | null;
-}
+import type { SelectedRoute } from '@/lib/types';
 
 interface SelectedRoutesListProps {
   selectedRoutes: SelectedRoute[];
@@ -23,6 +11,7 @@ interface SelectedRoutesListProps {
   onManageTrips: (route: SelectedRoute) => void;
   onClearAll: () => void;
   onRefreshMap?: () => void;
+  onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
 }
 
 export default function SelectedRoutesList({
@@ -30,7 +19,8 @@ export default function SelectedRoutesList({
   onRemoveRoute,
   onManageTrips,
   onClearAll,
-  onRefreshMap
+  onRefreshMap,
+  onUpdateRoutePartial
 }: SelectedRoutesListProps) {
   const { showSuccess, showError } = useToast();
   const today = new Date().toISOString().split('T')[0];
@@ -43,12 +33,14 @@ export default function SelectedRoutesList({
 
     setIsSaving(true);
     try {
+      // Extract partial values for each route
+      const partialValues = selectedRoutes.map(r => r.partial ?? false);
+
       await updateMultipleRoutes(
         selectedRoutes.map(r => parseInt(r.track_id)),
         date,
         note || null,
-        false,
-        false
+        partialValues
       );
 
       // Refresh map if callback provided
@@ -95,18 +87,25 @@ export default function SelectedRoutesList({
             {selectedRoutes.map((route) => (
               <div
                 key={route.track_id}
-                className="p-2 bg-gray-50 border border-gray-200 rounded text-xs flex items-center justify-between gap-2"
+                className="p-2 bg-gray-50 border border-gray-200 rounded text-xs flex items-start justify-between gap-2"
               >
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">
                     {route.track_number && `${route.track_number} `}
                     {route.from_station} ⟷ {route.to_station}
                   </div>
-                  {route.description && (
-                    <div className="text-gray-600 text-xs mt-0.5 truncate">
-                      {route.description}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-4 mt-1">
+                    <span className="text-gray-600">{route.length_km.toFixed(1)} km</span>
+                    <label className="flex items-center gap-1 cursor-pointer text-xs text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={route.partial ?? false}
+                        onChange={(e) => onUpdateRoutePartial(route.track_id, e.target.checked)}
+                        className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <span>Partial</span>
+                    </label>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -155,11 +154,10 @@ export default function SelectedRoutesList({
             <button
               onClick={handleLogAll}
               disabled={isSaving || !date}
-              className={`w-full px-4 py-2 text-white rounded font-medium ${
-                isSaving || !date
+              className={`w-full px-4 py-2 text-white rounded font-medium ${isSaving || !date
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-green-600 hover:bg-green-700 cursor-pointer'
-              }`}
+                }`}
             >
               {isSaving ? 'Saving...' : `Log All ${selectedRoutes.length} Routes`}
             </button>

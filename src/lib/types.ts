@@ -110,3 +110,18 @@ export interface PathResult {
   partIds: string[];
   coordinates: [number, number][];
 }
+
+// Selected route for user map (used in SelectedRoutesList and map interactions)
+export interface SelectedRoute {
+  track_id: string;
+  from_station: string;
+  to_station: string;
+  track_number: string | null;
+  description: string;
+  usage_types: string;
+  link: string | null;
+  date: string | null;
+  note: string | null;
+  partial: boolean | null;
+  length_km: number;
+}

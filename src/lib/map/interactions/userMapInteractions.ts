@@ -1,22 +1,10 @@
 import type maplibreglType from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import { getUsageLabel } from '@/lib/constants';
-
-interface EditingFeature {
-  track_id: string;
-  from_station: string;
-  to_station: string;
-  track_number: string | null;
-  description: string;
-  usage_types: string;
-  link: string | null;
-  date: string | null;
-  note: string | null;
-  partial: boolean | null;
-}
+import type { SelectedRoute } from '@/lib/types';
 
 interface UserMapInteractionCallbacks {
-  onRouteClick: (feature: EditingFeature) => void;
+  onRouteClick: (feature: SelectedRoute) => void;
 }
 
 /**
@@ -48,7 +36,8 @@ export function setupUserMapInteractions(
       link: properties.link || null,
       date: properties.date,
       note: properties.note,
-      partial: properties.partial
+      partial: properties.partial,
+      length_km: Number(properties.length_km) || 0
     });
   };
 

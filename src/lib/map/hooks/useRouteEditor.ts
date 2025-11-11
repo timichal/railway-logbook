@@ -10,29 +10,17 @@ import {
   type UserProgress,
   type UserTrip
 } from '@/lib/user-actions';
+import type { SelectedRoute } from '@/lib/types';
 import { createRailwayRoutesSource, createRailwayRoutesLayer, closeAllPopups } from '@/lib/map';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '../utils/userRouteStyling';
 import { useToast } from '@/lib/toast';
-
-interface EditingFeature {
-  track_id: string;
-  track_number: string | null;
-  from_station: string;
-  to_station: string;
-  description: string;
-  usage_types: string;
-  link: string | null;
-  date: string | null;
-  note: string | null;
-  partial: boolean | null;
-}
 
 /**
  * Hook to manage route editing and trips management
  */
 export function useRouteEditor(userId: number, map: React.MutableRefObject<maplibreglType.Map | null>) {
   const { showSuccess, showError } = useToast();
-  const [editingFeature, setEditingFeature] = useState<EditingFeature | null>(null);
+  const [editingFeature, setEditingFeature] = useState<SelectedRoute | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [trips, setTrips] = useState<UserTrip[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,7 +29,7 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
   const [showSpecialLines, setShowSpecialLines] = useState(false);
 
   // Open edit form with route data and fetch all trips
-  const openEditForm = useCallback(async (feature: EditingFeature) => {
+  const openEditForm = useCallback(async (feature: SelectedRoute) => {
     setEditingFeature(feature);
     setShowEditForm(true);
 
