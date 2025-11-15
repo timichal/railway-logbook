@@ -8,14 +8,13 @@ nedodělané tratě
 - uhřice čejc: asi jen část, shady
 
 dodělat s aičkem:
+- dodat pathfinder přímo do selected routes
 - přejmenovat multiroutelogger na pathfinder nebo tak
-- partial checkboxy do selectedrouteslist
 - stats page, about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
 - preferred routing: save route presets (brno-praha)
-- dont backtrack in pathfind
-- script to find duplicate routes?
+- dont backtrack in pathfind (hotovo při tvoření, podobně user)
 - correct utf8 sorting in admin routes
 
 ČESKO
