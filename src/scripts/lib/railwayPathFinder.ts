@@ -523,12 +523,12 @@ export class RailwayPathFinder {
     originalFirstHop: string,
     maxDistance: number
   ): string[] | null {
-    console.log(`  Trying to find path without backtracking (avoiding first hop ${originalFirstHop})...`);
+    console.log(`  Trying to find path without backtracking`);
 
-    // Try to find a non-backtracking path that avoids the original first hop
+    // Try to find a non-backtracking path
     const path = this.findPathWithoutBacktracking(startId, endId, maxDistance);
 
-    if (path && path.length > 1 && path[1] !== originalFirstHop) {
+    if (path && path.length > 1) {
       const distance = this.calculatePathDistance(path);
       console.log(`  ✓ Found non-backtracking path via ${path[1]} (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
       return path;
