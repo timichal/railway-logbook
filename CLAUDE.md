@@ -28,6 +28,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 
 ### Database Operations
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
+- `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
 - `npm run exportRouteData` - Export railway_routes and user_trips (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
@@ -208,6 +209,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 **Data Processing:**
 - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
 - `importMapData.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
+- `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
 - `exportRoutes.ts` - Export railway_routes table to JSON file
 - `importRoutes.ts` - Import railway_routes from JSON file
 
