@@ -72,7 +72,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 1. **Download & Filter** (`osmium-scripts/prepare.sh`) - Downloads OSM PBF data and applies OpenRailwayMap filter to extract railway features
 2. **Convert** (`osmium-scripts/prepare.sh`) - Converts filtered OSM data to GeoJSON format
 3. **Prune** (`src/scripts/pruneData.ts`) - Applies custom filters to remove unwanted features (subways, etc.)
-4. **Database Load** (`src/scripts/populateDb.ts`) - Imports processed data into PostgreSQL with user separation
+4. **Database Load** (`src/scripts/importMapData.ts`) - Imports processed data into PostgreSQL with user separation
 
 ### 3. Database Architecture
 - **PostgreSQL 16 with PostGIS** - Spatial database for geographic data
@@ -207,7 +207,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 **Data Processing:**
 - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
-- `populateDb.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
+- `importMapData.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
 - `exportRoutes.ts` - Export railway_routes table to JSON file
 - `importRoutes.ts` - Import railway_routes from JSON file
 
@@ -243,7 +243,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 ### Data Processing
 - Custom filters applied in `pruneData.ts` remove subway and unwanted railway types
-- `src/scripts/populateDb.ts` uses batch inserts for performance and:
+- `src/scripts/importMapData.ts` uses batch inserts for performance and:
   - Executes database initialization SQL files (vector tile functions, Web Mercator columns)
   - Populates `stations` and `railway_parts` from `cz-pruned.geojson`
   - Admin users create `railway_routes` manually via the web interface

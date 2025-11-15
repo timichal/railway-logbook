@@ -206,6 +206,15 @@ async function loadGeoJSONData(): Promise<void> {
       process.exit(1);
     }
 
+    // Validate file extension
+    if (!dataPath.toLowerCase().endsWith('.geojson')) {
+      console.error('Error: File must be a .geojson file');
+      console.error(`Provided file: ${dataPath}`);
+      console.error('Usage: npm run importMapData <filepath>');
+      console.error('Example: npm run importMapData ./data/europe-pruned-251027.geojson');
+      process.exit(1);
+    }
+
     console.log(`Using data file: ${dataPath}`);
 
     await client.connect();

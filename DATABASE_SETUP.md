@@ -30,7 +30,7 @@ This will:
 npm run importMapData <filepath>
 ```
 
-The loading script (`src/scripts/populateDb.ts`) will:
+The loading script (`src/scripts/importMapData.ts`) will:
 - Parse the GeoJSON file (e.g., data/cz-pruned.geojson)
 - Load stations and railway_parts into the database
 - Automatically recalculate existing routes if any are found

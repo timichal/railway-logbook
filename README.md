@@ -46,7 +46,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 ### Data Processing Scripts
 - `osmium-scripts/prepare.sh` - Complete pipeline: downloads OSM data, filters rail features, converts to GeoJSON
 - `src/scripts/pruneData.ts` - Removes subways and unwanted features
-- `src/scripts/populateDb.ts` - Loads stations and railway_parts into database, recalculates existing routes
+- `src/scripts/importMapData.ts` - Loads stations and railway_parts into database, recalculates existing routes
 
 ### Database Tables
 - `users` - User accounts with authentication
