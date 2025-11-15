@@ -371,11 +371,9 @@ export class RailwayPathFinder {
 
     console.log(`  Searching for non-backtracking alternatives (max ${(maxSearchDistance / 1000).toFixed(1)}km)...`);
 
-    const originalFirstHop = firstPath[1];
     const bestAlternative = this.findNonBacktrackingAlternative(
       startId,
       endId,
-      originalFirstHop,
       maxSearchDistance
     );
 
@@ -520,7 +518,6 @@ export class RailwayPathFinder {
   private findNonBacktrackingAlternative(
     startId: string,
     endId: string,
-    originalFirstHop: string,
     maxDistance: number
   ): string[] | null {
     console.log(`  Trying to find path without backtracking`);
