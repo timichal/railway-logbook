@@ -6,9 +6,11 @@ temp poznamky
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
+- polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
 dodělat s aičkem:
 - journey planner a selectedrouteslist jako dva taby jako v adminu
+- clear all u planneru
 - stats page, about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
