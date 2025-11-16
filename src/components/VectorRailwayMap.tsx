@@ -14,7 +14,6 @@ import {
 } from '@/lib/map';
 import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
-import MultiRouteLogger from './MultiRouteLogger';
 import SelectedRoutesList from './SelectedRoutesList';
 import TripRow from './TripRow';
 
@@ -26,8 +25,7 @@ interface VectorRailwayMapProps {
 export default function VectorRailwayMap({ className = '', userId }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
 
-  // Multi-route logger state
-  const [showMultiRouteLogger, setShowMultiRouteLogger] = useState(false);
+  // Highlighted routes state (for journey planner)
   const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
 
   // Selected routes state
@@ -280,6 +278,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         onClearAll={handleClearAll}
         onRefreshMap={routeEditor.refreshAfterQuickLog}
         onUpdateRoutePartial={handleUpdateRoutePartial}
+        onHighlightRoutes={setHighlightedRoutes}
+        onAddRoutesFromPlanner={handleAddRoutesFromLogger}
       />
 
       {/* Progress Stats Box */}
@@ -309,18 +309,8 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         </div>
       )}
 
-      {/* Multi-Route Logger Toggle Button */}
-      <button
-        onClick={() => setShowMultiRouteLogger(!showMultiRouteLogger)}
-        className={`absolute top-4 right-12 px-4 py-2 rounded shadow-lg text-white font-medium z-10 cursor-pointer ${
-          showMultiRouteLogger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-        }`}
-      >
-        {showMultiRouteLogger ? 'Close Path Finder' : 'Open Path Finder'}
-      </button>
-
       {/* Station Search Box */}
-      <div className="absolute top-16 right-12 w-80 z-10">
+      <div className="absolute top-4 right-12 w-80 z-10">
         <div className="relative">
           <input
             ref={stationSearch.searchInputRef}
@@ -378,18 +368,6 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
           )}
         </div>
       </div>
-
-      {/* Multi-Route Logger Panel */}
-      {showMultiRouteLogger && (
-        <MultiRouteLogger
-          onHighlightRoutes={setHighlightedRoutes}
-          onClose={() => {
-            setShowMultiRouteLogger(false);
-            setHighlightedRoutes([]);
-          }}
-          onAddRoutesToSelection={handleAddRoutesFromLogger}
-        />
-      )}
 
       {/* Manage Trips Modal */}
       {routeEditor.showEditForm && routeEditor.editingFeature && (

@@ -101,8 +101,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension)
 - **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
-- **Selected Routes Panel** - Left-side panel for route selection and bulk logging workflow (see dedicated section below)
-- **Multi-Route Logger** - Journey planner that finds routes between stations and adds them to the selection panel (see dedicated section below)
+- **Selected Routes Panel** - Left-side panel for route selection, bulk logging, and journey planning (see dedicated section below)
 
 ### 5. Admin System Architecture
 - **Admin Access Control** - Restricted to user_id=1 with server-side authentication checks in all admin actions
@@ -144,10 +143,10 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### Components (`src/components/`)
 
 **User Map Components:**
-- `VectorRailwayMap.tsx` - Main user map with selected routes panel, station search, and multi-route logger
+- `VectorRailwayMap.tsx` - Main user map with selected routes panel and station search
 - `VectorMapWrapper.tsx` - Wrapper for user map with authentication
-- `SelectedRoutesList.tsx` - Left-side panel for route selection and bulk logging
-- `MultiRouteLogger.tsx` - Journey planner UI for finding routes between stations (from → via → to with drag-and-drop reordering) and feeding them to SelectedRoutesList
+- `SelectedRoutesList.tsx` - Left-side panel for route selection, bulk logging, and integrated journey planner
+- `JourneyPlanner.tsx` - Journey planner component for finding routes between stations (from → via → to with drag-and-drop reordering)
 - `TripRow.tsx` - Individual trip row in Manage Trips modal (inline editing/deleting)
 
 **Admin Map Components:**
@@ -175,7 +174,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `route-delete-actions.ts` - Admin-only route deletion with security checks
 - `db-path-actions.ts` - Admin-only railway parts pathfinding using RailwayPathFinder
 - `railway-parts-actions.ts` - Admin-only railway parts fetching by IDs
-- `routePathFinder.ts` - Route-level pathfinding for multi-route journeys (user-facing)
+- `routePathFinder.ts` - Route-level pathfinding for journey planner (user-facing, uses station name matching)
 - `authActions.ts` - Authentication actions (login, register, logout, getUser)
 
 **Utilities:**
@@ -313,9 +312,10 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Delete trips with single click (no confirmation)
   - Real-time map refresh after add/update/delete operations
 
-### Multi-Route Logger (Journey Planner)
+### Journey Planner (Integrated in Selected Routes Panel)
 - **Purpose**: Find routes between stations and add them to the selected routes panel for batch logging
-- **Location**: Side panel accessible via "Find Path" button on user map
+- **Location**: Collapsible section within the Selected Routes Panel (left-side panel)
+- **Integration**: Toggle button at bottom of Selected Routes Panel to show/hide journey planner
 - **UI Features**:
   - From/To station selection with autocomplete search
   - Multiple optional "via" stations (add/remove dynamically with drag-and-drop reordering)
@@ -324,12 +324,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Search prioritizes name-start matches over contains matches
   - Auto-clear station selection when user edits input
   - Drag handle (☰) for reordering via stations
-- **Pathfinding** (`routePathFinder.ts`):
+- **Pathfinding** (`src/lib/routePathFinder.ts`):
   - Sequential segment pathfinding (A→B, B→C, C→D for via stations)
   - In-memory BFS graph search for performance
   - Progressive buffer search: 50km → 100km → 200km → 500km → 1000km
-  - Route connection tolerance: 2000m between route endpoints
-  - Station-to-route tolerance: 2000m for finding nearby routes
+  - Route connections based on station name matching (not distance)
+  - Station-to-route tolerance: Progressive 100m → 500m → 1km → 2km → 5km
   - Continues from previous segment's end route for path continuity
   - Supports unlimited journey length through via stations
 - **Route Highlighting**:

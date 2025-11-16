@@ -8,8 +8,7 @@ nedodělané tratě
 - uhřice čejc: asi jen část, shady
 
 dodělat s aičkem:
-- dodat pathfinder přímo do selected routes
-- přejmenovat multiroutelogger na pathfinder nebo tak
+- journey planner a selectedrouteslist jako dva taby jako v adminu
 - stats page, about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
