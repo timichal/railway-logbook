@@ -100,7 +100,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
 
     // Fetch the route details to get starting_part_id and ending_part_id
     try {
-      const { getRailwayRoute } = await import('@/lib/admin-route-actions');
+      const { getRailwayRoute } = await import('@/lib/adminRouteActions');
       const routeDetail = await getRailwayRoute(trackId);
 
       // Prefill the starting/ending part IDs if they exist

@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { dbConfig } from './db-config';
+import { dbConfig } from './dbConfig';
 
 // Create a connection pool for better performance
 const pool = new Pool(dbConfig);

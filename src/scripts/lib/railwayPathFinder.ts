@@ -537,7 +537,7 @@ export class RailwayPathFinder {
   private buildPathResult(partIds: string[]): PathResult {
     // Build a simple coordinate list by concatenating all part coordinates
     // Note: This is a fallback. In practice, the caller should use mergeLinearChain
-    // from coordinate-utils.ts for proper coordinate ordering by fetching the actual
+    // from coordinateUtils.ts for proper coordinate ordering by fetching the actual
     // railway part geometries from the database.
     const coordinates: [number, number][] = [];
 

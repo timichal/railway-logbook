@@ -9,7 +9,7 @@ import {
   quickLogRoute,
   type UserProgress,
   type UserTrip
-} from '@/lib/user-actions';
+} from '@/lib/userActions';
 import type { SelectedRoute } from '@/lib/types';
 import { createRailwayRoutesSource, createRailwayRoutesLayer, closeAllPopups } from '@/lib/map';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '../utils/userRouteStyling';

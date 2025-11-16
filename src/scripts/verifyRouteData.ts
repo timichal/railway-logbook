@@ -1,8 +1,8 @@
 import { Client } from 'pg';
 import dotenv from 'dotenv';
 import { RailwayPathFinder } from './lib/railwayPathFinder';
-import { mergeLinearChain, coordinatesToWKT, type Coord } from '../lib/coordinate-utils';
-import { getDbConfig } from '../lib/db-config';
+import { mergeLinearChain, coordinatesToWKT, type Coord } from '../lib/coordinateUtils';
+import { getDbConfig } from '../lib/dbConfig';
 
 dotenv.config();
 

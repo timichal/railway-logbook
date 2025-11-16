@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getUser } from '@/lib/auth-actions';
+import { getUser } from '@/lib/authActions';
 import AdminPageClient from '@/components/AdminPageClient';
 
 export default async function AdminPage() {

@@ -2,8 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react';
 import type { Station } from '@/lib/types';
-import { searchStations } from '@/lib/user-actions';
-import { findRoutePathBetweenStations } from '@/lib/route-path-finder';
+import { searchStations } from '@/lib/userActions';
+import { findRoutePathBetweenStations } from '@/lib/routePathFinder';
 import { useToast } from '@/lib/toast';
 
 interface RouteNode {

@@ -8,7 +8,7 @@
 
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
-import { getDbConfig } from '../lib/db-config';
+import { getDbConfig } from '../lib/dbConfig';
 
 // Load environment variables from .env file
 dotenv.config();

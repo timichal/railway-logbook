@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import VectorAdminMapWrapper from '@/components/VectorAdminMapWrapper';
 import AdminSidebar from '@/components/AdminSidebar';
-import { logout } from '@/lib/auth-actions';
-import { saveRailwayRoute } from '@/lib/admin-route-actions';
+import { logout } from '@/lib/authActions';
+import { saveRailwayRoute } from '@/lib/adminRouteActions';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 

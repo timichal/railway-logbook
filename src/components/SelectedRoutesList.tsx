@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { updateMultipleRoutes } from '@/lib/user-actions';
+import { updateMultipleRoutes } from '@/lib/userActions';
 import { useToast } from '@/lib/toast';
 import type { SelectedRoute } from '@/lib/types';
 

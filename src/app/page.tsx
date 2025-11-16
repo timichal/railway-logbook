@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import VectorMapWrapper from '@/components/VectorMapWrapper';
-import { getUser, logout } from '@/lib/auth-actions';
+import { getUser, logout } from '@/lib/authActions';
 
 export default async function Home() {
   // Check if user is authenticated

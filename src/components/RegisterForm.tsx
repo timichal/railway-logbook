@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { register } from '@/lib/auth-actions';
+import { register } from '@/lib/authActions';
 import Link from 'next/link';
 
 export default function RegisterForm() {

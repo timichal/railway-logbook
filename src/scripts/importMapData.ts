@@ -2,7 +2,7 @@ import { Client } from 'pg';
 import dotenv from 'dotenv';
 import { loadStationsAndParts } from './lib/loadRailwayData';
 import { verifyAndRecalculateRoutes } from './verifyRouteData';
-import { getDbConfig } from '../lib/db-config';
+import { getDbConfig } from '../lib/dbConfig';
 
 dotenv.config();
 

@@ -1,7 +1,7 @@
 'use server';
 
 import { query } from './db';
-import { getUser } from './auth-actions';
+import { getUser } from './authActions';
 import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {

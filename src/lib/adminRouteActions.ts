@@ -2,9 +2,9 @@
 
 import pool from './db';
 import { query } from './db';
-import { getUser } from './auth-actions';
+import { getUser } from './authActions';
 import { GeoJSONFeatureCollection, GeoJSONFeature, PathResult, RailwayPart } from './types';
-import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinate-utils';
+import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinateUtils';
 import type { UsageType } from './constants';
 
 /**

@@ -2,7 +2,7 @@ import { Client } from 'pg';
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { getDbConfig } from '../lib/db-config';
+import { getDbConfig } from '../lib/dbConfig';
 
 dotenv.config();
 

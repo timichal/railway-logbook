@@ -2,7 +2,7 @@
 
 import pool from './db';
 import { query } from './db';
-import { getUser } from './auth-actions';
+import { getUser } from './authActions';
 import { RailwayPathFinder } from '../scripts/lib/railwayPathFinder';
 import type { PathResult, RailwayPart, GeoJSONFeatureCollection, GeoJSONFeature } from './types';
 

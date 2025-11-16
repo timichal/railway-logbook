@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { UserTrip } from '@/lib/user-actions';
+import type { UserTrip } from '@/lib/userActions';
 
 interface TripRowProps {
   trip: UserTrip | null; // null for new trip row

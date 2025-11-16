@@ -169,19 +169,19 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 **Database & Actions:**
 - `db.ts` - PostgreSQL connection pool (exports pool as default)
-- `db-config.ts` - Database configuration utilities
-- `user-actions.ts` - User-facing server actions (search stations, get GeoJSON data, update/delete user trips, get progress, bulk update routes with firstPartial/lastPartial)
+- `dbConfig.ts` - Database configuration utilities
+- `userActions.ts` - User-facing server actions (search stations, get GeoJSON data, update/delete user trips, get progress, bulk update routes with firstPartial/lastPartial)
 - `route-save-actions.ts` - Admin-only route creation/update with security checks
 - `route-delete-actions.ts` - Admin-only route deletion with security checks
 - `db-path-actions.ts` - Admin-only railway parts pathfinding using RailwayPathFinder
 - `railway-parts-actions.ts` - Admin-only railway parts fetching by IDs
-- `route-path-finder.ts` - Route-level pathfinding for multi-route journeys (user-facing)
-- `auth-actions.ts` - Authentication actions (login, register, logout, getUser)
+- `routePathFinder.ts` - Route-level pathfinding for multi-route journeys (user-facing)
+- `authActions.ts` - Authentication actions (login, register, logout, getUser)
 
 **Utilities:**
 - `types.ts` - Core TypeScript type definitions (Station, GeoJSONFeature, RailwayRoute, UserTrip, etc.)
 - `constants.ts` - Usage type options (Regular=0, Special=1), frequency options (Daily, Weekdays, Weekends, Once a week, Seasonal), UsageType type export
-- `coordinate-utils.ts` - Coordinate utilities (mergeLinearChain algorithm, coordinatesToWKT)
+- `coordinateUtils.ts` - Coordinate utilities (mergeLinearChain algorithm, coordinatesToWKT)
 
 #### Map Library (`src/lib/map/`)
 
@@ -324,7 +324,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Search prioritizes name-start matches over contains matches
   - Auto-clear station selection when user edits input
   - Drag handle (☰) for reordering via stations
-- **Pathfinding** (`route-path-finder.ts`):
+- **Pathfinding** (`routePathFinder.ts`):
   - Sequential segment pathfinding (A→B, B→C, C→D for via stations)
   - In-memory BFS graph search for performance
   - Progressive buffer search: 50km → 100km → 200km → 500km → 1000km
