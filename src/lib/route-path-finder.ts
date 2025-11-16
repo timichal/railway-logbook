@@ -16,9 +16,6 @@ interface PathResult {
   error?: string;
 }
 
-const STATION_TO_ROUTE_TOLERANCE_M = 2000; // Station can be 2000m from route
-const ROUTE_CONNECTION_TOLERANCE_M = 2000; // Route endpoints can be 2000m apart (increased from 500m)
-
 /**
  * In-memory route graph for fast pathfinding
  */
@@ -43,25 +40,38 @@ class RouteGraph {
 
 /**
  * Find all routes that pass near a given station
+ * Uses progressive tolerance: 100m → 500m → 1km → 2km → 5km
  */
 async function findRoutesNearStation(stationId: number): Promise<number[]> {
   const client = await pool.connect();
   try {
-    const result = await client.query<{ track_id: number }>(
-      `
-      SELECT DISTINCT r.track_id
-      FROM railway_routes r, stations s
-      WHERE s.id = $1
-        AND ST_DWithin(
-          r.geometry::geography,
-          s.coordinates::geography,
-          $2
-        )
-      ORDER BY r.track_id
-      `,
-      [stationId, STATION_TO_ROUTE_TOLERANCE_M]
-    );
-    return result.rows.map(row => row.track_id);
+    // Progressive tolerance values (in meters)
+    const tolerances = [100, 500, 1000, 2000, 5000];
+
+    for (const tolerance of tolerances) {
+      const result = await client.query<{ track_id: number }>(
+        `
+        SELECT DISTINCT r.track_id
+        FROM railway_routes r, stations s
+        WHERE s.id = $1
+          AND ST_DWithin(
+            r.geometry::geography,
+            s.coordinates::geography,
+            $2
+          )
+        ORDER BY r.track_id
+        `,
+        [stationId, tolerance]
+      );
+
+      // If we found routes, return them
+      if (result.rows.length > 0) {
+        return result.rows.map(row => row.track_id);
+      }
+    }
+
+    // No routes found even at maximum tolerance
+    return [];
   } finally {
     client.release();
   }
@@ -69,6 +79,7 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
 
 /**
  * Build route graph for routes within a buffer area around start/end stations
+ * Routes are connected based on station name matching (not distance)
  */
 async function buildRouteGraphInBuffer(
   fromStationId: number,
@@ -79,7 +90,7 @@ async function buildRouteGraphInBuffer(
   const graph = new RouteGraph();
 
   try {
-    // Get all route connections within buffer area
+    // Get all route connections within buffer area based on station name matching
     const result = await client.query<{ from_route: number; to_route: number }>(
       `
       WITH station_points AS (
@@ -98,32 +109,28 @@ async function buildRouteGraphInBuffer(
         FROM station_points
       ),
       routes_in_area AS (
-        SELECT DISTINCT r.track_id
+        SELECT DISTINCT r.track_id, r.from_station, r.to_station
         FROM railway_routes r, search_area
         WHERE ST_Intersects(r.geometry, search_area.buffer_geom)
-      ),
-      route_endpoints AS (
-        SELECT
-          track_id,
-          ST_StartPoint(geometry) as start_point,
-          ST_EndPoint(geometry) as end_point
-        FROM railway_routes
-        WHERE track_id IN (SELECT track_id FROM routes_in_area)
       )
       SELECT DISTINCT
         r1.track_id as from_route,
         r2.track_id as to_route
-      FROM route_endpoints r1
-      CROSS JOIN route_endpoints r2
+      FROM routes_in_area r1
+      CROSS JOIN routes_in_area r2
       WHERE r1.track_id != r2.track_id
         AND (
-          ST_DWithin(r1.start_point::geography, r2.start_point::geography, $4)
-          OR ST_DWithin(r1.start_point::geography, r2.end_point::geography, $4)
-          OR ST_DWithin(r1.end_point::geography, r2.start_point::geography, $4)
-          OR ST_DWithin(r1.end_point::geography, r2.end_point::geography, $4)
+          -- r1's to_station matches r2's from_station
+          r1.to_station = r2.from_station
+          -- r1's to_station matches r2's to_station (bidirectional)
+          OR r1.to_station = r2.to_station
+          -- r1's from_station matches r2's from_station (bidirectional)
+          OR r1.from_station = r2.from_station
+          -- r1's from_station matches r2's to_station
+          OR r1.from_station = r2.to_station
         )
       `,
-      [fromStationId, toStationId, bufferMeters, ROUTE_CONNECTION_TOLERANCE_M]
+      [fromStationId, toStationId, bufferMeters]
     );
 
     for (const row of result.rows) {
