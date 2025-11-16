@@ -109,8 +109,8 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     if (!onSaveRoute || createForm.usage_type === undefined) return;
 
     await onSaveRoute({
-      from_station: createForm.from_station,
-      to_station: createForm.to_station,
+      from_station: createForm.from_station.trim(),
+      to_station: createForm.to_station.trim(),
       track_number: createForm.track_number,
       description: createForm.description,
       usage_type: createForm.usage_type,

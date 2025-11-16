@@ -145,8 +145,8 @@ export default function AdminRoutesTab({
       setIsLoading(true);
       await updateRailwayRoute(
         selectedRoute.track_id,
-        editForm.from_station,
-        editForm.to_station,
+        editForm.from_station.trim(),
+        editForm.to_station.trim(),
         editForm.track_number || null,
         editForm.description || null,
         editForm.usage_type,
@@ -156,12 +156,21 @@ export default function AdminRoutesTab({
 
       await loadRoutes();
 
+      // Update state with trimmed values
+      const trimmedForm = {
+        ...editForm,
+        from_station: editForm.from_station.trim(),
+        to_station: editForm.to_station.trim()
+      };
+
       setSelectedRoute({
         ...selectedRoute,
-        ...editForm,
+        ...trimmedForm,
         track_number: editForm.track_number || null,
         description: editForm.description || null
       });
+
+      setEditForm(trimmedForm);
 
       if (onRouteUpdated) {
         onRouteUpdated();
