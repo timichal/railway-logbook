@@ -8,10 +8,13 @@ nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
+!PRIO! přejet cross country lines
+
 dodělat s aičkem:
 - journey planner a selectedrouteslist jako dva taby jako v adminu
+- stats and preferences page (ke každé zemi stat a checkbox)
 - clear all u planneru
-- stats page, about/faq
+- about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
 - preferred routing: save route presets (brno-praha)
