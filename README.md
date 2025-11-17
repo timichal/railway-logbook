@@ -25,8 +25,9 @@ docker compose up -d db tiles
 
 2. **Process data**
 ```bash
-npm run prepareMapData  # Downloads and transforms OSM data
-npm run importMapData   # Loads data and recalculates routes (if any exist)
+npm run prepareMapData              # Downloads and transforms OSM data
+npm run importMapData               # Loads data and recalculates routes (if any exist)
+npm run migration:addCountries      # One-time: Add country tracking (if upgrading)
 ```
 
 3. **Run application**
@@ -52,24 +53,28 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - `users` - User accounts with authentication
 - `stations` - Railway stations (Point features)
 - `railway_parts` - Raw railway segments from OSM
-- `railway_routes` - Defined routes with usage type (Regular/Seasonal/Special)
+- `railway_routes` - Defined routes with usage type, country tracking (start/end), validity flags
 - `user_trips` - User ride history (dates, notes, partial flag)
+- `user_preferences` - User settings (selected countries for filtering)
 
 ### Features
 
 **For Users:**
 - Interactive map with hover popups showing route details
+- **Country filtering** - Filter routes by country (CZ, SK, AT, PL, DE) with Select All/None options
 - Three-way color coding:
   - Dark green = fully completed routes
   - Dark orange = partially completed routes
   - Red = unvisited routes
-- Progress tracking (km/% of total distance, excludes partial routes)
+- Progress tracking (km/% of total distance, respects country filter, excludes partial routes)
 - Click routes to mark ride date, add notes, and flag partial completion
+- Journey planner with multi-station routing (from → via → to)
 
 **For Admin (user_id=1):**
 - Create routes by clicking railway_parts on map
 - Automatic pathfinding between points (50km buffer, BFS algorithm)
-- Assign usage type (Regular/Seasonal/Special)
+- **Automatic country detection** - Routes automatically tagged with start/end countries (worldwide support)
+- Assign usage type (Regular/Seasonal/Special) and frequency tags
 - Edit route geometry to fix invalid routes after OSM updates
 - Delete routes with security checks
 - Auto-generated track_id and automatic length calculation
