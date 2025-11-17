@@ -2,6 +2,7 @@ temp poznamky
 
 - dělení: special nejsou v běžných JŘ, seasonal jo
 - junctions: aproximace (představit si jako kolečko)
+- actually možná projet triangly a udělat z nich routes kde jde
 - 222 vlašim-trhový štěpánov a 304 kojetín-tovačov v roce 26 bez provozu? 25: https://railwaycapital.cz/jizdni-rady/
 
 nedodělané tratě
