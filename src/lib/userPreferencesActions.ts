@@ -3,6 +3,7 @@
 import { query } from './db';
 import { getUser } from './authActions';
 import type { UserPreferences } from './types';
+import { SUPPORTED_COUNTRIES } from './constants';
 
 /**
  * Get user preferences (selected countries for filtering)
@@ -27,7 +28,7 @@ export async function getUserPreferences(): Promise<string[]> {
     }
 
     // No preferences found, create default preferences
-    const defaultCountries = ['CZ', 'SK', 'AT', 'PL', 'DE'];
+    const defaultCountries = SUPPORTED_COUNTRIES.map(c => c.code);
     await query(
       'INSERT INTO user_preferences (user_id, selected_countries) VALUES ($1, $2)',
       [user.id, defaultCountries]
@@ -70,7 +71,7 @@ export async function updateUserPreferences(selectedCountries: string[]): Promis
  */
 export async function ensureUserPreferences(userId: number): Promise<void> {
   try {
-    const defaultCountries = ['CZ', 'SK', 'AT', 'PL', 'DE'];
+    const defaultCountries = SUPPORTED_COUNTRIES.map(c => c.code);
 
     await query(
       `INSERT INTO user_preferences (user_id, selected_countries)

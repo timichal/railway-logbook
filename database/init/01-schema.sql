@@ -73,7 +73,7 @@ CREATE TABLE user_trips (
 -- User preferences (for country filtering and other settings)
 CREATE TABLE user_preferences (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    selected_countries TEXT[] NOT NULL DEFAULT ARRAY['CZ', 'SK', 'AT', 'PL', 'DE'], -- ISO 3166-1 alpha-2 country codes
+    selected_countries TEXT[] NOT NULL DEFAULT ARRAY['CZ', 'SK', 'AT', 'PL', 'DE', 'LT', 'LV', 'EE'], -- ISO 3166-1 alpha-2 country codes
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

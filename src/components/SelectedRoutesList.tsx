@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { updateMultipleRoutes } from '@/lib/userActions';
 import { useToast } from '@/lib/toast';
 import type { SelectedRoute } from '@/lib/types';
-import JourneyPlanner from './JourneyPlanner';
 
 interface RouteNode {
   track_id: number;
@@ -40,7 +39,6 @@ export default function SelectedRoutesList({
   const [date, setDate] = useState(today);
   const [note, setNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [showJourneyPlanner, setShowJourneyPlanner] = useState(false);
 
   const handleLogAll = async () => {
     if (selectedRoutes.length === 0 || !date) return;
@@ -77,7 +75,7 @@ export default function SelectedRoutesList({
   };
 
   return (
-    <div className="absolute top-4 left-4 w-96 bg-white rounded-lg shadow-xl p-4 z-10 max-h-[90vh] overflow-y-auto text-black">
+    <div className="p-4 text-black">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-bold">Selected Routes</h3>
         {selectedRoutes.length > 0 && (
@@ -178,26 +176,6 @@ export default function SelectedRoutesList({
           </div>
         </>
       )}
-
-      {/* Journey Planner Section */}
-      <div className="pt-3 border-t border-gray-200 mt-3">
-        <button
-          onClick={() => setShowJourneyPlanner(!showJourneyPlanner)}
-          className="w-full px-3 py-2 bg-blue-50 text-blue-700 rounded font-medium text-sm hover:bg-blue-100 cursor-pointer flex items-center justify-between"
-        >
-          <span>{showJourneyPlanner ? 'Hide' : 'Show'} Journey Planner</span>
-          <span className="text-lg">{showJourneyPlanner ? '−' : '+'}</span>
-        </button>
-
-        {showJourneyPlanner && (
-          <div className="mt-3">
-            <JourneyPlanner
-              onHighlightRoutes={onHighlightRoutes}
-              onAddRoutesToSelection={onAddRoutesFromPlanner}
-            />
-          </div>
-        )}
-      </div>
     </div>
   );
 }

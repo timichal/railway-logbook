@@ -1,10 +1,11 @@
 import type maplibreglType from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import { getUsageLabel } from '@/lib/constants';
-import type { SelectedRoute } from '@/lib/types';
+import type { SelectedRoute, Station } from '@/lib/types';
 
 interface UserMapInteractionCallbacks {
   onRouteClick: (feature: SelectedRoute) => void;
+  onStationClick?: (station: Station | null) => void;
 }
 
 /**
@@ -14,7 +15,7 @@ export function setupUserMapInteractions(
   mapInstance: maplibreglType.Map,
   callbacks: UserMapInteractionCallbacks
 ) {
-  const { onRouteClick } = callbacks;
+  const { onRouteClick, onStationClick } = callbacks;
   let currentPopup: maplibregl.Popup | null = null;
 
   // Click handler for adding routes to selection
@@ -154,6 +155,28 @@ export function setupUserMapInteractions(
     }
   };
 
+  // Click handler for stations (Journey Planner)
+  const handleStationClick = (e: maplibreglType.MapLayerMouseEvent) => {
+    if (!e.features || e.features.length === 0 || !onStationClick) return;
+
+    const feature = e.features[0];
+    const properties = feature.properties;
+    const geometry = feature.geometry;
+
+    if (!properties || !geometry || geometry.type !== 'Point') return;
+
+    // Validate station data before creating Station object
+    if (!properties.id || !properties.name || !geometry.coordinates) return;
+
+    // Convert to Station type
+    const station: Station = {
+      id: properties.id,
+      name: properties.name,
+      coordinates: geometry.coordinates as [number, number]
+    };
+
+    onStationClick(station);
+  };
 
   // Attach route handlers
   mapInstance.on('click', 'railway_routes', handleClick);
@@ -162,6 +185,7 @@ export function setupUserMapInteractions(
   mapInstance.on('mouseleave', 'railway_routes', handleRouteMouseLeave);
 
   // Attach station handlers (added after routes, so they take precedence due to layer order)
+  mapInstance.on('click', 'stations', handleStationClick);
   mapInstance.on('mousemove', 'stations', handleStationMouseMove);
   mapInstance.on('mouseenter', 'stations', handleStationMouseEnter);
   mapInstance.on('mouseleave', 'stations', handleStationMouseLeave);
@@ -177,6 +201,7 @@ export function setupUserMapInteractions(
     mapInstance.off('mouseenter', 'railway_routes', handleRouteMouseEnter);
     mapInstance.off('mouseleave', 'railway_routes', handleRouteMouseLeave);
     // Remove station handlers
+    mapInstance.off('click', 'stations', handleStationClick);
     mapInstance.off('mousemove', 'stations', handleStationMouseMove);
     mapInstance.off('mouseenter', 'stations', handleStationMouseEnter);
     mapInstance.off('mouseleave', 'stations', handleStationMouseLeave);

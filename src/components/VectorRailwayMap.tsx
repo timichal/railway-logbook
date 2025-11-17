@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { FilterSpecification } from 'maplibre-gl';
 import type { Station, SelectedRoute } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
@@ -15,9 +15,8 @@ import {
 import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
 import { updateUserPreferences } from '@/lib/userPreferencesActions';
-import SelectedRoutesList from './SelectedRoutesList';
+import UserSidebar, { type ActiveTab } from './UserSidebar';
 import TripRow from './TripRow';
-import CountryFilterPanel from './CountryFilterPanel';
 
 interface VectorRailwayMapProps {
   className?: string;
@@ -31,6 +30,18 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
   // Country filter state - initialize with server-provided preferences
   const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
   const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
+
+  // Active tab state (tracks which sidebar tab is active)
+  const [activeTab, setActiveTab] = useState<ActiveTab>('routes');
+
+  // Station click handler from Journey Planner
+  const [journeyStationClickHandler, setJourneyStationClickHandler] = useState<((station: Station | null) => void) | null>(null);
+
+  // Wrapper for setting station click handler
+  const handleSetStationClickHandler = useCallback((handler: ((station: Station | null) => void) | null) => {
+    // When setting a function in state, need to wrap in another function
+    setJourneyStationClickHandler(() => handler ? handler : null);
+  }, []);
 
   // Highlighted routes state (for journey planner)
   const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
@@ -64,8 +75,11 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
   // Route editor hook (needs map ref and selected countries)
   const routeEditor = useRouteEditor(userId, map, selectedCountries);
 
-  // Handler to toggle route selection
+  // Handler to toggle route selection (only works in Route Logger tab)
   const handleRouteClick = (route: SelectedRoute) => {
+    // Only allow route clicking when in Route Logger tab
+    if (activeTab !== 'routes') return;
+
     // Check if route is already selected
     const isAlreadySelected = selectedRoutes.some(r => r.track_id === route.track_id);
     if (isAlreadySelected) {
@@ -125,11 +139,15 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
 
     const cleanup = setupUserMapInteractions(map.current, {
       onRouteClick: handleRouteClick,
+      // Only enable station clicking when in Journey tab and handler is registered
+      onStationClick: activeTab === 'journey' && journeyStationClickHandler
+        ? journeyStationClickHandler
+        : undefined,
     });
 
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, selectedRoutes]); // Need selectedRoutes to check if already selected
+  }, [map, selectedRoutes, activeTab, journeyStationClickHandler]); // Re-run when activeTab or handler changes
 
   // Fetch progress stats on component mount
   useEffect(() => {
@@ -291,21 +309,9 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
   };
 
   return (
-    <div className="relative w-full h-full">
-      <div
-        ref={mapContainer}
-        className={`w-full h-full ${className}`}
-        style={{ height: '100%', minHeight: '400px' }}
-      />
-
-      {/* Country Filter Panel */}
-      <CountryFilterPanel
-        selectedCountries={selectedCountries}
-        onCountriesChange={handleCountriesChange}
-      />
-
-      {/* Selected Routes List */}
-      <SelectedRoutesList
+    <div className="h-full flex relative">
+      {/* User Sidebar */}
+      <UserSidebar
         selectedRoutes={selectedRoutes}
         onRemoveRoute={handleRemoveRoute}
         onManageTrips={routeEditor.openEditForm}
@@ -314,7 +320,20 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
         onUpdateRoutePartial={handleUpdateRoutePartial}
         onHighlightRoutes={setHighlightedRoutes}
         onAddRoutesFromPlanner={handleAddRoutesFromLogger}
+        selectedCountries={selectedCountries}
+        onCountryChange={handleCountriesChange}
+        onActiveTabChange={setActiveTab}
+        onStationClickHandler={handleSetStationClickHandler}
+        sidebarWidth={600}
       />
+
+      {/* Map Container */}
+      <div className="flex-1 overflow-hidden relative">
+        <div
+          ref={mapContainer}
+          className={`w-full h-full ${className}`}
+          style={{ height: '100%', minHeight: '400px' }}
+        />
 
       {/* Progress Stats Box */}
       {routeEditor.progress && (
@@ -401,6 +420,7 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Manage Trips Modal */}

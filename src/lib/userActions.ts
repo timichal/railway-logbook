@@ -3,6 +3,7 @@
 import { query } from './db';
 import { getUser } from './authActions';
 import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
+import { SUPPORTED_COUNTRIES } from './constants';
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
@@ -305,6 +306,115 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
     routePercentage: Math.round(routePercentage),
     totalRoutes,
     completedRoutes
+  };
+}
+
+export interface CountryProgress {
+  countryCode: string;
+  countryName: string;
+  totalKm: number;
+  completedKm: number;
+}
+
+export interface ProgressByCountry {
+  byCountry: CountryProgress[];
+  total: {
+    totalKm: number;
+    completedKm: number;
+  };
+}
+
+/**
+ * Get progress statistics broken down by country
+ * Returns stats for each country (routes starting AND ending in that country)
+ * Plus overall total across all countries
+ */
+export async function getProgressByCountry(): Promise<ProgressByCountry> {
+  const user = await getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const userId = user.id;
+
+  // Get stats for each country (routes where BOTH start AND end are in that country)
+  const countryStats: CountryProgress[] = [];
+
+  for (const country of SUPPORTED_COUNTRIES) {
+    // Get total km for routes starting AND ending in this country (excluding Special)
+    const totalResult = await query(
+      `SELECT COALESCE(SUM(length_km), 0) as total_km
+       FROM railway_routes
+       WHERE length_km IS NOT NULL
+         AND usage_type != 1
+         AND start_country = $1
+         AND end_country = $1`,
+      [country.code]
+    );
+
+    // Get completed km for routes in this country
+    const completedResult = await query(
+      `SELECT COALESCE(SUM(rr.length_km), 0) as completed_km
+       FROM railway_routes rr
+       WHERE rr.usage_type != 1
+         AND rr.length_km IS NOT NULL
+         AND rr.start_country = $1
+         AND rr.end_country = $1
+         AND EXISTS (
+           SELECT 1
+           FROM user_trips ut
+           WHERE ut.track_id = rr.track_id
+             AND ut.user_id = $2
+             AND ut.date IS NOT NULL
+             AND (ut.partial IS NULL OR ut.partial = FALSE)
+         )`,
+      [country.code, userId]
+    );
+
+    const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
+    const completedKm = parseFloat(completedResult.rows[0].completed_km) || 0;
+
+    countryStats.push({
+      countryCode: country.code,
+      countryName: country.name,
+      totalKm: Math.round(totalKm * 10) / 10,
+      completedKm: Math.round(completedKm * 10) / 10,
+    });
+  }
+
+  // Get overall total (all routes regardless of country)
+  const overallTotalResult = await query(
+    `SELECT COALESCE(SUM(length_km), 0) as total_km
+     FROM railway_routes
+     WHERE length_km IS NOT NULL
+       AND usage_type != 1`
+  );
+
+  const overallCompletedResult = await query(
+    `SELECT COALESCE(SUM(rr.length_km), 0) as completed_km
+     FROM railway_routes rr
+     WHERE rr.usage_type != 1
+       AND rr.length_km IS NOT NULL
+       AND EXISTS (
+         SELECT 1
+         FROM user_trips ut
+         WHERE ut.track_id = rr.track_id
+           AND ut.user_id = $1
+           AND ut.date IS NOT NULL
+           AND (ut.partial IS NULL OR ut.partial = FALSE)
+       )`,
+    [userId]
+  );
+
+  const overallTotalKm = parseFloat(overallTotalResult.rows[0].total_km) || 0;
+  const overallCompletedKm = parseFloat(overallCompletedResult.rows[0].completed_km) || 0;
+
+  return {
+    byCountry: countryStats,
+    total: {
+      totalKm: Math.round(overallTotalKm * 10) / 10,
+      completedKm: Math.round(overallCompletedKm * 10) / 10,
+    }
   };
 }
 

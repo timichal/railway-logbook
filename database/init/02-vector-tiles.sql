@@ -192,7 +192,7 @@ PARALLEL SAFE;
 
 -- Function: stations_tile
 -- Serves railway stations as vector tiles
--- Only displayed at zoom 10+ (matching Leaflet behavior)
+-- Only displayed at zoom 9+ (matching Leaflet behavior)
 CREATE OR REPLACE FUNCTION stations_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
 DECLARE
@@ -220,8 +220,8 @@ BEGIN
         WHERE
             -- Spatial filter using index
             coordinates_3857 && tile_envelope
-            -- Only show stations at zoom 10+
-            AND z >= 10
+            -- Only show stations at zoom 8+
+            AND z >= 9
         ORDER BY name
     ) AS mvtgeom
     WHERE geom IS NOT NULL;

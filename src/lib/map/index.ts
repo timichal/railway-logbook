@@ -32,7 +32,7 @@ export const EUROPE_BOUNDS: [[number, number], [number, number]] = [
 export const ZOOM_RANGES = {
   railwayRoutes: { min: 4, max: 18 }, // Matches Martin configuration
   railwayParts: { min: 4, max: 18 }, // Matches Martin configuration
-  stations: { min: 10, max: 18 }, // Matches Martin configuration
+  stations: { min: 9, max: 18 }, // Matches Martin configuration
 } as const;
 
 export const COLORS = {

@@ -37,7 +37,7 @@ postgres:
     stations_tile:
       schema: public
       function: stations_tile
-      minzoom: 10
+      minzoom: 9
       maxzoom: 18
       # This function accepts z, x, y parameters
 

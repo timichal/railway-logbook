@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { Station } from '@/lib/types';
 import { searchStations } from '@/lib/userActions';
 import { findRoutePathBetweenStations } from '@/lib/routePathFinder';
@@ -24,9 +24,10 @@ type MaybeStation = SelectedStation | null;
 interface JourneyPlannerProps {
   onHighlightRoutes?: (routeIds: number[]) => void;
   onAddRoutesToSelection?: (routes: RouteNode[]) => void;
+  onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
 
-export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelection }: JourneyPlannerProps) {
+export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelection, onStationClickHandler }: JourneyPlannerProps) {
   const { showSuccess } = useToast();
   const [fromStation, setFromStation] = useState<SelectedStation | null>(null);
   const [viaStations, setViaStations] = useState<MaybeStation[]>([]);
@@ -46,6 +47,34 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
   const [searchResults, setSearchResults] = useState<Station[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Store current state in refs to avoid stale closures
+  const activeSearchRef = useRef(activeSearch);
+  const fromStationRef = useRef(fromStation);
+  const toStationRef = useRef(toStation);
+  const viaStationsRef = useRef(viaStations);
+  const viaSearchQueriesRef = useRef(viaSearchQueries);
+
+  // Update refs when state changes
+  useEffect(() => {
+    activeSearchRef.current = activeSearch;
+  }, [activeSearch]);
+
+  useEffect(() => {
+    fromStationRef.current = fromStation;
+  }, [fromStation]);
+
+  useEffect(() => {
+    toStationRef.current = toStation;
+  }, [toStation]);
+
+  useEffect(() => {
+    viaStationsRef.current = viaStations;
+  }, [viaStations]);
+
+  useEffect(() => {
+    viaSearchQueriesRef.current = viaSearchQueries;
+  }, [viaSearchQueries]);
 
   // Debounced station search
   const performSearch = useCallback(async (query: string) => {
@@ -127,6 +156,54 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
     setSearchResults([]);
     setSelectedIndex(-1);
   };
+
+  // Handle station click from map - using refs to avoid dependency issues
+  const handleStationClickFromMap = useCallback((station: Station | null) => {
+    // Guard against null station
+    if (!station || !station.id || !station.name) {
+      return;
+    }
+
+    const selected = { id: station.id, name: station.name };
+
+    // Use refs to get current values without causing re-creation
+    const currentActiveSearch = activeSearchRef.current;
+    const currentFromStation = fromStationRef.current;
+    const currentToStation = toStationRef.current;
+    const currentViaStations = viaStationsRef.current;
+    const currentViaSearchQueries = viaSearchQueriesRef.current;
+
+    // Logic: if activeSearch is set, use that field
+    // Otherwise, fill from → to in order
+    if (currentActiveSearch === 'from' || (!currentFromStation && currentActiveSearch === null)) {
+      setFromStation(selected);
+      setFromSearchQuery(station.name);
+    } else if (currentActiveSearch === 'to' || (currentFromStation && !currentToStation && currentActiveSearch === null)) {
+      setToStation(selected);
+      setToSearchQuery(station.name);
+    } else if (typeof currentActiveSearch === 'number') {
+      // Via station
+      const newStations = [...currentViaStations];
+      newStations[currentActiveSearch] = selected;
+      setViaStations(newStations);
+      const newQueries = [...currentViaSearchQueries];
+      newQueries[currentActiveSearch] = station.name;
+      setViaSearchQueries(newQueries);
+    }
+  }, []); // Empty deps - handler is stable, uses refs for current values
+
+  // Register station click handler with parent on mount and when handler changes
+  useEffect(() => {
+    if (onStationClickHandler) {
+      onStationClickHandler(handleStationClickFromMap);
+    }
+    // Cleanup: unregister handler when component unmounts
+    return () => {
+      if (onStationClickHandler) {
+        onStationClickHandler(null);
+      }
+    };
+  }, [onStationClickHandler, handleStationClickFromMap]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -212,8 +289,16 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
     onAddRoutesToSelection(foundPath);
 
     // Reset form after adding to selection
+    resetForm();
+
+    showSuccess(`${foundPath.length} route${foundPath.length !== 1 ? 's' : ''} added to selection!`);
+  };
+
+  // Clear all fields
+  const resetForm = () => {
     setFoundPath([]);
     setTotalDistance(0);
+    setPathError(null);
     setFromStation(null);
     setToStation(null);
     setViaStations([]);
@@ -221,8 +306,6 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
     setToSearchQuery('');
     setViaSearchQueries([]);
     if (onHighlightRoutes) onHighlightRoutes([]);
-
-    showSuccess(`${foundPath.length} route${foundPath.length !== 1 ? 's' : ''} added to selection!`);
   };
 
   // Add new via station
@@ -274,8 +357,16 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
   };
 
   return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-bold text-gray-700">Journey Planner</h4>
+    <div className="p-4 space-y-3 text-black">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-bold">Journey Planner</h3>
+        <button
+          onClick={resetForm}
+          className="text-xs text-gray-500 hover:text-gray-700 underline"
+        >
+          Clear all
+        </button>
+      </div>
 
       {/* From Station */}
       <div>

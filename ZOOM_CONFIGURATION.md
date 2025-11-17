@@ -37,7 +37,7 @@ railway_parts_tile:
   maxzoom: 18
 
 stations_tile:
-  minzoom: 10  # Stations only visible from zoom 10+
+  minzoom: 9  # Stations only visible from zoom 9+
   maxzoom: 18
 ```
 
@@ -51,7 +51,7 @@ Martin will **refuse** to generate tiles outside these ranges.
 export const ZOOM_RANGES = {
   railwayRoutes: { min: 4, max: 18 },
   railwayParts: { min: 4, max: 18 },
-  stations: { min: 10, max: 18 },
+  stations: { min: 9, max: 18 },
 } as const;
 ```
 
@@ -64,7 +64,7 @@ Should **match** Martin's configuration to avoid unnecessary tile requests.
 ```sql
 -- railway_routes_tile: NO zoom filter (show all data at all zooms)
 -- railway_parts_tile: Dynamic filtering based on segment length
--- stations_tile: Filter z >= 10
+-- stations_tile: Filter z >= 9
 ```
 
 SQL filters can add **additional** restrictions beyond Martin's zoom ranges.

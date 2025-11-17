@@ -85,7 +85,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), PostGIS geometry, length_km, start_country (ISO 3166-1 alpha-2), end_country (ISO 3166-1 alpha-2), starting_part_id, ending_part_id, is_valid flag, and error_message
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and recalculation)
   - `user_trips` - User-specific trip records; supports multiple trips per route with id, user_id, track_id, date, note, partial flag, created_at, updated_at; no UNIQUE constraint allows logging the same route multiple times
-  - `user_preferences` - User preferences for country filtering; stores selected_countries as TEXT[] array of ISO country codes (defaults: CZ, SK, AT, PL, DE)
+  - `user_preferences` - User preferences for country filtering; stores selected_countries as TEXT[] array of ISO country codes (defaults: CZ, SK, AT, PL, DE, LT, LV, EE)
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 - **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
 - **Route Validity Tracking**: Routes store starting_part_id and ending_part_id for recalculation; is_valid flag marks routes that can't be recalculated after OSM updates
@@ -102,10 +102,9 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Usage Type & Frequency Display** - Frontend displays usage_type (0=Regular, 1=Special) and frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal) in hover popups
 - **Connection Pooling** - PostgreSQL pool for database performance
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
-- **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension)
+- **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension); floating search box in top-right
 - **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
-- **Country Filtering** - Collapsible top-right panel for filtering routes by country (CZ, SK, AT, PL, DE); preferences saved to database; filters both map display and progress statistics
-- **Selected Routes Panel** - Left-side panel for route selection, bulk logging, and journey planning (see dedicated section below)
+- **Unified User Sidebar** - Left-side tabbed sidebar with three sections: Route Logger, Journey Planner, and Country Settings & Stats (see dedicated section below)
 
 ### 5. Admin System Architecture
 - **Admin Access Control** - Restricted to user_id=1 with server-side authentication checks in all admin actions
@@ -147,11 +146,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### Components (`src/components/`)
 
 **User Map Components:**
-- `VectorRailwayMap.tsx` - Main user map with country filter, selected routes panel, and station search
+- `VectorRailwayMap.tsx` - Main user map with unified sidebar, station search, and progress stats
 - `VectorMapWrapper.tsx` - Wrapper for user map with authentication; passes server-side user preferences to avoid flash
-- `CountryFilterPanel.tsx` - Collapsible country filter panel (top-right) with checkboxes for CZ, SK, AT, PL, DE; Select All/None buttons
-- `SelectedRoutesList.tsx` - Left-side panel for route selection, bulk logging, and integrated journey planner
-- `JourneyPlanner.tsx` - Journey planner component for finding routes between stations (from → via → to with drag-and-drop reordering)
+- `UserSidebar.tsx` - Unified tab-based sidebar (Route Logger / Journey Planner / Country Settings & Stats)
+- `SelectedRoutesList.tsx` - Route Logger tab: route selection list and bulk logging form
+- `JourneyPlanner.tsx` - Journey Planner tab: pathfinding between stations (from → via → to with drag-and-drop reordering); stations clickable on map
+- `CountriesStatsTab.tsx` - Country Settings & Stats tab: country filter checkboxes (CZ, SK, AT, PL, DE, LT, LV, EE) with per-country stats and total
 - `TripRow.tsx` - Individual trip row in Manage Trips modal (inline editing/deleting)
 
 **Admin Map Components:**
@@ -295,14 +295,18 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Hover over routes shows popup with details
   - Click routes to add them to the selected routes panel (no popups)
 
-### Selected Routes Panel
+### Unified User Sidebar
+- **Purpose**: Consolidated tabbed interface for route logging, journey planning, and country filtering
+- **Location**: Fixed left-side sidebar (600px width, always visible)
+- **Architecture**: Three tabs modeled after admin interface pattern
+- **Tab Switching**: Affects map interaction behavior (route clicking only works in Route Logger tab, station clicking only in Journey Planner tab)
+
+#### Tab 1: Route Logger
 - **Purpose**: Build a selection of routes for batch logging or individual management
-- **Location**: Left-side panel, always visible on user map
+- **Map Interaction**: Click routes on map to add them to the selection (only active in this tab)
 - **UI Features**:
-  - Click routes on the map to add them to the selection
-  - Each route shows: track number, stations, description, edit icon, remove button
+  - Each route shows: track number, stations, description, length, partial checkbox, edit icon, remove button
   - Compact single-line layout with text truncation for long names
-  - Drag handle (☰) for via stations in multi-route logger
   - Edit icon (pencil) opens "Manage trips" modal for individual route
   - Remove button (×) removes route from selection
   - "Clear all" button to empty the entire selection
@@ -314,8 +318,9 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Bulk Logging**:
   - Date field (defaults to today's date, required)
   - Note field (optional, shared across all routes)
+  - Partial checkbox per route (individual control)
   - "Log All X Routes" button logs entire selection at once
-  - Uses `updateMultipleRoutes` with `firstPartial` and `lastPartial` parameters
+  - Uses `updateMultipleRoutes` with individual partial flags
   - Automatically refreshes map data and clears selection after successful save
 - **Manage Trips Modal**:
   - Opens via edit icon on individual routes
@@ -325,11 +330,16 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Delete trips with single click (no confirmation)
   - Real-time map refresh after add/update/delete operations
 
-### Journey Planner (Integrated in Selected Routes Panel)
-- **Purpose**: Find routes between stations and add them to the selected routes panel for batch logging
-- **Location**: Collapsible section within the Selected Routes Panel (left-side panel)
-- **Integration**: Toggle button at bottom of Selected Routes Panel to show/hide journey planner
+#### Tab 2: Journey Planner
+- **Purpose**: Find routes between stations using pathfinding and add them to Route Logger for batch logging
+- **Map Interaction**: Click stations on map to fill form fields (only active in this tab)
+- **Station Filling Logic**:
+  - If any field is focused (activeSearch) → fill that field
+  - Else if "from" is empty → fill from
+  - Else if "to" is empty → fill to
+  - Via stations also supported with focused field
 - **UI Features**:
+  - "Clear All" button to reset all form fields
   - From/To station selection with autocomplete search
   - Multiple optional "via" stations (add/remove dynamically with drag-and-drop reordering)
   - All inputs support arrow key navigation and keyboard shortcuts
@@ -352,7 +362,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Shows found routes in compact list format (one route per line)
   - Displays route sequence: "1. Station A ⟷ Station B"
   - Shows individual route distance and total journey distance
-  - "Add Routes to Selection" button feeds routes to SelectedRoutesList
+  - "Add Routes to Selection" button adds routes and switches to Route Logger tab
   - Automatically filters out duplicates (routes already in selection)
   - Resets form after adding routes
 - **Error Handling**:
@@ -360,15 +370,22 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Shows helpful errors if stations/routes not found
   - Suggests adding via stations for segments >1000km
 
-### Country Filtering System
-- **Purpose**: Filter railway routes by country to focus on specific regions
-- **Location**: Collapsible panel in top-right corner of user map
+#### Tab 3: Country Settings & Stats
+- **Purpose**: Filter railway routes by country and view per-country statistics
 - **UI Features**:
-  - Checkboxes for 5 countries: Czechia (CZ), Slovakia (SK), Austria (AT), Poland (PL), Germany (DE)
-  - "Select All" button - selects all 5 countries
+  - Country checkboxes with flag emojis (🇨🇿 🇸🇰 🇦🇹 🇵🇱 🇩🇪 🇱🇹 🇱🇻 🇪🇪)
+  - 8 supported countries: Czechia (CZ), Slovakia (SK), Austria (AT), Poland (PL), Germany (DE), Lithuania (LT), Latvia (LV), Estonia (EE)
+  - Flag emojis generated using Unicode regional indicators (no external library)
+  - "Select All" button - selects all 8 countries
   - "Select None" button - deselects all (shows empty map with 0 km stats)
   - Status indicator showing count of selected countries
   - Warning when no countries selected
+- **Per-Country Statistics**:
+  - Individual stats next to each country (e.g., "🇨🇿 Czechia - 1,234.5 / 5,678.9 km")
+  - Shows routes where **both** start_country AND end_country match that country
+  - Total stats at bottom showing overall completion across all countries
+  - Real-time updates when routes are logged
+  - Uses `getProgressByCountry()` server action
 - **Filtering Logic**:
   - Shows routes where **both** start_country AND end_country are in selected list
   - Examples:
@@ -381,7 +398,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Auto-saves to database on every change
 - **Integration**:
   - Filters map display via vector tile query parameters
-  - Filters progress statistics (only counts routes in selected countries)
+  - Filters progress statistics in all tabs
   - Admin map ignores country filter (always shows all routes)
 - **Country Detection**:
   - Uses `@rapideditor/country-coder` library for worldwide boundary detection
