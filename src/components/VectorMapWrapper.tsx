@@ -15,8 +15,9 @@ const VectorRailwayMap = dynamic(() => import('./VectorRailwayMap'), {
 interface VectorMapWrapperProps {
   className?: string;
   userId: number;
+  initialSelectedCountries: string[];
 }
 
-export default function VectorMapWrapper({ className, userId }: VectorMapWrapperProps) {
-  return <VectorRailwayMap className={className} userId={userId} />;
+export default function VectorMapWrapper({ className, userId, initialSelectedCountries }: VectorMapWrapperProps) {
+  return <VectorRailwayMap className={className} userId={userId} initialSelectedCountries={initialSelectedCountries} />;
 }

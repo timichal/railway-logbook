@@ -84,6 +84,8 @@ export type RailwayRoute = {
   link?: string | null // External URL/link for the route
   geometry: string // GeoJSON string
   length_km?: number
+  start_country?: string | null // ISO 3166-1 alpha-2 country code of start point
+  end_country?: string | null // ISO 3166-1 alpha-2 country code of end point
   starting_part_id?: string | null
   ending_part_id?: string | null
   is_valid?: boolean
@@ -101,6 +103,14 @@ export type UserTrip = {
   date: string | null
   note: string | null
   partial: boolean
+  created_at: string
+  updated_at: string
+}
+
+// User preferences from database
+export type UserPreferences = {
+  user_id: number
+  selected_countries: string[] // ISO 3166-1 alpha-2 country codes
   created_at: string
   updated_at: string
 }

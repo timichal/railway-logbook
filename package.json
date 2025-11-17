@@ -11,6 +11,7 @@
     "prepareMapData": "sh ./osmium-scripts/prepare.sh",
     "importMapData": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/importMapData.ts",
     "verifyRouteData": "tsx src/scripts/verifyRouteData.ts",
+    "migration:addCountries": "tsx src/scripts/addCountryColumns.ts",
     "exportRouteData": "tsx src/scripts/exportRoutes.ts",
     "importRouteData": "tsx src/scripts/importRoutes.ts",
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
@@ -30,6 +31,7 @@
   },
   "homepage": "https://github.com/timichal/railway-logbook#readme",
   "dependencies": {
+    "@rapideditor/country-coder": "^5.6.0",
     "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
     "autoprefixer": "^10.4.22",

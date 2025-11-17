@@ -232,7 +232,7 @@ export interface UserProgress {
   completedRoutes: number;
 }
 
-export async function getUserProgress(): Promise<UserProgress> {
+export async function getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
   const user = await getUser();
   if (!user) {
     throw new Error('User not authenticated');
@@ -240,25 +240,45 @@ export async function getUserProgress(): Promise<UserProgress> {
 
   const userId = user.id;
 
-  // Get total distance and count of all routes (excluding Special usage_type=1)
-  const totalResult = await query(`
-    SELECT
+  // If selectedCountries is provided (even if empty), apply filtering
+  // undefined = no filter (show all), [] = empty filter (show nothing), [...] = specific countries
+  const applyCountryFilter = selectedCountries !== undefined;
+  const hasCountries = selectedCountries && selectedCountries.length > 0;
+
+  // If empty array, return zeros immediately
+  if (applyCountryFilter && !hasCountries) {
+    return {
+      totalKm: 0,
+      completedKm: 0,
+      percentage: 0,
+      routePercentage: 0,
+      totalRoutes: 0,
+      completedRoutes: 0
+    };
+  }
+
+  // Get total distance and count of all routes (excluding Special usage_type=1, optionally filtered by countries)
+  const totalResult = await query(
+    `SELECT
       COALESCE(SUM(length_km), 0) as total_km,
       COUNT(*) as total_routes
     FROM railway_routes
     WHERE length_km IS NOT NULL
       AND usage_type != 1
-  `);
+      ${hasCountries ? 'AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])' : ''}`,
+    hasCountries ? [selectedCountries] : []
+  );
 
   // Get completed distance and count (routes with at least one complete trip, excluding Special usage_type=1)
   // Use EXISTS to ensure each route is only counted once regardless of number of trips
-  const completedResult = await query(`
-    SELECT
+  const completedResult = await query(
+    `SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
       COUNT(*) as completed_routes
     FROM railway_routes rr
     WHERE rr.usage_type != 1
       AND rr.length_km IS NOT NULL
+      ${hasCountries ? 'AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])' : ''}
       AND EXISTS (
         SELECT 1
         FROM user_trips ut
@@ -266,8 +286,9 @@ export async function getUserProgress(): Promise<UserProgress> {
           AND ut.user_id = $1
           AND ut.date IS NOT NULL
           AND (ut.partial IS NULL OR ut.partial = FALSE)
-      )
-  `, [userId]);
+      )`,
+    hasCountries ? [userId, selectedCountries] : [userId]
+  );
 
   const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
   const completedKm = parseFloat(completedResult.rows[0].completed_km) || 0;

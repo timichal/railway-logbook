@@ -90,18 +90,28 @@ PARALLEL SAFE;
 -- Function: railway_routes_tile
 -- Serves railway routes (combined lines with metadata) as vector tiles
 -- Includes user-specific trip data for styling (most recent trip's date/note/partial)
+-- Supports country filtering via query params
 CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
 RETURNS bytea AS $$
 DECLARE
     result bytea;
     tile_envelope geometry;
     user_id_param integer;
+    selected_countries_param text[];
 BEGIN
     -- Get the tile envelope in Web Mercator
     tile_envelope := ST_TileEnvelope(z, x, y);
 
     -- Extract user_id from query params (for user-specific styling)
     user_id_param := (query_params->>'user_id')::integer;
+
+    -- Extract selected_countries from query params (for country filtering)
+    -- Parse JSON array string to PostgreSQL array
+    selected_countries_param := CASE
+        WHEN query_params->>'selected_countries' IS NOT NULL
+        THEN ARRAY(SELECT json_array_elements_text((query_params->>'selected_countries')::json))
+        ELSE NULL
+    END;
 
     -- Generate MVT tile
     SELECT INTO result ST_AsMVT(mvtgeom.*, 'railway_routes')
@@ -116,6 +126,8 @@ BEGIN
             rr.frequency,
             rr.link,
             rr.length_km,
+            rr.start_country,
+            rr.end_country,
             rr.is_valid,
             rr.error_message,
             rr.starting_part_id,
@@ -158,6 +170,11 @@ BEGIN
             -- Spatial filter using index
             rr.geometry_3857 && tile_envelope
             -- Show routes at all zoom levels (no zoom restriction)
+            -- Country filtering: if countries are specified, filter by start AND end country
+            AND (
+                selected_countries_param IS NULL OR
+                (rr.start_country = ANY(selected_countries_param) AND rr.end_country = ANY(selected_countries_param))
+            )
         ORDER BY
             -- Render order: unvisited routes first (so visited are on top)
             CASE WHEN ut.date IS NULL THEN 0 ELSE 1 END,

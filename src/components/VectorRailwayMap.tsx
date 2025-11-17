@@ -14,16 +14,23 @@ import {
 } from '@/lib/map';
 import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
+import { updateUserPreferences } from '@/lib/userPreferencesActions';
 import SelectedRoutesList from './SelectedRoutesList';
 import TripRow from './TripRow';
+import CountryFilterPanel from './CountryFilterPanel';
 
 interface VectorRailwayMapProps {
   className?: string;
   userId: number;
+  initialSelectedCountries: string[];
 }
 
-export default function VectorRailwayMap({ className = '', userId }: VectorRailwayMapProps) {
+export default function VectorRailwayMap({ className = '', userId, initialSelectedCountries }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
+
+  // Country filter state - initialize with server-provided preferences
+  const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
+  const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
 
   // Highlighted routes state (for journey planner)
   const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
@@ -39,7 +46,7 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
     mapContainer,
     {
       sources: {
-        railway_routes: createRailwayRoutesSource({ userId, cacheBuster: Date.now() }),
+        railway_routes: createRailwayRoutesSource({ userId, cacheBuster, selectedCountries }),
         stations: createStationsSource(),
       },
       layers: [
@@ -51,11 +58,11 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         createStationsLayer(),
       ],
     },
-    [userId]
+    [userId, cacheBuster, selectedCountries]
   );
 
-  // Route editor hook (needs map ref)
-  const routeEditor = useRouteEditor(userId, map);
+  // Route editor hook (needs map ref and selected countries)
+  const routeEditor = useRouteEditor(userId, map, selectedCountries);
 
   // Handler to toggle route selection
   const handleRouteClick = (route: SelectedRoute) => {
@@ -128,6 +135,27 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
   useEffect(() => {
     routeEditor.fetchProgress();
   }, []);
+
+  // Refresh progress when selected countries change
+  useEffect(() => {
+    routeEditor.fetchProgress();
+  }, [selectedCountries]);
+
+  // Handler for country filter changes
+  const handleCountriesChange = async (countries: string[]) => {
+    try {
+      // Update local state immediately
+      setSelectedCountries(countries);
+
+      // Save to database
+      await updateUserPreferences(countries);
+
+      // Force map refresh by updating cache buster
+      setCacheBuster(Date.now());
+    } catch (error) {
+      console.error('Error updating country preferences:', error);
+    }
+  };
 
   // Update layer filter when showSpecialLines changes
   useEffect(() => {
@@ -268,6 +296,12 @@ export default function VectorRailwayMap({ className = '', userId }: VectorRailw
         ref={mapContainer}
         className={`w-full h-full ${className}`}
         style={{ height: '100%', minHeight: '400px' }}
+      />
+
+      {/* Country Filter Panel */}
+      <CountryFilterPanel
+        selectedCountries={selectedCountries}
+        onCountriesChange={handleCountriesChange}
       />
 
       {/* Selected Routes List */}

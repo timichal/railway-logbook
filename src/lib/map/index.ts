@@ -64,6 +64,7 @@ export const COLORS = {
 export interface RailwayRoutesSourceOptions {
   userId?: number;
   cacheBuster?: number;
+  selectedCountries?: string[];
 }
 
 export interface RailwayRoutesPaintConfig {
@@ -106,12 +107,15 @@ export function createOSMBackgroundSource(): maplibregl.RasterSourceSpecificatio
 export function createRailwayRoutesSource(
   options: RailwayRoutesSourceOptions = {}
 ): maplibregl.VectorSourceSpecification {
-  const { userId, cacheBuster } = options;
+  const { userId, cacheBuster, selectedCountries } = options;
   const baseUrl = `${TILE_BASE_URL}/railway_routes_tile/{z}/{x}/{y}`;
   const params = new URLSearchParams();
 
   if (userId !== undefined) params.append('user_id', userId.toString());
   if (cacheBuster !== undefined) params.append('v', cacheBuster.toString());
+  if (selectedCountries !== undefined) {
+    params.append('selected_countries', JSON.stringify(selectedCountries));
+  }
 
   const queryString = params.toString();
   const tilesUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;

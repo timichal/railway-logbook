@@ -18,7 +18,11 @@ import { useToast } from '@/lib/toast';
 /**
  * Hook to manage route editing and trips management
  */
-export function useRouteEditor(userId: number, map: React.MutableRefObject<maplibreglType.Map | null>) {
+export function useRouteEditor(
+  userId: number,
+  map: React.MutableRefObject<maplibreglType.Map | null>,
+  selectedCountries?: string[]
+) {
   const { showSuccess, showError } = useToast();
   const [editingFeature, setEditingFeature] = useState<SelectedRoute | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -81,7 +85,7 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
   const refreshMapAndProgress = async () => {
     // Refresh progress stats
     try {
-      const progressData = await getUserProgress();
+      const progressData = await getUserProgress(selectedCountries);
       setProgress(progressData);
     } catch (error) {
       console.error('Error refreshing progress:', error);
@@ -212,7 +216,7 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
   // Fetch initial progress
   const fetchProgress = async () => {
     try {
-      const progressData = await getUserProgress();
+      const progressData = await getUserProgress(selectedCountries);
       setProgress(progressData);
     } catch (error) {
       console.error('Error fetching progress:', error);
@@ -231,7 +235,7 @@ export function useRouteEditor(userId: number, map: React.MutableRefObject<mapli
   // Refresh map after quick log (call this after delay)
   const refreshAfterQuickLog = useCallback(async () => {
     await refreshMapAndProgress();
-  }, [editingFeature, userId, map, showSpecialLines]);
+  }, [editingFeature, userId, map, showSpecialLines, selectedCountries]);
 
   return {
     editingFeature,

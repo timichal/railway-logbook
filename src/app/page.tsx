@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import VectorMapWrapper from '@/components/VectorMapWrapper';
 import { getUser, logout } from '@/lib/authActions';
+import { getUserPreferences } from '@/lib/userPreferencesActions';
 
 export default async function Home() {
   // Check if user is authenticated
@@ -10,6 +11,9 @@ export default async function Home() {
   if (!user) {
     redirect('/login');
   }
+
+  // Fetch user preferences server-side to avoid flash
+  const selectedCountries = await getUserPreferences();
 
   async function handleLogout() {
     'use server';
@@ -50,7 +54,7 @@ export default async function Home() {
       </header>
       
       <main className="flex-1 overflow-hidden">
-        <VectorMapWrapper className="w-full h-full" userId={user.id} />
+        <VectorMapWrapper className="w-full h-full" userId={user.id} initialSelectedCountries={selectedCountries} />
       </main>
     </div>
   );

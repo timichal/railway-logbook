@@ -48,6 +48,8 @@ CREATE TABLE railway_routes (
     link TEXT, -- External URL/link for the route
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
+    start_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of start point
+    end_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of end point
     starting_part_id BIGINT, -- Reference to starting railway_part for recalculation
     ending_part_id BIGINT, -- Reference to ending railway_part for recalculation
     is_valid BOOLEAN DEFAULT TRUE, -- Route validity flag (for recalculation errors)
@@ -68,12 +70,22 @@ CREATE TABLE user_trips (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User preferences (for country filtering and other settings)
+CREATE TABLE user_preferences (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    selected_countries TEXT[] NOT NULL DEFAULT ARRAY['CZ', 'SK', 'AT', 'PL', 'DE'], -- ISO 3166-1 alpha-2 country codes
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_stations_coordinates ON stations USING GIST (coordinates);
 CREATE INDEX idx_railway_parts_geometry ON railway_parts USING GIST (geometry);
 CREATE INDEX idx_railway_routes_geometry ON railway_routes USING GIST (geometry);
 CREATE INDEX idx_railway_routes_from_station ON railway_routes (from_station);
 CREATE INDEX idx_railway_routes_to_station ON railway_routes (to_station);
+CREATE INDEX idx_railway_routes_start_country ON railway_routes (start_country);
+CREATE INDEX idx_railway_routes_end_country ON railway_routes (end_country);
 CREATE INDEX idx_railway_routes_starting_part ON railway_routes (starting_part_id);
 CREATE INDEX idx_railway_routes_ending_part ON railway_routes (ending_part_id);
 CREATE INDEX idx_user_trips_user_id ON user_trips (user_id);

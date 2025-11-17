@@ -5,6 +5,7 @@ import { query } from './db';
 import { getUser } from './authActions';
 import { GeoJSONFeatureCollection, GeoJSONFeature, PathResult, RailwayPart } from './types';
 import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinateUtils';
+import { getRouteCountries } from './countryUtils';
 import type { UsageType } from './constants';
 
 /**
@@ -152,6 +153,10 @@ export async function saveRailwayRoute(
     // Create LineString geometry from sorted coordinates
     const geometryWKT = coordinatesToWKT(sortedCoordinates);
 
+    // Determine countries from route geometry
+    const { startCountry, endCountry } = getRouteCountries({ type: 'LineString', coordinates: sortedCoordinates });
+    console.log('Route countries:', startCountry, '→', endCountry);
+
     // Get starting and ending part IDs from the path
     const startingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[0] : null;
     const endingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[pathResult.partIds.length - 1] : null;
@@ -160,24 +165,28 @@ export async function saveRailwayRoute(
     let values: (string | number | string[] | null)[];
 
     if (trackId) {
-      // Update existing route - only update geometry, length, part IDs, and validity
+      // Update existing route - only update geometry, length, part IDs, countries, and validity
       // Keep name, description, usage_type unchanged
       queryStr = `
         UPDATE railway_routes
         SET
           geometry = ST_GeomFromText($1, 4326),
           length_km = ST_Length(ST_GeomFromText($1, 4326)::geography) / 1000,
-          starting_part_id = $2,
-          ending_part_id = $3,
+          start_country = $2,
+          end_country = $3,
+          starting_part_id = $4,
+          ending_part_id = $5,
           is_valid = TRUE,
           error_message = NULL,
           updated_at = CURRENT_TIMESTAMP
-        WHERE track_id = $4
+        WHERE track_id = $6
         RETURNING track_id, length_km
       `;
 
       values = [
         geometryWKT,
+        startCountry,
+        endCountry,
         startingPartId,
         endingPartId,
         trackId
@@ -195,6 +204,8 @@ export async function saveRailwayRoute(
           link,
           geometry,
           length_km,
+          start_country,
+          end_country,
           starting_part_id,
           ending_part_id,
           is_valid
@@ -210,6 +221,8 @@ export async function saveRailwayRoute(
           ST_Length(ST_GeomFromText($8, 4326)::geography) / 1000,
           $9,
           $10,
+          $11,
+          $12,
           TRUE
         )
         RETURNING track_id, length_km
@@ -224,6 +237,8 @@ export async function saveRailwayRoute(
         routeData.frequency || [],
         routeData.link || null,
         geometryWKT,
+        startCountry,
+        endCountry,
         startingPartId,
         endingPartId
       ];
