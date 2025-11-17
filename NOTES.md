@@ -12,9 +12,7 @@ nedodělané tratě
 !PRIO! přejet cross country lines
 
 dodělat s aičkem:
-- journey planner a selectedrouteslist jako dva taby jako v adminu
-- stats and preferences page (ke každé zemi stat a checkbox)
-- clear all u planneru
+- mezistátky rozdělit - poslední zast - přeshraniční úsek - první zast
 - about/faq
 - mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
