@@ -22,9 +22,35 @@ interface AdminSidebarProps {
   onEditingGeometryChange?: (trackId: string | null) => void;
   onRouteFocus?: (geometry: string) => void;
   sidebarWidth?: number;
+  isSplitMode?: boolean;
+  splittingPartId?: string | null;
+  onSplitModeActivate?: (partId: string) => void;
+  onSplitModeDeactivate?: () => void;
+  splitCompletedTrigger?: number;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth = 400 }: AdminSidebarProps) {
+export default function AdminSidebar({
+  selectedRouteId,
+  onRouteSelect,
+  selectedPartId,
+  partClickTrigger,
+  onPreviewRoute,
+  onCreateFormIdsChange,
+  isPreviewMode,
+  onCancelPreview,
+  onSaveRoute,
+  onFormReset,
+  onRouteDeleted,
+  onRouteUpdated,
+  onEditingGeometryChange,
+  onRouteFocus,
+  sidebarWidth = 400,
+  isSplitMode,
+  splittingPartId,
+  onSplitModeActivate,
+  onSplitModeDeactivate,
+  splitCompletedTrigger = 0
+}: AdminSidebarProps) {
   const { showError } = useToast();
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
@@ -202,6 +228,11 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
               }
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
+            isSplitMode={isSplitMode}
+            splittingPartId={splittingPartId}
+            onSplitModeActivate={onSplitModeActivate}
+            onSplitModeDeactivate={onSplitModeDeactivate}
+            splitCompletedTrigger={splitCompletedTrigger}
           />
         )}
       </div>

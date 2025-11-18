@@ -1,5 +1,5 @@
 import { Client, Pool, PoolClient } from 'pg';
-import type { PathResult } from '../../lib/types';
+import type { PathResult, RailwayPartSplit } from '../../lib/types';
 
 export type { PathResult };
 
@@ -8,11 +8,23 @@ interface RailwayPart {
   coordinates: [number, number][];
   startPoint: [number, number];
   endPoint: [number, number];
+  originalPartId?: string; // Set for split segments (seg0, seg1)
+  segmentIndex?: number; // 0 or 1 for split segments
 }
 
 export class RailwayPathFinder {
   private parts: Map<string, RailwayPart> = new Map();
   private coordToPartIds: Map<string, string[]> = new Map();
+  private splits: Map<string, RailwayPartSplit> = new Map(); // partId -> split info
+
+  /**
+   * Extract original part ID from a segment ID
+   * e.g., "12345_seg0" -> "12345", "12345" -> "12345"
+   */
+  private extractOriginalPartId(partId: string): string {
+    const match = partId.match(/^(\d+)_seg[01]$/);
+    return match ? match[1] : partId;
+  }
 
   async loadRailwayParts(
     dbClient: Client | Pool,
@@ -36,8 +48,36 @@ export class RailwayPathFinder {
     }
 
     try {
+      // First, load all splits in the search area
+      const splitsResult = await client.query(`
+        SELECT
+          s.id,
+          s.part_id,
+          ST_AsGeoJSON(s.split_coordinate) as split_coordinate_json,
+          s.split_fraction,
+          s.created_at,
+          s.created_by
+        FROM railway_part_splits s
+      `);
+
+      for (const row of splitsResult.rows) {
+        const splitCoordJson = JSON.parse(row.split_coordinate_json);
+        this.splits.set(row.part_id.toString(), {
+          id: row.id,
+          part_id: row.part_id,
+          split_coordinate: splitCoordJson.coordinates,
+          split_fraction: parseFloat(row.split_fraction),
+          created_at: row.created_at,
+          created_by: row.created_by
+        });
+      }
+
       // Create a buffer around start and end points to limit search space
       // Default: 50km buffer in Web Mercator (meters)
+
+      // Extract original part IDs from segment IDs (if any)
+      const startPartId = this.extractOriginalPartId(startId);
+      const endPartId = this.extractOriginalPartId(endId);
 
       const result = await client.query(`
         WITH endpoints AS (
@@ -62,7 +102,7 @@ export class RailwayPathFinder {
         WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
           AND rp.geometry IS NOT NULL
         ORDER BY rp.id
-      `, [startId, endId, bufferMeters]);
+      `, [startPartId, endPartId, bufferMeters]);
 
       for (const row of result.rows) {
         const id = String(row.id);
@@ -70,32 +110,27 @@ export class RailwayPathFinder {
 
         if (geom.type === 'LineString' && geom.coordinates.length >= 2) {
           const coordinates = geom.coordinates as [number, number][];
-          const startPoint = coordinates[0];
-          const endPoint = coordinates[coordinates.length - 1];
 
-          const part: RailwayPart = {
-            id,
-            coordinates,
-            startPoint,
-            endPoint
-          };
+          // Check if this part has a split
+          const split = this.splits.get(id);
 
-          this.parts.set(id, part);
+          if (split) {
+            // Part is split - create two virtual segments
+            this.createSplitSegments(id, coordinates, split);
+          } else {
+            // Normal part - add as is
+            const startPoint = coordinates[0];
+            const endPoint = coordinates[coordinates.length - 1];
 
-          // Add to coordinate mapping for fast connection lookups
-          const startKey = this.coordinateToKey(startPoint);
-          const endKey = this.coordinateToKey(endPoint);
+            const part: RailwayPart = {
+              id,
+              coordinates,
+              startPoint,
+              endPoint
+            };
 
-          if (!this.coordToPartIds.has(startKey)) {
-            this.coordToPartIds.set(startKey, []);
-          }
-          if (!this.coordToPartIds.has(endKey)) {
-            this.coordToPartIds.set(endKey, []);
-          }
-
-          this.coordToPartIds.get(startKey)!.push(id);
-          if (startKey !== endKey) { // Avoid duplicates for closed loops
-            this.coordToPartIds.get(endKey)!.push(id);
+            this.parts.set(id, part);
+            this.addToCoordinateMapping(id, startPoint, endPoint);
           }
         }
       }
@@ -103,6 +138,96 @@ export class RailwayPathFinder {
       if (shouldRelease && 'release' in client) {
         client.release();
       }
+    }
+  }
+
+  /**
+   * Create two virtual segments for a split part
+   */
+  private createSplitSegments(
+    partId: string,
+    coordinates: [number, number][],
+    split: RailwayPartSplit
+  ): void {
+    // Calculate split index in coordinates array
+    const splitFraction = split.split_fraction;
+    const totalPoints = coordinates.length - 1;
+    const splitIndex = Math.floor(splitFraction * totalPoints);
+
+    // Ensure split index is valid
+    if (splitIndex <= 0 || splitIndex >= coordinates.length - 1) {
+      console.warn(`Invalid split fraction ${splitFraction} for part ${partId}, treating as unsplit`);
+      const startPoint = coordinates[0];
+      const endPoint = coordinates[coordinates.length - 1];
+      const part: RailwayPart = {
+        id: partId,
+        coordinates,
+        startPoint,
+        endPoint
+      };
+      this.parts.set(partId, part);
+      this.addToCoordinateMapping(partId, startPoint, endPoint);
+      return;
+    }
+
+    // Split coordinate is the point where the segments meet
+    const splitCoordinate = split.split_coordinate;
+
+    // Segment 0: from start to split point (inclusive)
+    const seg0Coords = coordinates.slice(0, splitIndex + 1);
+    seg0Coords.push(splitCoordinate); // Add split point at the end
+
+    const seg0: RailwayPart = {
+      id: `${partId}_seg0`,
+      coordinates: seg0Coords,
+      startPoint: seg0Coords[0],
+      endPoint: splitCoordinate,
+      originalPartId: partId,
+      segmentIndex: 0
+    };
+
+    // Segment 1: from split point to end
+    const seg1Coords = [splitCoordinate, ...coordinates.slice(splitIndex + 1)];
+
+    const seg1: RailwayPart = {
+      id: `${partId}_seg1`,
+      coordinates: seg1Coords,
+      startPoint: splitCoordinate,
+      endPoint: seg1Coords[seg1Coords.length - 1],
+      originalPartId: partId,
+      segmentIndex: 1
+    };
+
+    // Add both segments to parts map
+    this.parts.set(seg0.id, seg0);
+    this.parts.set(seg1.id, seg1);
+
+    // Add to coordinate mapping
+    this.addToCoordinateMapping(seg0.id, seg0.startPoint, seg0.endPoint);
+    this.addToCoordinateMapping(seg1.id, seg1.startPoint, seg1.endPoint);
+  }
+
+  /**
+   * Helper method to add a part to coordinate mapping
+   */
+  private addToCoordinateMapping(
+    partId: string,
+    startPoint: [number, number],
+    endPoint: [number, number]
+  ): void {
+    const startKey = this.coordinateToKey(startPoint);
+    const endKey = this.coordinateToKey(endPoint);
+
+    if (!this.coordToPartIds.has(startKey)) {
+      this.coordToPartIds.set(startKey, []);
+    }
+    if (!this.coordToPartIds.has(endKey)) {
+      this.coordToPartIds.set(endKey, []);
+    }
+
+    this.coordToPartIds.get(startKey)!.push(partId);
+    if (startKey !== endKey) { // Avoid duplicates for closed loops
+      this.coordToPartIds.get(endKey)!.push(partId);
     }
   }
 
@@ -334,6 +459,26 @@ export class RailwayPathFinder {
   clear(): void {
     this.parts.clear();
     this.coordToPartIds.clear();
+    this.splits.clear();
+  }
+
+  /**
+   * Get the original part ID from a segment ID (e.g., "12345_seg0" -> "12345")
+   * Returns the input if it's already an original part ID
+   */
+  public getOriginalPartId(partId: string): string {
+    const part = this.parts.get(partId);
+    if (part && part.originalPartId) {
+      return part.originalPartId;
+    }
+    return partId;
+  }
+
+  /**
+   * Check if a part ID represents a split segment
+   */
+  public isSplitSegment(partId: string): boolean {
+    return partId.includes('_seg');
   }
 
   public findPath(startId: string, endId: string): PathResult | null {

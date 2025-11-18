@@ -22,6 +22,10 @@ interface GeoJSONFeature {
 export interface LoadResult {
   stationsCount: number;
   partsCount: number;
+  geometryChanges?: {
+    changedPartIds: string[];
+    affectedRoutes: number;
+  };
 }
 
 /**
@@ -34,7 +38,24 @@ export async function loadStationsAndParts(
 ): Promise<LoadResult> {
   console.log(`Loading data from ${geojsonPath}...`);
 
-  // Clear existing data
+  // Before clearing data, check for parts with splits and save their geometries
+  console.log('Checking for split parts with geometry changes...');
+  const splitPartsResult = await client.query(`
+    SELECT
+      rps.part_id,
+      ST_AsText(rp.geometry) as old_geometry
+    FROM railway_part_splits rps
+    JOIN railway_parts rp ON rp.id = rps.part_id
+  `);
+
+  const oldSplitGeometries = new Map<string, string>();
+  for (const row of splitPartsResult.rows) {
+    oldSplitGeometries.set(row.part_id.toString(), row.old_geometry);
+  }
+
+  console.log(`Found ${oldSplitGeometries.size} parts with active splits`);
+
+  // Clear existing data (CASCADE will auto-delete splits)
   console.log('Clearing existing data...');
   await client.query('DELETE FROM railway_parts');
   await client.query('DELETE FROM stations');
@@ -182,5 +203,61 @@ export async function loadStationsAndParts(
   console.log(`- Stations loaded: ${stationsCount}`);
   console.log(`- Railway parts loaded: ${partsCount}`);
 
-  return { stationsCount, partsCount };
+  // Check if any split parts have changed geometry
+  let geometryChanges = undefined;
+  if (oldSplitGeometries.size > 0) {
+    console.log('');
+    console.log('Checking for geometry changes in split parts...');
+
+    const changedPartIds: string[] = [];
+
+    for (const [partId, oldGeometry] of oldSplitGeometries.entries()) {
+      // Check if part still exists and if geometry changed
+      const result = await client.query(`
+        SELECT ST_AsText(geometry) as new_geometry
+        FROM railway_parts
+        WHERE id = $1
+      `, [partId]);
+
+      if (result.rows.length === 0) {
+        // Part no longer exists in new data
+        console.log(`⚠️  Part ${partId} (had split) no longer exists in new data`);
+        changedPartIds.push(partId);
+      } else {
+        const newGeometry = result.rows[0].new_geometry;
+        if (newGeometry !== oldGeometry) {
+          console.log(`⚠️  Part ${partId} geometry has changed`);
+          changedPartIds.push(partId);
+        }
+      }
+    }
+
+    if (changedPartIds.length > 0) {
+      console.log(`Found ${changedPartIds.length} split parts with geometry changes`);
+      console.log('Marking affected routes as invalid...');
+
+      // Mark routes that use these parts as invalid
+      const updateResult = await client.query(`
+        UPDATE railway_routes
+        SET
+          is_valid = false,
+          error_message = 'Split part geometry changed during map data update. Please re-split and recreate route.'
+        WHERE starting_part_id::TEXT = ANY($1)
+           OR ending_part_id::TEXT = ANY($1)
+        RETURNING track_id
+      `, [changedPartIds]);
+
+      const affectedRoutes = updateResult.rows.length;
+      console.log(`Marked ${affectedRoutes} routes as invalid due to split geometry changes`);
+
+      geometryChanges = {
+        changedPartIds,
+        affectedRoutes
+      };
+    } else {
+      console.log('No geometry changes detected in split parts');
+    }
+  }
+
+  return { stationsCount, partsCount, geometryChanges };
 }

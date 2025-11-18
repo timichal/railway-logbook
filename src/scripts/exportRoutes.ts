@@ -44,6 +44,20 @@ async function exportRoutes() {
       throw error;
     }
 
+    console.log('Exporting railway_part_splits table...');
+    const splitsCmd = `docker exec ${containerName} pg_dump -U ${dbUser} -d ${dbName} --table=railway_part_splits --data-only --column-inserts`;
+
+    let splitsDump = '';
+    try {
+      splitsDump = execSync(splitsCmd, {
+        encoding: 'utf-8',
+        maxBuffer: 50 * 1024 * 1024
+      });
+    } catch (error) {
+      console.error('Error running pg_dump for splits:', error);
+      throw error;
+    }
+
     // Get user_trips for user_id=1
     console.log('Exporting user_trips for user_id=1...');
     const userDataResult = await query(`
@@ -77,15 +91,19 @@ async function exportRoutes() {
     const fullDump = `-- Railway Data Export (${timestamp})
 -- This file contains:
 --   1. railway_routes table (full export)
---   2. user_trips for user_id=1
+--   2. railway_part_splits table (full export)
+--   3. user_trips for user_id=1
 
--- Clear existing railway_routes
+-- Clear existing data
 DELETE FROM public.railway_routes;
+DELETE FROM public.railway_part_splits;
 
 -- Disable triggers during import (avoids ST_Transform search_path issues)
 SET session_replication_role = replica;
 
 ${sqlDump}
+
+${splitsDump}
 
 ${userDataSQL}
 
@@ -97,6 +115,7 @@ SET session_replication_role = DEFAULT;
     fs.writeFileSync(filepath, fullDump);
 
     console.log(`✓ Exported railway_routes (${sqlDump.split('\n').filter(l => l.startsWith('INSERT')).length} routes)`);
+    console.log(`✓ Exported railway_part_splits (${splitsDump.split('\n').filter(l => l.startsWith('INSERT')).length} splits)`);
     console.log(`✓ Exported user_trips (${userDataResult.rows.length} records)`);
     console.log(`✓ Saved to ${filepath}`);
     process.exit(0);

@@ -8,21 +8,27 @@ interface StyleParams {
   startingId?: string;
   endingId?: string;
   isPreviewActive: boolean;
+  splittingPartId?: string | null; // Part currently being split
 }
 
 /**
  * Build MapLibre expressions for railway parts styling
  */
 export function buildRailwayPartsStyleExpressions(params: StyleParams) {
-  const { hoveredPartId, startingId, endingId, isPreviewActive } = params;
-  const hasAnyCondition = !isPreviewActive && !!(hoveredPartId || startingId || endingId);
+  const { hoveredPartId, startingId, endingId, isPreviewActive, splittingPartId } = params;
+  const hasAnyCondition = !isPreviewActive && !!(hoveredPartId || startingId || endingId || splittingPartId);
 
   // Build color expression
   let colorExpr: MapLibreExpression;
   if (hasAnyCondition) {
     const expr: unknown[] = ['case'];
 
-    // Hover state (highest priority)
+    // Splitting part (highest priority - purple to indicate split mode)
+    if (splittingPartId) {
+      expr.push(['==', ['get', 'id'], parseInt(splittingPartId)], '#9333EA'); // Purple-600
+    }
+
+    // Hover state
     if (hoveredPartId) {
       expr.push(['==', ['get', 'id'], hoveredPartId], COLORS.railwayParts.hover);
     }
@@ -49,6 +55,11 @@ export function buildRailwayPartsStyleExpressions(params: StyleParams) {
   if (hasAnyCondition) {
     const expr: unknown[] = ['case'];
 
+    // Splitting part (extra thick)
+    if (splittingPartId) {
+      expr.push(['==', ['get', 'id'], parseInt(splittingPartId)], 7);
+    }
+
     if (startingId) {
       expr.push(['==', ['get', 'id'], parseInt(startingId)], 6);
     }
@@ -67,8 +78,13 @@ export function buildRailwayPartsStyleExpressions(params: StyleParams) {
 
   // Build opacity expression
   let opacityExpr: MapLibreExpression;
-  if (startingId || endingId) {
+  if (startingId || endingId || splittingPartId) {
     const expr: unknown[] = ['case'];
+
+    // Splitting part (full opacity)
+    if (splittingPartId) {
+      expr.push(['==', ['get', 'id'], parseInt(splittingPartId)], 1.0);
+    }
 
     if (startingId) {
       expr.push(['==', ['get', 'id'], parseInt(startingId)], 1.0);

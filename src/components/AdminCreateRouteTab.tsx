@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { usageOptions, frequencyOptions, type UsageType } from '@/lib/constants';
 import { findRailwayPathDB, getRailwayPartsByIds } from '@/lib/adminMapActions';
 import { saveRailwayRoute } from '@/lib/adminRouteActions';
+import { getSplitForPart, splitRailwayPart, removeSplit } from '@/lib/railwayPartSplitsActions';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 
@@ -20,10 +21,40 @@ interface AdminCreateRouteTabProps {
   editingGeometryForTrackId?: string | null;
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
+  onSplitModeActivate?: (partId: string, fieldTarget: 'starting' | 'ending') => void;
+  onSplitModeDeactivate?: () => void;
+  isSplitMode?: boolean;
+  splittingPartId?: string | null;
+  userId?: number;
+  splitCompletedTrigger?: number; // Incremented when a split operation completes
 }
 
-export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, editingGeometryForTrackId, onGeometryEditComplete, onCancelGeometryEdit }: AdminCreateRouteTabProps) {
+export default function AdminCreateRouteTab({
+  startingId,
+  endingId,
+  onStartingIdChange,
+  onEndingIdChange,
+  onPreviewRoute,
+  isPreviewMode,
+  onCancelPreview,
+  onSaveRoute,
+  onFormReset,
+  editingGeometryForTrackId,
+  onGeometryEditComplete,
+  onCancelGeometryEdit,
+  onSplitModeActivate,
+  onSplitModeDeactivate,
+  isSplitMode,
+  splittingPartId,
+  userId = 1, // Default to admin user
+  splitCompletedTrigger = 0
+}: AdminCreateRouteTabProps) {
   const { showError, showSuccess } = useToast();
+
+  // Track split states for starting and ending parts
+  const [startingSplitExists, setStartingSplitExists] = useState(false);
+  const [endingSplitExists, setEndingSplitExists] = useState(false);
+  const [splitCheckTrigger, setSplitCheckTrigger] = useState(0); // Force re-check
 
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
@@ -176,6 +207,83 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     }
   };
 
+  // Trigger split check when parent notifies of split completion
+  useEffect(() => {
+    if (splitCompletedTrigger > 0) {
+      setSplitCheckTrigger(prev => prev + 1);
+    }
+  }, [splitCompletedTrigger]);
+
+  // Helper to extract original part ID from segment ID
+  const extractOriginalPartId = (partId: string): string => {
+    const match = partId.match(/^(\d+)_seg[01]$/);
+    return match ? match[1] : partId;
+  };
+
+  // Check if splits exist for starting and ending parts
+  useEffect(() => {
+    async function checkSplits() {
+      if (startingId) {
+        // Extract original part ID if this is a segment
+        const originalPartId = extractOriginalPartId(startingId);
+        const split = await getSplitForPart(originalPartId);
+        setStartingSplitExists(!!split);
+      } else {
+        setStartingSplitExists(false);
+      }
+    }
+    checkSplits();
+  }, [startingId, splitCheckTrigger]);
+
+  useEffect(() => {
+    async function checkSplits() {
+      if (endingId) {
+        // Extract original part ID if this is a segment
+        const originalPartId = extractOriginalPartId(endingId);
+        const split = await getSplitForPart(originalPartId);
+        setEndingSplitExists(!!split);
+      } else {
+        setEndingSplitExists(false);
+      }
+    }
+    checkSplits();
+  }, [endingId, splitCheckTrigger]);
+
+  // Handlers for split mode
+  const handleSplitPart = (partId: string, fieldTarget: 'starting' | 'ending') => {
+    if (onSplitModeActivate) {
+      // Extract original part ID if this is a segment
+      const originalPartId = extractOriginalPartId(partId);
+      onSplitModeActivate(originalPartId, fieldTarget);
+    }
+  };
+
+  const handleRemoveSplit = async (partId: string) => {
+    try {
+      // Extract original part ID if this is a segment
+      const originalPartId = extractOriginalPartId(partId);
+      const result = await removeSplit(originalPartId, userId);
+      if (result.success) {
+        showSuccess('Split removed successfully!');
+        // Refresh split status
+        if (extractOriginalPartId(startingId) === originalPartId) {
+          setStartingSplitExists(false);
+        }
+        if (extractOriginalPartId(endingId) === originalPartId) {
+          setEndingSplitExists(false);
+        }
+        // Trigger preview refresh
+        if (onCancelPreview) {
+          onCancelPreview();
+        }
+      } else {
+        showError(`Error removing split: ${result.error}`);
+      }
+    } catch (error) {
+      showError(`Error removing split: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   // Automatically preview route when both IDs are filled
   useEffect(() => {
     if (startingId && endingId && !isPreviewMode) {
@@ -200,7 +308,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
         {/* Starting ID */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Starting Part ID *
+            Starting Part ID * {startingSplitExists && <span className="text-purple-600 text-xs">(Split)</span>}
           </label>
           <div className="flex gap-2">
             <input
@@ -212,6 +320,29 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
             />
+            {startingId && (
+              <>
+                {!startingSplitExists ? (
+                  <button
+                    onClick={() => handleSplitPart(startingId, 'starting')}
+                    className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={isSplitMode ? "Already splitting a part" : "Split this railway part"}
+                    disabled={isSplitMode && splittingPartId !== extractOriginalPartId(startingId)}
+                  >
+                    {isSplitMode && splittingPartId === extractOriginalPartId(startingId) ? 'Splitting...' : 'Split'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleRemoveSplit(startingId)}
+                    className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Remove split from this part"
+                    disabled={isSplitMode}
+                  >
+                    Unsplit
+                  </button>
+                )}
+              </>
+            )}
             <button
               onClick={clearStartingId}
               className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
@@ -225,7 +356,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
         {/* Ending ID */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Ending Part ID *
+            Ending Part ID * {endingSplitExists && <span className="text-purple-600 text-xs">(Split)</span>}
           </label>
           <div className="flex gap-2">
             <input
@@ -237,6 +368,29 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
             />
+            {endingId && (
+              <>
+                {!endingSplitExists ? (
+                  <button
+                    onClick={() => handleSplitPart(endingId, 'ending')}
+                    className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={isSplitMode ? "Already splitting a part" : "Split this railway part"}
+                    disabled={isSplitMode && splittingPartId !== extractOriginalPartId(endingId)}
+                  >
+                    {isSplitMode && splittingPartId === extractOriginalPartId(endingId) ? 'Splitting...' : 'Split'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleRemoveSplit(endingId)}
+                    className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Remove split from this part"
+                    disabled={isSplitMode}
+                  >
+                    Unsplit
+                  </button>
+                )}
+              </>
+            )}
             <button
               onClick={clearEndingId}
               className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"

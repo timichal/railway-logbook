@@ -25,6 +25,10 @@ interface VectorAdminMapProps {
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
+  isSplitMode?: boolean;
+  splittingPartId?: string | null;
+  viewingSegmentsForPart?: string | null;
+  onSplitPointClick?: (lng: number, lat: number) => void;
 }
 
 export default function VectorAdminMap({
@@ -36,7 +40,11 @@ export default function VectorAdminMap({
   selectedParts,
   refreshTrigger,
   isEditingGeometry,
-  focusGeometry
+  focusGeometry,
+  isSplitMode,
+  splittingPartId,
+  viewingSegmentsForPart,
+  onSplitPointClick
 }: VectorAdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [showPartsLayer, setShowPartsLayer] = useState(true);
@@ -51,16 +59,22 @@ export default function VectorAdminMap({
   // Store callbacks and props in refs to avoid map recreation on changes
   const onPartClickRef = useRef(onPartClick);
   const onRouteSelectRef = useRef(onRouteSelect);
+  const onSplitPointClickRef = useRef(onSplitPointClick);
   const selectedPartsRef = useRef(selectedParts);
   const previewRouteRef = useRef(previewRoute);
   const updatePartsStyleRef = useRef<(() => void) | null>(null);
+  const splitModeRef = useRef(isSplitMode || false);
+  const splittingPartIdRef = useRef(splittingPartId);
 
   useEffect(() => {
     onPartClickRef.current = onPartClick;
     onRouteSelectRef.current = onRouteSelect;
+    onSplitPointClickRef.current = onSplitPointClick;
     selectedPartsRef.current = selectedParts;
     previewRouteRef.current = previewRoute;
-  }, [onPartClick, onRouteSelect, selectedParts, previewRoute]);
+    splitModeRef.current = isSplitMode || false;
+    splittingPartIdRef.current = splittingPartId;
+  }, [onPartClick, onRouteSelect, onSplitPointClick, selectedParts, previewRoute, isSplitMode, splittingPartId]);
 
   // Initialize map with shared hook
   const { map, mapLoaded } = useMapLibre(
@@ -80,9 +94,12 @@ export default function VectorAdminMap({
         setupAdminMapInteractions(mapInstance, {
           onPartClickRef,
           onRouteSelectRef,
+          onSplitPointClickRef,
           selectedPartsRef,
           previewRouteRef,
           updatePartsStyleRef,
+          splitModeRef,
+          splittingPartIdRef,
         });
       },
     },
@@ -97,6 +114,15 @@ export default function VectorAdminMap({
       });
     }
   }, [selectedParts?.startingId, selectedParts?.endingId, mapLoaded, map]);
+
+  // Update parts styling when split mode or splitting part changes
+  useEffect(() => {
+    if (map.current && mapLoaded && updatePartsStyleRef.current) {
+      requestAnimationFrame(() => {
+        updatePartsStyleRef.current?.();
+      });
+    }
+  }, [isSplitMode, splittingPartId, mapLoaded, map]);
 
   // Handle layer visibility toggles
   useEffect(() => {
@@ -346,6 +372,222 @@ export default function VectorAdminMap({
       });
     }
   }, [previewRoute, mapLoaded, map]);
+
+  // Handle split segments display
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    async function loadSplitSegments() {
+      try {
+        const { getSplitSegmentsGeoJSON, getSplitPartIds } = await import('@/lib/railwayPartSplitsActions');
+        const [segmentsData, splitPartIds] = await Promise.all([
+          getSplitSegmentsGeoJSON(),
+          getSplitPartIds()
+        ]);
+
+        if (!map.current) return;
+
+        // Remove existing layer and source
+        if (map.current.getLayer('split-segments')) {
+          map.current.removeLayer('split-segments');
+        }
+        if (map.current.getSource('split-segments')) {
+          map.current.removeSource('split-segments');
+        }
+
+        // Don't hide split parts - keep them visible in blue
+        // Segments will be shown separately when needed
+        map.current.setFilter('railway_parts', null);
+
+        // Only add if there are segments
+        if (segmentsData.features.length > 0) {
+          // Add source
+          map.current.addSource('split-segments', {
+            type: 'geojson',
+            data: segmentsData
+          });
+
+          // Build filter to show segments only when:
+          // 1. The part is currently being split (splittingPartId), OR
+          // 2. A segment from that part is selected in starting/ending field
+
+          // Extract original part IDs from segment IDs
+          const extractOriginalPartId = (partId: string): string => {
+            const match = partId.match(/^(\d+)_seg[01]$/);
+            return match ? match[1] : partId;
+          };
+
+          const visiblePartIds: number[] = [];
+
+          // Add part being split
+          if (splittingPartId) {
+            visiblePartIds.push(parseInt(splittingPartId));
+          }
+
+          // Add part being viewed for segment selection
+          if (viewingSegmentsForPart) {
+            visiblePartIds.push(parseInt(viewingSegmentsForPart));
+          }
+
+          // Add parts that are selected in fields and are segments
+          if (selectedParts?.startingId && selectedParts.startingId.includes('_seg')) {
+            const originalId = extractOriginalPartId(selectedParts.startingId);
+            visiblePartIds.push(parseInt(originalId));
+          }
+          if (selectedParts?.endingId && selectedParts.endingId.includes('_seg')) {
+            const originalId = extractOriginalPartId(selectedParts.endingId);
+            visiblePartIds.push(parseInt(originalId));
+          }
+
+          // Create filter expression
+          let filter: any[] | null = null;
+          if (visiblePartIds.length > 0) {
+            // Remove duplicates
+            const uniquePartIds = Array.from(new Set(visiblePartIds));
+            filter = ['in', ['to-number', ['get', 'part_id']], ['literal', uniquePartIds]];
+          } else {
+            // No parts to show - hide all segments
+            filter = ['==', ['get', 'part_id'], ''];
+          }
+
+          // Add layer with distinct colors for each segment
+          map.current.addLayer({
+            'id': 'split-segments',
+            'type': 'line',
+            'source': 'split-segments',
+            'filter': filter,
+            'paint': {
+              'line-color': [
+                'case',
+                ['==', ['get', 'segment_index'], 0],
+                '#10B981', // Green-500 for seg0
+                '#3B82F6'  // Blue-500 for seg1
+              ],
+              'line-width': 5,
+              'line-opacity': 0.9
+            }
+          }, 'railway_parts'); // Insert before railway_parts so parts appear on top
+        }
+      } catch (error) {
+        console.error('Error loading split segments:', error);
+      }
+    }
+
+    loadSplitSegments();
+  }, [mapLoaded, refreshTrigger, map]);
+
+  // Update split-segments filter and styling when dependencies change
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const layer = map.current.getLayer('split-segments');
+    if (!layer) return;
+
+    // Extract original part IDs from segment IDs
+    const extractOriginalPartId = (partId: string): string => {
+      const match = partId.match(/^(\d+)_seg[01]$/);
+      return match ? match[1] : partId;
+    };
+
+    const visiblePartIds: number[] = [];
+
+    // Add part being split
+    if (splittingPartId) {
+      visiblePartIds.push(parseInt(splittingPartId));
+    }
+
+    // Add part being viewed for segment selection
+    if (viewingSegmentsForPart) {
+      visiblePartIds.push(parseInt(viewingSegmentsForPart));
+    }
+
+    // Add parts that are selected in fields and are segments
+    if (selectedParts?.startingId && selectedParts.startingId.includes('_seg')) {
+      const originalId = extractOriginalPartId(selectedParts.startingId);
+      visiblePartIds.push(parseInt(originalId));
+    }
+    if (selectedParts?.endingId && selectedParts.endingId.includes('_seg')) {
+      const originalId = extractOriginalPartId(selectedParts.endingId);
+      visiblePartIds.push(parseInt(originalId));
+    }
+
+    // Create filter expression
+    let filter: any[] | null = null;
+    if (visiblePartIds.length > 0) {
+      // Remove duplicates
+      const uniquePartIds = Array.from(new Set(visiblePartIds));
+      filter = ['in', ['to-number', ['get', 'part_id']], ['literal', uniquePartIds]];
+    } else {
+      // No parts to show - hide all segments
+      filter = ['==', ['get', 'part_id'], ''];
+    }
+
+    map.current.setFilter('split-segments', filter);
+
+    // Update paint properties to highlight selected segments
+    // Build color expression: green for starting segment, orange for ending segment
+    const hasSelectedSegments =
+      (selectedParts?.startingId && selectedParts.startingId.includes('_seg')) ||
+      (selectedParts?.endingId && selectedParts.endingId.includes('_seg'));
+
+    let colorExpr: any;
+    if (hasSelectedSegments) {
+      const expr: any[] = ['case'];
+
+      // Check if segment_id matches startingId (which might be a segment ID)
+      if (selectedParts?.startingId && selectedParts.startingId.includes('_seg')) {
+        expr.push(['==', ['get', 'segment_id'], selectedParts.startingId], '#059669'); // Green for starting
+      }
+
+      // Check if segment_id matches endingId (which might be a segment ID)
+      if (selectedParts?.endingId && selectedParts.endingId.includes('_seg')) {
+        expr.push(['==', ['get', 'segment_id'], selectedParts.endingId], '#F97316'); // Orange for ending
+      }
+
+      // Default colors based on segment index
+      expr.push(
+        ['case',
+          ['==', ['get', 'segment_index'], 0],
+          '#10B981', // Green-500 for seg0
+          '#3B82F6'  // Blue-500 for seg1
+        ]
+      );
+
+      colorExpr = expr;
+    } else {
+      // No selected segments - use default colors
+      colorExpr = [
+        'case',
+        ['==', ['get', 'segment_index'], 0],
+        '#10B981', // Green-500 for seg0
+        '#3B82F6'  // Blue-500 for seg1
+      ];
+    }
+
+    map.current.setPaintProperty('split-segments', 'line-color', colorExpr);
+
+    // Build width expression: thicker for selected segments
+    let widthExpr: any;
+    if (hasSelectedSegments) {
+      const expr: any[] = ['case'];
+
+      if (selectedParts?.startingId && selectedParts.startingId.includes('_seg')) {
+        expr.push(['==', ['get', 'segment_id'], selectedParts.startingId], 7);
+      }
+      if (selectedParts?.endingId && selectedParts.endingId.includes('_seg')) {
+        expr.push(['==', ['get', 'segment_id'], selectedParts.endingId], 7);
+      }
+
+      expr.push(5); // Default width
+      widthExpr = expr;
+    } else {
+      // No selected segments - use default width
+      widthExpr = 5;
+    }
+
+    map.current.setPaintProperty('split-segments', 'line-width', widthExpr);
+
+  }, [selectedParts?.startingId, selectedParts?.endingId, splittingPartId, viewingSegmentsForPart, mapLoaded, map]);
 
   // Handle focus on route geometry (fly to route when selected)
   useEffect(() => {

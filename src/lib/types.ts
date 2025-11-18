@@ -65,6 +65,16 @@ export type RailwayPart = {
   }
 }
 
+// Railway part split from database
+export type RailwayPartSplit = {
+  id: number
+  part_id: string | number
+  split_coordinate: [number, number] // GeoJSON point coordinates
+  split_fraction: number // 0.0 to 1.0
+  created_at: string
+  created_by: number | null
+}
+
 // Station from database
 export type Station = {
   id: string | number

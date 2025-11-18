@@ -4,7 +4,7 @@ import pool from './db';
 import { query } from './db';
 import { getUser } from './authActions';
 import { RailwayPathFinder } from '../scripts/lib/railwayPathFinder';
-import type { PathResult, RailwayPart, GeoJSONFeatureCollection, GeoJSONFeature } from './types';
+import type { PathResult, RailwayPart, GeoJSONFeatureCollection, GeoJSONFeature, RailwayPartSplit } from './types';
 
 /**
  * Find a path between two railway parts using BFS pathfinding
@@ -31,7 +31,51 @@ export async function findRailwayPathDB(startId: string, endId: string): Promise
 }
 
 /**
- * Get railway parts by their IDs (used for route creation)
+ * Helper function to extract segment geometry from a full part geometry
+ * @param coordinates - Full part coordinates
+ * @param split - Split metadata
+ * @param segmentIndex - 0 for first segment, 1 for second segment
+ */
+function extractSegmentGeometry(
+  coordinates: [number, number][],
+  split: RailwayPartSplit,
+  segmentIndex: number
+): [number, number][] {
+  const splitFraction = split.split_fraction;
+  const totalPoints = coordinates.length - 1;
+  const splitIndex = Math.floor(splitFraction * totalPoints);
+
+  const splitCoordinate = split.split_coordinate;
+
+  if (segmentIndex === 0) {
+    // First segment: from start to split point
+    const segCoords = coordinates.slice(0, splitIndex + 1);
+    segCoords.push(splitCoordinate);
+    return segCoords;
+  } else {
+    // Second segment: from split point to end
+    return [splitCoordinate, ...coordinates.slice(splitIndex + 1)];
+  }
+}
+
+/**
+ * Parse segment ID to extract original part ID and segment index
+ * Returns { originalId, segmentIndex } or null if not a segment ID
+ */
+function parseSegmentId(partId: string): { originalId: string; segmentIndex: number } | null {
+  const match = partId.match(/^(\d+)_seg([01])$/);
+  if (match) {
+    return {
+      originalId: match[1],
+      segmentIndex: parseInt(match[2])
+    };
+  }
+  return null;
+}
+
+/**
+ * Get railway parts by their IDs (split-aware, used for route creation)
+ * Handles both regular part IDs and segment IDs (e.g., "12345_seg0")
  */
 export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPart[]> {
   // Admin check
@@ -47,8 +91,30 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
   try {
     console.log('Fetching railway parts for IDs:', partIds);
 
-    // Create placeholders for the IN query
-    const placeholders = partIds.map((_, index) => `$${index + 1}`).join(',');
+    // Separate regular part IDs from segment IDs
+    const segmentRequests: Array<{ partId: string; originalId: string; segmentIndex: number }> = [];
+    const regularPartIds: string[] = [];
+
+    for (const partId of partIds) {
+      const parsed = parseSegmentId(partId);
+      if (parsed) {
+        segmentRequests.push({ partId, ...parsed });
+      } else {
+        regularPartIds.push(partId);
+      }
+    }
+
+    // Get unique original part IDs to fetch
+    const uniqueOriginalIds = new Set<string>();
+    regularPartIds.forEach(id => uniqueOriginalIds.add(id));
+    segmentRequests.forEach(req => uniqueOriginalIds.add(req.originalId));
+
+    const idsToFetch = Array.from(uniqueOriginalIds);
+
+    if (idsToFetch.length === 0) return [];
+
+    // Fetch all required parts from database
+    const placeholders = idsToFetch.map((_, index) => `$${index + 1}`).join(',');
 
     const queryStr = `
       SELECT
@@ -59,26 +125,89 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
         AND geometry IS NOT NULL
     `;
 
-    const result = await client.query(queryStr, partIds);
+    const result = await client.query(queryStr, idsToFetch);
 
-    const features: RailwayPart[] = result.rows
-      .map(row => {
-        const geom = JSON.parse(row.geometry_json);
-        // Only return LineString features to match RailwayPart type
-        if (geom.type === 'LineString') {
-          return {
+    // Build a map of part ID to geometry
+    const partGeometries = new Map<string, [number, number][]>();
+    for (const row of result.rows) {
+      const geom = JSON.parse(row.geometry_json);
+      if (geom.type === 'LineString') {
+        partGeometries.set(row.id.toString(), geom.coordinates);
+      }
+    }
+
+    // Fetch split information for parts that might be split
+    const splitsQueryStr = `
+      SELECT
+        part_id,
+        ST_AsGeoJSON(split_coordinate) as split_coordinate_json,
+        split_fraction
+      FROM railway_part_splits
+      WHERE part_id IN (${placeholders})
+    `;
+
+    const splitsResult = await client.query(splitsQueryStr, idsToFetch);
+
+    // Build a map of part ID to split info
+    const splits = new Map<string, RailwayPartSplit>();
+    for (const row of splitsResult.rows) {
+      const splitCoordJson = JSON.parse(row.split_coordinate_json);
+      splits.set(row.part_id.toString(), {
+        id: 0, // Not needed for this use case
+        part_id: row.part_id,
+        split_coordinate: splitCoordJson.coordinates,
+        split_fraction: parseFloat(row.split_fraction),
+        created_at: '',
+        created_by: null
+      });
+    }
+
+    // Build result array in the same order as input partIds
+    const features: RailwayPart[] = [];
+
+    for (const partId of partIds) {
+      const parsed = parseSegmentId(partId);
+
+      if (parsed) {
+        // This is a segment ID - extract the appropriate segment
+        const coordinates = partGeometries.get(parsed.originalId);
+        const split = splits.get(parsed.originalId);
+
+        if (coordinates && split) {
+          const segmentCoords = extractSegmentGeometry(coordinates, split, parsed.segmentIndex);
+          features.push({
             type: 'Feature' as const,
-            geometry: geom,
+            geometry: {
+              type: 'LineString',
+              coordinates: segmentCoords
+            },
             properties: {
-              '@id': parseInt(row.id)
+              '@id': partId // Use segment ID as identifier
             }
-          } as RailwayPart;
+          } as RailwayPart);
+        } else {
+          console.warn(`Segment ${partId} requested but split not found or part missing`);
         }
-        return null;
-      })
-      .filter((feature): feature is RailwayPart => feature !== null);
+      } else {
+        // Regular part ID
+        const coordinates = partGeometries.get(partId);
 
-    console.log('Fetched', features.length, 'railway parts from database');
+        if (coordinates) {
+          features.push({
+            type: 'Feature' as const,
+            geometry: {
+              type: 'LineString',
+              coordinates
+            },
+            properties: {
+              '@id': parseInt(partId)
+            }
+          } as RailwayPart);
+        }
+      }
+    }
+
+    console.log('Fetched', features.length, 'railway parts/segments from database');
     return features;
 
   } catch (error) {

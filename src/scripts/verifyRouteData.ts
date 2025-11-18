@@ -34,24 +34,75 @@ export async function recalculateRoute(
     }
 
     // Fetch the actual railway part geometries from the database
-    const railwayPartsQuery = await client.query(`
-      SELECT id, ST_AsGeoJSON(geometry) as geometry_json
-      FROM railway_parts
-      WHERE id = ANY($1)
-      ORDER BY array_position($1, id)
-    `, [result.partIds]);
+    // Handle both regular part IDs and split segment IDs (e.g., "12345_seg0")
+    const coordinateLists: Coord[][] = [];
+
+    for (const partId of result.partIds) {
+      // Check if this is a segment ID
+      const segmentMatch = partId.match(/^(\d+)_seg([01])$/);
+
+      if (segmentMatch) {
+        // Extract segment geometry from split metadata
+        const originalPartId = segmentMatch[1];
+        const segmentIndex = parseInt(segmentMatch[2]);
+
+        const splitQuery = await client.query(`
+          SELECT
+            ST_AsGeoJSON(rp.geometry) as part_geometry_json,
+            s.split_fraction,
+            ST_AsGeoJSON(s.split_coordinate) as split_coordinate_json
+          FROM railway_part_splits s
+          JOIN railway_parts rp ON rp.id = s.part_id
+          WHERE s.part_id = $1
+        `, [originalPartId]);
+
+        if (splitQuery.rows.length > 0) {
+          const row = splitQuery.rows[0];
+          const partGeom = JSON.parse(row.part_geometry_json);
+          const splitFraction = parseFloat(row.split_fraction);
+          const splitCoord = JSON.parse(row.split_coordinate_json);
+
+          if (partGeom.type === 'LineString') {
+            const coordinates = partGeom.coordinates as Coord[];
+            const splitCoordinate = splitCoord.coordinates as Coord;
+
+            // Calculate split index
+            const totalPoints = coordinates.length - 1;
+            const splitIndex = Math.floor(splitFraction * totalPoints);
+
+            // Extract the correct segment
+            if (segmentIndex === 0) {
+              // Segment 0: from start to split point
+              const seg0Coords = coordinates.slice(0, splitIndex + 1);
+              seg0Coords.push(splitCoordinate);
+              coordinateLists.push(seg0Coords);
+            } else {
+              // Segment 1: from split point to end
+              const seg1Coords = [splitCoordinate, ...coordinates.slice(splitIndex + 1)];
+              coordinateLists.push(seg1Coords);
+            }
+          }
+        }
+      } else {
+        // Regular part ID - fetch from railway_parts
+        const partQuery = await client.query(`
+          SELECT ST_AsGeoJSON(geometry) as geometry_json
+          FROM railway_parts
+          WHERE id = $1
+        `, [partId]);
+
+        if (partQuery.rows.length > 0) {
+          const geom = JSON.parse(partQuery.rows[0].geometry_json);
+          if (geom.type === 'LineString') {
+            coordinateLists.push(geom.coordinates as Coord[]);
+          }
+        }
+      }
+    }
 
     let sortedCoordinates: Coord[];
 
-    if (railwayPartsQuery.rows.length > 0) {
-      // Extract coordinate lists from each railway part
-      const coordinateLists: Coord[][] = railwayPartsQuery.rows
-        .map(row => {
-          const geom = JSON.parse(row.geometry_json);
-          return geom.type === 'LineString' ? geom.coordinates as Coord[] : null;
-        })
-        .filter((coords): coords is Coord[] => coords !== null);
-
+    if (coordinateLists.length > 0) {
       try {
         // Use the mergeLinearChain function to properly sort and connect coordinates
         sortedCoordinates = mergeLinearChain(coordinateLists);

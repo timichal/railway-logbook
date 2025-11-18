@@ -158,8 +158,22 @@ export async function saveRailwayRoute(
     console.log('Route countries:', startCountry, '→', endCountry);
 
     // Get starting and ending part IDs from the path
-    const startingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[0] : null;
-    const endingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[pathResult.partIds.length - 1] : null;
+    // Extract original part IDs if these are split segments (e.g., "12345_seg0" -> "12345")
+    let startingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[0] : null;
+    let endingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[pathResult.partIds.length - 1] : null;
+
+    // Helper to extract original part ID from segment ID
+    const extractOriginalPartId = (partId: string): string => {
+      const match = partId.match(/^(\d+)_seg[01]$/);
+      return match ? match[1] : partId;
+    };
+
+    if (startingPartId) {
+      startingPartId = extractOriginalPartId(startingPartId);
+    }
+    if (endingPartId) {
+      endingPartId = extractOriginalPartId(endingPartId);
+    }
 
     let queryStr: string;
     let values: (string | number | string[] | null)[];

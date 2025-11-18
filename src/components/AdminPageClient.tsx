@@ -22,6 +22,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [partClickTrigger, setPartClickTrigger] = useState<number>(0); // Trigger to force effect to run
+  const [viewingSegmentsForPart, setViewingSegmentsForPart] = useState<string | null>(null); // Part whose segments are being viewed (not selected)
   const [previewRoute, setPreviewRoute] = useState<{partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]} | null>(null);
   const [createFormIds, setCreateFormIds] = useState<{startingId: string, endingId: string}>({startingId: '', endingId: ''});
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
@@ -30,6 +31,12 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(600); // Sidebar width in pixels
   const [isResizing, setIsResizing] = useState<boolean>(false);
+
+  // Split mode state
+  const [isSplitMode, setIsSplitMode] = useState<boolean>(false);
+  const [splittingPartId, setSplittingPartId] = useState<string | null>(null);
+  const [splittingFieldTarget, setSplittingFieldTarget] = useState<'starting' | 'ending' | null>(null); // Track which field initiated split
+  const [splitCompletedTrigger, setSplitCompletedTrigger] = useState<number>(0);
 
   const handleRouteSelect = (routeId: string) => {
     // If empty string, unselect the route
@@ -46,11 +53,49 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setIsPreviewMode(false);
   };
 
-  const handlePartClick = (partId: string) => {
+  const handlePartClick = async (partId: string) => {
+    console.log('AdminPageClient: Part clicked:', partId, 'Split mode:', isSplitMode, 'Target:', splittingFieldTarget);
+
+    // If we're in split mode and a segment was clicked, fill the target field
+    if (isSplitMode && splittingFieldTarget && partId.includes('_seg')) {
+      console.log(`AdminPageClient: Filling ${splittingFieldTarget} field with segment:`, partId);
+
+      if (splittingFieldTarget === 'starting') {
+        // Update starting ID via the form IDs
+        setCreateFormIds(prev => ({ ...prev, startingId: partId }));
+      } else {
+        // Update ending ID via the form IDs
+        setCreateFormIds(prev => ({ ...prev, endingId: partId }));
+      }
+
+      // Deactivate split mode after selecting segment
+      handleSplitModeDeactivate();
+
+      // Don't run the normal auto-fill logic
+      return;
+    }
+
+    // Check if this is a split part (not a segment, not in split mode)
+    if (!isSplitMode && !partId.includes('_seg')) {
+      const { getSplitForPart } = await import('@/lib/railwayPartSplitsActions');
+      const split = await getSplitForPart(partId);
+
+      if (split) {
+        // This is a split part - store it for segment viewing, don't auto-fill
+        console.log('AdminPageClient: Clicked split part, setting viewingSegmentsForPart');
+        setViewingSegmentsForPart(partId);
+        setSelectedRouteId(null);
+        // Don't set selectedPartId to prevent auto-fill
+        return;
+      }
+    }
+
+    // Normal part click logic
     setSelectedPartId(partId);
     setPartClickTrigger(prev => prev + 1); // Increment to force effect to run
     // Unselect any selected route when clicking a part
     setSelectedRouteId(null);
+    setViewingSegmentsForPart(null);
   };
 
   const handlePreviewRoute = (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => {
@@ -124,6 +169,56 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
   const handleRouteFocus = (geometry: string) => {
     setFocusGeometry(geometry);
+  };
+
+  const handleSplitModeActivate = (partId: string, fieldTarget: 'starting' | 'ending') => {
+    console.log(`AdminPageClient: Activating split mode for part ${partId}, target field: ${fieldTarget}`);
+    setIsSplitMode(true);
+    setSplittingPartId(partId);
+    setSplittingFieldTarget(fieldTarget);
+    // Clear any selected route or preview mode
+    setSelectedRouteId(null);
+    setPreviewRoute(null);
+    setIsPreviewMode(false);
+  };
+
+  const handleSplitModeDeactivate = () => {
+    console.log('AdminPageClient: Deactivating split mode');
+    setIsSplitMode(false);
+    setSplittingPartId(null);
+    setSplittingFieldTarget(null);
+  };
+
+  const handleSplitPointClick = async (lng: number, lat: number) => {
+    console.log('AdminPageClient: Split point clicked at:', lng, lat);
+
+    if (!splittingPartId) {
+      console.warn('No part ID set for splitting');
+      return;
+    }
+
+    try {
+      // Import the split action
+      const { splitRailwayPart } = await import('@/lib/railwayPartSplitsActions');
+
+      // Call the split action
+      const result = await splitRailwayPart(splittingPartId, [lng, lat], user.id);
+
+      if (result.success) {
+        showSuccess(`Railway part ${splittingPartId} split successfully! Click a segment to select it.`);
+        // DON'T deactivate split mode - keep it active so user can click a segment
+        // Split mode will be deactivated when user clicks a segment
+        // Trigger map refresh
+        setRefreshTrigger(prev => prev + 1);
+        // Notify child components that split completed
+        setSplitCompletedTrigger(prev => prev + 1);
+      } else {
+        showError(`Error splitting part: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error splitting railway part:', error);
+      showError(`Error splitting part: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const handleMouseDown = () => {
@@ -207,6 +302,11 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           onEditingGeometryChange={handleEditingGeometryChange}
           onRouteFocus={handleRouteFocus}
           sidebarWidth={sidebarWidth}
+          isSplitMode={isSplitMode}
+          splittingPartId={splittingPartId}
+          onSplitModeActivate={handleSplitModeActivate}
+          onSplitModeDeactivate={handleSplitModeDeactivate}
+          splitCompletedTrigger={splitCompletedTrigger}
         />
 
         {/* Resizer */}
@@ -227,6 +327,10 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             refreshTrigger={refreshTrigger}
             isEditingGeometry={!!editingGeometryForTrackId}
             focusGeometry={focusGeometry}
+            isSplitMode={isSplitMode}
+            splittingPartId={splittingPartId}
+            viewingSegmentsForPart={viewingSegmentsForPart}
+            onSplitPointClick={handleSplitPointClick}
           />
         </div>
       </main>

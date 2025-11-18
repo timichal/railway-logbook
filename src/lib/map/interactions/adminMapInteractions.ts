@@ -7,9 +7,12 @@ import { getUsageLabel } from '@/lib/constants';
 interface AdminMapCallbacks {
   onPartClickRef: MutableRefObject<((partId: string) => void) | undefined>;
   onRouteSelectRef: MutableRefObject<((routeId: string) => void) | undefined>;
+  onSplitPointClickRef?: MutableRefObject<((lng: number, lat: number) => void) | undefined>;
   selectedPartsRef: MutableRefObject<{ startingId: string; endingId: string } | undefined>;
   previewRouteRef: MutableRefObject<unknown>;
   updatePartsStyleRef: MutableRefObject<(() => void) | null>;
+  splitModeRef?: MutableRefObject<boolean>;
+  splittingPartIdRef?: MutableRefObject<string | null>;
 }
 
 /**
@@ -19,7 +22,44 @@ export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
   callbacks: AdminMapCallbacks
 ) {
-  const { onPartClickRef, onRouteSelectRef, selectedPartsRef, previewRouteRef, updatePartsStyleRef } = callbacks;
+  const {
+    onPartClickRef,
+    onRouteSelectRef,
+    onSplitPointClickRef,
+    selectedPartsRef,
+    previewRouteRef,
+    updatePartsStyleRef,
+    splitModeRef,
+    splittingPartIdRef
+  } = callbacks;
+
+  // Click handler for split segments (higher priority than parts)
+  mapInstance.on('click', 'split-segments', (e) => {
+    if (!e.features || e.features.length === 0) return;
+
+    // Don't handle segment clicks if we also clicked on a route
+    const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
+      layers: ['railway_routes']
+    });
+    if (routeFeatures && routeFeatures.length > 0) {
+      return;
+    }
+
+    const feature = e.features[0];
+    const properties = feature.properties;
+
+    if (!properties || !onPartClickRef.current) return;
+
+    // When clicking a split segment, use the segment_id (e.g., "12345_seg0")
+    const segmentId = properties.segment_id?.toString();
+    if (segmentId) {
+      console.log('Clicked split segment:', segmentId);
+      onPartClickRef.current(segmentId);
+    }
+
+    // Stop event propagation so railway_parts handler doesn't fire
+    e.preventDefault();
+  });
 
   // Click handler for railway parts
   mapInstance.on('click', 'railway_parts', (e) => {
@@ -33,11 +73,33 @@ export function setupAdminMapInteractions(
       return;
     }
 
+    // Check if we clicked on a split segment
+    const segmentFeatures = mapInstance.queryRenderedFeatures(e.point, {
+      layers: ['split-segments']
+    });
+    if (segmentFeatures && segmentFeatures.length > 0) {
+      return; // Let split-segments handler handle it
+    }
+
     const feature = e.features[0];
     const properties = feature.properties;
 
-    if (!properties || !onPartClickRef.current) return;
+    if (!properties) return;
 
+    // Check if we're in split mode
+    if (splitModeRef?.current && onSplitPointClickRef?.current) {
+      // In split mode - capture the split point coordinates
+      const partId = properties.id.toString();
+
+      // Only allow splitting if this is the part being split
+      if (splittingPartIdRef?.current === partId) {
+        onSplitPointClickRef.current(e.lngLat.lng, e.lngLat.lat);
+      }
+      return;
+    }
+
+    // Normal part selection mode
+    if (!onPartClickRef.current) return;
     const partId = properties.id.toString();
     onPartClickRef.current(partId);
   });
@@ -85,14 +147,25 @@ export function setupAdminMapInteractions(
     const selectedParts = selectedPartsRef.current;
     const startingId = selectedParts?.startingId;
     const endingId = selectedParts?.endingId;
+    const splittingPartId = splittingPartIdRef?.current || null;
 
     applyRailwayPartsStyling(mapInstance, {
       hoveredPartId,
       startingId,
       endingId,
       isPreviewActive,
+      splittingPartId,
     });
   };
+
+  // Hover effects for split segments
+  mapInstance.on('mouseenter', 'split-segments', () => {
+    mapInstance.getCanvas().style.cursor = 'pointer';
+  });
+
+  mapInstance.on('mouseleave', 'split-segments', () => {
+    mapInstance.getCanvas().style.cursor = '';
+  });
 
   mapInstance.on('mouseenter', 'railway_parts', (e) => {
     mapInstance.getCanvas().style.cursor = 'pointer';

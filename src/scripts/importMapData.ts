@@ -40,7 +40,16 @@ async function loadGeoJSONData(): Promise<void> {
     // Step 1: Load stations and railway parts from pruned GeoJSON
     console.log('');
     console.log('=== Step 1: Loading map data ===');
-    await loadStationsAndParts(client, dataPath);
+    const loadResult = await loadStationsAndParts(client, dataPath);
+
+    // Show geometry change information if any
+    if (loadResult.geometryChanges && loadResult.geometryChanges.changedPartIds.length > 0) {
+      console.log('');
+      console.log('⚠️  GEOMETRY CHANGES DETECTED:');
+      console.log(`   - ${loadResult.geometryChanges.changedPartIds.length} split parts have changed`);
+      console.log(`   - ${loadResult.geometryChanges.affectedRoutes} routes marked as invalid`);
+      console.log('   - Admin will need to re-split affected parts and recreate routes');
+    }
 
     // Step 2: Verify and recalculate routes if they exist
     console.log('');
