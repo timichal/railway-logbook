@@ -117,6 +117,5 @@ export function isValidSplitPoint(
 ): boolean {
   const distanceToStart = calculateDistance(splitPoint, segmentStart);
   const distanceToEnd = calculateDistance(splitPoint, segmentEnd);
-  console.log('Distance to start:', distanceToStart, 'Distance to end:', distanceToEnd);
   return distanceToStart >= minDistanceKm && distanceToEnd >= minDistanceKm;
 }

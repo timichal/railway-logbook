@@ -126,14 +126,17 @@ export async function splitRailwayPart(
     };
   }
 
-  const { segmentIndex, splitPoint } = splitInfo;
+  let { segmentIndex, splitPoint } = splitInfo;
 
-  // Validate that split point is not too close to existing vertices
+  // If split point is too close to existing vertices, snap to the nearest vertex
   if (!isValidSplitPoint(splitPoint, coordinates[segmentIndex], coordinates[segmentIndex + 1])) {
-    return {
-      success: false,
-      message: 'Split point is too close to an existing vertex. Please click further from endpoints.',
-    };
+    // Calculate distances to both vertices
+    const { calculateDistance } = await import('./map/utils/distance');
+    const distToStart = calculateDistance(splitPoint, coordinates[segmentIndex]);
+    const distToEnd = calculateDistance(splitPoint, coordinates[segmentIndex + 1]);
+
+    // Snap to the nearest vertex
+    splitPoint = distToStart < distToEnd ? coordinates[segmentIndex] : coordinates[segmentIndex + 1];
   }
 
   // Split the LineString

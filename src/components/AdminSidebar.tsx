@@ -28,10 +28,14 @@ interface AdminSidebarProps {
   splittingPartId?: string | null;
   onRefreshMap?: () => void;
   splitRefreshTrigger?: number;
+  clearFieldForPartId?: string | null; // Part ID to clear from form fields after split
+  showError?: (message: string) => void;
+  showSuccess?: (message: string) => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth = 400, onEnterSplitMode, onExitSplitMode, isSplittingMode, splittingPartId, onRefreshMap, splitRefreshTrigger }: AdminSidebarProps) {
-  const { showError } = useToast();
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedPartId, partClickTrigger, onPreviewRoute, onCreateFormIdsChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth = 400, onEnterSplitMode, onExitSplitMode, isSplittingMode, splittingPartId, onRefreshMap, splitRefreshTrigger, clearFieldForPartId, showError: showErrorProp, showSuccess: showSuccessProp }: AdminSidebarProps) {
+  const { showError: showErrorToast } = useToast();
+  const showError = showErrorProp || showErrorToast;
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
 
@@ -97,6 +101,27 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
       onFormReset();
     }
   }, [onFormReset]);
+
+  // Clear form field when a part is split
+  React.useEffect(() => {
+    if (clearFieldForPartId) {
+      console.log('AdminSidebar: Clearing field for split part:', clearFieldForPartId);
+      console.log('AdminSidebar: Current createFormIds:', createFormIds);
+
+      setCreateFormIds(prev => {
+        const newIds = { ...prev };
+        if (prev.startingId === clearFieldForPartId) {
+          console.log('AdminSidebar: Clearing starting ID');
+          newIds.startingId = '';
+        }
+        if (prev.endingId === clearFieldForPartId) {
+          console.log('AdminSidebar: Clearing ending ID');
+          newIds.endingId = '';
+        }
+        return newIds;
+      });
+    }
+  }, [clearFieldForPartId]); // Only watch clearFieldForPartId, not createFormIds to avoid loops
 
   // Handle edit geometry button click
   const handleEditGeometry = React.useCallback(async (trackId: string) => {

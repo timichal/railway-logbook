@@ -190,9 +190,11 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
   // Handle split part button click
   const handleSplitPart = (partId: string) => {
+    console.log('AdminCreateRouteTab: handleSplitPart called with partId:', partId);
     if (!partId) return;
 
     if (onEnterSplitMode) {
+      console.log('AdminCreateRouteTab: Calling onEnterSplitMode with partId:', partId);
       onEnterSplitMode(partId);
     }
   };

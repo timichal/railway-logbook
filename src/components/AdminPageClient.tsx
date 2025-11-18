@@ -32,6 +32,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [isSplittingMode, setIsSplittingMode] = useState<boolean>(false);
   const [splittingPartId, setSplittingPartId] = useState<string | null>(null);
+  const [clearFieldForPartId, setClearFieldForPartId] = useState<string | null>(null);
 
   const handleRouteSelect = (routeId: string) => {
     // If empty string, unselect the route
@@ -130,6 +131,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
   const handleEnterSplitMode = (partId: string) => {
     console.log('AdminPageClient: Entering split mode for part', partId);
+    console.log('AdminPageClient: Current form IDs before split mode:', createFormIds);
     setIsSplittingMode(true);
     setSplittingPartId(partId);
   };
@@ -146,13 +148,10 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   };
   const handleSplitSuccess = (parentId: string) => {
     console.log('AdminPageClient: Split successful for part:', parentId);
-    // Clear the field that matches the split part
-    if (createFormIds.startingId === parentId) {
-      handleStartingIdChange('');
-    }
-    if (createFormIds.endingId === parentId) {
-      handleEndingIdChange('');
-    }
+    // Trigger field clearing in AdminSidebar by setting the clearFieldForPartId
+    setClearFieldForPartId(parentId);
+    // Reset it after a brief delay so it can be triggered again if needed
+    setTimeout(() => setClearFieldForPartId(null), 100);
   };
 
 
@@ -243,6 +242,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           splittingPartId={splittingPartId}
           onRefreshMap={handleRefreshMap}
           splitRefreshTrigger={refreshTrigger}
+          clearFieldForPartId={clearFieldForPartId}
           showError={showError}
           showSuccess={showSuccess}
         />

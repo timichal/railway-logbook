@@ -43,9 +43,16 @@ export function setupAdminMapInteractions(
 
         if (result.success) {
           console.log('Split successful:', result.message);
+          console.log('adminMapInteractions: splittingPartIdRef.current =', splittingPartIdRef.current);
+          console.log('adminMapInteractions: Calling onSplitSuccess callback');
           // Notify parent component of successful split
           if (onSplitSuccessRef.current && splittingPartIdRef.current) {
             onSplitSuccessRef.current(splittingPartIdRef.current);
+          } else {
+            console.log('adminMapInteractions: Callback not called - ref check failed', {
+              hasCallback: !!onSplitSuccessRef.current,
+              hasSplittingId: !!splittingPartIdRef.current,
+            });
           }
 
           // Exit split mode
@@ -84,6 +91,7 @@ export function setupAdminMapInteractions(
     if (!properties || !onPartClickRef.current) return;
 
     const partId = properties.id.toString();
+    console.log('adminMapInteractions: Part clicked, ID type:', typeof properties.id, 'ID value:', properties.id, 'toString:', partId);
     onPartClickRef.current(partId);
   };
 
