@@ -121,6 +121,19 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Route Management**: Create, edit geometry, update, and delete railway routes (track_id is auto-generated)
 - **Route Validity Display**: Invalid routes (is_valid=false) shown in grey when unselected, with alert banner in edit panel
 - **Edit Geometry Feature**: Allows fixing invalid routes by selecting new start/end points with same pathfinding mechanism
+- **Railway Part Splitting**:
+  - Allows splitting long railway segments into two parts for more precise route creation
+  - Split parts stored in separate `railway_part_splits` table (compound IDs like "parent_id-1", "parent_id-2")
+  - Split parts served via `railway_part_splits_tile` vector tile function as overlay layer
+  - Overlay rendering ensures split parts clickable/hoverable with priority over unsplit parts
+  - Split button appears when part selected; click on line to choose split point
+  - Split point inserted between nearest vertices (not snapped to existing points)
+  - Unsplit button removes split and restores original part
+  - Toast notifications for split errors (e.g., "Split point too close to endpoints")
+  - Field auto-clears after successful split
+  - Martin tile server cache disabled for immediate split visibility
+  - Pathfinding integration: RailwayPathFinder loads both regular and split parts
+  - Export/Import: `npm run exportRoutes` includes railway_part_splits table
 - **Components**: `AdminPageClient` → `VectorAdminMapWrapper` → `VectorAdminMap`
 
 ## Simplified Project Structure

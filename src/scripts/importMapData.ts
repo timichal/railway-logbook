@@ -2,6 +2,7 @@ import { Client } from 'pg';
 import dotenv from 'dotenv';
 import { loadStationsAndParts } from './lib/loadRailwayData';
 import { verifyAndRecalculateRoutes } from './verifyRouteData';
+import { validateSplitPartsAfterImport } from './lib/validateSplitParts';
 import { getDbConfig } from '../lib/dbConfig';
 
 dotenv.config();
@@ -46,6 +47,11 @@ async function loadGeoJSONData(): Promise<void> {
     console.log('');
     console.log('=== Step 2: Verifying routes ===');
     await verifyAndRecalculateRoutes(client);
+
+    // Step 3: Validate split parts after data reload
+    console.log('');
+    console.log('=== Step 3: Validating split parts ===');
+    await validateSplitPartsAfterImport(client);
 
     console.log('');
     console.log('Database update completed!');

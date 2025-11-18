@@ -8,33 +8,39 @@ interface StyleParams {
   startingId?: string;
   endingId?: string;
   isPreviewActive: boolean;
+  splittingPartId?: string | null;
 }
 
 /**
  * Build MapLibre expressions for railway parts styling
  */
 export function buildRailwayPartsStyleExpressions(params: StyleParams) {
-  const { hoveredPartId, startingId, endingId, isPreviewActive } = params;
-  const hasAnyCondition = !isPreviewActive && !!(hoveredPartId || startingId || endingId);
+  const { hoveredPartId, startingId, endingId, isPreviewActive, splittingPartId } = params;
+  const hasAnyCondition = !isPreviewActive && !!(hoveredPartId || startingId || endingId || splittingPartId);
 
   // Build color expression
   let colorExpr: MapLibreExpression;
   if (hasAnyCondition) {
     const expr: unknown[] = ['case'];
 
-    // Hover state (highest priority)
+    // Splitting part (yellow - highest priority when splitting)
+    if (splittingPartId) {
+      expr.push(['==', ['to-string', ['get', 'id']], splittingPartId], '#FFD700'); // Gold color
+    }
+
+    // Hover state (high priority)
     if (hoveredPartId) {
-      expr.push(['==', ['get', 'id'], hoveredPartId], COLORS.railwayParts.hover);
+      expr.push(['==', ['to-string', ['get', 'id']], hoveredPartId], COLORS.railwayParts.hover);
     }
 
     // Starting part (green)
     if (startingId) {
-      expr.push(['==', ['get', 'id'], parseInt(startingId)], COLORS.railwayParts.selected);
+      expr.push(['==', ['to-string', ['get', 'id']], startingId], COLORS.railwayParts.selected);
     }
 
     // Ending part (red)
     if (endingId) {
-      expr.push(['==', ['get', 'id'], parseInt(endingId)], COLORS.railwayParts.hover);
+      expr.push(['==', ['to-string', ['get', 'id']], endingId], COLORS.railwayParts.hover);
     }
 
     // Default blue
@@ -49,14 +55,17 @@ export function buildRailwayPartsStyleExpressions(params: StyleParams) {
   if (hasAnyCondition) {
     const expr: unknown[] = ['case'];
 
+    if (splittingPartId) {
+      expr.push(['==', ['to-string', ['get', 'id']], splittingPartId], 7);
+    }
     if (startingId) {
-      expr.push(['==', ['get', 'id'], parseInt(startingId)], 6);
+      expr.push(['==', ['to-string', ['get', 'id']], startingId], 6);
     }
     if (endingId) {
-      expr.push(['==', ['get', 'id'], parseInt(endingId)], 6);
+      expr.push(['==', ['to-string', ['get', 'id']], endingId], 6);
     }
     if (hoveredPartId) {
-      expr.push(['==', ['get', 'id'], hoveredPartId], 4);
+      expr.push(['==', ['to-string', ['get', 'id']], hoveredPartId], 4);
     }
 
     expr.push(3); // Default
@@ -67,14 +76,17 @@ export function buildRailwayPartsStyleExpressions(params: StyleParams) {
 
   // Build opacity expression
   let opacityExpr: MapLibreExpression;
-  if (startingId || endingId) {
+  if (startingId || endingId || splittingPartId) {
     const expr: unknown[] = ['case'];
 
+    if (splittingPartId) {
+      expr.push(['==', ['to-string', ['get', 'id']], splittingPartId], 1.0);
+    }
     if (startingId) {
-      expr.push(['==', ['get', 'id'], parseInt(startingId)], 1.0);
+      expr.push(['==', ['to-string', ['get', 'id']], startingId], 1.0);
     }
     if (endingId) {
-      expr.push(['==', ['get', 'id'], parseInt(endingId)], 1.0);
+      expr.push(['==', ['to-string', ['get', 'id']], endingId], 1.0);
     }
 
     expr.push(0.7); // Default
@@ -98,4 +110,9 @@ export function applyRailwayPartsStyling(
   map.setPaintProperty('railway_parts', 'line-color', colorExpr);
   map.setPaintProperty('railway_parts', 'line-width', weightExpr);
   map.setPaintProperty('railway_parts', 'line-opacity', opacityExpr);
+  if (map.getLayer('railway_part_splits')) {
+    map.setPaintProperty('railway_part_splits', 'line-color', colorExpr);
+    map.setPaintProperty('railway_part_splits', 'line-width', weightExpr);
+    map.setPaintProperty('railway_part_splits', 'line-opacity', opacityExpr);
+  }
 }

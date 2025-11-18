@@ -13,9 +13,9 @@
       "WebFetch(domain:www.crunchydata.com)",
       "WebFetch(domain:medium.com)",
       "Bash(curl:*)",
-      "Bash(docker exec railway-logbook-db psql:*)",
       "Bash(docker logs:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(docker exec:*)"
     ],
     "deny": []
   }

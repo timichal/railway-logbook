@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { usageOptions, frequencyOptions, type UsageType } from '@/lib/constants';
 import { findRailwayPathDB, getRailwayPartsByIds } from '@/lib/adminMapActions';
 import { saveRailwayRoute } from '@/lib/adminRouteActions';
+import { isPartSplit, unsplitRailwayPart } from '@/lib/adminPartActions';
+import { isCompoundId } from '@/lib/partUtils';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 
@@ -20,10 +22,20 @@ interface AdminCreateRouteTabProps {
   editingGeometryForTrackId?: string | null;
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
+  onEnterSplitMode?: (partId: string) => void;
+  onExitSplitMode?: () => void;
+  isSplittingMode?: boolean;
+  splittingPartId?: string | null;
+  onRefreshMap?: () => void;
+  splitRefreshTrigger?: number;
 }
 
-export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, editingGeometryForTrackId, onGeometryEditComplete, onCancelGeometryEdit }: AdminCreateRouteTabProps) {
+export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, editingGeometryForTrackId, onGeometryEditComplete, onCancelGeometryEdit, onEnterSplitMode, onExitSplitMode, isSplittingMode, splittingPartId, onRefreshMap, splitRefreshTrigger }: AdminCreateRouteTabProps) {
   const { showError, showSuccess } = useToast();
+
+  // Track which parts are split
+  const [startingPartIsSplit, setStartingPartIsSplit] = useState(false);
+  const [endingPartIsSplit, setEndingPartIsSplit] = useState(false);
 
   // Create route form state (without the IDs that are managed by parent)
   const [createForm, setCreateForm] = useState({
@@ -176,6 +188,70 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     }
   };
 
+  // Handle split part button click
+  const handleSplitPart = (partId: string) => {
+    if (!partId) return;
+
+    if (onEnterSplitMode) {
+      onEnterSplitMode(partId);
+    }
+  };
+
+  // Handle unsplit part button click
+  const handleUnsplitPart = async (partId: string) => {
+    if (!partId) return;
+
+    try {
+      const result = await unsplitRailwayPart(partId);
+
+      if (result.success) {
+        showSuccess(result.message);
+
+        // Clear the part ID from the form
+        if (partId === startingId || partId.startsWith(startingId.split('-')[0])) {
+          onStartingIdChange('');
+        } else if (partId === endingId || partId.startsWith(endingId.split('-')[0])) {
+          onEndingIdChange('');
+        }
+
+        // Refresh the map to show the original part
+        if (onRefreshMap) {
+          onRefreshMap();
+        }
+      } else {
+        showError(result.message);
+      }
+    } catch (error) {
+      console.error('Error unsplitting part:', error);
+      showError(`Error unsplitting part: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Check if parts are split when IDs change or after a split operation
+  useEffect(() => {
+    const checkStartingPart = async () => {
+      if (startingId) {
+        const isSplit = isCompoundId(startingId) || await isPartSplit(startingId);
+        setStartingPartIsSplit(isSplit);
+      } else {
+        setStartingPartIsSplit(false);
+      }
+    };
+    checkStartingPart();
+  }, [startingId, splitRefreshTrigger]);
+
+  useEffect(() => {
+    const checkEndingPart = async () => {
+      if (endingId) {
+        const isSplit = isCompoundId(endingId) || await isPartSplit(endingId);
+        setEndingPartIsSplit(isSplit);
+        
+        setEndingPartIsSplit(false);
+      }
+    };
+    checkEndingPart();
+  }, [endingId, splitRefreshTrigger]);
+
   // Automatically preview route when both IDs are filled
   useEffect(() => {
     if (startingId && endingId && !isPreviewMode) {
@@ -208,18 +284,45 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               value={startingId || ''}
               onChange={(e) => onStartingIdChange(e.target.value)}
               placeholder="Click a railway part on the map"
-              disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : ''
+              disabled={isPreviewMode || isSplittingMode}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode || isSplittingMode ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
             />
             <button
               onClick={clearStartingId}
-              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
+              disabled={isSplittingMode}
+              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Clear starting ID"
             >
               ×
             </button>
           </div>
+          {/* Split/Unsplit button for starting part */}
+          {startingId && !isPreviewMode && (
+            <div className="mt-2">
+              {startingPartIsSplit ? (
+                <button
+                  onClick={() => handleUnsplitPart(startingId)}
+                  disabled={isSplittingMode}
+                  className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm disabled:cursor-not-allowed"
+                >
+                  Unsplit Part
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleSplitPart(startingId)}
+                  disabled={isSplittingMode && splittingPartId !== startingId}
+                  className={`w-full font-medium py-2 px-4 rounded-md text-sm ${
+                    isSplittingMode && splittingPartId === startingId
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  {isSplittingMode && splittingPartId === startingId ? 'Click on the line to split' : 'Split Part'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Ending ID */}
@@ -233,18 +336,45 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               value={endingId || ''}
               onChange={(e) => onEndingIdChange(e.target.value)}
               placeholder="Click a railway part on the map"
-              disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : ''
+              disabled={isPreviewMode || isSplittingMode}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode || isSplittingMode ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
             />
             <button
               onClick={clearEndingId}
-              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
+              disabled={isSplittingMode}
+              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Clear ending ID"
             >
               ×
             </button>
           </div>
+          {/* Split/Unsplit button for ending part */}
+          {endingId && !isPreviewMode && (
+            <div className="mt-2">
+              {endingPartIsSplit ? (
+                <button
+                  onClick={() => handleUnsplitPart(endingId)}
+                  disabled={isSplittingMode}
+                  className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm disabled:cursor-not-allowed"
+                >
+                  Unsplit Part
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleSplitPart(endingId)}
+                  disabled={isSplittingMode && splittingPartId !== endingId}
+                  className={`w-full font-medium py-2 px-4 rounded-md text-sm ${
+                    isSplittingMode && splittingPartId === endingId
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  {isSplittingMode && splittingPartId === endingId ? 'Click on the line to split' : 'Split Part'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Only show metadata fields in create mode */}

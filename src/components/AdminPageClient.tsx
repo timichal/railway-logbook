@@ -30,6 +30,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(600); // Sidebar width in pixels
   const [isResizing, setIsResizing] = useState<boolean>(false);
+  const [isSplittingMode, setIsSplittingMode] = useState<boolean>(false);
+  const [splittingPartId, setSplittingPartId] = useState<string | null>(null);
 
   const handleRouteSelect = (routeId: string) => {
     // If empty string, unselect the route
@@ -126,6 +128,34 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setFocusGeometry(geometry);
   };
 
+  const handleEnterSplitMode = (partId: string) => {
+    console.log('AdminPageClient: Entering split mode for part', partId);
+    setIsSplittingMode(true);
+    setSplittingPartId(partId);
+  };
+
+  const handleExitSplitMode = () => {
+    console.log('AdminPageClient: Exiting split mode');
+    setIsSplittingMode(false);
+    setSplittingPartId(null);
+  };
+
+  const handleRefreshMap = () => {
+    console.log('AdminPageClient: Refreshing map tiles');
+    setRefreshTrigger(prev => prev + 1);
+  };
+  const handleSplitSuccess = (parentId: string) => {
+    console.log('AdminPageClient: Split successful for part:', parentId);
+    // Clear the field that matches the split part
+    if (createFormIds.startingId === parentId) {
+      handleStartingIdChange('');
+    }
+    if (createFormIds.endingId === parentId) {
+      handleEndingIdChange('');
+    }
+  };
+
+
   const handleMouseDown = () => {
     setIsResizing(true);
   };
@@ -207,6 +237,14 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           onEditingGeometryChange={handleEditingGeometryChange}
           onRouteFocus={handleRouteFocus}
           sidebarWidth={sidebarWidth}
+          onEnterSplitMode={handleEnterSplitMode}
+          onExitSplitMode={handleExitSplitMode}
+          isSplittingMode={isSplittingMode}
+          splittingPartId={splittingPartId}
+          onRefreshMap={handleRefreshMap}
+          splitRefreshTrigger={refreshTrigger}
+          showError={showError}
+          showSuccess={showSuccess}
         />
 
         {/* Resizer */}
@@ -227,6 +265,13 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             refreshTrigger={refreshTrigger}
             isEditingGeometry={!!editingGeometryForTrackId}
             focusGeometry={focusGeometry}
+            isSplittingMode={isSplittingMode}
+            splittingPartId={splittingPartId}
+            onExitSplitMode={handleExitSplitMode}
+            onRefreshMap={handleRefreshMap}
+            showError={showError}
+            onSplitSuccess={handleSplitSuccess}
+            showSuccess={showSuccess}
           />
         </div>
       </main>

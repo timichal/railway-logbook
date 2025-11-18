@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import type { MutableRefObject } from 'react';
 import { applyRailwayPartsStyling } from '../utils/railwayPartsStyling';
 import { getUsageLabel } from '@/lib/constants';
+import { splitRailwayPart } from '@/lib/adminPartActions';
 
 interface AdminMapCallbacks {
   onPartClickRef: MutableRefObject<((partId: string) => void) | undefined>;
@@ -10,6 +11,13 @@ interface AdminMapCallbacks {
   selectedPartsRef: MutableRefObject<{ startingId: string; endingId: string } | undefined>;
   previewRouteRef: MutableRefObject<unknown>;
   updatePartsStyleRef: MutableRefObject<(() => void) | null>;
+  isSplittingModeRef: MutableRefObject<boolean | undefined>;
+  splittingPartIdRef: MutableRefObject<string | null | undefined>;
+  onExitSplitModeRef: MutableRefObject<(() => void) | undefined>;
+  onRefreshMapRef: MutableRefObject<(() => void) | undefined>;
+  showErrorRef: MutableRefObject<((message: string) => void) | undefined>;
+  showSuccessRef: MutableRefObject<((message: string) => void) | undefined>;
+  onSplitSuccessRef: MutableRefObject<((parentId: string) => void) | undefined>;
 }
 
 /**
@@ -19,12 +27,49 @@ export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
   callbacks: AdminMapCallbacks
 ) {
-  const { onPartClickRef, onRouteSelectRef, selectedPartsRef, previewRouteRef, updatePartsStyleRef } = callbacks;
+  const { onPartClickRef, onRouteSelectRef, selectedPartsRef, previewRouteRef, updatePartsStyleRef, isSplittingModeRef, splittingPartIdRef, onExitSplitModeRef, onRefreshMapRef, showErrorRef, showSuccessRef, onSplitSuccessRef } = callbacks;
 
-  // Click handler for railway parts
-  mapInstance.on('click', 'railway_parts', (e) => {
+  // Shared click handler logic for both railway_parts and railway_part_splits
+  const handlePartClick = async (e: maplibreglType.MapLayerMouseEvent) => {
     if (!e.features || e.features.length === 0) return;
 
+    // Check if we're in splitting mode
+    if (isSplittingModeRef.current && splittingPartIdRef.current) {
+      // Handle split point click
+      const clickedCoordinate: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+
+      try {
+        const result = await splitRailwayPart(splittingPartIdRef.current, clickedCoordinate);
+
+        if (result.success) {
+          console.log('Split successful:', result.message);
+          // Notify parent component of successful split
+          if (onSplitSuccessRef.current && splittingPartIdRef.current) {
+            onSplitSuccessRef.current(splittingPartIdRef.current);
+          }
+
+          // Exit split mode
+          if (onExitSplitModeRef.current) {
+            onExitSplitModeRef.current();
+          }
+
+          // Refresh map to show the split parts
+          if (onRefreshMapRef.current) {
+            onRefreshMapRef.current();
+          }
+        } else {
+          console.error('Split failed:', result.message);
+          showErrorRef.current?.(result.message);
+        }
+      } catch (error) {
+        console.error('Error during split:', error);
+        showErrorRef.current?.(`Error splitting part: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+      return; // Don't handle normal part click logic
+    }
+
+    // Normal part click logic (not in splitting mode)
     // Don't handle part clicks if we also clicked on a route
     const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
       layers: ['railway_routes']
@@ -40,6 +85,26 @@ export function setupAdminMapInteractions(
 
     const partId = properties.id.toString();
     onPartClickRef.current(partId);
+  };
+
+  // Click handler for railway_part_splits (split parts have priority)
+  mapInstance.on('click', 'railway_part_splits', handlePartClick);
+
+  // Click handler for railway_parts
+  // Only handle if we didn't click on a split part
+  mapInstance.on('click', 'railway_parts', (e) => {
+    // Check if we also clicked on a split part
+    const splitFeatures = mapInstance.queryRenderedFeatures(e.point, {
+      layers: ['railway_part_splits']
+    });
+
+    // If we clicked on a split part, let that handler deal with it
+    if (splitFeatures && splitFeatures.length > 0) {
+      return;
+    }
+
+    // Otherwise, handle the normal part click
+    handlePartClick(e);
   });
 
   // Click handler for railway routes
@@ -66,10 +131,14 @@ export function setupAdminMapInteractions(
     const partFeatures = mapInstance.queryRenderedFeatures(e.point, {
       layers: ['railway_parts']
     });
+    const splitFeatures = mapInstance.queryRenderedFeatures(e.point, {
+      layers: ['railway_part_splits']
+    });
 
     // If we didn't click on any features, unselect the route
     if ((!routeFeatures || routeFeatures.length === 0) &&
-      (!partFeatures || partFeatures.length === 0)) {
+      (!partFeatures || partFeatures.length === 0) &&
+      (!splitFeatures || splitFeatures.length === 0)) {
       if (onRouteSelectRef.current) {
         onRouteSelectRef.current('');  // Empty string to unselect
       }
@@ -85,22 +154,57 @@ export function setupAdminMapInteractions(
     const selectedParts = selectedPartsRef.current;
     const startingId = selectedParts?.startingId;
     const endingId = selectedParts?.endingId;
+    const splittingPartId = isSplittingModeRef.current ? splittingPartIdRef.current : null;
 
     applyRailwayPartsStyling(mapInstance, {
       hoveredPartId,
       startingId,
       endingId,
       isPreviewActive,
+      splittingPartId,
     });
   };
 
   mapInstance.on('mouseenter', 'railway_parts', (e) => {
-    mapInstance.getCanvas().style.cursor = 'pointer';
+    // Check if we're also hovering over a split part
+    const splitFeatures = mapInstance.queryRenderedFeatures(e.point, {
+      layers: ['railway_part_splits']
+    });
+
+    // If hovering over a split part, let that handler deal with it
+    if (splitFeatures && splitFeatures.length > 0) {
+      return;
+    }
+
+    // Use crosshair cursor in splitting mode, otherwise pointer
+    if (isSplittingModeRef.current) {
+      mapInstance.getCanvas().style.cursor = 'crosshair';
+    } else {
+      mapInstance.getCanvas().style.cursor = 'pointer';
+    }
     hoveredPartId = e.features?.[0]?.properties?.id?.toString() || null;
     updatePartsStyle();
   });
 
   mapInstance.on('mouseleave', 'railway_parts', () => {
+    mapInstance.getCanvas().style.cursor = '';
+    hoveredPartId = null;
+    updatePartsStyle();
+  });
+
+  // Hover effects for railway_part_splits (same as railway_parts)
+  mapInstance.on('mouseenter', 'railway_part_splits', (e) => {
+    // Use crosshair cursor in splitting mode, otherwise pointer
+    if (isSplittingModeRef.current) {
+      mapInstance.getCanvas().style.cursor = 'crosshair';
+    } else {
+      mapInstance.getCanvas().style.cursor = 'pointer';
+    }
+    hoveredPartId = e.features?.[0]?.properties?.id?.toString() || null;
+    updatePartsStyle();
+  });
+
+  mapInstance.on('mouseleave', 'railway_part_splits', () => {
     mapInstance.getCanvas().style.cursor = '';
     hoveredPartId = null;
     updatePartsStyle();

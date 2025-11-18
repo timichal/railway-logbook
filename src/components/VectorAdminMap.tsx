@@ -9,6 +9,8 @@ import {
   createRailwayRoutesLayer,
   createRailwayPartsSource,
   createRailwayPartsLayer,
+  createRailwayPartSplitsSource,
+  createRailwayPartSplitsLayer,
   createStationsSource,
   createStationsLayer,
   COLORS,
@@ -25,6 +27,13 @@ interface VectorAdminMapProps {
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
+  isSplittingMode?: boolean;
+  splittingPartId?: string | null;
+  onExitSplitMode?: () => void;
+  onRefreshMap?: () => void;
+  showError?: (message: string) => void;
+  showSuccess?: (message: string) => void;
+  onSplitSuccess?: (parentId: string) => void;
 }
 
 export default function VectorAdminMap({
@@ -36,7 +45,14 @@ export default function VectorAdminMap({
   selectedParts,
   refreshTrigger,
   isEditingGeometry,
-  focusGeometry
+  focusGeometry,
+  isSplittingMode,
+  splittingPartId,
+  onExitSplitMode,
+  onRefreshMap,
+  showError,
+  showSuccess,
+  onSplitSuccess,
 }: VectorAdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [showPartsLayer, setShowPartsLayer] = useState(true);
@@ -54,13 +70,26 @@ export default function VectorAdminMap({
   const selectedPartsRef = useRef(selectedParts);
   const previewRouteRef = useRef(previewRoute);
   const updatePartsStyleRef = useRef<(() => void) | null>(null);
+  const isSplittingModeRef = useRef(isSplittingMode);
+  const splittingPartIdRef = useRef(splittingPartId);
+  const onExitSplitModeRef = useRef(onExitSplitMode);
+  const onRefreshMapRef = useRef(onRefreshMap);
+  const showErrorRef = useRef(showError);
+  const showSuccessRef = useRef(showSuccess);
+  const onSplitSuccessRef = useRef(onSplitSuccess);
 
-  useEffect(() => {
-    onPartClickRef.current = onPartClick;
-    onRouteSelectRef.current = onRouteSelect;
-    selectedPartsRef.current = selectedParts;
-    previewRouteRef.current = previewRoute;
-  }, [onPartClick, onRouteSelect, selectedParts, previewRoute]);
+
+  onPartClickRef.current = onPartClick;
+  onRouteSelectRef.current = onRouteSelect;
+  selectedPartsRef.current = selectedParts;
+  previewRouteRef.current = previewRoute;
+  isSplittingModeRef.current = isSplittingMode;
+  splittingPartIdRef.current = splittingPartId;
+  onExitSplitModeRef.current = onExitSplitMode;
+  onRefreshMapRef.current = onRefreshMap;
+  showErrorRef.current = showError;
+  showSuccessRef.current = showSuccess;
+  onSplitSuccessRef.current = onSplitSuccess;
 
   // Initialize map with shared hook
   const { map, mapLoaded } = useMapLibre(
@@ -68,11 +97,13 @@ export default function VectorAdminMap({
     {
       sources: {
         railway_parts: createRailwayPartsSource(),
+        railway_part_splits: createRailwayPartSplitsSource(),
         railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBuster }),
         stations: createStationsSource(),
       },
       layers: [
         createRailwayPartsLayer(),
+        createRailwayPartSplitsLayer(),
         createRailwayRoutesLayer(),
         createStationsLayer(),
       ],
@@ -83,20 +114,27 @@ export default function VectorAdminMap({
           selectedPartsRef,
           previewRouteRef,
           updatePartsStyleRef,
+          isSplittingModeRef,
+          splittingPartIdRef,
+          showErrorRef,
+          showSuccessRef,
+          onExitSplitModeRef,
+          onRefreshMapRef,
+          onSplitSuccessRef,
         });
       },
     },
     [] // Only initialize once
   );
 
-  // Update parts styling when selectedParts changes
+  // Update parts styling when selectedParts or splitting mode changes
   useEffect(() => {
     if (map.current && mapLoaded && updatePartsStyleRef.current) {
       requestAnimationFrame(() => {
         updatePartsStyleRef.current?.();
       });
     }
-  }, [selectedParts?.startingId, selectedParts?.endingId, mapLoaded, map]);
+  }, [selectedParts?.startingId, selectedParts?.endingId, isSplittingMode, splittingPartId, mapLoaded, map]);
 
   // Handle layer visibility toggles
   useEffect(() => {
@@ -107,6 +145,13 @@ export default function VectorAdminMap({
       'visibility',
       showPartsLayer ? 'visible' : 'none'
     );
+    if (map.current.getLayer('railway_part_splits')) {
+      map.current.setLayoutProperty(
+        'railway_part_splits',
+        'visibility',
+        showPartsLayer ? 'visible' : 'none'
+      );
+    }
   }, [showPartsLayer, mapLoaded, map]);
 
   useEffect(() => {
@@ -202,10 +247,12 @@ export default function VectorAdminMap({
     }
   }, [selectedRouteId, mapLoaded, map]);
 
-  // Handle railway routes refresh when routes are saved/deleted
+  // Handle railway routes and parts refresh when routes/parts are saved/deleted/split
   useEffect(() => {
     if (!map.current || !mapLoaded || refreshTrigger === undefined) return;
     if (refreshTrigger === 0) return; // Skip initial render
+
+    console.log('Refreshing railway tiles...');
 
     // Update cache buster
     const newCacheBuster = Date.now();
@@ -272,7 +319,69 @@ export default function VectorAdminMap({
         3  // Normal routes = standard width
       ]);
     }
-  }, [refreshTrigger, mapLoaded, showRoutesLayer, selectedRouteId, map]);
+
+    // Also reload railway_parts tiles to show newly split parts
+    const hasPartsLayer = map.current.getLayer('railway_parts');
+    const hasPartsSource = map.current.getSource('railway_parts');
+
+    if (hasPartsLayer) {
+      map.current.removeLayer('railway_parts');
+    }
+    if (hasPartsSource) {
+      map.current.removeSource('railway_parts');
+    }
+
+    // Re-add source with cache buster
+    map.current.addSource('railway_parts', {
+      ...createRailwayPartsSource(),
+      tiles: createRailwayPartsSource().tiles?.map(url => `${url}?t=${newCacheBuster}`)
+    });
+
+    // Re-add layer
+    map.current.addLayer(createRailwayPartsLayer());
+
+    // Re-apply visibility
+    if (!showPartsLayer) {
+      map.current.setLayoutProperty('railway_parts', 'visibility', 'none');
+    }
+
+    // Also reload railway_part_splits tiles to show newly split parts
+    const hasSplitsLayer = map.current.getLayer('railway_part_splits');
+    const hasSplitsSource = map.current.getSource('railway_part_splits');
+
+    if (hasSplitsLayer) {
+      map.current.removeLayer('railway_part_splits');
+    }
+    if (hasSplitsSource) {
+      map.current.removeSource('railway_part_splits');
+    }
+
+    // Re-add source with cache buster
+    map.current.addSource('railway_part_splits', {
+      ...createRailwayPartSplitsSource(),
+      tiles: createRailwayPartSplitsSource().tiles?.map(url => `${url}?t=${newCacheBuster}`)
+    });
+
+    // Re-add layer (must be added after railway_parts but before railway_routes)
+    map.current.addLayer(createRailwayPartSplitsLayer(), 'railway_routes');
+
+    // Re-apply visibility
+    if (!showPartsLayer) {
+      map.current.setLayoutProperty('railway_part_splits', 'visibility', 'none');
+    }
+
+    // Reapply parts styling
+    if (updatePartsStyleRef.current) {
+      setTimeout(() => {
+        updatePartsStyleRef.current?.();
+      }, 100);
+    }
+
+    // Force map repaint to clear any cached tiles
+    map.current.triggerRepaint();
+
+    console.log('Railway tiles refreshed');
+  }, [refreshTrigger, mapLoaded, showRoutesLayer, showPartsLayer, selectedRouteId, map]);
 
   // Handle preview route
   useEffect(() => {

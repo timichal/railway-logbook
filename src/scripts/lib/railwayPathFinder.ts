@@ -38,11 +38,17 @@ export class RailwayPathFinder {
     try {
       // Create a buffer around start and end points to limit search space
       // Default: 50km buffer in Web Mercator (meters)
+      // Updated to handle split parts and compound IDs
 
       const result = await client.query(`
         WITH endpoints AS (
+          -- Get geometry from either railway_parts or railway_part_splits
           SELECT geometry
           FROM railway_parts
+          WHERE id::TEXT = $1 OR id::TEXT = $2
+          UNION ALL
+          SELECT geometry
+          FROM railway_part_splits
           WHERE id = $1 OR id = $2
         ),
         search_area AS (
@@ -54,14 +60,33 @@ export class RailwayPathFinder {
             4326
           ) as buffer_geom
           FROM endpoints
+        ),
+        original_parts AS (
+          -- Original railway parts (excluding those that have been split)
+          SELECT
+            id::TEXT as id,
+            geometry
+          FROM railway_parts rp, search_area
+          WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
+            AND rp.geometry IS NOT NULL
+            AND rp.id NOT IN (SELECT DISTINCT parent_id FROM railway_part_splits)
+        ),
+        split_parts AS (
+          -- Split parts (displayed instead of their parent parts)
+          SELECT
+            id,
+            geometry
+          FROM railway_part_splits rps, search_area
+          WHERE ST_Intersects(rps.geometry, search_area.buffer_geom)
+            AND rps.geometry IS NOT NULL
         )
-        SELECT
-          rp.id,
-          ST_AsGeoJSON(rp.geometry) as geometry_json
-        FROM railway_parts rp, search_area
-        WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
-          AND rp.geometry IS NOT NULL
-        ORDER BY rp.id
+        -- Combine original and split parts
+        SELECT id, ST_AsGeoJSON(geometry) as geometry_json
+        FROM original_parts
+        UNION ALL
+        SELECT id, ST_AsGeoJSON(geometry) as geometry_json
+        FROM split_parts
+        ORDER BY id
       `, [startId, endId, bufferMeters]);
 
       for (const row of result.rows) {

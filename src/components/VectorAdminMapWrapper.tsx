@@ -23,6 +23,13 @@ interface VectorAdminMapWrapperProps {
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
+  isSplittingMode?: boolean;
+  splittingPartId?: string | null;
+  onExitSplitMode?: () => void;
+  onRefreshMap?: () => void;
+  showError?: (message: string) => void;
+  showSuccess?: (message: string) => void;
+  onSplitSuccess?: (parentId: string) => void;
 }
 
 export default function VectorAdminMapWrapper({
@@ -34,7 +41,14 @@ export default function VectorAdminMapWrapper({
   selectedParts,
   refreshTrigger,
   isEditingGeometry,
-  focusGeometry
+  focusGeometry,
+  isSplittingMode,
+  splittingPartId,
+  onExitSplitMode,
+  onRefreshMap,
+  showError,
+  showSuccess,
+  onSplitSuccess,
 }: VectorAdminMapWrapperProps) {
   return (
     <VectorAdminMap
@@ -47,6 +61,13 @@ export default function VectorAdminMapWrapper({
       refreshTrigger={refreshTrigger}
       isEditingGeometry={isEditingGeometry}
       focusGeometry={focusGeometry}
+      isSplittingMode={isSplittingMode}
+      splittingPartId={splittingPartId}
+      onExitSplitMode={onExitSplitMode}
+      onRefreshMap={onRefreshMap}
+      showError={showError}
+      showSuccess={showSuccess}
+      onSplitSuccess={onSplitSuccess}
     />
   );
 }

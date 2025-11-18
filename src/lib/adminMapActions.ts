@@ -32,6 +32,7 @@ export async function findRailwayPathDB(startId: string, endId: string): Promise
 
 /**
  * Get railway parts by their IDs (used for route creation)
+ * Handles both original parts (numeric IDs) and split parts (compound IDs like "12345-1")
  */
 export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPart[]> {
   // Admin check
@@ -47,38 +48,77 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
   try {
     console.log('Fetching railway parts for IDs:', partIds);
 
-    // Create placeholders for the IN query
-    const placeholders = partIds.map((_, index) => `$${index + 1}`).join(',');
+    // Separate compound IDs (split parts) from regular IDs
+    const compoundIds: string[] = [];
+    const regularIds: string[] = [];
 
-    const queryStr = `
-      SELECT
-        id,
-        ST_AsGeoJSON(geometry) as geometry_json
-      FROM railway_parts
-      WHERE id IN (${placeholders})
-        AND geometry IS NOT NULL
-    `;
+    partIds.forEach(id => {
+      if (id.includes('-')) {
+        compoundIds.push(id);
+      } else {
+        regularIds.push(id);
+      }
+    });
 
-    const result = await client.query(queryStr, partIds);
+    const features: RailwayPart[] = [];
 
-    const features: RailwayPart[] = result.rows
-      .map(row => {
+    // Fetch original parts if any regular IDs exist
+    if (regularIds.length > 0) {
+      const placeholders = regularIds.map((_, index) => `$${index + 1}`).join(',');
+      const queryStr = `
+        SELECT
+          id,
+          ST_AsGeoJSON(geometry) as geometry_json
+        FROM railway_parts
+        WHERE id IN (${placeholders})
+          AND geometry IS NOT NULL
+      `;
+
+      const result = await client.query(queryStr, regularIds);
+
+      result.rows.forEach(row => {
         const geom = JSON.parse(row.geometry_json);
-        // Only return LineString features to match RailwayPart type
         if (geom.type === 'LineString') {
-          return {
+          features.push({
             type: 'Feature' as const,
             geometry: geom,
             properties: {
               '@id': parseInt(row.id)
             }
-          } as RailwayPart;
+          } as RailwayPart);
         }
-        return null;
-      })
-      .filter((feature): feature is RailwayPart => feature !== null);
+      });
+    }
 
-    console.log('Fetched', features.length, 'railway parts from database');
+    // Fetch split parts if any compound IDs exist
+    if (compoundIds.length > 0) {
+      const placeholders = compoundIds.map((_, index) => `$${index + 1}`).join(',');
+      const queryStr = `
+        SELECT
+          id,
+          ST_AsGeoJSON(geometry) as geometry_json
+        FROM railway_part_splits
+        WHERE id IN (${placeholders})
+          AND geometry IS NOT NULL
+      `;
+
+      const result = await client.query(queryStr, compoundIds);
+
+      result.rows.forEach(row => {
+        const geom = JSON.parse(row.geometry_json);
+        if (geom.type === 'LineString') {
+          features.push({
+            type: 'Feature' as const,
+            geometry: geom,
+            properties: {
+              '@id': row.id // Keep as string for compound IDs
+            }
+          } as RailwayPart);
+        }
+      });
+    }
+
+    console.log('Fetched', features.length, 'railway parts from database (original + split)');
     return features;
 
   } catch (error) {

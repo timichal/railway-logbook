@@ -218,6 +218,33 @@ export function createRailwayPartsLayer(): maplibregl.LineLayerSpecification {
   };
 }
 
+export function createRailwayPartSplitsSource(): maplibregl.VectorSourceSpecification {
+  return {
+    type: 'vector',
+    tiles: [`${TILE_BASE_URL}/railway_part_splits_tile/{z}/{x}/{y}`],
+    minzoom: ZOOM_RANGES.railwayParts.min,
+    maxzoom: ZOOM_RANGES.railwayParts.max,
+  };
+}
+
+export function createRailwayPartSplitsLayer(): maplibregl.LineLayerSpecification {
+  return {
+    id: 'railway_part_splits',
+    type: 'line',
+    source: 'railway_part_splits',
+    'source-layer': 'railway_part_splits',
+    minzoom: ZOOM_RANGES.railwayParts.min,
+    layout: {
+      visibility: 'visible',
+    },
+    paint: {
+      'line-color': COLORS.railwayParts.default,
+      'line-width': 3,
+      'line-opacity': 0.7,
+    },
+  };
+}
+
 // ============================================================================
 // POPUP UTILITIES
 // ============================================================================
