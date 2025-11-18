@@ -21,15 +21,6 @@ dolní žleb-schöna
 vejprty-bärenstein
 potůčky-johanngeorgenstadt
 
-cz-pl
-petrovice u karviné-zebrzydowice
-bohumín-chalupki
-jindřichov-glucholazy
-lichkov-miedzylesie
-meziměstí-mieroszow
-královec-lubawka
-harrachov-polana jakuszycka
-
 dodělat s aičkem:
 - mezistátky rozdělit - poslední zast - přeshraniční úsek - první zast
 - about/faq
