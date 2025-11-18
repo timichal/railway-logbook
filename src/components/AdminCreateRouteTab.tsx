@@ -247,7 +247,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       if (endingId) {
         const isSplit = isCompoundId(endingId) || await isPartSplit(endingId);
         setEndingPartIsSplit(isSplit);
-        
+
         setEndingPartIsSplit(false);
       }
     };
@@ -290,6 +290,31 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode || isSplittingMode ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
             />
+            {/* Split/Unsplit button for starting part */}
+            {startingId && !isPreviewMode && (
+              <div>
+                {startingPartIsSplit ? (
+                  <button
+                    onClick={() => handleUnsplitPart(startingId)}
+                    disabled={isSplittingMode}
+                    className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm disabled:cursor-not-allowed"
+                  >
+                    Unsplit Part
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSplitPart(startingId)}
+                    disabled={isSplittingMode && splittingPartId !== startingId}
+                    className={`w-full font-medium py-2 px-4 rounded-md text-sm ${isSplittingMode && splittingPartId === startingId
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed'
+                      }`}
+                  >
+                    {isSplittingMode && splittingPartId === startingId ? 'Click on the line to split' : 'Split Part'}
+                  </button>
+                )}
+              </div>
+            )}
             <button
               onClick={clearStartingId}
               disabled={isSplittingMode}
@@ -299,32 +324,6 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               ×
             </button>
           </div>
-          {/* Split/Unsplit button for starting part */}
-          {startingId && !isPreviewMode && (
-            <div className="mt-2">
-              {startingPartIsSplit ? (
-                <button
-                  onClick={() => handleUnsplitPart(startingId)}
-                  disabled={isSplittingMode}
-                  className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm disabled:cursor-not-allowed"
-                >
-                  Unsplit Part
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleSplitPart(startingId)}
-                  disabled={isSplittingMode && splittingPartId !== startingId}
-                  className={`w-full font-medium py-2 px-4 rounded-md text-sm ${
-                    isSplittingMode && splittingPartId === startingId
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed'
-                  }`}
-                >
-                  {isSplittingMode && splittingPartId === startingId ? 'Click on the line to split' : 'Split Part'}
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Ending ID */}
@@ -342,6 +341,31 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode || isSplittingMode ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
             />
+            {/* Split/Unsplit button for ending part */}
+            {endingId && !isPreviewMode && (
+              <div>
+                {endingPartIsSplit ? (
+                  <button
+                    onClick={() => handleUnsplitPart(endingId)}
+                    disabled={isSplittingMode}
+                    className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm disabled:cursor-not-allowed"
+                  >
+                    Unsplit Part
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSplitPart(endingId)}
+                    disabled={isSplittingMode && splittingPartId !== endingId}
+                    className={`w-full font-medium py-2 px-4 rounded-md text-sm ${isSplittingMode && splittingPartId === endingId
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed'
+                      }`}
+                  >
+                    {isSplittingMode && splittingPartId === endingId ? 'Click on the line to split' : 'Split Part'}
+                  </button>
+                )}
+              </div>
+            )}
             <button
               onClick={clearEndingId}
               disabled={isSplittingMode}
@@ -351,32 +375,6 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
               ×
             </button>
           </div>
-          {/* Split/Unsplit button for ending part */}
-          {endingId && !isPreviewMode && (
-            <div className="mt-2">
-              {endingPartIsSplit ? (
-                <button
-                  onClick={() => handleUnsplitPart(endingId)}
-                  disabled={isSplittingMode}
-                  className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm disabled:cursor-not-allowed"
-                >
-                  Unsplit Part
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleSplitPart(endingId)}
-                  disabled={isSplittingMode && splittingPartId !== endingId}
-                  className={`w-full font-medium py-2 px-4 rounded-md text-sm ${
-                    isSplittingMode && splittingPartId === endingId
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed'
-                  }`}
-                >
-                  {isSplittingMode && splittingPartId === endingId ? 'Click on the line to split' : 'Split Part'}
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Only show metadata fields in create mode */}
