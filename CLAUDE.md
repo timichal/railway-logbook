@@ -29,7 +29,6 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 ### Database Operations
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
-- `npm run migration:addCountries` - Migration script to add country tracking columns (start_country, end_country) and user_preferences table
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
 - `npm run exportRouteData` - Export railway_routes and user_trips (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
