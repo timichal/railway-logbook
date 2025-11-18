@@ -11,7 +11,6 @@
     "prepareMapData": "sh ./osmium-scripts/prepare.sh",
     "importMapData": "node --max-old-space-size=8192 ./node_modules/tsx/dist/cli.mjs src/scripts/importMapData.ts",
     "verifyRouteData": "tsx src/scripts/verifyRouteData.ts",
-    "migration:addCountries": "tsx src/scripts/addCountryColumns.ts",
     "exportRouteData": "tsx src/scripts/exportRoutes.ts",
     "importRouteData": "tsx src/scripts/importRoutes.ts",
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
