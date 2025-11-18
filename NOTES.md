@@ -4,12 +4,42 @@ temp poznamky
 - junctions: aproximace (představit si jako kolečko)
 - actually možná projet triangly a udělat z nich routes kde jde
 - 222 vlašim-trhový štěpánov a 304 kojetín-tovačov v roce 26 bez provozu? 25: https://railwaycapital.cz/jizdni-rady/
+- geolokace parts nepřesná - nutno asi přes api nebo manuálně (chyba - Vrbovce, s jinou knihovnou Hel)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
 !PRIO! přejet cross country lines
+de-cz
+zittau-liberec
+seifhennersdorf-varnsdorf kocour
+varnsdorf-grossschonau
+jiříkov-ebersbach (?)
+dolní poustevna-sebnitz
+dolní žleb-schöna
+vejprty-bärenstein
+potůčky-johanngeorgenstadt
+
+cz-pl
+petrovice u karviné-zebrzydowice
+bohumín-chalupki
+jindřichov-glucholazy
+lichkov-miedzylesie
+meziměstí-mieroszow
+královec-lubawka
+harrachov-polana jakuszycka
+
+cz-at
+linz-summerau
+šatov-unterretzbach
+břeclav-bernardsthal
+
+cz-sk
+javorník nad veličkou-vrbovce 121sk 343cz
+vlárský průsmyk-horné srnie
+střelná-strelenka
+mosty u jablunkova-svrčinovec
 
 dodělat s aičkem:
 - mezistátky rozdělit - poslední zast - přeshraniční úsek - první zast
