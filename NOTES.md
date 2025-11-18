@@ -30,17 +30,6 @@ meziměstí-mieroszow
 královec-lubawka
 harrachov-polana jakuszycka
 
-cz-at
-linz-summerau
-šatov-unterretzbach
-břeclav-bernardsthal
-
-cz-sk
-javorník nad veličkou-vrbovce 121sk 343cz
-vlárský průsmyk-horné srnie
-střelná-strelenka
-mosty u jablunkova-svrčinovec
-
 dodělat s aičkem:
 - mezistátky rozdělit - poslední zast - přeshraniční úsek - první zast
 - about/faq
