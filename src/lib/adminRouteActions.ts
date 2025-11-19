@@ -91,6 +91,71 @@ export async function getRailwayRoute(trackId: string) {
 }
 
 /**
+ * Get all route endpoints (starting and ending coordinates) for map display
+ * Returns GeoJSON FeatureCollection of Point features
+ */
+export async function getAllRouteEndpoints(): Promise<GeoJSONFeatureCollection> {
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
+  const result = await query(`
+    SELECT
+      track_id,
+      from_station,
+      to_station,
+      ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
+      ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json
+    FROM railway_routes
+    WHERE starting_coordinate IS NOT NULL AND ending_coordinate IS NOT NULL
+  `);
+
+  const features: GeoJSONFeature[] = [];
+
+  for (const row of result.rows) {
+    // Parse starting coordinate
+    if (row.starting_coordinate_json) {
+      const geojson = JSON.parse(row.starting_coordinate_json);
+      if (geojson.type === 'Point' && geojson.coordinates) {
+        features.push({
+          type: 'Feature' as const,
+          geometry: geojson,
+          properties: {
+            track_id: row.track_id,
+            endpoint_type: 'start',
+            station_name: row.from_station,
+            route_name: `${row.from_station} ⟷ ${row.to_station}`
+          }
+        });
+      }
+    }
+
+    // Parse ending coordinate
+    if (row.ending_coordinate_json) {
+      const geojson = JSON.parse(row.ending_coordinate_json);
+      if (geojson.type === 'Point' && geojson.coordinates) {
+        features.push({
+          type: 'Feature' as const,
+          geometry: geojson,
+          properties: {
+            track_id: row.track_id,
+            endpoint_type: 'end',
+            station_name: row.to_station,
+            route_name: `${row.from_station} ⟷ ${row.to_station}`
+          }
+        });
+      }
+    }
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features
+  };
+}
+
+/**
  * Get all railway routes with geometry (for map display)
  */
 export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {

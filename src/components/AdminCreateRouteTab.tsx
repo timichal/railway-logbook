@@ -24,6 +24,7 @@ interface AdminCreateRouteTabProps {
   onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: UsageType, frequency: string[], link: string }) => void;
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
+  editingRouteInfo?: { from_station: string, to_station: string, track_number: string } | null;
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
   onRefreshMap?: () => void;
@@ -40,6 +41,7 @@ export default function AdminCreateRouteTab({
   onSaveRoute,
   onFormReset,
   editingGeometryForTrackId,
+  editingRouteInfo,
   onGeometryEditComplete,
   onCancelGeometryEdit
 }: AdminCreateRouteTabProps) {
@@ -225,10 +227,20 @@ export default function AdminCreateRouteTab({
     return `${coord[1].toFixed(6)}, ${coord[0].toFixed(6)}`;
   };
 
+  // Format header for edit mode
+  const getEditModeHeader = () => {
+    if (!isEditMode || !editingRouteInfo) {
+      return 'Create New Route';
+    }
+
+    const trackNum = editingRouteInfo.track_number ? `${editingRouteInfo.track_number} ` : '';
+    return `Edit Route Geometry (${trackNum}${editingRouteInfo.from_station} ⟷ ${editingRouteInfo.to_station})`;
+  };
+
   return (
     <div className="p-4 overflow-y-auto">
       <h3 className="font-semibold text-gray-900 mb-4">
-        {isEditMode ? `Edit Route Geometry (Track ID: ${editingGeometryForTrackId})` : 'Create New Route'}
+        {getEditModeHeader()}
       </h3>
       <p className="text-sm text-gray-600 mb-4">
         Click on railway parts in the map to set starting and ending points. The route will be automatically previewed on the map.

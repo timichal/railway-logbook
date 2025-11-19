@@ -1083,40 +1083,52 @@ export class RailwayPathFinder {
     if (sublists.length === 0) return [];
     if (sublists.length === 1) return sublists[0];
 
-    // Step 1: Create a map of coordinate frequencies
+    // Make a copy to avoid mutating the original
+    const remainingSublists = sublists.map(s => [...s]);
+
+    // Step 1: Create a map of coordinate frequencies (only count endpoints)
     const coordCount = new Map<string, number>();
-    sublists.flat().forEach(([x, y]) => {
-      const key = `${x},${y}`;
-      coordCount.set(key, (coordCount.get(key) || 0) + 1);
+    remainingSublists.forEach(sublist => {
+      const firstKey = `${sublist[0][0]},${sublist[0][1]}`;
+      const lastKey = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
+      coordCount.set(firstKey, (coordCount.get(firstKey) || 0) + 1);
+      coordCount.set(lastKey, (coordCount.get(lastKey) || 0) + 1);
     });
 
-    // Step 2: Find the starting sublist
-    const startingSublistIndex = sublists.findIndex(sublist => {
+    // Step 2: Find the starting sublist (prefer one with an endpoint that appears only once)
+    let startingSublistIndex = remainingSublists.findIndex(sublist => {
       const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
       const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
       return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
     });
 
+    // If no clear endpoint found (e.g., circular routes or complex junctions), use first sublist
     if (startingSublistIndex === -1) {
-      throw new Error("No valid starting sublist found.");
+      console.log('[RailwayPathFinder] No clear endpoint found, using first sublist as starting point');
+      startingSublistIndex = 0;
     }
 
     // Extract the starting sublist
-    const mergedChain = [...sublists[startingSublistIndex]];
-    sublists.splice(startingSublistIndex, 1); // Remove the starting sublist
+    const mergedChain = [...remainingSublists[startingSublistIndex]];
+    remainingSublists.splice(startingSublistIndex, 1);
 
-    // Step 2.1: Ensure the starting sublist is oriented correctly
+    // Step 2.1: Orient the starting sublist correctly if we have a clear endpoint
+    const firstCoord = `${mergedChain[0][0]},${mergedChain[0][1]}`;
     const lastCoord = `${mergedChain[mergedChain.length - 1][0]},${mergedChain[mergedChain.length - 1][1]}`;
-    if (coordCount.get(lastCoord) === 1) {
-      mergedChain.reverse(); // Reverse if the starting point is at the "end"
+
+    // If the last coordinate appears only once, it should be at the end
+    // If the first coordinate appears only once, it should be at the start (don't reverse)
+    if (coordCount.get(lastCoord) === 1 && coordCount.get(firstCoord) !== 1) {
+      // Last coord is endpoint, first coord is not -> need to reverse
+      mergedChain.reverse();
     }
 
     // Step 3: Build the chain incrementally
-    while (sublists.length > 0) {
+    while (remainingSublists.length > 0) {
       const lastCoordInChain = mergedChain[mergedChain.length - 1];
 
       // Find the next sublist that connects to the current chain
-      const nextIndex = sublists.findIndex(sublist =>
+      const nextIndex = remainingSublists.findIndex(sublist =>
         sublist.some(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1])
       );
 
@@ -1125,7 +1137,7 @@ export class RailwayPathFinder {
       }
 
       // Extract the next sublist and reverse it if necessary
-      const nextSublist = [...sublists[nextIndex]];
+      const nextSublist = [...remainingSublists[nextIndex]];
       const overlapIndex = nextSublist.findIndex(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1]);
 
       if (overlapIndex !== 0) {
@@ -1136,7 +1148,7 @@ export class RailwayPathFinder {
       mergedChain.push(...nextSublist.slice(1));
 
       // Remove the processed sublist
-      sublists.splice(nextIndex, 1);
+      remainingSublists.splice(nextIndex, 1);
     }
 
     return mergedChain;

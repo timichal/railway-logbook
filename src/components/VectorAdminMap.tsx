@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { RailwayPart } from '@/lib/types';
+import type { RailwayPart, GeoJSONFeatureCollection } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
 import { useRouteLength } from '@/lib/map/hooks/useRouteLength';
 import {
@@ -14,6 +14,7 @@ import {
   COLORS,
 } from '@/lib/map';
 import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapInteractions';
+import { getAllRouteEndpoints } from '@/lib/adminRouteActions';
 
 interface VectorAdminMapProps {
   className?: string;
@@ -48,7 +49,9 @@ export default function VectorAdminMap({
   const [showPartsLayer, setShowPartsLayer] = useState(true);
   const [showRoutesLayer, setShowRoutesLayer] = useState(true);
   const [showStationsLayer, setShowStationsLayer] = useState(true);
+  const [showEndpointsLayer, setShowEndpointsLayer] = useState(true);
   const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
+  const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
   const previousShowRoutesLayerRef = useRef(true); // Track previous state before editing geometry
 
   // Use custom hook for route length management
@@ -101,6 +104,22 @@ export default function VectorAdminMap({
     },
     [] // Only initialize once
   );
+
+  // Fetch route endpoints when map loads or routes are updated
+  useEffect(() => {
+    const fetchEndpoints = async () => {
+      try {
+        const endpoints = await getAllRouteEndpoints();
+        setRouteEndpoints(endpoints);
+      } catch (error) {
+        console.error('Error fetching route endpoints:', error);
+      }
+    };
+
+    if (mapLoaded) {
+      fetchEndpoints();
+    }
+  }, [mapLoaded, refreshTrigger]);
 
   // Update parts styling when selectedCoordinates change
   useEffect(() => {
@@ -461,6 +480,66 @@ export default function VectorAdminMap({
     }
   }, [selectedCoordinates, mapLoaded, map]);
 
+  // Handle route endpoints layer visualization (only show in edit/create mode)
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Remove existing route endpoints layers if any
+    if (map.current.getLayer('route-endpoints')) {
+      map.current.removeLayer('route-endpoints');
+    }
+    if (map.current.getSource('route-endpoints')) {
+      map.current.removeSource('route-endpoints');
+    }
+
+    // Only show endpoints when we have coordinates selected (create mode) or editing geometry
+    const shouldShowEndpoints = showEndpointsLayer && (
+      (selectedCoordinates?.startingCoordinate !== null || selectedCoordinates?.endingCoordinate !== null) ||
+      isEditingGeometry
+    );
+
+    if (routeEndpoints && routeEndpoints.features.length > 0 && shouldShowEndpoints) {
+      console.log('[VectorAdminMap] Adding route endpoints layer with', routeEndpoints.features.length, 'endpoints');
+
+      // Add route endpoints as a GeoJSON source
+      map.current.addSource('route-endpoints', {
+        type: 'geojson',
+        data: routeEndpoints
+      });
+
+      // Add route endpoints layer
+      // Note: selected-points layer will be added after this, so it will naturally be on top
+      map.current.addLayer({
+        'id': 'route-endpoints',
+        'type': 'circle',
+        'source': 'route-endpoints',
+        'paint': {
+          'circle-radius': 5,
+          'circle-color': '#3b82f6', // Blue color for existing route endpoints
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.5,
+          'circle-opacity': 0.8
+        }
+      });
+
+      console.log('[VectorAdminMap] Route endpoints layer added');
+    }
+  }, [routeEndpoints, showEndpointsLayer, selectedCoordinates, isEditingGeometry, mapLoaded, map]);
+
+  // Handle layer visibility for route endpoints
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const hasLayer = map.current.getLayer('route-endpoints');
+    if (hasLayer) {
+      map.current.setLayoutProperty(
+        'route-endpoints',
+        'visibility',
+        showEndpointsLayer ? 'visible' : 'none'
+      );
+    }
+  }, [showEndpointsLayer, mapLoaded, map]);
+
   // Handle focus on route geometry (fly to route when selected)
   useEffect(() => {
     if (!map.current || !mapLoaded || !focusGeometry) return;
@@ -527,6 +606,15 @@ export default function VectorAdminMap({
               className="mr-2"
             />
             Stations
+          </label>
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showEndpointsLayer}
+              onChange={() => setShowEndpointsLayer(!showEndpointsLayer)}
+              className="mr-2"
+            />
+            Route Endpoints
           </label>
         </div>
       </div>

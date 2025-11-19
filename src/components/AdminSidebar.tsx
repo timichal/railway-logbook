@@ -38,6 +38,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
   const showError = showErrorProp || showErrorToast;
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
+  const [editingRouteInfo, setEditingRouteInfo] = useState<{ from_station: string, to_station: string, track_number: string } | null>(null);
 
   // Switch to create tab when a coordinate is clicked
   React.useEffect(() => {
@@ -125,6 +126,13 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
       console.log('Starting coordinate:', routeDetail.starting_coordinate);
       console.log('Ending coordinate:', routeDetail.ending_coordinate);
 
+      // Store route info for display
+      setEditingRouteInfo({
+        from_station: routeDetail.from_station,
+        to_station: routeDetail.to_station,
+        track_number: routeDetail.track_number || ''
+      });
+
       // Prefill the starting/ending coordinates if they exist
       if (routeDetail.starting_coordinate && routeDetail.ending_coordinate) {
         setCreateFormCoordinates({
@@ -164,6 +172,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
   const handleCancelGeometryEdit = React.useCallback(() => {
     console.log('Cancel geometry edit');
     setEditingGeometryForTrackId(null);
+    setEditingRouteInfo(null);
     setActiveTab('routes');
     setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
 
@@ -239,8 +248,10 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
             onSaveRoute={onSaveRoute}
             onFormReset={handleResetCoordinates}
             editingGeometryForTrackId={editingGeometryForTrackId}
+            editingRouteInfo={editingRouteInfo}
             onGeometryEditComplete={() => {
               setEditingGeometryForTrackId(null);
+              setEditingRouteInfo(null);
               setActiveTab('routes');
 
               // Trigger map refresh after geometry edit
