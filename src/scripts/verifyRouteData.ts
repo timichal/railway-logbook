@@ -33,11 +33,21 @@ export async function recalculateRoute(
       return { success: false, error: 'No path found between starting and ending parts' };
     }
 
-    // Fetch the actual railway part geometries from the database
+    // Fetch the actual railway part geometries from the database (both regular and split parts)
     const railwayPartsQuery = await client.query(`
-      SELECT id, ST_AsGeoJSON(geometry) as geometry_json
-      FROM railway_parts
-      WHERE id = ANY($1)
+      WITH regular_parts AS (
+        SELECT id::TEXT as id, ST_AsGeoJSON(geometry) as geometry_json
+        FROM railway_parts
+        WHERE id::TEXT = ANY($1)
+      ),
+      split_parts AS (
+        SELECT id, ST_AsGeoJSON(geometry) as geometry_json
+        FROM railway_part_splits
+        WHERE id = ANY($1)
+      )
+      SELECT id, geometry_json FROM regular_parts
+      UNION ALL
+      SELECT id, geometry_json FROM split_parts
       ORDER BY array_position($1, id)
     `, [result.partIds]);
 

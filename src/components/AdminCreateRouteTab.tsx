@@ -193,6 +193,11 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     console.log('AdminCreateRouteTab: handleSplitPart called with partId:', partId);
     if (!partId) return;
 
+    // Clear the preview if it exists
+    if (onCancelPreview) {
+      onCancelPreview();
+    }
+
     if (onEnterSplitMode) {
       console.log('AdminCreateRouteTab: Calling onEnterSplitMode with partId:', partId);
       onEnterSplitMode(partId);
@@ -256,11 +261,11 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
 
   // Automatically preview route when both IDs are filled
   useEffect(() => {
-    if (startingId && endingId && !isPreviewMode) {
+    if (startingId && endingId && !isPreviewMode && !isSplittingMode) {
       handlePreviewRoute();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startingId, endingId, isPreviewMode]);
+  }, [startingId, endingId, isPreviewMode, isSplittingMode]);
 
   const isEditMode = !!editingGeometryForTrackId;
 
@@ -291,7 +296,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
                 }`}
             />
             {/* Split/Unsplit button for starting part */}
-            {startingId && !isPreviewMode && (
+            {startingId && (
               <div>
                 {startingPartIsSplit ? (
                   <button
@@ -342,7 +347,7 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
                 }`}
             />
             {/* Split/Unsplit button for ending part */}
-            {endingId && !isPreviewMode && (
+            {endingId && (
               <div>
                 {endingPartIsSplit ? (
                   <button

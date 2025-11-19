@@ -190,6 +190,9 @@ export default function VectorAdminMap({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
+    const hasLayer = map.current.getLayer('railway_routes');
+    if (!hasLayer) return;
+
     if (isEditingGeometry) {
       // Hide the railway_routes layer
       map.current.setLayoutProperty('railway_routes', 'visibility', 'none');
@@ -252,75 +255,11 @@ export default function VectorAdminMap({
     if (!map.current || !mapLoaded || refreshTrigger === undefined) return;
     if (refreshTrigger === 0) return; // Skip initial render
 
-    console.log('Refreshing railway tiles...');
-
     // Update cache buster
     const newCacheBuster = Date.now();
     setRoutesCacheBuster(newCacheBuster);
 
-    // Reload railway_routes tiles
-    const hasRoutesLayer = map.current.getLayer('railway_routes');
-    const hasRoutesSource = map.current.getSource('railway_routes');
-
-    if (hasRoutesLayer) {
-      map.current.removeLayer('railway_routes');
-    }
-    if (hasRoutesSource) {
-      map.current.removeSource('railway_routes');
-    }
-
-    // Re-add source with new cache buster
-    map.current.addSource('railway_routes', createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
-
-    // Re-add layer
-    map.current.addLayer(createRailwayRoutesLayer());
-
-    // Re-apply visibility
-    if (!showRoutesLayer) {
-      map.current.setLayoutProperty('railway_routes', 'visibility', 'none');
-    }
-
-    // Re-apply selected route highlighting if needed
-    if (selectedRouteId) {
-      map.current.setPaintProperty('railway_routes', 'line-color', [
-        'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
-        COLORS.railwayRoutes.selected, // Selected routes always orange
-        ['==', ['get', 'is_valid'], false],
-        COLORS.railwayRoutes.invalid, // Unselected invalid routes are grey
-        COLORS.railwayRoutes.created
-      ]);
-      map.current.setPaintProperty('railway_routes', 'line-width', [
-        'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
-        5,
-        ['==', ['get', 'usage_type'], 1],
-        2, // Special routes = thinner
-        3  // Normal routes = standard width
-      ]);
-      map.current.setPaintProperty('railway_routes', 'line-opacity', [
-        'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
-        1.0,
-        0.8
-      ]);
-    } else {
-      // Also apply invalid styling when no route is selected
-      map.current.setPaintProperty('railway_routes', 'line-color', [
-        'case',
-        ['==', ['get', 'is_valid'], false],
-        COLORS.railwayRoutes.invalid,
-        COLORS.railwayRoutes.created
-      ]);
-      map.current.setPaintProperty('railway_routes', 'line-width', [
-        'case',
-        ['==', ['get', 'usage_type'], 1],
-        2, // Special routes = thinner
-        3  // Normal routes = standard width
-      ]);
-    }
-
-    // Also reload railway_parts tiles to show newly split parts
+    // Step 1: Reload railway_parts tiles to show newly split parts
     const hasPartsLayer = map.current.getLayer('railway_parts');
     const hasPartsSource = map.current.getSource('railway_parts');
 
@@ -362,12 +301,76 @@ export default function VectorAdminMap({
       tiles: createRailwayPartSplitsSource().tiles?.map(url => `${url}?t=${newCacheBuster}`)
     });
 
-    // Re-add layer (must be added after railway_parts but before railway_routes)
-    map.current.addLayer(createRailwayPartSplitsLayer(), 'railway_routes');
+    // Re-add layer (after railway_parts)
+    map.current.addLayer(createRailwayPartSplitsLayer());
 
     // Re-apply visibility
     if (!showPartsLayer) {
       map.current.setLayoutProperty('railway_part_splits', 'visibility', 'none');
+    }
+
+    // Step 2: Reload railway_routes tiles (AFTER parts so routes render on top)
+    const hasRoutesLayer = map.current.getLayer('railway_routes');
+    const hasRoutesSource = map.current.getSource('railway_routes');
+
+    if (hasRoutesLayer) {
+      map.current.removeLayer('railway_routes');
+    }
+    if (hasRoutesSource) {
+      map.current.removeSource('railway_routes');
+    }
+
+    // Re-add source with new cache buster
+    map.current.addSource('railway_routes', createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
+
+    // Re-add layer (this goes on top of parts)
+    map.current.addLayer(createRailwayRoutesLayer());
+
+    // Explicitly set visibility based on current state
+    map.current.setLayoutProperty(
+      'railway_routes',
+      'visibility',
+      showRoutesLayer ? 'visible' : 'none'
+    );
+
+    // Re-apply selected route highlighting if needed
+    if (selectedRouteId) {
+      map.current.setPaintProperty('railway_routes', 'line-color', [
+        'case',
+        ['==', ['get', 'track_id'], selectedRouteId],
+        COLORS.railwayRoutes.selected, // Selected routes always orange
+        ['==', ['get', 'is_valid'], false],
+        COLORS.railwayRoutes.invalid, // Unselected invalid routes are grey
+        COLORS.railwayRoutes.created
+      ]);
+      map.current.setPaintProperty('railway_routes', 'line-width', [
+        'case',
+        ['==', ['get', 'track_id'], selectedRouteId],
+        5,
+        ['==', ['get', 'usage_type'], 1],
+        2, // Special routes = thinner
+        3  // Normal routes = standard width
+      ]);
+      map.current.setPaintProperty('railway_routes', 'line-opacity', [
+        'case',
+        ['==', ['get', 'track_id'], selectedRouteId],
+        1.0,
+        0.8
+      ]);
+    } else {
+      // Also apply invalid styling when no route is selected
+      map.current.setPaintProperty('railway_routes', 'line-color', [
+        'case',
+        ['==', ['get', 'is_valid'], false],
+        COLORS.railwayRoutes.invalid,
+        COLORS.railwayRoutes.created
+      ]);
+      map.current.setPaintProperty('railway_routes', 'line-width', [
+        'case',
+        ['==', ['get', 'usage_type'], 1],
+        2, // Special routes = thinner
+        3  // Normal routes = standard width
+      ]);
     }
 
     // Reapply parts styling
@@ -379,8 +382,6 @@ export default function VectorAdminMap({
 
     // Force map repaint to clear any cached tiles
     map.current.triggerRepaint();
-
-    console.log('Railway tiles refreshed');
   }, [refreshTrigger, mapLoaded, showRoutesLayer, showPartsLayer, selectedRouteId, map]);
 
   // Handle preview route

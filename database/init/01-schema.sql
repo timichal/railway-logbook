@@ -62,8 +62,8 @@ CREATE TABLE railway_routes (
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
     start_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of start point
     end_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of end point
-    starting_part_id BIGINT, -- Reference to starting railway_part for recalculation
-    ending_part_id BIGINT, -- Reference to ending railway_part for recalculation
+    starting_part_id TEXT, -- Reference to starting railway_part or split part for recalculation (supports both bigint IDs and compound split IDs)
+    ending_part_id TEXT, -- Reference to ending railway_part or split part for recalculation (supports both bigint IDs and compound split IDs)
     is_valid BOOLEAN DEFAULT TRUE, -- Route validity flag (for recalculation errors)
     error_message TEXT, -- Error details if route recalculation fails
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

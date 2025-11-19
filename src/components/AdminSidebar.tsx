@@ -227,9 +227,13 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedP
             onGeometryEditComplete={() => {
               setEditingGeometryForTrackId(null);
               setActiveTab('routes');
+
               // Trigger map refresh after geometry edit
+              // Use setTimeout to allow showRoutesLayer state to update first
               if (onRouteUpdated) {
-                onRouteUpdated();
+                setTimeout(() => {
+                  onRouteUpdated();
+                }, 50);
               }
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
