@@ -89,8 +89,12 @@ export function setupAdminMapInteractions(
         layers: ['route-endpoints']
       });
       if (endpointFeatures && endpointFeatures.length > 0) {
-        // Simulate layer-specific click event
-        handleEndpointClick(e as maplibreglType.MapLayerMouseEvent);
+        // Manually call the endpoint click handler with proper features
+        const feature = endpointFeatures[0];
+        if (feature.geometry.type === 'Point' && onCoordinateClickRef.current) {
+          const clickedCoordinate = feature.geometry.coordinates as [number, number];
+          onCoordinateClickRef.current(clickedCoordinate);
+        }
       }
     }
   };
@@ -123,9 +127,18 @@ export function setupAdminMapInteractions(
       layers: ['railway_parts']
     });
 
+    // Also check for endpoint clicks
+    let endpointFeatures = null;
+    if (mapInstance.getLayer('route-endpoints')) {
+      endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
+        layers: ['route-endpoints']
+      });
+    }
+
     // If we didn't click on any features, unselect the route
     if ((!routeFeatures || routeFeatures.length === 0) &&
-      (!partFeatures || partFeatures.length === 0)) {
+      (!partFeatures || partFeatures.length === 0) &&
+      (!endpointFeatures || endpointFeatures.length === 0)) {
       if (onRouteSelectRef.current) {
         onRouteSelectRef.current('');  // Empty string to unselect
       }

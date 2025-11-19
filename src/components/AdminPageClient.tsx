@@ -155,6 +155,10 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
   const handleEditingGeometryChange = (trackId: string | null) => {
     setEditingGeometryForTrackId(trackId);
+    // Clear focus geometry when entering/exiting edit mode to prevent unwanted panning
+    if (trackId) {
+      setFocusGeometry(null);
+    }
   };
 
   const handleRouteFocus = (geometry: string) => {

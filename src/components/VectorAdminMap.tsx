@@ -377,8 +377,8 @@ export default function VectorAdminMap({
 
       console.log('[VectorAdminMap] Preview route layer added successfully');
 
-      // Optionally zoom to show the preview route
-      if (previewRoute.coordinates.length > 0) {
+      // Optionally zoom to show the preview route (but not in edit geometry mode)
+      if (previewRoute.coordinates.length > 0 && !isEditingGeometry) {
         const lngs = previewRoute.coordinates.map(c => c[0]);
         const lats = previewRoute.coordinates.map(c => c[1]);
         const bounds: [[number, number], [number, number]] = [
@@ -542,7 +542,8 @@ export default function VectorAdminMap({
 
   // Handle focus on route geometry (fly to route when selected)
   useEffect(() => {
-    if (!map.current || !mapLoaded || !focusGeometry) return;
+    // Don't pan/zoom when in edit geometry mode
+    if (!map.current || !mapLoaded || !focusGeometry || isEditingGeometry) return;
 
     try {
       // Parse the WKT geometry string (should be in format "LINESTRING(...)")
@@ -570,7 +571,7 @@ export default function VectorAdminMap({
     } catch (error) {
       console.error('Error parsing geometry for focus:', error);
     }
-  }, [focusGeometry, mapLoaded, map]);
+  }, [focusGeometry, mapLoaded, map, isEditingGeometry]);
 
   return (
     <div className={`${className} relative`}>

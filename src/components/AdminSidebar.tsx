@@ -152,10 +152,6 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
         setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
       }
 
-      // Focus on the route geometry
-      if (onRouteFocus && routeDetail.geometry) {
-        onRouteFocus(routeDetail.geometry);
-      }
     } catch (error) {
       console.error('Error fetching route details for geometry edit:', error);
       showError(`Failed to load route details: ${error instanceof Error ? error.message : 'Unknown error'}`);
