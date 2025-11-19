@@ -49,7 +49,8 @@ BEGIN
     tile_envelope := ST_TileEnvelope(z, x, y);
 
     -- Generate MVT tile with zoom-level optimization
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'railway_parts')
+    -- Use 'id' as feature ID for MapLibre feature-state support
+    SELECT INTO result ST_AsMVT(mvtgeom.*, 'railway_parts', 4096, 'geom', 'id')
     FROM (
         SELECT
             id,
@@ -76,54 +77,6 @@ BEGIN
                 (z >= 10)
             )
         -- Order doesn't matter for parts, but consistent ordering helps caching
-        ORDER BY id
-    ) AS mvtgeom
-    WHERE geom IS NOT NULL;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql
-IMMUTABLE
-STRICT
-PARALLEL SAFE;
-
--- Function: railway_part_splits_tile
--- Serves railway part splits as a separate overlay layer
--- This layer renders on top of railway_parts, so clicks will select split parts instead of originals
-CREATE OR REPLACE FUNCTION railway_part_splits_tile(z integer, x integer, y integer)
-RETURNS bytea AS $$
-DECLARE
-    result bytea;
-    tile_envelope geometry;
-BEGIN
-    -- Get the tile envelope in Web Mercator
-    tile_envelope := ST_TileEnvelope(z, x, y);
-
-    -- Generate MVT tile for split parts only
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'railway_part_splits')
-    FROM (
-        SELECT
-            id,
-            parent_id,
-            segment_number,
-            -- Simplify geometry for tile display
-            ST_AsMVTGeom(
-                geometry_3857,
-                tile_envelope,
-                4096,
-                64,
-                true
-            ) AS geom
-        FROM railway_part_splits
-        WHERE
-            -- Spatial filter using index
-            geometry_3857 && tile_envelope
-            -- Same zoom-level filtering as original parts
-            AND (
-                (z < 8 AND ST_Length(geometry_3857) > 1000) OR
-                (z >= 8 AND z < 10 AND ST_Length(geometry_3857) > 500) OR
-                (z >= 10)
-            )
         ORDER BY id
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
@@ -289,8 +242,6 @@ RETURNS TRIGGER AS $$
 BEGIN
     IF TG_TABLE_NAME = 'railway_parts' THEN
         NEW.geometry_3857 := ST_Transform(NEW.geometry, 3857);
-    ELSIF TG_TABLE_NAME = 'railway_part_splits' THEN
-        NEW.geometry_3857 := ST_Transform(NEW.geometry, 3857);
     ELSIF TG_TABLE_NAME = 'railway_routes' THEN
         NEW.geometry_3857 := ST_Transform(NEW.geometry, 3857);
     ELSIF TG_TABLE_NAME = 'stations' THEN
@@ -315,11 +266,5 @@ CREATE TRIGGER railway_routes_sync_geometry
 DROP TRIGGER IF EXISTS stations_sync_geometry ON stations;
 CREATE TRIGGER stations_sync_geometry
     BEFORE INSERT OR UPDATE OF coordinates ON stations
-    FOR EACH ROW
-    EXECUTE FUNCTION sync_geometry_3857();
-
-DROP TRIGGER IF EXISTS railway_part_splits_sync_geometry ON railway_part_splits;
-CREATE TRIGGER railway_part_splits_sync_geometry
-    BEFORE INSERT OR UPDATE OF geometry ON railway_part_splits
     FOR EACH ROW
     EXECUTE FUNCTION sync_geometry_3857();

@@ -36,18 +36,6 @@ CREATE TABLE railway_parts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Railway part splits (manually split segments for detailed routing)
-CREATE TABLE railway_part_splits (
-    id TEXT PRIMARY KEY, -- Compound ID format: "parent_id-segment_number" (e.g., "12345-1")
-    parent_id BIGINT NOT NULL, -- Reference to original railway_parts.id
-    segment_number INTEGER NOT NULL CHECK (segment_number IN (1, 2)), -- Which segment of the split (1 or 2)
-    geometry GEOMETRY(LINESTRING, 4326) NOT NULL, -- PostGIS LineString for the split segment
-    geometry_3857 GEOMETRY(LINESTRING, 3857), -- Web Mercator projection for tile serving
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_parent_segment UNIQUE (parent_id, segment_number)
-);
-
 -- Railway lines/routes (objective data only)
 CREATE TABLE railway_routes (
     track_id SERIAL PRIMARY KEY, -- Auto-generated unique track identifier
@@ -62,8 +50,10 @@ CREATE TABLE railway_routes (
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
     start_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of start point
     end_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of end point
-    starting_part_id TEXT, -- Reference to starting railway_part or split part for recalculation (supports both bigint IDs and compound split IDs)
-    ending_part_id TEXT, -- Reference to ending railway_part or split part for recalculation (supports both bigint IDs and compound split IDs)
+    starting_coordinate GEOMETRY(POINT, 4326), -- Exact start coordinate on route (for verification)
+    ending_coordinate GEOMETRY(POINT, 4326), -- Exact end coordinate on route (for verification)
+    starting_part_id TEXT, -- DEPRECATED: Reference to starting railway_part (kept for migration, will be removed)
+    ending_part_id TEXT, -- DEPRECATED: Reference to ending railway_part (kept for migration, will be removed)
     is_valid BOOLEAN DEFAULT TRUE, -- Route validity flag (for recalculation errors)
     error_message TEXT, -- Error details if route recalculation fails
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -93,10 +83,9 @@ CREATE TABLE user_preferences (
 -- Create indexes for better performance
 CREATE INDEX idx_stations_coordinates ON stations USING GIST (coordinates);
 CREATE INDEX idx_railway_parts_geometry ON railway_parts USING GIST (geometry);
-CREATE INDEX idx_railway_part_splits_geometry ON railway_part_splits USING GIST (geometry);
-CREATE INDEX idx_railway_part_splits_geometry_3857 ON railway_part_splits USING GIST (geometry_3857);
-CREATE INDEX idx_railway_part_splits_parent_id ON railway_part_splits (parent_id);
 CREATE INDEX idx_railway_routes_geometry ON railway_routes USING GIST (geometry);
+CREATE INDEX idx_railway_routes_starting_coordinate ON railway_routes USING GIST (starting_coordinate);
+CREATE INDEX idx_railway_routes_ending_coordinate ON railway_routes USING GIST (ending_coordinate);
 CREATE INDEX idx_railway_routes_from_station ON railway_routes (from_station);
 CREATE INDEX idx_railway_routes_to_station ON railway_routes (to_station);
 CREATE INDEX idx_railway_routes_start_country ON railway_routes (start_country);

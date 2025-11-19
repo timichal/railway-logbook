@@ -22,14 +22,6 @@ postgres:
       maxzoom: 18
       # This function accepts z, x, y parameters
 
-    # Railway part splits (overlay for split segments)
-    railway_part_splits_tile:
-      schema: public
-      function: railway_part_splits_tile
-      minzoom: 4
-      maxzoom: 18
-      # This function accepts z, x, y parameters
-
     # Railway routes (combined lines with metadata)
     railway_routes_tile:
       schema: public

@@ -2,19 +2,23 @@
 
 import React, { useState, useEffect } from 'react';
 import { usageOptions, frequencyOptions, type UsageType } from '@/lib/constants';
-import { findRailwayPathDB, getRailwayPartsByIds } from '@/lib/adminMapActions';
+import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from '@/lib/adminMapActions';
 import { saveRailwayRoute } from '@/lib/adminRouteActions';
-import { isPartSplit, unsplitRailwayPart } from '@/lib/adminPartActions';
-import { isCompoundId } from '@/lib/partUtils';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 
 interface AdminCreateRouteTabProps {
-  startingId: string;
-  endingId: string;
-  onStartingIdChange: (id: string) => void;
-  onEndingIdChange: (id: string) => void;
-  onPreviewRoute?: (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => void;
+  startingCoordinate: [number, number] | null;
+  endingCoordinate: [number, number] | null;
+  onStartingCoordinateChange: (coord: [number, number] | null) => void;
+  onEndingCoordinateChange: (coord: [number, number] | null) => void;
+  onPreviewRoute?: (
+    partIds: string[],
+    coordinates: [number, number][],
+    railwayParts: RailwayPart[],
+    startCoordinate: [number, number],
+    endCoordinate: [number, number]
+  ) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
   onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: UsageType, frequency: string[], link: string }) => void;
@@ -22,22 +26,26 @@ interface AdminCreateRouteTabProps {
   editingGeometryForTrackId?: string | null;
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
-  onEnterSplitMode?: (partId: string) => void;
-  onExitSplitMode?: () => void;
-  isSplittingMode?: boolean;
-  splittingPartId?: string | null;
   onRefreshMap?: () => void;
-  splitRefreshTrigger?: number;
 }
 
-export default function AdminCreateRouteTab({ startingId, endingId, onStartingIdChange, onEndingIdChange, onPreviewRoute, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, editingGeometryForTrackId, onGeometryEditComplete, onCancelGeometryEdit, onEnterSplitMode, onExitSplitMode, isSplittingMode, splittingPartId, onRefreshMap, splitRefreshTrigger }: AdminCreateRouteTabProps) {
+export default function AdminCreateRouteTab({
+  startingCoordinate,
+  endingCoordinate,
+  onStartingCoordinateChange,
+  onEndingCoordinateChange,
+  onPreviewRoute,
+  isPreviewMode,
+  onCancelPreview,
+  onSaveRoute,
+  onFormReset,
+  editingGeometryForTrackId,
+  onGeometryEditComplete,
+  onCancelGeometryEdit
+}: AdminCreateRouteTabProps) {
   const { showError, showSuccess } = useToast();
 
-  // Track which parts are split
-  const [startingPartIsSplit, setStartingPartIsSplit] = useState(false);
-  const [endingPartIsSplit, setEndingPartIsSplit] = useState(false);
-
-  // Create route form state (without the IDs that are managed by parent)
+  // Create route form state (without the coordinates that are managed by parent)
   const [createForm, setCreateForm] = useState({
     from_station: '',
     to_station: '',
@@ -49,7 +57,13 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
   });
 
   // Store the current path result and railway parts for geometry updates
-  const [currentPathResult, setCurrentPathResult] = useState<{ partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[] } | null>(null);
+  const [currentPathResult, setCurrentPathResult] = useState<{
+    partIds: string[],
+    coordinates: [number, number][],
+    railwayParts: RailwayPart[],
+    startCoordinate: [number, number],
+    endCoordinate: [number, number]
+  } | null>(null);
 
   // Reset form function
   const resetForm = () => {
@@ -62,40 +76,39 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       frequency: [],
       link: ''
     });
-    // Clear the IDs managed by parent via callback
+    // Clear the coordinates managed by parent via callback
     if (onFormReset) {
       onFormReset();
     }
   };
 
-  // Clear starting ID
-  const clearStartingId = () => {
-    onStartingIdChange('');
+  // Clear starting coordinate
+  const clearStartingCoordinate = () => {
+    onStartingCoordinateChange(null);
     if (onCancelPreview) {
       onCancelPreview();
     }
   };
 
-  // Clear ending ID
-  const clearEndingId = () => {
-    onEndingIdChange('');
+  // Clear ending coordinate
+  const clearEndingCoordinate = () => {
+    onEndingCoordinateChange(null);
     if (onCancelPreview) {
       onCancelPreview();
     }
   };
-
 
   // Handle preview route functionality
   const handlePreviewRoute = async () => {
-    if (!startingId || !endingId || !onPreviewRoute) {
-      console.error('Preview: Missing starting ID, ending ID, or preview callback');
+    if (!startingCoordinate || !endingCoordinate || !onPreviewRoute) {
+      console.error('Preview: Missing starting coordinate, ending coordinate, or preview callback');
       return;
     }
 
-    console.log('Preview: Finding path from', startingId, 'to', endingId);
+    console.log('Preview: Finding path from', startingCoordinate, 'to', endingCoordinate);
 
-    // Use database-based server action to find path
-    const result = await findRailwayPathDB(startingId, endingId);
+    // Use coordinate-based server action to find path
+    const result = await findRailwayPathFromCoordinates(startingCoordinate, endingCoordinate);
 
     if (result) {
       console.log('Preview: Path found!');
@@ -106,19 +119,25 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       console.log('Preview: Fetched', railwayParts.length, 'railway part geometries');
 
       // Store the path result for potential geometry updates
-      setCurrentPathResult({ partIds: result.partIds, coordinates: result.coordinates, railwayParts });
+      setCurrentPathResult({
+        partIds: result.partIds,
+        coordinates: result.coordinates,
+        railwayParts,
+        startCoordinate: startingCoordinate,
+        endCoordinate: endingCoordinate
+      });
 
-      // Pass both the path result and the individual railway parts
-      onPreviewRoute(result.partIds, result.coordinates, railwayParts);
+      // Pass both the path result, the individual railway parts, and the start/end coordinates
+      onPreviewRoute(result.partIds, result.coordinates, railwayParts, startingCoordinate, endingCoordinate);
     } else {
-      console.error('Preview: No path found between', startingId, 'and', endingId);
-      showError('No path found between the selected railway parts within 150km. Make sure both parts are connected through the railway network.');
+      console.error('Preview: No path found between coordinates');
+      showError('No path found between the selected coordinates within 150km. Make sure both points are on connected railway parts.');
     }
   };
 
   // Handle save route functionality
   const handleSaveRoute = async () => {
-    if (!onSaveRoute || createForm.usage_type === undefined) return;
+    if (!onSaveRoute || createForm.usage_type === undefined || !currentPathResult) return;
 
     await onSaveRoute({
       from_station: createForm.from_station.trim(),
@@ -147,6 +166,8 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       await saveRailwayRoute(
         { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '' }, // Dummy data, not used in UPDATE mode
         { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates },
+        currentPathResult.startCoordinate,
+        currentPathResult.endCoordinate,
         currentPathResult.railwayParts,
         editingGeometryForTrackId // Pass track ID to trigger UPDATE query
       );
@@ -188,86 +209,21 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
     }
   };
 
-  // Handle split part button click
-  const handleSplitPart = (partId: string) => {
-    console.log('AdminCreateRouteTab: handleSplitPart called with partId:', partId);
-    if (!partId) return;
-
-    // Clear the preview if it exists
-    if (onCancelPreview) {
-      onCancelPreview();
-    }
-
-    if (onEnterSplitMode) {
-      console.log('AdminCreateRouteTab: Calling onEnterSplitMode with partId:', partId);
-      onEnterSplitMode(partId);
-    }
-  };
-
-  // Handle unsplit part button click
-  const handleUnsplitPart = async (partId: string) => {
-    if (!partId) return;
-
-    try {
-      const result = await unsplitRailwayPart(partId);
-
-      if (result.success) {
-        showSuccess(result.message);
-
-        // Clear the part ID from the form
-        if (partId === startingId || partId.startsWith(startingId.split('-')[0])) {
-          onStartingIdChange('');
-        } else if (partId === endingId || partId.startsWith(endingId.split('-')[0])) {
-          onEndingIdChange('');
-        }
-
-        // Refresh the map to show the original part
-        if (onRefreshMap) {
-          onRefreshMap();
-        }
-      } else {
-        showError(result.message);
-      }
-    } catch (error) {
-      console.error('Error unsplitting part:', error);
-      showError(`Error unsplitting part: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  // Check if parts are split when IDs change or after a split operation
+  // Automatically preview route when both coordinates are filled
   useEffect(() => {
-    const checkStartingPart = async () => {
-      if (startingId) {
-        const isSplit = isCompoundId(startingId) || await isPartSplit(startingId);
-        setStartingPartIsSplit(isSplit);
-      } else {
-        setStartingPartIsSplit(false);
-      }
-    };
-    checkStartingPart();
-  }, [startingId, splitRefreshTrigger]);
-
-  useEffect(() => {
-    const checkEndingPart = async () => {
-      if (endingId) {
-        const isSplit = isCompoundId(endingId) || await isPartSplit(endingId);
-        setEndingPartIsSplit(isSplit);
-
-        setEndingPartIsSplit(false);
-      }
-    };
-    checkEndingPart();
-  }, [endingId, splitRefreshTrigger]);
-
-  // Automatically preview route when both IDs are filled
-  useEffect(() => {
-    if (startingId && endingId && !isPreviewMode && !isSplittingMode) {
+    if (startingCoordinate && endingCoordinate && !isPreviewMode) {
       handlePreviewRoute();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startingId, endingId, isPreviewMode, isSplittingMode]);
+  }, [startingCoordinate, endingCoordinate, isPreviewMode]);
 
   const isEditMode = !!editingGeometryForTrackId;
+
+  // Format coordinate for display
+  const formatCoordinate = (coord: [number, number] | null) => {
+    if (!coord) return '';
+    return `${coord[1].toFixed(6)}, ${coord[0].toFixed(6)}`;
+  };
 
   return (
     <div className="p-4 overflow-y-auto">
@@ -280,102 +236,52 @@ export default function AdminCreateRouteTab({ startingId, endingId, onStartingId
       </p>
 
       <div className="space-y-4">
-        {/* Starting ID */}
+        {/* Starting Coordinate */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Starting Part ID *
+            Starting Point *
           </label>
           <div className="flex gap-2">
             <input
               type="text"
-              value={startingId || ''}
-              onChange={(e) => onStartingIdChange(e.target.value)}
+              value={formatCoordinate(startingCoordinate)}
+              readOnly
               placeholder="Click a railway part on the map"
-              disabled={isPreviewMode || isSplittingMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode || isSplittingMode ? 'bg-gray-100 cursor-not-allowed' : ''
-                }`}
+              disabled={isPreviewMode}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
+                isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'
+              }`}
             />
-            {/* Split/Unsplit button for starting part */}
-            {startingId && (
-              <div>
-                {startingPartIsSplit ? (
-                  <button
-                    onClick={() => handleUnsplitPart(startingId)}
-                    disabled={isSplittingMode}
-                    className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm disabled:cursor-not-allowed"
-                  >
-                    Unsplit Part
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSplitPart(startingId)}
-                    disabled={isSplittingMode && splittingPartId !== startingId}
-                    className={`w-full font-medium py-2 px-4 rounded-md text-sm ${isSplittingMode && splittingPartId === startingId
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed'
-                      }`}
-                  >
-                    {isSplittingMode && splittingPartId === startingId ? 'Click on the line to split' : 'Split Part'}
-                  </button>
-                )}
-              </div>
-            )}
             <button
-              onClick={clearStartingId}
-              disabled={isSplittingMode}
-              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Clear starting ID"
+              onClick={clearStartingCoordinate}
+              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
+              title="Clear starting coordinate"
             >
               ×
             </button>
           </div>
         </div>
 
-        {/* Ending ID */}
+        {/* Ending Coordinate */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Ending Part ID *
+            Ending Point *
           </label>
           <div className="flex gap-2">
             <input
               type="text"
-              value={endingId || ''}
-              onChange={(e) => onEndingIdChange(e.target.value)}
+              value={formatCoordinate(endingCoordinate)}
+              readOnly
               placeholder="Click a railway part on the map"
-              disabled={isPreviewMode || isSplittingMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode || isSplittingMode ? 'bg-gray-100 cursor-not-allowed' : ''
-                }`}
+              disabled={isPreviewMode}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
+                isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'
+              }`}
             />
-            {/* Split/Unsplit button for ending part */}
-            {endingId && (
-              <div>
-                {endingPartIsSplit ? (
-                  <button
-                    onClick={() => handleUnsplitPart(endingId)}
-                    disabled={isSplittingMode}
-                    className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm disabled:cursor-not-allowed"
-                  >
-                    Unsplit Part
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSplitPart(endingId)}
-                    disabled={isSplittingMode && splittingPartId !== endingId}
-                    className={`w-full font-medium py-2 px-4 rounded-md text-sm ${isSplittingMode && splittingPartId === endingId
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed'
-                      }`}
-                  >
-                    {isSplittingMode && splittingPartId === endingId ? 'Click on the line to split' : 'Split Part'}
-                  </button>
-                )}
-              </div>
-            )}
             <button
-              onClick={clearEndingId}
-              disabled={isSplittingMode}
-              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Clear ending ID"
+              onClick={clearEndingCoordinate}
+              className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
+              title="Clear ending coordinate"
             >
               ×
             </button>

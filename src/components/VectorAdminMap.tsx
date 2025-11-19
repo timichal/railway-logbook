@@ -9,8 +9,6 @@ import {
   createRailwayRoutesLayer,
   createRailwayPartsSource,
   createRailwayPartsLayer,
-  createRailwayPartSplitsSource,
-  createRailwayPartSplitsLayer,
   createStationsSource,
   createStationsLayer,
   COLORS,
@@ -19,40 +17,32 @@ import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapIntera
 
 interface VectorAdminMapProps {
   className?: string;
-  onPartClick?: (partId: string) => void;
+  onCoordinateClick?: (coordinate: [number, number]) => void;
   onRouteSelect?: (routeId: string) => void;
   selectedRouteId?: string | null;
   previewRoute?: { partIds: string[], coordinates: [number, number][], railwayParts?: RailwayPart[] } | null;
-  selectedParts?: { startingId: string, endingId: string };
+  selectedCoordinates?: { startingCoordinate: [number, number] | null, endingCoordinate: [number, number] | null };
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
-  isSplittingMode?: boolean;
-  splittingPartId?: string | null;
-  onExitSplitMode?: () => void;
   onRefreshMap?: () => void;
   showError?: (message: string) => void;
   showSuccess?: (message: string) => void;
-  onSplitSuccess?: (parentId: string) => void;
 }
 
 export default function VectorAdminMap({
   className = '',
-  onPartClick,
+  onCoordinateClick,
   onRouteSelect,
   selectedRouteId,
   previewRoute,
-  selectedParts,
+  selectedCoordinates,
   refreshTrigger,
   isEditingGeometry,
   focusGeometry,
-  isSplittingMode,
-  splittingPartId,
-  onExitSplitMode,
   onRefreshMap,
   showError,
   showSuccess,
-  onSplitSuccess,
 }: VectorAdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [showPartsLayer, setShowPartsLayer] = useState(true);
@@ -65,31 +55,22 @@ export default function VectorAdminMap({
   const { previewLength, selectedRouteLength } = useRouteLength(previewRoute, selectedRouteId);
 
   // Store callbacks and props in refs to avoid map recreation on changes
-  const onPartClickRef = useRef(onPartClick);
+  const onCoordinateClickRef = useRef(onCoordinateClick);
   const onRouteSelectRef = useRef(onRouteSelect);
-  const selectedPartsRef = useRef(selectedParts);
+  const selectedCoordinatesRef = useRef(selectedCoordinates);
   const previewRouteRef = useRef(previewRoute);
   const updatePartsStyleRef = useRef<(() => void) | null>(null);
-  const isSplittingModeRef = useRef(isSplittingMode);
-  const splittingPartIdRef = useRef(splittingPartId);
-  const onExitSplitModeRef = useRef(onExitSplitMode);
   const onRefreshMapRef = useRef(onRefreshMap);
   const showErrorRef = useRef(showError);
   const showSuccessRef = useRef(showSuccess);
-  const onSplitSuccessRef = useRef(onSplitSuccess);
 
-
-  onPartClickRef.current = onPartClick;
+  onCoordinateClickRef.current = onCoordinateClick;
   onRouteSelectRef.current = onRouteSelect;
-  selectedPartsRef.current = selectedParts;
+  selectedCoordinatesRef.current = selectedCoordinates;
   previewRouteRef.current = previewRoute;
-  isSplittingModeRef.current = isSplittingMode;
-  splittingPartIdRef.current = splittingPartId;
-  onExitSplitModeRef.current = onExitSplitMode;
   onRefreshMapRef.current = onRefreshMap;
   showErrorRef.current = showError;
   showSuccessRef.current = showSuccess;
-  onSplitSuccessRef.current = onSplitSuccess;
 
   // Initialize map with shared hook
   const { map, mapLoaded } = useMapLibre(
@@ -97,44 +78,38 @@ export default function VectorAdminMap({
     {
       sources: {
         railway_parts: createRailwayPartsSource(),
-        railway_part_splits: createRailwayPartSplitsSource(),
         railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBuster }),
         stations: createStationsSource(),
       },
       layers: [
         createRailwayPartsLayer(),
-        createRailwayPartSplitsLayer(),
         createRailwayRoutesLayer(),
         createStationsLayer(),
       ],
       onLoad: (mapInstance) => {
         setupAdminMapInteractions(mapInstance, {
-          onPartClickRef,
+          onCoordinateClickRef,
           onRouteSelectRef,
-          selectedPartsRef,
+          selectedCoordinatesRef,
           previewRouteRef,
           updatePartsStyleRef,
-          isSplittingModeRef,
-          splittingPartIdRef,
           showErrorRef,
           showSuccessRef,
-          onExitSplitModeRef,
           onRefreshMapRef,
-          onSplitSuccessRef,
         });
       },
     },
     [] // Only initialize once
   );
 
-  // Update parts styling when selectedParts or splitting mode changes
+  // Update parts styling when selectedCoordinates change
   useEffect(() => {
     if (map.current && mapLoaded && updatePartsStyleRef.current) {
       requestAnimationFrame(() => {
         updatePartsStyleRef.current?.();
       });
     }
-  }, [selectedParts?.startingId, selectedParts?.endingId, isSplittingMode, splittingPartId, mapLoaded, map]);
+  }, [selectedCoordinates?.startingCoordinate, selectedCoordinates?.endingCoordinate, mapLoaded, map]);
 
   // Handle layer visibility toggles
   useEffect(() => {
@@ -145,13 +120,6 @@ export default function VectorAdminMap({
       'visibility',
       showPartsLayer ? 'visible' : 'none'
     );
-    if (map.current.getLayer('railway_part_splits')) {
-      map.current.setLayoutProperty(
-        'railway_part_splits',
-        'visibility',
-        showPartsLayer ? 'visible' : 'none'
-      );
-    }
   }, [showPartsLayer, mapLoaded, map]);
 
   useEffect(() => {
@@ -250,7 +218,7 @@ export default function VectorAdminMap({
     }
   }, [selectedRouteId, mapLoaded, map]);
 
-  // Handle railway routes and parts refresh when routes/parts are saved/deleted/split
+  // Handle railway routes refresh when routes are saved/deleted
   useEffect(() => {
     if (!map.current || !mapLoaded || refreshTrigger === undefined) return;
     if (refreshTrigger === 0) return; // Skip initial render
@@ -259,57 +227,7 @@ export default function VectorAdminMap({
     const newCacheBuster = Date.now();
     setRoutesCacheBuster(newCacheBuster);
 
-    // Step 1: Reload railway_parts tiles to show newly split parts
-    const hasPartsLayer = map.current.getLayer('railway_parts');
-    const hasPartsSource = map.current.getSource('railway_parts');
-
-    if (hasPartsLayer) {
-      map.current.removeLayer('railway_parts');
-    }
-    if (hasPartsSource) {
-      map.current.removeSource('railway_parts');
-    }
-
-    // Re-add source with cache buster
-    map.current.addSource('railway_parts', {
-      ...createRailwayPartsSource(),
-      tiles: createRailwayPartsSource().tiles?.map(url => `${url}?t=${newCacheBuster}`)
-    });
-
-    // Re-add layer
-    map.current.addLayer(createRailwayPartsLayer());
-
-    // Re-apply visibility
-    if (!showPartsLayer) {
-      map.current.setLayoutProperty('railway_parts', 'visibility', 'none');
-    }
-
-    // Also reload railway_part_splits tiles to show newly split parts
-    const hasSplitsLayer = map.current.getLayer('railway_part_splits');
-    const hasSplitsSource = map.current.getSource('railway_part_splits');
-
-    if (hasSplitsLayer) {
-      map.current.removeLayer('railway_part_splits');
-    }
-    if (hasSplitsSource) {
-      map.current.removeSource('railway_part_splits');
-    }
-
-    // Re-add source with cache buster
-    map.current.addSource('railway_part_splits', {
-      ...createRailwayPartSplitsSource(),
-      tiles: createRailwayPartSplitsSource().tiles?.map(url => `${url}?t=${newCacheBuster}`)
-    });
-
-    // Re-add layer (after railway_parts)
-    map.current.addLayer(createRailwayPartSplitsLayer());
-
-    // Re-apply visibility
-    if (!showPartsLayer) {
-      map.current.setLayoutProperty('railway_part_splits', 'visibility', 'none');
-    }
-
-    // Step 2: Reload railway_routes tiles (AFTER parts so routes render on top)
+    // Reload railway_routes tiles
     const hasRoutesLayer = map.current.getLayer('railway_routes');
     const hasRoutesSource = map.current.getSource('railway_routes');
 
@@ -323,7 +241,7 @@ export default function VectorAdminMap({
     // Re-add source with new cache buster
     map.current.addSource('railway_routes', createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
 
-    // Re-add layer (this goes on top of parts)
+    // Re-add layer
     map.current.addLayer(createRailwayRoutesLayer());
 
     // Explicitly set visibility based on current state
@@ -382,7 +300,7 @@ export default function VectorAdminMap({
 
     // Force map repaint to clear any cached tiles
     map.current.triggerRepaint();
-  }, [refreshTrigger, mapLoaded, showRoutesLayer, showPartsLayer, selectedRouteId, map]);
+  }, [refreshTrigger, mapLoaded, showRoutesLayer, selectedRouteId, map]);
 
   // Handle preview route
   useEffect(() => {
@@ -397,35 +315,20 @@ export default function VectorAdminMap({
     }
 
     if (previewRoute && previewRoute.coordinates && previewRoute.coordinates.length > 0) {
-      // Build a FeatureCollection from railway parts
-      const features: Array<{
-        type: 'Feature';
-        geometry: { type: 'LineString'; coordinates: [number, number][] };
-        properties: Record<string, never>;
-      }> = [];
+      console.log('[VectorAdminMap] Rendering preview route with', previewRoute.coordinates.length, 'coordinates');
 
-      // If we have railwayParts, use their actual geometries
-      if (previewRoute.railwayParts && previewRoute.railwayParts.length > 0) {
-        previewRoute.railwayParts.forEach((part: RailwayPart) => {
-          if (part.geometry && part.geometry.type === 'LineString') {
-            features.push({
-              type: 'Feature',
-              geometry: part.geometry,
-              properties: {}
-            });
-          }
-        });
-      } else {
-        // Fallback to simple LineString
-        features.push({
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: previewRoute.coordinates
-          },
-          properties: {}
-        });
-      }
+      // Use the merged/truncated coordinates directly
+      // This is what the pathfinder produces after merging and truncating
+      const features = [{
+        type: 'Feature' as const,
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: previewRoute.coordinates
+        },
+        properties: {}
+      }];
+
+      console.log('[VectorAdminMap] Preview features:', features);
 
       // Add preview route as a GeoJSON source
       map.current.addSource('preview-route', {
@@ -436,17 +339,43 @@ export default function VectorAdminMap({
         }
       });
 
-      // Add preview layer
+      // Add preview layer on top of all other layers
+      // Don't specify beforeId to add it as the topmost layer
       map.current.addLayer({
         'id': 'preview-route',
         'type': 'line',
         'source': 'preview-route',
+        'layout': {
+          'line-cap': 'round',
+          'line-join': 'round'
+        },
         'paint': {
           'line-color': COLORS.preview,
           'line-width': 8,
           'line-opacity': 1.0
         }
       });
+
+      console.log('[VectorAdminMap] Preview route layer added successfully');
+
+      // Optionally zoom to show the preview route
+      if (previewRoute.coordinates.length > 0) {
+        const lngs = previewRoute.coordinates.map(c => c[0]);
+        const lats = previewRoute.coordinates.map(c => c[1]);
+        const bounds: [[number, number], [number, number]] = [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)]
+        ];
+
+        // Fit bounds with padding to show the whole route
+        map.current.fitBounds(bounds, {
+          padding: 80,
+          duration: 500,
+          maxZoom: 14
+        });
+      }
+    } else {
+      console.log('[VectorAdminMap] No preview route to display');
     }
 
     // Update parts styling when preview changes
@@ -456,6 +385,81 @@ export default function VectorAdminMap({
       });
     }
   }, [previewRoute, mapLoaded, map]);
+
+  // Handle selected coordinate points visualization
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Remove existing selected points layers if any
+    if (map.current.getLayer('selected-points')) {
+      map.current.removeLayer('selected-points');
+    }
+    if (map.current.getSource('selected-points')) {
+      map.current.removeSource('selected-points');
+    }
+
+    const features: Array<{
+      type: 'Feature';
+      geometry: { type: 'Point'; coordinates: [number, number] };
+      properties: { type: string };
+    }> = [];
+
+    if (selectedCoordinates?.startingCoordinate) {
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: selectedCoordinates.startingCoordinate
+        },
+        properties: { type: 'start' }
+      });
+      console.log('[VectorAdminMap] Added start point:', selectedCoordinates.startingCoordinate);
+    }
+
+    if (selectedCoordinates?.endingCoordinate) {
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: selectedCoordinates.endingCoordinate
+        },
+        properties: { type: 'end' }
+      });
+      console.log('[VectorAdminMap] Added end point:', selectedCoordinates.endingCoordinate);
+    }
+
+    if (features.length > 0) {
+      // Add selected points as a GeoJSON source
+      map.current.addSource('selected-points', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: features
+        }
+      });
+
+      // Add selected points layer
+      map.current.addLayer({
+        'id': 'selected-points',
+        'type': 'circle',
+        'source': 'selected-points',
+        'paint': {
+          'circle-radius': 8,
+          'circle-color': [
+            'case',
+            ['==', ['get', 'type'], 'start'],
+            '#16a34a', // Green for start point
+            '#dc2626'  // Red for end point
+          ],
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2,
+          'circle-opacity': 1.0
+        }
+      });
+
+      console.log('[VectorAdminMap] Selected points layer added with', features.length, 'points');
+    }
+  }, [selectedCoordinates, mapLoaded, map]);
 
   // Handle focus on route geometry (fly to route when selected)
   useEffect(() => {

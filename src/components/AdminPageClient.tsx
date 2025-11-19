@@ -20,19 +20,25 @@ interface AdminPageClientProps {
 export default function AdminPageClient({ user }: AdminPageClientProps) {
   const { showError, showSuccess } = useToast();
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-  const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
-  const [partClickTrigger, setPartClickTrigger] = useState<number>(0); // Trigger to force effect to run
-  const [previewRoute, setPreviewRoute] = useState<{partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]} | null>(null);
-  const [createFormIds, setCreateFormIds] = useState<{startingId: string, endingId: string}>({startingId: '', endingId: ''});
+  const [selectedCoordinate, setSelectedCoordinate] = useState<[number, number] | null>(null);
+  const [coordinateClickTrigger, setCoordinateClickTrigger] = useState<number>(0); // Trigger to force effect to run
+  const [previewRoute, setPreviewRoute] = useState<{
+    partIds: string[],
+    coordinates: [number, number][],
+    railwayParts: RailwayPart[],
+    startCoordinate: [number, number],
+    endCoordinate: [number, number]
+  } | null>(null);
+  const [createFormCoordinates, setCreateFormCoordinates] = useState<{
+    startingCoordinate: [number, number] | null,
+    endingCoordinate: [number, number] | null
+  }>({ startingCoordinate: null, endingCoordinate: null });
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
   const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(600); // Sidebar width in pixels
   const [isResizing, setIsResizing] = useState<boolean>(false);
-  const [isSplittingMode, setIsSplittingMode] = useState<boolean>(false);
-  const [splittingPartId, setSplittingPartId] = useState<string | null>(null);
-  const [clearFieldForPartId, setClearFieldForPartId] = useState<string | null>(null);
 
   const handleRouteSelect = (routeId: string) => {
     // If empty string, unselect the route
@@ -42,26 +48,35 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     }
 
     setSelectedRouteId(routeId);
-    // Clear any selected parts when viewing a route
-    setCreateFormIds({startingId: '', endingId: ''});
+    // Clear any selected coordinates when viewing a route
+    setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
     // Clear preview mode
     setPreviewRoute(null);
     setIsPreviewMode(false);
   };
 
-  const handlePartClick = (partId: string) => {
-    setSelectedPartId(partId);
-    setPartClickTrigger(prev => prev + 1); // Increment to force effect to run
-    // Unselect any selected route when clicking a part
+  const handleCoordinateClick = (coordinate: [number, number]) => {
+    setSelectedCoordinate(coordinate);
+    setCoordinateClickTrigger(prev => prev + 1); // Increment to force effect to run
+    // Unselect any selected route when clicking a coordinate
     setSelectedRouteId(null);
   };
 
-  const handlePreviewRoute = (partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[]) => {
+  const handlePreviewRoute = (
+    partIds: string[],
+    coordinates: [number, number][],
+    railwayParts: RailwayPart[],
+    startCoordinate: [number, number],
+    endCoordinate: [number, number]
+  ) => {
     console.log('AdminPageClient: Preview route requested');
     console.log('Part IDs:', partIds);
     console.log('Coordinates count:', coordinates.length);
     console.log('Railway parts:', railwayParts.length);
-    setPreviewRoute({ partIds, coordinates, railwayParts });
+    console.log('Start coordinate:', startCoordinate);
+    console.log('End coordinate:', endCoordinate);
+
+    setPreviewRoute({ partIds, coordinates, railwayParts, startCoordinate, endCoordinate });
     setIsPreviewMode(true);
   };
 
@@ -71,7 +86,15 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setIsPreviewMode(false);
   };
 
-  const handleSaveRoute = async (routeData: {from_station: string, to_station: string, track_number: string, description: string, usage_type: 0 | 1, frequency: string[], link: string}) => {
+  const handleSaveRoute = async (routeData: {
+    from_station: string,
+    to_station: string,
+    track_number: string,
+    description: string,
+    usage_type: 0 | 1,
+    frequency: string[],
+    link: string
+  }) => {
     console.log('AdminPageClient: Save route requested', routeData);
 
     if (!previewRoute) {
@@ -81,15 +104,21 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     }
 
     try {
-      const trackId = await saveRailwayRoute(routeData, previewRoute, previewRoute.railwayParts);
+      const trackId = await saveRailwayRoute(
+        routeData,
+        { partIds: previewRoute.partIds, coordinates: previewRoute.coordinates },
+        previewRoute.startCoordinate,
+        previewRoute.endCoordinate,
+        previewRoute.railwayParts
+      );
       console.log('AdminPageClient: Route saved successfully with auto-generated track_id:', trackId);
 
       // Clear preview mode
       setPreviewRoute(null);
       setIsPreviewMode(false);
 
-      // Clear the form IDs (unselect start/end points)
-      setCreateFormIds({startingId: '', endingId: ''});
+      // Clear the form coordinates (unselect start/end points)
+      setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
 
       // Trigger routes layer refresh
       setRefreshTrigger(prev => prev + 1);
@@ -103,8 +132,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   };
 
   const handleFormReset = () => {
-    // Clear the form IDs
-    setCreateFormIds({startingId: '', endingId: ''});
+    // Clear the form coordinates
+    setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
   };
 
   const handleRouteDeleted = () => {
@@ -117,8 +146,11 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setRefreshTrigger(prev => prev + 1);
   };
 
-  const handleCreateFormIdsChange = (ids: {startingId: string, endingId: string}) => {
-    setCreateFormIds(ids);
+  const handleCreateFormCoordinatesChange = (coordinates: {
+    startingCoordinate: [number, number] | null,
+    endingCoordinate: [number, number] | null
+  }) => {
+    setCreateFormCoordinates(coordinates);
   };
 
   const handleEditingGeometryChange = (trackId: string | null) => {
@@ -128,32 +160,6 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const handleRouteFocus = (geometry: string) => {
     setFocusGeometry(geometry);
   };
-
-  const handleEnterSplitMode = (partId: string) => {
-    console.log('AdminPageClient: Entering split mode for part', partId);
-    console.log('AdminPageClient: Current form IDs before split mode:', createFormIds);
-    setIsSplittingMode(true);
-    setSplittingPartId(partId);
-  };
-
-  const handleExitSplitMode = () => {
-    console.log('AdminPageClient: Exiting split mode');
-    setIsSplittingMode(false);
-    setSplittingPartId(null);
-  };
-
-  const handleRefreshMap = () => {
-    console.log('AdminPageClient: Refreshing map tiles');
-    setRefreshTrigger(prev => prev + 1);
-  };
-  const handleSplitSuccess = (parentId: string) => {
-    console.log('AdminPageClient: Split successful for part:', parentId);
-    // Trigger field clearing in AdminSidebar by setting the clearFieldForPartId
-    setClearFieldForPartId(parentId);
-    // Reset it after a brief delay so it can be triggered again if needed
-    setTimeout(() => setClearFieldForPartId(null), 100);
-  };
-
 
   const handleMouseDown = () => {
     setIsResizing(true);
@@ -223,10 +229,10 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
         <AdminSidebar
           selectedRouteId={selectedRouteId}
           onRouteSelect={handleRouteSelect}
-          selectedPartId={selectedPartId}
-          partClickTrigger={partClickTrigger}
+          selectedCoordinate={selectedCoordinate}
+          coordinateClickTrigger={coordinateClickTrigger}
           onPreviewRoute={handlePreviewRoute}
-          onCreateFormIdsChange={handleCreateFormIdsChange}
+          onCreateFormCoordinatesChange={handleCreateFormCoordinatesChange}
           isPreviewMode={isPreviewMode}
           onCancelPreview={handleCancelPreview}
           onSaveRoute={handleSaveRoute}
@@ -236,13 +242,6 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
           onEditingGeometryChange={handleEditingGeometryChange}
           onRouteFocus={handleRouteFocus}
           sidebarWidth={sidebarWidth}
-          onEnterSplitMode={handleEnterSplitMode}
-          onExitSplitMode={handleExitSplitMode}
-          isSplittingMode={isSplittingMode}
-          splittingPartId={splittingPartId}
-          onRefreshMap={handleRefreshMap}
-          splitRefreshTrigger={refreshTrigger}
-          clearFieldForPartId={clearFieldForPartId}
           showError={showError}
           showSuccess={showSuccess}
         />
@@ -259,19 +258,15 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             className="w-full h-full"
             selectedRouteId={selectedRouteId}
             onRouteSelect={handleRouteSelect}
-            onPartClick={handlePartClick}
+            onCoordinateClick={handleCoordinateClick}
             previewRoute={previewRoute}
-            selectedParts={{startingId: createFormIds.startingId, endingId: createFormIds.endingId}}
+            selectedCoordinates={{
+              startingCoordinate: createFormCoordinates.startingCoordinate,
+              endingCoordinate: createFormCoordinates.endingCoordinate
+            }}
             refreshTrigger={refreshTrigger}
             isEditingGeometry={!!editingGeometryForTrackId}
             focusGeometry={focusGeometry}
-            isSplittingMode={isSplittingMode}
-            splittingPartId={splittingPartId}
-            onExitSplitMode={handleExitSplitMode}
-            onRefreshMap={handleRefreshMap}
-            showError={showError}
-            onSplitSuccess={handleSplitSuccess}
-            showSuccess={showSuccess}
           />
         </div>
       </main>

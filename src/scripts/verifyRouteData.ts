@@ -17,65 +17,36 @@ export interface RecalculationResult {
 }
 
 /**
- * Recalculate a single railway route based on starting and ending part IDs
+ * Recalculate a single railway route based on starting and ending coordinates
+ *
+ * @param isMigratedRoute - If true (migrated), include entire edge parts. If false (new), truncate from click point.
  */
 export async function recalculateRoute(
   client: Client,
   trackId: number,
-  startingPartId: string,
-  endingPartId: string
+  startingCoordinate: [number, number],
+  endingCoordinate: [number, number],
+  isMigratedRoute: boolean = false
 ): Promise<{ success: boolean; coordinates?: Coord[]; error?: string }> {
   try {
     const pathFinder = new RailwayPathFinder();
-    const result = await pathFinder.findPathWithRetry(client, startingPartId, endingPartId);
+
+    // For migrated routes: truncateEdges=false (include entire parts)
+    // For new routes: truncateEdges=true (truncate from click point)
+    const result = await pathFinder.findPathFromCoordinates(
+      client,
+      startingCoordinate,
+      endingCoordinate,
+      !isMigratedRoute // truncateEdges
+    );
 
     if (!result) {
-      return { success: false, error: 'No path found between starting and ending parts' };
+      return { success: false, error: 'No path found between starting and ending coordinates' };
     }
 
-    // Fetch the actual railway part geometries from the database (both regular and split parts)
-    const railwayPartsQuery = await client.query(`
-      WITH regular_parts AS (
-        SELECT id::TEXT as id, ST_AsGeoJSON(geometry) as geometry_json
-        FROM railway_parts
-        WHERE id::TEXT = ANY($1)
-      ),
-      split_parts AS (
-        SELECT id, ST_AsGeoJSON(geometry) as geometry_json
-        FROM railway_part_splits
-        WHERE id = ANY($1)
-      )
-      SELECT id, geometry_json FROM regular_parts
-      UNION ALL
-      SELECT id, geometry_json FROM split_parts
-      ORDER BY array_position($1, id)
-    `, [result.partIds]);
+    console.log(`  Successfully calculated ${result.coordinates.length} coordinates for route ${trackId}`);
 
-    let sortedCoordinates: Coord[];
-
-    if (railwayPartsQuery.rows.length > 0) {
-      // Extract coordinate lists from each railway part
-      const coordinateLists: Coord[][] = railwayPartsQuery.rows
-        .map(row => {
-          const geom = JSON.parse(row.geometry_json);
-          return geom.type === 'LineString' ? geom.coordinates as Coord[] : null;
-        })
-        .filter((coords): coords is Coord[] => coords !== null);
-
-      try {
-        // Use the mergeLinearChain function to properly sort and connect coordinates
-        sortedCoordinates = mergeLinearChain(coordinateLists);
-        console.log(`  Successfully sorted ${sortedCoordinates.length} coordinates for route ${trackId}`);
-      } catch (error) {
-        console.warn(`  Coordinate sorting failed for route ${trackId}, falling back to path result coordinates:`, error);
-        sortedCoordinates = result.coordinates;
-      }
-    } else {
-      // No railway parts found, use path result coordinates
-      sortedCoordinates = result.coordinates;
-    }
-
-    return { success: true, coordinates: sortedCoordinates };
+    return { success: true, coordinates: result.coordinates };
 
   } catch (error) {
     return {
@@ -86,7 +57,7 @@ export async function recalculateRoute(
 }
 
 /**
- * Recalculate all railway routes based on stored part IDs
+ * Recalculate all railway routes based on stored coordinates
  */
 export async function recalculateAllRoutes(client: Client): Promise<RecalculationResult> {
   console.log('Recalculating all railway routes...');
@@ -98,12 +69,24 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
     errors: []
   };
 
-  // Get all routes with starting and ending part IDs
+  // Get all routes with coordinates, part IDs, and full geometry
   const routes = await client.query(`
-    SELECT track_id, track_number, from_station, to_station, starting_part_id, ending_part_id, length_km
+    SELECT
+      track_id,
+      track_number,
+      from_station,
+      to_station,
+      starting_part_id,
+      ending_part_id,
+      ST_X(starting_coordinate) as start_lng,
+      ST_Y(starting_coordinate) as start_lat,
+      ST_X(ending_coordinate) as end_lng,
+      ST_Y(ending_coordinate) as end_lat,
+      ST_AsGeoJSON(geometry) as geometry_json,
+      length_km
     FROM railway_routes
-    WHERE starting_part_id IS NOT NULL
-      AND ending_part_id IS NOT NULL
+    WHERE starting_coordinate IS NOT NULL
+      AND ending_coordinate IS NOT NULL
     ORDER BY track_id
   `);
 
@@ -111,18 +94,25 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
   console.log(`Found ${result.totalRoutes} routes to recalculate`);
 
   for (const route of routes.rows) {
-    const { track_id, track_number, from_station, to_station, starting_part_id, ending_part_id, length_km } = route;
+    const { track_id, track_number, from_station, to_station, starting_part_id, ending_part_id, start_lng, start_lat, end_lng, end_lat, geometry_json, length_km } = route;
     const originalLength = parseFloat(length_km);
 
+    const startingCoordinate: [number, number] = [parseFloat(start_lng), parseFloat(start_lat)];
+    const endingCoordinate: [number, number] = [parseFloat(end_lng), parseFloat(end_lat)];
+
+    // Recalculate ALL routes from coordinates
+    // For migrated routes (has starting_part_id): use entire edge parts (isMigratedRoute=true)
+    // For new routes (no starting_part_id): truncate edge parts (isMigratedRoute=false)
     const recalcResult = await recalculateRoute(
       client,
       track_id,
-      String(starting_part_id),
-      String(ending_part_id)
+      startingCoordinate,
+      endingCoordinate,
+      !!starting_part_id // migrated routes: include entire edge parts
     );
 
     if (recalcResult.success && recalcResult.coordinates) {
-      // Convert coordinates to LineString WKT format using shared utility
+      // Convert coordinates to LineString WKT format
       const lineString = coordinatesToWKT(recalcResult.coordinates);
 
       // Calculate the new length
@@ -210,8 +200,8 @@ export async function verifyAndRecalculateRoutes(client: Client): Promise<void> 
   const routeCount = await client.query(`
     SELECT COUNT(*) as count
     FROM railway_routes
-    WHERE starting_part_id IS NOT NULL
-      AND ending_part_id IS NOT NULL
+    WHERE starting_coordinate IS NOT NULL
+      AND ending_coordinate IS NOT NULL
   `);
 
   const hasRoutes = parseInt(routeCount.rows[0].count) > 0;

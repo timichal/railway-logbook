@@ -52,6 +52,8 @@ export async function getRailwayRoute(trackId: string) {
   const result = await query(`
     SELECT track_id, from_station, to_station, track_number, description, usage_type, frequency, link,
            ST_AsGeoJSON(geometry) as geometry, length_km,
+           ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
+           ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json,
            starting_part_id, ending_part_id, is_valid, error_message
     FROM railway_routes
     WHERE track_id = $1
@@ -61,7 +63,31 @@ export async function getRailwayRoute(trackId: string) {
     throw new Error('Route not found');
   }
 
-  return result.rows[0];
+  const row = result.rows[0];
+
+  // Parse coordinate JSON if they exist
+  let startingCoordinate = null;
+  let endingCoordinate = null;
+
+  if (row.starting_coordinate_json) {
+    const geojson = JSON.parse(row.starting_coordinate_json);
+    if (geojson.type === 'Point' && geojson.coordinates) {
+      startingCoordinate = geojson.coordinates as [number, number];
+    }
+  }
+
+  if (row.ending_coordinate_json) {
+    const geojson = JSON.parse(row.ending_coordinate_json);
+    if (geojson.type === 'Point' && geojson.coordinates) {
+      endingCoordinate = geojson.coordinates as [number, number];
+    }
+  }
+
+  return {
+    ...row,
+    starting_coordinate: startingCoordinate,
+    ending_coordinate: endingCoordinate
+  };
 }
 
 /**
@@ -105,10 +131,14 @@ export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureC
 /**
  * Create a new route OR update existing route geometry
  * @param trackId - If provided, updates geometry only. If omitted, creates new route.
+ * @param startCoordinate - Exact start coordinate [lng, lat]
+ * @param endCoordinate - Exact end coordinate [lng, lat]
  */
 export async function saveRailwayRoute(
   routeData: SaveRouteData,
   pathResult: PathResult,
+  startCoordinate: [number, number],
+  endCoordinate: [number, number],
   railwayParts?: RailwayPart[],
   trackId?: string
 ): Promise<string> {
@@ -123,50 +153,32 @@ export async function saveRailwayRoute(
   try {
     console.log('Saving railway route:', `${routeData.from_station} ⟷ ${routeData.to_station}`);
     console.log('Path segments:', pathResult.partIds.length);
+    console.log('Start coordinate:', startCoordinate);
+    console.log('End coordinate:', endCoordinate);
 
-    let sortedCoordinates: Coord[];
+    // Use the truncated/merged coordinates from pathResult
+    // The pathfinder already handles truncation and merging correctly
+    const sortedCoordinates = pathResult.coordinates;
+    console.log('Using pathfinder coordinates:', sortedCoordinates.length, 'points');
 
-    // If we have railway parts with individual coordinates, sort them properly
-    if (railwayParts && railwayParts.length > 0) {
-      console.log('Using railway parts for coordinate sorting');
-
-      // Extract coordinate lists from each railway part
-      const coordinateLists: Coord[][] = railwayParts
-        .filter(part => part.geometry && part.geometry.type === 'LineString')
-        .map(part => part.geometry.coordinates as Coord[]);
-
-      console.log('Extracted', coordinateLists.length, 'coordinate lists');
-
-      try {
-        // Use the mergeLinearChain function to properly sort and connect coordinates
-        sortedCoordinates = mergeLinearChain(coordinateLists);
-        console.log('Successfully sorted coordinates, result:', sortedCoordinates.length, 'points');
-      } catch (error) {
-        console.warn('Coordinate sorting failed, falling back to path result coordinates:', error);
-        sortedCoordinates = pathResult.coordinates;
-      }
-    } else {
-      console.log('No railway parts available, using path result coordinates');
-      sortedCoordinates = pathResult.coordinates;
-    }
-
-    // Create LineString geometry from sorted coordinates
+    // Create LineString geometry from coordinates
     const geometryWKT = coordinatesToWKT(sortedCoordinates);
+
+    // Create POINT WKT for start and end coordinates
+    const startPointWKT = `POINT(${startCoordinate[0]} ${startCoordinate[1]})`;
+    const endPointWKT = `POINT(${endCoordinate[0]} ${endCoordinate[1]})`;
 
     // Determine countries from route geometry
     const { startCountry, endCountry } = getRouteCountries({ type: 'LineString', coordinates: sortedCoordinates });
     console.log('Route countries:', startCountry, '→', endCountry);
 
-    // Get starting and ending part IDs from the path
-    const startingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[0] : null;
-    const endingPartId = pathResult.partIds.length > 0 ? pathResult.partIds[pathResult.partIds.length - 1] : null;
-
     let queryStr: string;
     let values: (string | number | string[] | null)[];
 
     if (trackId) {
-      // Update existing route - only update geometry, length, part IDs, countries, and validity
+      // Update existing route - only update geometry, length, coordinates, countries, and validity
       // Keep name, description, usage_type unchanged
+      // Set part_id fields to NULL (deprecated)
       queryStr = `
         UPDATE railway_routes
         SET
@@ -174,8 +186,10 @@ export async function saveRailwayRoute(
           length_km = ST_Length(ST_GeomFromText($1, 4326)::geography) / 1000,
           start_country = $2,
           end_country = $3,
-          starting_part_id = $4,
-          ending_part_id = $5,
+          starting_coordinate = ST_GeomFromText($4, 4326),
+          ending_coordinate = ST_GeomFromText($5, 4326),
+          starting_part_id = NULL,
+          ending_part_id = NULL,
           is_valid = TRUE,
           error_message = NULL,
           updated_at = CURRENT_TIMESTAMP
@@ -187,12 +201,13 @@ export async function saveRailwayRoute(
         geometryWKT,
         startCountry,
         endCountry,
-        startingPartId,
-        endingPartId,
+        startPointWKT,
+        endPointWKT,
         trackId
       ];
     } else {
       // Insert new route with auto-generated track_id
+      // Set part_id fields to NULL (deprecated)
       queryStr = `
         INSERT INTO railway_routes (
           from_station,
@@ -206,6 +221,8 @@ export async function saveRailwayRoute(
           length_km,
           start_country,
           end_country,
+          starting_coordinate,
+          ending_coordinate,
           starting_part_id,
           ending_part_id,
           is_valid
@@ -221,8 +238,10 @@ export async function saveRailwayRoute(
           ST_Length(ST_GeomFromText($8, 4326)::geography) / 1000,
           $9,
           $10,
-          $11,
-          $12,
+          ST_GeomFromText($11, 4326),
+          ST_GeomFromText($12, 4326),
+          NULL,
+          NULL,
           TRUE
         )
         RETURNING track_id, length_km
@@ -239,8 +258,8 @@ export async function saveRailwayRoute(
         geometryWKT,
         startCountry,
         endCountry,
-        startingPartId,
-        endingPartId
+        startPointWKT,
+        endPointWKT
       ];
     }
 
@@ -255,7 +274,7 @@ export async function saveRailwayRoute(
     }
     console.log('Final geometry has', sortedCoordinates.length, 'coordinate points');
     console.log('Calculated route length:', lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : 'N/A');
-    console.log('Stored part IDs:', startingPartId, 'to', endingPartId);
+    console.log('Stored coordinates:', startCoordinate, 'to', endCoordinate);
     return String(savedTrackId);
 
   } catch (error) {

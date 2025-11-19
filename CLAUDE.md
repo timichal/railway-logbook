@@ -30,6 +30,9 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
+- `npm run migrateToCoordinates` - Complete migration to coordinate-based routes (adds columns, migrates data, updates vector tiles, drops obsolete tables)
+  - One-time migration for existing deployments (pre-coordinate system)
+  - New deployments start with coordinate-based system by default
 - `npm run exportRouteData` - Export railway_routes and user_trips (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
@@ -81,13 +84,13 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Tables**:
   - `users` - User accounts and authentication (email as username, password field for bcrypt hashes)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
-  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), PostGIS geometry, length_km, start_country (ISO 3166-1 alpha-2), end_country (ISO 3166-1 alpha-2), starting_part_id, ending_part_id, is_valid flag, and error_message
-  - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and recalculation)
+  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), PostGIS geometry, length_km, start_country (ISO 3166-1 alpha-2), end_country (ISO 3166-1 alpha-2), **starting_coordinate (POINT)**, **ending_coordinate (POINT)**, is_valid flag, and error_message
+  - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and pathfinding)
   - `user_trips` - User-specific trip records; supports multiple trips per route with id, user_id, track_id, date, note, partial flag, created_at, updated_at; no UNIQUE constraint allows logging the same route multiple times
   - `user_preferences` - User preferences for country filtering; stores selected_countries as TEXT[] array of ISO country codes (defaults: CZ, SK, AT, PL, DE, LT, LV, EE)
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 - **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
-- **Route Validity Tracking**: Routes store starting_part_id and ending_part_id for recalculation; is_valid flag marks routes that can't be recalculated after OSM updates
+- **Coordinate-Based Routing**: Routes store exact starting_coordinate and ending_coordinate (exact click points on railway parts) for precise recalculation; is_valid flag marks routes that can't be recalculated after OSM updates
 - **Multiple Trips Support**: user_trips table allows users to log the same route multiple times (e.g., different dates); frontend displays most recent trip for route coloring
 - **Country Tracking**: Routes automatically store start_country and end_country (2-letter ISO codes) determined from route geometry; uses @rapideditor/country-coder for worldwide boundary detection
 
@@ -113,26 +116,24 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Efficient rendering of large datasets through tile-based loading
   - MapLibre GL JS handles tile caching and viewport management automatically
 - **Interactive Features**:
-  - Click railway parts to select start/end points for route creation
+  - Click railway parts to select exact coordinates for start/end points
+  - Click anywhere on a railway part captures the precise GPS coordinate
   - Click railway routes to view/edit details
   - Route preview with geometry visualization
   - Hover effects on railway parts
 - **Route Management**: Create, edit geometry, update, and delete railway routes (track_id is auto-generated)
 - **Route Validity Display**: Invalid routes (is_valid=false) shown in grey when unselected, with alert banner in edit panel
-- **Edit Geometry Feature**: Allows fixing invalid routes by selecting new start/end points with same pathfinding mechanism
-- **Railway Part Splitting**:
-  - Allows splitting long railway segments into two parts for more precise route creation
-  - Split parts stored in separate `railway_part_splits` table (compound IDs like "parent_id-1", "parent_id-2")
-  - Split parts served via `railway_part_splits_tile` vector tile function as overlay layer
-  - Overlay rendering ensures split parts clickable/hoverable with priority over unsplit parts
-  - Split button appears when part selected; click on line to choose split point
-  - Split point inserted between nearest vertices (not snapped to existing points)
-  - Unsplit button removes split and restores original part
-  - Toast notifications for split errors (e.g., "Split point too close to endpoints")
-  - Field auto-clears after successful split
-  - Martin tile server cache disabled for immediate split visibility
-  - Pathfinding integration: RailwayPathFinder loads both regular and split parts
-  - Export/Import: `npm run exportRoutes` includes railway_part_splits table
+- **Edit Geometry Feature**: Allows fixing invalid routes by selecting new start/end coordinates with same pathfinding mechanism
+- **Coordinate-Based Routing**:
+  - Routes defined by exact start/end coordinates (stored as PostGIS POINT geometries)
+  - Click anywhere on a railway part to set route boundaries
+  - Pathfinding automatically:
+    - Finds which railway part contains each coordinate
+    - Truncates edge parts from click point to connection
+    - Builds complete route geometry with proper ordering
+  - Eliminates need for railway part splitting - click precision replaces segmentation
+  - Route recalculation uses stored coordinates to rebuild geometry after OSM updates
+  - Pathfinding tolerance: 50m to find nearest part vertex
 - **Components**: `AdminPageClient` → `VectorAdminMapWrapper` → `VectorAdminMap`
 
 ## Simplified Project Structure
@@ -190,8 +191,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `userPreferencesActions.ts` - User preferences management (get/update selected countries, ensure defaults)
 - `adminRouteActions.ts` - Admin-only route creation/update with security checks and automatic country detection
 - `route-delete-actions.ts` - Admin-only route deletion with security checks
-- `db-path-actions.ts` - Admin-only railway parts pathfinding using RailwayPathFinder
-- `railway-parts-actions.ts` - Admin-only railway parts fetching by IDs
+- `adminMapActions.ts` - Admin-only coordinate-based pathfinding (`findRailwayPathFromCoordinates`) and railway parts fetching by IDs
 - `routePathFinder.ts` - Route-level pathfinding for journey planner (user-facing, uses station name matching)
 - `authActions.ts` - Authentication actions (login, register, logout, getUser)
 
@@ -215,11 +215,10 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 **Interactions:**
 - `interactions/userMapInteractions.ts` - User map click handlers (route click to add to selection, hover popups)
-- `interactions/adminMapInteractions.ts` - Admin map click handlers (railway parts selection, route editing)
+- `interactions/adminMapInteractions.ts` - Admin map click handlers (coordinate capture from railway parts, route editing)
 
 **Utilities:**
 - `utils/userRouteStyling.ts` - User route color/width expressions (three-way colors: dark green=completed, dark orange=partial, crimson=unvisited)
-- `utils/railwayPartsStyling.ts` - Railway parts styling for admin map
 - `utils/distance.ts` - Distance calculation utilities
 
 #### Scripts (`src/scripts/`)
@@ -245,7 +244,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `railway_routes_tile` - Shows routes at all zoom levels with country filtering via selected_countries query param; includes start_country and end_country in tile attributes
   - `railway_parts_tile` - Zoom-based filtering for raw OSM segments
   - `stations_tile` - Stations visible at zoom 10+
-- Contains tables for users, stations, railway_routes (with frequency, link, start_country, end_country, starting_part_id, ending_part_id, is_valid, error_message), railway_parts, user_trips (supports multiple trips per route), and user_preferences (selected_countries array)
+- Contains tables for users, stations, railway_routes (with frequency, link, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message), railway_parts, user_trips (supports multiple trips per route), and user_preferences (selected_countries array)
 
 ### Configuration Files
 - `eslint.config.mjs` - ESLint configuration
@@ -273,25 +272,31 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Admin users create `railway_routes` manually via the web interface
 
 ### Admin Route Creation and Management
-- Admin interface allows creating new routes by clicking railway parts on the map
-- Routes are built by selecting start/end points from `railway_parts`
-- Shared pathfinding (`RailwayPathFinder` class) uses BFS with PostGIS spatial queries within 150km
+- Admin interface allows creating new routes by clicking exact coordinates on railway parts
+- **Coordinate-Based System**: Click anywhere on a railway part to capture precise GPS coordinates (no part splitting needed)
+- Routes are built by selecting start/end coordinates, stored as PostGIS POINT geometries
+- Shared pathfinding (`RailwayPathFinder` class):
+  - `findPathFromCoordinates()` method accepts exact coordinates
+  - Uses BFS with PostGIS spatial queries (50km → 100km → 150km progressive buffer)
+  - Automatically finds which railway parts contain the coordinates (50m tolerance)
+  - Truncates edge parts from click point to connection
+  - Returns properly ordered coordinate chain
 - Route length is automatically calculated using ST_Length with geography cast
 - **Country Detection**: start_country and end_country automatically determined from route geometry using @rapideditor/country-coder (worldwide boundary detection)
 - track_id is auto-generated using PostgreSQL SERIAL
-- Routes store starting_part_id and ending_part_id for recalculation after OSM updates
-- `saveRailwayRoute` handles both INSERT (new routes) and UPDATE (edit geometry) with optional trackId parameter
+- Routes store `starting_coordinate` and `ending_coordinate` for recalculation after OSM updates
+- `saveRailwayRoute` handles both INSERT (new routes) and UPDATE (edit geometry) with coordinate parameters
 - Uses `mergeLinearChain` algorithm to properly order and connect coordinate sublists
 
 ### Database Updates and Route Recalculation
 - `npm run importMapData` automatically reloads railway_parts from pruned GeoJSON and recalculates all existing routes
 - If no routes exist (initial setup), recalculation is skipped
-- Recalculation uses stored starting_part_id and ending_part_id with shared `RailwayPathFinder`
-- Fetches railway part geometries and uses shared `mergeLinearChain` for proper coordinate ordering (same as route creation)
-- Routes that can't be recalculated are marked with is_valid=false and error_message
+- Recalculation uses stored `starting_coordinate` and `ending_coordinate` with `findPathFromCoordinates()`
+- Pathfinding automatically handles coordinate-to-part mapping and edge truncation
+- Routes that can't be recalculated are marked with is_valid=false and error_message (e.g., "No path found", "Coordinate no longer on railway network")
 - Routes with distance mismatches (>0.1 km AND >1% difference) are marked invalid with detailed error message
 - Invalid routes displayed in grey on admin map (orange when selected)
-- Admin can fix invalid routes using "Edit Route Geometry" to select new start/end points
+- Admin can fix invalid routes using "Edit Route Geometry" to select new start/end coordinates
 
 ### User Progress Tracking
 - User-specific data stored in `user_trips` table with date, note, and partial fields; supports multiple trips per route

@@ -8,6 +8,7 @@ import type { PathResult, RailwayPart, GeoJSONFeatureCollection, GeoJSONFeature 
 
 /**
  * Find a path between two railway parts using BFS pathfinding
+ * DEPRECATED: Use findRailwayPathFromCoordinates for new code
  */
 export async function findRailwayPathDB(startId: string, endId: string): Promise<PathResult | null> {
   // Admin check
@@ -31,8 +32,36 @@ export async function findRailwayPathDB(startId: string, endId: string): Promise
 }
 
 /**
+ * Find a path between two coordinates using BFS pathfinding
+ * This is the new coordinate-based pathfinding method
+ */
+export async function findRailwayPathFromCoordinates(
+  startCoordinate: [number, number],
+  endCoordinate: [number, number]
+): Promise<PathResult | null> {
+  // Admin check
+  const user = await getUser();
+  if (!user || user.id !== 1) {
+    throw new Error('Admin access required');
+  }
+
+  console.log('Coordinate-based path finder: Finding path from', startCoordinate, 'to', endCoordinate);
+
+  const pathFinder = new RailwayPathFinder();
+  // For new routes created in admin interface: truncateEdges=true (truncate from click point to edge)
+  const result = await pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate, true);
+
+  if (result) {
+    console.log('Coordinate-based path finder: Path found with', result.partIds.length, 'segments and', result.coordinates.length, 'coordinates');
+  } else {
+    console.log('Coordinate-based path finder: No path found');
+  }
+
+  return result;
+}
+
+/**
  * Get railway parts by their IDs (used for route creation)
- * Handles both original parts (numeric IDs) and split parts (compound IDs like "12345-1")
  */
 export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPart[]> {
   // Admin check
@@ -48,77 +77,30 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
   try {
     console.log('Fetching railway parts for IDs:', partIds);
 
-    // Separate compound IDs (split parts) from regular IDs
-    const compoundIds: string[] = [];
-    const regularIds: string[] = [];
+    const placeholders = partIds.map((_, index) => `$${index + 1}`).join(',');
+    const queryStr = `
+      SELECT
+        id,
+        ST_AsGeoJSON(geometry) as geometry_json
+      FROM railway_parts
+      WHERE id IN (${placeholders})
+        AND geometry IS NOT NULL
+    `;
 
-    partIds.forEach(id => {
-      if (id.includes('-')) {
-        compoundIds.push(id);
-      } else {
-        regularIds.push(id);
-      }
+    const result = await client.query(queryStr, partIds);
+
+    const features: RailwayPart[] = result.rows.map(row => {
+      const geom = JSON.parse(row.geometry_json);
+      return {
+        type: 'Feature' as const,
+        geometry: geom,
+        properties: {
+          '@id': parseInt(row.id)
+        }
+      } as RailwayPart;
     });
 
-    const features: RailwayPart[] = [];
-
-    // Fetch original parts if any regular IDs exist
-    if (regularIds.length > 0) {
-      const placeholders = regularIds.map((_, index) => `$${index + 1}`).join(',');
-      const queryStr = `
-        SELECT
-          id,
-          ST_AsGeoJSON(geometry) as geometry_json
-        FROM railway_parts
-        WHERE id IN (${placeholders})
-          AND geometry IS NOT NULL
-      `;
-
-      const result = await client.query(queryStr, regularIds);
-
-      result.rows.forEach(row => {
-        const geom = JSON.parse(row.geometry_json);
-        if (geom.type === 'LineString') {
-          features.push({
-            type: 'Feature' as const,
-            geometry: geom,
-            properties: {
-              '@id': parseInt(row.id)
-            }
-          } as RailwayPart);
-        }
-      });
-    }
-
-    // Fetch split parts if any compound IDs exist
-    if (compoundIds.length > 0) {
-      const placeholders = compoundIds.map((_, index) => `$${index + 1}`).join(',');
-      const queryStr = `
-        SELECT
-          id,
-          ST_AsGeoJSON(geometry) as geometry_json
-        FROM railway_part_splits
-        WHERE id IN (${placeholders})
-          AND geometry IS NOT NULL
-      `;
-
-      const result = await client.query(queryStr, compoundIds);
-
-      result.rows.forEach(row => {
-        const geom = JSON.parse(row.geometry_json);
-        if (geom.type === 'LineString') {
-          features.push({
-            type: 'Feature' as const,
-            geometry: geom,
-            properties: {
-              '@id': row.id // Keep as string for compound IDs
-            }
-          } as RailwayPart);
-        }
-      });
-    }
-
-    console.log('Fetched', features.length, 'railway parts from database (original + split)');
+    console.log('Fetched', features.length, 'railway parts from database');
     return features;
 
   } catch (error) {

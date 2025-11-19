@@ -15,59 +15,47 @@ const VectorAdminMap = dynamic(() => import('./VectorAdminMap'), {
 
 interface VectorAdminMapWrapperProps {
   className?: string;
-  onPartClick?: (partId: string) => void;
+  onCoordinateClick?: (coordinate: [number, number]) => void;
   onRouteSelect?: (routeId: string) => void;
   selectedRouteId?: string | null;
   previewRoute?: { partIds: string[], coordinates: [number, number][], railwayParts: RailwayPart[] } | null;
-  selectedParts?: { startingId: string, endingId: string };
+  selectedCoordinates?: { startingCoordinate: [number, number] | null, endingCoordinate: [number, number] | null };
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
-  isSplittingMode?: boolean;
-  splittingPartId?: string | null;
-  onExitSplitMode?: () => void;
   onRefreshMap?: () => void;
   showError?: (message: string) => void;
   showSuccess?: (message: string) => void;
-  onSplitSuccess?: (parentId: string) => void;
 }
 
 export default function VectorAdminMapWrapper({
   className,
-  onPartClick,
+  onCoordinateClick,
   onRouteSelect,
   selectedRouteId,
   previewRoute,
-  selectedParts,
+  selectedCoordinates,
   refreshTrigger,
   isEditingGeometry,
   focusGeometry,
-  isSplittingMode,
-  splittingPartId,
-  onExitSplitMode,
   onRefreshMap,
   showError,
   showSuccess,
-  onSplitSuccess,
 }: VectorAdminMapWrapperProps) {
   return (
     <VectorAdminMap
       className={className}
-      onPartClick={onPartClick}
+      onCoordinateClick={onCoordinateClick}
       onRouteSelect={onRouteSelect}
       selectedRouteId={selectedRouteId}
       previewRoute={previewRoute}
-      selectedParts={selectedParts}
+      selectedCoordinates={selectedCoordinates}
       refreshTrigger={refreshTrigger}
       isEditingGeometry={isEditingGeometry}
       focusGeometry={focusGeometry}
-      isSplittingMode={isSplittingMode}
-      splittingPartId={splittingPartId}
-      onExitSplitMode={onExitSplitMode}
       onRefreshMap={onRefreshMap}
       showError={showError}
       showSuccess={showSuccess}
-      onSplitSuccess={onSplitSuccess}
     />
   );
 }

@@ -5,10 +5,10 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 
 /**
- * Export railway_routes, railway_part_splits, and user_trips (user_id=1) to SQL dump
+ * Export railway_routes and user_trips (user_id=1) to SQL dump
  */
 async function exportRoutes() {
-  console.log('Exporting railway_routes, railway_part_splits, and user_trips...');
+  console.log('Exporting railway_routes and user_trips...');
 
   try {
     // Create data directory if it doesn't exist
@@ -41,21 +41,6 @@ async function exportRoutes() {
       });
     } catch (error) {
       console.error('Error running pg_dump:', error);
-      throw error;
-    }
-
-    // Export railway_part_splits table
-    console.log('Exporting railway_part_splits table...');
-    const pgDumpSplitsCmd = `docker exec ${containerName} pg_dump -U ${dbUser} -d ${dbName} --table=railway_part_splits --data-only --column-inserts`;
-
-    let splitsDump = '';
-    try {
-      splitsDump = execSync(pgDumpSplitsCmd, {
-        encoding: 'utf-8',
-        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
-      });
-    } catch (error) {
-      console.error('Error running pg_dump for splits:', error);
       throw error;
     }
 
@@ -93,19 +78,15 @@ async function exportRoutes() {
     const fullDump = `-- Railway Data Export (${timestamp})
 -- This file contains:
 --   1. railway_routes table (full export)
---   2. railway_part_splits table (full export)
---   3. user_trips for user_id=1
+--   2. user_trips for user_id=1
 
 -- Clear existing data
 DELETE FROM public.railway_routes;
-DELETE FROM public.railway_part_splits;
 
 -- Disable triggers during import (avoids ST_Transform search_path issues)
 SET session_replication_role = replica;
 
 ${sqlDump}
-
-${splitsDump}
 
 ${userDataSQL}
 
@@ -117,7 +98,6 @@ SET session_replication_role = DEFAULT;
     fs.writeFileSync(filepath, fullDump);
 
     console.log(`✓ Exported railway_routes (${sqlDump.split('\n').filter(l => l.startsWith('INSERT')).length} routes)`);
-    console.log(`✓ Exported railway_part_splits (${splitsDump.split('\n').filter(l => l.startsWith('INSERT')).length} splits)`);
     console.log(`✓ Exported user_trips (${userDataResult.rows.length} records)`);
     console.log(`✓ Saved to ${filepath}`);
     process.exit(0);

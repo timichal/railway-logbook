@@ -10,11 +10,6 @@ nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
-splitáž:
-- unsplit by měl rovnou vrátit původní id
-- a split by neměl spustit přepočet
-- proč teď pomalý přepočet?
-
 !PRIO! přejet cross country lines
 de-cz
 zittau-liberec
