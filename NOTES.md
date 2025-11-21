@@ -1,4 +1,4 @@
-temp poznamky
+poznámky
 
 - dělení: special nejsou v běžných JŘ, seasonal jo
 - 222 vlašim-trhový štěpánov a 304 kojetín-tovačov v roce 26 bez provozu? 25: https://railwaycapital.cz/jizdni-rady/
@@ -7,6 +7,10 @@ temp poznamky
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
+
+z předělávání na souřadnice
+- přemyšl medyka do véčka (ale s tím asi nic)
+- munina hrebenne blbě navazuje, opraveno OSM
 
 !PRIO! přejet cross country lines
 de-cz
