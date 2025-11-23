@@ -10,7 +10,6 @@ nedodělané tratě
 
 z předělávání na souřadnice
 - přemyšl medyka do véčka (ale s tím asi nic)
-- munina hrebenne blbě navazuje, opraveno OSM
 
 !PRIO! přejet cross country lines
 de-cz
