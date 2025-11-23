@@ -70,6 +70,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
   };
 
   // Get all routes with coordinates, part IDs, and full geometry
+  // Skip routes that are already marked as invalid
   const routes = await client.query(`
     SELECT
       track_id,
@@ -87,6 +88,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
     FROM railway_routes
     WHERE starting_coordinate IS NOT NULL
       AND ending_coordinate IS NOT NULL
+      AND (is_valid IS NULL OR is_valid = TRUE)
     ORDER BY track_id
   `);
 

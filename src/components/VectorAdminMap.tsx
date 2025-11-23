@@ -480,7 +480,7 @@ export default function VectorAdminMap({
     }
   }, [selectedCoordinates, mapLoaded, map]);
 
-  // Handle route endpoints layer visualization (only show in edit/create mode)
+  // Handle route endpoints layer visualization
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
@@ -492,13 +492,7 @@ export default function VectorAdminMap({
       map.current.removeSource('route-endpoints');
     }
 
-    // Only show endpoints when we have coordinates selected (create mode) or editing geometry
-    const shouldShowEndpoints = showEndpointsLayer && (
-      (selectedCoordinates?.startingCoordinate !== null || selectedCoordinates?.endingCoordinate !== null) ||
-      isEditingGeometry
-    );
-
-    if (routeEndpoints && routeEndpoints.features.length > 0 && shouldShowEndpoints) {
+    if (routeEndpoints && routeEndpoints.features.length > 0) {
       console.log('[VectorAdminMap] Adding route endpoints layer with', routeEndpoints.features.length, 'endpoints');
 
       // Add route endpoints as a GeoJSON source
