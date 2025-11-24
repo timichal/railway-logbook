@@ -17,6 +17,7 @@ z předělávání na souřadnice
 - zagorz ustrzyki blbě navazuje, opraveno OSM
 - kh blbě úvrať, opraveno OSM
 - úľany zlaté moravce blbě split, opraveno OSM
+- totéž trebišov michalany
 
 !PRIO! přejet cross country lines
 de-cz
