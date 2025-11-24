@@ -16,7 +16,7 @@ z předělávání na souřadnice
 - přemyšl medyka do véčka (ale s tím asi nic)
 - kh blbě úvrať, opraveno OSM
 - úľany zlaté moravce blbě split, opraveno OSM
-- totéž trebišov michalany
+- totéž trebišov michalany, jaslo rzeszow
 
 !PRIO! přejet cross country lines
 de-cz
