@@ -14,7 +14,6 @@ nedodělané tratě
 
 z předělávání na souřadnice
 - přemyšl medyka do véčka (ale s tím asi nic)
-- zagorz ustrzyki blbě navazuje, opraveno OSM
 - kh blbě úvrať, opraveno OSM
 - úľany zlaté moravce blbě split, opraveno OSM
 - totéž trebišov michalany
