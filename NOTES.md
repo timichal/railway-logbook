@@ -4,6 +4,10 @@ poznámky
 - 222 vlašim-trhový štěpánov a 304 kojetín-tovačov v roce 26 bez provozu? 25: https://railwaycapital.cz/jizdni-rady/
 - geolokace parts nepřesná - nutno asi přes api nebo manuálně (chyba - Vrbovce, s jinou knihovnou Hel)
 
+STAV
+hotovo: Litva, Lotyšsko, Estonsko
+rozdělané: Česko, Slovensko, Polsko, Rakousko, Německo
+
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
