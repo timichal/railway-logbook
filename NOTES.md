@@ -15,6 +15,7 @@ nedodělané tratě
 z předělávání na souřadnice
 - přemyšl medyka do véčka (ale s tím asi nic)
 - nutno dodělat przeworsk triangl, opraveno OSM
+- dojebaný vjezd z Opavy do Krnova, opraveno OSM
 
 !PRIO! přejet cross country lines
 de-cz
