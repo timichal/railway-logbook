@@ -13,7 +13,6 @@ nedodělané tratě
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
 z předělávání na souřadnice
-- přemyšl medyka do véčka (ale s tím asi nic)
 - nutno dodělat przeworsk triangl, opraveno OSM
 - dojebaný vjezd z Opavy do Krnova, opraveno OSM
 - totéž Opava, nutno dodělat Opava-Kylešovice
