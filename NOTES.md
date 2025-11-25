@@ -17,6 +17,7 @@ z předělávání na souřadnice
 - nutno dodělat przeworsk triangl, opraveno OSM
 - dojebaný vjezd z Opavy do Krnova, opraveno OSM
 - totéž Opava, nutno dodělat Opava-Kylešovice
+- taky Sobotín-Petrov nad Desnou
 
 !PRIO! přejet cross country lines
 de-cz
