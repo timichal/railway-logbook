@@ -570,27 +570,19 @@ export class RailwayPathFinder {
 
   /**
    * Find path from start coordinate to end coordinate with automatic retry using larger buffers
-   * This is the new coordinate-based pathfinding method
+   * This is the coordinate-based pathfinding method
    *
    * Algorithm:
    * 1. Find all parts that contain the start coordinate (within 1m tolerance)
    * 2. Find all parts that contain the end coordinate (within 1m tolerance)
    * 3. For each combination of (start part, end part), run part-based pathfinding
-   * 4. If truncateEdges=false (migrated routes): include entire parts (no truncation)
-   *    If truncateEdges=true (new routes): trim edge parts from click point to connection
+   * 4. Trim edge parts from click point to connection
    * 5. Select the shortest path among all candidates
-   *
-   * This ensures coordinate-based and part-based pathfinding produce identical results
-   * for migrated routes (where coordinates are at part endpoints).
-   *
-   * @param truncateEdges - If false: migrated routes (include entire parts)
-   *                        If true: new routes (truncate edges from click points)
    */
   async findPathFromCoordinates(
     dbClient: Client | Pool,
     startCoordinate: [number, number],
-    endCoordinate: [number, number],
-    truncateEdges: boolean = true
+    endCoordinate: [number, number]
   ): Promise<PathResult | null> {
     const buffers = [50000, 100000, 150000]; // 50km, 100km, 150km
 
@@ -641,28 +633,12 @@ export class RailwayPathFinder {
 
           console.log(`    Path found with ${pathResult.partIds.length} parts`);
 
-          // Calculate coordinates for this path
-          let coordinates: [number, number][];
-
-          if (truncateEdges) {
-            // NEW ROUTE LOGIC: Truncate edge parts from click points to connections
-            coordinates = this.buildCoordinatesWithTruncation(
-              pathResult.partIds,
-              startCoordinate,
-              endCoordinate
-            );
-          } else {
-            // MIGRATED ROUTE LOGIC: Use entire parts (no truncation)
-            // This ensures identical results to old part-based pathfinding
-            const coordinateSublists: [number, number][][] = [];
-            for (const partId of pathResult.partIds) {
-              const part = this.parts.get(partId);
-              if (part) {
-                coordinateSublists.push(part.coordinates);
-              }
-            }
-            coordinates = this.mergeLinearChain(coordinateSublists);
-          }
+          // Calculate coordinates for this path with edge truncation
+          const coordinates = this.buildCoordinatesWithTruncation(
+            pathResult.partIds,
+            startCoordinate,
+            endCoordinate
+          );
 
           // Calculate total distance
           let distance = 0;

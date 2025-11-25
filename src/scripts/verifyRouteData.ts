@@ -18,26 +18,20 @@ export interface RecalculationResult {
 
 /**
  * Recalculate a single railway route based on starting and ending coordinates
- *
- * @param isMigratedRoute - If true (migrated), include entire edge parts. If false (new), truncate from click point.
  */
 export async function recalculateRoute(
   client: Client,
   trackId: number,
   startingCoordinate: [number, number],
-  endingCoordinate: [number, number],
-  isMigratedRoute: boolean = false
+  endingCoordinate: [number, number]
 ): Promise<{ success: boolean; coordinates?: Coord[]; error?: string }> {
   try {
     const pathFinder = new RailwayPathFinder();
 
-    // For migrated routes: truncateEdges=false (include entire parts)
-    // For new routes: truncateEdges=true (truncate from click point)
     const result = await pathFinder.findPathFromCoordinates(
       client,
       startingCoordinate,
-      endingCoordinate,
-      !isMigratedRoute // truncateEdges
+      endingCoordinate
     );
 
     if (!result) {
@@ -102,15 +96,12 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
     const startingCoordinate: [number, number] = [parseFloat(start_lng), parseFloat(start_lat)];
     const endingCoordinate: [number, number] = [parseFloat(end_lng), parseFloat(end_lat)];
 
-    // Recalculate ALL routes from coordinates
-    // For migrated routes (has starting_part_id): use entire edge parts (isMigratedRoute=true)
-    // For new routes (no starting_part_id): truncate edge parts (isMigratedRoute=false)
+    // Recalculate route from coordinates
     const recalcResult = await recalculateRoute(
       client,
       track_id,
       startingCoordinate,
-      endingCoordinate,
-      !!starting_part_id // migrated routes: include entire edge parts
+      endingCoordinate
     );
 
     if (recalcResult.success && recalcResult.coordinates) {

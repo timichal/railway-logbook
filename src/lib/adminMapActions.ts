@@ -48,8 +48,7 @@ export async function findRailwayPathFromCoordinates(
   console.log('Coordinate-based path finder: Finding path from', startCoordinate, 'to', endCoordinate);
 
   const pathFinder = new RailwayPathFinder();
-  // For new routes created in admin interface: truncateEdges=true (truncate from click point to edge)
-  const result = await pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate, true);
+  const result = await pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
 
   if (result) {
     console.log('Coordinate-based path finder: Path found with', result.partIds.length, 'segments and', result.coordinates.length, 'coordinates');
