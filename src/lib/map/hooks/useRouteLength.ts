@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { RailwayPart } from '@/lib/types';
 import { getRailwayRoute } from '@/lib/adminRouteActions';
-import { calculateRouteLength } from '../utils/distance';
+import { calculateDistance } from '../utils/distance';
 
 interface PreviewRoute {
   partIds: string[];
@@ -19,14 +19,19 @@ export function useRouteLength(
   const [previewLength, setPreviewLength] = useState<number | null>(null);
   const [selectedRouteLength, setSelectedRouteLength] = useState<number | null>(null);
 
-  // Calculate total length of preview route
+  // Calculate total length of preview route using truncated coordinates
+  // This ensures preview matches the saved length (which uses truncated coordinates)
   useEffect(() => {
-    if (!previewRoute || !previewRoute.railwayParts || previewRoute.railwayParts.length === 0) {
+    if (!previewRoute || !previewRoute.coordinates || previewRoute.coordinates.length < 2) {
       setPreviewLength(null);
       return;
     }
 
-    const totalLength = calculateRouteLength(previewRoute.railwayParts);
+    // Calculate distance from truncated coordinates (matching database calculation)
+    let totalLength = 0;
+    for (let i = 0; i < previewRoute.coordinates.length - 1; i++) {
+      totalLength += calculateDistance(previewRoute.coordinates[i], previewRoute.coordinates[i + 1]);
+    }
     setPreviewLength(totalLength);
   }, [previewRoute]);
 

@@ -1,5 +1,3 @@
-import type { RailwayPart } from '@/lib/types';
-
 /**
  * Calculate distance between two coordinates using Haversine formula
  */
@@ -18,22 +16,4 @@ export function calculateDistance(coord1: [number, number], coord2: [number, num
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c;
-}
-
-/**
- * Calculate total length of a route from railway parts
- */
-export function calculateRouteLength(railwayParts: RailwayPart[]): number {
-  let totalLength = 0;
-
-  railwayParts.forEach((part) => {
-    if (part.geometry && part.geometry.type === 'LineString') {
-      const coords = part.geometry.coordinates as [number, number][];
-      for (let i = 0; i < coords.length - 1; i++) {
-        totalLength += calculateDistance(coords[i], coords[i + 1]);
-      }
-    }
-  });
-
-  return totalLength;
 }
