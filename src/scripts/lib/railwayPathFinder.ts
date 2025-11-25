@@ -409,87 +409,136 @@ export class RailwayPathFinder {
   }
 
   /**
-   * Orient a part correctly for path traversal
-   * Returns [entry, exit] points where exit is where we leave to go to the next part
+   * Determine if a part should be traversed forward or backward in the path
+   * Returns true if traversing from first coordinate to last, false if reversed
    */
-  private getOrientedPartEndpoints(partId: string, prevPartId: string | null, nextPartId: string | null): [[number, number], [number, number]] | null {
+  private isPartTraversedForward(partId: string, prevPartId: string | null, nextPartId: string | null): boolean {
     const part = this.parts.get(partId);
-    if (!part) return null;
+    if (!part) return true;
 
     const startKey = this.coordinateToKey(part.startPoint);
     const endKey = this.coordinateToKey(part.endPoint);
 
-    // If we have a next part, orient so we exit toward it
+    // If we have a next part, determine orientation based on which end connects
     if (nextPartId) {
       const nextPart = this.parts.get(nextPartId);
       if (nextPart) {
         const nextStartKey = this.coordinateToKey(nextPart.startPoint);
         const nextEndKey = this.coordinateToKey(nextPart.endPoint);
 
-        // Exit point connects to next part's entry
+        // If end connects to next part, we're going forward
         if (endKey === nextStartKey || endKey === nextEndKey) {
-          // End connects to next, so orient: start → end
-          return [part.startPoint, part.endPoint];
+          return true;
         } else {
-          // Start connects to next, so orient: end → start
-          return [part.endPoint, part.startPoint];
+          return false;
         }
       }
     }
 
-    // If no next part but have previous, orient so we entered from prev
+    // If no next part but have previous, orient based on where we came from
     if (prevPartId) {
       const prevPart = this.parts.get(prevPartId);
       if (prevPart) {
         const prevStartKey = this.coordinateToKey(prevPart.startPoint);
         const prevEndKey = this.coordinateToKey(prevPart.endPoint);
 
-        // Entry point connects to prev part's exit
+        // If start connects to prev, we're going forward
         if (startKey === prevStartKey || startKey === prevEndKey) {
-          // Start connects to prev, so orient: start → end
-          return [part.startPoint, part.endPoint];
+          return true;
         } else {
-          // End connects to prev, so orient: end → start
-          return [part.endPoint, part.startPoint];
+          return false;
         }
       }
     }
 
-    // No context, use default orientation
-    return [part.startPoint, part.endPoint];
+    // Default: forward
+    return true;
+  }
+
+  /**
+   * Get the segment coordinates near a connection point for accurate bearing calculation
+   * Returns [coord1, coord2] representing the direction of travel near the connection
+   *
+   * @param isExit - If true, returns the segment near where we EXIT the part. If false, returns entry segment.
+   */
+  private getConnectionSegment(
+    partId: string,
+    prevPartId: string | null,
+    nextPartId: string | null,
+    isExit: boolean
+  ): [[number, number], [number, number]] | null {
+    const part = this.parts.get(partId);
+    if (!part) return null;
+
+    const coords = part.coordinates;
+    if (coords.length < 2) return null;
+
+    const isForward = this.isPartTraversedForward(partId, prevPartId, nextPartId);
+
+    if (isExit) {
+      // We want the segment near where we EXIT this part
+      if (isForward) {
+        // Traversing forward: exit is at the end
+        // Return last 2 coordinates in forward direction
+        return [coords[coords.length - 2], coords[coords.length - 1]];
+      } else {
+        // Traversing backward: exit is at the start (index 0)
+        // Return first 2 coordinates in backward direction (reversed)
+        return [coords[1], coords[0]];
+      }
+    } else {
+      // We want the segment near where we ENTER this part
+      if (isForward) {
+        // Traversing forward: entry is at the start
+        // Return first 2 coordinates in forward direction
+        return [coords[0], coords[1]];
+      } else {
+        // Traversing backward: entry is at the end
+        // Return last 2 coordinates in backward direction (reversed)
+        return [coords[coords.length - 1], coords[coords.length - 2]];
+      }
+    }
   }
 
   /**
    * Detect if a path has backtracking (tight "V" shapes)
-   * Uses oriented parts to calculate accurate bearing changes
+   * Uses segments near connection points for accurate bearing calculations
+   *
+   * Instead of using part endpoints (which can be far apart for long curvy parts),
+   * we use the coordinates closest to the connection points:
+   * - For part 1 (A→B→C→D): use C→D (exit segment)
+   * - For part 2 (D→E→F→G): use D→E (entry segment)
    */
   private hasBacktracking(partIds: string[]): boolean {
-    if (partIds.length < 3) return false;
+    if (partIds.length < 2) return false;
 
-    for (let i = 0; i < partIds.length - 2; i++) {
-      // Get oriented endpoints for three consecutive parts
-      const oriented1 = this.getOrientedPartEndpoints(partIds[i], i > 0 ? partIds[i-1] : null, partIds[i+1]);
-      const oriented2 = this.getOrientedPartEndpoints(partIds[i+1], partIds[i], partIds[i+2]);
-      const oriented3 = this.getOrientedPartEndpoints(partIds[i+2], partIds[i+1], i+3 < partIds.length ? partIds[i+3] : null);
+    for (let i = 0; i < partIds.length - 1; i++) {
+      const prevPartId = i > 0 ? partIds[i - 1] : null;
+      const currentPartId = partIds[i];
+      const nextPartId = partIds[i + 1];
+      const afterNextPartId = i + 2 < partIds.length ? partIds[i + 2] : null;
 
-      if (!oriented1 || !oriented2 || !oriented3) continue;
+      // Get exit segment of current part (coordinates near where it connects to next)
+      const exitSegment = this.getConnectionSegment(currentPartId, prevPartId, nextPartId, true);
 
-      // Calculate bearings from entry to exit for each part
-      const bearing1 = this.calculateBearing(oriented1[0], oriented1[1]);
-      const bearing2 = this.calculateBearing(oriented2[0], oriented2[1]);
-      const bearing3 = this.calculateBearing(oriented3[0], oriented3[1]);
+      // Get entry segment of next part (coordinates near where it connects from current)
+      const entrySegment = this.getConnectionSegment(nextPartId, currentPartId, afterNextPartId, false);
 
-      // Calculate angular changes between consecutive segments
-      const diff1 = Math.abs(bearing2 - bearing1);
-      const diff2 = Math.abs(bearing3 - bearing2);
+      if (!exitSegment || !entrySegment) continue;
 
-      // Normalize to 0-180 range
-      const normalizedDiff1 = diff1 > 180 ? 360 - diff1 : diff1;
-      const normalizedDiff2 = diff2 > 180 ? 360 - diff2 : diff2;
+      // Calculate bearing of exit from current part: C→D
+      const exitBearing = this.calculateBearing(exitSegment[0], exitSegment[1]);
+
+      // Calculate bearing of entry to next part: D→E
+      const entryBearing = this.calculateBearing(entrySegment[0], entrySegment[1]);
+
+      // Calculate angular change
+      const diff = Math.abs(entryBearing - exitBearing);
+      const normalizedDiff = diff > 180 ? 360 - diff : diff;
 
       // If direction changes by more than 140 degrees, it's a backtrack
-      if (normalizedDiff1 > 140 || normalizedDiff2 > 140) {
-        console.log(`    ⚠️  BACKTRACKING DETECTED: ${normalizedDiff1 > 140 ? normalizedDiff1.toFixed(1) : normalizedDiff2.toFixed(1)}° > 140°`);
+      if (normalizedDiff > 140) {
+        console.log(`    ⚠️  BACKTRACKING DETECTED at ${currentPartId}→${nextPartId}: ${normalizedDiff.toFixed(1)}° > 140°`);
         return true;
       }
     }
@@ -965,33 +1014,30 @@ export class RailwayPathFinder {
         if (!visited.has(connectedId)) {
           const newPath = [...current.path, connectedId];
 
-          // Check if adding this node would create backtracking (if we have enough nodes)
-          if (newPath.length >= 3) {
-            // Check the last 3 nodes for backtracking
-            const lastThree = newPath.slice(-3);
-            const tempPart1 = this.parts.get(lastThree[0]);
-            const tempPart2 = this.parts.get(lastThree[1]);
-            const tempPart3 = this.parts.get(lastThree[2]);
+          // Check if adding this node would create backtracking (if we have at least 2 nodes)
+          if (newPath.length >= 2) {
+            // Check the connection between last two parts for backtracking
+            const currentIdx = newPath.length - 2;
+            const prevPartId = currentIdx > 0 ? newPath[currentIdx - 1] : null;
+            const currentPartId = newPath[currentIdx];
+            const nextPartId = newPath[currentIdx + 1];
 
-            if (tempPart1 && tempPart2 && tempPart3) {
-              const oriented1 = this.getOrientedPartEndpoints(lastThree[0], newPath.length > 3 ? newPath[newPath.length - 4] : null, lastThree[1]);
-              const oriented2 = this.getOrientedPartEndpoints(lastThree[1], lastThree[0], lastThree[2]);
-              const oriented3 = this.getOrientedPartEndpoints(lastThree[2], lastThree[1], null);
+            // Get exit segment of current part
+            const exitSegment = this.getConnectionSegment(currentPartId, prevPartId, nextPartId, true);
 
-              if (oriented1 && oriented2 && oriented3) {
-                const bearing1 = this.calculateBearing(oriented1[0], oriented1[1]);
-                const bearing2 = this.calculateBearing(oriented2[0], oriented2[1]);
-                const bearing3 = this.calculateBearing(oriented3[0], oriented3[1]);
+            // Get entry segment of next part
+            const entrySegment = this.getConnectionSegment(nextPartId, currentPartId, null, false);
 
-                const diff1 = Math.abs(bearing2 - bearing1);
-                const diff2 = Math.abs(bearing3 - bearing2);
-                const normalizedDiff1 = diff1 > 180 ? 360 - diff1 : diff1;
-                const normalizedDiff2 = diff2 > 180 ? 360 - diff2 : diff2;
+            if (exitSegment && entrySegment) {
+              const exitBearing = this.calculateBearing(exitSegment[0], exitSegment[1]);
+              const entryBearing = this.calculateBearing(entrySegment[0], entrySegment[1]);
 
-                // If this would create backtracking, skip this branch
-                if (normalizedDiff1 > 140 || normalizedDiff2 > 140) {
-                  continue; // Don't explore this path further
-                }
+              const diff = Math.abs(entryBearing - exitBearing);
+              const normalizedDiff = diff > 180 ? 360 - diff : diff;
+
+              // If this would create backtracking, skip this branch
+              if (normalizedDiff > 140) {
+                continue; // Don't explore this path further
               }
             }
           }
