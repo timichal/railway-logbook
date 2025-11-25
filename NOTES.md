@@ -14,9 +14,7 @@ nedodělané tratě
 
 z předělávání na souřadnice
 - přemyšl medyka do véčka (ale s tím asi nic)
-- kh blbě úvrať, opraveno OSM
-- úľany zlaté moravce blbě split, opraveno OSM
-- totéž trebišov michalany, jaslo rzeszow
+- nutno dodělat przeworsk triangl, opraveno OSM
 
 !PRIO! přejet cross country lines
 de-cz
