@@ -971,9 +971,15 @@ export class RailwayPathFinder {
   }
 
   /**
-   * Find non-backtracking path using BFS that checks for backtracking during exploration
+   * Find non-backtracking path using BFS, optionally forcing a specific first hop
+   * Returns the shortest non-backtracking path found
    */
-  private findPathWithoutBacktracking(startId: string, endId: string, maxDistance: number): string[] | null {
+  private findPathWithoutBacktracking(
+    startId: string,
+    endId: string,
+    maxDistance: number,
+    forcedFirstHop?: string
+  ): string[] | null {
     const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
     const visited = new Set<string>([startId]);
     let shortestPath: string[] | null = null;
@@ -993,6 +999,11 @@ export class RailwayPathFinder {
       const connected = this.getConnectedPartIds(current.id);
 
       for (const connectedId of connected) {
+        // If we're at start and have a forced first hop, skip other neighbors
+        if (current.id === startId && forcedFirstHop && connectedId !== forcedFirstHop) {
+          continue;
+        }
+
         if (connectedId === endId) {
           // Found end - check final path
           const completePath = [...current.path, connectedId];
@@ -1056,23 +1067,39 @@ export class RailwayPathFinder {
 
   /**
    * Find non-backtracking alternative by trying different first hops
+   * If the first attempt doesn't find a path, tries again with each possible first hop
    */
   private findNonBacktrackingAlternative(
     startId: string,
     endId: string,
     maxDistance: number
   ): string[] | null {
-    console.log(`  Trying to find path without backtracking`);
+    console.log(`  Trying to find path without backtracking...`);
 
-    // Try to find a non-backtracking path
-    const path = this.findPathWithoutBacktracking(startId, endId, maxDistance);
+    // First attempt: try without forcing any specific first hop
+    let path = this.findPathWithoutBacktracking(startId, endId, maxDistance);
 
-    if (path && path.length > 1) {
+    if (path) {
       const distance = this.calculatePathDistance(path);
       console.log(`  ✓ Found non-backtracking path via ${path[1]} (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
       return path;
     }
 
+    // If first attempt failed, try forcing each possible first hop
+    console.log(`  First attempt found no path, trying different starting branches...`);
+    const firstHops = this.getConnectedPartIds(startId);
+
+    for (const firstHop of firstHops) {
+      path = this.findPathWithoutBacktracking(startId, endId, maxDistance, firstHop);
+
+      if (path) {
+        const distance = this.calculatePathDistance(path);
+        console.log(`  ✓ Found non-backtracking path via ${firstHop} on retry (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
+        return path;
+      }
+    }
+
+    console.log(`  No non-backtracking path found after ${firstHops.length + 1} attempts`);
     return null;
   }
 
