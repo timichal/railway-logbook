@@ -3,6 +3,7 @@ poznámky
 - dělení: special nejsou v běžných JŘ, seasonal jo
 - 222 vlašim-trhový štěpánov a 304 kojetín-tovačov v roce 26 bez provozu? 25: https://railwaycapital.cz/jizdni-rady/
 - geolokace parts nepřesná - nutno asi přes api nebo manuálně (chyba - Vrbovce, s jinou knihovnou Hel)
+- zvolen šahy se 26 zavírá!
 
 STAV
 hotovo: Litva, Lotyšsko, Estonsko
@@ -14,8 +15,7 @@ nedodělané tratě
 
 z předělávání na souřadnice
 - nutno dodělat przeworsk triangl, opraveno OSM
-- dojebaný vjezd z Opavy do Krnova, opraveno OSM
-- totéž Opava, nutno dodělat Opava-Kylešovice
+- Kalwaria Zebrzydowska triangl taky
 - taky Sobotín-Petrov nad Desnou
 
 !PRIO! přejet cross country lines
@@ -26,8 +26,6 @@ varnsdorf-grossschonau
 jiříkov-ebersbach (?)
 dolní poustevna-sebnitz
 dolní žleb-schöna
-vejprty-bärenstein
-potůčky-johanngeorgenstadt
 
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
