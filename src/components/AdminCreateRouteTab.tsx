@@ -133,7 +133,7 @@ export default function AdminCreateRouteTab({
       onPreviewRoute(result.partIds, result.coordinates, railwayParts, startingCoordinate, endingCoordinate);
     } else {
       console.error('Preview: No path found between coordinates');
-      showError('No path found between the selected coordinates within 200km. Make sure both points are on connected railway parts.');
+      showError('No path found between the selected coordinates within 222km. Make sure both points are on connected railway parts.');
     }
   };
 
