@@ -65,5 +65,6 @@ export const SUPPORTED_COUNTRIES = [
   { code: 'LT', name: 'Lithuania' },
   { code: 'LV', name: 'Latvia' },
   { code: 'EE', name: 'Estonia' },
+  { code: 'FI', name: 'Finland' },
 ] as const;
 
