@@ -602,16 +602,16 @@ export class RailwayPathFinder {
       return result;
     }
 
-    // Third attempt with 150km buffer
-    console.log('Path not found with 100km buffer, retrying with 150km buffer...');
+    // Third attempt with 200km buffer
+    console.log('Path not found with 100km buffer, retrying with 200km buffer...');
     this.clear(); // Clear previous data
-    await this.loadRailwayParts(dbClient, startId, endId, 150000);
+    await this.loadRailwayParts(dbClient, startId, endId, 200000);
     result = this.findPath(startId, endId);
 
     if (result) {
-      console.log('Path found with 150km buffer');
+      console.log('Path found with 200km buffer');
     } else {
-      console.log('Path not found even with 150km buffer');
+      console.log('Path not found even with 200km buffer');
     }
 
     return result;
@@ -633,7 +633,7 @@ export class RailwayPathFinder {
     startCoordinate: [number, number],
     endCoordinate: [number, number]
   ): Promise<PathResult | null> {
-    const buffers = [50000, 100000, 150000]; // 50km, 100km, 150km
+    const buffers = [50000, 100000, 200000]; // 50km, 100km, 200km
 
     for (const bufferMeters of buffers) {
       console.log(`Attempting coordinate-based pathfinding with ${bufferMeters / 1000}km buffer...`);

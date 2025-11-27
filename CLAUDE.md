@@ -277,7 +277,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - Routes are built by selecting start/end coordinates, stored as PostGIS POINT geometries
 - Shared pathfinding (`RailwayPathFinder` class):
   - `findPathFromCoordinates()` method accepts exact coordinates
-  - Uses BFS with PostGIS spatial queries (50km → 100km → 150km progressive buffer)
+  - Uses BFS with PostGIS spatial queries (50km → 100km → 200km progressive buffer)
   - Automatically finds which railway parts contain the coordinates (50m tolerance)
   - Truncates edge parts from click point to connection
   - Returns properly ordered coordinate chain
