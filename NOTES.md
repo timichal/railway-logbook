@@ -6,8 +6,8 @@ poznámky
 - zvolen šahy se 26 zavírá!
 
 STAV
-hotovo: Litva, Lotyšsko, Estonsko
-rozdělané: Česko, Slovensko, Polsko, Rakousko, Německo
+hotovo: Litva, Lotyšsko, Estonsko, Slovensko (až na přeshraniční do Maďarska)
+rozdělané: Česko, Polsko, Rakousko, Německo
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
@@ -18,14 +18,10 @@ z předělávání na souřadnice
 - Kalwaria Zebrzydowska triangl taky
 - taky Sobotín-Petrov nad Desnou
 
-!PRIO! přejet cross country lines
-de-cz
+!PRIO! přejet cross country lines de-cz
 zittau-liberec
 seifhennersdorf-varnsdorf kocour
 varnsdorf-grossschonau
-jiříkov-ebersbach (?)
-dolní poustevna-sebnitz
-dolní žleb-schöna
 
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
