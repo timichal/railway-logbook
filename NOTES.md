@@ -6,8 +6,8 @@ poznámky
 - zvolen šahy se 26 zavírá!
 
 STAV
-hotovo: Litva, Lotyšsko, Estonsko, Slovensko (až na přeshraniční do Maďarska)
-rozdělané: Česko, Polsko, Rakousko, Německo, Finsko
+hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do Maďarska)
+rozdělané: Česko, Polsko, Rakousko, Německo
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
