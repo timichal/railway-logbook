@@ -7,7 +7,7 @@ poznámky
 
 STAV
 hotovo: Litva, Lotyšsko, Estonsko, Slovensko (až na přeshraniční do Maďarska)
-rozdělané: Česko, Polsko, Rakousko, Německo
+rozdělané: Česko, Polsko, Rakousko, Německo, Finsko
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady

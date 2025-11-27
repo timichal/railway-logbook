@@ -57,14 +57,14 @@ export const getFrequencyLabel = (frequency: string): string => {
  * Supported countries for filtering
  */
 export const SUPPORTED_COUNTRIES = [
-  { code: 'CZ', name: 'Czechia' },
-  { code: 'SK', name: 'Slovakia' },
   { code: 'AT', name: 'Austria' },
-  { code: 'PL', name: 'Poland' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'LT', name: 'Lithuania' },
-  { code: 'LV', name: 'Latvia' },
+  { code: 'CZ', name: 'Czechia' },
   { code: 'EE', name: 'Estonia' },
   { code: 'FI', name: 'Finland' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'LV', name: 'Latvia' },
+  { code: 'LT', name: 'Lithuania' },
+  { code: 'PL', name: 'Poland' },
+  { code: 'SK', name: 'Slovakia' },
 ] as const;
 
