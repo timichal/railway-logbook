@@ -19,11 +19,6 @@ z předělávání na souřadnice
 - Kalwaria Zebrzydowska triangl taky
 - taky Sobotín-Petrov nad Desnou
 
-!PRIO! přejet cross country lines de-cz
-zittau-liberec
-seifhennersdorf-varnsdorf kocour
-varnsdorf-grossschonau
-
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
 - about/faq
