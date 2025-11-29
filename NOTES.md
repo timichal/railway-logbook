@@ -14,9 +14,10 @@ nedodělané tratě
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
 opravy v OSM
-- Kalwaria Zebrzydowska triangl
 - Löbau z jihu
-- Jelcz, Boleslav úvrať 
+- levá strana trojúhelníku Chabowka (chybí úplně)
+- Jelcz
+- Boleslav úvrať 
 
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
