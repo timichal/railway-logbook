@@ -33,6 +33,7 @@ export const ZOOM_RANGES = {
   railwayRoutes: { min: 4, max: 18 }, // Matches Martin configuration
   railwayParts: { min: 4, max: 18 }, // Matches Martin configuration
   stations: { min: 9, max: 18 }, // Matches Martin configuration
+  adminNotes: { min: 4, max: 18 }, // Admin notes visible at all zooms
 } as const;
 
 export const COLORS = {
@@ -53,6 +54,11 @@ export const COLORS = {
   stations: {
     fill: '#ff7800',
     stroke: '#000',
+  },
+  adminNotes: {
+    fill: '#fbbf24', // Yellow/amber for notes
+    stroke: '#78350f', // Dark brown stroke
+    hover: '#f59e0b', // Darker amber on hover
   },
   preview: '#ff6600',
 } as const;
@@ -224,6 +230,45 @@ export function createRailwayPartsLayer(): maplibregl.LineLayerSpecification {
         3
       ],
       'line-opacity': 0.7,
+    },
+  };
+}
+
+export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorSourceSpecification {
+  const baseUrl = `${TILE_BASE_URL}/admin_notes_tile/{z}/{x}/{y}`;
+  const tilesUrl = cacheBuster ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
+
+  return {
+    type: 'vector',
+    tiles: [tilesUrl],
+    minzoom: ZOOM_RANGES.adminNotes.min,
+    maxzoom: ZOOM_RANGES.adminNotes.max,
+  };
+}
+
+export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
+  return {
+    id: 'admin_notes',
+    type: 'circle',
+    source: 'admin_notes',
+    'source-layer': 'admin_notes',
+    minzoom: ZOOM_RANGES.adminNotes.min,
+    paint: {
+      'circle-radius': [
+        'case',
+        ['boolean', ['feature-state', 'hover'], false],
+        8,
+        6
+      ],
+      'circle-color': [
+        'case',
+        ['boolean', ['feature-state', 'hover'], false],
+        COLORS.adminNotes.hover,
+        COLORS.adminNotes.fill
+      ],
+      'circle-stroke-color': COLORS.adminNotes.stroke,
+      'circle-stroke-width': 2,
+      'circle-opacity': 0.9,
     },
   };
 }

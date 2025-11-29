@@ -41,6 +41,14 @@ postgres:
       maxzoom: 18
       # This function accepts z, x, y parameters
 
+    # Admin notes (admin-only annotations)
+    admin_notes_tile:
+      schema: public
+      function: admin_notes_tile
+      minzoom: 4
+      maxzoom: 18
+      # This function accepts z, x, y parameters
+
 # Cache configuration - disable caching for dynamic data
 cache_size_mb: 0
 

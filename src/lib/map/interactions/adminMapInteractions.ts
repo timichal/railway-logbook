@@ -6,12 +6,6 @@ import { getUsageLabel } from '@/lib/constants';
 interface AdminMapCallbacks {
   onCoordinateClickRef: MutableRefObject<((coordinate: [number, number]) => void) | undefined>;
   onRouteSelectRef: MutableRefObject<((routeId: string) => void) | undefined>;
-  selectedCoordinatesRef: MutableRefObject<{ startingCoordinate: [number, number] | null; endingCoordinate: [number, number] | null } | undefined>;
-  previewRouteRef: MutableRefObject<unknown>;
-  updatePartsStyleRef: MutableRefObject<(() => void) | null>;
-  showErrorRef: MutableRefObject<((message: string) => void) | undefined>;
-  showSuccessRef: MutableRefObject<((message: string) => void) | undefined>;
-  onRefreshMapRef: MutableRefObject<(() => void) | undefined>;
 }
 
 /**
@@ -21,31 +15,7 @@ export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
   callbacks: AdminMapCallbacks
 ) {
-  const { onCoordinateClickRef, onRouteSelectRef, selectedCoordinatesRef, previewRouteRef, updatePartsStyleRef, showErrorRef, showSuccessRef, onRefreshMapRef } = callbacks;
-
-  // Function to update railway parts styling based on selected coordinates
-  const updatePartsStyle = () => {
-    // No special styling needed for coordinate-based selection
-    // Railway parts remain at default color, hover will be handled by CSS
-  };
-
-  // Set up the updatePartsStyle function so parent can call it
-  if (updatePartsStyleRef) {
-    updatePartsStyleRef.current = updatePartsStyle;
-  }
-
-  // Click handler for route endpoints
-  const handleEndpointClick = (e: maplibreglType.MapLayerMouseEvent) => {
-    if (!e.features || e.features.length === 0) return;
-    if (!onCoordinateClickRef.current) return;
-
-    const feature = e.features[0];
-    if (feature.geometry.type === 'Point') {
-      const clickedCoordinate = feature.geometry.coordinates as [number, number];
-      console.log('adminMapInteractions: Route endpoint clicked at coordinate:', clickedCoordinate);
-      onCoordinateClickRef.current(clickedCoordinate);
-    }
-  };
+  const { onCoordinateClickRef, onRouteSelectRef } = callbacks;
 
   // Click handler for railway_parts - extracts exact click coordinate
   const handlePartClick = (e: maplibreglType.MapLayerMouseEvent) => {
@@ -352,6 +322,78 @@ export function setupAdminMapInteractions(
         endpointHoverPopup.remove();
         endpointHoverPopup = null;
       }
+    }
+  });
+
+  // Hover effects for admin notes with popup
+  let noteHoverPopup: maplibregl.Popup | null = null;
+  let hoveredNoteId: number | string | null = null;
+
+  mapInstance.on('mouseenter', 'admin_notes', (e) => {
+    mapInstance.getCanvas().style.cursor = 'pointer';
+
+    if (e.features && e.features.length > 0) {
+      const feature = e.features[0];
+      const properties = feature.properties;
+      const noteId = feature.id;
+
+      // Set hover state for the feature
+      if (noteId !== undefined && noteId !== hoveredNoteId) {
+        // Remove hover from previous note
+        if (hoveredNoteId !== null) {
+          mapInstance.setFeatureState(
+            { source: 'admin_notes', sourceLayer: 'admin_notes', id: hoveredNoteId },
+            { hover: false }
+          );
+        }
+
+        // Add hover to current note
+        hoveredNoteId = noteId;
+        mapInstance.setFeatureState(
+          { source: 'admin_notes', sourceLayer: 'admin_notes', id: noteId },
+          { hover: true }
+        );
+      }
+
+      if (properties) {
+        if (noteHoverPopup) {
+          noteHoverPopup.remove();
+        }
+
+        noteHoverPopup = new maplibregl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 10,
+          className: 'admin-note-hover-popup'
+        })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div style="color: black;">
+              <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note</h3>
+              <div style="font-size: 0.85rem; color: #374151;">${properties.text || ''}</div>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Right-click to edit</div>
+            </div>
+          `)
+          .addTo(mapInstance);
+      }
+    }
+  });
+
+  mapInstance.on('mouseleave', 'admin_notes', () => {
+    mapInstance.getCanvas().style.cursor = '';
+
+    // Remove hover state from the last hovered note
+    if (hoveredNoteId !== null) {
+      mapInstance.setFeatureState(
+        { source: 'admin_notes', sourceLayer: 'admin_notes', id: hoveredNoteId },
+        { hover: false }
+      );
+      hoveredNoteId = null;
+    }
+
+    if (noteHoverPopup) {
+      noteHoverPopup.remove();
+      noteHoverPopup = null;
     }
   });
 }

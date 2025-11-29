@@ -30,6 +30,10 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
+- `npm run addAdminNotes` - Run migration to create admin_notes table (one-time setup)
+  - Creates table with id, coordinate (PostGIS POINT), text, created_at, updated_at
+  - Adds spatial index and auto-update trigger
+  - Safe to run multiple times (checks if table exists)
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate
@@ -91,6 +95,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and pathfinding)
   - `user_trips` - User-specific trip records; supports multiple trips per route with id, user_id, track_id, date, note, partial flag, created_at, updated_at; no UNIQUE constraint allows logging the same route multiple times
   - `user_preferences` - User preferences for country filtering; stores selected_countries as TEXT[] array of ISO country codes (defaults: CZ, SK, AT, PL, DE, LT, LV, EE)
+  - `admin_notes` - Admin-only map notes with id, coordinate (PostGIS POINT), text, created_at, updated_at; auto-updates timestamp on edit
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 - **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
 - **Coordinate-Based Routing**: Routes store exact starting_coordinate and ending_coordinate (exact click points on railway parts) for precise recalculation; is_valid flag marks routes that can't be recalculated after OSM updates
@@ -113,9 +118,9 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 ### 5. Admin System Architecture
 - **Admin Access Control** - Restricted to user_id=1 with server-side authentication checks in all admin actions
-- **Security**: All admin operations (create, update, delete routes, pathfinding) require `user.id === 1` check
+- **Security**: All admin operations (create, update, delete routes, pathfinding, notes) require `user.id === 1` check
 - **Vector Tile Architecture**:
-  - `railway_routes` and `railway_parts` served via Martin tile server (PostGIS → MVT tiles)
+  - `railway_routes`, `railway_parts`, and `admin_notes` served via Martin tile server (PostGIS → MVT tiles)
   - Efficient rendering of large datasets through tile-based loading
   - MapLibre GL JS handles tile caching and viewport management automatically
 - **Interactive Features**:
@@ -123,10 +128,19 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Click anywhere on a railway part captures the precise GPS coordinate
   - Click railway routes to view/edit details
   - Route preview with geometry visualization
-  - Hover effects on railway parts
+  - Hover effects on railway parts and notes
+  - **Right-click to create/edit notes** - Right-click anywhere on map to create note, right-click on existing note to edit
 - **Route Management**: Create, edit geometry, update, and delete railway routes (track_id is auto-generated)
 - **Route Validity Display**: Invalid routes (is_valid=false) shown in grey when unselected, with alert banner in edit panel
 - **Edit Geometry Feature**: Allows fixing invalid routes by selecting new start/end coordinates with same pathfinding mechanism
+- **Admin Notes System**:
+  - Right-click map to create notes at any location
+  - Right-click existing notes to edit or delete
+  - Notes displayed as yellow/amber circles on map
+  - Popup interface with text field, save, delete, and close buttons
+  - Keyboard shortcuts: Ctrl+Enter to save, Escape to close
+  - Auto-refresh map after create/update/delete
+  - Toast notifications for all operations
 - **Coordinate-Based Routing**:
   - Routes defined by exact start/end coordinates (stored as PostGIS POINT geometries)
   - Click anywhere on a railway part to set route boundaries
@@ -171,7 +185,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `TripRow.tsx` - Individual trip row in Manage Trips modal (inline editing/deleting)
 
 **Admin Map Components:**
-- `VectorAdminMap.tsx` - Admin map for route management with railway parts selection
+- `VectorAdminMap.tsx` - Admin map for route management with railway parts selection and notes system (right-click to create/edit notes)
 - `VectorAdminMapWrapper.tsx` - Wrapper for admin map
 - `AdminPageClient.tsx` - Admin page container with state management
 - `AdminSidebar.tsx` - Tab-based sidebar (Create Route / Routes List)
@@ -179,6 +193,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `AdminRoutesTab.tsx` - Route list with search and edit functionality
 - `RoutesList.tsx` - Paginated route table with validity indicators
 - `RouteEditForm.tsx` - Form for editing route metadata (from/to/track/description/usage)
+- `NotesPopup.tsx` - Popup component for creating/editing admin notes (text field, save/delete buttons, keyboard shortcuts)
 
 **Shared Components:**
 - `LoginForm.tsx` - Login form with email/password
@@ -193,6 +208,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `userPreferencesActions.ts` - User preferences management (get/update selected countries, ensure defaults)
 - `adminRouteActions.ts` - Admin-only route creation/update/deletion with security checks and automatic country detection
 - `adminMapActions.ts` - Admin-only coordinate-based pathfinding (`findRailwayPathFromCoordinates`) and railway parts fetching by IDs
+- `adminNotesActions.ts` - Admin-only notes CRUD operations (getAllAdminNotes, getAdminNote, createAdminNote, updateAdminNote, deleteAdminNote)
 - `routePathFinder.ts` - Route-level pathfinding for journey planner (user-facing, uses station name matching)
 - `authActions.ts` - Authentication actions (login, register, logout, getUser)
 
@@ -228,6 +244,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
 - `importMapData.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
 - `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
+- `addAdminNotes.ts` - Migration script to create admin_notes table with spatial index and auto-update trigger
 - `markAllRoutesInvalid.ts` - Marks all routes as invalid for rechecking (utility script)
 - `listStations.ts` - Lists all unique station names from railway_routes (debugging utility)
 - `exportRoutes.ts` - Export railway_routes table to JSON file
@@ -242,11 +259,13 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 ### Database Schema
 - `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes, route validity tracking fields, country tracking (start_country, end_country), and user_preferences table
-- `database/init/02-vector-tiles.sql` - Vector tile functions with country filtering support:
+- `database/init/02-vector-tiles.sql` - Vector tile functions with country filtering support and admin notes:
   - `railway_routes_tile` - Shows routes at all zoom levels with country filtering via selected_countries query param; includes start_country and end_country in tile attributes
   - `railway_parts_tile` - Zoom-based filtering for raw OSM segments
   - `stations_tile` - Stations visible at zoom 10+
-- Contains tables for users, stations, railway_routes (with frequency, link, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message), railway_parts, user_trips (supports multiple trips per route), and user_preferences (selected_countries array)
+  - `admin_notes_tile` - Admin notes visible at all zoom levels (admin-only)
+  - Web Mercator (EPSG:3857) geometry columns and sync triggers for all spatial tables including admin_notes
+- Contains tables for users, stations, railway_routes (with frequency, link, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message), railway_parts, user_trips (supports multiple trips per route), user_preferences (selected_countries array), and admin_notes (coordinate, text, timestamps)
 
 ### Configuration Files
 - `eslint.config.mjs` - ESLint configuration

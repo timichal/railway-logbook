@@ -23,9 +23,8 @@ interface VectorAdminMapWrapperProps {
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
-  onRefreshMap?: () => void;
-  showError?: (message: string) => void;
-  showSuccess?: (message: string) => void;
+  showSuccess: (message: string) => void;
+  showError: (message: string) => void;
 }
 
 export default function VectorAdminMapWrapper({
@@ -38,9 +37,8 @@ export default function VectorAdminMapWrapper({
   refreshTrigger,
   isEditingGeometry,
   focusGeometry,
-  onRefreshMap,
-  showError,
   showSuccess,
+  showError,
 }: VectorAdminMapWrapperProps) {
   return (
     <VectorAdminMap
@@ -53,9 +51,8 @@ export default function VectorAdminMapWrapper({
       refreshTrigger={refreshTrigger}
       isEditingGeometry={isEditingGeometry}
       focusGeometry={focusGeometry}
-      onRefreshMap={onRefreshMap}
-      showError={showError}
       showSuccess={showSuccess}
+      showError={showError}
     />
   );
 }

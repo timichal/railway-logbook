@@ -14,6 +14,7 @@
     "exportRouteData": "tsx src/scripts/exportRoutes.ts",
     "importRouteData": "tsx src/scripts/importRoutes.ts",
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
+    "addAdminNotes": "tsx src/scripts/addAdminNotes.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
     "listStations": "tsx src/scripts/listStations.ts",
     "uploadMapData": "pscp ./data/*.geojson railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/",
@@ -37,7 +38,7 @@
     "dotenv": "^17.2.3",
     "jose": "^6.1.2",
     "maplibre-gl": "^5.13.0",
-    "next": "^16.0.3",
+    "next": "^16.0.5",
     "pg": "^8.16.3",
     "postcss": "^8.5.6",
     "react": "^19.2.0",
@@ -46,15 +47,15 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.1",
+    "@eslint/eslintrc": "^3.3.3",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/bcryptjs": "^2.4.6",
-    "@types/react": "^19.2.6",
+    "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
     "eslint": "^9.39.1",
-    "eslint-config-next": "^16.0.3",
+    "eslint-config-next": "^16.0.5",
     "tailwindcss": "^4.1.17"
   }
 }

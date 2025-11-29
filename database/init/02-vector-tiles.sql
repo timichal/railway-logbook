@@ -246,6 +246,8 @@ BEGIN
         NEW.geometry_3857 := ST_Transform(NEW.geometry, 3857);
     ELSIF TG_TABLE_NAME = 'stations' THEN
         NEW.coordinates_3857 := ST_Transform(NEW.coordinates, 3857);
+    ELSIF TG_TABLE_NAME = 'admin_notes' THEN
+        NEW.coordinate_3857 := ST_Transform(NEW.coordinate, 3857);
     END IF;
     RETURN NEW;
 END;
@@ -268,3 +270,72 @@ CREATE TRIGGER stations_sync_geometry
     BEFORE INSERT OR UPDATE OF coordinates ON stations
     FOR EACH ROW
     EXECUTE FUNCTION sync_geometry_3857();
+
+-- Add Web Mercator geometry for admin_notes (if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_notes') THEN
+        ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS coordinate_3857 GEOMETRY(POINT, 3857);
+
+        UPDATE admin_notes
+        SET coordinate_3857 = ST_Transform(coordinate, 3857)
+        WHERE coordinate IS NOT NULL AND coordinate_3857 IS NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_admin_notes_coordinate_3857
+        ON admin_notes USING GIST (coordinate_3857);
+    END IF;
+END $$;
+
+-- Function: admin_notes_tile
+-- Serves admin notes as vector tiles (admin-only)
+-- Shows all notes at all zoom levels
+CREATE OR REPLACE FUNCTION admin_notes_tile(z integer, x integer, y integer)
+RETURNS bytea AS $$
+DECLARE
+    result bytea;
+    tile_envelope geometry;
+BEGIN
+    -- Get the tile envelope in Web Mercator
+    tile_envelope := ST_TileEnvelope(z, x, y);
+
+    -- Generate MVT tile
+    SELECT INTO result ST_AsMVT(mvtgeom.*, 'admin_notes')
+    FROM (
+        SELECT
+            id,
+            text,
+            -- Point geometry doesn't need much simplification
+            ST_AsMVTGeom(
+                coordinate_3857,
+                tile_envelope,
+                4096,
+                0,  -- No buffer needed for points
+                true
+            ) AS geom
+        FROM admin_notes
+        WHERE
+            -- Spatial filter using index
+            coordinate_3857 && tile_envelope
+            -- Show all notes at all zoom levels
+        ORDER BY updated_at DESC
+    ) AS mvtgeom
+    WHERE geom IS NOT NULL;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+PARALLEL SAFE;
+
+-- Add trigger for admin_notes Web Mercator sync (if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_notes') THEN
+        DROP TRIGGER IF EXISTS admin_notes_sync_geometry ON admin_notes;
+        CREATE TRIGGER admin_notes_sync_geometry
+            BEFORE INSERT OR UPDATE OF coordinate ON admin_notes
+            FOR EACH ROW
+            EXECUTE FUNCTION sync_geometry_3857();
+    END IF;
+END $$;

@@ -80,6 +80,15 @@ CREATE TABLE user_preferences (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Admin notes (admin-only map annotations)
+CREATE TABLE admin_notes (
+    id SERIAL PRIMARY KEY,
+    coordinate GEOMETRY(POINT, 4326) NOT NULL, -- PostGIS point (lon, lat)
+    text TEXT NOT NULL, -- Note content
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_stations_coordinates ON stations USING GIST (coordinates);
 CREATE INDEX idx_railway_parts_geometry ON railway_parts USING GIST (geometry);
@@ -95,3 +104,19 @@ CREATE INDEX idx_railway_routes_ending_part ON railway_routes (ending_part_id);
 CREATE INDEX idx_user_trips_user_id ON user_trips (user_id);
 CREATE INDEX idx_user_trips_track_id ON user_trips (track_id);
 CREATE INDEX idx_user_trips_date ON user_trips (date);
+CREATE INDEX idx_admin_notes_coordinate ON admin_notes USING GIST (coordinate);
+
+-- Trigger function to auto-update updated_at timestamp for admin_notes
+CREATE OR REPLACE FUNCTION update_admin_notes_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to auto-update updated_at on admin_notes updates
+CREATE TRIGGER admin_notes_update_timestamp
+BEFORE UPDATE ON admin_notes
+FOR EACH ROW
+EXECUTE FUNCTION update_admin_notes_timestamp();

@@ -115,6 +115,15 @@ export type UserPreferences = {
   updated_at: string
 }
 
+// Admin note from database
+export type AdminNote = {
+  id: number
+  coordinate: [number, number] // [longitude, latitude]
+  text: string
+  created_at: string
+  updated_at: string
+}
+
 // Pathfinding result (from railway pathfinder)
 export interface PathResult {
   partIds: string[];

@@ -271,6 +271,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             refreshTrigger={refreshTrigger}
             isEditingGeometry={!!editingGeometryForTrackId}
             focusGeometry={focusGeometry}
+            showSuccess={showSuccess}
+            showError={showError}
           />
         </div>
       </main>

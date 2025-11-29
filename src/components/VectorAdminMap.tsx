@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import maplibregl from 'maplibre-gl';
 import type { RailwayPart, GeoJSONFeatureCollection } from '@/lib/types';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
 import { useRouteLength } from '@/lib/map/hooks/useRouteLength';
@@ -11,10 +13,14 @@ import {
   createRailwayPartsLayer,
   createStationsSource,
   createStationsLayer,
+  createAdminNotesSource,
+  createAdminNotesLayer,
   COLORS,
 } from '@/lib/map';
 import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapInteractions';
 import { getAllRouteEndpoints } from '@/lib/adminRouteActions';
+import { getAdminNote } from '@/lib/adminNotesActions';
+import NotesPopup from './NotesPopup';
 
 interface VectorAdminMapProps {
   className?: string;
@@ -26,9 +32,8 @@ interface VectorAdminMapProps {
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
-  onRefreshMap?: () => void;
-  showError?: (message: string) => void;
-  showSuccess?: (message: string) => void;
+  showSuccess: (message: string) => void;
+  showError: (message: string) => void;
 }
 
 export default function VectorAdminMap({
@@ -41,39 +46,30 @@ export default function VectorAdminMap({
   refreshTrigger,
   isEditingGeometry,
   focusGeometry,
-  onRefreshMap,
-  showError,
   showSuccess,
+  showError,
 }: VectorAdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [showPartsLayer, setShowPartsLayer] = useState(true);
   const [showRoutesLayer, setShowRoutesLayer] = useState(true);
   const [showStationsLayer, setShowStationsLayer] = useState(true);
   const [showEndpointsLayer, setShowEndpointsLayer] = useState(true);
+  const [showNotesLayer, setShowNotesLayer] = useState(true);
   const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
+  const [notesCacheBuster, setNotesCacheBuster] = useState(Date.now());
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
   const previousShowRoutesLayerRef = useRef(true); // Track previous state before editing geometry
+  const notesPopupRef = useRef<maplibregl.Popup | null>(null);
 
   // Use custom hook for route length management
   const { previewLength, selectedRouteLength } = useRouteLength(previewRoute, selectedRouteId);
 
-  // Store callbacks and props in refs to avoid map recreation on changes
+  // Store callbacks in refs to avoid map recreation on changes
   const onCoordinateClickRef = useRef(onCoordinateClick);
   const onRouteSelectRef = useRef(onRouteSelect);
-  const selectedCoordinatesRef = useRef(selectedCoordinates);
-  const previewRouteRef = useRef(previewRoute);
-  const updatePartsStyleRef = useRef<(() => void) | null>(null);
-  const onRefreshMapRef = useRef(onRefreshMap);
-  const showErrorRef = useRef(showError);
-  const showSuccessRef = useRef(showSuccess);
 
   onCoordinateClickRef.current = onCoordinateClick;
   onRouteSelectRef.current = onRouteSelect;
-  selectedCoordinatesRef.current = selectedCoordinates;
-  previewRouteRef.current = previewRoute;
-  onRefreshMapRef.current = onRefreshMap;
-  showErrorRef.current = showError;
-  showSuccessRef.current = showSuccess;
 
   // Initialize map with shared hook
   const { map, mapLoaded } = useMapLibre(
@@ -83,22 +79,18 @@ export default function VectorAdminMap({
         railway_parts: createRailwayPartsSource(),
         railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBuster }),
         stations: createStationsSource(),
+        admin_notes: createAdminNotesSource(notesCacheBuster),
       },
       layers: [
         createRailwayPartsLayer(),
         createRailwayRoutesLayer(),
         createStationsLayer(),
+        createAdminNotesLayer(),
       ],
       onLoad: (mapInstance) => {
         setupAdminMapInteractions(mapInstance, {
           onCoordinateClickRef,
           onRouteSelectRef,
-          selectedCoordinatesRef,
-          previewRouteRef,
-          updatePartsStyleRef,
-          showErrorRef,
-          showSuccessRef,
-          onRefreshMapRef,
         });
       },
     },
@@ -120,15 +112,6 @@ export default function VectorAdminMap({
       fetchEndpoints();
     }
   }, [mapLoaded, refreshTrigger]);
-
-  // Update parts styling when selectedCoordinates change
-  useEffect(() => {
-    if (map.current && mapLoaded && updatePartsStyleRef.current) {
-      requestAnimationFrame(() => {
-        updatePartsStyleRef.current?.();
-      });
-    }
-  }, [selectedCoordinates?.startingCoordinate, selectedCoordinates?.endingCoordinate, mapLoaded, map]);
 
   // Handle layer visibility toggles
   useEffect(() => {
@@ -160,6 +143,16 @@ export default function VectorAdminMap({
       showStationsLayer ? 'visible' : 'none'
     );
   }, [showStationsLayer, mapLoaded, map]);
+
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    map.current.setLayoutProperty(
+      'admin_notes',
+      'visibility',
+      showNotesLayer ? 'visible' : 'none'
+    );
+  }, [showNotesLayer, mapLoaded, map]);
 
   // Sync Railway Routes checkbox with edit geometry mode
   useEffect(() => {
@@ -310,13 +303,6 @@ export default function VectorAdminMap({
       ]);
     }
 
-    // Reapply parts styling
-    if (updatePartsStyleRef.current) {
-      setTimeout(() => {
-        updatePartsStyleRef.current?.();
-      }, 100);
-    }
-
     // Force map repaint to clear any cached tiles
     map.current.triggerRepaint();
   }, [refreshTrigger, mapLoaded, showRoutesLayer, selectedRouteId, map]);
@@ -395,13 +381,6 @@ export default function VectorAdminMap({
       }
     } else {
       console.log('[VectorAdminMap] No preview route to display');
-    }
-
-    // Update parts styling when preview changes
-    if (updatePartsStyleRef.current) {
-      requestAnimationFrame(() => {
-        updatePartsStyleRef.current?.();
-      });
     }
   }, [previewRoute, mapLoaded, map]);
 
@@ -567,6 +546,160 @@ export default function VectorAdminMap({
     }
   }, [focusGeometry, mapLoaded, map, isEditingGeometry]);
 
+  // Handle right-click for admin notes (create/edit)
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const handleRightClick = async (e: maplibregl.MapMouseEvent) => {
+      e.preventDefault();
+
+      const coordinate: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+
+      // Check if clicking on an existing note
+      const noteFeatures = map.current!.queryRenderedFeatures(e.point, {
+        layers: ['admin_notes']
+      });
+
+      let noteId: number | null = null;
+      let noteText = '';
+
+      if (noteFeatures && noteFeatures.length > 0) {
+        // Editing existing note
+        noteId = noteFeatures[0].properties?.id;
+        if (noteId) {
+          try {
+            const note = await getAdminNote(noteId);
+            if (note) {
+              noteText = note.text;
+            }
+          } catch (error) {
+            console.error('Failed to load note:', error);
+            return;
+          }
+        }
+      }
+
+      // Close existing popup if any
+      if (notesPopupRef.current) {
+        notesPopupRef.current.remove();
+      }
+
+      // Create popup container
+      const popupContainer = document.createElement('div');
+
+      // Determine popup anchor based on click position
+      // If clicked near top of screen, show popup below; otherwise show above
+      const clickY = e.point.y;
+      const mapHeight = map.current!.getContainer().clientHeight;
+      const anchor = clickY < mapHeight * 0.3 ? 'top' : 'bottom';
+
+      // Create popup with smart positioning
+      const popup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        maxWidth: 'none',
+        anchor: anchor, // Dynamic anchor based on click position
+        offset: 15, // Offset from the point
+      })
+        .setLngLat(e.lngLat)
+        .setDOMContent(popupContainer)
+        .addTo(map.current!);
+
+      notesPopupRef.current = popup;
+
+      // Render React component into popup
+      const root = createRoot(popupContainer);
+
+      const handleClose = () => {
+        popup.remove();
+        notesPopupRef.current = null;
+        root.unmount();
+      };
+
+      const handleSaved = () => {
+        // Refresh notes layer
+        setNotesCacheBuster(Date.now());
+      };
+
+      root.render(
+        <NotesPopup
+          noteId={noteId}
+          initialText={noteText}
+          coordinate={coordinate}
+          onClose={handleClose}
+          onSaved={handleSaved}
+          showSuccess={showSuccess}
+          showError={showError}
+        />
+      );
+    };
+
+    // Handle click outside popup to close it
+    const handleMapClick = (e: maplibregl.MapMouseEvent) => {
+      if (!notesPopupRef.current) return;
+
+      // Check if click is on a note (to open edit)
+      const noteFeatures = map.current!.queryRenderedFeatures(e.point, {
+        layers: ['admin_notes']
+      });
+      if (noteFeatures && noteFeatures.length > 0) {
+        return; // Let the right-click handler handle this
+      }
+
+      // Check if click is inside the popup element
+      const popupElement = notesPopupRef.current.getElement();
+      if (popupElement && e.originalEvent.target instanceof Node) {
+        if (popupElement.contains(e.originalEvent.target as Node)) {
+          return; // Click is inside popup, don't close
+        }
+      }
+
+      // Click is outside popup, close it
+      notesPopupRef.current.remove();
+      notesPopupRef.current = null;
+    };
+
+    map.current.on('contextmenu', handleRightClick);
+    map.current.on('click', handleMapClick);
+
+    return () => {
+      if (map.current) {
+        map.current.off('contextmenu', handleRightClick);
+        map.current.off('click', handleMapClick);
+      }
+      if (notesPopupRef.current) {
+        notesPopupRef.current.remove();
+        notesPopupRef.current = null;
+      }
+    };
+  }, [mapLoaded, map, showSuccess, showError]);
+
+  // Refresh notes layer when cache buster changes
+  useEffect(() => {
+    if (!map.current || !mapLoaded || notesCacheBuster === Date.now()) return;
+
+    const hasNotesLayer = map.current.getLayer('admin_notes');
+    const hasNotesSource = map.current.getSource('admin_notes');
+
+    if (hasNotesLayer) {
+      map.current.removeLayer('admin_notes');
+    }
+    if (hasNotesSource) {
+      map.current.removeSource('admin_notes');
+    }
+
+    map.current.addSource('admin_notes', createAdminNotesSource(notesCacheBuster));
+    map.current.addLayer(createAdminNotesLayer());
+
+    map.current.setLayoutProperty(
+      'admin_notes',
+      'visibility',
+      showNotesLayer ? 'visible' : 'none'
+    );
+
+    map.current.triggerRepaint();
+  }, [notesCacheBuster, mapLoaded, map, showNotesLayer]);
+
   return (
     <div className={`${className} relative`}>
       <div ref={mapContainer} className="w-full h-full" />
@@ -610,6 +743,15 @@ export default function VectorAdminMap({
               className="mr-2"
             />
             Route Endpoints
+          </label>
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showNotesLayer}
+              onChange={() => setShowNotesLayer(!showNotesLayer)}
+              className="mr-2"
+            />
+            Admin Notes
           </label>
         </div>
       </div>
