@@ -40,7 +40,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `npm run listStations` - List all unique station names from railway_routes table (sorted alphabetically)
   - Debugging utility for viewing station data
   - Combines from_station and to_station columns
-- `npm run exportRouteData` - Export railway_routes and user_trips (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
+- `npm run exportRouteData` - Export railway_routes, user_trips (user_id=1), and admin_notes to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
 - `npm run importRouteData <filename>` - Import railway data from SQL dump using Docker (e.g., `npm run importRouteData railway_data_2025-01-15.sql`)
@@ -277,7 +277,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `<country>-rail.tmp.osm.pbf` - Filtered railway data
 - `<country>-rail.tmp.geojson` - Converted to GeoJSON
 - `<country>-pruned.geojson` - Custom filtered data (ready for database loading)
-- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes and user_trips (from `npm run exportRouteData`)
+- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes, user_trips, and admin_notes (from `npm run exportRouteData`)
 
 ## Development Notes
 
