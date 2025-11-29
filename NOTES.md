@@ -13,11 +13,10 @@ nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
-z předělávání na souřadnice
-- Tarnow blbej výjezd od Stroze, opraveno OSM
-- Stroze dodělat třetí stranu trianglu, TODO osm
-- Kalwaria Zebrzydowska triangl taky
-- taky Sobotín-Petrov nad Desnou
+opravy v OSM
+- Kalwaria Zebrzydowska triangl
+- Löbau z jihu
+- Jelcz, Boleslav úvrať 
 
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou

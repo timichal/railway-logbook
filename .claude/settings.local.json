@@ -15,7 +15,8 @@
       "Bash(curl:*)",
       "Bash(docker logs:*)",
       "Bash(npx tsc:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

@@ -30,9 +30,12 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
-- `npm run migrateToCoordinates` - Complete migration to coordinate-based routes (adds columns, migrates data, updates vector tiles, drops obsolete tables)
-  - One-time migration for existing deployments (pre-coordinate system)
-  - New deployments start with coordinate-based system by default
+- `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
+  - Useful for forcing recalculation of all routes
+  - Run `verifyRouteData` after to recalculate
+- `npm run listStations` - List all unique station names from railway_routes table (sorted alphabetically)
+  - Debugging utility for viewing station data
+  - Combines from_station and to_station columns
 - `npm run exportRouteData` - Export railway_routes and user_trips (user_id=1) to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
@@ -180,7 +183,6 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 **Shared Components:**
 - `LoginForm.tsx` - Login form with email/password
 - `RegisterForm.tsx` - Registration form
-- `LayerControls.tsx` - Map layer toggle controls
 
 #### Library (`src/lib/`)
 
@@ -189,8 +191,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `dbConfig.ts` - Database configuration utilities
 - `userActions.ts` - User-facing server actions (search stations, get GeoJSON data, update/delete user trips, get progress with country filtering, bulk update routes with firstPartial/lastPartial)
 - `userPreferencesActions.ts` - User preferences management (get/update selected countries, ensure defaults)
-- `adminRouteActions.ts` - Admin-only route creation/update with security checks and automatic country detection
-- `route-delete-actions.ts` - Admin-only route deletion with security checks
+- `adminRouteActions.ts` - Admin-only route creation/update/deletion with security checks and automatic country detection
 - `adminMapActions.ts` - Admin-only coordinate-based pathfinding (`findRailwayPathFromCoordinates`) and railway parts fetching by IDs
 - `routePathFinder.ts` - Route-level pathfinding for journey planner (user-facing, uses station name matching)
 - `authActions.ts` - Authentication actions (login, register, logout, getUser)
@@ -227,7 +228,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
 - `importMapData.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
 - `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
-- `addCountryColumns.ts` - Migration script to add country columns (start_country, end_country) to railway_routes and create user_preferences table
+- `markAllRoutesInvalid.ts` - Marks all routes as invalid for rechecking (utility script)
+- `listStations.ts` - Lists all unique station names from railway_routes (debugging utility)
 - `exportRoutes.ts` - Export railway_routes table to JSON file
 - `importRoutes.ts` - Import railway_routes from JSON file
 
