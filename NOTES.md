@@ -14,10 +14,9 @@ nedodělané tratě
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
 opravy v OSM
-- Löbau z jihu
 - levá strana trojúhelníku Chabowka (chybí úplně)
-- Jelcz
-- Boleslav úvrať 
+- Opole
+- napojení Lublin
 
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
