@@ -17,6 +17,8 @@ opravy v OSM
 - levá strana trojúhelníku Chabowka (chybí úplně)
 - Opole
 - napojení Lublin
+- Czarnca chybí jedna strana
+- totéž jaworzno  
 
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
