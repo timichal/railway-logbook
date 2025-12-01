@@ -13,13 +13,6 @@ nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 
-opravy v OSM
-- levá strana trojúhelníku Chabowka (chybí úplně)
-- Opole
-- napojení Lublin
-- Czarnca chybí jedna strana
-- totéž jaworzno  
-
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
 - about/faq
