@@ -2,12 +2,15 @@ poznámky
 
 - dělení: special nejsou v běžných JŘ, seasonal jo
 - 222 vlašim-trhový štěpánov a 304 kojetín-tovačov v roce 26 bez provozu? 25: https://railwaycapital.cz/jizdni-rady/
-- geolokace parts nepřesná - nutno asi přes api nebo manuálně (chyba - Vrbovce, s jinou knihovnou Hel)
+- geolokace parts nepřesná - nutno asi přes api nebo manuálně (chyba - Vrbovce, s jinou knihovnou Hel): to vede ke špatným určením i větších tras (Šahy)
 - zvolen šahy se 26 zavírá!
 
 STAV
 hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do Maďarska)
 rozdělané: Česko, Polsko, Rakousko, Německo
+
+OSM chyby
+- Timelkam Ampflwang návaznost (opraveno)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
