@@ -10,7 +10,7 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do
 rozdělané: Česko, Polsko, Rakousko, Německo
 
 OSM chyby
-- Timelkam Ampflwang návaznost (opraveno)
+- Znin návaznost speciálka (opraveno)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
