@@ -10,6 +10,7 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do
 rozdělané: Česko, Polsko, Rakousko, Německo
 
 OSM chyby
+- nájezd Bydgoszcz východ (opraveno)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
