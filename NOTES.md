@@ -10,8 +10,6 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do
 rozdělané: Česko, Polsko, Rakousko, Německo
 
 OSM chyby
-- Znin návaznost speciálka (opraveno)
-- Inowroclaw spojka na vedlejší (opraveno)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
