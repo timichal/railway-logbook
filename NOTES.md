@@ -10,9 +10,6 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do
 rozdělané: Česko, Polsko, Rakousko, Německo
 
 OSM chyby
-- nájezd Bydgoszcz východ (opraveno 9.12.)
-- Pila Sczeczinek nájezd u Pily (opraveno 10.12.)
-- Rosenheim Rohrdorf návaznost (opraveno 10.12.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
