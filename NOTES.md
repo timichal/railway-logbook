@@ -10,6 +10,7 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do
 rozdělané: Česko, Rakousko, Německo
 
 OSM chyby
+- Passau-Lindau úvrať do Passau (opraveno 11. 12.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
