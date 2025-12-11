@@ -6,8 +6,8 @@ poznámky
 - zvolen šahy se 26 zavírá!
 
 STAV
-hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do Maďarska)
-rozdělané: Česko, Polsko, Rakousko, Německo
+hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do Maďarska), Polsko
+rozdělané: Česko, Rakousko, Německo
 
 OSM chyby
 
