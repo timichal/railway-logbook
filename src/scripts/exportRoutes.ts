@@ -30,19 +30,23 @@ async function exportRoutes() {
     console.log('Exporting railway_routes table...');
 
     // Use docker exec to run pg_dump inside the container
+    // Redirect output directly to a temp file to avoid ENOBUFS error
     const containerName = 'db';
-    const pgDumpCmd = `docker exec ${containerName} pg_dump -U ${dbUser} -d ${dbName} --table=railway_routes --data-only --column-inserts`;
+    const tempFilepath = path.join(dataDir, 'temp_routes_dump.sql');
+    const pgDumpCmd = `docker exec ${containerName} pg_dump -U ${dbUser} -d ${dbName} --table=railway_routes --data-only --column-inserts > "${tempFilepath}"`;
 
-    let sqlDump = '';
     try {
-      sqlDump = execSync(pgDumpCmd, {
-        encoding: 'utf-8',
-        maxBuffer: 50 * 1024 * 1024 // 50MB buffer (default is 1MB)
+      execSync(pgDumpCmd, {
+        shell: true,
+        stdio: 'inherit' // Don't capture output, redirect directly to file
       });
     } catch (error) {
       console.error('Error running pg_dump:', error);
       throw error;
     }
+
+    // Read the dump from the temp file
+    const sqlDump = fs.readFileSync(tempFilepath, 'utf-8');
 
     // Get user_trips for user_id=1
     // Get user_trips for user_id=1
@@ -131,6 +135,11 @@ SET session_replication_role = DEFAULT;
     // Write to file
     fs.writeFileSync(filepath, fullDump);
 
+    // Clean up temp file
+    if (fs.existsSync(tempFilepath)) {
+      fs.unlinkSync(tempFilepath);
+    }
+
     console.log(`✓ Exported railway_routes (${sqlDump.split('\n').filter(l => l.startsWith('INSERT')).length} routes)`);
     console.log(`✓ Exported user_trips (${userDataResult.rows.length} records)`);
     console.log(`✓ Exported admin_notes (${adminNotesResult.rows.length} notes)`);
@@ -138,6 +147,13 @@ SET session_replication_role = DEFAULT;
     process.exit(0);
   } catch (error) {
     console.error('Error exporting data:', error);
+
+    // Clean up temp file if it exists
+    const tempFilepath = path.join(process.cwd(), 'data', 'temp_routes_dump.sql');
+    if (fs.existsSync(tempFilepath)) {
+      fs.unlinkSync(tempFilepath);
+    }
+
     process.exit(1);
   }
 }
