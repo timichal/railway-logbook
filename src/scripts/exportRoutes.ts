@@ -10,13 +10,16 @@ import { execSync } from 'child_process';
 async function exportRoutes() {
   console.log('Exporting railway_routes, user_trips, and admin_notes...');
 
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
+  // Create data directory if it doesn't exist
+  const dataDir = path.join(process.cwd(), 'data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
 
+  // Declare temp file path in outer scope for cleanup in error handler
+  const tempFilepath = path.join(dataDir, 'temp_routes_dump.sql');
+
+  try {
     // Generate filename with timestamp
     const now = new Date();
     const timestamp = now.toISOString().replace(/:/g, '-').split('.')[0];
@@ -32,12 +35,10 @@ async function exportRoutes() {
     // Use docker exec to run pg_dump inside the container
     // Redirect output directly to a temp file to avoid ENOBUFS error
     const containerName = 'db';
-    const tempFilepath = path.join(dataDir, 'temp_routes_dump.sql');
     const pgDumpCmd = `docker exec ${containerName} pg_dump -U ${dbUser} -d ${dbName} --table=railway_routes --data-only --column-inserts > "${tempFilepath}"`;
 
     try {
       execSync(pgDumpCmd, {
-        shell: true,
         stdio: 'inherit' // Don't capture output, redirect directly to file
       });
     } catch (error) {
@@ -149,7 +150,6 @@ SET session_replication_role = DEFAULT;
     console.error('Error exporting data:', error);
 
     // Clean up temp file if it exists
-    const tempFilepath = path.join(process.cwd(), 'data', 'temp_routes_dump.sql');
     if (fs.existsSync(tempFilepath)) {
       fs.unlinkSync(tempFilepath);
     }
