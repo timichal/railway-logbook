@@ -79,36 +79,45 @@ async function exportRoutes() {
       userDataSQL += '-- No user data found for user_id=1\n';
     }
 
-    // Get admin_notes
+    // Get admin_notes using pg_dump (same as railway_routes)
     console.log('Exporting admin_notes...');
-    const adminNotesResult = await query(`
-      SELECT
-        id,
-        ST_X(coordinate) as lng,
-        ST_Y(coordinate) as lat,
-        text,
-        created_at,
-        updated_at
-      FROM admin_notes
-      ORDER BY id
-    `);
+    const tempNotesFilepath = path.join(dataDir, 'temp_notes_dump.sql');
+    const pgDumpNotesCmd = `docker exec ${containerName} pg_dump -U ${dbUser} -d ${dbName} --table=admin_notes --data-only --column-inserts > "${tempNotesFilepath}"`;
 
-    // Generate SQL INSERT statements for admin_notes
     let adminNotesSQL = '\n-- Admin notes\n';
-    if (adminNotesResult.rows.length > 0) {
-      adminNotesSQL += 'DELETE FROM public.admin_notes;\n\n';
-      for (const row of adminNotesResult.rows) {
-        const textValue = row.text.replace(/'/g, "''");
-        const createdAt = row.created_at ? `'${row.created_at.toISOString()}'` : 'CURRENT_TIMESTAMP';
-        const updatedAt = row.updated_at ? `'${row.updated_at.toISOString()}'` : 'CURRENT_TIMESTAMP';
+    try {
+      execSync(pgDumpNotesCmd, {
+        stdio: 'inherit'
+      });
 
-        adminNotesSQL += `INSERT INTO public.admin_notes (id, coordinate, text, created_at, updated_at) VALUES (${row.id}, ST_SetSRID(ST_MakePoint(${row.lng}, ${row.lat}), 4326), '${textValue}', ${createdAt}, ${updatedAt});\n`;
+      // Read the dump
+      const notesDump = fs.readFileSync(tempNotesFilepath, 'utf-8');
+
+      if (notesDump.includes('INSERT INTO')) {
+        adminNotesSQL += 'DELETE FROM public.admin_notes;\n\n';
+        adminNotesSQL += notesDump;
+        adminNotesSQL += '\nSELECT setval(\'admin_notes_id_seq\', (SELECT MAX(id) FROM admin_notes));\n';
+      } else {
+        adminNotesSQL += '-- No admin notes found\n';
       }
-      // Reset sequence
-      adminNotesSQL += `\nSELECT setval('admin_notes_id_seq', (SELECT MAX(id) FROM admin_notes));\n`;
-    } else {
-      adminNotesSQL += '-- No admin notes found\n';
+
+      // Clean up temp file
+      if (fs.existsSync(tempNotesFilepath)) {
+        fs.unlinkSync(tempNotesFilepath);
+      }
+    } catch (error) {
+      console.error('Error exporting admin_notes:', error);
+      adminNotesSQL += '-- Error exporting admin notes\n';
+
+      // Clean up temp file
+      if (fs.existsSync(tempNotesFilepath)) {
+        fs.unlinkSync(tempNotesFilepath);
+      }
     }
+
+    // Get count for reporting
+    const adminNotesResult = await query('SELECT COUNT(*) FROM admin_notes');
+    const notesCount = adminNotesResult.rows[0].count;
 
     // Combine the dumps
     const fullDump = `-- Railway Data Export (${timestamp})
@@ -143,7 +152,7 @@ SET session_replication_role = DEFAULT;
 
     console.log(`✓ Exported railway_routes (${sqlDump.split('\n').filter(l => l.startsWith('INSERT')).length} routes)`);
     console.log(`✓ Exported user_trips (${userDataResult.rows.length} records)`);
-    console.log(`✓ Exported admin_notes (${adminNotesResult.rows.length} notes)`);
+    console.log(`✓ Exported admin_notes (${notesCount} notes)`);
     console.log(`✓ Saved to ${filepath}`);
     process.exit(0);
   } catch (error) {
