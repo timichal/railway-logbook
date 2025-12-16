@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
+import { query } from '../lib/db';
 
 /**
- * Import railway_routes and user_trips from SQL dump
+ * Import railway_routes, user_trips, and admin_notes from SQL dump
  */
 async function importRoutes() {
   // Get filename from command line arguments
@@ -81,7 +82,23 @@ async function importRoutes() {
         // Ignore cleanup errors
       }
 
-      console.log(`✓ Import completed`);
+      // Verify what was imported
+      console.log('\nVerifying imported data...');
+
+      try {
+        const routesCount = await query('SELECT COUNT(*) FROM railway_routes');
+        console.log(`✓ Railway routes: ${routesCount.rows[0].count}`);
+
+        const tripsCount = await query('SELECT COUNT(*) FROM user_trips WHERE user_id = 1');
+        console.log(`✓ User trips (user_id=1): ${tripsCount.rows[0].count}`);
+
+        const notesCount = await query('SELECT COUNT(*) FROM admin_notes');
+        console.log(`✓ Admin notes: ${notesCount.rows[0].count}`);
+      } catch (verifyError) {
+        console.warn('Warning: Could not verify imported data counts');
+      }
+
+      console.log(`\n✓ Import completed successfully`);
 
       process.exit(0);
     } catch (error) {
