@@ -11,8 +11,9 @@ async function importRoutes() {
   const filename = process.argv[2];
 
   if (!filename) {
-    console.error('Usage: npm run importRoutes <filename>');
-    console.error('Example: npm run importRoutes railway_data_2025-01-15.sql');
+    console.error('Usage: npm run importRouteData <filename>');
+    console.error('Example: npm run importRouteData ./data/railway_data_2025-01-15.sql');
+    console.error('\nImports railway_routes, user_trips (user_id=1), and admin_notes from SQL dump');
     process.exit(1);
   }
 
@@ -28,6 +29,7 @@ async function importRoutes() {
   }
 
   console.log(`Importing railway data from ${filename}...`);
+  console.log('This will import: railway_routes, user_trips (user_id=1), and admin_notes\n');
 
   try {
     // Get database credentials from environment
