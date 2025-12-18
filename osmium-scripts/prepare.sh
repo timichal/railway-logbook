@@ -59,18 +59,28 @@ osmium tags-filter \
 echo "✓ Filtering complete"
 echo ""
 
-# 3. Convert to GeoJSON and pipe directly to pruneData
-echo "[3/3] Converting to GeoJSON and pruning (streaming)..."
-osmium export "${FILTERED_FILE}" -a id -f geojson | tsx src/scripts/pruneData.ts ${COUNTRY_CODE} ${VERSION} || {
-    echo "ERROR: Failed to convert and prune data"
+# 3. Convert to GeoJSON
+echo "[3/4] Converting to GeoJSON..."
+GEOJSON_FILE="${DATA_DIR}/${COUNTRY_CODE}-rail.tmp.geojson"
+osmium export "${FILTERED_FILE}" -a id -f geojson -o "${GEOJSON_FILE}" || {
+    echo "ERROR: Failed to convert to GeoJSON"
     exit 1
 }
-echo "✓ Processing complete"
+echo "✓ Conversion complete"
 echo ""
 
-# 4. Cleanup: remove downloaded PBF and filtered PBF
+# 4. Prune data
+echo "[4/4] Pruning data (transliterating station names)..."
+cat "${GEOJSON_FILE}" | tsx src/scripts/pruneData.ts ${COUNTRY_CODE} ${VERSION} || {
+    echo "ERROR: Failed to prune data"
+    exit 1
+}
+echo "✓ Pruning complete"
+echo ""
+
+# 5. Cleanup: remove all temporary files
 echo "Cleaning up intermediate files..."
-rm -f "${DOWNLOAD_FILE}" "${FILTERED_FILE}"
+rm -f "${DOWNLOAD_FILE}" "${FILTERED_FILE}" "${GEOJSON_FILE}"
 echo "✓ Cleanup complete"
 echo ""
 
