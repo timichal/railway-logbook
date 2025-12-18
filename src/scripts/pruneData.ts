@@ -1,5 +1,6 @@
 import { createWriteStream } from "fs";
 import { Feature } from "../lib/types";
+import { transliterate } from "transliteration";
 
 const args = process.argv.slice(2);
 
@@ -15,6 +16,28 @@ if (args.length < 1 || args.length > 2) {
 const countryCode = args[0];
 const version = args[1] || '';
 
+/**
+ * Transliterates station names from Cyrillic and Greek to Latin characters.
+ * Preserves Latin characters with diacritics (e.g., Kadaň-Prunéřov).
+ * @param name - The station name to potentially transliterate
+ * @returns The transliterated name (or original if already Latin)
+ */
+function transliterateName(name: string | undefined): string | undefined {
+  if (!name) return name;
+
+  // Check if the name contains Cyrillic or Greek characters
+  // Cyrillic: U+0400-U+04FF
+  // Greek: U+0370-U+03FF
+  const hasCyrillicOrGreek = /[\u0400-\u04FF\u0370-\u03FF]/.test(name);
+
+  if (hasCyrillicOrGreek) {
+    // Transliterate the name (preserves Latin characters with diacritics)
+    return transliterate(name);
+  }
+
+  return name;
+}
+
 function filterFeature(feat: Feature): boolean {
   if (feat.geometry.type === "Point") {
     if (!feat.properties.railway || !["station", "halt"].includes(feat.properties.railway) || feat.properties.subway) return false;
@@ -28,9 +51,8 @@ function filterFeature(feat: Feature): boolean {
 }
 
 function pruneFeatureProperties(feat: Feature): Feature {
-  return {
-    ...feat,
-    properties: Object.fromEntries(Object.entries(feat.properties)
+  const filteredProperties = Object.fromEntries(
+    Object.entries(feat.properties)
       .filter(([key]) => {
         if (key === "@id") return true;
         if (feat.geometry.type === "Point") {
@@ -41,7 +63,18 @@ function pruneFeatureProperties(feat: Feature): Feature {
         }
         return false;
       })
-    ),
+      .map(([key, value]) => {
+        // Transliterate station names (Point features only)
+        if (key === "name" && feat.geometry.type === "Point") {
+          return [key, transliterateName(value as string)];
+        }
+        return [key, value];
+      })
+  );
+
+  return {
+    ...feat,
+    properties: filteredProperties,
   };
 }
 
