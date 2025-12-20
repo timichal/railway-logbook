@@ -7,7 +7,7 @@ poznámky
 
 STAV
 hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do Maďarska), Polsko
-rozdělané: Česko, Rakousko, Německo
+rozdělané: Česko, Rakousko, Německo, Švýcarsko
 
 OSM chyby
 - Passau-Lindau úvrať do Passau (opraveno 11. 12.)
