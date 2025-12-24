@@ -25,48 +25,60 @@ echo ""
 mkdir -p "${DATA_DIR}"
 
 # 1. Download OSM data (with resume support)
-echo "[1/3] Downloading ${COUNTRY_CODE}-${VERSION}.osm.pbf..."
 DOWNLOAD_FILE="${DATA_DIR}/${COUNTRY_CODE}-${VERSION}.osm.pbf"
-curl -C - -o "${DOWNLOAD_FILE}" "https://download.geofabrik.de/${COUNTRY_CODE}-${VERSION}.osm.pbf" || {
-    echo "ERROR: Failed to download ${COUNTRY_CODE}-${VERSION}.osm.pbf"
-    exit 1
-}
-echo "✓ Download complete"
+if [ -f "${DOWNLOAD_FILE}" ]; then
+    echo "[1/4] Skipping download - ${DOWNLOAD_FILE} already exists"
+else
+    echo "[1/4] Downloading ${COUNTRY_CODE}-${VERSION}.osm.pbf..."
+    curl -C - -o "${DOWNLOAD_FILE}" "https://download.geofabrik.de/${COUNTRY_CODE}-${VERSION}.osm.pbf" || {
+        echo "ERROR: Failed to download ${COUNTRY_CODE}-${VERSION}.osm.pbf"
+        exit 1
+    }
+    echo "✓ Download complete"
+fi
 echo ""
 
 # 2. Filter rail features
-echo "[2/3] Filtering rail features..."
-FILTERED_FILE="${DATA_DIR}/${COUNTRY_CODE}-rail.tmp.osm.pbf"
-osmium tags-filter \
-    --overwrite \
-    -o "${FILTERED_FILE}" \
-    "${DOWNLOAD_FILE}" \
-    nwr/railway \
-    nwr/disused:railway \
-    nwr/abandoned:railway \
-    nwr/razed:railway \
-    nwr/construction:railway \
-    nwr/proposed:railway \
-    n/public_transport=stop_position \
-    nwr/public_transport=platform \
-    r/route=train \
-    r/route=tram \
-    r/route=light_rail \
-    r/route=subway || {
-        echo "ERROR: Failed to filter rail features"
-        exit 1
-    }
-echo "✓ Filtering complete"
+FILTERED_FILE="${DATA_DIR}/${COUNTRY_CODE}-${VERSION}.tmp.osm.pbf"
+if [ -f "${FILTERED_FILE}" ]; then
+    echo "[2/4] Skipping filtering - ${FILTERED_FILE} already exists"
+else
+    echo "[2/4] Filtering rail features..."
+    osmium tags-filter \
+        --overwrite \
+        -o "${FILTERED_FILE}" \
+        "${DOWNLOAD_FILE}" \
+        nwr/railway \
+        nwr/disused:railway \
+        nwr/abandoned:railway \
+        nwr/razed:railway \
+        nwr/construction:railway \
+        nwr/proposed:railway \
+        n/public_transport=stop_position \
+        nwr/public_transport=platform \
+        r/route=train \
+        r/route=tram \
+        r/route=light_rail \
+        r/route=subway || {
+            echo "ERROR: Failed to filter rail features"
+            exit 1
+        }
+    echo "✓ Filtering complete"
+fi
 echo ""
 
 # 3. Convert to GeoJSON
-echo "[3/4] Converting to GeoJSON..."
-GEOJSON_FILE="${DATA_DIR}/${COUNTRY_CODE}-rail.tmp.geojson"
-osmium export "${FILTERED_FILE}" -a id -f geojson -o "${GEOJSON_FILE}" || {
-    echo "ERROR: Failed to convert to GeoJSON"
-    exit 1
-}
-echo "✓ Conversion complete"
+GEOJSON_FILE="${DATA_DIR}/${COUNTRY_CODE}-${VERSION}.tmp.geojson"
+if [ -f "${GEOJSON_FILE}" ]; then
+    echo "[3/4] Skipping conversion - ${GEOJSON_FILE} already exists"
+else
+    echo "[3/4] Converting to GeoJSON..."
+    osmium export "${FILTERED_FILE}" -a id -f geojson -o "${GEOJSON_FILE}" || {
+        echo "ERROR: Failed to convert to GeoJSON"
+        exit 1
+    }
+    echo "✓ Conversion complete"
+fi
 echo ""
 
 # 4. Prune data
