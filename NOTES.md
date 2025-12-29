@@ -10,6 +10,9 @@ STAV
 hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do Maďarska), Polsko
 rozdělané: Česko, Rakousko, Německo, Švýcarsko
 
+osm úpravy
+- Lebork Slupsk - opraven split 29. 12.
+
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
