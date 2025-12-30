@@ -44,3 +44,6 @@ traťové jř https://www.stops.lt/traukiniai/#traukiniai/en
 RAKOUSKO
 traťové jř https://www.oebb.at/en/fahrplan/fahrplanbilder
 traťová mapa https://www.oebb.at/de/dam/jcr:7fc18e86-1c23-4cf0-b9e0-94eb05d32c3e/bahnnetz-oebb.pdf
+
+ŠVÝCARSKO
+traťová mapa https://maps.trafimage.ch/ch.sbb.infrastruktur?display_srs=EPSG%3A2056&lang=en&layers=ch.sbb.infrastruktur.uebrigebahnen.group,ch.sbb.infrastruktur.tochtergesellschaften.group,ch.sbb.infrastruktur.gewaesser.group&baselayers=ch.sbb.infrastruktur
