@@ -8,7 +8,7 @@ poznámky
 
 STAV
 hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do Maďarska), Polsko
-rozdělané: Česko, Rakousko, Německo, Švýcarsko
+rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie
 
 osm úpravy
 - Wil Frauenfeld opravena tram type 31. 12.
