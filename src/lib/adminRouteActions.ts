@@ -237,12 +237,13 @@ export async function saveRailwayRoute(
     // Determine countries from route geometry
     const { startCountry, endCountry } = getRouteCountries({ type: 'LineString', coordinates: sortedCoordinates });
     console.log('Route countries:', startCountry, '→', endCountry);
+    console.log('Has backtracking:', pathResult.hasBacktracking || false);
 
     let queryStr: string;
     let values: (string | number | string[] | boolean | null)[];
 
     if (trackId) {
-      // Update existing route - only update geometry, length, coordinates, countries, and validity
+      // Update existing route - only update geometry, length, coordinates, countries, validity, and backtracking flag
       // Keep name, description, usage_type unchanged
       // Set part_id fields to NULL (deprecated)
       queryStr = `
@@ -256,10 +257,11 @@ export async function saveRailwayRoute(
           ending_coordinate = ST_GeomFromText($5, 4326),
           starting_part_id = NULL,
           ending_part_id = NULL,
+          has_backtracking = $6,
           is_valid = TRUE,
           error_message = NULL,
           updated_at = CURRENT_TIMESTAMP
-        WHERE track_id = $6
+        WHERE track_id = $7
         RETURNING track_id, length_km
       `;
 
@@ -269,6 +271,7 @@ export async function saveRailwayRoute(
         endCountry,
         startPointWKT,
         endPointWKT,
+        pathResult.hasBacktracking || false,
         trackId
       ];
     } else {
@@ -292,7 +295,8 @@ export async function saveRailwayRoute(
           starting_part_id,
           ending_part_id,
           is_valid,
-          intended_backtracking
+          intended_backtracking,
+          has_backtracking
         ) VALUES (
           $1,
           $2,
@@ -310,7 +314,8 @@ export async function saveRailwayRoute(
           NULL,
           NULL,
           TRUE,
-          $13
+          $13,
+          $14
         )
         RETURNING track_id, length_km
       `;
@@ -328,7 +333,8 @@ export async function saveRailwayRoute(
         endCountry,
         startPointWKT,
         endPointWKT,
-        routeData.intended_backtracking
+        routeData.intended_backtracking,
+        pathResult.hasBacktracking || false
       ];
     }
 

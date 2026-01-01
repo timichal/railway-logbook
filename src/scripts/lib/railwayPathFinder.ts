@@ -257,7 +257,7 @@ export class RailwayPathFinder {
         startCoordinate,
         endCoordinate
       );
-      console.log("hb", bestResult?.hasBacktracking)
+
       if (bestResult) {
         return bestResult;
       }
