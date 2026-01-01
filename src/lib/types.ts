@@ -128,6 +128,7 @@ export type AdminNote = {
 export interface PathResult {
   partIds: string[];
   coordinates: [number, number][];
+  hasBacktracking?: boolean; // True if the final path contains backtracking
 }
 
 // Selected route for user map (used in SelectedRoutesList and map interactions)

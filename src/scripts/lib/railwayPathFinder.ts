@@ -129,33 +129,6 @@ export class RailwayPathFinder {
   // ============================================================================
 
   /**
-   * Find path between two railway part IDs with automatic retry using larger buffers
-   */
-  async findPathWithRetry(
-    dbClient: Client | Pool,
-    startId: string,
-    endId: string
-  ): Promise<PathResult | null> {
-    const buffers = [50000, 100000, 222000]; // 50km, 100km, 222km
-
-    for (const bufferMeters of buffers) {
-      await this.loadRailwayParts(dbClient, startId, endId, bufferMeters);
-      const result = this.findPath(startId, endId);
-
-      if (result) {
-        console.log(`Path found with ${bufferMeters / 1000}km buffer`);
-        return result;
-      }
-
-      console.log(`Path not found with ${bufferMeters / 1000}km buffer, retrying...`);
-      this.clear();
-    }
-
-    console.log('Path not found even with 222km buffer');
-    return null;
-  }
-
-  /**
    * Find path between two railway part IDs
    *
    * Algorithm:
@@ -199,7 +172,9 @@ export class RailwayPathFinder {
 
     if (!bestAlternative) {
       console.log(`  No non-backtracking alternative found, using original`);
-      return this.buildPathResult(firstPath);
+      const result = this.buildPathResult(firstPath);
+      result.hasBacktracking = true;
+      return result;
     }
 
     // Step 4: Compare by distance
@@ -214,12 +189,16 @@ export class RailwayPathFinder {
         return this.buildPathResult(bestAlternative);
       } catch (error) {
         console.log(`  ⚠️  Alternative path has broken chain, using backtracking path instead`);
-        return this.buildPathResult(firstPath);
+        const result = this.buildPathResult(firstPath);
+        result.hasBacktracking = true;
+        return result;
       }
     }
 
     console.log(`  Alternative is too long (${(altDistance / 1000).toFixed(1)}km vs ${(firstDistance / 1000).toFixed(1)}km), using original`);
-    return this.buildPathResult(firstPath);
+    const result = this.buildPathResult(firstPath);
+    result.hasBacktracking = true;
+    return result;
   }
 
   // ============================================================================
@@ -720,7 +699,8 @@ export class RailwayPathFinder {
           bestDistance = distance;
           bestResult = {
             partIds: pathResult.partIds,
-            coordinates
+            coordinates,
+            hasBacktracking: pathResult.hasBacktracking,
           };
         }
       }
@@ -1101,7 +1081,7 @@ export class RailwayPathFinder {
 
     const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
     const x = Math.cos(lat1) * Math.sin(lat2) -
-              Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+      Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
     const bearing = Math.atan2(y, x) * 180 / Math.PI;
 
     return (bearing + 360) % 360;
@@ -1121,8 +1101,8 @@ export class RailwayPathFinder {
     const deltaLon = (coord2[0] - coord1[0]) * Math.PI / 180;
 
     const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-              Math.cos(lat1) * Math.cos(lat2) *
-              Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+      Math.cos(lat1) * Math.cos(lat2) *
+      Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c;

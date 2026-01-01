@@ -7,31 +7,6 @@ import { RailwayPathFinder } from '../scripts/lib/railwayPathFinder';
 import type { PathResult, RailwayPart, GeoJSONFeatureCollection, GeoJSONFeature } from './types';
 
 /**
- * Find a path between two railway parts using BFS pathfinding
- * DEPRECATED: Use findRailwayPathFromCoordinates for new code
- */
-export async function findRailwayPathDB(startId: string, endId: string): Promise<PathResult | null> {
-  // Admin check
-  const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
-  }
-
-  console.log('Database path finder: Finding path from', startId, 'to', endId);
-
-  const pathFinder = new RailwayPathFinder();
-  const result = await pathFinder.findPathWithRetry(pool, startId, endId);
-
-  if (result) {
-    console.log('Database path finder: Path found with', result.partIds.length, 'segments and', result.coordinates.length, 'coordinates');
-  } else {
-    console.log('Database path finder: No path found');
-  }
-
-  return result;
-}
-
-/**
  * Find a path between two coordinates using BFS pathfinding
  * This is the new coordinate-based pathfinding method
  */

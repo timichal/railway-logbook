@@ -28,19 +28,11 @@ export async function recalculateRoute(
 ): Promise<{ success: boolean; coordinates?: Coord[]; error?: string; hasBacktracking?: boolean }> {
   const pathFinder = new RailwayPathFinder();
 
-  // Capture console output to detect backtracking
-  let hasBacktracking = false;
+  // Suppress console output during pathfinding
   const originalLog = console.log;
+  console.log = () => {}; // Suppress all output
 
   try {
-    console.log = (...args: any[]) => {
-      const message = args.join(' ');
-      if (message.includes('using backtracking path instead')) {
-        hasBacktracking = true;
-      }
-      // Suppress output during pathfinding
-    };
-
     const result = await pathFinder.findPathFromCoordinates(
       client,
       startingCoordinate,
@@ -51,7 +43,11 @@ export async function recalculateRoute(
       return { success: false, error: 'No path found between starting and ending coordinates' };
     }
 
-    return { success: true, coordinates: result.coordinates, hasBacktracking };
+    return {
+      success: true,
+      coordinates: result.coordinates,
+      hasBacktracking: result.hasBacktracking || false
+    };
 
   } catch (error) {
     return {
