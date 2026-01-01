@@ -10,35 +10,45 @@ interface RailwayPart {
   endPoint: [number, number];
 }
 
+interface PointOnSegment {
+  projectedPoint: [number, number];
+  distance: number;
+}
+
+interface NearestPointResult extends PointOnSegment {
+  segmentIndex: number;
+}
+
+/**
+ * RailwayPathFinder: BFS-based pathfinding for railway networks
+ *
+ * Features:
+ * - Part-based pathfinding (between railway part IDs)
+ * - Coordinate-based pathfinding (between GPS coordinates)
+ * - Backtracking detection and avoidance
+ * - Progressive buffer retry (50km → 100km → 222km)
+ * - Edge truncation for coordinate-based routes
+ */
 export class RailwayPathFinder {
   private parts: Map<string, RailwayPart> = new Map();
   private coordToPartIds: Map<string, string[]> = new Map();
 
+  // ============================================================================
+  // DATABASE LOADING
+  // ============================================================================
+
+  /**
+   * Load railway parts around start and end part IDs with buffer
+   */
   async loadRailwayParts(
     dbClient: Client | Pool,
     startId: string,
     endId: string,
     bufferMeters: number = 50000
   ): Promise<void> {
-    // Handle both Pool and Client - get a client if needed
-    let client: Client | PoolClient;
-    let shouldRelease = false;
-
-    // Check if it's a Pool by checking for the 'totalCount' property
-    // which is unique to Pool and not present on Client
-    if ('totalCount' in dbClient) {
-      // It's a Pool
-      client = await (dbClient as Pool).connect();
-      shouldRelease = true;
-    } else {
-      // It's already a Client or PoolClient
-      client = dbClient as Client;
-    }
+    const client = await this.getClient(dbClient);
 
     try {
-      // Create a buffer around start and end points to limit search space
-      // Default: 50km buffer in Web Mercator (meters)
-
       const result = await client.query(`
         WITH endpoints AS (
           SELECT geometry
@@ -64,70 +74,21 @@ export class RailwayPathFinder {
         ORDER BY id
       `, [startId, endId, bufferMeters]);
 
-      for (const row of result.rows) {
-        const id = String(row.id);
-        const geom = JSON.parse(row.geometry_json);
-
-        if (geom.type === 'LineString' && geom.coordinates.length >= 2) {
-          const coordinates = geom.coordinates as [number, number][];
-          const startPoint = coordinates[0];
-          const endPoint = coordinates[coordinates.length - 1];
-
-          const part: RailwayPart = {
-            id,
-            coordinates,
-            startPoint,
-            endPoint
-          };
-
-          this.parts.set(id, part);
-
-          // Add to coordinate mapping for fast connection lookups
-          const startKey = this.coordinateToKey(startPoint);
-          const endKey = this.coordinateToKey(endPoint);
-
-          if (!this.coordToPartIds.has(startKey)) {
-            this.coordToPartIds.set(startKey, []);
-          }
-          if (!this.coordToPartIds.has(endKey)) {
-            this.coordToPartIds.set(endKey, []);
-          }
-
-          this.coordToPartIds.get(startKey)!.push(id);
-          if (startKey !== endKey) { // Avoid duplicates for closed loops
-            this.coordToPartIds.get(endKey)!.push(id);
-          }
-        }
-      }
+      this.parseAndStoreParts(result.rows);
     } finally {
-      if (shouldRelease && 'release' in client) {
-        client.release();
-      }
+      this.releaseClient(dbClient, client);
     }
   }
 
-  private coordinateToKey(coord: [number, number]): string {
-    // Round to 7 decimal places to handle floating point precision
-    return `${coord[0].toFixed(7)},${coord[1].toFixed(7)}`;
-  }
-
   /**
-   * Load railway parts around a coordinate (for coordinate-based pathfinding)
+   * Load railway parts around a coordinate with buffer
    */
   async loadRailwayPartsAroundCoordinate(
     dbClient: Client | Pool,
     coordinate: [number, number],
     bufferMeters: number = 50000
   ): Promise<void> {
-    let client: Client | PoolClient;
-    let shouldRelease = false;
-
-    if ('totalCount' in dbClient) {
-      client = await (dbClient as Pool).connect();
-      shouldRelease = true;
-    } else {
-      client = dbClient as Client;
-    }
+    const client = await this.getClient(dbClient);
 
     try {
       const result = await client.query(`
@@ -149,55 +110,875 @@ export class RailwayPathFinder {
         ORDER BY id
       `, [coordinate[0], coordinate[1], bufferMeters]);
 
-      for (const row of result.rows) {
-        const id = String(row.id);
-        const geom = JSON.parse(row.geometry_json);
+      this.parseAndStoreParts(result.rows);
+    } finally {
+      this.releaseClient(dbClient, client);
+    }
+  }
 
-        if (geom.type === 'LineString' && geom.coordinates.length >= 2) {
-          const coordinates = geom.coordinates as [number, number][];
-          const startPoint = coordinates[0];
-          const endPoint = coordinates[coordinates.length - 1];
+  /**
+   * Clear all loaded railway parts data
+   */
+  clear(): void {
+    this.parts.clear();
+    this.coordToPartIds.clear();
+  }
 
-          const part: RailwayPart = {
-            id,
-            coordinates,
-            startPoint,
-            endPoint
-          };
+  // ============================================================================
+  // PART-BASED PATHFINDING
+  // ============================================================================
 
-          this.parts.set(id, part);
+  /**
+   * Find path between two railway part IDs with automatic retry using larger buffers
+   */
+  async findPathWithRetry(
+    dbClient: Client | Pool,
+    startId: string,
+    endId: string
+  ): Promise<PathResult | null> {
+    const buffers = [50000, 100000, 222000]; // 50km, 100km, 222km
 
-          const startKey = this.coordinateToKey(startPoint);
-          const endKey = this.coordinateToKey(endPoint);
+    for (const bufferMeters of buffers) {
+      await this.loadRailwayParts(dbClient, startId, endId, bufferMeters);
+      const result = this.findPath(startId, endId);
 
-          if (!this.coordToPartIds.has(startKey)) {
-            this.coordToPartIds.set(startKey, []);
-          }
-          if (!this.coordToPartIds.has(endKey)) {
-            this.coordToPartIds.set(endKey, []);
-          }
+      if (result) {
+        console.log(`Path found with ${bufferMeters / 1000}km buffer`);
+        return result;
+      }
 
-          this.coordToPartIds.get(startKey)!.push(id);
-          if (startKey !== endKey) {
-            this.coordToPartIds.get(endKey)!.push(id);
-          }
+      console.log(`Path not found with ${bufferMeters / 1000}km buffer, retrying...`);
+      this.clear();
+    }
+
+    console.log('Path not found even with 222km buffer');
+    return null;
+  }
+
+  /**
+   * Find path between two railway part IDs
+   *
+   * Algorithm:
+   * 1. Find shortest path using BFS
+   * 2. Check if it backtracks
+   * 3. If backtracking, search for non-backtracking alternative
+   * 4. Compare alternatives and choose best
+   */
+  findPath(startId: string, endId: string): PathResult | null {
+    if (!this.parts.has(startId) || !this.parts.has(endId)) {
+      return null;
+    }
+
+    if (startId === endId) {
+      const part = this.parts.get(startId)!;
+      return { partIds: [startId], coordinates: part.coordinates };
+    }
+
+    // Step 1: Find shortest path using standard BFS
+    const firstPath = this.findShortestPath(startId, endId);
+    if (!firstPath) {
+      return null;
+    }
+
+    // Step 2: Check if it backtracks
+    if (!this.hasBacktracking(firstPath)) {
+      return this.buildPathResult(firstPath);
+    }
+
+    // Step 3: Search for non-backtracking alternative
+    const firstDistance = this.calculatePathDistance(firstPath);
+    console.log(`  Searching for non-backtracking alternatives (max ${(firstDistance / 1000).toFixed(1)}km)...`);
+
+    const bestAlternative = this.findNonBacktrackingAlternative(
+      startId,
+      endId,
+      firstDistance
+    );
+
+    if (!bestAlternative) {
+      console.log(`  No non-backtracking alternative found, using original`);
+      return this.buildPathResult(firstPath);
+    }
+
+    // Step 4: Compare by distance
+    const altDistance = this.calculatePathDistance(bestAlternative);
+    const maxAcceptable = Math.min(firstDistance * 1.1, firstDistance + 5000);
+
+    if (altDistance <= maxAcceptable) {
+      console.log(`  Using non-backtracking alternative (${(altDistance / 1000).toFixed(1)}km) over backtracking path (${(firstDistance / 1000).toFixed(1)}km)`);
+      return this.buildPathResult(bestAlternative);
+    }
+
+    console.log(`  Alternative is too long (${(altDistance / 1000).toFixed(1)}km vs ${(firstDistance / 1000).toFixed(1)}km), using original`);
+    return this.buildPathResult(firstPath);
+  }
+
+  // ============================================================================
+  // COORDINATE-BASED PATHFINDING
+  // ============================================================================
+
+  /**
+   * Find path from start coordinate to end coordinate with automatic retry
+   *
+   * Algorithm:
+   * 1. Find all parts containing start/end coordinates
+   * 2. Try pathfinding for each (start part, end part) combination
+   * 3. Truncate edge parts from click points to connections
+   * 4. Select shortest path
+   */
+  async findPathFromCoordinates(
+    dbClient: Client | Pool,
+    startCoordinate: [number, number],
+    endCoordinate: [number, number]
+  ): Promise<PathResult | null> {
+    const buffers = [50000, 100000, 222000]; // 50km, 100km, 222km
+
+    for (const bufferMeters of buffers) {
+      console.log(`Attempting coordinate-based pathfinding with ${bufferMeters / 1000}km buffer...`);
+      this.clear();
+
+      // Load parts around both coordinates
+      await this.loadRailwayPartsAroundCoordinate(dbClient, startCoordinate, bufferMeters);
+      await this.loadRailwayPartsAroundCoordinate(dbClient, endCoordinate, bufferMeters);
+
+      // Find parts containing the coordinates (1m tolerance)
+      const startPartIds = this.findAllPartsContainingCoordinate(startCoordinate, 1);
+      const endPartIds = this.findAllPartsContainingCoordinate(endCoordinate, 1);
+
+      if (startPartIds.length === 0) {
+        console.log(`Start coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
+        continue;
+      }
+
+      if (endPartIds.length === 0) {
+        console.log(`End coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
+        continue;
+      }
+
+      console.log(`Found ${startPartIds.length} start part(s): ${startPartIds.join(', ')}`);
+      console.log(`Found ${endPartIds.length} end part(s): ${endPartIds.join(', ')}`);
+
+      // Try all combinations
+      const bestResult = this.findBestCoordinatePath(
+        startPartIds,
+        endPartIds,
+        startCoordinate,
+        endCoordinate
+      );
+
+      if (bestResult) {
+        return bestResult;
+      }
+
+      console.log(`No valid path found (buffer: ${bufferMeters / 1000}km)`);
+    }
+
+    console.log('No path found with any buffer size');
+    return null;
+  }
+
+  // ============================================================================
+  // BFS SEARCH ALGORITHMS
+  // ============================================================================
+
+  /**
+   * Find shortest path using standard BFS with global visited set
+   */
+  private findShortestPath(startId: string, endId: string): string[] | null {
+    const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
+    const visited = new Set<string>([startId]);
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const connected = this.getConnectedPartIds(current.id);
+
+      for (const connectedId of connected) {
+        if (connectedId === endId) {
+          return [...current.path, connectedId];
+        }
+
+        if (!visited.has(connectedId)) {
+          visited.add(connectedId);
+          queue.push({
+            id: connectedId,
+            path: [...current.path, connectedId]
+          });
         }
       }
-    } finally {
-      if (shouldRelease && 'release' in client) {
-        client.release();
+    }
+
+    return null;
+  }
+
+  /**
+   * Find non-backtracking path using BFS with backtracking rejection
+   * Optionally forces a specific first hop for retry logic
+   */
+  private findPathWithoutBacktracking(
+    startId: string,
+    endId: string,
+    maxDistance: number,
+    forcedFirstHop?: string
+  ): string[] | null {
+    const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
+    const visited = new Set<string>([startId]);
+    let shortestPath: string[] | null = null;
+    let shortestDistance = Infinity;
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+
+      // Prune paths exceeding max distance
+      if (current.path.length > 3) {
+        const currentDistance = this.calculatePathDistance(current.path);
+        if (currentDistance > maxDistance) {
+          continue;
+        }
+      }
+
+      const connected = this.getConnectedPartIds(current.id);
+
+      for (const connectedId of connected) {
+        // Enforce forced first hop if specified
+        if (current.id === startId && forcedFirstHop && connectedId !== forcedFirstHop) {
+          continue;
+        }
+
+        // Check if we reached the end
+        if (connectedId === endId) {
+          const completePath = [...current.path, connectedId];
+
+          if (this.hasBacktracking(completePath)) {
+            continue;
+          }
+
+          const pathDistance = this.calculatePathDistance(completePath);
+          if (pathDistance <= maxDistance && pathDistance < shortestDistance) {
+            shortestPath = completePath;
+            shortestDistance = pathDistance;
+          }
+          continue;
+        }
+
+        if (!visited.has(connectedId)) {
+          const newPath = [...current.path, connectedId];
+
+          // Reject if adding this node creates backtracking
+          if (this.wouldCreateBacktracking(newPath)) {
+            continue;
+          }
+
+          visited.add(connectedId);
+          queue.push({
+            id: connectedId,
+            path: newPath
+          });
+        }
+      }
+    }
+
+    return shortestPath;
+  }
+
+  /**
+   * Find non-backtracking alternative by trying different first hops
+   */
+  private findNonBacktrackingAlternative(
+    startId: string,
+    endId: string,
+    maxDistance: number
+  ): string[] | null {
+    console.log(`  Trying to find path without backtracking...`);
+
+    // First attempt: no forced first hop
+    let path = this.findPathWithoutBacktracking(startId, endId, maxDistance);
+    if (path) {
+      const distance = this.calculatePathDistance(path);
+      console.log(`  ✓ Found non-backtracking path via ${path[1]} (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
+      return path;
+    }
+
+    // Retry with each possible first hop
+    console.log(`  First attempt found no path, trying different starting branches...`);
+    const firstHops = this.getConnectedPartIds(startId);
+
+    for (const firstHop of firstHops) {
+      path = this.findPathWithoutBacktracking(startId, endId, maxDistance, firstHop);
+      if (path) {
+        const distance = this.calculatePathDistance(path);
+        console.log(`  ✓ Found non-backtracking path via ${firstHop} on retry (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
+        return path;
+      }
+    }
+
+    console.log(`  No non-backtracking path found after ${firstHops.length + 1} attempts`);
+    return null;
+  }
+
+  // ============================================================================
+  // BACKTRACKING DETECTION
+  // ============================================================================
+
+  /**
+   * Check if adding the last node to a path would create backtracking
+   */
+  private wouldCreateBacktracking(path: string[]): boolean {
+    if (path.length < 2) return false;
+
+    const currentIdx = path.length - 2;
+    const prevPartId = currentIdx > 0 ? path[currentIdx - 1] : null;
+    const currentPartId = path[currentIdx];
+    const nextPartId = path[currentIdx + 1];
+
+    const exitSegment = this.getConnectionSegment(currentPartId, prevPartId, nextPartId, true);
+    const entrySegment = this.getConnectionSegment(nextPartId, currentPartId, null, false);
+
+    if (!exitSegment || !entrySegment) return false;
+
+    const exitBearing = this.calculateBearing(exitSegment[0], exitSegment[1]);
+    const entryBearing = this.calculateBearing(entrySegment[0], entrySegment[1]);
+
+    const diff = Math.abs(entryBearing - exitBearing);
+    const normalizedDiff = diff > 180 ? 360 - diff : diff;
+
+    return normalizedDiff > 140;
+  }
+
+  /**
+   * Check if a path has backtracking (tight "V" shapes)
+   * Uses segments near connection points for accurate bearing calculations
+   */
+  private hasBacktracking(partIds: string[]): boolean {
+    if (partIds.length < 2) return false;
+
+    for (let i = 0; i < partIds.length - 1; i++) {
+      const prevPartId = i > 0 ? partIds[i - 1] : null;
+      const currentPartId = partIds[i];
+      const nextPartId = partIds[i + 1];
+      const afterNextPartId = i + 2 < partIds.length ? partIds[i + 2] : null;
+
+      // Get exit segment of current part (where it connects to next)
+      const exitSegment = this.getConnectionSegment(currentPartId, prevPartId, nextPartId, true);
+
+      // Get entry segment of next part (where it connects from current)
+      const entrySegment = this.getConnectionSegment(nextPartId, currentPartId, afterNextPartId, false);
+
+      if (!exitSegment || !entrySegment) continue;
+
+      const exitBearing = this.calculateBearing(exitSegment[0], exitSegment[1]);
+      const entryBearing = this.calculateBearing(entrySegment[0], entrySegment[1]);
+
+      const diff = Math.abs(entryBearing - exitBearing);
+      const normalizedDiff = diff > 180 ? 360 - diff : diff;
+
+      if (normalizedDiff > 140) {
+        console.log(`    ⚠️  BACKTRACKING DETECTED at ${currentPartId}→${nextPartId}: ${normalizedDiff.toFixed(1)}° > 140°`);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Get the segment coordinates near a connection point for bearing calculation
+   *
+   * @param isExit - If true, returns segment near where we EXIT. If false, returns entry segment.
+   */
+  private getConnectionSegment(
+    partId: string,
+    prevPartId: string | null,
+    nextPartId: string | null,
+    isExit: boolean
+  ): [[number, number], [number, number]] | null {
+    const part = this.parts.get(partId);
+    if (!part || part.coordinates.length < 2) return null;
+
+    const coords = part.coordinates;
+    const isForward = this.isPartTraversedForward(partId, prevPartId, nextPartId);
+
+    if (isExit) {
+      // Segment near where we EXIT this part
+      if (isForward) {
+        return [coords[coords.length - 2], coords[coords.length - 1]];
+      } else {
+        return [coords[1], coords[0]];
+      }
+    } else {
+      // Segment near where we ENTER this part
+      if (isForward) {
+        return [coords[0], coords[1]];
+      } else {
+        return [coords[coords.length - 1], coords[coords.length - 2]];
       }
     }
   }
 
   /**
-   * Calculate distance from a point to a line segment
+   * Determine if a part should be traversed forward (first→last) or backward (last→first)
    */
-  private pointToSegmentDistance(
+  private isPartTraversedForward(
+    partId: string,
+    prevPartId: string | null,
+    nextPartId: string | null
+  ): boolean {
+    const part = this.parts.get(partId);
+    if (!part) return true;
+
+    const startKey = this.coordinateToKey(part.startPoint);
+    const endKey = this.coordinateToKey(part.endPoint);
+
+    // Determine orientation based on next part
+    if (nextPartId) {
+      const nextPart = this.parts.get(nextPartId);
+      if (nextPart) {
+        const nextStartKey = this.coordinateToKey(nextPart.startPoint);
+        const nextEndKey = this.coordinateToKey(nextPart.endPoint);
+
+        // If end connects to next, we're going forward
+        if (endKey === nextStartKey || endKey === nextEndKey) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+
+    // Determine orientation based on previous part
+    if (prevPartId) {
+      const prevPart = this.parts.get(prevPartId);
+      if (prevPart) {
+        const prevStartKey = this.coordinateToKey(prevPart.startPoint);
+        const prevEndKey = this.coordinateToKey(prevPart.endPoint);
+
+        // If start connects to prev, we're going forward
+        if (startKey === prevStartKey || startKey === prevEndKey) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+
+    return true; // Default: forward
+  }
+
+  // ============================================================================
+  // COORDINATE GEOMETRY
+  // ============================================================================
+
+  /**
+   * Find all railway parts containing a coordinate (within tolerance)
+   * Checks if coordinate lies on any segment, not just vertices
+   */
+  private findAllPartsContainingCoordinate(
+    coordinate: [number, number],
+    toleranceMeters: number = 50
+  ): string[] {
+    const matchingParts: string[] = [];
+
+    for (const [partId, part] of this.parts) {
+      for (let i = 0; i < part.coordinates.length - 1; i++) {
+        const dist = this.pointToSegmentDistance(
+          coordinate,
+          part.coordinates[i],
+          part.coordinates[i + 1]
+        );
+        if (dist <= toleranceMeters) {
+          matchingParts.push(partId);
+          break;
+        }
+      }
+    }
+
+    return matchingParts;
+  }
+
+  /**
+   * Find nearest point on a part to a coordinate
+   * Returns segment index, projected point, and distance
+   */
+  private findNearestPointOnPart(
+    partId: string,
+    coordinate: [number, number]
+  ): NearestPointResult | null {
+    const part = this.parts.get(partId);
+    if (!part) return null;
+
+    let minDistance = Infinity;
+    let bestSegmentIndex = -1;
+    let bestProjectedPoint: [number, number] = [0, 0];
+
+    for (let i = 0; i < part.coordinates.length - 1; i++) {
+      const projection = this.projectPointOnSegment(
+        coordinate,
+        part.coordinates[i],
+        part.coordinates[i + 1]
+      );
+
+      if (projection.distance < minDistance) {
+        minDistance = projection.distance;
+        bestSegmentIndex = i;
+        bestProjectedPoint = projection.projectedPoint;
+      }
+    }
+
+    if (bestSegmentIndex === -1) return null;
+
+    return {
+      segmentIndex: bestSegmentIndex,
+      projectedPoint: bestProjectedPoint,
+      distance: minDistance
+    };
+  }
+
+  /**
+   * Find best path among all start/end part combinations for coordinate-based routing
+   */
+  private findBestCoordinatePath(
+    startPartIds: string[],
+    endPartIds: string[],
+    startCoordinate: [number, number],
+    endCoordinate: [number, number]
+  ): PathResult | null {
+    let bestResult: PathResult | null = null;
+    let bestDistance = Infinity;
+
+    for (const startPartId of startPartIds) {
+      for (const endPartId of endPartIds) {
+        console.log(`  Trying path: ${startPartId} → ${endPartId}`);
+
+        const pathResult = this.findPath(startPartId, endPartId);
+        if (!pathResult) {
+          console.log(`    No path found`);
+          continue;
+        }
+
+        console.log(`    Path found with ${pathResult.partIds.length} parts`);
+
+        // Build coordinates with edge truncation
+        const coordinates = this.buildCoordinatesWithTruncation(
+          pathResult.partIds,
+          startCoordinate,
+          endCoordinate
+        );
+
+        // Calculate total distance
+        const distance = this.calculateCoordinateDistance(coordinates);
+        console.log(`    Distance: ${(distance / 1000).toFixed(2)} km`);
+
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestResult = {
+            partIds: pathResult.partIds,
+            coordinates
+          };
+        }
+      }
+    }
+
+    if (bestResult) {
+      console.log(`Selected shortest path: ${(bestDistance / 1000).toFixed(2)} km`);
+    }
+
+    return bestResult;
+  }
+
+  /**
+   * Build coordinates with edge truncation for coordinate-based routes
+   * Trims first and last parts from click points to their connections
+   */
+  private buildCoordinatesWithTruncation(
+    partIds: string[],
+    startCoordinate: [number, number],
+    endCoordinate: [number, number]
+  ): [number, number][] {
+    if (partIds.length === 0) return [];
+
+    // Special case: single part
+    if (partIds.length === 1) {
+      return this.buildSinglePartCoordinates(partIds[0], startCoordinate, endCoordinate);
+    }
+
+    // Multi-part path: truncate first and last parts
+    const coordinateSublists: [number, number][][] = [];
+
+    for (let i = 0; i < partIds.length; i++) {
+      const partId = partIds[i];
+      const part = this.parts.get(partId);
+      if (!part) continue;
+
+      if (i === 0) {
+        // First part: truncate from start coordinate to connection
+        const truncated = this.buildFirstPartCoordinates(partId, partIds[1], startCoordinate);
+        coordinateSublists.push(truncated);
+      } else if (i === partIds.length - 1) {
+        // Last part: truncate from connection to end coordinate
+        const truncated = this.buildLastPartCoordinates(partId, partIds[i - 1], endCoordinate);
+        coordinateSublists.push(truncated);
+      } else {
+        // Middle part: use entire part
+        coordinateSublists.push(part.coordinates);
+      }
+    }
+
+    return this.mergeLinearChain(coordinateSublists);
+  }
+
+  /**
+   * Build coordinates for a single-part route
+   */
+  private buildSinglePartCoordinates(
+    partId: string,
+    startCoordinate: [number, number],
+    endCoordinate: [number, number]
+  ): [number, number][] {
+    const part = this.parts.get(partId);
+    if (!part) return [];
+
+    const startPoint = this.findNearestPointOnPart(partId, startCoordinate);
+    const endPoint = this.findNearestPointOnPart(partId, endCoordinate);
+
+    if (!startPoint || !endPoint) return part.coordinates;
+
+    const coordinates: [number, number][] = [];
+
+    if (startPoint.segmentIndex === endPoint.segmentIndex) {
+      // Both on same segment
+      coordinates.push(startPoint.projectedPoint);
+      coordinates.push(endPoint.projectedPoint);
+    } else if (startPoint.segmentIndex < endPoint.segmentIndex) {
+      // Start before end
+      coordinates.push(startPoint.projectedPoint);
+      for (let i = startPoint.segmentIndex + 1; i <= endPoint.segmentIndex; i++) {
+        coordinates.push(part.coordinates[i]);
+      }
+      coordinates.push(endPoint.projectedPoint);
+    } else {
+      // End before start - reverse
+      coordinates.push(startPoint.projectedPoint);
+      for (let i = startPoint.segmentIndex; i > endPoint.segmentIndex; i--) {
+        coordinates.push(part.coordinates[i]);
+      }
+      coordinates.push(endPoint.projectedPoint);
+    }
+
+    return coordinates;
+  }
+
+  /**
+   * Build coordinates for first part (truncated from start coordinate to connection)
+   */
+  private buildFirstPartCoordinates(
+    partId: string,
+    nextPartId: string,
+    startCoordinate: [number, number]
+  ): [number, number][] {
+    const part = this.parts.get(partId);
+    const nextPart = this.parts.get(nextPartId);
+    if (!part || !nextPart) return part ? part.coordinates : [];
+
+    // Determine which endpoint connects to next part
+    const endKey = this.coordinateToKey(part.endPoint);
+    const nextStartKey = this.coordinateToKey(nextPart.startPoint);
+    const nextEndKey = this.coordinateToKey(nextPart.endPoint);
+    const endsConnect = (endKey === nextStartKey || endKey === nextEndKey);
+
+    const startPoint = this.findNearestPointOnPart(partId, startCoordinate);
+    if (!startPoint) return part.coordinates;
+
+    const truncated: [number, number][] = [];
+    truncated.push(startPoint.projectedPoint);
+
+    if (endsConnect) {
+      // Go from start point to end of part
+      for (let j = startPoint.segmentIndex + 1; j < part.coordinates.length; j++) {
+        truncated.push(part.coordinates[j]);
+      }
+    } else {
+      // Go from start point to start of part (reverse)
+      for (let j = startPoint.segmentIndex; j >= 0; j--) {
+        truncated.push(part.coordinates[j]);
+      }
+    }
+
+    return truncated;
+  }
+
+  /**
+   * Build coordinates for last part (truncated from connection to end coordinate)
+   */
+  private buildLastPartCoordinates(
+    partId: string,
+    prevPartId: string,
+    endCoordinate: [number, number]
+  ): [number, number][] {
+    const part = this.parts.get(partId);
+    const prevPart = this.parts.get(prevPartId);
+    if (!part || !prevPart) return part ? part.coordinates : [];
+
+    // Determine which endpoint connects to previous part
+    const startKey = this.coordinateToKey(part.startPoint);
+    const prevStartKey = this.coordinateToKey(prevPart.startPoint);
+    const prevEndKey = this.coordinateToKey(prevPart.endPoint);
+    const startsConnect = (startKey === prevStartKey || startKey === prevEndKey);
+
+    const endPoint = this.findNearestPointOnPart(partId, endCoordinate);
+    if (!endPoint) return part.coordinates;
+
+    const truncated: [number, number][] = [];
+
+    if (startsConnect) {
+      // Go from start of part to end point
+      for (let j = 0; j <= endPoint.segmentIndex; j++) {
+        truncated.push(part.coordinates[j]);
+      }
+    } else {
+      // Go from end of part to end point (reverse)
+      for (let j = part.coordinates.length - 1; j > endPoint.segmentIndex; j--) {
+        truncated.push(part.coordinates[j]);
+      }
+    }
+
+    truncated.push(endPoint.projectedPoint);
+    return truncated;
+  }
+
+  // ============================================================================
+  // PATH RESULT BUILDING
+  // ============================================================================
+
+  /**
+   * Build PathResult from part IDs (merges and orients coordinates)
+   */
+  private buildPathResult(partIds: string[]): PathResult {
+    const coordinateSublists: [number, number][][] = [];
+
+    for (const partId of partIds) {
+      const part = this.parts.get(partId);
+      if (part) {
+        coordinateSublists.push(part.coordinates);
+      }
+    }
+
+    const coordinates = this.mergeLinearChain(coordinateSublists);
+
+    return { partIds, coordinates };
+  }
+
+  /**
+   * Merge coordinate sublists into a single linear chain
+   * Ensures proper orientation and removes duplicate connection points
+   */
+  private mergeLinearChain(sublists: [number, number][][]): [number, number][] {
+    if (sublists.length === 0) return [];
+    if (sublists.length === 1) return sublists[0];
+
+    const remainingSublists = sublists.map(s => [...s]);
+
+    // Find starting sublist (prefer one with endpoint appearing only once)
+    const coordCount = this.countEndpointFrequencies(remainingSublists);
+    let startingIndex = this.findStartingSublistIndex(remainingSublists, coordCount);
+
+    if (startingIndex === -1) {
+      console.log('[RailwayPathFinder] No clear endpoint found, using first sublist');
+      startingIndex = 0;
+    }
+
+    // Extract and orient starting sublist
+    const mergedChain = [...remainingSublists[startingIndex]];
+    remainingSublists.splice(startingIndex, 1);
+
+    this.orientStartingSublist(mergedChain, coordCount);
+
+    // Build chain incrementally
+    while (remainingSublists.length > 0) {
+      const lastCoord = mergedChain[mergedChain.length - 1];
+
+      const nextIndex = remainingSublists.findIndex(sublist =>
+        sublist.some(([x, y]) => x === lastCoord[0] && y === lastCoord[1])
+      );
+
+      if (nextIndex === -1) {
+        throw new Error("Chain is broken; no connecting sublist found.");
+      }
+
+      const nextSublist = [...remainingSublists[nextIndex]];
+      const overlapIndex = nextSublist.findIndex(
+        ([x, y]) => x === lastCoord[0] && y === lastCoord[1]
+      );
+
+      if (overlapIndex !== 0) {
+        nextSublist.reverse();
+      }
+
+      mergedChain.push(...nextSublist.slice(1));
+      remainingSublists.splice(nextIndex, 1);
+    }
+
+    return mergedChain;
+  }
+
+  /**
+   * Count how many times each endpoint coordinate appears
+   */
+  private countEndpointFrequencies(
+    sublists: [number, number][][]
+  ): Map<string, number> {
+    const coordCount = new Map<string, number>();
+
+    sublists.forEach(sublist => {
+      const firstKey = `${sublist[0][0]},${sublist[0][1]}`;
+      const lastKey = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
+      coordCount.set(firstKey, (coordCount.get(firstKey) || 0) + 1);
+      coordCount.set(lastKey, (coordCount.get(lastKey) || 0) + 1);
+    });
+
+    return coordCount;
+  }
+
+  /**
+   * Find index of sublist that should start the chain
+   */
+  private findStartingSublistIndex(
+    sublists: [number, number][][],
+    coordCount: Map<string, number>
+  ): number {
+    return sublists.findIndex(sublist => {
+      const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
+      const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
+      return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
+    });
+  }
+
+  /**
+   * Orient starting sublist so endpoint (count=1) is at the end
+   */
+  private orientStartingSublist(
+    mergedChain: [number, number][],
+    coordCount: Map<string, number>
+  ): void {
+    const firstCoord = `${mergedChain[0][0]},${mergedChain[0][1]}`;
+    const lastCoord = `${mergedChain[mergedChain.length - 1][0]},${mergedChain[mergedChain.length - 1][1]}`;
+
+    // If last coord appears only once and first doesn't, reverse
+    if (coordCount.get(lastCoord) === 1 && coordCount.get(firstCoord) !== 1) {
+      mergedChain.reverse();
+    }
+  }
+
+  // ============================================================================
+  // GEOMETRY UTILITIES
+  // ============================================================================
+
+  /**
+   * Project a point onto a line segment and return projection point + distance
+   */
+  private projectPointOnSegment(
     point: [number, number],
     segmentStart: [number, number],
     segmentEnd: [number, number]
-  ): number {
+  ): PointOnSegment {
     const x = point[0];
     const y = point[1];
     const x1 = segmentStart[0];
@@ -231,130 +1012,50 @@ export class RailwayPathFinder {
       yy = y1 + param * D;
     }
 
-    return this.haversineDistance(point, [xx, yy]);
-  }
-
-  /**
-   * Find all railway parts that contain a given coordinate (within tolerance)
-   * Returns array of part IDs that contain the coordinate
-   * Checks if coordinate lies on any segment of the part (not just vertices)
-   */
-  private findAllPartsContainingCoordinate(
-    coordinate: [number, number],
-    toleranceMeters: number = 50
-  ): string[] {
-    const matchingParts: string[] = [];
-
-    for (const [partId, part] of this.parts) {
-      // Check if coordinate lies on any segment of this part
-      for (let i = 0; i < part.coordinates.length - 1; i++) {
-        const dist = this.pointToSegmentDistance(
-          coordinate,
-          part.coordinates[i],
-          part.coordinates[i + 1]
-        );
-        if (dist <= toleranceMeters) {
-          matchingParts.push(partId);
-          break; // Found match for this part, move to next part
-        }
-      }
-    }
-
-    return matchingParts;
-  }
-
-  /**
-   * Find which endpoint (first or last vertex) of a part is closest to a coordinate
-   * Returns the index (0 for first, length-1 for last) and the distance
-   */
-  private findClosestEndpoint(
-    partId: string,
-    coordinate: [number, number]
-  ): { index: number; distance: number } | null {
-    const part = this.parts.get(partId);
-    if (!part) return null;
-
-    const firstDist = this.haversineDistance(coordinate, part.coordinates[0]);
-    const lastDist = this.haversineDistance(coordinate, part.coordinates[part.coordinates.length - 1]);
-
-    if (firstDist < lastDist) {
-      return { index: 0, distance: firstDist };
-    } else {
-      return { index: part.coordinates.length - 1, distance: lastDist };
-    }
-  }
-
-  /**
-   * Find the nearest point on a part to a given coordinate
-   * Returns the segment index and the projected point on that segment
-   */
-  private findNearestPointOnPart(
-    partId: string,
-    coordinate: [number, number]
-  ): { segmentIndex: number; projectedPoint: [number, number]; distance: number } | null {
-    const part = this.parts.get(partId);
-    if (!part) return null;
-
-    let minDistance = Infinity;
-    let bestSegmentIndex = -1;
-    let bestProjectedPoint: [number, number] = [0, 0];
-
-    // Check each segment
-    for (let i = 0; i < part.coordinates.length - 1; i++) {
-      const x = coordinate[0];
-      const y = coordinate[1];
-      const x1 = part.coordinates[i][0];
-      const y1 = part.coordinates[i][1];
-      const x2 = part.coordinates[i + 1][0];
-      const y2 = part.coordinates[i + 1][1];
-
-      const A = x - x1;
-      const B = y - y1;
-      const C = x2 - x1;
-      const D = y2 - y1;
-
-      const dot = A * C + B * D;
-      const lenSq = C * C + D * D;
-      let param = -1;
-
-      if (lenSq !== 0) {
-        param = dot / lenSq;
-      }
-
-      let xx, yy;
-
-      if (param < 0) {
-        xx = x1;
-        yy = y1;
-      } else if (param > 1) {
-        xx = x2;
-        yy = y2;
-      } else {
-        xx = x1 + param * C;
-        yy = y1 + param * D;
-      }
-
-      const dist = this.haversineDistance(coordinate, [xx, yy]);
-      if (dist < minDistance) {
-        minDistance = dist;
-        bestSegmentIndex = i;
-        bestProjectedPoint = [xx, yy];
-      }
-    }
-
-    if (bestSegmentIndex === -1) return null;
-
     return {
-      segmentIndex: bestSegmentIndex,
-      projectedPoint: bestProjectedPoint,
-      distance: minDistance
+      projectedPoint: [xx, yy],
+      distance: this.haversineDistance(point, [xx, yy])
     };
   }
 
   /**
-   * Calculate geographic distance between two coordinates using Haversine formula
+   * Calculate distance from point to line segment
    */
-  private haversineDistance(coord1: [number, number], coord2: [number, number]): number {
+  private pointToSegmentDistance(
+    point: [number, number],
+    segmentStart: [number, number],
+    segmentEnd: [number, number]
+  ): number {
+    return this.projectPointOnSegment(point, segmentStart, segmentEnd).distance;
+  }
+
+  /**
+   * Calculate bearing from coord1 to coord2 in degrees (0-360)
+   */
+  private calculateBearing(
+    coord1: [number, number],
+    coord2: [number, number]
+  ): number {
+    const lon1 = coord1[0] * Math.PI / 180;
+    const lon2 = coord2[0] * Math.PI / 180;
+    const lat1 = coord1[1] * Math.PI / 180;
+    const lat2 = coord2[1] * Math.PI / 180;
+
+    const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) -
+              Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+    const bearing = Math.atan2(y, x) * 180 / Math.PI;
+
+    return (bearing + 360) % 360;
+  }
+
+  /**
+   * Calculate geographic distance using Haversine formula
+   */
+  private haversineDistance(
+    coord1: [number, number],
+    coord2: [number, number]
+  ): number {
     const R = 6371000; // Earth's radius in meters
     const lat1 = coord1[1] * Math.PI / 180;
     const lat2 = coord2[1] * Math.PI / 180;
@@ -366,11 +1067,11 @@ export class RailwayPathFinder {
               Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c; // Distance in meters
+    return R * c;
   }
 
   /**
-   * Calculate total geographic distance for a path
+   * Calculate total distance for a path (by part IDs)
    */
   private calculatePathDistance(partIds: string[]): number {
     let totalDistance = 0;
@@ -379,7 +1080,6 @@ export class RailwayPathFinder {
       const part = this.parts.get(partId);
       if (!part) continue;
 
-      // Calculate distance along this railway part
       for (let i = 0; i < part.coordinates.length - 1; i++) {
         totalDistance += this.haversineDistance(
           part.coordinates[i],
@@ -392,160 +1092,23 @@ export class RailwayPathFinder {
   }
 
   /**
-   * Calculate bearing from coord1 to coord2 in degrees (0-360)
+   * Calculate total distance for a coordinate chain
    */
-  private calculateBearing(coord1: [number, number], coord2: [number, number]): number {
-    const lon1 = coord1[0] * Math.PI / 180;
-    const lon2 = coord2[0] * Math.PI / 180;
-    const lat1 = coord1[1] * Math.PI / 180;
-    const lat2 = coord2[1] * Math.PI / 180;
-
-    const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) -
-              Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
-    const bearing = Math.atan2(y, x) * 180 / Math.PI;
-
-    return (bearing + 360) % 360; // Normalize to 0-360
+  private calculateCoordinateDistance(coordinates: [number, number][]): number {
+    let distance = 0;
+    for (let i = 0; i < coordinates.length - 1; i++) {
+      distance += this.haversineDistance(coordinates[i], coordinates[i + 1]);
+    }
+    return distance;
   }
+
+  // ============================================================================
+  // GRAPH CONNECTIVITY
+  // ============================================================================
 
   /**
-   * Determine if a part should be traversed forward or backward in the path
-   * Returns true if traversing from first coordinate to last, false if reversed
+   * Get all part IDs connected to a given part (sorted deterministically)
    */
-  private isPartTraversedForward(partId: string, prevPartId: string | null, nextPartId: string | null): boolean {
-    const part = this.parts.get(partId);
-    if (!part) return true;
-
-    const startKey = this.coordinateToKey(part.startPoint);
-    const endKey = this.coordinateToKey(part.endPoint);
-
-    // If we have a next part, determine orientation based on which end connects
-    if (nextPartId) {
-      const nextPart = this.parts.get(nextPartId);
-      if (nextPart) {
-        const nextStartKey = this.coordinateToKey(nextPart.startPoint);
-        const nextEndKey = this.coordinateToKey(nextPart.endPoint);
-
-        // If end connects to next part, we're going forward
-        if (endKey === nextStartKey || endKey === nextEndKey) {
-          return true;
-        } else {
-          return false;
-        }
-      }
-    }
-
-    // If no next part but have previous, orient based on where we came from
-    if (prevPartId) {
-      const prevPart = this.parts.get(prevPartId);
-      if (prevPart) {
-        const prevStartKey = this.coordinateToKey(prevPart.startPoint);
-        const prevEndKey = this.coordinateToKey(prevPart.endPoint);
-
-        // If start connects to prev, we're going forward
-        if (startKey === prevStartKey || startKey === prevEndKey) {
-          return true;
-        } else {
-          return false;
-        }
-      }
-    }
-
-    // Default: forward
-    return true;
-  }
-
-  /**
-   * Get the segment coordinates near a connection point for accurate bearing calculation
-   * Returns [coord1, coord2] representing the direction of travel near the connection
-   *
-   * @param isExit - If true, returns the segment near where we EXIT the part. If false, returns entry segment.
-   */
-  private getConnectionSegment(
-    partId: string,
-    prevPartId: string | null,
-    nextPartId: string | null,
-    isExit: boolean
-  ): [[number, number], [number, number]] | null {
-    const part = this.parts.get(partId);
-    if (!part) return null;
-
-    const coords = part.coordinates;
-    if (coords.length < 2) return null;
-
-    const isForward = this.isPartTraversedForward(partId, prevPartId, nextPartId);
-
-    if (isExit) {
-      // We want the segment near where we EXIT this part
-      if (isForward) {
-        // Traversing forward: exit is at the end
-        // Return last 2 coordinates in forward direction
-        return [coords[coords.length - 2], coords[coords.length - 1]];
-      } else {
-        // Traversing backward: exit is at the start (index 0)
-        // Return first 2 coordinates in backward direction (reversed)
-        return [coords[1], coords[0]];
-      }
-    } else {
-      // We want the segment near where we ENTER this part
-      if (isForward) {
-        // Traversing forward: entry is at the start
-        // Return first 2 coordinates in forward direction
-        return [coords[0], coords[1]];
-      } else {
-        // Traversing backward: entry is at the end
-        // Return last 2 coordinates in backward direction (reversed)
-        return [coords[coords.length - 1], coords[coords.length - 2]];
-      }
-    }
-  }
-
-  /**
-   * Detect if a path has backtracking (tight "V" shapes)
-   * Uses segments near connection points for accurate bearing calculations
-   *
-   * Instead of using part endpoints (which can be far apart for long curvy parts),
-   * we use the coordinates closest to the connection points:
-   * - For part 1 (A→B→C→D): use C→D (exit segment)
-   * - For part 2 (D→E→F→G): use D→E (entry segment)
-   */
-  private hasBacktracking(partIds: string[]): boolean {
-    if (partIds.length < 2) return false;
-
-    for (let i = 0; i < partIds.length - 1; i++) {
-      const prevPartId = i > 0 ? partIds[i - 1] : null;
-      const currentPartId = partIds[i];
-      const nextPartId = partIds[i + 1];
-      const afterNextPartId = i + 2 < partIds.length ? partIds[i + 2] : null;
-
-      // Get exit segment of current part (coordinates near where it connects to next)
-      const exitSegment = this.getConnectionSegment(currentPartId, prevPartId, nextPartId, true);
-
-      // Get entry segment of next part (coordinates near where it connects from current)
-      const entrySegment = this.getConnectionSegment(nextPartId, currentPartId, afterNextPartId, false);
-
-      if (!exitSegment || !entrySegment) continue;
-
-      // Calculate bearing of exit from current part: C→D
-      const exitBearing = this.calculateBearing(exitSegment[0], exitSegment[1]);
-
-      // Calculate bearing of entry to next part: D→E
-      const entryBearing = this.calculateBearing(entrySegment[0], entrySegment[1]);
-
-      // Calculate angular change
-      const diff = Math.abs(entryBearing - exitBearing);
-      const normalizedDiff = diff > 180 ? 360 - diff : diff;
-
-      // If direction changes by more than 140 degrees, it's a backtrack
-      if (normalizedDiff > 140) {
-        console.log(`    ⚠️  BACKTRACKING DETECTED at ${currentPartId}→${nextPartId}: ${normalizedDiff.toFixed(1)}° > 140°`);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   private getConnectedPartIds(partId: string): string[] {
     const part = this.parts.get(partId);
     if (!part) return [];
@@ -574,632 +1137,77 @@ export class RailwayPathFinder {
     });
   }
 
+  // ============================================================================
+  // DATABASE HELPERS
+  // ============================================================================
+
   /**
-   * Find path with automatic retry using larger buffer if initial search fails
+   * Get a database client from Pool or Client
    */
-  async findPathWithRetry(
-    dbClient: Client | Pool,
-    startId: string,
-    endId: string
-  ): Promise<PathResult | null> {
-    // First attempt with 50km buffer
-    await this.loadRailwayParts(dbClient, startId, endId, 50000);
-    let result = this.findPath(startId, endId);
-
-    if (result) {
-      console.log('Path found with 50km buffer');
-      return result;
+  private async getClient(dbClient: Client | Pool): Promise<Client | PoolClient> {
+    if ('totalCount' in dbClient) {
+      return await (dbClient as Pool).connect();
     }
-
-    // Second attempt with 100km buffer
-    console.log('Path not found with 50km buffer, retrying with 100km buffer...');
-    this.clear(); // Clear previous data
-    await this.loadRailwayParts(dbClient, startId, endId, 100000);
-    result = this.findPath(startId, endId);
-
-    if (result) {
-      console.log('Path found with 100km buffer');
-      return result;
-    }
-
-    // Third attempt with 222km buffer
-    console.log('Path not found with 100km buffer, retrying with 222km buffer...');
-    this.clear(); // Clear previous data
-    await this.loadRailwayParts(dbClient, startId, endId, 222000);
-    result = this.findPath(startId, endId);
-
-    if (result) {
-      console.log('Path found with 222km buffer');
-    } else {
-      console.log('Path not found even with 222km buffer');
-    }
-
-    return result;
+    return dbClient as Client;
   }
 
   /**
-   * Find path from start coordinate to end coordinate with automatic retry using larger buffers
-   * This is the coordinate-based pathfinding method
-   *
-   * Algorithm:
-   * 1. Find all parts that contain the start coordinate (within 1m tolerance)
-   * 2. Find all parts that contain the end coordinate (within 1m tolerance)
-   * 3. For each combination of (start part, end part), run part-based pathfinding
-   * 4. Trim edge parts from click point to connection
-   * 5. Select the shortest path among all candidates
+   * Release client if it was obtained from a Pool
    */
-  async findPathFromCoordinates(
-    dbClient: Client | Pool,
-    startCoordinate: [number, number],
-    endCoordinate: [number, number]
-  ): Promise<PathResult | null> {
-    const buffers = [50000, 100000, 222000]; // 50km, 100km, 222km
-
-    for (const bufferMeters of buffers) {
-      console.log(`Attempting coordinate-based pathfinding with ${bufferMeters / 1000}km buffer...`);
-
-      // Clear previous data
-      this.clear();
-
-      // Load parts around both coordinates
-      await this.loadRailwayPartsAroundCoordinate(dbClient, startCoordinate, bufferMeters);
-      await this.loadRailwayPartsAroundCoordinate(dbClient, endCoordinate, bufferMeters);
-
-      // Find ALL parts containing the start coordinate (1m tolerance for exact match)
-      const startPartIds = this.findAllPartsContainingCoordinate(startCoordinate, 1);
-
-      // Find ALL parts containing the end coordinate (1m tolerance for exact match)
-      const endPartIds = this.findAllPartsContainingCoordinate(endCoordinate, 1);
-
-      if (startPartIds.length === 0) {
-        console.log(`Start coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
-        continue;
-      }
-
-      if (endPartIds.length === 0) {
-        console.log(`End coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
-        continue;
-      }
-
-      console.log(`Found ${startPartIds.length} start part(s): ${startPartIds.join(', ')}`);
-      console.log(`Found ${endPartIds.length} end part(s): ${endPartIds.join(', ')}`);
-
-      // Try all combinations of start and end parts
-      let bestResult: PathResult | null = null;
-      let bestDistance = Infinity;
-
-      for (const startPartId of startPartIds) {
-        for (const endPartId of endPartIds) {
-          console.log(`  Trying path: ${startPartId} → ${endPartId}`);
-
-          // Use existing part-based pathfinding (deterministic)
-          const pathResult = this.findPath(startPartId, endPartId);
-
-          if (!pathResult) {
-            console.log(`    No path found`);
-            continue;
-          }
-
-          console.log(`    Path found with ${pathResult.partIds.length} parts`);
-
-          // Calculate coordinates for this path with edge truncation
-          const coordinates = this.buildCoordinatesWithTruncation(
-            pathResult.partIds,
-            startCoordinate,
-            endCoordinate
-          );
-
-          // Calculate total distance
-          let distance = 0;
-          for (let i = 0; i < coordinates.length - 1; i++) {
-            distance += this.haversineDistance(coordinates[i], coordinates[i + 1]);
-          }
-
-          console.log(`    Distance: ${(distance / 1000).toFixed(2)} km`);
-
-          // Keep track of shortest path
-          if (distance < bestDistance) {
-            bestDistance = distance;
-            bestResult = {
-              partIds: pathResult.partIds,
-              coordinates
-            };
-          }
-        }
-      }
-
-      if (bestResult) {
-        console.log(`Selected shortest path: ${(bestDistance / 1000).toFixed(2)} km`);
-        return bestResult;
-      }
-
-      console.log(`No valid path found (buffer: ${bufferMeters / 1000}km)`);
+  private releaseClient(
+    original: Client | Pool,
+    client: Client | PoolClient
+  ): void {
+    if ('totalCount' in original && 'release' in client) {
+      client.release();
     }
-
-    // No path found even with largest buffer
-    console.log('No path found with any buffer size');
-    return null;
   }
 
   /**
-   * Build coordinates with edge truncation for new routes
-   * Trims the first and last parts from the click points to their connections
+   * Parse database rows and store parts in memory
    */
-  private buildCoordinatesWithTruncation(
-    partIds: string[],
-    startCoordinate: [number, number],
-    endCoordinate: [number, number]
-  ): [number, number][] {
-    if (partIds.length === 0) return [];
+  private parseAndStoreParts(rows: any[]): void {
+    for (const row of rows) {
+      const id = String(row.id);
+      const geom = JSON.parse(row.geometry_json);
 
-    // Special case: single part
-    if (partIds.length === 1) {
-      const part = this.parts.get(partIds[0]);
-      if (!part) return [];
+      if (geom.type === 'LineString' && geom.coordinates.length >= 2) {
+        const coordinates = geom.coordinates as [number, number][];
+        const startPoint = coordinates[0];
+        const endPoint = coordinates[coordinates.length - 1];
 
-      // Find nearest points on the part for start and end coordinates
-      const startPoint = this.findNearestPointOnPart(partIds[0], startCoordinate);
-      const endPoint = this.findNearestPointOnPart(partIds[0], endCoordinate);
+        const part: RailwayPart = {
+          id,
+          coordinates,
+          startPoint,
+          endPoint
+        };
 
-      if (!startPoint || !endPoint) return part.coordinates;
+        this.parts.set(id, part);
 
-      // Build coordinate list from start to end
-      const coordinates: [number, number][] = [];
+        // Add to coordinate mapping for connection lookups
+        const startKey = this.coordinateToKey(startPoint);
+        const endKey = this.coordinateToKey(endPoint);
 
-      if (startPoint.segmentIndex === endPoint.segmentIndex) {
-        // Both points on the same segment
-        coordinates.push(startPoint.projectedPoint);
-        coordinates.push(endPoint.projectedPoint);
-      } else if (startPoint.segmentIndex < endPoint.segmentIndex) {
-        // Start before end
-        coordinates.push(startPoint.projectedPoint);
-        // Add all vertices between start and end segments
-        for (let i = startPoint.segmentIndex + 1; i <= endPoint.segmentIndex; i++) {
-          coordinates.push(part.coordinates[i]);
+        if (!this.coordToPartIds.has(startKey)) {
+          this.coordToPartIds.set(startKey, []);
         }
-        coordinates.push(endPoint.projectedPoint);
-      } else {
-        // End before start - reverse direction
-        coordinates.push(startPoint.projectedPoint);
-        // Add all vertices between (in reverse)
-        for (let i = startPoint.segmentIndex; i > endPoint.segmentIndex; i--) {
-          coordinates.push(part.coordinates[i]);
-        }
-        coordinates.push(endPoint.projectedPoint);
-      }
-
-      return coordinates;
-    }
-
-    // Multi-part path: truncate first and last parts
-    const coordinateSublists: [number, number][][] = [];
-
-    for (let i = 0; i < partIds.length; i++) {
-      const partId = partIds[i];
-      const part = this.parts.get(partId);
-      if (!part) continue;
-
-      if (i === 0) {
-        // First part: truncate from start coordinate to connection with next part
-        const nextPartId = partIds[1];
-        const nextPart = this.parts.get(nextPartId);
-        if (!nextPart) {
-          coordinateSublists.push(part.coordinates);
-          continue;
+        if (!this.coordToPartIds.has(endKey)) {
+          this.coordToPartIds.set(endKey, []);
         }
 
-        // Find which endpoint of this part connects to next part
-        const endKey = this.coordinateToKey(part.endPoint);
-        const startKey = this.coordinateToKey(part.startPoint);
-        const nextStartKey = this.coordinateToKey(nextPart.startPoint);
-        const nextEndKey = this.coordinateToKey(nextPart.endPoint);
-
-        const endsConnect = (endKey === nextStartKey || endKey === nextEndKey);
-
-        // Find nearest point on part for start coordinate
-        const startPoint = this.findNearestPointOnPart(partId, startCoordinate);
-        if (!startPoint) {
-          coordinateSublists.push(part.coordinates);
-          continue;
+        this.coordToPartIds.get(startKey)!.push(id);
+        if (startKey !== endKey) {
+          this.coordToPartIds.get(endKey)!.push(id);
         }
-
-        // Build coordinates from start point to connection endpoint
-        const truncated: [number, number][] = [];
-        truncated.push(startPoint.projectedPoint);
-
-        if (endsConnect) {
-          // Go from start point to end of part
-          for (let j = startPoint.segmentIndex + 1; j < part.coordinates.length; j++) {
-            truncated.push(part.coordinates[j]);
-          }
-        } else {
-          // Go from start point to start of part (reverse)
-          for (let j = startPoint.segmentIndex; j >= 0; j--) {
-            truncated.push(part.coordinates[j]);
-          }
-        }
-
-        coordinateSublists.push(truncated);
-
-      } else if (i === partIds.length - 1) {
-        // Last part: truncate from connection with previous part to end coordinate
-        const prevPartId = partIds[i - 1];
-        const prevPart = this.parts.get(prevPartId);
-        if (!prevPart) {
-          coordinateSublists.push(part.coordinates);
-          continue;
-        }
-
-        // Find which endpoint of this part connects to previous part
-        const startKey = this.coordinateToKey(part.startPoint);
-        const endKey = this.coordinateToKey(part.endPoint);
-        const prevStartKey = this.coordinateToKey(prevPart.startPoint);
-        const prevEndKey = this.coordinateToKey(prevPart.endPoint);
-
-        const startsConnect = (startKey === prevStartKey || startKey === prevEndKey);
-
-        // Find nearest point on part for end coordinate
-        const endPoint = this.findNearestPointOnPart(partId, endCoordinate);
-        if (!endPoint) {
-          coordinateSublists.push(part.coordinates);
-          continue;
-        }
-
-        // Build coordinates from connection endpoint to end point
-        const truncated: [number, number][] = [];
-
-        if (startsConnect) {
-          // Go from start of part to end point
-          for (let j = 0; j <= endPoint.segmentIndex; j++) {
-            truncated.push(part.coordinates[j]);
-          }
-        } else {
-          // Go from end of part to end point (reverse)
-          for (let j = part.coordinates.length - 1; j > endPoint.segmentIndex; j--) {
-            truncated.push(part.coordinates[j]);
-          }
-        }
-
-        truncated.push(endPoint.projectedPoint);
-        coordinateSublists.push(truncated);
-
-      } else {
-        // Middle part: use entire part
-        coordinateSublists.push(part.coordinates);
       }
     }
-
-    // Merge and orient all coordinate sublists
-    return this.mergeLinearChain(coordinateSublists);
   }
 
   /**
-   * Clear all loaded railway parts data
+   * Convert coordinate to string key (rounded to 7 decimal places)
    */
-  clear(): void {
-    this.parts.clear();
-    this.coordToPartIds.clear();
-  }
-
-  public findPath(startId: string, endId: string): PathResult | null {
-    if (!this.parts.has(startId)) {
-      return null;
-    }
-    if (!this.parts.has(endId)) {
-      return null;
-    }
-
-    if (startId === endId) {
-      const part = this.parts.get(startId)!;
-      return {
-        partIds: [startId],
-        coordinates: part.coordinates
-      };
-    }
-
-    // Step 1: Find shortest path using standard BFS
-    const firstPath = this.findShortestPath(startId, endId);
-
-    if (!firstPath) {
-      return null; // No path found at all
-    }
-
-    // Step 2: Check if it backtracks
-    if (!this.hasBacktracking(firstPath)) {
-      // No backtracking - use it immediately
-      return this.buildPathResult(firstPath);
-    }
-
-    // Step 3: Path backtracks - search for non-backtracking alternatives
-    const firstDistance = this.calculatePathDistance(firstPath);
-    const maxSearchDistance = firstDistance; // Don't search beyond original distance
-
-    console.log(`  Searching for non-backtracking alternatives (max ${(maxSearchDistance / 1000).toFixed(1)}km)...`);
-
-    const bestAlternative = this.findNonBacktrackingAlternative(
-      startId,
-      endId,
-      maxSearchDistance
-    );
-
-    if (!bestAlternative) {
-      console.log(`  No non-backtracking alternative found within ${(maxSearchDistance / 1000).toFixed(1)}km, using original`);
-      return this.buildPathResult(firstPath);
-    }
-
-    // Step 4: Compare by geographic distance
-    const altDistance = this.calculatePathDistance(bestAlternative);
-    const maxAcceptable = Math.min(firstDistance * 1.1, firstDistance + 5000);
-
-    if (altDistance <= maxAcceptable) {
-      console.log(`  Using non-backtracking alternative (${(altDistance / 1000).toFixed(1)}km) over backtracking path (${(firstDistance / 1000).toFixed(1)}km)`);
-      return this.buildPathResult(bestAlternative);
-    }
-
-    // Alternative doesn't backtrack but is too long
-    console.log(`  Alternative is too long (${(altDistance / 1000).toFixed(1)}km vs ${(firstDistance / 1000).toFixed(1)}km), using original`);
-    return this.buildPathResult(firstPath);
-  }
-
-  /**
-   * Find shortest path using standard BFS with global visited set (fast)
-   */
-  private findShortestPath(startId: string, endId: string): string[] | null {
-    const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
-    const visited = new Set<string>([startId]);
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const connected = this.getConnectedPartIds(current.id);
-
-      for (const connectedId of connected) {
-        if (connectedId === endId) {
-          return [...current.path, connectedId];
-        }
-
-        if (!visited.has(connectedId)) {
-          visited.add(connectedId);
-          queue.push({
-            id: connectedId,
-            path: [...current.path, connectedId]
-          });
-        }
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Find non-backtracking path using BFS, optionally forcing a specific first hop
-   * Returns the shortest non-backtracking path found
-   */
-  private findPathWithoutBacktracking(
-    startId: string,
-    endId: string,
-    maxDistance: number,
-    forcedFirstHop?: string
-  ): string[] | null {
-    const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
-    const visited = new Set<string>([startId]);
-    let shortestPath: string[] | null = null;
-    let shortestDistance = Infinity;
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-
-      // Check if current path already exceeds max distance
-      if (current.path.length > 3) {
-        const currentDistance = this.calculatePathDistance(current.path);
-        if (currentDistance > maxDistance) {
-          continue; // Skip this branch
-        }
-      }
-
-      const connected = this.getConnectedPartIds(current.id);
-
-      for (const connectedId of connected) {
-        // If we're at start and have a forced first hop, skip other neighbors
-        if (current.id === startId && forcedFirstHop && connectedId !== forcedFirstHop) {
-          continue;
-        }
-
-        if (connectedId === endId) {
-          // Found end - check final path
-          const completePath = [...current.path, connectedId];
-
-          // Check if this path has backtracking
-          if (this.hasBacktracking(completePath)) {
-            continue; // Reject this path
-          }
-
-          // Check distance
-          const pathDistance = this.calculatePathDistance(completePath);
-          if (pathDistance <= maxDistance && pathDistance < shortestDistance) {
-            shortestPath = completePath;
-            shortestDistance = pathDistance;
-          }
-          continue;
-        }
-
-        if (!visited.has(connectedId)) {
-          const newPath = [...current.path, connectedId];
-
-          // Check if adding this node would create backtracking (if we have at least 2 nodes)
-          if (newPath.length >= 2) {
-            // Check the connection between last two parts for backtracking
-            const currentIdx = newPath.length - 2;
-            const prevPartId = currentIdx > 0 ? newPath[currentIdx - 1] : null;
-            const currentPartId = newPath[currentIdx];
-            const nextPartId = newPath[currentIdx + 1];
-
-            // Get exit segment of current part
-            const exitSegment = this.getConnectionSegment(currentPartId, prevPartId, nextPartId, true);
-
-            // Get entry segment of next part
-            const entrySegment = this.getConnectionSegment(nextPartId, currentPartId, null, false);
-
-            if (exitSegment && entrySegment) {
-              const exitBearing = this.calculateBearing(exitSegment[0], exitSegment[1]);
-              const entryBearing = this.calculateBearing(entrySegment[0], entrySegment[1]);
-
-              const diff = Math.abs(entryBearing - exitBearing);
-              const normalizedDiff = diff > 180 ? 360 - diff : diff;
-
-              // If this would create backtracking, skip this branch
-              if (normalizedDiff > 140) {
-                continue; // Don't explore this path further
-              }
-            }
-          }
-
-          visited.add(connectedId);
-          queue.push({
-            id: connectedId,
-            path: newPath
-          });
-        }
-      }
-    }
-
-    return shortestPath;
-  }
-
-  /**
-   * Find non-backtracking alternative by trying different first hops
-   * If the first attempt doesn't find a path, tries again with each possible first hop
-   */
-  private findNonBacktrackingAlternative(
-    startId: string,
-    endId: string,
-    maxDistance: number
-  ): string[] | null {
-    console.log(`  Trying to find path without backtracking...`);
-
-    // First attempt: try without forcing any specific first hop
-    let path = this.findPathWithoutBacktracking(startId, endId, maxDistance);
-
-    if (path) {
-      const distance = this.calculatePathDistance(path);
-      console.log(`  ✓ Found non-backtracking path via ${path[1]} (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
-      return path;
-    }
-
-    // If first attempt failed, try forcing each possible first hop
-    console.log(`  First attempt found no path, trying different starting branches...`);
-    const firstHops = this.getConnectedPartIds(startId);
-
-    for (const firstHop of firstHops) {
-      path = this.findPathWithoutBacktracking(startId, endId, maxDistance, firstHop);
-
-      if (path) {
-        const distance = this.calculatePathDistance(path);
-        console.log(`  ✓ Found non-backtracking path via ${firstHop} on retry (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
-        return path;
-      }
-    }
-
-    console.log(`  No non-backtracking path found after ${firstHops.length + 1} attempts`);
-    return null;
-  }
-
-  private buildPathResult(partIds: string[]): PathResult {
-    // Build coordinate sublists (one per part)
-    const coordinateSublists: [number, number][][] = [];
-
-    for (const partId of partIds) {
-      const part = this.parts.get(partId);
-      if (part) {
-        coordinateSublists.push(part.coordinates);
-      }
-    }
-
-    // Use mergeLinearChain to properly orient and connect the coordinate sublists
-    const coordinates = this.mergeLinearChain(coordinateSublists);
-
-    return {
-      partIds,
-      coordinates
-    };
-  }
-
-  /**
-   * Merges a list of coordinate sublists into a single linear chain.
-   * This ensures proper orientation and removes duplicate connection points.
-   * Based on the algorithm from coordinateUtils.ts but kept here to avoid circular dependencies.
-   */
-  private mergeLinearChain(sublists: [number, number][][]): [number, number][] {
-    if (sublists.length === 0) return [];
-    if (sublists.length === 1) return sublists[0];
-
-    // Make a copy to avoid mutating the original
-    const remainingSublists = sublists.map(s => [...s]);
-
-    // Step 1: Create a map of coordinate frequencies (only count endpoints)
-    const coordCount = new Map<string, number>();
-    remainingSublists.forEach(sublist => {
-      const firstKey = `${sublist[0][0]},${sublist[0][1]}`;
-      const lastKey = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
-      coordCount.set(firstKey, (coordCount.get(firstKey) || 0) + 1);
-      coordCount.set(lastKey, (coordCount.get(lastKey) || 0) + 1);
-    });
-
-    // Step 2: Find the starting sublist (prefer one with an endpoint that appears only once)
-    let startingSublistIndex = remainingSublists.findIndex(sublist => {
-      const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
-      const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
-      return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
-    });
-
-    // If no clear endpoint found (e.g., circular routes or complex junctions), use first sublist
-    if (startingSublistIndex === -1) {
-      console.log('[RailwayPathFinder] No clear endpoint found, using first sublist as starting point');
-      startingSublistIndex = 0;
-    }
-
-    // Extract the starting sublist
-    const mergedChain = [...remainingSublists[startingSublistIndex]];
-    remainingSublists.splice(startingSublistIndex, 1);
-
-    // Step 2.1: Orient the starting sublist correctly if we have a clear endpoint
-    const firstCoord = `${mergedChain[0][0]},${mergedChain[0][1]}`;
-    const lastCoord = `${mergedChain[mergedChain.length - 1][0]},${mergedChain[mergedChain.length - 1][1]}`;
-
-    // If the last coordinate appears only once, it should be at the end
-    // If the first coordinate appears only once, it should be at the start (don't reverse)
-    if (coordCount.get(lastCoord) === 1 && coordCount.get(firstCoord) !== 1) {
-      // Last coord is endpoint, first coord is not -> need to reverse
-      mergedChain.reverse();
-    }
-
-    // Step 3: Build the chain incrementally
-    while (remainingSublists.length > 0) {
-      const lastCoordInChain = mergedChain[mergedChain.length - 1];
-
-      // Find the next sublist that connects to the current chain
-      const nextIndex = remainingSublists.findIndex(sublist =>
-        sublist.some(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1])
-      );
-
-      if (nextIndex === -1) {
-        throw new Error("Chain is broken; no connecting sublist found.");
-      }
-
-      // Extract the next sublist and reverse it if necessary
-      const nextSublist = [...remainingSublists[nextIndex]];
-      const overlapIndex = nextSublist.findIndex(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1]);
-
-      if (overlapIndex !== 0) {
-        nextSublist.reverse(); // Reverse if the overlap is not at the start
-      }
-
-      // Add the non-overlapping part of the sublist to the chain
-      mergedChain.push(...nextSublist.slice(1));
-
-      // Remove the processed sublist
-      remainingSublists.splice(nextIndex, 1);
-    }
-
-    return mergedChain;
+  private coordinateToKey(coord: [number, number]): string {
+    return `${coord[0].toFixed(7)},${coord[1].toFixed(7)}`;
   }
 }
