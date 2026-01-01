@@ -13,6 +13,7 @@ export interface RecalculationResult {
   totalRoutes: number;
   successfulRoutes: number;
   invalidRoutes: number;
+  backtrackingRoutes: Array<{ track_number: string; from_station: string; to_station: string }>;
   errors: Array<{ track_number: string; from_station: string; to_station: string; error: string }>;
 }
 
@@ -24,9 +25,21 @@ export async function recalculateRoute(
   trackId: number,
   startingCoordinate: [number, number],
   endingCoordinate: [number, number]
-): Promise<{ success: boolean; coordinates?: Coord[]; error?: string }> {
+): Promise<{ success: boolean; coordinates?: Coord[]; error?: string; hasBacktracking?: boolean }> {
+  const pathFinder = new RailwayPathFinder();
+
+  // Capture console output to detect backtracking
+  let hasBacktracking = false;
+  const originalLog = console.log;
+
   try {
-    const pathFinder = new RailwayPathFinder();
+    console.log = (...args: any[]) => {
+      const message = args.join(' ');
+      if (message.includes('using backtracking path instead')) {
+        hasBacktracking = true;
+      }
+      // Suppress output during pathfinding
+    };
 
     const result = await pathFinder.findPathFromCoordinates(
       client,
@@ -38,15 +51,16 @@ export async function recalculateRoute(
       return { success: false, error: 'No path found between starting and ending coordinates' };
     }
 
-    console.log(`  Successfully calculated ${result.coordinates.length} coordinates for route ${trackId}`);
-
-    return { success: true, coordinates: result.coordinates };
+    return { success: true, coordinates: result.coordinates, hasBacktracking };
 
   } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error during recalculation'
     };
+  } finally {
+    // Always restore console.log
+    console.log = originalLog;
   }
 }
 
@@ -60,6 +74,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
     totalRoutes: 0,
     successfulRoutes: 0,
     invalidRoutes: 0,
+    backtrackingRoutes: [],
     errors: []
   };
 
@@ -156,6 +171,15 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
 
         result.successfulRoutes++;
 
+        // Track routes that used backtracking
+        if (recalcResult.hasBacktracking) {
+          result.backtrackingRoutes.push({
+            track_number,
+            from_station,
+            to_station
+          });
+        }
+
         if (result.successfulRoutes % 100 === 0) {
           console.log(`  Recalculated ${result.successfulRoutes}/${result.totalRoutes} routes...`);
         }
@@ -213,7 +237,16 @@ export async function verifyAndRecalculateRoutes(client: Client): Promise<void> 
   console.log('=== Route Recalculation Summary ===');
   console.log(`Total routes: ${recalcResult.totalRoutes}`);
   console.log(`Successfully recalculated: ${recalcResult.successfulRoutes}`);
+  console.log(`Routes with backtracking: ${recalcResult.backtrackingRoutes.length}`);
   console.log(`Invalid routes: ${recalcResult.invalidRoutes}`);
+
+  if (recalcResult.backtrackingRoutes.length > 0) {
+    console.log('');
+    console.log('=== Routes Using Backtracking Path ===');
+    for (const route of recalcResult.backtrackingRoutes) {
+      console.log(`  [${route.track_number}] ${route.from_station} → ${route.to_station}`);
+    }
+  }
 
   if (recalcResult.errors.length > 0) {
     console.log('');

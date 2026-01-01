@@ -187,12 +187,14 @@ export class RailwayPathFinder {
 
     // Step 3: Search for non-backtracking alternative
     const firstDistance = this.calculatePathDistance(firstPath);
-    console.log(`  Searching for non-backtracking alternatives (max ${(firstDistance / 1000).toFixed(1)}km)...`);
+    // Allow searching for paths up to 10% longer or +5km (non-backtracking paths are often slightly longer)
+    const searchDistance = Math.min(firstDistance * 1.1, firstDistance + 5000);
+    console.log(`  Searching for non-backtracking alternatives (max ${(searchDistance / 1000).toFixed(1)}km)...`);
 
     const bestAlternative = this.findNonBacktrackingAlternative(
       startId,
       endId,
-      firstDistance
+      searchDistance
     );
 
     if (!bestAlternative) {
@@ -206,7 +208,14 @@ export class RailwayPathFinder {
 
     if (altDistance <= maxAcceptable) {
       console.log(`  Using non-backtracking alternative (${(altDistance / 1000).toFixed(1)}km) over backtracking path (${(firstDistance / 1000).toFixed(1)}km)`);
-      return this.buildPathResult(bestAlternative);
+
+      // Try to build the path - if it fails due to chain break, use original
+      try {
+        return this.buildPathResult(bestAlternative);
+      } catch (error) {
+        console.log(`  ⚠️  Alternative path has broken chain, using backtracking path instead`);
+        return this.buildPathResult(firstPath);
+      }
     }
 
     console.log(`  Alternative is too long (${(altDistance / 1000).toFixed(1)}km vs ${(firstDistance / 1000).toFixed(1)}km), using original`);
@@ -313,6 +322,8 @@ export class RailwayPathFinder {
   /**
    * Find non-backtracking path using BFS with backtracking rejection
    * Optionally forces a specific first hop for retry logic
+   *
+   * Uses best-distance tracking instead of global visited to allow alternative paths.
    */
   private findPathWithoutBacktracking(
     startId: string,
@@ -320,20 +331,30 @@ export class RailwayPathFinder {
     maxDistance: number,
     forcedFirstHop?: string
   ): string[] | null {
-    const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
-    const visited = new Set<string>([startId]);
+    const queue: { id: string; path: string[]; distance: number }[] = [{
+      id: startId,
+      path: [startId],
+      distance: 0
+    }];
+
+    const bestDistance = new Map<string, number>();
+    bestDistance.set(startId, 0);
+
     let shortestPath: string[] | null = null;
-    let shortestDistance = Infinity;
+    let shortestPathDistance = Infinity;
 
     while (queue.length > 0) {
       const current = queue.shift()!;
 
-      // Prune paths exceeding max distance
-      if (current.path.length > 3) {
-        const currentDistance = this.calculatePathDistance(current.path);
-        if (currentDistance > maxDistance) {
-          continue;
-        }
+      // Skip if we already found a better path to this node
+      const currentBest = bestDistance.get(current.id);
+      if (currentBest !== undefined && current.distance > currentBest) {
+        continue;
+      }
+
+      // Prune if exceeding max distance
+      if (current.distance > maxDistance) {
+        continue;
       }
 
       const connected = this.getConnectedPartIds(current.id);
@@ -341,6 +362,11 @@ export class RailwayPathFinder {
       for (const connectedId of connected) {
         // Enforce forced first hop if specified
         if (current.id === startId && forcedFirstHop && connectedId !== forcedFirstHop) {
+          continue;
+        }
+
+        // Prevent cycles in current path
+        if (current.path.includes(connectedId)) {
           continue;
         }
 
@@ -353,25 +379,41 @@ export class RailwayPathFinder {
           }
 
           const pathDistance = this.calculatePathDistance(completePath);
-          if (pathDistance <= maxDistance && pathDistance < shortestDistance) {
+          if (pathDistance <= maxDistance && pathDistance < shortestPathDistance) {
             shortestPath = completePath;
-            shortestDistance = pathDistance;
+            shortestPathDistance = pathDistance;
           }
           continue;
         }
 
-        if (!visited.has(connectedId)) {
-          const newPath = [...current.path, connectedId];
+        const newPath = [...current.path, connectedId];
 
-          // Reject if adding this node creates backtracking
-          if (this.wouldCreateBacktracking(newPath)) {
-            continue;
-          }
+        // Reject if adding this node creates backtracking
+        if (this.wouldCreateBacktracking(newPath)) {
+          continue;
+        }
 
-          visited.add(connectedId);
+        // Calculate distance efficiently (only add new segment)
+        const connectedPart = this.parts.get(connectedId);
+        if (!connectedPart) continue;
+
+        let segmentDist = 0;
+        for (let i = 0; i < connectedPart.coordinates.length - 1; i++) {
+          segmentDist += this.haversineDistance(
+            connectedPart.coordinates[i],
+            connectedPart.coordinates[i + 1]
+          );
+        }
+        const newDistance = current.distance + segmentDist;
+
+        // Only explore if this is best path to this node so far
+        const bestToNode = bestDistance.get(connectedId);
+        if (bestToNode === undefined || newDistance < bestToNode) {
+          bestDistance.set(connectedId, newDistance);
           queue.push({
             id: connectedId,
-            path: newPath
+            path: newPath,
+            distance: newDistance
           });
         }
       }
@@ -657,11 +699,18 @@ export class RailwayPathFinder {
         console.log(`    Path found with ${pathResult.partIds.length} parts`);
 
         // Build coordinates with edge truncation
-        const coordinates = this.buildCoordinatesWithTruncation(
-          pathResult.partIds,
-          startCoordinate,
-          endCoordinate
-        );
+        let coordinates: [number, number][];
+        try {
+          coordinates = this.buildCoordinatesWithTruncation(
+            pathResult.partIds,
+            startCoordinate,
+            endCoordinate
+          );
+        } catch (error) {
+          // Chain is broken - this path doesn't connect properly
+          console.log(`    ❌ Chain broken - skipping this combination`);
+          continue;
+        }
 
         // Calculate total distance
         const distance = this.calculateCoordinateDistance(coordinates);
@@ -792,14 +841,18 @@ export class RailwayPathFinder {
 
     if (endsConnect) {
       // Go from start point to end of part
-      for (let j = startPoint.segmentIndex + 1; j < part.coordinates.length; j++) {
+      for (let j = startPoint.segmentIndex + 1; j < part.coordinates.length - 1; j++) {
         truncated.push(part.coordinates[j]);
       }
+      // CRITICAL: Always end with exact endpoint for chain continuity
+      truncated.push(part.endPoint);
     } else {
       // Go from start point to start of part (reverse)
-      for (let j = startPoint.segmentIndex; j >= 0; j--) {
+      for (let j = startPoint.segmentIndex; j >= 1; j--) {
         truncated.push(part.coordinates[j]);
       }
+      // CRITICAL: Always end with exact endpoint for chain continuity
+      truncated.push(part.startPoint);
     }
 
     return truncated;
@@ -830,12 +883,16 @@ export class RailwayPathFinder {
 
     if (startsConnect) {
       // Go from start of part to end point
-      for (let j = 0; j <= endPoint.segmentIndex; j++) {
+      // CRITICAL: Always start with exact endpoint for chain continuity
+      truncated.push(part.startPoint);
+      for (let j = 1; j <= endPoint.segmentIndex; j++) {
         truncated.push(part.coordinates[j]);
       }
     } else {
       // Go from end of part to end point (reverse)
-      for (let j = part.coordinates.length - 1; j > endPoint.segmentIndex; j--) {
+      // CRITICAL: Always start with exact endpoint for chain continuity
+      truncated.push(part.endPoint);
+      for (let j = part.coordinates.length - 2; j > endPoint.segmentIndex; j--) {
         truncated.push(part.coordinates[j]);
       }
     }
@@ -895,8 +952,9 @@ export class RailwayPathFinder {
     while (remainingSublists.length > 0) {
       const lastCoord = mergedChain[mergedChain.length - 1];
 
+      const lastCoordKey = this.coordinateToKey(lastCoord);
       const nextIndex = remainingSublists.findIndex(sublist =>
-        sublist.some(([x, y]) => x === lastCoord[0] && y === lastCoord[1])
+        sublist.some(coord => this.coordinateToKey(coord) === lastCoordKey)
       );
 
       if (nextIndex === -1) {
@@ -905,7 +963,7 @@ export class RailwayPathFinder {
 
       const nextSublist = [...remainingSublists[nextIndex]];
       const overlapIndex = nextSublist.findIndex(
-        ([x, y]) => x === lastCoord[0] && y === lastCoord[1]
+        coord => this.coordinateToKey(coord) === lastCoordKey
       );
 
       if (overlapIndex !== 0) {

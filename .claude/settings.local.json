@@ -16,7 +16,9 @@
       "Bash(docker logs:*)",
       "Bash(npx tsc:*)",
       "Bash(docker exec:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npx tsx:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }
