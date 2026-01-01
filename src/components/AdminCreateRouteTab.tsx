@@ -167,9 +167,9 @@ export default function AdminCreateRouteTab({
 
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
-      // Metadata (name, description, usage_type, track_number, frequency, link) won't be used in update mode
+      // Metadata (name, description, usage_type, track_number, frequency, link, intended_backtracking) won't be used in update mode
       await saveRailwayRoute(
-        { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '' }, // Dummy data, not used in UPDATE mode
+        { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '', intended_backtracking: false }, // Dummy data, not used in UPDATE mode
         { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates },
         currentPathResult.startCoordinate,
         currentPathResult.endCoordinate,

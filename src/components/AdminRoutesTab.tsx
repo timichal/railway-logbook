@@ -34,6 +34,7 @@ export default function AdminRoutesTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showInvalidOnly, setShowInvalidOnly] = useState(false);
+  const [showUnintendedBacktrackingOnly, setShowUnintendedBacktrackingOnly] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const itemsPerPage = 100;
   const [editForm, setEditForm] = useState<{
@@ -73,6 +74,10 @@ export default function AdminRoutesTab({
       filtered = filtered.filter(route => route.is_valid === false);
     }
 
+    if (showUnintendedBacktrackingOnly) {
+      filtered = filtered.filter(route => route.has_backtracking === true && route.intended_backtracking !== true);
+    }
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((route) => {
@@ -84,7 +89,7 @@ export default function AdminRoutesTab({
     }
 
     return filtered;
-  }, [routes, searchQuery, showInvalidOnly]);
+  }, [routes, searchQuery, showInvalidOnly, showUnintendedBacktrackingOnly]);
 
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   const paginatedRoutes = useMemo(() => {
@@ -93,10 +98,11 @@ export default function AdminRoutesTab({
   }, [filteredRoutes, currentPage]);
 
   const invalidRouteCount = routes.filter(route => route.is_valid === false).length;
+  const unintendedBacktrackingCount = routes.filter(route => route.has_backtracking === true && route.intended_backtracking !== true).length;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, showInvalidOnly]);
+  }, [searchQuery, showInvalidOnly, showUnintendedBacktrackingOnly]);
 
   // Route selection
   const handleRouteClick = useCallback(async (trackId: string) => {
@@ -253,15 +259,18 @@ export default function AdminRoutesTab({
         paginatedRoutes={paginatedRoutes}
         totalRoutes={routes.length}
         invalidRouteCount={invalidRouteCount}
+        unintendedBacktrackingCount={unintendedBacktrackingCount}
         isLoading={isLoading && !selectedRoute}
         selectedRouteId={selectedRouteId}
         searchQuery={searchQuery}
         showInvalidOnly={showInvalidOnly}
+        showUnintendedBacktrackingOnly={showUnintendedBacktrackingOnly}
         currentPage={currentPage}
         totalPages={totalPages}
         filteredCount={filteredRoutes.length}
         onSearchChange={setSearchQuery}
         onInvalidOnlyChange={setShowInvalidOnly}
+        onUnintendedBacktrackingOnlyChange={setShowUnintendedBacktrackingOnly}
         onRouteClick={handleRouteClick}
         onPageChange={setCurrentPage}
       />

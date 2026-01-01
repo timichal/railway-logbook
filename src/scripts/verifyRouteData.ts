@@ -154,17 +154,18 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
           error: errorMsg
         });
       } else {
-        // Update route with new geometry
+        // Update route with new geometry and has_backtracking flag
         await client.query(`
           UPDATE railway_routes
           SET
             geometry = ST_GeomFromText($1, 4326),
             length_km = $2,
+            has_backtracking = $3,
             is_valid = TRUE,
             error_message = NULL,
             updated_at = CURRENT_TIMESTAMP
-          WHERE track_id = $3
-        `, [lineString, newLength, track_id]);
+          WHERE track_id = $4
+        `, [lineString, newLength, recalcResult.hasBacktracking || false, track_id]);
 
         result.successfulRoutes++;
 

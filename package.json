@@ -15,6 +15,7 @@
     "importRouteData": "tsx src/scripts/importRoutes.ts",
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "addIntendedBacktracking": "tsx src/scripts/addIntendedBacktracking.ts",
+    "addHasBacktracking": "tsx src/scripts/addHasBacktracking.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
     "listStations": "tsx src/scripts/listStations.ts",
     "uploadMapData": "pscp ./data/*.geojson railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/",

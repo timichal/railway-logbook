@@ -93,7 +93,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     description: string,
     usage_type: 0 | 1,
     frequency: string[],
-    link: string
+    link: string,
+    intended_backtracking: boolean
   }) => {
     console.log('AdminPageClient: Save route requested', routeData);
 

@@ -91,6 +91,7 @@ export type RailwayRoute = {
   is_valid?: boolean
   error_message?: string | null
   intended_backtracking?: boolean // Flag to indicate backtracking is intentional
+  has_backtracking?: boolean // Flag set by verification script indicating route uses backtracking path
   date?: string | null // From user_trips join
   note?: string | null // From user_trips join
   partial?: boolean | null // From user_trips join

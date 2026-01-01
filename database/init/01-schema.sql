@@ -57,6 +57,7 @@ CREATE TABLE railway_routes (
     is_valid BOOLEAN DEFAULT TRUE, -- Route validity flag (for recalculation errors)
     error_message TEXT, -- Error details if route recalculation fails
     intended_backtracking BOOLEAN DEFAULT FALSE, -- Flag to indicate backtracking is intentional
+    has_backtracking BOOLEAN DEFAULT FALSE, -- Flag set by verification script indicating route uses backtracking path
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

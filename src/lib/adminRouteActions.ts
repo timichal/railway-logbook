@@ -33,7 +33,7 @@ export async function getAllRailwayRoutes() {
 
   const result = await query(`
     SELECT track_id, from_station, to_station, track_number, description, usage_type,
-           starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking
+           starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking, has_backtracking
     FROM railway_routes
     ORDER BY from_station, to_station
   `);
@@ -239,7 +239,7 @@ export async function saveRailwayRoute(
     console.log('Route countries:', startCountry, '→', endCountry);
 
     let queryStr: string;
-    let values: (string | number | string[] | null)[];
+    let values: (string | number | string[] | boolean | null)[];
 
     if (trackId) {
       // Update existing route - only update geometry, length, coordinates, countries, and validity

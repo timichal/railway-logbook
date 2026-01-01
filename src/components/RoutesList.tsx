@@ -8,15 +8,18 @@ interface RoutesListProps {
   paginatedRoutes: RailwayRoute[];
   totalRoutes: number;
   invalidRouteCount: number;
+  unintendedBacktrackingCount: number;
   isLoading: boolean;
   selectedRouteId?: string | null;
   searchQuery: string;
   showInvalidOnly: boolean;
+  showUnintendedBacktrackingOnly: boolean;
   currentPage: number;
   totalPages: number;
   filteredCount: number;
   onSearchChange: (query: string) => void;
   onInvalidOnlyChange: (checked: boolean) => void;
+  onUnintendedBacktrackingOnlyChange: (checked: boolean) => void;
   onRouteClick: (trackId: string) => void;
   onPageChange: (page: number) => void;
 }
@@ -25,15 +28,18 @@ export default function RoutesList({
   paginatedRoutes,
   totalRoutes,
   invalidRouteCount,
+  unintendedBacktrackingCount,
   isLoading,
   selectedRouteId,
   searchQuery,
   showInvalidOnly,
+  showUnintendedBacktrackingOnly,
   currentPage,
   totalPages,
   filteredCount,
   onSearchChange,
   onInvalidOnlyChange,
+  onUnintendedBacktrackingOnlyChange,
   onRouteClick,
   onPageChange
 }: RoutesListProps) {
@@ -43,8 +49,9 @@ export default function RoutesList({
       <div className="p-3 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-gray-900">Routes ({totalRoutes})</h3>
-          {/* Invalid Only Filter */}
-          <div>
+          {/* Filters */}
+          <div className="flex flex-col items-start gap-1">
+            {/* Invalid Only Filter */}
             <label className="flex justify-center items-center cursor-pointer text-sm">
               <input
                 type="checkbox"
@@ -53,6 +60,16 @@ export default function RoutesList({
                 className="mr-2"
               />
               <span className="text-gray-700">Invalid only ({invalidRouteCount})</span>
+            </label>
+            {/* Unintended Backtracking Filter */}
+            <label className="flex justify-center items-center cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={showUnintendedBacktrackingOnly}
+                onChange={(e) => onUnintendedBacktrackingOnlyChange(e.target.checked)}
+                className="mr-2"
+              />
+              <span className="text-gray-700">Unintended backtracking ({unintendedBacktrackingCount})</span>
             </label>
           </div>
         </div>
