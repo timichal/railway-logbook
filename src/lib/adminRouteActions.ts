@@ -19,6 +19,7 @@ export interface SaveRouteData {
   usage_type: UsageType;
   frequency: string[];
   link: string;
+  intended_backtracking: boolean;
 }
 
 /**
@@ -32,7 +33,7 @@ export async function getAllRailwayRoutes() {
 
   const result = await query(`
     SELECT track_id, from_station, to_station, track_number, description, usage_type,
-           starting_part_id, ending_part_id, is_valid, error_message
+           starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking
     FROM railway_routes
     ORDER BY from_station, to_station
   `);
@@ -54,7 +55,7 @@ export async function getRailwayRoute(trackId: string) {
            ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
            ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json,
-           starting_part_id, ending_part_id, is_valid, error_message
+           starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking
     FROM railway_routes
     WHERE track_id = $1
   `, [trackId]);
@@ -290,7 +291,8 @@ export async function saveRailwayRoute(
           ending_coordinate,
           starting_part_id,
           ending_part_id,
-          is_valid
+          is_valid,
+          intended_backtracking
         ) VALUES (
           $1,
           $2,
@@ -307,7 +309,8 @@ export async function saveRailwayRoute(
           ST_GeomFromText($12, 4326),
           NULL,
           NULL,
-          TRUE
+          TRUE,
+          $13
         )
         RETURNING track_id, length_km
       `;
@@ -324,7 +327,8 @@ export async function saveRailwayRoute(
         startCountry,
         endCountry,
         startPointWKT,
-        endPointWKT
+        endPointWKT,
+        routeData.intended_backtracking
       ];
     }
 
@@ -362,7 +366,8 @@ export async function updateRailwayRoute(
   description: string | null,
   usageType: UsageType,
   frequency: string[],
-  link: string | null
+  link: string | null,
+  intendedBacktracking: boolean
 ) {
   const user = await getUser();
   if (!user || user.id !== 1) {
@@ -372,9 +377,9 @@ export async function updateRailwayRoute(
   await query(`
     UPDATE railway_routes
     SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, frequency = $7, link = $8,
-        is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+        intended_backtracking = $9, is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [trackId, fromStation, toStation, trackNumber, description, usageType, frequency || [], link]);
+  `, [trackId, fromStation, toStation, trackNumber, description, usageType, frequency || [], link, intendedBacktracking]);
 }
 
 /**

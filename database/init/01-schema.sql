@@ -56,6 +56,7 @@ CREATE TABLE railway_routes (
     ending_part_id TEXT, -- DEPRECATED: Reference to ending railway_part (kept for migration, will be removed)
     is_valid BOOLEAN DEFAULT TRUE, -- Route validity flag (for recalculation errors)
     error_message TEXT, -- Error details if route recalculation fails
+    intended_backtracking BOOLEAN DEFAULT FALSE, -- Flag to indicate backtracking is intentional
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

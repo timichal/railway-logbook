@@ -11,6 +11,7 @@ interface EditFormData {
   usage_type: UsageType;
   frequency: string[];
   link: string;
+  intended_backtracking: boolean;
 }
 
 interface RouteEditFormProps {
@@ -197,6 +198,22 @@ export default function RouteEditForm({
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Intended Backtracking */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editForm.intended_backtracking}
+                onChange={(e) => onEditFormChange({ ...editForm, intended_backtracking: e.target.checked })}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+              <span className="text-sm font-medium text-gray-700">Intended backtracking</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1 ml-6">
+              Check this if the route intentionally backtracks (e.g., reversing direction, switching tracks)
+            </p>
           </div>
 
           {/* Action Buttons */}

@@ -44,6 +44,7 @@ export default function AdminRoutesTab({
     usage_type: UsageType;
     frequency: string[];
     link: string;
+    intended_backtracking: boolean;
   } | null>(null);
 
   // Data loading
@@ -110,7 +111,8 @@ export default function AdminRoutesTab({
         description: routeDetail.description || '',
         usage_type: routeDetail.usage_type,
         frequency: routeDetail.frequency || [],
-        link: routeDetail.link || ''
+        link: routeDetail.link || '',
+        intended_backtracking: routeDetail.intended_backtracking || false
       });
 
       if (onRouteSelect) {
@@ -151,7 +153,8 @@ export default function AdminRoutesTab({
         editForm.description || null,
         editForm.usage_type,
         editForm.frequency,
-        editForm.link || null
+        editForm.link || null,
+        editForm.intended_backtracking
       );
 
       await loadRoutes();

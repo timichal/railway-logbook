@@ -89,7 +89,8 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
       ST_X(ending_coordinate) as end_lng,
       ST_Y(ending_coordinate) as end_lat,
       ST_AsGeoJSON(geometry) as geometry_json,
-      length_km
+      length_km,
+      intended_backtracking
     FROM railway_routes
     WHERE starting_coordinate IS NOT NULL
       AND ending_coordinate IS NOT NULL
@@ -101,7 +102,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
   console.log(`Found ${result.totalRoutes} routes to recalculate`);
 
   for (const route of routes.rows) {
-    const { track_id, track_number, from_station, to_station, starting_part_id, ending_part_id, start_lng, start_lat, end_lng, end_lat, geometry_json, length_km } = route;
+    const { track_id, track_number, from_station, to_station, starting_part_id, ending_part_id, start_lng, start_lat, end_lng, end_lat, geometry_json, length_km, intended_backtracking } = route;
     const originalLength = parseFloat(length_km);
 
     const startingCoordinate: [number, number] = [parseFloat(start_lng), parseFloat(start_lat)];
@@ -167,8 +168,8 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
 
         result.successfulRoutes++;
 
-        // Track routes that used backtracking
-        if (recalcResult.hasBacktracking) {
+        // Track routes with unintended backtracking (hasBacktracking=true AND intended_backtracking=false)
+        if (recalcResult.hasBacktracking && !intended_backtracking) {
           result.backtrackingRoutes.push({
             track_number,
             from_station,
@@ -233,12 +234,13 @@ export async function verifyAndRecalculateRoutes(client: Client): Promise<void> 
   console.log('=== Route Recalculation Summary ===');
   console.log(`Total routes: ${recalcResult.totalRoutes}`);
   console.log(`Successfully recalculated: ${recalcResult.successfulRoutes}`);
-  console.log(`Routes with backtracking: ${recalcResult.backtrackingRoutes.length}`);
+  console.log(`Routes with unintended backtracking: ${recalcResult.backtrackingRoutes.length}`);
   console.log(`Invalid routes: ${recalcResult.invalidRoutes}`);
 
   if (recalcResult.backtrackingRoutes.length > 0) {
     console.log('');
-    console.log('=== Routes Using Backtracking Path ===');
+    console.log('=== Routes with Unintended Backtracking ===');
+    console.log('(Routes with hasBacktracking=true but intended_backtracking=false)');
     for (const route of recalcResult.backtrackingRoutes) {
       console.log(`  [${route.track_number}] ${route.from_station} → ${route.to_station}`);
     }

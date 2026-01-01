@@ -90,6 +90,7 @@ export type RailwayRoute = {
   ending_part_id?: string | null
   is_valid?: boolean
   error_message?: string | null
+  intended_backtracking?: boolean // Flag to indicate backtracking is intentional
   date?: string | null // From user_trips join
   note?: string | null // From user_trips join
   partial?: boolean | null // From user_trips join
