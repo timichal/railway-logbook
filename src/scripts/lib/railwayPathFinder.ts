@@ -144,7 +144,7 @@ export class RailwayPathFinder {
 
     if (startId === endId) {
       const part = this.parts.get(startId)!;
-      return { partIds: [startId], coordinates: part.coordinates };
+      return { partIds: [startId], coordinates: part.coordinates, hasBacktracking: false };
     }
 
     // Step 1: Find shortest path using standard BFS
@@ -155,7 +155,9 @@ export class RailwayPathFinder {
 
     // Step 2: Check if it backtracks
     if (!this.hasBacktracking(firstPath)) {
-      return this.buildPathResult(firstPath);
+      const result = this.buildPathResult(firstPath);
+      result.hasBacktracking = false;
+      return result;
     }
 
     // Step 3: Search for non-backtracking alternative
@@ -186,7 +188,9 @@ export class RailwayPathFinder {
 
       // Try to build the path - if it fails due to chain break, use original
       try {
-        return this.buildPathResult(bestAlternative);
+        const result = this.buildPathResult(bestAlternative);
+        result.hasBacktracking = false;
+        return result;
       } catch (error) {
         console.log(`  ⚠️  Alternative path has broken chain, using backtracking path instead`);
         const result = this.buildPathResult(firstPath);
@@ -253,7 +257,7 @@ export class RailwayPathFinder {
         startCoordinate,
         endCoordinate
       );
-
+      console.log("hb", bestResult?.hasBacktracking)
       if (bestResult) {
         return bestResult;
       }
@@ -695,7 +699,20 @@ export class RailwayPathFinder {
         const distance = this.calculateCoordinateDistance(coordinates);
         console.log(`    Distance: ${(distance / 1000).toFixed(2)} km`);
 
-        if (distance < bestDistance) {
+        // Selection logic: prefer non-backtracking paths when distances are close
+        const isSameDistance = Math.abs(distance - bestDistance) < 10; // 10 meters tolerance
+        const replacingGoodWithBad = bestResult && !bestResult.hasBacktracking && pathResult.hasBacktracking;
+        const betterQuality = bestResult?.hasBacktracking && !pathResult.hasBacktracking;
+
+        // Update if:
+        // 1. No best result yet, OR
+        // 2. Shorter distance (but not if replacing non-backtracking with backtracking when close), OR
+        // 3. Same distance and better quality (non-backtracking over backtracking)
+        const shouldUpdate = !bestResult ||
+          (distance < bestDistance && !(isSameDistance && replacingGoodWithBad)) ||
+          (isSameDistance && betterQuality);
+
+        if (shouldUpdate) {
           bestDistance = distance;
           bestResult = {
             partIds: pathResult.partIds,
