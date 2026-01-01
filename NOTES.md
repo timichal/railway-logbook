@@ -11,8 +11,6 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do
 rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie
 
 osm úpravy
-- Wil Frauenfeld opravena tram type 31. 12.
-- frhafen aulendorf možno spojit+smazat pozn
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
