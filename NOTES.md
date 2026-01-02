@@ -11,7 +11,6 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Slovensko (až na přeshraniční do
 rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko
 
 osm úpravy
-- brig úzkokolejka, opraveno 1. 1.
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
