@@ -96,21 +96,6 @@ async function importRoutes() {
 
         const notesCount = await query('SELECT COUNT(*) FROM admin_notes');
         console.log(`✓ Admin notes: ${notesCount.rows[0].count}`);
-
-        // Fix admin_notes coordinate_3857 (triggers were disabled during import)
-        if (parseInt(notesCount.rows[0].count) > 0) {
-          console.log('\nFixing admin_notes Web Mercator coordinates...');
-          const fixResult = await query(`
-            UPDATE admin_notes
-            SET coordinate_3857 = ST_Transform(coordinate, 3857)
-            WHERE coordinate IS NOT NULL AND coordinate_3857 IS NULL
-          `);
-          if (fixResult.rowCount && fixResult.rowCount > 0) {
-            console.log(`✓ Fixed ${fixResult.rowCount} admin_notes`);
-          } else {
-            console.log('✓ All admin_notes already have correct coordinates');
-          }
-        }
       } catch (verifyError) {
         console.warn('Warning: Could not verify imported data counts');
       }
