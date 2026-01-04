@@ -7,9 +7,10 @@ poznámky
 
 STAV
 hotovo: Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshraniční do Maďarska + scénické značení)
-rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko
+rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
+- nájezd loop Mulhouse (fix 4. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
