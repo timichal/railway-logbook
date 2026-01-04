@@ -98,16 +98,26 @@ export type RailwayRoute = {
   partial?: boolean | null // From user_trips join
 }
 
-// User trip from database
+// User trip from database or localStorage
 export type UserTrip = {
-  id: number
+  id: number | string  // number for DB trips, string (UUID) for localStorage trips
   user_id: number
   track_id: number
-  date: string | null
+  date: string
   note: string | null
   partial: boolean
   created_at: string
   updated_at: string
+}
+
+// Local trip stored in localStorage (for unauthenticated users)
+export type LocalTrip = {
+  id: string // UUID
+  track_id: string
+  date: string // YYYY-MM-DD
+  note: string | null
+  partial: boolean
+  created_at: string // ISO timestamp
 }
 
 // User preferences from database

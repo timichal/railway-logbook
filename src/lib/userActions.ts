@@ -2,7 +2,7 @@
 
 import { query } from './db';
 import { getUser } from './authActions';
-import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
+import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute, UserTrip } from './types';
 import { SUPPORTED_COUNTRIES } from './constants';
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {
@@ -29,6 +29,37 @@ export async function searchStations(searchQuery: string): Promise<Station[]> {
     id: row.id,
     name: row.name,
     coordinates: [row.lon, row.lat]
+  }));
+}
+
+/**
+ * Get all railway routes without user-specific data
+ * Used for unlogged users to calculate progress stats client-side
+ * No authentication required
+ */
+export async function getAllRoutes(): Promise<RailwayRoute[]> {
+  const result = await query(`
+    SELECT
+      track_id,
+      from_station,
+      to_station,
+      track_number,
+      description,
+      usage_type,
+      frequency,
+      link,
+      scenic,
+      ST_AsGeoJSON(geometry) as geometry,
+      length_km,
+      start_country,
+      end_country
+    FROM railway_routes
+    ORDER BY track_id
+  `);
+
+  return result.rows.map(row => ({
+    ...row,
+    track_id: row.track_id.toString(),
   }));
 }
 
@@ -416,16 +447,6 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
       completedKm: Math.round(overallCompletedKm * 10) / 10,
     }
   };
-}
-
-export interface UserTrip {
-  id: number;
-  track_id: number;
-  date: string;
-  note: string | null;
-  partial: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 /**

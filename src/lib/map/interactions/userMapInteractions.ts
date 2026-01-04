@@ -26,9 +26,13 @@ export function setupUserMapInteractions(
     const properties = feature.properties;
     if (!properties) return;
 
+    // track_id is the feature ID (not in properties)
+    const trackId = feature.id;
+    if (!trackId) return;
+
     // Add route to selection
     onRouteClick({
-      track_id: properties.track_id,
+      track_id: String(trackId),
       from_station: properties.from_station,
       to_station: properties.to_station,
       track_number: properties.track_number || null,

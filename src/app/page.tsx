@@ -1,19 +1,15 @@
-import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import VectorMapWrapper from '@/components/VectorMapWrapper';
+import Navbar from '@/components/Navbar';
 import { getUser, logout } from '@/lib/authActions';
 import { getUserPreferences } from '@/lib/userPreferencesActions';
+import { SUPPORTED_COUNTRIES } from '@/lib/constants';
 
 export default async function Home() {
-  // Check if user is authenticated
+  // Check if user is authenticated (optional - map works for both logged and unlogged users)
   const user = await getUser();
 
-  if (!user) {
-    redirect('/login');
-  }
-
-  // Fetch user preferences server-side to avoid flash
-  const selectedCountries = await getUserPreferences();
+  // Fetch user preferences server-side to avoid flash (only for logged-in users)
+  const selectedCountries = user ? await getUserPreferences() : SUPPORTED_COUNTRIES.map((country) => country.code);
 
   async function handleLogout() {
     'use server';
@@ -22,39 +18,14 @@ export default async function Home() {
 
   return (
     <div className="h-screen flex flex-col bg-white">
-      <header className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              The Railway Logbook
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Welcome, {user.name || user.email}! Log your rail journeys around Europe.
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            {user.id === 1 && (
-              <Link 
-                href="/admin"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm"
-              >
-                Admin
-              </Link>
-            )}
-            <form action={handleLogout}>
-              <button
-                type="submit"
-                className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
-              >
-                Logout
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
-      
+      <Navbar user={user} onLogout={handleLogout} />
+
       <main className="flex-1 overflow-hidden">
-        <VectorMapWrapper className="w-full h-full" userId={user.id} initialSelectedCountries={selectedCountries} />
+        <VectorMapWrapper
+          className="w-full h-full"
+          user={user}
+          initialSelectedCountries={selectedCountries}
+        />
       </main>
     </div>
   );

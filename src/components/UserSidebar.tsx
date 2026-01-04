@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+import type { User } from '@/lib/authActions';
+import type { DataAccess } from '@/lib/dataAccess';
 import SelectedRoutesList from './SelectedRoutesList';
 import JourneyPlanner from './JourneyPlanner';
 import CountriesStatsTab from './CountriesStatsTab';
@@ -17,14 +19,16 @@ interface RouteNode {
 export type ActiveTab = 'routes' | 'journey' | 'filter';
 
 interface UserSidebarProps {
+  user: User | null;
+  dataAccess: DataAccess;
   selectedRoutes: SelectedRoute[];
   onRemoveRoute: (trackId: string) => void;
   onManageTrips: (route: SelectedRoute) => void;
   onClearAll: () => void;
-  onRefreshMap?: () => void;
   onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
   onHighlightRoutes?: (routeIds: number[]) => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
+  onRoutesLogged?: () => void;
   selectedCountries: string[];
   onCountryChange: (countries: string[]) => void;
   onActiveTabChange?: (tab: ActiveTab) => void;
@@ -33,14 +37,16 @@ interface UserSidebarProps {
 }
 
 export default function UserSidebar({
+  user,
+  dataAccess,
   selectedRoutes,
   onRemoveRoute,
   onManageTrips,
   onClearAll,
-  onRefreshMap,
   onUpdateRoutePartial,
   onHighlightRoutes,
   onAddRoutesFromPlanner,
+  onRoutesLogged,
   selectedCountries,
   onCountryChange,
   onActiveTabChange,
@@ -108,14 +114,16 @@ export default function UserSidebar({
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'routes' && (
           <SelectedRoutesList
+            user={user}
+            dataAccess={dataAccess}
             selectedRoutes={selectedRoutes}
             onRemoveRoute={onRemoveRoute}
             onManageTrips={onManageTrips}
             onClearAll={onClearAll}
-            onRefreshMap={onRefreshMap}
             onUpdateRoutePartial={onUpdateRoutePartial}
             onHighlightRoutes={onHighlightRoutes}
             onAddRoutesFromPlanner={handleAddRoutesFromPlanner}
+            onRoutesLogged={onRoutesLogged}
           />
         )}
 
@@ -129,6 +137,7 @@ export default function UserSidebar({
 
         {activeTab === 'filter' && (
           <CountriesStatsTab
+            dataAccess={dataAccess}
             selectedCountries={selectedCountries}
             onCountryChange={onCountryChange}
           />

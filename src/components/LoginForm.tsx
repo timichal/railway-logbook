@@ -3,19 +3,86 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/authActions';
-import Link from 'next/link';
+import { LocalStorageManager } from '@/lib/localStorage';
+import { migrateLocalTrips } from '@/lib/migrationActions';
+import { useToast } from '@/lib/toast';
 
-export default function LoginForm() {
+interface LoginFormProps {
+  onSuccess?: () => void;
+}
+
+export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { showSuccess, showConfirm } = useToast();
 
   async function handleSubmit(formData: FormData) {
     setError('');
+    setLoading(true);
 
     try {
       await login(formData);
-      router.push('/');
+
+      // Check if there are localStorage trips to merge
+      const tripCount = LocalStorageManager.getTripCount();
+
+      if (tripCount > 0) {
+        // Show confirmation dialog for merging trips
+        showConfirm({
+          title: 'Merge Local Trips?',
+          message: `You have ${tripCount} trip${tripCount !== 1 ? 's' : ''} stored locally. Would you like to merge them with your account?\n\nDuplicates will be skipped automatically.\n\nIf you choose "Keep Local", these trips will remain in your browser but won't be visible until you log out.`,
+          confirmLabel: `Merge ${tripCount} Trip${tripCount !== 1 ? 's' : ''}`,
+          cancelLabel: 'Keep Local',
+          thirdLabel: 'Delete Local',
+          variant: 'info',
+          onConfirm: async () => {
+            try {
+              const localTrips = LocalStorageManager.exportTrips();
+              const result = await migrateLocalTrips(localTrips);
+
+              // Clear localStorage after successful migration
+              LocalStorageManager.clearTrips();
+
+              if (result.migrated > 0) {
+                showSuccess(`${result.migrated} trip${result.migrated !== 1 ? 's' : ''} merged successfully!`);
+              } else {
+                showSuccess('All trips were duplicates, none merged.');
+              }
+
+              // Refresh to show merged data
+              router.refresh();
+            } catch (err) {
+              console.error('Error migrating trips:', err);
+              showSuccess('Login successful, but trip migration failed. Your local trips are still saved.');
+            }
+          },
+          onCancel: () => {
+            // User chose to keep local - trips stay in localStorage but invisible
+            showSuccess('Login successful! Your local trips remain in browser storage.');
+          },
+          onThird: () => {
+            // User chose to delete local trips
+            LocalStorageManager.clearTrips();
+            showSuccess('Login successful! Local trips have been deleted.');
+            router.refresh();
+          }
+        });
+      }
+
+      // Call onSuccess callback if provided (for dropdown mode)
+      if (onSuccess) {
+        onSuccess();
+        // Refresh only if no trips to merge (otherwise refresh happens in merge callback)
+        if (tripCount === 0) {
+          router.refresh();
+        }
+      } else {
+        // Redirect to home page (for standalone login page)
+        if (tripCount === 0) {
+          router.push('/');
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);
@@ -23,21 +90,11 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Access your railway logs
-          </p>
-        </div>
-        <form 
-          className="mt-8 space-y-6" 
-          action={handleSubmit}
-          onSubmit={() => setLoading(true)}
-        >
+    <div className="space-y-4">
+      <form
+        className="space-y-4"
+        action={handleSubmit}
+      >
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">
@@ -75,29 +132,16 @@ export default function LoginForm() {
             </div>
           )}
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 cursor-pointer"
-            >
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Don&apos;t have an account?{' '}
-              <Link
-                href="/register"
-                className="font-medium text-indigo-600 hover:text-indigo-500"
-              >
-                Register here
-              </Link>
-            </p>
-          </div>
-        </form>
-      </div>
+        <div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 cursor-pointer"
+          >
+            {loading ? 'Signing in...' : 'Sign in'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

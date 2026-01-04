@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import type { DataAccess } from '@/lib/dataAccess';
 import { SUPPORTED_COUNTRIES } from '@/lib/constants';
-import { getProgressByCountry, type ProgressByCountry } from '@/lib/userActions';
+import type { ProgressByCountry } from '@/lib/userActions';
 
 interface CountriesStatsTabProps {
+  dataAccess: DataAccess;
   selectedCountries: string[];
   onCountryChange: (countries: string[]) => void;
 }
 
-export default function CountriesStatsTab({ selectedCountries, onCountryChange }: CountriesStatsTabProps) {
+export default function CountriesStatsTab({ dataAccess, selectedCountries, onCountryChange }: CountriesStatsTabProps) {
   const [stats, setStats] = useState<ProgressByCountry | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -18,7 +20,7 @@ export default function CountriesStatsTab({ selectedCountries, onCountryChange }
     async function loadStats() {
       setIsLoading(true);
       try {
-        const progressData = await getProgressByCountry();
+        const progressData = await dataAccess.getProgressByCountry();
         setStats(progressData);
       } catch (error) {
         console.error('Failed to load country stats:', error);
@@ -28,7 +30,7 @@ export default function CountriesStatsTab({ selectedCountries, onCountryChange }
     }
 
     loadStats();
-  }, [selectedCountries]); // Reload when selection changes (in case user logs routes)
+  }, [selectedCountries, dataAccess]); // Reload when selection changes (in case user logs routes)
 
   const handleCountryToggle = (countryCode: string) => {
     const newSelection = selectedCountries.includes(countryCode)

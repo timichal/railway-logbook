@@ -1,12 +1,14 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import type { Toast, ToastType, ToastContextValue } from './types';
+import type { Toast, ToastType, ToastContextValue, ConfirmDialogOptions } from './types';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogOptions | null>(null);
   const nextIdRef = useRef(0);
 
   const removeToast = useCallback((id: string) => {
@@ -42,6 +44,31 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     showToast(message, 'info', duration);
   }, [showToast]);
 
+  const showConfirm = useCallback((options: ConfirmDialogOptions) => {
+    setConfirmDialog(options);
+  }, []);
+
+  const handleConfirm = useCallback(() => {
+    if (confirmDialog) {
+      confirmDialog.onConfirm();
+      setConfirmDialog(null);
+    }
+  }, [confirmDialog]);
+
+  const handleCancel = useCallback(() => {
+    if (confirmDialog) {
+      confirmDialog.onCancel?.();
+      setConfirmDialog(null);
+    }
+  }, [confirmDialog]);
+
+  const handleThird = useCallback(() => {
+    if (confirmDialog) {
+      confirmDialog.onThird?.();
+      setConfirmDialog(null);
+    }
+  }, [confirmDialog]);
+
   const value: ToastContextValue = {
     toasts,
     showToast,
@@ -50,11 +77,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     showWarning,
     showInfo,
     removeToast,
+    showConfirm,
   };
 
   return (
     <ToastContext.Provider value={value}>
       {children}
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title || ''}
+        message={confirmDialog?.message || ''}
+        confirmLabel={confirmDialog?.confirmLabel}
+        cancelLabel={confirmDialog?.cancelLabel}
+        thirdLabel={confirmDialog?.thirdLabel}
+        variant={confirmDialog?.variant}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+        onThird={handleThird}
+      />
     </ToastContext.Provider>
   );
 }

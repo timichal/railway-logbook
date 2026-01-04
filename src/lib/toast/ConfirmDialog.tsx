@@ -8,8 +8,10 @@ interface ConfirmDialogProps {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  thirdLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  onThird?: () => void;
   variant?: 'danger' | 'warning' | 'info';
 }
 
@@ -19,8 +21,10 @@ export function ConfirmDialog({
   message,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
+  thirdLabel,
   onConfirm,
   onCancel,
+  onThird,
   variant = 'warning'
 }: ConfirmDialogProps) {
   if (!isOpen) return null;
@@ -44,6 +48,14 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
+          {thirdLabel && onThird && (
+            <button
+              onClick={onThird}
+              className="px-4 py-2 text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 rounded-md"
+            >
+              {thirdLabel}
+            </button>
+          )}
           <button
             onClick={onConfirm}
             className={`px-4 py-2 text-sm font-medium text-white rounded-md ${variantStyles[variant]}`}

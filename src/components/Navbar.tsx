@@ -1,0 +1,133 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import type { User } from '@/lib/authActions';
+import LoginForm from './LoginForm';
+import RegisterForm from './RegisterForm';
+
+interface NavbarProps {
+  user: User | null;
+  onLogout?: () => void;
+}
+
+export default function Navbar({ user, onLogout }: NavbarProps) {
+  const [showLoginDropdown, setShowLoginDropdown] = useState(false);
+  const [showRegisterDropdown, setShowRegisterDropdown] = useState(false);
+  const loginRef = useRef<HTMLDivElement>(null);
+  const registerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (loginRef.current && !loginRef.current.contains(event.target as Node)) {
+        setShowLoginDropdown(false);
+      }
+      if (registerRef.current && !registerRef.current.contains(event.target as Node)) {
+        setShowRegisterDropdown(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Close dropdown after successful login/register
+  const handleLoginSuccess = () => {
+    setShowLoginDropdown(false);
+  };
+
+  const handleRegisterSuccess = () => {
+    setShowRegisterDropdown(false);
+  };
+
+  return (
+    <header className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            The Railway Logbook
+          </h1>
+          <p className="text-gray-600 mt-1">
+            {user
+              ? `Welcome, ${user.name || user.email}! Log your rail journeys around Europe.`
+              : 'Log your rail journeys around Europe'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {user ? (
+            // Logged-in user menu
+            <>
+              {user.id === 1 && (
+                <Link
+                  href="/admin"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm"
+                >
+                  Admin
+                </Link>
+              )}
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+                >
+                  Logout
+                </button>
+              )}
+            </>
+          ) : (
+            // Unlogged user - show login/register buttons with dropdowns
+            <>
+              {/* Login dropdown */}
+              <div className="relative" ref={loginRef}>
+                <button
+                  onClick={() => {
+                    setShowLoginDropdown(!showLoginDropdown);
+                    setShowRegisterDropdown(false);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+                >
+                  Login
+                </button>
+
+                {showLoginDropdown && (
+                  <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                    <div className="p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Sign in to your account</h3>
+                      <LoginForm onSuccess={handleLoginSuccess} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Register dropdown */}
+              <div className="relative" ref={registerRef}>
+                <button
+                  onClick={() => {
+                    setShowRegisterDropdown(!showRegisterDropdown);
+                    setShowLoginDropdown(false);
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+                >
+                  Register
+                </button>
+
+                {showRegisterDropdown && (
+                  <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                    <div className="p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Create your account</h3>
+                      <RegisterForm onSuccess={handleRegisterSuccess} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}

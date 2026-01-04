@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { UserTrip } from '@/lib/userActions';
+import type { UserTrip } from '@/lib/types';
 
 interface TripRowProps {
   trip: UserTrip | null; // null for new trip row
-  onUpdate: (tripId: number, date: string, note: string | null, partial: boolean) => Promise<void>;
-  onDelete: (tripId: number) => Promise<void>;
+  onUpdate: (tripId: number | string, date: string, note: string | null, partial: boolean) => Promise<void>;
+  onDelete: (tripId: number | string) => Promise<void>;
   onAdd: (date: string, note: string | null, partial: boolean) => Promise<void>;
   isNewRow?: boolean;
 }

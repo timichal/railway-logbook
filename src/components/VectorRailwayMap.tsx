@@ -1,8 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { FilterSpecification } from 'maplibre-gl';
+import type { User } from '@/lib/authActions';
 import type { Station, SelectedRoute } from '@/lib/types';
+import { createDataAccess } from '@/lib/dataAccess';
+import { LocalStorageManager } from '@/lib/localStorage';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
 import { useStationSearch } from '@/lib/map/hooks/useStationSearch';
 import { useRouteEditor } from '@/lib/map/hooks/useRouteEditor';
@@ -15,18 +18,25 @@ import {
 } from '@/lib/map';
 import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
-import { updateUserPreferences } from '@/lib/userPreferencesActions';
+import { useToast } from '@/lib/toast';
 import UserSidebar, { type ActiveTab } from './UserSidebar';
 import TripRow from './TripRow';
 
 interface VectorRailwayMapProps {
   className?: string;
-  userId: number;
+  user: User | null;
   initialSelectedCountries: string[];
 }
 
-export default function VectorRailwayMap({ className = '', userId, initialSelectedCountries }: VectorRailwayMapProps) {
+export default function VectorRailwayMap({ className = '', user, initialSelectedCountries }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
+  const { showError } = useToast();
+
+  // Extract userId for tiles (or null for unlogged users)
+  const userId = user?.id || null;
+
+  // Create data access layer based on auth state
+  const dataAccess = useMemo(() => createDataAccess(user), [user]);
 
   // Country filter state - initialize with server-provided preferences
   const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
@@ -53,12 +63,15 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
   // Station search hook
   const stationSearch = useStationSearch();
 
-  // Initialize map with shared hook
-  const { map } = useMapLibre(
+  // Initialize map with shared hook (don't include cacheBuster in deps to avoid full rebuild)
+  const { map, mapLoaded } = useMapLibre(
     mapContainer,
     {
       sources: {
-        railway_routes: createRailwayRoutesSource({ userId, cacheBuster, selectedCountries }),
+        railway_routes: createRailwayRoutesSource({
+          userId: userId || undefined,
+          selectedCountries
+        }),
         stations: createStationsSource(),
       },
       layers: [
@@ -74,47 +87,144 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
         createStationsLayer(),
       ],
     },
-    [userId, cacheBuster, selectedCountries]
+    [userId, selectedCountries]
   );
 
-  // Route editor hook (needs map ref and selected countries)
-  const routeEditor = useRouteEditor(userId, map, selectedCountries);
+  // Track which routes have feature states applied (for cleanup)
+  const featureStateTrackIdsRef = useRef<Set<number>>(new Set());
+
+  // Update map feature states for localStorage trips (unlogged users only)
+  const updateLocalStorageFeatureStates = useCallback(async () => {
+    if (!map.current || user) return;
+
+    // Get all localStorage trips
+    const allTrips = LocalStorageManager.getTrips();
+    console.log('Updating feature states for localStorage trips:', allTrips.length, 'trips');
+
+    // Group trips by track_id and find most recent for each route
+    const tripsByRoute = new Map<string, {date: string | null; partial: boolean}>();
+
+    for (const trip of allTrips) {
+      const trackId = trip.track_id;
+      const existing = tripsByRoute.get(trackId);
+
+      if (!existing || (trip.date && (!existing.date || trip.date > existing.date))) {
+        tripsByRoute.set(trackId, {
+          date: trip.date,
+          partial: trip.partial
+        });
+      }
+    }
+
+    console.log('Applying feature states for', tripsByRoute.size, 'routes');
+
+    // Track new set of track_ids with trips
+    const newTrackIds = new Set<number>();
+
+    // Apply feature states to map
+    tripsByRoute.forEach((tripData, trackId) => {
+      if (!map.current) return;
+      const featureId = parseInt(trackId);
+      newTrackIds.add(featureId);
+      console.log('Setting feature state for track_id', featureId, ':', tripData);
+      map.current.setFeatureState(
+        { source: 'railway_routes', sourceLayer: 'railway_routes', id: featureId },
+        {
+          hasTrip: true,
+          date: tripData.date,
+          partial: tripData.partial
+        }
+      );
+    });
+
+    // Remove feature states for routes that no longer have trips
+    featureStateTrackIdsRef.current.forEach(trackId => {
+      if (!newTrackIds.has(trackId) && map.current) {
+        console.log('Removing feature state for track_id', trackId);
+        map.current.removeFeatureState(
+          { source: 'railway_routes', sourceLayer: 'railway_routes', id: trackId }
+        );
+      }
+    });
+
+    // Update tracked set
+    featureStateTrackIdsRef.current = newTrackIds;
+  }, [map, user]);
+
+  // Callback for when route editor refreshes map (used for localStorage feature-state updates)
+  const handleMapRefresh = useCallback(() => {
+    if (!user && map.current) {
+      // For unlogged users, reapply localStorage feature states after tile reload
+      updateLocalStorageFeatureStates();
+    }
+  }, [user, map, updateLocalStorageFeatureStates]);
+
+  // Route editor hook (uses data access layer)
+  const routeEditor = useRouteEditor(dataAccess, map, userId, selectedCountries, handleMapRefresh);
 
   // Handler to toggle route selection (only works in Route Logger tab)
-  const handleRouteClick = (route: SelectedRoute) => {
+  const handleRouteClick = useCallback(async (route: SelectedRoute) => {
     // Only allow route clicking when in Route Logger tab
     if (activeTab !== 'routes') return;
 
-    // Check if route is already selected
-    const isAlreadySelected = selectedRoutes.some(r => r.track_id === route.track_id);
-    if (isAlreadySelected) {
-      // Remove from selection
-      setSelectedRoutes(selectedRoutes.filter(r => r.track_id !== route.track_id));
-    } else {
-      // Add to selection
-      setSelectedRoutes([...selectedRoutes, route]);
+    // Check if route is already selected using a temporary variable
+    let isSelected = false;
+    setSelectedRoutes(prev => {
+      isSelected = prev.some(r => r.track_id === route.track_id);
+
+      if (isSelected) {
+        // Remove from selection
+        return prev.filter(r => r.track_id !== route.track_id);
+      }
+
+      // Don't add yet, just return unchanged
+      return prev;
+    });
+
+    // If we just removed it, we're done
+    if (isSelected) return;
+
+    // For unlogged users, check trip limit before adding
+    if (!user) {
+      const canAdd = await dataAccess.canAddMoreTrips();
+      if (!canAdd) {
+        showError('Trip limit reached (50/50). Please register to log more routes.');
+        return;
+      }
     }
-  };
+
+    // Add to selection
+    setSelectedRoutes(prev => [...prev, route]);
+  }, [activeTab, user, dataAccess, showError]);
 
   // Handler to remove route from selection
-  const handleRemoveRoute = (trackId: string) => {
-    setSelectedRoutes(selectedRoutes.filter(r => r.track_id !== trackId));
-  };
+  const handleRemoveRoute = useCallback((trackId: string) => {
+    setSelectedRoutes(prev => prev.filter(r => r.track_id !== trackId));
+  }, []);
 
   // Handler to clear all selected routes
-  const handleClearAll = () => {
+  const handleClearAll = useCallback(() => {
     setSelectedRoutes([]);
-  };
+  }, []);
 
   // Handler to update partial status for a route
-  const handleUpdateRoutePartial = (trackId: string, partial: boolean) => {
+  const handleUpdateRoutePartial = useCallback((trackId: string, partial: boolean) => {
     setSelectedRoutes(routes =>
       routes.map(r => r.track_id === trackId ? { ...r, partial } : r)
     );
-  };
+  }, []);
 
   // Handler to add routes from multi-route logger
-  const handleAddRoutesFromLogger = (routes: Array<{track_id: number; from_station: string; to_station: string; description: string; length_km: number}>) => {
+  const handleAddRoutesFromLogger = useCallback(async (routes: Array<{track_id: number; from_station: string; to_station: string; description: string; length_km: number}>) => {
+    // For unlogged users, check trip limit before adding
+    if (!user) {
+      const canAdd = await dataAccess.canAddMoreTrips();
+      if (!canAdd) {
+        showError('Trip limit reached (50/50). Please register to log more routes.');
+        return;
+      }
+    }
+
     // Convert RouteNode to SelectedRoute format
     const newRoutes = routes.map(route => ({
       track_id: route.track_id.toString(),
@@ -131,38 +241,133 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
     }));
 
     // Filter out routes already in selection
-    const routesToAdd = newRoutes.filter(
-      newRoute => !selectedRoutes.some(existingRoute => existingRoute.track_id === newRoute.track_id)
-    );
+    setSelectedRoutes(prev => {
+      const routesToAdd = newRoutes.filter(
+        newRoute => !prev.some(existingRoute => existingRoute.track_id === newRoute.track_id)
+      );
+      return [...prev, ...routesToAdd];
+    });
+  }, [user, dataAccess, showError]);
 
-    setSelectedRoutes([...selectedRoutes, ...routesToAdd]);
-  };
+  // Handler called after routes are logged
+  const handleRoutesLogged = useCallback(() => {
+    if (user) {
+      // For logged users: refresh map tiles to show updated route colors from database
+      setCacheBuster(Date.now());
+    } else {
+      // For unlogged users: update feature states based on localStorage
+      updateLocalStorageFeatureStates();
+    }
+    // Refresh progress stats
+    routeEditor.fetchProgress();
+  }, [user, updateLocalStorageFeatureStates, routeEditor]);
 
-  // Setup map interactions after map loads
+  // Set up localStorage feature states when map loads (for unlogged users)
+  useEffect(() => {
+    if (!map.current || !mapLoaded || user) return;
+
+    // Wait for tiles to load, then apply feature states
+    const applyStates = () => {
+      updateLocalStorageFeatureStates();
+    };
+
+    if (map.current.isMoving()) {
+      map.current.once('idle', applyStates);
+    } else {
+      applyStates();
+    }
+  }, [map, mapLoaded, user, updateLocalStorageFeatureStates]);
+
+  // Force map refresh when user changes (login/logout)
   useEffect(() => {
     if (!map.current) return;
 
-    const cleanup = setupUserMapInteractions(map.current, {
-      onRouteClick: handleRouteClick,
-      // Only enable station clicking when in Journey tab and handler is registered
-      onStationClick: activeTab === 'journey' && journeyStationClickHandler
-        ? journeyStationClickHandler
-        : undefined,
+    // Update cache buster to force tile reload with new/no user data
+    setCacheBuster(Date.now());
+  }, [user, map]);
+
+  // Reload railway_routes tiles when cacheBuster changes - used when logged in user logs a route
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !user) return;
+
+    // Remove existing railway_routes source and layers (including dependent layers)
+    const layersToRemove = ['selected_routes_highlight', 'highlighted_routes', 'railway_routes', 'railway_routes_scenic_outline'];
+    layersToRemove.forEach(layerId => {
+      if (map.current?.getLayer(layerId)) {
+        map.current.removeLayer(layerId);
+      }
     });
 
-    return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, selectedRoutes, activeTab, journeyStationClickHandler]); // Re-run when activeTab or handler changes
+    if (map.current.getSource('railway_routes')) {
+      map.current.removeSource('railway_routes');
+    }
 
-  // Fetch progress stats on component mount
+    // Re-add source with new cache buster
+    map.current.addSource('railway_routes', createRailwayRoutesSource({
+      userId: userId || undefined,
+      cacheBuster,
+      selectedCountries
+    }));
+
+    // Re-add layers (scenic outline first, then main routes layer on top)
+    map.current.addLayer(createScenicRoutesOutlineLayer({
+      widthExpression: getUserRouteWidthExpression(),
+      filter: ['!=', ['get', 'usage_type'], 1],
+    }), 'stations'); // Add before stations layer
+
+    map.current.addLayer(createRailwayRoutesLayer({
+      colorExpression: getUserRouteColorExpression(),
+      widthExpression: getUserRouteWidthExpression(),
+      filter: ['!=', ['get', 'usage_type'], 1],
+    }), 'stations'); // Add before stations layer
+  }, [cacheBuster]);
+
+  // Setup map interactions after map loads
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    let cleanup: (() => void) | undefined;
+
+    // Wait for tiles to be loaded using 'idle' event
+    const setupWhenReady = () => {
+      if (!map.current) return;
+
+      // Check if layer exists
+      if (!map.current.getLayer('railway_routes')) {
+        console.warn('railway_routes layer not found when setting up interactions');
+        return;
+      }
+
+      console.log('Setting up map interactions');
+
+      cleanup = setupUserMapInteractions(map.current, {
+        onRouteClick: handleRouteClick,
+        // Only enable station clicking when in Journey tab and handler is registered
+        onStationClick: activeTab === 'journey' && journeyStationClickHandler
+          ? journeyStationClickHandler
+          : undefined,
+      });
+    };
+
+    // If map is idle (tiles loaded), set up immediately
+    if (!map.current.isMoving()) {
+      setupWhenReady();
+    } else {
+      // Otherwise wait for 'idle' event (fires after tiles load)
+      map.current.once('idle', setupWhenReady);
+    }
+
+    return () => {
+      if (cleanup) {
+        cleanup();
+      }
+    };
+  }, [map, mapLoaded, handleRouteClick, activeTab, journeyStationClickHandler]);
+
+  // Fetch progress stats on component mount and when it changes
   useEffect(() => {
     routeEditor.fetchProgress();
-  }, []);
-
-  // Refresh progress when selected countries change
-  useEffect(() => {
-    routeEditor.fetchProgress();
-  }, [selectedCountries]);
+  }, [routeEditor.fetchProgress]);
 
   // Handler for country filter changes
   const handleCountriesChange = async (countries: string[]) => {
@@ -170,8 +375,8 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
       // Update local state immediately
       setSelectedCountries(countries);
 
-      // Save to database
-      await updateUserPreferences(countries);
+      // Save preferences (database for logged users, localStorage for unlogged users)
+      await dataAccess.updateUserPreferences(countries);
 
       // Force map refresh by updating cache buster
       setCacheBuster(Date.now());
@@ -217,12 +422,12 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
             'line-width': 6,
             'line-opacity': 0.8,
           },
-          filter: ['in', ['get', 'track_id'], ['literal', highlightedRoutes]],
+          filter: ['in', ['id'], ['literal', highlightedRoutes]],
         });
       } else {
         map.current.setFilter('highlighted_routes', [
           'in',
-          ['get', 'track_id'],
+          ['id'],
           ['literal', highlightedRoutes],
         ]);
       }
@@ -251,19 +456,30 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
           paint: {
             'line-color': [
               'case',
-              ['has', 'date'], // If route has a date (logged)
-              '#059669', // Green for logged routes (Tailwind green-600)
-              '#DC2626'  // Red for unlogged routes (Tailwind red-600)
+              // Logged users: Has at least one complete trip (from tile data)
+              ['all', ['has', 'date'], ['==', ['get', 'has_complete_trip'], true]],
+              '#059669', // Green
+              // Logged users: Has trips but no complete trip (from tile data)
+              ['has', 'date'],
+              '#d97706', // Orange
+              // Unlogged users: Has partial trip (from feature-state)
+              ['all', ['==', ['feature-state', 'hasTrip'], true], ['==', ['feature-state', 'partial'], true]],
+              '#d97706', // Orange
+              // Unlogged users: Has complete trip (from feature-state)
+              ['==', ['feature-state', 'hasTrip'], true],
+              '#059669', // Green
+              // No trips
+              '#DC2626'  // Red
             ],
             'line-width': 7,
             'line-opacity': 0.9,
           },
-          filter: ['in', ['get', 'track_id'], ['literal', selectedTrackIds]],
+          filter: ['in', ['id'], ['literal', selectedTrackIds]],
         }, 'railway_routes'); // Insert before railway_routes layer so it's underneath
       } else {
         map.current.setFilter('selected_routes_highlight', [
           'in',
-          ['get', 'track_id'],
+          ['id'],
           ['literal', selectedTrackIds],
         ]);
       }
@@ -326,14 +542,16 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
     <div className="h-full flex relative">
       {/* User Sidebar */}
       <UserSidebar
+        user={user}
+        dataAccess={dataAccess}
         selectedRoutes={selectedRoutes}
         onRemoveRoute={handleRemoveRoute}
         onManageTrips={routeEditor.openEditForm}
         onClearAll={handleClearAll}
-        onRefreshMap={routeEditor.refreshAfterQuickLog}
         onUpdateRoutePartial={handleUpdateRoutePartial}
         onHighlightRoutes={setHighlightedRoutes}
         onAddRoutesFromPlanner={handleAddRoutesFromLogger}
+        onRoutesLogged={handleRoutesLogged}
         selectedCountries={selectedCountries}
         onCountryChange={handleCountriesChange}
         onActiveTabChange={setActiveTab}

@@ -1,27 +1,22 @@
 import { useState, useCallback } from 'react';
 import type maplibreglType from 'maplibre-gl';
-import {
-  getUserTrips,
-  addUserTrip,
-  updateUserTrip,
-  deleteUserTrip,
-  getUserProgress,
-  quickLogRoute,
-  type UserProgress,
-  type UserTrip
-} from '@/lib/userActions';
-import type { SelectedRoute } from '@/lib/types';
+import type { DataAccess } from '@/lib/dataAccess';
+import type { UserProgress } from '@/lib/userActions';
+import type { SelectedRoute, UserTrip } from '@/lib/types';
 import { createRailwayRoutesSource, createRailwayRoutesLayer, createScenicRoutesOutlineLayer, closeAllPopups } from '@/lib/map';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '../utils/userRouteStyling';
 import { useToast } from '@/lib/toast';
 
 /**
  * Hook to manage route editing and trips management
+ * Now uses DataAccess abstraction layer to work with both logged and unlogged users
  */
 export function useRouteEditor(
-  userId: number,
+  dataAccess: DataAccess,
   map: React.MutableRefObject<maplibreglType.Map | null>,
-  selectedCountries?: string[]
+  userId: number | null,
+  selectedCountries?: string[],
+  onRefresh?: () => void
 ) {
   const { showSuccess, showError } = useToast();
   const [editingFeature, setEditingFeature] = useState<SelectedRoute | null>(null);
@@ -37,9 +32,9 @@ export function useRouteEditor(
     setEditingFeature(feature);
     setShowEditForm(true);
 
-    // Fetch all trips for this route
+    // Fetch all trips for this route using data access layer
     try {
-      const tripsData = await getUserTrips(feature.track_id);
+      const tripsData = await dataAccess.getUserTrips(feature.track_id);
       setTrips(tripsData);
     } catch (error) {
       console.error('Error fetching trips:', error);
@@ -66,7 +61,7 @@ export function useRouteEditor(
         ]
       ]);
     }
-  }, [map]);
+  }, [map, dataAccess]);
 
   // Close edit form
   const closeEditForm = useCallback(() => {
@@ -83,15 +78,23 @@ export function useRouteEditor(
 
   // Refresh map and progress stats
   const refreshMapAndProgress = async () => {
-    // Refresh progress stats
+    // Refresh progress stats using data access layer
     try {
-      const progressData = await getUserProgress(selectedCountries);
+      const progressData = await dataAccess.getUserProgress(selectedCountries);
       setProgress(progressData);
     } catch (error) {
       console.error('Error refreshing progress:', error);
     }
 
-    // Update cache buster to force tile reload
+    // For unlogged users: skip tile reload, just update feature-states
+    if (!userId) {
+      if (onRefresh) {
+        onRefresh();
+      }
+      return;
+    }
+
+    // For logged users: reload tiles to get updated user data from database
     const newCacheBuster = Date.now();
     setCacheBuster(newCacheBuster);
 
@@ -108,7 +111,11 @@ export function useRouteEditor(
       map.current.removeSource('railway_routes');
 
       // Re-add source and layers
-      map.current.addSource('railway_routes', createRailwayRoutesSource({ userId, cacheBuster: newCacheBuster }));
+      map.current.addSource('railway_routes', createRailwayRoutesSource({
+        userId: userId || undefined,
+        cacheBuster: newCacheBuster,
+        selectedCountries
+      }));
       // Add scenic outline layer first (underneath)
       map.current.addLayer(
         createScenicRoutesOutlineLayer({
@@ -156,29 +163,29 @@ export function useRouteEditor(
 
     setIsLoading(true);
     try {
-      await addUserTrip(editingFeature.track_id, date, note, partial);
+      await dataAccess.addUserTrip(editingFeature.track_id, date, note, partial);
 
       // Refresh trips list to get the new trip with ID
-      const tripsData = await getUserTrips(editingFeature.track_id);
+      const tripsData = await dataAccess.getUserTrips(editingFeature.track_id);
       setTrips(tripsData);
 
       await refreshMapAndProgress();
       showSuccess('Trip added!');
     } catch (error) {
       console.error('Error adding trip:', error);
-      showError('Failed to add trip');
+      showError(error instanceof Error ? error.message : 'Failed to add trip');
     } finally {
       setIsLoading(false);
     }
   };
 
   // Update an existing trip
-  const updateTrip = async (tripId: number, date: string, note: string | null, partial: boolean) => {
+  const updateTrip = async (tripId: number | string, date: string, note: string | null, partial: boolean) => {
     if (!editingFeature?.track_id) return;
 
     setIsLoading(true);
     try {
-      await updateUserTrip(tripId, date, note, partial);
+      await dataAccess.updateUserTrip(tripId, date, note, partial);
 
       // Update local state without re-fetching (maintains order)
       setTrips(prevTrips =>
@@ -200,15 +207,15 @@ export function useRouteEditor(
   };
 
   // Delete a trip
-  const deleteTrip = async (tripId: number) => {
+  const deleteTrip = async (tripId: number | string) => {
     if (!editingFeature?.track_id) return;
 
     setIsLoading(true);
     try {
-      await deleteUserTrip(tripId);
+      await dataAccess.deleteUserTrip(tripId);
 
       // Refresh trips list
-      const tripsData = await getUserTrips(editingFeature.track_id);
+      const tripsData = await dataAccess.getUserTrips(editingFeature.track_id);
       setTrips(tripsData);
 
       await refreshMapAndProgress();
@@ -222,28 +229,14 @@ export function useRouteEditor(
   };
 
   // Fetch initial progress
-  const fetchProgress = async () => {
+  const fetchProgress = useCallback(async () => {
     try {
-      const progressData = await getUserProgress(selectedCountries);
+      const progressData = await dataAccess.getUserProgress(selectedCountries);
       setProgress(progressData);
     } catch (error) {
       console.error('Error fetching progress:', error);
     }
-  };
-
-  // Quick log route with current date (returns callback for refresh)
-  const quickLog = useCallback(async (trackId: string) => {
-    try {
-      await quickLogRoute(trackId);
-    } catch (error) {
-      console.error('Error quick logging route:', error);
-    }
-  }, []);
-
-  // Refresh map after quick log (call this after delay)
-  const refreshAfterQuickLog = useCallback(async () => {
-    await refreshMapAndProgress();
-  }, [editingFeature, userId, map, showSpecialLines, selectedCountries]);
+  }, [dataAccess, selectedCountries]);
 
   return {
     editingFeature,
@@ -260,7 +253,5 @@ export function useRouteEditor(
     updateTrip,
     deleteTrip,
     fetchProgress,
-    quickLog,
-    refreshAfterQuickLog,
   };
 }

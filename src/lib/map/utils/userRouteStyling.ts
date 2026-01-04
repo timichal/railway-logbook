@@ -4,6 +4,8 @@ import { COLORS } from '@/lib/map';
 /**
  * Get color expression for user railway routes based on visit status
  * Logic:
+ * - For logged users: Uses 'date' property from tile data
+ * - For unlogged users: Uses feature-state set from localStorage
  * - If has complete trip → dark green (visited)
  * - Else if has any trip → dark orange (partial)
  * - Else → crimson (unvisited)
@@ -12,12 +14,18 @@ import { COLORS } from '@/lib/map';
 export function getUserRouteColorExpression(): maplibregl.ExpressionSpecification {
   return [
     'case',
-    // Has at least one complete trip → dark green
+    // Logged users: Has at least one complete trip (from tile data) → dark green
     ['all', ['has', 'date'], ['==', ['get', 'has_complete_trip'], true]],
     COLORS.railwayRoutes.visited,
-    // Has trips but no complete trip → dark orange
+    // Logged users: Has trips but no complete trip (from tile data) → dark orange
     ['has', 'date'],
     COLORS.railwayRoutes.partial,
+    // Unlogged users: Has partial trip (from feature-state) → dark orange
+    ['all', ['==', ['feature-state', 'hasTrip'], true], ['==', ['feature-state', 'partial'], true]],
+    COLORS.railwayRoutes.partial,
+    // Unlogged users: Has complete trip (from feature-state) → dark green
+    ['==', ['feature-state', 'hasTrip'], true],
+    COLORS.railwayRoutes.visited,
     // No trips → crimson
     COLORS.railwayRoutes.unvisited
   ] as maplibregl.ExpressionSpecification;

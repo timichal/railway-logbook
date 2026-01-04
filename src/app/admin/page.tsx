@@ -5,13 +5,9 @@ import AdminPageClient from '@/components/AdminPageClient';
 export default async function AdminPage() {
   // Check if user is authenticated and is admin
   const user = await getUser();
-  
-  if (!user) {
-    redirect('/login');
-  }
 
-  if (user.id !== 1) {
-    redirect('/'); // Redirect non-admin users to main page
+  if (!user || user.id !== 1) {
+    redirect('/');
   }
 
   return <AdminPageClient user={user} />;

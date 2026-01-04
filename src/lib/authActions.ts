@@ -88,7 +88,11 @@ export async function login(formData: FormData) {
   return { success: true, user: { id: user.id, email: user.email, name: user.name } };
 }
 
-export async function register(formData: FormData) {
+export async function register(
+  formData: FormData,
+  localTrips?: { track_id: string; date: string; note: string | null; partial: boolean }[],
+  localPreferences?: string[]
+) {
   const name = formData.get('name') as string;
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
@@ -127,9 +131,57 @@ export async function register(formData: FormData) {
 
   const user = result.rows[0];
 
+  let migratedCount = 0;
+  let skippedCount = 0;
+
+  // Migrate localStorage trips if provided
+  if (localTrips && localTrips.length > 0) {
+    for (const trip of localTrips) {
+      try {
+        // Check for exact duplicate (same track_id, date, note, partial)
+        const duplicateCheck = await query(
+          `SELECT id FROM user_trips
+           WHERE user_id = $1
+           AND track_id = $2
+           AND date = $3
+           AND (note = $4 OR (note IS NULL AND $4 IS NULL))
+           AND partial = $5`,
+          [user.id, parseInt(trip.track_id), trip.date, trip.note, trip.partial]
+        );
+
+        if (duplicateCheck.rows.length === 0) {
+          // Not a duplicate, insert it
+          await query(
+            'INSERT INTO user_trips (user_id, track_id, date, note, partial) VALUES ($1, $2, $3, $4, $5)',
+            [user.id, parseInt(trip.track_id), trip.date, trip.note, trip.partial]
+          );
+          migratedCount++;
+        } else {
+          skippedCount++;
+        }
+      } catch (error) {
+        console.error('Error migrating trip:', error);
+        // Continue with other trips even if one fails
+      }
+    }
+  }
+
+  // Migrate localStorage preferences if provided
+  if (localPreferences && localPreferences.length > 0) {
+    try {
+      await query(
+        'INSERT INTO user_preferences (user_id, selected_countries) VALUES ($1, $2)',
+        [user.id, localPreferences]
+      );
+    } catch (error) {
+      console.error('Error migrating preferences:', error);
+      // Non-fatal, continue
+    }
+  }
+
   // Create JWT token
   const token = await createToken({ id: user.id, email: user.email, name: user.name });
-  
+
   // Set cookie
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
@@ -139,11 +191,16 @@ export async function register(formData: FormData) {
     maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 
-  return { success: true, user: { id: user.id, email: user.email, name: user.name } };
+  return {
+    success: true,
+    user: { id: user.id, email: user.email, name: user.name },
+    migrated: migratedCount,
+    skipped: skippedCount
+  };
 }
 
 export async function logout() {
   const cookieStore = await cookies();
   cookieStore.delete(COOKIE_NAME);
-  redirect('/login');
+  redirect('/');
 }

@@ -115,7 +115,8 @@ BEGIN
     END;
 
     -- Generate MVT tile
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'railway_routes')
+    -- Use 'track_id' as feature ID for MapLibre feature-state support
+    SELECT INTO result ST_AsMVT(mvtgeom.*, 'railway_routes', 4096, 'geom', 'track_id')
     FROM (
         SELECT
             rr.track_id,
@@ -154,7 +155,8 @@ BEGIN
             SELECT date, note, partial
             FROM user_trips
             WHERE track_id = rr.track_id
-                AND (user_id_param IS NULL OR user_id = user_id_param)
+                AND user_id_param IS NOT NULL
+                AND user_id = user_id_param
             ORDER BY
                 date DESC NULLS LAST,
                 created_at DESC
@@ -164,7 +166,8 @@ BEGIN
             SELECT track_id
             FROM user_trips
             WHERE track_id = rr.track_id
-                AND (user_id_param IS NULL OR user_id = user_id_param)
+                AND user_id_param IS NOT NULL
+                AND user_id = user_id_param
                 AND (partial IS NULL OR partial = false)
             LIMIT 1
         ) complete_trip ON true

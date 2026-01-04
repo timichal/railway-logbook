@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import type { User } from '@/lib/authActions';
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
 const VectorRailwayMap = dynamic(() => import('./VectorRailwayMap'), {
@@ -14,10 +15,16 @@ const VectorRailwayMap = dynamic(() => import('./VectorRailwayMap'), {
 
 interface VectorMapWrapperProps {
   className?: string;
-  userId: number;
+  user: User | null;
   initialSelectedCountries: string[];
 }
 
-export default function VectorMapWrapper({ className, userId, initialSelectedCountries }: VectorMapWrapperProps) {
-  return <VectorRailwayMap className={className} userId={userId} initialSelectedCountries={initialSelectedCountries} />;
+export default function VectorMapWrapper({ className, user, initialSelectedCountries }: VectorMapWrapperProps) {
+  return (
+    <VectorRailwayMap
+      className={className}
+      user={user}
+      initialSelectedCountries={initialSelectedCountries}
+    />
+  );
 }
