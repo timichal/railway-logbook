@@ -76,11 +76,11 @@ export function setupAdminMapInteractions(
   mapInstance.on('click', 'railway_routes', (e) => {
     if (!e.features || e.features.length === 0) return;
     const feature = e.features[0];
-    const properties = feature.properties;
 
-    if (!properties || !onRouteSelectRef.current) return;
+    if (!onRouteSelectRef.current) return;
 
-    const trackId = properties.track_id;
+    // track_id is the feature ID (not in properties), convert to string
+    const trackId = String(feature.id);
     onRouteSelectRef.current(trackId);
 
     // Stop event propagation to prevent map click handler from firing

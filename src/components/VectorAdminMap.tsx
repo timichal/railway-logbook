@@ -124,7 +124,7 @@ export default function VectorAdminMap({
       'visibility',
       showPartsLayer ? 'visible' : 'none'
     );
-  }, [showPartsLayer, mapLoaded, map]);
+  }, [showPartsLayer, mapLoaded]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -135,7 +135,7 @@ export default function VectorAdminMap({
     if (map.current.getLayer('railway_routes_scenic_outline')) {
       map.current.setLayoutProperty('railway_routes_scenic_outline', 'visibility', visibility);
     }
-  }, [showRoutesLayer, mapLoaded, map]);
+  }, [showRoutesLayer, mapLoaded]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -145,7 +145,7 @@ export default function VectorAdminMap({
       'visibility',
       showStationsLayer ? 'visible' : 'none'
     );
-  }, [showStationsLayer, mapLoaded, map]);
+  }, [showStationsLayer, mapLoaded]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -155,7 +155,7 @@ export default function VectorAdminMap({
       'visibility',
       showNotesLayer ? 'visible' : 'none'
     );
-  }, [showNotesLayer, mapLoaded, map]);
+  }, [showNotesLayer, mapLoaded]);
 
   // Sync Railway Routes checkbox with edit geometry mode
   useEffect(() => {
@@ -183,16 +183,19 @@ export default function VectorAdminMap({
     if (map.current.getLayer('railway_routes_scenic_outline')) {
       map.current.setLayoutProperty('railway_routes_scenic_outline', 'visibility', visibility);
     }
-  }, [isEditingGeometry, showRoutesLayer, mapLoaded, map]);
+  }, [isEditingGeometry, showRoutesLayer, mapLoaded]);
 
   // Handle selected route highlighting
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
     if (selectedRouteId) {
+      // Convert selectedRouteId to number (track_id is the feature ID, which is a number)
+      const trackIdNum = parseInt(selectedRouteId, 10);
+
       map.current.setPaintProperty('railway_routes', 'line-color', [
         'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
+        ['==', ['id'], trackIdNum],
         COLORS.railwayRoutes.selected, // Selected routes always orange
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid, // Unselected invalid routes are grey
@@ -200,7 +203,7 @@ export default function VectorAdminMap({
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
+        ['==', ['id'], trackIdNum],
         5,
         ['==', ['get', 'usage_type'], 1],
         2, // Special routes = thinner
@@ -208,7 +211,7 @@ export default function VectorAdminMap({
       ]);
       map.current.setPaintProperty('railway_routes', 'line-opacity', [
         'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
+        ['==', ['id'], trackIdNum],
         1.0,
         0.8
       ]);
@@ -227,7 +230,7 @@ export default function VectorAdminMap({
       ]);
       map.current.setPaintProperty('railway_routes', 'line-opacity', 0.8);
     }
-  }, [selectedRouteId, mapLoaded, map]);
+  }, [selectedRouteId, mapLoaded]);
 
   // Handle railway routes refresh when routes are saved/deleted
   useEffect(() => {
@@ -270,9 +273,12 @@ export default function VectorAdminMap({
 
     // Re-apply selected route highlighting if needed
     if (selectedRouteId) {
+      // Convert selectedRouteId to number (track_id is the feature ID, which is a number)
+      const trackIdNum = parseInt(selectedRouteId, 10);
+
       map.current.setPaintProperty('railway_routes', 'line-color', [
         'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
+        ['==', ['id'], trackIdNum],
         COLORS.railwayRoutes.selected, // Selected routes always orange
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid, // Unselected invalid routes are grey
@@ -280,7 +286,7 @@ export default function VectorAdminMap({
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
+        ['==', ['id'], trackIdNum],
         5,
         ['==', ['get', 'usage_type'], 1],
         2, // Special routes = thinner
@@ -288,7 +294,7 @@ export default function VectorAdminMap({
       ]);
       map.current.setPaintProperty('railway_routes', 'line-opacity', [
         'case',
-        ['==', ['get', 'track_id'], selectedRouteId],
+        ['==', ['id'], trackIdNum],
         1.0,
         0.8
       ]);
@@ -310,7 +316,7 @@ export default function VectorAdminMap({
 
     // Force map repaint to clear any cached tiles
     map.current.triggerRepaint();
-  }, [refreshTrigger, mapLoaded, showRoutesLayer, selectedRouteId, map]);
+  }, [refreshTrigger, mapLoaded, showRoutesLayer, selectedRouteId]);
 
   // Handle preview route
   useEffect(() => {
@@ -387,7 +393,7 @@ export default function VectorAdminMap({
     } else {
       console.log('[VectorAdminMap] No preview route to display');
     }
-  }, [previewRoute, mapLoaded, map]);
+  }, [previewRoute, mapLoaded]);
 
   // Handle selected coordinate points visualization
   useEffect(() => {
@@ -462,7 +468,7 @@ export default function VectorAdminMap({
 
       console.log('[VectorAdminMap] Selected points layer added with', features.length, 'points');
     }
-  }, [selectedCoordinates, mapLoaded, map]);
+  }, [selectedCoordinates, mapLoaded]);
 
   // Handle route endpoints layer visualization
   useEffect(() => {
@@ -502,7 +508,7 @@ export default function VectorAdminMap({
 
       console.log('[VectorAdminMap] Route endpoints layer added');
     }
-  }, [routeEndpoints, showEndpointsLayer, selectedCoordinates, isEditingGeometry, mapLoaded, map]);
+  }, [routeEndpoints, mapLoaded]);
 
   // Handle layer visibility for route endpoints
   useEffect(() => {
@@ -516,7 +522,7 @@ export default function VectorAdminMap({
         showEndpointsLayer ? 'visible' : 'none'
       );
     }
-  }, [showEndpointsLayer, mapLoaded, map]);
+  }, [showEndpointsLayer, mapLoaded]);
 
   // Handle focus on route geometry (fly to route when selected)
   useEffect(() => {
@@ -549,7 +555,7 @@ export default function VectorAdminMap({
     } catch (error) {
       console.error('Error parsing geometry for focus:', error);
     }
-  }, [focusGeometry, mapLoaded, map, isEditingGeometry]);
+  }, [focusGeometry, mapLoaded, isEditingGeometry]);
 
   // Handle right-click for admin notes (create/edit)
   useEffect(() => {

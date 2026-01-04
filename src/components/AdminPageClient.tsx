@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import VectorAdminMapWrapper from '@/components/VectorAdminMapWrapper';
 import AdminSidebar from '@/components/AdminSidebar';
@@ -40,20 +40,25 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [sidebarWidth, setSidebarWidth] = useState<number>(600); // Sidebar width in pixels
   const [isResizing, setIsResizing] = useState<boolean>(false);
 
-  const handleRouteSelect = (routeId: string) => {
+  const handleRouteSelect = useCallback((routeId: string) => {
     // If empty string, unselect the route
     if (routeId === '') {
       setSelectedRouteId(null);
       return;
     }
 
-    setSelectedRouteId(routeId);
-    // Clear any selected coordinates when viewing a route
-    setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
-    // Clear preview mode
-    setPreviewRoute(null);
-    setIsPreviewMode(false);
-  };
+    setSelectedRouteId(prevId => {      
+      // Only clear coordinates/preview if the route ID actually changed
+      // This prevents clearing coordinates when re-selecting the same route
+      // (which happens during "Edit Route Geometry")
+      if (String(prevId) !== String(routeId)) {
+        setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+        setPreviewRoute(null);
+        setIsPreviewMode(false);
+      }
+      return routeId;
+    });
+  }, []);
 
   const handleCoordinateClick = (coordinate: [number, number]) => {
     setSelectedCoordinate(coordinate);

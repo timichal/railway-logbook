@@ -157,11 +157,6 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
       showError(`Failed to load route details: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
     }
-
-    // Select the route to highlight it
-    if (onRouteSelect) {
-      onRouteSelect(trackId);
-    }
   }, [onRouteSelect, onEditingGeometryChange, onCreateFormCoordinatesChange, onRouteFocus, showError]);
 
   // Handle cancel geometry edit
