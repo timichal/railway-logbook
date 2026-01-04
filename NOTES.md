@@ -19,7 +19,6 @@ nedodělané tratě
 dodělat s aičkem:
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
 - about/faq
-- mapa bez loginu
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
 - preferred routing: save route presets (brno-praha)
 - dont backtrack in pathfind (hotovo při tvoření, podobně user)

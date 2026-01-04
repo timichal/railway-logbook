@@ -45,6 +45,9 @@ export default function VectorRailwayMap({ className = '', user, initialSelected
   // Active tab state (tracks which sidebar tab is active)
   const [activeTab, setActiveTab] = useState<ActiveTab>('routes');
 
+  // Scenic routes outline toggle state (default: off)
+  const [showScenicOutline, setShowScenicOutline] = useState<boolean>(false);
+
   // Station click handler from Journey Planner
   const [journeyStationClickHandler, setJourneyStationClickHandler] = useState<((station: Station | null) => void) | null>(null);
 
@@ -405,6 +408,17 @@ export default function VectorRailwayMap({ className = '', user, initialSelected
     }
   }, [map, routeEditor.showSpecialLines]);
 
+  // Toggle scenic routes outline layer visibility
+  useEffect(() => {
+    if (!map.current || !map.current.getLayer('railway_routes_scenic_outline')) return;
+
+    map.current.setLayoutProperty(
+      'railway_routes_scenic_outline',
+      'visibility',
+      showScenicOutline ? 'visible' : 'none'
+    );
+  }, [map, showScenicOutline]);
+
   // Highlight routes from multi-route logger (gold)
   useEffect(() => {
     if (!map.current || !map.current.getLayer('railway_routes')) return;
@@ -581,7 +595,7 @@ export default function VectorRailwayMap({ className = '', user, initialSelected
             {routeEditor.progress.completedRoutes}/{routeEditor.progress.totalRoutes} ({routeEditor.progress.routePercentage}%) routes
           </div>
           <div className="mt-2 pt-2 border-t border-gray-200">
-            <label className="flex items-center gap-2 cursor-pointer text-xs">
+            <label className="flex items-center gap-2 cursor-pointer text-xs mb-2">
               <input
                 type="checkbox"
                 checked={routeEditor.showSpecialLines}
@@ -589,6 +603,15 @@ export default function VectorRailwayMap({ className = '', user, initialSelected
                 className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
               />
               <span>Show special lines</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer text-xs">
+              <input
+                type="checkbox"
+                checked={showScenicOutline}
+                onChange={(e) => setShowScenicOutline(e.target.checked)}
+                className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+              <span>Highlight scenic lines</span>
             </label>
           </div>
         </div>

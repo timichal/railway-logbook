@@ -192,7 +192,7 @@ export function createScenicRoutesOutlineLayer(
     'source-layer': 'railway_routes',
     minzoom: ZOOM_RANGES.railwayRoutes.min,
     layout: {
-      visibility: 'visible',
+      visibility: 'none', // Default to hidden, controlled by "Highlight scenic lines" checkbox
     },
     paint: {
       'line-color': '#fbbf24', // Amber outline
