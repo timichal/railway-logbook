@@ -29,8 +29,7 @@ async function markAllRoutesInvalid() {
       SET is_valid = FALSE,
           error_message = 'Route recheck',
           updated_at = CURRENT_TIMESTAMP
-      WHERE (is_valid = TRUE OR error_message IS NULL OR error_message != 'Route recheck')
-      AND (from_station LIKE '%junction%' OR to_station LIKE '%junction%')
+      WHERE is_valid = TRUE OR error_message IS NULL OR error_message != 'Route recheck'
       RETURNING track_id, from_station, to_station;
     `);
 
