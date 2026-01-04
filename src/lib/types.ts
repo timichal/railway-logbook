@@ -82,6 +82,7 @@ export type RailwayRoute = {
   usage_type: UsageType // 0=Regular, 1=Special
   frequency: string[] // Array of frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
   link?: string | null // External URL/link for the route
+  scenic?: boolean | null // Flag to mark route as scenic
   geometry: string // GeoJSON string
   length_km?: number
   start_country?: string | null // ISO 3166-1 alpha-2 country code of start point

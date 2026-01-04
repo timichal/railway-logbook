@@ -21,7 +21,7 @@ interface AdminCreateRouteTabProps {
   ) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: UsageType, frequency: string[], link: string, intended_backtracking: boolean }) => void;
+  onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: UsageType, frequency: string[], link: string, scenic: boolean, intended_backtracking: boolean }) => void;
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
   editingRouteInfo?: { from_station: string, to_station: string, track_number: string } | null;
@@ -56,6 +56,7 @@ export default function AdminCreateRouteTab({
     usage_type: undefined as UsageType | undefined,
     frequency: [] as string[],
     link: '',
+    scenic: false,
     intended_backtracking: false
   });
 
@@ -78,6 +79,7 @@ export default function AdminCreateRouteTab({
       usage_type: undefined,
       frequency: [],
       link: '',
+      scenic: false,
       intended_backtracking: false
     });
     // Clear the coordinates managed by parent via callback
@@ -151,6 +153,7 @@ export default function AdminCreateRouteTab({
       usage_type: createForm.usage_type,
       frequency: createForm.frequency,
       link: createForm.link,
+      scenic: createForm.scenic,
       intended_backtracking: createForm.intended_backtracking
     });
 
@@ -167,9 +170,9 @@ export default function AdminCreateRouteTab({
 
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
-      // Metadata (name, description, usage_type, track_number, frequency, link, intended_backtracking) won't be used in update mode
+      // Metadata (name, description, usage_type, track_number, frequency, link, scenic, intended_backtracking) won't be used in update mode
       await saveRailwayRoute(
-        { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '', intended_backtracking: false }, // Dummy data, not used in UPDATE mode
+        { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '', scenic: false, intended_backtracking: false }, // Dummy data, not used in UPDATE mode
         { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates },
         currentPathResult.startCoordinate,
         currentPathResult.endCoordinate,
@@ -263,9 +266,8 @@ export default function AdminCreateRouteTab({
               readOnly
               placeholder="Click a railway part on the map"
               disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
-                isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'
-              }`}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'
+                }`}
             />
             <button
               onClick={clearStartingCoordinate}
@@ -289,9 +291,8 @@ export default function AdminCreateRouteTab({
               readOnly
               placeholder="Click a railway part on the map"
               disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
-                isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'
-              }`}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'
+                }`}
             />
             <button
               onClick={clearEndingCoordinate}
@@ -405,7 +406,7 @@ export default function AdminCreateRouteTab({
               </label>
               <div className="flex flex-wrap gap-4">
                 {frequencyOptions.map((option) => (
-                  <label key={option.key} className="flex  flex-[0_1_30%] items-center gap-2 cursor-pointer">
+                  <label key={option.key} className="flex flex-[0_1_30%] items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={createForm.frequency.includes(option.key)}
@@ -424,20 +425,35 @@ export default function AdminCreateRouteTab({
               </div>
             </div>
 
-            {/* Intended Backtracking */}
-            <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={createForm.intended_backtracking}
-                  onChange={(e) => setCreateForm({ ...createForm, intended_backtracking: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                />
-                <span className="text-sm font-medium text-gray-700">Intended backtracking</span>
-              </label>
-              <p className="text-xs text-gray-500 mt-1 ml-6">
-                Check this if the route intentionally backtracks (e.g., reversing direction, switching tracks)
-              </p>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Other
+            </label>
+            <div className="flex flex-wrap gap-4">
+              {/* Scenic */}
+              <div className="flex-[0_1_30%]">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createForm.scenic}
+                    onChange={(e) => setCreateForm({ ...createForm, scenic: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Scenic route</span>
+                </label>
+              </div>
+
+              {/* Intended Backtracking */}
+              <div className="flex-[0_1_30%]">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createForm.intended_backtracking}
+                    onChange={(e) => setCreateForm({ ...createForm, intended_backtracking: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Intended backtracking</span>
+                </label>
+              </div>
             </div>
           </>
         )}

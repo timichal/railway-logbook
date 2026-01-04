@@ -1,7 +1,7 @@
 import type maplibreglType from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
-import { getUsageLabel } from '@/lib/constants';
 import type { SelectedRoute, Station } from '@/lib/types';
+import { formatRouteMetadataBadges } from '@/lib/map/utils/tooltipFormatting';
 
 interface UserMapInteractionCallbacks {
   onRouteClick: (feature: SelectedRoute) => void;
@@ -60,11 +60,13 @@ export function setupUserMapInteractions(
     let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.from_station} ⟷ ${properties.to_station}</h3>`;
 
     let formattedDescription = "";
-    formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
 
-    if (properties.frequency !== "{}") {
-      formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ").replaceAll("\"", "")}<br />`
-    }
+    // Route metadata badges (usage type, scenic, frequency)
+    formattedDescription += formatRouteMetadataBadges({
+      usage_type: properties.usage_type,
+      scenic: properties.scenic,
+      frequency: properties.frequency
+    });
     if (properties.description) {
       formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
     }

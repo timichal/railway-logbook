@@ -11,6 +11,7 @@ interface EditFormData {
   usage_type: UsageType;
   frequency: string[];
   link: string;
+  scenic: boolean;
   intended_backtracking: boolean;
 }
 
@@ -200,6 +201,22 @@ export default function RouteEditForm({
             </div>
           </div>
 
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Other
+          </label>
+          {/* Scenic */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editForm.scenic}
+                onChange={(e) => onEditFormChange({ ...editForm, scenic: e.target.checked })}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+              <span className="text-sm font-medium text-gray-700">Scenic route</span>
+            </label>
+          </div>
+
           {/* Intended Backtracking */}
           <div>
             <label className="flex items-center gap-2 cursor-pointer">
@@ -211,9 +228,6 @@ export default function RouteEditForm({
               />
               <span className="text-sm font-medium text-gray-700">Intended backtracking</span>
             </label>
-            <p className="text-xs text-gray-500 mt-1 ml-6">
-              Check this if the route intentionally backtracks (e.g., reversing direction, switching tracks)
-            </p>
           </div>
 
           {/* Action Buttons */}

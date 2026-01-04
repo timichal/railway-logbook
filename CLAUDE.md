@@ -34,6 +34,9 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
   - Creates table with id, coordinate (PostGIS POINT), text, created_at, updated_at
   - Adds spatial index and auto-update trigger
   - Safe to run multiple times (checks if table exists)
+- `npm run addScenicField` - Run migration to add scenic field to railway_routes table (one-time setup)
+  - Adds scenic BOOLEAN column with default FALSE
+  - Safe to run multiple times (uses IF NOT EXISTS)
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate
@@ -91,7 +94,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Tables**:
   - `users` - User accounts and authentication (email as username, password field for bcrypt hashes)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
-  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), PostGIS geometry, length_km, start_country (ISO 3166-1 alpha-2), end_country (ISO 3166-1 alpha-2), **starting_coordinate (POINT)**, **ending_coordinate (POINT)**, is_valid flag, and error_message
+  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), scenic (BOOLEAN flag for particularly scenic routes), PostGIS geometry, length_km, start_country (ISO 3166-1 alpha-2), end_country (ISO 3166-1 alpha-2), **starting_coordinate (POINT)**, **ending_coordinate (POINT)**, is_valid flag, and error_message
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and pathfinding)
   - `user_trips` - User-specific trip records; supports multiple trips per route with id, user_id, track_id, date, note, partial flag, created_at, updated_at; no UNIQUE constraint allows logging the same route multiple times
   - `user_preferences` - User preferences for country filtering; stores selected_countries as TEXT[] array of ISO country codes (defaults: CZ, SK, AT, PL, DE, LT, LV, EE)
@@ -108,8 +111,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Martin Tile Server** - PostGIS vector tile server (port 3001) serving railway_routes, railway_parts, and stations as MVT tiles
 - **Server Actions** - Type-safe database operations with automatic serialization
 - **Authentication** - Email/password authentication with bcrypt, session management
-- **Dynamic Styling** - Three-way route colors based on user data (dark green=fully completed, dark orange=partial, crimson=unvisited), weight based on usage type (thinner for Special)
-- **Usage Type & Frequency Display** - Frontend displays usage_type (0=Regular, 1=Special) and frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal) in hover popups
+- **Dynamic Styling** - Three-way route colors based on user data (dark green=fully completed, dark orange=partial, crimson=unvisited), weight based on usage type (thinner for Special), amber outline effect for scenic routes
+- **Badge-Style Tooltips** - Hover popups display color-coded badges: usage type (blue=Regular, purple=Special), frequency tags (green badges), and scenic flag (amber badge)
 - **Connection Pooling** - PostgreSQL pool for database performance
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension); floating search box in top-right
@@ -192,7 +195,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `AdminCreateRouteTab.tsx` - Route creation interface with start/end point selection
 - `AdminRoutesTab.tsx` - Route list with search and edit functionality
 - `RoutesList.tsx` - Paginated route table with validity indicators
-- `RouteEditForm.tsx` - Form for editing route metadata (from/to/track/description/usage)
+- `RouteEditForm.tsx` - Form for editing route metadata (from/to/track/description/usage/scenic/frequency/link)
 - `NotesPopup.tsx` - Popup component for creating/editing admin notes (text field, save/delete buttons, keyboard shortcuts)
 
 **Shared Components:**
@@ -221,7 +224,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### Map Library (`src/lib/map/`)
 
 **Core:**
-- `index.ts` - Map constants (MAPLIBRE_STYLE, MARTIN_URL), layer factories (createRailwayRoutesSource/Layer, createStationsSource/Layer), closeAllPopups utility
+- `index.ts` - Map constants (MAPLIBRE_STYLE, MARTIN_URL), layer factories (createRailwayRoutesSource/Layer, createScenicRoutesOutlineLayer, createStationsSource/Layer), closeAllPopups utility
 - `mapState.ts` - Shared map state management
 
 **Hooks:**
@@ -231,11 +234,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `hooks/useRouteLength.ts` - Hook for calculating route length display
 
 **Interactions:**
-- `interactions/userMapInteractions.ts` - User map click handlers (route click to add to selection, hover popups)
-- `interactions/adminMapInteractions.ts` - Admin map click handlers (coordinate capture from railway parts, route editing)
+- `interactions/userMapInteractions.ts` - User map click handlers (route click to add to selection, badge-style hover popups)
+- `interactions/adminMapInteractions.ts` - Admin map click handlers (coordinate capture from railway parts, route editing, badge-style hover popups)
 
 **Utilities:**
-- `utils/userRouteStyling.ts` - User route color/width expressions (three-way colors: dark green=completed, dark orange=partial, crimson=unvisited)
+- `utils/userRouteStyling.ts` - User route color/width expressions (three-way colors: dark green=completed, dark orange=partial, crimson=unvisited; scenic routes use same colors with outline layer)
+- `utils/tooltipFormatting.ts` - Shared tooltip badge formatting (usage type, frequency, scenic badges)
 - `utils/distance.ts` - Distance calculation utilities
 
 #### Scripts (`src/scripts/`)
@@ -265,7 +269,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `stations_tile` - Stations visible at zoom 10+
   - `admin_notes_tile` - Admin notes visible at all zoom levels (admin-only)
   - Web Mercator (EPSG:3857) geometry columns and sync triggers for all spatial tables including admin_notes
-- Contains tables for users, stations, railway_routes (with frequency, link, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message), railway_parts, user_trips (supports multiple trips per route), user_preferences (selected_countries array), and admin_notes (coordinate, text, timestamps)
+- Contains tables for users, stations, railway_routes (with frequency, link, scenic flag, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message), railway_parts, user_trips (supports multiple trips per route), user_preferences (selected_countries array), and admin_notes (coordinate, text, timestamps)
 
 ### Configuration Files
 - `eslint.config.mjs` - ESLint configuration

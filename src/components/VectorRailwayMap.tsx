@@ -9,6 +9,7 @@ import { useRouteEditor } from '@/lib/map/hooks/useRouteEditor';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
+  createScenicRoutesOutlineLayer,
   createStationsSource,
   createStationsLayer,
 } from '@/lib/map';
@@ -61,6 +62,10 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
         stations: createStationsSource(),
       },
       layers: [
+        createScenicRoutesOutlineLayer({
+          widthExpression: getUserRouteWidthExpression(),
+          filter: ['!=', ['get', 'usage_type'], 1], // Hide special routes by default (matches showSpecialLines initial state)
+        }),
         createRailwayRoutesLayer({
           colorExpression: getUserRouteColorExpression(),
           widthExpression: getUserRouteWidthExpression(),
@@ -183,7 +188,16 @@ export default function VectorRailwayMap({ className = '', userId, initialSelect
       ? null // Show all routes
       : ['!=', ['get', 'usage_type'], 1]; // Hide special routes (usage_type === 1)
 
+    // Apply filter to main routes layer
     map.current.setFilter('railway_routes', filter);
+
+    // For scenic outline layer, combine scenic check with special lines filter
+    if (map.current.getLayer('railway_routes_scenic_outline')) {
+      const scenicFilter: FilterSpecification = routeEditor.showSpecialLines
+        ? ['==', ['get', 'scenic'], true] // Show all scenic routes
+        : ['all', ['==', ['get', 'scenic'], true], ['!=', ['get', 'usage_type'], 1]]; // Show scenic routes that are not special
+      map.current.setFilter('railway_routes_scenic_outline', scenicFilter);
+    }
   }, [map, routeEditor.showSpecialLines]);
 
   // Highlight routes from multi-route logger (gold)

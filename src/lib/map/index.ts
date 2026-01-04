@@ -171,6 +171,44 @@ export function createRailwayRoutesLayer(
   return layer;
 }
 
+export function createScenicRoutesOutlineLayer(
+  config: RailwayRoutesPaintConfig = {}
+): maplibregl.LineLayerSpecification {
+  const {
+    widthExpression,
+    defaultWidth = 3,
+    filter,
+  } = config;
+
+  // Calculate outline width (add 2px to the base width)
+  const outlineWidth: maplibregl.ExpressionSpecification | number = widthExpression
+    ? (['+', widthExpression, 6] as maplibregl.ExpressionSpecification)
+    : (defaultWidth + 6);
+
+  const layer: maplibregl.LineLayerSpecification = {
+    id: 'railway_routes_scenic_outline',
+    type: 'line',
+    source: 'railway_routes',
+    'source-layer': 'railway_routes',
+    minzoom: ZOOM_RANGES.railwayRoutes.min,
+    layout: {
+      visibility: 'visible',
+    },
+    paint: {
+      'line-color': '#fbbf24', // Amber outline
+      'line-width': outlineWidth,
+      'line-opacity': 0.6,
+    },
+    filter: [
+      'all',
+      ['==', ['get', 'scenic'], true],
+      ...(filter ? [filter] : [])
+    ] as maplibregl.FilterSpecification,
+  };
+
+  return layer;
+}
+
 export function createStationsSource(): maplibregl.VectorSourceSpecification {
   return {
     type: 'vector',

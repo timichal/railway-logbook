@@ -7,6 +7,7 @@ import { COLORS } from '@/lib/map';
  * - If has complete trip → dark green (visited)
  * - Else if has any trip → dark orange (partial)
  * - Else → crimson (unvisited)
+ * Note: Scenic routes use same colors but with outline effect (separate layer)
  */
 export function getUserRouteColorExpression(): maplibregl.ExpressionSpecification {
   return [

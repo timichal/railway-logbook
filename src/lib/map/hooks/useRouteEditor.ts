@@ -11,7 +11,7 @@ import {
   type UserTrip
 } from '@/lib/userActions';
 import type { SelectedRoute } from '@/lib/types';
-import { createRailwayRoutesSource, createRailwayRoutesLayer, closeAllPopups } from '@/lib/map';
+import { createRailwayRoutesSource, createRailwayRoutesLayer, createScenicRoutesOutlineLayer, closeAllPopups } from '@/lib/map';
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '../utils/userRouteStyling';
 import { useToast } from '@/lib/toast';
 
@@ -97,19 +97,27 @@ export function useRouteEditor(
 
     if (map.current && map.current.getSource('railway_routes')) {
       // Remove dependent layers first
-      const dependentLayers = ['selected_routes_highlight', 'highlighted_routes'];
+      const dependentLayers = ['selected_routes_highlight', 'highlighted_routes', 'railway_routes', 'railway_routes_scenic_outline'];
       dependentLayers.forEach(layerId => {
         if (map.current && map.current.getLayer(layerId)) {
           map.current.removeLayer(layerId);
         }
       });
 
-      // Now remove the main layer and source
-      map.current.removeLayer('railway_routes');
+      // Now remove the source
       map.current.removeSource('railway_routes');
 
-      // Re-add source and layer
+      // Re-add source and layers
       map.current.addSource('railway_routes', createRailwayRoutesSource({ userId, cacheBuster: newCacheBuster }));
+      // Add scenic outline layer first (underneath)
+      map.current.addLayer(
+        createScenicRoutesOutlineLayer({
+          widthExpression: getUserRouteWidthExpression(),
+          filter: showSpecialLines ? undefined : ['!=', ['get', 'usage_type'], 1],
+        }),
+        'stations'
+      );
+      // Add main routes layer on top
       map.current.addLayer(
         createRailwayRoutesLayer({
           colorExpression: getUserRouteColorExpression(),

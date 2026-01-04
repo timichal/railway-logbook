@@ -9,6 +9,7 @@ import { useRouteLength } from '@/lib/map/hooks/useRouteLength';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
+  createScenicRoutesOutlineLayer,
   createRailwayPartsSource,
   createRailwayPartsLayer,
   createStationsSource,
@@ -83,6 +84,7 @@ export default function VectorAdminMap({
       },
       layers: [
         createRailwayPartsLayer(),
+        createScenicRoutesOutlineLayer(),
         createRailwayRoutesLayer(),
         createStationsLayer(),
         createAdminNotesLayer(),
@@ -127,11 +129,12 @@ export default function VectorAdminMap({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    map.current.setLayoutProperty(
-      'railway_routes',
-      'visibility',
-      showRoutesLayer ? 'visible' : 'none'
-    );
+    // Toggle both railway routes and scenic outline layers together
+    const visibility = showRoutesLayer ? 'visible' : 'none';
+    map.current.setLayoutProperty('railway_routes', 'visibility', visibility);
+    if (map.current.getLayer('railway_routes_scenic_outline')) {
+      map.current.setLayoutProperty('railway_routes_scenic_outline', 'visibility', visibility);
+    }
   }, [showRoutesLayer, mapLoaded, map]);
 
   useEffect(() => {
@@ -173,16 +176,12 @@ export default function VectorAdminMap({
     const hasLayer = map.current.getLayer('railway_routes');
     if (!hasLayer) return;
 
-    if (isEditingGeometry) {
-      // Hide the railway_routes layer
-      map.current.setLayoutProperty('railway_routes', 'visibility', 'none');
-    } else {
-      // Restore the layer visibility based on showRoutesLayer
-      map.current.setLayoutProperty(
-        'railway_routes',
-        'visibility',
-        showRoutesLayer ? 'visible' : 'none'
-      );
+    const visibility = isEditingGeometry ? 'none' : (showRoutesLayer ? 'visible' : 'none');
+
+    // Toggle both railway routes and scenic outline layers together
+    map.current.setLayoutProperty('railway_routes', 'visibility', visibility);
+    if (map.current.getLayer('railway_routes_scenic_outline')) {
+      map.current.setLayoutProperty('railway_routes_scenic_outline', 'visibility', visibility);
     }
   }, [isEditingGeometry, showRoutesLayer, mapLoaded, map]);
 
@@ -241,11 +240,18 @@ export default function VectorAdminMap({
 
     // Reload railway_routes tiles
     const hasRoutesLayer = map.current.getLayer('railway_routes');
+    const hasScenicOutlineLayer = map.current.getLayer('railway_routes_scenic_outline');
     const hasRoutesSource = map.current.getSource('railway_routes');
 
+    // Remove layers first (both layers use the same source)
     if (hasRoutesLayer) {
       map.current.removeLayer('railway_routes');
     }
+    if (hasScenicOutlineLayer) {
+      map.current.removeLayer('railway_routes_scenic_outline');
+    }
+
+    // Now we can safely remove the source
     if (hasRoutesSource) {
       map.current.removeSource('railway_routes');
     }
@@ -253,15 +259,14 @@ export default function VectorAdminMap({
     // Re-add source with new cache buster
     map.current.addSource('railway_routes', createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
 
-    // Re-add layer
+    // Re-add layers (scenic outline first, then main routes layer on top)
+    map.current.addLayer(createScenicRoutesOutlineLayer());
     map.current.addLayer(createRailwayRoutesLayer());
 
     // Explicitly set visibility based on current state
-    map.current.setLayoutProperty(
-      'railway_routes',
-      'visibility',
-      showRoutesLayer ? 'visible' : 'none'
-    );
+    const visibility = showRoutesLayer ? 'visible' : 'none';
+    map.current.setLayoutProperty('railway_routes', 'visibility', visibility);
+    map.current.setLayoutProperty('railway_routes_scenic_outline', 'visibility', visibility);
 
     // Re-apply selected route highlighting if needed
     if (selectedRouteId) {

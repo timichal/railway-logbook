@@ -53,19 +53,20 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - `users` - User accounts with authentication
 - `stations` - Railway stations (Point features)
 - `railway_parts` - Raw railway segments from OSM
-- `railway_routes` - Defined routes with usage type, country tracking (start/end), validity flags
+- `railway_routes` - Defined routes with usage type, scenic flag, country tracking (start/end), validity flags
 - `user_trips` - User ride history (dates, notes, partial flag)
 - `user_preferences` - User settings (selected countries for filtering)
 
 ### Features
 
 **For Users:**
-- Interactive map with hover popups showing route details
+- Interactive map with badge-style hover popups (color-coded: usage type, frequency, scenic flag)
 - **Country filtering** - Filter routes by country (CZ, SK, AT, PL, DE) with Select All/None options
 - Three-way color coding:
   - Dark green = fully completed routes
   - Dark orange = partially completed routes
   - Red = unvisited routes
+  - Scenic routes display with amber outline effect
 - Progress tracking (km/% of total distance, respects country filter, excludes partial routes)
 - Click routes to mark ride date, add notes, and flag partial completion
 - Journey planner with multi-station routing (from → via → to)
@@ -74,7 +75,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - Create routes by clicking railway_parts on map
 - Automatic pathfinding between points (50km buffer, BFS algorithm)
 - **Automatic country detection** - Routes automatically tagged with start/end countries (worldwide support)
-- Assign usage type (Regular/Seasonal/Special) and frequency tags
+- Assign usage type (Regular/Seasonal/Special), frequency tags, and scenic flag
 - Edit route geometry to fix invalid routes after OSM updates
 - Delete routes with security checks
 - Auto-generated track_id and automatic length calculation

@@ -1,7 +1,7 @@
 import type maplibreglType from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import type { MutableRefObject } from 'react';
-import { getUsageLabel } from '@/lib/constants';
+import { formatRouteMetadataBadges } from '@/lib/map/utils/tooltipFormatting';
 
 interface AdminMapCallbacks {
   onCoordinateClickRef: MutableRefObject<((coordinate: [number, number]) => void) | undefined>;
@@ -181,11 +181,13 @@ export function setupAdminMapInteractions(
 
       if (properties) {
         let formattedDescription = "";
-        formattedDescription += `${getUsageLabel(properties.usage_type)} route<br />`;
 
-        if (properties.frequency !== "{}") {
-          formattedDescription += `<b>Frequency:</b> ${properties.frequency.slice(1, -1).replaceAll(",", ", ").replaceAll("\"", "")}<br />`
-        }
+        // Route metadata badges (usage type, scenic, frequency)
+        formattedDescription += formatRouteMetadataBadges({
+          usage_type: properties.usage_type,
+          scenic: properties.scenic,
+          frequency: properties.frequency
+        });
         if (properties.description) {
           formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
         }
