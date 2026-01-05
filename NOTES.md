@@ -10,7 +10,7 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshrani
 rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
-- nájezd loop Mulhouse (fix 4. 1.)
+- nájezd loop Mulhouse (fix 5. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
@@ -18,6 +18,7 @@ nedodělané tratě
 - jokeri v helsinkách asi nepočítat
 
 dodělat s aičkem:
+- atlas část: europe by rail trasy
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
 - about/faq
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
