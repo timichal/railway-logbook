@@ -11,6 +11,7 @@ rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Franci
 
 osm úpravy
 - nájezd loop Mulhouse (fix 5. 1.)
+- split Cava Carbonara-Pavia (fix 5. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
