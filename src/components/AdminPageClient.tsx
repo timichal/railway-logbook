@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import Link from 'next/link';
 import VectorAdminMapWrapper from '@/components/VectorAdminMapWrapper';
 import AdminSidebar from '@/components/AdminSidebar';
@@ -8,6 +8,7 @@ import { logout } from '@/lib/authActions';
 import { saveRailwayRoute } from '@/lib/adminRouteActions';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
+import { useResizableSidebar } from '@/hooks/useResizableSidebar';
 
 interface AdminPageClientProps {
   user: {
@@ -37,8 +38,9 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
   const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
-  const [sidebarWidth, setSidebarWidth] = useState<number>(600); // Sidebar width in pixels
-  const [isResizing, setIsResizing] = useState<boolean>(false);
+
+  // Resizable sidebar hook
+  const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar();
 
   const handleRouteSelect = useCallback((routeId: string) => {
     // If empty string, unselect the route
@@ -171,35 +173,6 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const handleRouteFocus = (geometry: string) => {
     setFocusGeometry(geometry);
   };
-
-  const handleMouseDown = () => {
-    setIsResizing(true);
-  };
-
-  // Handle resize drag
-  useEffect(() => {
-    if (!isResizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = e.clientX;
-      // Constrain between 400px and 1200px
-      if (newWidth >= 400 && newWidth <= 1200) {
-        setSidebarWidth(newWidth);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
 
   async function handleLogout() {
     await logout();
