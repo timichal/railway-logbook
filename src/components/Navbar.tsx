@@ -11,10 +11,10 @@ interface NavbarProps {
   onLogout?: () => void;
   onOpenHowTo?: () => void;
   onOpenNotes?: () => void;
-  showArticleButtons?: boolean;
+  isAdminPage?: boolean;
 }
 
-export default function Navbar({ user, onLogout, onOpenHowTo, onOpenNotes, showArticleButtons = false }: NavbarProps) {
+export default function Navbar({ user, onLogout, onOpenHowTo, onOpenNotes, isAdminPage = false }: NavbarProps) {
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
   const [showRegisterDropdown, setShowRegisterDropdown] = useState(false);
   const loginRef = useRef<HTMLDivElement>(null);
@@ -52,57 +52,63 @@ export default function Navbar({ user, onLogout, onOpenHowTo, onOpenNotes, showA
         <div className="flex items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              The Railway Logbook
+              {isAdminPage ? 'Admin - Railway Management' : 'The Railway Logbook'}
             </h1>
             <p className="text-gray-600 mt-1">
-              {user
-                ? `Welcome, ${user.name || user.email}! Log your rail journeys around Europe.`
-                : 'Log your rail journeys around Europe'}
+              {isAdminPage
+                ? `Welcome, ${user?.name || user?.email} - Manage railway routes and view raw data`
+                : user
+                  ? `Welcome, ${user.name || user.email}! Log your rail journeys around Europe.`
+                  : 'Log your rail journeys around Europe'}
             </p>
           </div>
 
-          {/* Article buttons - show only for non-admin views */}
-          {showArticleButtons && (
-            <div className="flex gap-2 ml-4">
-              <button
-                onClick={onOpenHowTo}
-                className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-md text-sm border border-blue-300 cursor-pointer"
-              >
-                How To Use
-              </button>
-              <button
-                onClick={onOpenNotes}
-                className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded-md text-sm border border-green-300 cursor-pointer"
-              >
-                Railway Notes
-              </button>
-            </div>
-          )}
+          <div className="flex gap-2 ml-4">
+            <button
+              onClick={onOpenHowTo}
+              className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-md text-sm border border-blue-300 cursor-pointer"
+            >
+              How To Use
+            </button>
+            <button
+              onClick={onOpenNotes}
+              className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded-md text-sm border border-green-300 cursor-pointer"
+            >
+              Railway Notes
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Admin link or Back to Main Map */}
+          {user?.id === 1 && !isAdminPage && (
+            <Link
+              href="/admin"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm"
+            >
+              Admin
+            </Link>
+          )}
+          {isAdminPage && (
+            <Link
+              href="/"
+              className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md text-sm"
+            >
+              Back to Main Map
+            </Link>
+          )}
+
+          {/* Login/Register or Logout */}
           {user ? (
-            // Logged-in user menu
-            <>
-              {user.id === 1 && (
-                <Link
-                  href="/admin"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm"
-                >
-                  Admin
-                </Link>
-              )}
-              {onLogout && (
-                <button
-                  onClick={onLogout}
-                  className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
-                >
-                  Logout
-                </button>
-              )}
-            </>
+            onLogout && (
+              <button
+                onClick={onLogout}
+                className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+              >
+                Logout
+              </button>
+            )
           ) : (
-            // Unlogged user - show login/register buttons with dropdowns
             <>
               {/* Login dropdown */}
               <div className="relative" ref={loginRef}>

@@ -1,14 +1,24 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import Link from 'next/link';
-import VectorAdminMapWrapper from '@/components/VectorAdminMapWrapper';
+import dynamic from 'next/dynamic';
+import Navbar from '@/components/Navbar';
 import AdminSidebar from '@/components/AdminSidebar';
 import { logout } from '@/lib/authActions';
 import { saveRailwayRoute } from '@/lib/adminRouteActions';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 import { useResizableSidebar } from '@/hooks/useResizableSidebar';
+
+// Dynamically import the map component to avoid SSR issues with MapLibre
+const VectorAdminMap = dynamic(() => import('./VectorAdminMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+      <div className="text-gray-600">Loading map...</div>
+    </div>
+  ),
+});
 
 interface AdminPageClientProps {
   user: {
@@ -180,34 +190,11 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
 
   return (
     <div className="h-screen flex flex-col bg-white">
-      <header className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Admin - Railway Management
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Welcome, {user.name || user.email} - Manage railway routes and view raw data
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md text-sm"
-            >
-              Back to Main Map
-            </Link>
-            <form action={handleLogout}>
-              <button
-                type="submit"
-                className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
-              >
-                Logout
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
+      <Navbar
+        user={user}
+        onLogout={handleLogout}
+        isAdminPage={true}
+      />
 
       <main className="flex-1 overflow-hidden flex relative">
         <AdminSidebar
@@ -238,7 +225,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
         />
 
         <div className="flex-1 overflow-hidden">
-          <VectorAdminMapWrapper
+          <VectorAdminMap
             className="w-full h-full"
             selectedRouteId={selectedRouteId}
             onRouteSelect={handleRouteSelect}

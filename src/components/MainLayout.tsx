@@ -34,7 +34,6 @@ export default function MainLayout({ user, onLogout, initialSelectedCountries }:
         onLogout={onLogout}
         onOpenHowTo={() => setActiveTab('howto')}
         onOpenNotes={() => setActiveTab('notes')}
-        showArticleButtons={true}
       />
 
       <main className="flex-1 overflow-hidden">
