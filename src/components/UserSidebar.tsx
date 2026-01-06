@@ -6,6 +6,8 @@ import type { DataAccess } from '@/lib/dataAccess';
 import SelectedRoutesList from './SelectedRoutesList';
 import JourneyPlanner from './JourneyPlanner';
 import CountriesStatsTab from './CountriesStatsTab';
+import HowToUseArticle from './HowToUseArticle';
+import RailwayNotesArticle from './RailwayNotesArticle';
 import type { SelectedRoute, Station } from '@/lib/types';
 
 interface RouteNode {
@@ -16,7 +18,7 @@ interface RouteNode {
   length_km: number;
 }
 
-export type ActiveTab = 'routes' | 'journey' | 'filter';
+export type ActiveTab = 'routes' | 'journey' | 'filter' | 'howto' | 'notes';
 
 interface UserSidebarProps {
   user: User | null;
@@ -31,7 +33,8 @@ interface UserSidebarProps {
   onRoutesLogged?: () => void;
   selectedCountries: string[];
   onCountryChange: (countries: string[]) => void;
-  onActiveTabChange?: (tab: ActiveTab) => void;
+  activeTab: ActiveTab;
+  setActiveTab: (tab: ActiveTab) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
   sidebarWidth?: number;
 }
@@ -49,19 +52,11 @@ export default function UserSidebar({
   onRoutesLogged,
   selectedCountries,
   onCountryChange,
-  onActiveTabChange,
+  activeTab,
+  setActiveTab,
   onStationClickHandler,
   sidebarWidth = 600
 }: UserSidebarProps) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('routes');
-
-  // Notify parent when tab changes
-  const handleTabChange = useCallback((tab: ActiveTab) => {
-    setActiveTab(tab);
-    if (onActiveTabChange) {
-      onActiveTabChange(tab);
-    }
-  }, [onActiveTabChange]);
 
   // Handle adding routes from journey planner - switches to Routes tab
   const handleAddRoutesFromPlanner = useCallback((routes: RouteNode[]) => {
@@ -71,15 +66,24 @@ export default function UserSidebar({
     }
 
     // Switch to Routes tab
-    handleTabChange('routes');
-  }, [onAddRoutesFromPlanner, handleTabChange]);
+    setActiveTab('routes');
+  }, [onAddRoutesFromPlanner, setActiveTab]);
+
+  // Close article tabs - switches back to Route Logger
+  const handleCloseArticle = useCallback(() => {
+    setActiveTab('routes');
+  }, [setActiveTab]);
+
+  // Check if we're in article mode
+  const isArticleMode = activeTab === 'howto' || activeTab === 'notes';
 
   return (
     <div style={{ width: `${sidebarWidth}px` }} className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
-      {/* Tab Headers */}
-      <div className="flex border-b border-gray-200">
+      {/* Tab Headers - hide when in article mode */}
+      {!isArticleMode && (
+        <div className="flex border-b border-gray-200">
         <button
-          onClick={() => handleTabChange('routes')}
+          onClick={() => setActiveTab('routes')}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
             activeTab === 'routes'
               ? 'border-blue-500 text-blue-600 bg-blue-50'
@@ -89,7 +93,7 @@ export default function UserSidebar({
           Route Logger
         </button>
         <button
-          onClick={() => handleTabChange('journey')}
+          onClick={() => setActiveTab('journey')}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
             activeTab === 'journey'
               ? 'border-blue-500 text-blue-600 bg-blue-50'
@@ -99,7 +103,7 @@ export default function UserSidebar({
           Journey Planner
         </button>
         <button
-          onClick={() => handleTabChange('filter')}
+          onClick={() => setActiveTab('filter')}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
             activeTab === 'filter'
               ? 'border-blue-500 text-blue-600 bg-blue-50'
@@ -108,7 +112,8 @@ export default function UserSidebar({
         >
           Country Settings & Stats
         </button>
-      </div>
+        </div>
+      )}
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
@@ -141,6 +146,14 @@ export default function UserSidebar({
             selectedCountries={selectedCountries}
             onCountryChange={onCountryChange}
           />
+        )}
+
+        {activeTab === 'howto' && (
+          <HowToUseArticle onClose={handleCloseArticle} />
+        )}
+
+        {activeTab === 'notes' && (
+          <RailwayNotesArticle onClose={handleCloseArticle} />
         )}
       </div>
     </div>

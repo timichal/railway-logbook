@@ -1,5 +1,4 @@
-import VectorMapWrapper from '@/components/VectorMapWrapper';
-import Navbar from '@/components/Navbar';
+import MainLayout from '@/components/MainLayout';
 import { getUser, logout } from '@/lib/authActions';
 import { getUserPreferences } from '@/lib/userPreferencesActions';
 import { SUPPORTED_COUNTRIES } from '@/lib/constants';
@@ -18,15 +17,11 @@ export default async function Home() {
 
   return (
     <div className="h-screen flex flex-col bg-white">
-      <Navbar user={user} onLogout={handleLogout} />
-
-      <main className="flex-1 overflow-hidden">
-        <VectorMapWrapper
-          className="w-full h-full"
-          user={user}
-          initialSelectedCountries={selectedCountries}
-        />
-      </main>
+      <MainLayout
+        user={user}
+        onLogout={handleLogout}
+        initialSelectedCountries={selectedCountries}
+      />
     </div>
   );
 }

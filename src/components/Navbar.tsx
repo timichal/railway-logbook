@@ -9,9 +9,12 @@ import RegisterForm from './RegisterForm';
 interface NavbarProps {
   user: User | null;
   onLogout?: () => void;
+  onOpenHowTo?: () => void;
+  onOpenNotes?: () => void;
+  showArticleButtons?: boolean;
 }
 
-export default function Navbar({ user, onLogout }: NavbarProps) {
+export default function Navbar({ user, onLogout, onOpenHowTo, onOpenNotes, showArticleButtons = false }: NavbarProps) {
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
   const [showRegisterDropdown, setShowRegisterDropdown] = useState(false);
   const loginRef = useRef<HTMLDivElement>(null);
@@ -46,15 +49,35 @@ export default function Navbar({ user, onLogout }: NavbarProps) {
   return (
     <header className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            The Railway Logbook
-          </h1>
-          <p className="text-gray-600 mt-1">
-            {user
-              ? `Welcome, ${user.name || user.email}! Log your rail journeys around Europe.`
-              : 'Log your rail journeys around Europe'}
-          </p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              The Railway Logbook
+            </h1>
+            <p className="text-gray-600 mt-1">
+              {user
+                ? `Welcome, ${user.name || user.email}! Log your rail journeys around Europe.`
+                : 'Log your rail journeys around Europe'}
+            </p>
+          </div>
+
+          {/* Article buttons - show only for non-admin views */}
+          {showArticleButtons && (
+            <div className="flex gap-2 ml-4">
+              <button
+                onClick={onOpenHowTo}
+                className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-md text-sm border border-blue-300 cursor-pointer"
+              >
+                How To Use
+              </button>
+              <button
+                onClick={onOpenNotes}
+                className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded-md text-sm border border-green-300 cursor-pointer"
+              >
+                Railway Notes
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-4">

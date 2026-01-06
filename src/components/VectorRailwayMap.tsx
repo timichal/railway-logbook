@@ -26,9 +26,23 @@ interface VectorRailwayMapProps {
   className?: string;
   user: User | null;
   initialSelectedCountries: string[];
+  activeTab: ActiveTab;
+  setActiveTab: (tab: ActiveTab) => void;
+  sidebarWidth: number;
+  onSidebarResize: () => void;
+  isResizing: boolean;
 }
 
-export default function VectorRailwayMap({ className = '', user, initialSelectedCountries }: VectorRailwayMapProps) {
+export default function VectorRailwayMap({
+  className = '',
+  user,
+  initialSelectedCountries,
+  activeTab,
+  setActiveTab,
+  sidebarWidth,
+  onSidebarResize,
+  isResizing
+}: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const { showError } = useToast();
 
@@ -41,9 +55,6 @@ export default function VectorRailwayMap({ className = '', user, initialSelected
   // Country filter state - initialize with server-provided preferences
   const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
   const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
-
-  // Active tab state (tracks which sidebar tab is active)
-  const [activeTab, setActiveTab] = useState<ActiveTab>('routes');
 
   // Scenic routes outline toggle state (default: off)
   const [showScenicOutline, setShowScenicOutline] = useState<boolean>(false);
@@ -568,9 +579,17 @@ export default function VectorRailwayMap({ className = '', user, initialSelected
         onRoutesLogged={handleRoutesLogged}
         selectedCountries={selectedCountries}
         onCountryChange={handleCountriesChange}
-        onActiveTabChange={setActiveTab}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
         onStationClickHandler={handleSetStationClickHandler}
-        sidebarWidth={600}
+        sidebarWidth={sidebarWidth}
+      />
+
+      {/* Resizer */}
+      <div
+        onMouseDown={onSidebarResize}
+        className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? 'bg-blue-400' : ''}`}
+        style={{ userSelect: 'none' }}
       />
 
       {/* Map Container */}

@@ -60,6 +60,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `npm run build` - Build production application
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint checks
+- `npx tsc --noEmit` - Run TypeScript type checking without building
 
 ### Prerequisites
 - **Osmium Tool** required for data processing: `conda install conda-forge::osmium-tool`
@@ -117,7 +118,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension); floating search box in top-right
 - **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
-- **Unified User Sidebar** - Left-side tabbed sidebar with three sections: Route Logger, Journey Planner, and Country Settings & Stats (see dedicated section below)
+- **Unified User Sidebar** - Left-side resizable tabbed sidebar (400px-1200px) with five sections: Route Logger, Journey Planner, Country Settings & Stats, How To Use, and Railway Notes (see dedicated section below)
+- **Article Tabs** - "How To Use" and "Railway Notes" buttons in navbar open full-screen article tabs in sidebar with close button to return to Route Logger
 
 ### 5. Admin System Architecture
 - **Admin Access Control** - Restricted to user_id=1 with server-side authentication checks in all admin actions
@@ -171,7 +173,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 #### App Pages (`src/app/`)
 - `layout.tsx` - Root layout with authentication
-- `page.tsx` - Main user map page
+- `page.tsx` - Main user map page (server component that renders MainLayout with user data and preferences)
 - `login/page.tsx` - Login page
 - `register/page.tsx` - Registration page
 - `admin/page.tsx` - Admin route management page (user_id=1 only)
@@ -179,12 +181,15 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### Components (`src/components/`)
 
 **User Map Components:**
-- `VectorRailwayMap.tsx` - Main user map with unified sidebar, station search, and progress stats
+- `MainLayout.tsx` - Client component wrapper managing activeTab state and resizable sidebar (400px-1200px)
+- `VectorRailwayMap.tsx` - Main user map with unified sidebar, station search, progress stats, and resizer handle
 - `VectorMapWrapper.tsx` - Wrapper for user map with authentication; passes server-side user preferences to avoid flash
-- `UserSidebar.tsx` - Unified tab-based sidebar (Route Logger / Journey Planner / Country Settings & Stats)
+- `UserSidebar.tsx` - Unified tab-based sidebar (Route Logger / Journey Planner / Country Settings & Stats / How To Use / Railway Notes)
 - `SelectedRoutesList.tsx` - Route Logger tab: route selection list and bulk logging form
 - `JourneyPlanner.tsx` - Journey Planner tab: pathfinding between stations (from → via → to with drag-and-drop reordering); stations clickable on map
 - `CountriesStatsTab.tsx` - Country Settings & Stats tab: country filter checkboxes (CZ, SK, AT, PL, DE, LT, LV, EE) with per-country stats and total
+- `HowToUseArticle.tsx` - Article tab with header and close button (empty content area for user instructions)
+- `RailwayNotesArticle.tsx` - Article tab with header and close button (empty content area for railway notes)
 - `TripRow.tsx` - Individual trip row in Manage Trips modal (inline editing/deleting)
 
 **Admin Map Components:**
@@ -199,6 +204,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `NotesPopup.tsx` - Popup component for creating/editing admin notes (text field, save/delete buttons, keyboard shortcuts)
 
 **Shared Components:**
+- `Navbar.tsx` - Navigation bar with title, login/logout, and article buttons ("How To Use" and "Railway Notes")
 - `LoginForm.tsx` - Login form with email/password
 - `RegisterForm.tsx` - Registration form
 
@@ -283,6 +289,14 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `<country>-pruned.geojson` - Custom filtered data (ready for database loading)
 - `railway_data_YYYY-MM-DD.sql` - Exported railway_routes, user_trips, and admin_notes (from `npm run exportRouteData`)
 
+## Development Workflow
+
+### Type Checking
+- **ALWAYS run `npx tsc --noEmit` after completing a batch of related code changes** to verify type correctness
+- Do NOT run full builds (`npm run build`) unless specifically requested by the user
+- Type checking is sufficient for catching most issues and is much faster than full builds
+- Running type checks frequently prevents accumulation of type errors
+
 ## Development Notes
 
 ### TypeScript Configuration
@@ -338,10 +352,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Click routes to add them to the selected routes panel (no popups)
 
 ### Unified User Sidebar
-- **Purpose**: Consolidated tabbed interface for route logging, journey planning, and country filtering
-- **Location**: Fixed left-side sidebar (600px width, always visible)
-- **Architecture**: Three tabs modeled after admin interface pattern
+- **Purpose**: Consolidated tabbed interface for route logging, journey planning, country filtering, and documentation
+- **Location**: Resizable left-side sidebar (default 600px, range 400px-1200px)
+- **Architecture**: Five tabs with activeTab state managed in MainLayout component
+- **Resizing**: Blue drag handle between sidebar and map (same as admin interface)
 - **Tab Switching**: Affects map interaction behavior (route clicking only works in Route Logger tab, station clicking only in Journey Planner tab)
+- **State Management**: activeTab state in MainLayout flows down through VectorMapWrapper → VectorRailwayMap → UserSidebar (no useEffect synchronization)
 
 #### Tab 1: Route Logger
 - **Purpose**: Build a selection of routes for batch logging or individual management
@@ -447,3 +463,21 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Automatically determines start_country and end_country when admin creates/edits routes
   - Uses ISO 3166-1 alpha-2 codes (2-letter country codes)
   - Detection based on first and last coordinate of route geometry
+
+#### Tab 4: How To Use
+- **Purpose**: User documentation and instructions article
+- **Access**: Click "How To Use" button in navbar (blue button next to title)
+- **UI Features**:
+  - Full-screen article view with header and close button (×)
+  - Tab headers hidden when in article mode
+  - Close button returns to Route Logger tab
+  - Empty content area for user to fill with instructions
+
+#### Tab 5: Railway Notes
+- **Purpose**: Railway information and notes article
+- **Access**: Click "Railway Notes" button in navbar (green button next to title)
+- **UI Features**:
+  - Full-screen article view with header and close button (×)
+  - Tab headers hidden when in article mode
+  - Close button returns to Route Logger tab
+  - Empty content area for user to fill with railway notes
