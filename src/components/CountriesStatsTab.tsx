@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import type { DataAccess } from '@/lib/dataAccess';
 import { SUPPORTED_COUNTRIES } from '@/lib/constants';
 import type { ProgressByCountry } from '@/lib/userActions';
+import { getCountryFlag } from '@/lib/countryUtils';
 
 interface CountriesStatsTabProps {
   dataAccess: DataAccess;
@@ -49,13 +50,6 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
 
   const formatKm = (km: number) => {
     return km.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  };
-
-  // Convert country code to flag emoji (e.g., "CZ" → "🇨🇿")
-  const getCountryFlag = (countryCode: string) => {
-    return countryCode
-      .toUpperCase()
-      .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt(0)));
   };
 
   return (
