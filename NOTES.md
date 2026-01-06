@@ -10,8 +10,6 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshrani
 rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
-- nájezd loop Mulhouse (fix 5. 1.)
-- split Cava Carbonara-Pavia (fix 5. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
