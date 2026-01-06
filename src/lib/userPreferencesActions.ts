@@ -65,22 +65,3 @@ export async function updateUserPreferences(selectedCountries: string[]): Promis
     throw new Error('Failed to update user preferences');
   }
 }
-
-/**
- * Ensure user preferences exist (called during user creation/login)
- */
-export async function ensureUserPreferences(userId: number): Promise<void> {
-  try {
-    const defaultCountries = SUPPORTED_COUNTRIES.map(c => c.code);
-
-    await query(
-      `INSERT INTO user_preferences (user_id, selected_countries)
-       VALUES ($1, $2)
-       ON CONFLICT (user_id) DO NOTHING`,
-      [userId, defaultCountries]
-    );
-  } catch (error) {
-    console.error('Error ensuring user preferences:', error);
-    // Don't throw - this is a non-critical operation
-  }
-}

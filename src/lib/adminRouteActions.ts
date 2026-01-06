@@ -158,44 +158,6 @@ export async function getAllRouteEndpoints(): Promise<GeoJSONFeatureCollection> 
 }
 
 /**
- * Get all railway routes with geometry (for map display)
- */
-export async function getAllRailwayRoutesWithGeometry(): Promise<GeoJSONFeatureCollection> {
-  const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
-  }
-
-  const result = await query(`
-    SELECT track_id, from_station, to_station, track_number, description, usage_type,
-           ST_AsGeoJSON(geometry) as geometry,
-           starting_part_id, ending_part_id, is_valid, error_message
-    FROM railway_routes
-    ORDER BY from_station, to_station
-  `);
-
-  const features: GeoJSONFeature[] = result.rows.map(row => ({
-    type: 'Feature' as const,
-    geometry: JSON.parse(row.geometry),
-    properties: {
-      track_id: row.track_id,
-      name: `${row.from_station} ⟷ ${row.to_station}`,
-      description: row.description ?? undefined,
-      usage: row.usage_type,
-      starting_part_id: row.starting_part_id,
-      ending_part_id: row.ending_part_id,
-      is_valid: row.is_valid,
-      error_message: row.error_message ?? undefined
-    }
-  }));
-
-  return {
-    type: 'FeatureCollection',
-    features
-  };
-}
-
-/**
  * Create a new route OR update existing route geometry
  * @param trackId - If provided, updates geometry only. If omitted, creates new route.
  * @param startCoordinate - Exact start coordinate [lng, lat]

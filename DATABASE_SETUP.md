@@ -113,19 +113,6 @@ Update the database connection settings if needed.
 
 ## Usage
 
-### Querying Data
-
-```typescript
-// Get data formatted as GeoJSON for map display (includes dynamic styling)
-const geoJson = await getRailwayDataAsGeoJSON(1);
-
-// Update user's railway data (including partial flag)
-await updateUserRailwayData("track_123", "2024-01-15", "Great scenic route!", false);
-
-// Update with partial completion
-await updateUserRailwayData("track_456", "2024-01-20", "Only rode part of this route", true);
-```
-
 The frontend automatically handles:
 - **Dynamic Styling**: Route colors based on completion status (from most recent trip)
   - DarkGreen (#006400) for fully visited routes (date exists and not partial)
