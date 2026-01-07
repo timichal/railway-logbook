@@ -1,19 +1,13 @@
 #!/bin/bash
 
 # Deploy map data to remote server
-# Usage: ./deploy.sh <DATE>
-# Example: ./deploy.sh 251016
+# Automatically uses previous day's date in YYMMDD format
+# Example: If today is 2026-01-08, uses 250107
 
 set -e  # Exit on error
 
-if [ -z "$1" ]; then
-  echo "Error: DATE argument required"
-  echo "Usage: ./deploy.sh <DATE>"
-  echo "Example: ./deploy.sh 251016"
-  exit 1
-fi
-
-DATE=$1
+# Calculate previous day's date in YYMMDD format
+DATE=$(date -d "yesterday" +%y%m%d)
 REMOTE_HOST="railmap@railmap.zlatkovsky.cz"
 REMOTE_DIR="/home/railmap/osm-trains"
 PRUNED_FILE="europe-pruned-${DATE}.geojson"

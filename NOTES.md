@@ -48,6 +48,7 @@ RAKOUSKO
 čísla: z traťové mapy
 traťové jř https://www.oebb.at/en/fahrplan/fahrplanbilder
 traťová mapa https://www.oebb.at/de/dam/jcr:7fc18e86-1c23-4cf0-b9e0-94eb05d32c3e/bahnnetz-oebb.pdf
+síťová čísla https://infrastruktur.oebb.at/de/geschaeftspartner/schienennetz/dokumente-und-daten/netzkarten/karte-oebb-netz.pdf
 
 
 NĚMECKO
