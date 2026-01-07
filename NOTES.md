@@ -10,6 +10,7 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshrani
 rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
+- ceva ormea split (fix 7. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
