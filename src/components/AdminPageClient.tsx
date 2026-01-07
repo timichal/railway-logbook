@@ -38,7 +38,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     coordinates: [number, number][],
     railwayParts: RailwayPart[],
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
+    hasBacktracking?: boolean
   } | null>(null);
   const [createFormCoordinates, setCreateFormCoordinates] = useState<{
     startingCoordinate: [number, number] | null,
@@ -84,7 +85,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     coordinates: [number, number][],
     railwayParts: RailwayPart[],
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
+    hasBacktracking?: boolean
   ) => {
     console.log('AdminPageClient: Preview route requested');
     console.log('Part IDs:', partIds);
@@ -92,8 +94,9 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     console.log('Railway parts:', railwayParts.length);
     console.log('Start coordinate:', startCoordinate);
     console.log('End coordinate:', endCoordinate);
+    console.log('Has backtracking:', hasBacktracking);
 
-    setPreviewRoute({ partIds, coordinates, railwayParts, startCoordinate, endCoordinate });
+    setPreviewRoute({ partIds, coordinates, railwayParts, startCoordinate, endCoordinate, hasBacktracking });
     setIsPreviewMode(true);
   };
 
@@ -125,7 +128,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     try {
       const trackId = await saveRailwayRoute(
         routeData,
-        { partIds: previewRoute.partIds, coordinates: previewRoute.coordinates },
+        { partIds: previewRoute.partIds, coordinates: previewRoute.coordinates, hasBacktracking: previewRoute.hasBacktracking },
         previewRoute.startCoordinate,
         previewRoute.endCoordinate,
         previewRoute.railwayParts

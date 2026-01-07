@@ -16,7 +16,8 @@ interface AdminSidebarProps {
     coordinates: [number, number][],
     railwayParts: RailwayPart[],
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
+    hasBacktracking?: boolean
   ) => void;
   onCreateFormCoordinatesChange?: (coords: {startingCoordinate: [number, number] | null, endingCoordinate: [number, number] | null}) => void;
   isPreviewMode?: boolean;

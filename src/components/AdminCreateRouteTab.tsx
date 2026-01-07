@@ -17,7 +17,8 @@ interface AdminCreateRouteTabProps {
     coordinates: [number, number][],
     railwayParts: RailwayPart[],
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
+    hasBacktracking?: boolean
   ) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
@@ -66,7 +67,8 @@ export default function AdminCreateRouteTab({
     coordinates: [number, number][],
     railwayParts: RailwayPart[],
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
+    hasBacktracking?: boolean
   } | null>(null);
 
   // Reset form function
@@ -119,6 +121,7 @@ export default function AdminCreateRouteTab({
     if (result) {
       console.log('Preview: Path found!');
       console.log('Part IDs:', result.partIds);
+      console.log('Has backtracking:', result.hasBacktracking);
 
       // Fetch the actual railway part geometries from the database
       const railwayParts = await getRailwayPartsByIds(result.partIds);
@@ -130,11 +133,12 @@ export default function AdminCreateRouteTab({
         coordinates: result.coordinates,
         railwayParts,
         startCoordinate: startingCoordinate,
-        endCoordinate: endingCoordinate
+        endCoordinate: endingCoordinate,
+        hasBacktracking: result.hasBacktracking
       });
 
       // Pass both the path result, the individual railway parts, and the start/end coordinates
-      onPreviewRoute(result.partIds, result.coordinates, railwayParts, startingCoordinate, endingCoordinate);
+      onPreviewRoute(result.partIds, result.coordinates, railwayParts, startingCoordinate, endingCoordinate, result.hasBacktracking);
     } else {
       console.error('Preview: No path found between coordinates');
       showError('No path found between the selected coordinates within 222km. Make sure both points are on connected railway parts.');
@@ -173,7 +177,7 @@ export default function AdminCreateRouteTab({
       // Metadata (name, description, usage_type, track_number, frequency, link, scenic, intended_backtracking) won't be used in update mode
       await saveRailwayRoute(
         { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '', scenic: false, intended_backtracking: false }, // Dummy data, not used in UPDATE mode
-        { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates },
+        { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates, hasBacktracking: currentPathResult.hasBacktracking },
         currentPathResult.startCoordinate,
         currentPathResult.endCoordinate,
         currentPathResult.railwayParts,
