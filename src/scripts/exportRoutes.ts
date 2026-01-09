@@ -5,10 +5,10 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 
 /**
- * Export railway_routes, user_trips (user_id=1), and admin_notes to SQL dump
+ * Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
  */
 async function exportRoutes() {
-  console.log('Exporting railway_routes, user_trips, and admin_notes...');
+  console.log('Exporting railway_routes, user_journeys, user_logged_parts, and admin_notes...');
 
   // Create data directory if it doesn't exist
   const dataDir = path.join(process.cwd(), 'data');
@@ -49,34 +49,69 @@ async function exportRoutes() {
     // Read the dump from the temp file
     const sqlDump = fs.readFileSync(tempFilepath, 'utf-8');
 
-    // Get user_trips for user_id=1
-    // Get user_trips for user_id=1
-    console.log('Exporting user_trips for user_id=1...');
-    const userDataResult = await query(`
+    // Get user_journeys for user_id=1
+    console.log('Exporting user_journeys for user_id=1...');
+    const journeysResult = await query(`
       SELECT
+        id,
         user_id,
-        track_id,
+        name,
+        description,
         date,
-        note,
-        partial
-      FROM user_trips
+        created_at,
+        updated_at
+      FROM user_journeys
       WHERE user_id = 1
-      ORDER BY track_id
+      ORDER BY date DESC
     `);
 
-    // Generate SQL INSERT statements for user_trips
-    let userDataSQL = '\n-- User railway data for user_id=1\n';
-    if (userDataResult.rows.length > 0) {
-      userDataSQL += 'DELETE FROM public.user_trips WHERE user_id = 1;\n\n';
-      for (const row of userDataResult.rows) {
-        const dateValue = row.date ? `'${row.date.toISOString().split('T')[0]}'` : 'NULL';
-        const noteValue = row.note ? `'${row.note.replace(/'/g, "''")}'` : 'NULL';
-        const partialValue = row.partial ? 'true' : 'false';
+    // Generate SQL INSERT statements for user_journeys
+    let journeysSQL = '\n-- User journeys for user_id=1\n';
+    if (journeysResult.rows.length > 0) {
+      journeysSQL += 'DELETE FROM public.user_journeys WHERE user_id = 1;\n\n';
+      for (const row of journeysResult.rows) {
+        const nameValue = `'${row.name.replace(/'/g, "''")}'`;
+        const descValue = row.description ? `'${row.description.replace(/'/g, "''")}'` : 'NULL';
+        const dateValue = `'${row.date.toISOString().split('T')[0]}'`;
+        const createdValue = `'${row.created_at.toISOString()}'`;
+        const updatedValue = `'${row.updated_at.toISOString()}'`;
 
-        userDataSQL += `INSERT INTO public.user_trips (user_id, track_id, date, note, partial) VALUES (${row.user_id}, ${row.track_id}, ${dateValue}, ${noteValue}, ${partialValue});\n`;
+        journeysSQL += `INSERT INTO public.user_journeys (id, user_id, name, description, date, created_at, updated_at) VALUES (${row.id}, ${row.user_id}, ${nameValue}, ${descValue}, ${dateValue}, ${createdValue}, ${updatedValue});\n`;
       }
+      journeysSQL += '\nSELECT setval(\'user_journeys_id_seq\', (SELECT MAX(id) FROM user_journeys));\n';
     } else {
-      userDataSQL += '-- No user data found for user_id=1\n';
+      journeysSQL += '-- No journeys found for user_id=1\n';
+    }
+
+    // Get user_logged_parts for user_id=1
+    console.log('Exporting user_logged_parts for user_id=1...');
+    const loggedPartsResult = await query(`
+      SELECT
+        id,
+        user_id,
+        journey_id,
+        track_id,
+        partial,
+        created_at
+      FROM user_logged_parts
+      WHERE user_id = 1
+      ORDER BY journey_id, track_id
+    `);
+
+    // Generate SQL INSERT statements for user_logged_parts
+    let loggedPartsSQL = '\n-- User logged parts for user_id=1\n';
+    if (loggedPartsResult.rows.length > 0) {
+      loggedPartsSQL += 'DELETE FROM public.user_logged_parts WHERE user_id = 1;\n\n';
+      for (const row of loggedPartsResult.rows) {
+        const trackIdValue = row.track_id !== null ? row.track_id : 'NULL';
+        const partialValue = row.partial ? 'true' : 'false';
+        const createdValue = `'${row.created_at.toISOString()}'`;
+
+        loggedPartsSQL += `INSERT INTO public.user_logged_parts (id, user_id, journey_id, track_id, partial, created_at) VALUES (${row.id}, ${row.user_id}, ${row.journey_id}, ${trackIdValue}, ${partialValue}, ${createdValue});\n`;
+      }
+      loggedPartsSQL += '\nSELECT setval(\'user_logged_parts_id_seq\', (SELECT MAX(id) FROM user_logged_parts));\n';
+    } else {
+      loggedPartsSQL += '-- No logged parts found for user_id=1\n';
     }
 
     // Get admin_notes using pg_dump (same as railway_routes)
@@ -123,8 +158,9 @@ async function exportRoutes() {
     const fullDump = `-- Railway Data Export (${timestamp})
 -- This file contains:
 --   1. railway_routes table (full export)
---   2. user_trips for user_id=1
---   3. admin_notes (admin-only annotations)
+--   2. user_journeys for user_id=1
+--   3. user_logged_parts for user_id=1
+--   4. admin_notes (admin-only annotations)
 
 -- Clear existing data
 DELETE FROM public.railway_routes;
@@ -134,7 +170,9 @@ SET session_replication_role = replica;
 
 ${sqlDump}
 
-${userDataSQL}
+${journeysSQL}
+
+${loggedPartsSQL}
 
 ${adminNotesSQL}
 
@@ -151,7 +189,8 @@ SET session_replication_role = DEFAULT;
     }
 
     console.log(`✓ Exported railway_routes (${sqlDump.split('\n').filter(l => l.startsWith('INSERT')).length} routes)`);
-    console.log(`✓ Exported user_trips (${userDataResult.rows.length} records)`);
+    console.log(`✓ Exported user_journeys (${journeysResult.rows.length} journeys)`);
+    console.log(`✓ Exported user_logged_parts (${loggedPartsResult.rows.length} logged parts)`);
     console.log(`✓ Exported admin_notes (${notesCount} notes)`);
     console.log(`✓ Saved to ${filepath}`);
     process.exit(0);

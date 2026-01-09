@@ -4,7 +4,7 @@ import { execSync } from 'child_process';
 import { query } from '../lib/db';
 
 /**
- * Import railway_routes, user_trips, and admin_notes from SQL dump
+ * Import railway_routes, user_journeys, user_logged_parts, and admin_notes from SQL dump
  */
 async function importRoutes() {
   // Get filename from command line arguments
@@ -13,7 +13,7 @@ async function importRoutes() {
   if (!filename) {
     console.error('Usage: npm run importRouteData <filename>');
     console.error('Example: npm run importRouteData ./data/railway_data_2025-01-15.sql');
-    console.error('\nImports railway_routes, user_trips (user_id=1), and admin_notes from SQL dump');
+    console.error('\nImports railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes from SQL dump');
     process.exit(1);
   }
 
@@ -29,7 +29,7 @@ async function importRoutes() {
   }
 
   console.log(`Importing railway data from ${filename}...`);
-  console.log('This will import: railway_routes, user_trips (user_id=1), and admin_notes\n');
+  console.log('This will import: railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes\n');
 
   try {
     // Get database credentials from environment
@@ -91,8 +91,11 @@ async function importRoutes() {
         const routesCount = await query('SELECT COUNT(*) FROM railway_routes');
         console.log(`✓ Railway routes: ${routesCount.rows[0].count}`);
 
-        const tripsCount = await query('SELECT COUNT(*) FROM user_trips WHERE user_id = 1');
-        console.log(`✓ User trips (user_id=1): ${tripsCount.rows[0].count}`);
+        const journeysCount = await query('SELECT COUNT(*) FROM user_journeys WHERE user_id = 1');
+        console.log(`✓ User journeys (user_id=1): ${journeysCount.rows[0].count}`);
+
+        const loggedPartsCount = await query('SELECT COUNT(*) FROM user_logged_parts WHERE user_id = 1');
+        console.log(`✓ User logged parts (user_id=1): ${loggedPartsCount.rows[0].count}`);
 
         const notesCount = await query('SELECT COUNT(*) FROM admin_notes');
         console.log(`✓ Admin notes: ${notesCount.rows[0].count}`);

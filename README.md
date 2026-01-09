@@ -53,23 +53,26 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - `users` - User accounts with authentication
 - `stations` - Railway stations (Point features)
 - `railway_parts` - Raw railway segments from OSM
-- `railway_routes` - Defined routes with usage type, scenic flag, country tracking (start/end), validity flags
-- `user_trips` - User ride history (dates, notes, partial flag)
+- `railway_routes` - Defined routes with usage type, scenic flag, country tracking (start/end), validity flags, backtracking flags
+- `user_journeys` - Named trips with dates and descriptions
+- `user_logged_parts` - Connects journeys to routes with partial flags
 - `user_preferences` - User settings (selected countries for filtering)
+- `admin_notes` - Admin-only map annotations
 
 ### Features
 
 **For Users:**
 - Interactive map with badge-style hover popups (color-coded: usage type, frequency, scenic flag)
-- **Country filtering** - Filter routes by country (CZ, SK, AT, PL, DE) with Select All/None options
+- **Country filtering** - Filter routes by country (CZ, SK, AT, PL, DE, LT, LV, EE) with Select All/None options
 - Three-way color coding:
   - Dark green = fully completed routes
   - Dark orange = partially completed routes
   - Red = unvisited routes
   - Scenic routes display with amber outline effect
 - Progress tracking (km/% of total distance, respects country filter, excludes partial routes)
-- Click routes to mark ride date, add notes, and flag partial completion
-- Journey planner with multi-station routing (from → via → to)
+- **Journey-based logging** - Organize routes into named journeys with dates and descriptions
+- Journey planner with multi-station routing (from → via → to with drag-and-drop)
+- Journey log for viewing and managing all logged trips
 
 **For Admin (user_id=1):**
 - Create routes by clicking railway_parts on map
