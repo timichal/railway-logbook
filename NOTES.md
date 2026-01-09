@@ -10,7 +10,6 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshrani
 rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
-- ceva ormea split (fix 7. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
@@ -53,6 +52,8 @@ síťová čísla https://infrastruktur.oebb.at/de/geschaeftspartner/schienennet
 
 NĚMECKO
 čísla: z OSM
+fanmapa regiovlaků: https://www.reddit.com/r/TransitDiagrams/comments/1htftoy/oc_regional_train_services_germany_2025/#lightbox
+berlin sbahn: https://sbahn.berlin/liniennetz/
 
 ŠVÝCARSKO
 čísla: z traťové mapy
