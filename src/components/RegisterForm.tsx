@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { register } from '@/lib/authActions';
 import { LocalStorageManager } from '@/lib/localStorage';
+import { migrateLocalJourneys } from '@/lib/migrationActions';
 import { useToast } from '@/lib/toast';
 
 interface RegisterFormProps {
@@ -21,17 +22,30 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
     setLoading(true);
 
     try {
-      // Export localStorage preferences before registration
+      // Export localStorage data before registration
+      const { journeys, parts } = LocalStorageManager.exportJourneysData();
       const localPreferences = LocalStorageManager.exportPreferences();
 
-      // Register (note: journey migration not yet implemented)
+      // Register with auto-migration
       const result = await register(formData, [], localPreferences);
 
-      // Check if there were local journeys
-      const journeyCount = LocalStorageManager.getJourneyCount();
+      // Migrate journeys if there are any
+      if (journeys.length > 0) {
+        try {
+          const migrationResult = await migrateLocalJourneys(journeys, parts);
 
-      if (journeyCount > 0) {
-        showSuccess(`Account created! Note: You have ${journeyCount} journey${journeyCount !== 1 ? 's' : ''} in local storage that won't be visible while logged in.`);
+          // Clear localStorage after successful migration
+          LocalStorageManager.clearAll();
+
+          if (migrationResult.journeysMigrated > 0) {
+            showSuccess(`Account created! ${migrationResult.journeysMigrated} journey${migrationResult.journeysMigrated !== 1 ? 's' : ''} and ${migrationResult.partsMigrated} route${migrationResult.partsMigrated !== 1 ? 's' : ''} migrated successfully.`);
+          } else {
+            showSuccess('Account created successfully!');
+          }
+        } catch (migrationErr) {
+          console.error('Error migrating journeys:', migrationErr);
+          showSuccess('Account created, but journey migration failed. Your local journeys are still saved.');
+        }
       } else {
         showSuccess('Account created successfully!');
       }

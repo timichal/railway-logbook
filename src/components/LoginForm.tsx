@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/authActions';
 import { LocalStorageManager } from '@/lib/localStorage';
-import { migrateLocalTrips } from '@/lib/migrationActions';
+import { migrateLocalJourneys } from '@/lib/migrationActions';
 import { useToast } from '@/lib/toast';
 
 interface LoginFormProps {
@@ -28,20 +28,42 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       const journeyCount = LocalStorageManager.getJourneyCount();
 
       if (journeyCount > 0) {
-        // Show confirmation dialog about local journeys
+        // Show confirmation dialog for merging journeys
         showConfirm({
-          title: 'Local Journeys Found',
-          message: `You have ${journeyCount} journey${journeyCount !== 1 ? 's' : ''} stored locally. These will remain in your browser but won't be visible while logged in. You can keep them or delete them.`,
-          confirmLabel: 'Keep Local Journeys',
-          cancelLabel: 'Delete Local Journeys',
+          title: 'Merge Local Journeys?',
+          message: `You have ${journeyCount} journey${journeyCount !== 1 ? 's' : ''} stored locally. Would you like to merge them with your account?\n\nDuplicates will be skipped automatically.\n\nIf you choose "Keep Local", these journeys will remain in your browser but won't be visible until you log out.`,
+          confirmLabel: `Merge ${journeyCount} Journey${journeyCount !== 1 ? 's' : ''}`,
+          cancelLabel: 'Keep Local',
+          thirdLabel: 'Delete Local',
           variant: 'info',
-          onConfirm: () => {
-            // Keep local journeys
+          onConfirm: async () => {
+            try {
+              const { journeys, parts } = LocalStorageManager.exportJourneysData();
+              const result = await migrateLocalJourneys(journeys, parts);
+
+              // Clear localStorage after successful migration
+              LocalStorageManager.clearAll();
+
+              if (result.journeysMigrated > 0) {
+                showSuccess(`${result.journeysMigrated} journey${result.journeysMigrated !== 1 ? 's' : ''} and ${result.partsMigrated} route${result.partsMigrated !== 1 ? 's' : ''} merged successfully!`);
+              } else {
+                showSuccess('All journeys were duplicates, none merged.');
+              }
+
+              // Refresh to show merged data
+              router.refresh();
+            } catch (err) {
+              console.error('Error migrating journeys:', err);
+              showSuccess('Login successful, but journey migration failed. Your local journeys are still saved.');
+            }
+          },
+          onCancel: () => {
+            // User chose to keep local - journeys stay in localStorage but invisible
             showSuccess('Login successful! Your local journeys remain in browser storage.');
             router.refresh();
           },
-          onCancel: () => {
-            // Delete local journeys
+          onThird: () => {
+            // User chose to delete local journeys
             LocalStorageManager.clearAll();
             showSuccess('Login successful! Local journeys have been deleted.');
             router.refresh();
