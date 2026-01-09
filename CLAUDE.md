@@ -411,7 +411,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Station-to-route tolerance: Progressive 100m → 500m → 1km → 2km → 5km
   - Continues from previous segment's end route for path continuity
   - Supports unlimited journey length through via stations
-  - **Excludes scenic routes** - Only uses regular routes (scenic=FALSE) for pathfinding
+  - **Excludes special routes** - Only uses regular routes (usage_type=0) for pathfinding
 - **Route Highlighting**:
   - Found routes highlighted in gold (#FFD700) on map
   - Uses separate `highlighted_routes` layer with vector tile source

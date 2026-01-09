@@ -59,7 +59,7 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
             s.coordinates::geography,
             $2
           )
-          AND r.scenic = FALSE
+          AND r.usage_type = 0
         ORDER BY r.track_id
         `,
         [stationId, tolerance]
@@ -113,7 +113,7 @@ async function buildRouteGraphInBuffer(
         SELECT DISTINCT r.track_id, r.from_station, r.to_station
         FROM railway_routes r, search_area
         WHERE ST_Intersects(r.geometry, search_area.buffer_geom)
-          AND r.scenic = FALSE
+          AND r.usage_type = 0
       )
       SELECT DISTINCT
         r1.track_id as from_route,
