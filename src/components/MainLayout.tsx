@@ -27,11 +27,23 @@ export default function MainLayout({ user, onLogout, initialSelectedCountries }:
   const [activeTab, setActiveTab] = useState<ActiveTab>('routes');
   const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar();
 
+  // Wrap logout to also switch to Route Logger tab
+  const handleLogout = () => {
+    setActiveTab('routes');
+    onLogout();
+  };
+
+  // Handle successful login/register - switch to Route Logger tab
+  const handleAuthSuccess = () => {
+    setActiveTab('routes');
+  };
+
   return (
     <>
       <Navbar
         user={user}
-        onLogout={onLogout}
+        onLogout={handleLogout}
+        onAuthSuccess={handleAuthSuccess}
         onOpenHowTo={() => setActiveTab('howto')}
         onOpenNotes={() => setActiveTab('notes')}
       />

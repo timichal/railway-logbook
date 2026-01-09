@@ -40,6 +40,15 @@ export default function JourneyLogTab({
     loadJourneys();
   }, []);
 
+  // Clear highlights when component unmounts (tab switched)
+  useEffect(() => {
+    return () => {
+      if (onHighlightRoutes) {
+        onHighlightRoutes([]);
+      }
+    };
+  }, [onHighlightRoutes]);
+
   const loadJourneys = async () => {
     setIsLoading(true);
     try {
@@ -369,7 +378,7 @@ export default function JourneyLogTab({
                             </div>
                             <div className="flex items-center gap-3 mt-1 text-gray-600">
                               <span>{Number(route.length_km)?.toFixed(1)} km</span>
-                              {(route as any).partial && (
+                              {route.partial && (
                                 <span className="text-orange-600 font-medium">Partial</span>
                               )}
                             </div>

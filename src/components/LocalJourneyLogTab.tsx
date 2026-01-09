@@ -44,6 +44,15 @@ export default function LocalJourneyLogTab({
     return cleanup;
   }, []);
 
+  // Clear highlights when component unmounts (tab switched)
+  useEffect(() => {
+    return () => {
+      if (onHighlightRoutes) {
+        onHighlightRoutes([]);
+      }
+    };
+  }, [onHighlightRoutes]);
+
   const loadJourneys = () => {
     const allJourneys = LocalStorageManager.getJourneys();
     const allParts = LocalStorageManager.getLoggedParts();
@@ -370,22 +379,6 @@ export default function LocalJourneyLogTab({
                                   <span className="text-orange-600 font-medium">Partial</span>
                                 )}
                               </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleTogglePartial(part.id, part.partial)}
-                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
-                                title={part.partial ? 'Mark as complete' : 'Mark as partial'}
-                              >
-                                {part.partial ? 'Complete' : 'Partial'}
-                              </button>
-                              <button
-                                onClick={() => handleDeletePart(part.id)}
-                                className="text-red-600 hover:text-red-800 text-lg leading-none"
-                                title="Remove from journey"
-                              >
-                                ×
-                              </button>
                             </div>
                           </div>
                         ))}

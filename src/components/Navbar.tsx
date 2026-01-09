@@ -9,12 +9,13 @@ import RegisterForm from './RegisterForm';
 interface NavbarProps {
   user: User | null;
   onLogout?: () => void;
+  onAuthSuccess?: () => void;
   onOpenHowTo?: () => void;
   onOpenNotes?: () => void;
   isAdminPage?: boolean;
 }
 
-export default function Navbar({ user, onLogout, onOpenHowTo, onOpenNotes, isAdminPage = false }: NavbarProps) {
+export default function Navbar({ user, onLogout, onAuthSuccess, onOpenHowTo, onOpenNotes, isAdminPage = false }: NavbarProps) {
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
   const [showRegisterDropdown, setShowRegisterDropdown] = useState(false);
   const loginRef = useRef<HTMLDivElement>(null);
@@ -40,10 +41,16 @@ export default function Navbar({ user, onLogout, onOpenHowTo, onOpenNotes, isAdm
   // Close dropdown after successful login/register
   const handleLoginSuccess = () => {
     setShowLoginDropdown(false);
+    if (onAuthSuccess) {
+      onAuthSuccess();
+    }
   };
 
   const handleRegisterSuccess = () => {
     setShowRegisterDropdown(false);
+    if (onAuthSuccess) {
+      onAuthSuccess();
+    }
   };
 
   return (
