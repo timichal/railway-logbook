@@ -40,7 +40,7 @@ export function setupUserMapInteractions(
       usage_types: properties.usage_types,
       link: properties.link || null,
       date: properties.date,
-      note: properties.note,
+      journey_name: properties.journey_name,
       partial: properties.partial,
       length_km: Number(properties.length_km) || 0
     });
@@ -78,14 +78,16 @@ export function setupUserMapInteractions(
       formattedDescription += `<a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a><br />`;
     }
 
-    if (properties.date || properties.note) {
+    if (properties.date || properties.journey_name) {
       formattedDescription += `<hr class="my-2" />`;
     }
     if (properties.date) {
-      formattedDescription += `<span style="color: black;">Last ride: ${new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date))}</span><br />`;
-    }
-    if (properties.note) {
-      formattedDescription += `<span style="color: black;">${properties.note}</span>`;
+      const dateStr = new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date));
+      if (properties.journey_name) {
+        formattedDescription += `<span style="color: black;">Most recent: ${dateStr} (${properties.journey_name})</span>`;
+      } else {
+        formattedDescription += `<span style="color: black;">Most recent: ${dateStr}</span>`;
+      }
     }
 
     popupContent += `<div class="mb-2">${formattedDescription}</div>`;

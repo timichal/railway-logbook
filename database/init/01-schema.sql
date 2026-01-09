@@ -63,16 +63,25 @@ CREATE TABLE railway_routes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- User trips (supports multiple trips per route)
-CREATE TABLE user_trips (
+-- User journeys (named, dated collections of routes)
+CREATE TABLE user_journeys (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    track_id INTEGER NOT NULL REFERENCES railway_routes(track_id) ON DELETE CASCADE,
-    date DATE, -- Date of trip (can be null for unlogged routes)
-    note TEXT, -- User note
-    partial BOOLEAN DEFAULT FALSE, -- Partial completion flag
+    name TEXT NOT NULL CHECK (name != ''), -- User-defined journey name (required, non-empty)
+    description TEXT, -- Optional journey description
+    date DATE NOT NULL, -- Journey date (required)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User logged parts (connects journeys to routes with partial flags)
+CREATE TABLE user_logged_parts (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    journey_id INTEGER NOT NULL REFERENCES user_journeys(id) ON DELETE CASCADE,
+    track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE SET NULL, -- Nullable to preserve journey history
+    partial BOOLEAN DEFAULT FALSE, -- Per-journey partial flag
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- User preferences (for country filtering and other settings)
@@ -104,13 +113,23 @@ CREATE INDEX idx_railway_routes_start_country ON railway_routes (start_country);
 CREATE INDEX idx_railway_routes_end_country ON railway_routes (end_country);
 CREATE INDEX idx_railway_routes_starting_part ON railway_routes (starting_part_id);
 CREATE INDEX idx_railway_routes_ending_part ON railway_routes (ending_part_id);
-CREATE INDEX idx_user_trips_user_id ON user_trips (user_id);
-CREATE INDEX idx_user_trips_track_id ON user_trips (track_id);
-CREATE INDEX idx_user_trips_date ON user_trips (date);
+
+-- User journeys indexes
+CREATE INDEX idx_user_journeys_user_id ON user_journeys (user_id);
+CREATE INDEX idx_user_journeys_date ON user_journeys (date);
+CREATE INDEX idx_user_journeys_user_date ON user_journeys (user_id, date DESC); -- Composite index for common query pattern
+
+-- User logged parts indexes
+CREATE INDEX idx_logged_parts_user_id ON user_logged_parts (user_id);
+CREATE INDEX idx_logged_parts_journey_id ON user_logged_parts (journey_id);
+CREATE INDEX idx_logged_parts_track_id ON user_logged_parts (track_id);
+CREATE UNIQUE INDEX idx_logged_parts_unique ON user_logged_parts (journey_id, track_id); -- Same route once per journey
+CREATE INDEX idx_logged_parts_user_track_partial ON user_logged_parts (user_id, track_id, partial); -- CRITICAL: Progress calculation performance
+
 CREATE INDEX idx_admin_notes_coordinate ON admin_notes USING GIST (coordinate);
 
--- Trigger function to auto-update updated_at timestamp for admin_notes
-CREATE OR REPLACE FUNCTION update_admin_notes_timestamp()
+-- Trigger function to auto-update updated_at timestamp (reusable across tables)
+CREATE OR REPLACE FUNCTION update_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
@@ -118,8 +137,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Trigger to auto-update updated_at on user_journeys updates
+CREATE TRIGGER user_journeys_update_timestamp
+BEFORE UPDATE ON user_journeys
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
 -- Trigger to auto-update updated_at on admin_notes updates
 CREATE TRIGGER admin_notes_update_timestamp
 BEFORE UPDATE ON admin_notes
 FOR EACH ROW
-EXECUTE FUNCTION update_admin_notes_timestamp();
+EXECUTE FUNCTION update_timestamp();

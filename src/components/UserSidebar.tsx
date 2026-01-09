@@ -3,8 +3,9 @@
 import React, { useState, useCallback } from 'react';
 import type { User } from '@/lib/authActions';
 import type { DataAccess } from '@/lib/dataAccess';
-import SelectedRoutesList from './SelectedRoutesList';
-import JourneyPlanner from './JourneyPlanner';
+import JourneyLogger from './JourneyLogger';
+import LocalTripLogger from './LocalTripLogger';
+import JourneyLogTab from './JourneyLogTab';
 import CountriesStatsTab from './CountriesStatsTab';
 import HowToUseArticle from './HowToUseArticle';
 import RailwayNotesArticle from './RailwayNotesArticle';
@@ -18,14 +19,13 @@ interface RouteNode {
   length_km: number;
 }
 
-export type ActiveTab = 'routes' | 'journey' | 'filter' | 'howto' | 'notes';
+export type ActiveTab = 'routes' | 'journeylog' | 'filter' | 'howto' | 'notes';
 
 interface UserSidebarProps {
   user: User | null;
   dataAccess: DataAccess;
   selectedRoutes: SelectedRoute[];
   onRemoveRoute: (trackId: string) => void;
-  onManageTrips: (route: SelectedRoute) => void;
   onClearAll: () => void;
   onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
   onHighlightRoutes?: (routeIds: number[]) => void;
@@ -44,7 +44,6 @@ export default function UserSidebar({
   dataAccess,
   selectedRoutes,
   onRemoveRoute,
-  onManageTrips,
   onClearAll,
   onUpdateRoutePartial,
   onHighlightRoutes,
@@ -57,17 +56,6 @@ export default function UserSidebar({
   onStationClickHandler,
   sidebarWidth = 600
 }: UserSidebarProps) {
-
-  // Handle adding routes from journey planner - switches to Routes tab
-  const handleAddRoutesFromPlanner = useCallback((routes: RouteNode[]) => {
-    // Call parent callback to add routes
-    if (onAddRoutesFromPlanner) {
-      onAddRoutesFromPlanner(routes);
-    }
-
-    // Switch to Routes tab
-    setActiveTab('routes');
-  }, [onAddRoutesFromPlanner, setActiveTab]);
 
   // Close article tabs - switches back to Route Logger
   const handleCloseArticle = useCallback(() => {
@@ -92,16 +80,18 @@ export default function UserSidebar({
         >
           Route Logger
         </button>
-        <button
-          onClick={() => setActiveTab('journey')}
-          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
-            activeTab === 'journey'
-              ? 'border-blue-500 text-blue-600 bg-blue-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          Journey Planner
-        </button>
+        {user && (
+          <button
+            onClick={() => setActiveTab('journeylog')}
+            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+              activeTab === 'journeylog'
+                ? 'border-blue-500 text-blue-600 bg-blue-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            My Journeys
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('filter')}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
@@ -117,26 +107,32 @@ export default function UserSidebar({
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'routes' && (
-          <SelectedRoutesList
-            user={user}
-            dataAccess={dataAccess}
+        {activeTab === 'routes' && user && (
+          <JourneyLogger
             selectedRoutes={selectedRoutes}
             onRemoveRoute={onRemoveRoute}
-            onManageTrips={onManageTrips}
-            onClearAll={onClearAll}
+            onClearSelection={onClearAll}
             onUpdateRoutePartial={onUpdateRoutePartial}
+            onRoutesLogged={onRoutesLogged || (() => {})}
             onHighlightRoutes={onHighlightRoutes}
-            onAddRoutesFromPlanner={handleAddRoutesFromPlanner}
-            onRoutesLogged={onRoutesLogged}
+            onAddRoutesFromPlanner={onAddRoutesFromPlanner}
+            onStationClickHandler={onStationClickHandler}
+          />
+        )}
+        {activeTab === 'routes' && !user && (
+          <LocalTripLogger
+            selectedRoutes={selectedRoutes}
+            onRemoveRoute={onRemoveRoute}
+            onClearSelection={onClearAll}
+            onUpdateRoutePartial={onUpdateRoutePartial}
+            onRoutesLogged={onRoutesLogged || (() => {})}
           />
         )}
 
-        {activeTab === 'journey' && (
-          <JourneyPlanner
+        {activeTab === 'journeylog' && user && (
+          <JourneyLogTab
             onHighlightRoutes={onHighlightRoutes}
-            onAddRoutesToSelection={handleAddRoutesFromPlanner}
-            onStationClickHandler={onStationClickHandler}
+            onJourneyChanged={onRoutesLogged}
           />
         )}
 

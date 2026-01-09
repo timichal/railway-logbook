@@ -90,7 +90,8 @@ PARALLEL SAFE;
 
 -- Function: railway_routes_tile
 -- Serves railway routes (combined lines with metadata) as vector tiles
--- Includes user-specific trip data for styling (most recent trip's date/note/partial)
+-- Includes user-specific journey data for styling (most recent journey's date/name/partial)
+-- Uses "most permissive wins" logic: route is complete if it's complete in ANY journey
 -- Supports country filtering via query params
 CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
 RETURNS bytea AS $$
@@ -135,13 +136,13 @@ BEGIN
             rr.error_message,
             rr.starting_part_id,
             rr.ending_part_id,
-            -- Include most recent trip data for client-side styling
-            -- Use latest trip (by date, then by created_at) for route coloring
-            ut.date,
-            ut.note,
-            ut.partial,
-            -- Check if there's at least one complete trip for partial logic
-            CASE WHEN complete_trip.track_id IS NOT NULL THEN true ELSE false END AS has_complete_trip,
+            -- Include most recent journey data for client-side styling
+            -- Use latest journey (by date, then by created_at) for route coloring
+            recent_trip.date,
+            recent_trip.journey_name,
+            recent_trip.partial,
+            -- Check if there's at least one complete journey for "most permissive wins" logic
+            (complete_check.is_complete IS NOT NULL) AS has_complete_trip,
             -- Simplify geometry for tile display
             ST_AsMVTGeom(
                 rr.geometry_3857,
@@ -151,26 +152,29 @@ BEGIN
                 true
             ) AS geom
         FROM railway_routes rr
+        -- 1. Get most recent journey for this route
         LEFT JOIN LATERAL (
-            SELECT date, note, partial
-            FROM user_trips
-            WHERE track_id = rr.track_id
+            SELECT uj.date, uj.name as journey_name, ulp.partial
+            FROM user_logged_parts ulp
+            JOIN user_journeys uj ON ulp.journey_id = uj.id
+            WHERE ulp.track_id = rr.track_id
                 AND user_id_param IS NOT NULL
-                AND user_id = user_id_param
+                AND ulp.user_id = user_id_param
             ORDER BY
-                date DESC NULLS LAST,
-                created_at DESC
+                uj.date DESC NULLS LAST,
+                uj.created_at DESC
             LIMIT 1
-        ) ut ON true
+        ) recent_trip ON true
+        -- 2. Check if route is complete in ANY journey (for "most permissive wins" coloring)
         LEFT JOIN LATERAL (
-            SELECT track_id
-            FROM user_trips
+            SELECT 1 as is_complete
+            FROM user_logged_parts
             WHERE track_id = rr.track_id
                 AND user_id_param IS NOT NULL
                 AND user_id = user_id_param
-                AND (partial IS NULL OR partial = false)
+                AND partial = FALSE
             LIMIT 1
-        ) complete_trip ON true
+        ) complete_check ON true
         WHERE
             -- Spatial filter using index
             rr.geometry_3857 && tile_envelope
@@ -182,7 +186,7 @@ BEGIN
             )
         ORDER BY
             -- Render order: unvisited routes first (so visited are on top)
-            CASE WHEN ut.date IS NULL THEN 0 ELSE 1 END,
+            CASE WHEN recent_trip.date IS NULL THEN 0 ELSE 1 END,
             rr.from_station,
             rr.to_station
     ) AS mvtgeom

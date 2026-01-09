@@ -20,7 +20,6 @@ import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteract
 import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
 import { useToast } from '@/lib/toast';
 import UserSidebar, { type ActiveTab } from './UserSidebar';
-import TripRow from './TripRow';
 
 interface VectorRailwayMapProps {
   className?: string;
@@ -165,16 +164,8 @@ export default function VectorRailwayMap({
     featureStateTrackIdsRef.current = newTrackIds;
   }, [map, user]);
 
-  // Callback for when route editor refreshes map (used for localStorage feature-state updates)
-  const handleMapRefresh = useCallback(() => {
-    if (!user && map.current) {
-      // For unlogged users, reapply localStorage feature states after tile reload
-      updateLocalStorageFeatureStates();
-    }
-  }, [user, map, updateLocalStorageFeatureStates]);
-
   // Route editor hook (uses data access layer)
-  const routeEditor = useRouteEditor(dataAccess, map, userId, selectedCountries, handleMapRefresh);
+  const routeEditor = useRouteEditor(dataAccess, map, selectedCountries);
 
   // Handler to toggle route selection (only works in Route Logger tab)
   const handleRouteClick = useCallback(async (route: SelectedRoute) => {
@@ -249,7 +240,7 @@ export default function VectorRailwayMap({
       usage_types: '',
       link: null,
       date: null,
-      note: null,
+      journey_name: null,
       partial: null,
       length_km: route.length_km
     }));
@@ -268,13 +259,15 @@ export default function VectorRailwayMap({
     if (user) {
       // For logged users: refresh map tiles to show updated route colors from database
       setCacheBuster(Date.now());
+      // Also refresh progress stats
+      routeEditor.refreshProgress();
     } else {
       // For unlogged users: update feature states based on localStorage
       updateLocalStorageFeatureStates();
+      // Refresh progress stats
+      routeEditor.refreshProgress();
     }
-    // Refresh progress stats
-    routeEditor.fetchProgress();
-  }, [user, updateLocalStorageFeatureStates, routeEditor]);
+  }, [user, updateLocalStorageFeatureStates, routeEditor.refreshProgress]);
 
   // Set up localStorage feature states when map loads (for unlogged users)
   useEffect(() => {
@@ -356,8 +349,8 @@ export default function VectorRailwayMap({
 
       cleanup = setupUserMapInteractions(map.current, {
         onRouteClick: handleRouteClick,
-        // Only enable station clicking when in Journey tab and handler is registered
-        onStationClick: activeTab === 'journey' && journeyStationClickHandler
+        // Enable station clicking in Route Logger tab (for integrated planner)
+        onStationClick: activeTab === 'routes' && journeyStationClickHandler
           ? journeyStationClickHandler
           : undefined,
       });
@@ -378,10 +371,13 @@ export default function VectorRailwayMap({
     };
   }, [map, mapLoaded, handleRouteClick, activeTab, journeyStationClickHandler]);
 
-  // Fetch progress stats on component mount and when it changes
+  // Fetch progress stats on component mount
   useEffect(() => {
-    routeEditor.fetchProgress();
-  }, [routeEditor.fetchProgress]);
+    if (mapLoaded) {
+      // Just fetch progress stats (localStorage feature states handled separately)
+      routeEditor.refreshProgress();
+    }
+  }, [mapLoaded, routeEditor.refreshProgress]);
 
   // Handler for country filter changes
   const handleCountriesChange = async (countries: string[]) => {
@@ -571,7 +567,6 @@ export default function VectorRailwayMap({
         dataAccess={dataAccess}
         selectedRoutes={selectedRoutes}
         onRemoveRoute={handleRemoveRoute}
-        onManageTrips={routeEditor.openEditForm}
         onClearAll={handleClearAll}
         onUpdateRoutePartial={handleUpdateRoutePartial}
         onHighlightRoutes={setHighlightedRoutes}
@@ -618,7 +613,7 @@ export default function VectorRailwayMap({
               <input
                 type="checkbox"
                 checked={routeEditor.showSpecialLines}
-                onChange={(e) => routeEditor.setShowSpecialLines(e.target.checked)}
+                onChange={() => routeEditor.toggleShowSpecialLines()}
                 className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
               />
               <span>Show special lines</span>
@@ -697,61 +692,8 @@ export default function VectorRailwayMap({
       </div>
       </div>
 
-      {/* Manage Trips Modal */}
-      {routeEditor.showEditForm && routeEditor.editingFeature && (
-        <div className="absolute inset-0 flex items-center justify-center z-[9999] text-black">
-          <div className="bg-white p-6 rounded-lg shadow-xl border max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold mb-4">
-              Manage Trips: {routeEditor.editingFeature.track_number}
-              {' '}
-              {routeEditor.editingFeature.from_station} ⟷ {routeEditor.editingFeature.to_station}
-            </h3>
-
-            {/* Trips Table */}
-            <div className="mb-4 overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="text-left p-2">Date</th>
-                    <th className="text-left p-2">Note</th>
-                    <th className="text-center p-2">Partial</th>
-                    <th className="text-center p-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {routeEditor.trips.map((trip) => (
-                    <TripRow
-                      key={trip.id}
-                      trip={trip}
-                      onUpdate={routeEditor.updateTrip}
-                      onDelete={routeEditor.deleteTrip}
-                      onAdd={routeEditor.addTripInline}
-                    />
-                  ))}
-                  {/* Add new trip row */}
-                  <TripRow
-                    trip={null}
-                    onUpdate={routeEditor.updateTrip}
-                    onDelete={routeEditor.deleteTrip}
-                    onAdd={routeEditor.addTripInline}
-                    isNewRow={true}
-                  />
-                </tbody>
-              </table>
-            </div>
-
-            {/* Close Button */}
-            <div className="flex justify-end">
-              <button
-                onClick={routeEditor.closeEditForm}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Manage Trips Modal - REMOVED: Replaced with journey system */}
+      {/* Trip management functionality has been moved to journey-based logging */}
     </div>
   );
 }

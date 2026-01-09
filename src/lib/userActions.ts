@@ -2,7 +2,7 @@
 
 import { query } from './db';
 import { getUser } from './authActions';
-import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute, UserTrip } from './types';
+import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
 import { SUPPORTED_COUNTRIES } from './constants';
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {
@@ -63,42 +63,6 @@ export async function getAllRoutes(): Promise<RailwayRoute[]> {
   }));
 }
 
-export async function updateMultipleRoutes(
-  trackIds: number[],
-  date: string,
-  note: string | null = null,
-  partialValues: boolean[] = []
-): Promise<void> {
-  const user = await getUser();
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-
-  const userId = user.id;
-
-  const values = trackIds.map((trackId, idx) => {
-    const offset = idx * 5;
-    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`;
-  }).join(', ');
-
-  const params = trackIds.flatMap((trackId, idx) => {
-    const isPartial = partialValues[idx] ?? false;
-
-    return [
-      userId,
-      trackId,
-      date,
-      note || null,
-      isPartial
-    ];
-  });
-
-  await query(`
-    INSERT INTO user_trips (user_id, track_id, date, note, partial)
-    VALUES ${values}
-  `, params);
-}
-
 export interface UserProgress {
   totalKm: number;
   completedKm: number;
@@ -145,8 +109,9 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
     hasCountries ? [selectedCountries] : []
   );
 
-  // Get completed distance and count (routes with at least one complete trip, excluding Special usage_type=1)
-  // Use EXISTS to ensure each route is only counted once regardless of number of trips
+  // Get completed distance and count (routes with at least one complete journey, excluding Special usage_type=1)
+  // "Most permissive wins": Route is complete if it's complete in ANY journey
+  // Use EXISTS to ensure each route is only counted once regardless of number of journeys
   const completedResult = await query(
     `SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
@@ -157,11 +122,11 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
       ${hasCountries ? 'AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])' : ''}
       AND EXISTS (
         SELECT 1
-        FROM user_trips ut
-        WHERE ut.track_id = rr.track_id
-          AND ut.user_id = $1
-          AND ut.date IS NOT NULL
-          AND (ut.partial IS NULL OR ut.partial = FALSE)
+        FROM user_logged_parts
+        WHERE track_id = rr.track_id
+          AND user_id = $1
+          AND partial = FALSE
+          AND track_id IS NOT NULL
       )`,
     hasCountries ? [userId, selectedCountries] : [userId]
   );
@@ -237,11 +202,11 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
          AND rr.end_country = $1
          AND EXISTS (
            SELECT 1
-           FROM user_trips ut
-           WHERE ut.track_id = rr.track_id
-             AND ut.user_id = $2
-             AND ut.date IS NOT NULL
-             AND (ut.partial IS NULL OR ut.partial = FALSE)
+           FROM user_logged_parts
+           WHERE track_id = rr.track_id
+             AND user_id = $2
+             AND partial = FALSE
+             AND track_id IS NOT NULL
          )`,
       [country.code, userId]
     );
@@ -272,11 +237,11 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
        AND rr.length_km IS NOT NULL
        AND EXISTS (
          SELECT 1
-         FROM user_trips ut
-         WHERE ut.track_id = rr.track_id
-           AND ut.user_id = $1
-           AND ut.date IS NOT NULL
-           AND (ut.partial IS NULL OR ut.partial = FALSE)
+         FROM user_logged_parts
+         WHERE track_id = rr.track_id
+           AND user_id = $1
+           AND partial = FALSE
+           AND track_id IS NOT NULL
        )`,
     [userId]
   );
@@ -291,83 +256,4 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
       completedKm: Math.round(overallCompletedKm * 10) / 10,
     }
   };
-}
-
-/**
- * Get all trips for a specific route for the current user
- */
-export async function getUserTrips(trackId: string): Promise<UserTrip[]> {
-  const user = await getUser();
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-
-  const result = await query(`
-    SELECT id, track_id,
-           TO_CHAR(date, 'YYYY-MM-DD') as date,
-           note, partial, created_at, updated_at
-    FROM user_trips
-    WHERE user_id = $1 AND track_id = $2
-    ORDER BY date ASC NULLS FIRST, created_at ASC
-  `, [user.id, parseInt(trackId)]);
-
-  return result.rows;
-}
-
-/**
- * Add a new trip for a route
- */
-export async function addUserTrip(
-  trackId: string,
-  date: string,
-  note?: string | null,
-  partial?: boolean
-): Promise<void> {
-  const user = await getUser();
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-
-  await query(`
-    INSERT INTO user_trips (user_id, track_id, date, note, partial)
-    VALUES ($1, $2, $3, $4, $5)
-  `, [user.id, parseInt(trackId), date, note || null, partial ?? false]);
-}
-
-/**
- * Update an existing trip
- */
-export async function updateUserTrip(
-  tripId: number,
-  date: string,
-  note?: string | null,
-  partial?: boolean
-): Promise<void> {
-  const user = await getUser();
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-
-  // Verify the trip belongs to the current user
-  await query(`
-    UPDATE user_trips
-    SET date = $2, note = $3, partial = $4, updated_at = CURRENT_TIMESTAMP
-    WHERE id = $1 AND user_id = $5
-  `, [tripId, date, note || null, partial ?? false, user.id]);
-}
-
-/**
- * Delete a trip
- */
-export async function deleteUserTrip(tripId: number): Promise<void> {
-  const user = await getUser();
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-
-  // Verify the trip belongs to the current user before deleting
-  await query(`
-    DELETE FROM user_trips
-    WHERE id = $1 AND user_id = $2
-  `, [tripId, user.id]);
 }

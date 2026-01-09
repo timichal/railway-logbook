@@ -357,7 +357,7 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
   };
 
   return (
-    <div className="p-4 space-y-3 text-black">
+    <div className="space-y-3 text-black">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-bold">Journey Planner</h3>
         <button

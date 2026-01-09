@@ -93,21 +93,30 @@ export type RailwayRoute = {
   error_message?: string | null
   intended_backtracking?: boolean // Flag to indicate backtracking is intentional
   has_backtracking?: boolean // Flag set by verification script indicating route uses backtracking path
-  date?: string | null // From user_trips join
-  note?: string | null // From user_trips join
-  partial?: boolean | null // From user_trips join
+  date?: string | null // From most recent journey
+  journey_name?: string | null // From most recent journey (renamed from 'note')
+  partial?: boolean | null // From most recent journey
 }
 
-// User trip from database or localStorage
-export type UserTrip = {
-  id: number | string  // number for DB trips, string (UUID) for localStorage trips
+// User journey from database (named, dated collection of routes)
+export type Journey = {
+  id: number
   user_id: number
-  track_id: number
-  date: string
-  note: string | null
-  partial: boolean
+  name: string // User-defined journey name (required, non-empty)
+  description: string | null
+  date: string // Journey date (required, YYYY-MM-DD)
   created_at: string
   updated_at: string
+}
+
+// Logged part from database (connects journeys to routes with partial flags)
+export type LoggedPart = {
+  id: number
+  user_id: number
+  journey_id: number
+  track_id: number | null // Nullable to preserve history when routes are deleted
+  partial: boolean // Per-journey partial flag
+  created_at: string
 }
 
 // Local trip stored in localStorage (for unauthenticated users)
@@ -144,7 +153,7 @@ export interface PathResult {
   hasBacktracking?: boolean; // True if the final path contains backtracking
 }
 
-// Selected route for user map (used in SelectedRoutesList and map interactions)
+// Selected route for user map (used in JourneyLogger and map interactions)
 export interface SelectedRoute {
   track_id: string;
   from_station: string;
@@ -154,7 +163,7 @@ export interface SelectedRoute {
   usage_types: string;
   link: string | null;
   date: string | null;
-  note: string | null;
+  journey_name: string | null; // Renamed from 'note'
   partial: boolean | null;
   length_km: number;
 }
