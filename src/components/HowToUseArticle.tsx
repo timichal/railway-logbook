@@ -31,13 +31,13 @@ export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
           Only lines that are in regular use and available in timetables are displayed. Some heritage or otherwise non-regular lines are marked as <i>special lines</i>, available by ticking the <b>Show special lines</b> box - however, some of them may be missing and some may be without any traffic at the moment.
         </p>
         <p className="mb-4">
-          If you're an unregistered user, the app stores your data in your browser, with a limit of 50 logged line parts. To be able to access your data from multiple devices, you can create an account and log in. Trips saved in your browser can then be transferred to your account.
+          If you're an unregistered user, the app stores your data in your browser, with a limit of 5 journeys. To be able to access your data from multiple devices, you can create an account and log in. Journeys saved in your browser can then be transferred to your account.
         </p>
         <p className="mb-4">
-          There are two ways to log a trip. While in the <b>Route Logger</b> mode, you can click on individual line parts and then log them together with a date and note. Editing logs for a line part is currently done by clicking on the edit button in the selection list.
+          The log is organized by journeys. While in the <b>Route Logger</b> mode, you can either click on individual line parts or use the <b>Journey Planner</b> to find a route between two stations. Saved journeys are added to the <b>My Journeys</b> tab where you can edit or delete them.
         </p>
         <p className="mb-4">
-          The <b>Journey Planner</b> allows you to select all the parts between two stations. While having the tab open, you can click on the stations on the map or enter their names and select them from the dropdown. The planner is not selecting the actually used long-distance routes at the moment, but you can customize the route by adding <i>via</i> stations. The <b>Add Routes to Selection</b> button then moves you back to the Route Logger tab.
+          The <b>Journey Planner</b> allows you to select all parts between two stations. You can select stations by clicking them on the map or enter their names and select them from the dropdown. The planner is not always following the routes used in reality, just finding the shortest path - but you can customize the route by adding <i>via</i> stations.
         </p>
         <p className="mb-4">
           In the <b>Country Settings & Stats</b> tab, you can choose to display or hide railways by each country. Croos-border lines are shown only when both countries are enabled. The stats section shows your progress per country and for the whole network. The special lines are not counted in the stats.
