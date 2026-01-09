@@ -21,19 +21,17 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
     setLoading(true);
 
     try {
-      // Export localStorage data before registration
-      const localTrips = LocalStorageManager.exportTrips();
+      // Export localStorage preferences before registration
       const localPreferences = LocalStorageManager.exportPreferences();
 
-      // Register with auto-migration
-      const result = await register(formData, localTrips, localPreferences);
+      // Register (note: journey migration not yet implemented)
+      const result = await register(formData, [], localPreferences);
 
-      // Clear localStorage after successful migration
-      LocalStorageManager.clearTrips();
+      // Check if there were local journeys
+      const journeyCount = LocalStorageManager.getJourneyCount();
 
-      // Show success message with migration count
-      if (result.migrated > 0) {
-        showSuccess(`Account created! ${result.migrated} trip${result.migrated !== 1 ? 's' : ''} migrated successfully.`);
+      if (journeyCount > 0) {
+        showSuccess(`Account created! Note: You have ${journeyCount} journey${journeyCount !== 1 ? 's' : ''} in local storage that won't be visible while logged in.`);
       } else {
         showSuccess('Account created successfully!');
       }

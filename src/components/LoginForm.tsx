@@ -24,64 +24,40 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     try {
       await login(formData);
 
-      // Check if there are localStorage trips to merge
-      const tripCount = LocalStorageManager.getTripCount();
+      // Check if there are localStorage journeys
+      const journeyCount = LocalStorageManager.getJourneyCount();
 
-      if (tripCount > 0) {
-        // Show confirmation dialog for merging trips
+      if (journeyCount > 0) {
+        // Show confirmation dialog about local journeys
         showConfirm({
-          title: 'Merge Local Trips?',
-          message: `You have ${tripCount} trip${tripCount !== 1 ? 's' : ''} stored locally. Would you like to merge them with your account?\n\nDuplicates will be skipped automatically.\n\nIf you choose "Keep Local", these trips will remain in your browser but won't be visible until you log out.`,
-          confirmLabel: `Merge ${tripCount} Trip${tripCount !== 1 ? 's' : ''}`,
-          cancelLabel: 'Keep Local',
-          thirdLabel: 'Delete Local',
+          title: 'Local Journeys Found',
+          message: `You have ${journeyCount} journey${journeyCount !== 1 ? 's' : ''} stored locally. These will remain in your browser but won't be visible while logged in. You can keep them or delete them.`,
+          confirmLabel: 'Keep Local Journeys',
+          cancelLabel: 'Delete Local Journeys',
           variant: 'info',
-          onConfirm: async () => {
-            try {
-              const localTrips = LocalStorageManager.exportTrips();
-              const result = await migrateLocalTrips(localTrips);
-
-              // Clear localStorage after successful migration
-              LocalStorageManager.clearTrips();
-
-              if (result.migrated > 0) {
-                showSuccess(`${result.migrated} trip${result.migrated !== 1 ? 's' : ''} merged successfully!`);
-              } else {
-                showSuccess('All trips were duplicates, none merged.');
-              }
-
-              // Refresh to show merged data
-              router.refresh();
-            } catch (err) {
-              console.error('Error migrating trips:', err);
-              showSuccess('Login successful, but trip migration failed. Your local trips are still saved.');
-            }
+          onConfirm: () => {
+            // Keep local journeys
+            showSuccess('Login successful! Your local journeys remain in browser storage.');
+            router.refresh();
           },
           onCancel: () => {
-            // User chose to keep local - trips stay in localStorage but invisible
-            showSuccess('Login successful! Your local trips remain in browser storage.');
-          },
-          onThird: () => {
-            // User chose to delete local trips
-            LocalStorageManager.clearTrips();
-            showSuccess('Login successful! Local trips have been deleted.');
+            // Delete local journeys
+            LocalStorageManager.clearAll();
+            showSuccess('Login successful! Local journeys have been deleted.');
             router.refresh();
           }
         });
+      } else {
+        // No local journeys, just refresh
+        if (onSuccess) {
+          onSuccess();
+        }
+        router.refresh();
       }
 
       // Call onSuccess callback if provided (for dropdown mode)
-      if (onSuccess) {
+      if (onSuccess && journeyCount === 0) {
         onSuccess();
-        // Refresh only if no trips to merge (otherwise refresh happens in merge callback)
-        if (tripCount === 0) {
-          router.refresh();
-        }
-      } else {
-        // Redirect to home page (for standalone login page)
-        if (tripCount === 0) {
-          router.push('/');
-        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

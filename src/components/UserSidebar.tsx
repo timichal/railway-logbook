@@ -6,6 +6,7 @@ import type { DataAccess } from '@/lib/dataAccess';
 import JourneyLogger from './JourneyLogger';
 import LocalTripLogger from './LocalTripLogger';
 import JourneyLogTab from './JourneyLogTab';
+import LocalJourneyLogTab from './LocalJourneyLogTab';
 import CountriesStatsTab from './CountriesStatsTab';
 import HowToUseArticle from './HowToUseArticle';
 import RailwayNotesArticle from './RailwayNotesArticle';
@@ -80,18 +81,16 @@ export default function UserSidebar({
         >
           Route Logger
         </button>
-        {user && (
-          <button
-            onClick={() => setActiveTab('journeylog')}
-            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
-              activeTab === 'journeylog'
-                ? 'border-blue-500 text-blue-600 bg-blue-50'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            My Journeys
-          </button>
-        )}
+        <button
+          onClick={() => setActiveTab('journeylog')}
+          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+            activeTab === 'journeylog'
+              ? 'border-blue-500 text-blue-600 bg-blue-50'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          My Journeys
+        </button>
         <button
           onClick={() => setActiveTab('filter')}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
@@ -126,11 +125,21 @@ export default function UserSidebar({
             onClearSelection={onClearAll}
             onUpdateRoutePartial={onUpdateRoutePartial}
             onRoutesLogged={onRoutesLogged || (() => {})}
+            onHighlightRoutes={onHighlightRoutes}
+            onAddRoutesFromPlanner={onAddRoutesFromPlanner}
+            onStationClickHandler={onStationClickHandler}
           />
         )}
 
         {activeTab === 'journeylog' && user && (
           <JourneyLogTab
+            onHighlightRoutes={onHighlightRoutes}
+            onJourneyChanged={onRoutesLogged}
+          />
+        )}
+
+        {activeTab === 'journeylog' && !user && (
+          <LocalJourneyLogTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
           />

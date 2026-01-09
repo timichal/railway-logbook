@@ -111,46 +111,51 @@ export default function VectorRailwayMap({
     if (!map.current || user) return;
 
     // Get all localStorage trips
-    const allTrips = LocalStorageManager.getTrips();
-    console.log('Updating feature states for localStorage trips:', allTrips.length, 'trips');
+    const allParts = LocalStorageManager.getLoggedParts();
+    console.log('Updating feature states for localStorage logged parts:', allParts.length, 'parts');
 
-    // Group trips by track_id and find most recent for each route
-    const tripsByRoute = new Map<string, {date: string | null; partial: boolean}>();
+    // Group parts by track_id and determine status for each route
+    const routeStatus = new Map<string, {hasComplete: boolean; hasPartial: boolean}>();
 
-    for (const trip of allTrips) {
-      const trackId = trip.track_id;
-      const existing = tripsByRoute.get(trackId);
+    for (const part of allParts) {
+      const trackId = String(part.track_id);
+      const existing = routeStatus.get(trackId) || {hasComplete: false, hasPartial: false};
 
-      if (!existing || (trip.date && (!existing.date || trip.date > existing.date))) {
-        tripsByRoute.set(trackId, {
-          date: trip.date,
-          partial: trip.partial
-        });
+      if (!part.partial) {
+        existing.hasComplete = true;
+      } else {
+        existing.hasPartial = true;
       }
+
+      routeStatus.set(trackId, existing);
     }
 
-    console.log('Applying feature states for', tripsByRoute.size, 'routes');
+    console.log('Applying feature states for', routeStatus.size, 'routes');
 
-    // Track new set of track_ids with trips
+    // Track new set of track_ids with logged parts
     const newTrackIds = new Set<number>();
 
     // Apply feature states to map
-    tripsByRoute.forEach((tripData, trackId) => {
+    routeStatus.forEach((status, trackId) => {
       if (!map.current) return;
       const featureId = parseInt(trackId);
       newTrackIds.add(featureId);
-      console.log('Setting feature state for track_id', featureId, ':', tripData);
+
+      // Route is partial only if it has partial parts but NO complete parts
+      const isPartial = status.hasPartial && !status.hasComplete;
+
+      console.log('Setting feature state for track_id', featureId, ':', {hasComplete: status.hasComplete, isPartial});
       map.current.setFeatureState(
         { source: 'railway_routes', sourceLayer: 'railway_routes', id: featureId },
         {
           hasTrip: true,
-          date: tripData.date,
-          partial: tripData.partial
+          date: new Date().toISOString().split('T')[0], // Dummy date for coloring
+          partial: isPartial
         }
       );
     });
 
-    // Remove feature states for routes that no longer have trips
+    // Remove feature states for routes that no longer have logged parts
     featureStateTrackIdsRef.current.forEach(trackId => {
       if (!newTrackIds.has(trackId) && map.current) {
         console.log('Removing feature state for track_id', trackId);
@@ -191,7 +196,7 @@ export default function VectorRailwayMap({
 
     // For unlogged users, check trip limit before adding
     if (!user) {
-      const canAdd = await dataAccess.canAddMoreTrips();
+      const canAdd = await dataAccess.canAddMoreJourneys();
       if (!canAdd) {
         showError('Trip limit reached (50/50). Please register to log more routes.');
         return;
@@ -223,7 +228,7 @@ export default function VectorRailwayMap({
   const handleAddRoutesFromLogger = useCallback(async (routes: Array<{track_id: number; from_station: string; to_station: string; description: string; length_km: number}>) => {
     // For unlogged users, check trip limit before adding
     if (!user) {
-      const canAdd = await dataAccess.canAddMoreTrips();
+      const canAdd = await dataAccess.canAddMoreJourneys();
       if (!canAdd) {
         showError('Trip limit reached (50/50). Please register to log more routes.');
         return;

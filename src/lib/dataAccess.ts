@@ -32,8 +32,8 @@ export interface DataAccess {
   updateUserPreferences(selectedCountries: string[]): Promise<void>;
 
   // Utility (for localStorage users only)
-  getTripCount(): Promise<number>;
-  canAddMoreTrips(): Promise<boolean>;
+  getJourneyCount(): Promise<number>;
+  canAddMoreJourneys(): Promise<boolean>;
 }
 
 /**
@@ -72,12 +72,12 @@ function createDatabaseDataAccess(): DataAccess {
       await dbUpdateUserPreferences(selectedCountries);
     },
 
-    async getTripCount(): Promise<number> {
-      // Logged-in users use journeys, not localStorage trips
+    async getJourneyCount(): Promise<number> {
+      // Logged-in users use database journeys (unlimited)
       return 0;
     },
 
-    async canAddMoreTrips(): Promise<boolean> {
+    async canAddMoreJourneys(): Promise<boolean> {
       // Logged-in users have unlimited journeys
       return true;
     },
@@ -101,7 +101,7 @@ function createLocalStorageDataAccess(): DataAccess {
         }
 
         const allRoutes = routesCache || [];
-        const localTrips = LocalStorageManager.getTrips();
+        const localParts = LocalStorageManager.getLoggedParts();
 
         // Apply country filter if provided
         let filteredRoutes = allRoutes;
@@ -121,12 +121,12 @@ function createLocalStorageDataAccess(): DataAccess {
         const totalRoutes = filteredRoutes.length;
         const totalKm = filteredRoutes.reduce((sum, route) => sum + (Number(route.length_km) || 0), 0);
 
-        // Find completed routes (routes with at least one complete trip)
+        // Find completed routes (routes with at least one complete logged part)
         const completedRouteIds = new Set<string>();
-        for (const trip of localTrips) {
-          // Only count trips with date and not partial
-          if (trip.date && !trip.partial) {
-            completedRouteIds.add(trip.track_id);
+        for (const part of localParts) {
+          // Only count parts that are not partial
+          if (!part.partial) {
+            completedRouteIds.add(String(part.track_id));
           }
         }
 
@@ -170,13 +170,13 @@ function createLocalStorageDataAccess(): DataAccess {
         }
 
         const allRoutes = routesCache || [];
-        const localTrips = LocalStorageManager.getTrips();
+        const localParts = LocalStorageManager.getLoggedParts();
 
         // Find completed routes
         const completedRouteIds = new Set<string>();
-        for (const trip of localTrips) {
-          if (trip.date && !trip.partial) {
-            completedRouteIds.add(trip.track_id);
+        for (const part of localParts) {
+          if (!part.partial) {
+            completedRouteIds.add(String(part.track_id));
           }
         }
 
@@ -247,12 +247,12 @@ function createLocalStorageDataAccess(): DataAccess {
       LocalStorageManager.setPreferences(selectedCountries);
     },
 
-    async getTripCount(): Promise<number> {
-      return LocalStorageManager.getTripCount();
+    async getJourneyCount(): Promise<number> {
+      return LocalStorageManager.getJourneyCount();
     },
 
-    async canAddMoreTrips(): Promise<boolean> {
-      return LocalStorageManager.canAddMoreTrips();
+    async canAddMoreJourneys(): Promise<boolean> {
+      return LocalStorageManager.canAddMoreJourneys();
     },
   };
 }

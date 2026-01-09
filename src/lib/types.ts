@@ -119,12 +119,31 @@ export type LoggedPart = {
   created_at: string
 }
 
-// Local trip stored in localStorage (for unauthenticated users)
+// Local trip stored in localStorage (for unauthenticated users) - DEPRECATED
 export type LocalTrip = {
   id: string // UUID
   track_id: string
   date: string // YYYY-MM-DD
   note: string | null
+  partial: boolean
+  created_at: string // ISO timestamp
+}
+
+// Local journey stored in localStorage (for unauthenticated users)
+export type LocalJourney = {
+  id: string // UUID
+  name: string // User-defined journey name (required, non-empty)
+  description: string | null
+  date: string // YYYY-MM-DD
+  created_at: string // ISO timestamp
+  updated_at: string // ISO timestamp
+}
+
+// Local logged part stored in localStorage (for unauthenticated users)
+export type LocalLoggedPart = {
+  id: string // UUID
+  journey_id: string // References LocalJourney.id
+  track_id: number // References railway_routes.track_id
   partial: boolean
   created_at: string // ISO timestamp
 }

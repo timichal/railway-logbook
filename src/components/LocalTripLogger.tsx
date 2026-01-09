@@ -2,8 +2,17 @@
 
 import { useState } from 'react';
 import { useToast } from '@/lib/toast';
-import type { SelectedRoute } from '@/lib/types';
+import type { SelectedRoute, Station } from '@/lib/types';
 import { LocalStorageManager } from '@/lib/localStorage';
+import JourneyPlanner from './JourneyPlanner';
+
+interface RouteNode {
+  track_id: number;
+  from_station: string;
+  to_station: string;
+  description: string;
+  length_km: number;
+}
 
 interface LocalTripLoggerProps {
   selectedRoutes: SelectedRoute[];
@@ -11,6 +20,9 @@ interface LocalTripLoggerProps {
   onClearSelection: () => void;
   onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
   onRoutesLogged: () => void;
+  onHighlightRoutes?: (routeIds: number[]) => void;
+  onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
+  onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
 
 export default function LocalTripLogger({
@@ -18,55 +30,61 @@ export default function LocalTripLogger({
   onRemoveRoute,
   onClearSelection,
   onUpdateRoutePartial,
-  onRoutesLogged
+  onRoutesLogged,
+  onHighlightRoutes,
+  onAddRoutesFromPlanner,
+  onStationClickHandler
 }: LocalTripLoggerProps) {
   const { showSuccess, showError } = useToast();
   const today = new Date().toISOString().split('T')[0];
 
-  const [date, setDate] = useState(today);
-  const [note, setNote] = useState('');
+  // Journey form state
+  const [journeyName, setJourneyName] = useState('');
+  const [journeyDate, setJourneyDate] = useState(today);
+  const [journeyDescription, setJourneyDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const tripCount = LocalStorageManager.getTripCount();
-  const canAddMore = LocalStorageManager.canAddMoreTrips();
-  const remainingTrips = 50 - tripCount;
+  const journeyCount = LocalStorageManager.getJourneyCount();
+  const canAddMore = LocalStorageManager.canAddMoreJourneys();
+  const remainingJourneys = 5 - journeyCount;
 
-  const handleLogRoutes = async () => {
-    if (!date || selectedRoutes.length === 0) {
-      showError('Please select at least one route and set a date');
-      return;
-    }
-
-    // Check if user can add these routes
-    if (tripCount + selectedRoutes.length > 50) {
-      showError(`Trip limit would be exceeded. You can only add ${remainingTrips} more routes. Please register to log unlimited routes.`);
+  const handleCreateJourney = async () => {
+    if (!journeyName.trim() || !journeyDate || selectedRoutes.length === 0) {
+      showError('Please fill in journey name, date, and select at least one route');
       return;
     }
 
     setIsSaving(true);
     try {
-      // Add each route as a separate trip
-      for (const route of selectedRoutes) {
-        LocalStorageManager.addTrip({
-          track_id: route.track_id,
-          date,
-          note: note.trim() || null,
-          partial: route.partial ?? false,
-        });
-      }
+      // Create journey
+      const newJourney = LocalStorageManager.addJourney({
+        name: journeyName.trim(),
+        description: journeyDescription.trim() || null,
+        date: journeyDate,
+      });
+
+      // Add logged parts
+      const parts = selectedRoutes.map(r => ({
+        journey_id: newJourney.id,
+        track_id: parseInt(r.track_id),
+        partial: r.partial ?? false,
+      }));
+
+      LocalStorageManager.addLoggedParts(parts);
 
       // Clear form and selection
-      setDate(today);
-      setNote('');
+      setJourneyName('');
+      setJourneyDate(today);
+      setJourneyDescription('');
       onClearSelection();
 
       // Trigger map refresh
       onRoutesLogged();
 
-      showSuccess(`Logged ${selectedRoutes.length} route(s) successfully! (${tripCount + selectedRoutes.length}/50 trips used)`);
+      showSuccess(`Journey "${newJourney.name}" created successfully! (${journeyCount + 1}/5 journeys used)`);
     } catch (error) {
-      console.error('Error logging routes:', error);
-      showError(error instanceof Error ? error.message : 'Failed to log routes');
+      console.error('Error creating journey:', error);
+      showError(error instanceof Error ? error.message : 'Failed to create journey');
     } finally {
       setIsSaving(false);
     }
@@ -78,45 +96,65 @@ export default function LocalTripLogger({
     <div className="p-4 text-black space-y-4">
       {/* Storage Info */}
       <div className={`text-xs px-3 py-2 rounded border ${
-        remainingTrips <= 10
+        remainingJourneys <= 2
           ? 'bg-orange-50 border-orange-200 text-orange-800'
           : 'bg-blue-50 border-blue-200 text-blue-700'
       }`}>
-        <div className="font-medium mb-1">Local Storage ({tripCount}/50 trips)</div>
+        <div className="font-medium mb-1">Local Storage ({journeyCount}/5 journeys)</div>
         <div className="text-xs">
-          {remainingTrips > 0
-            ? `${remainingTrips} trips remaining. Register for unlimited routes!`
-            : 'Limit reached! Register to log more routes.'
+          {remainingJourneys > 0
+            ? `${remainingJourneys} journey${remainingJourneys === 1 ? '' : 's'} remaining. Register for unlimited journeys!`
+            : 'Limit reached! Register to log more journeys.'
           }
         </div>
       </div>
 
-      {/* Logging Form Section */}
+      {/* Journey Form Section */}
       <div>
-        <h3 className="text-lg font-bold mb-3">Log Routes</h3>
+        <h3 className="text-lg font-bold mb-3">New Journey</h3>
 
         <div className="space-y-2">
           <div>
-            <label className="block text-sm font-medium mb-1">Date*</label>
+            <label className="block text-sm font-medium mb-1">Journey Name*</label>
             <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              type="text"
+              value={journeyName}
+              onChange={(e) => setJourneyName(e.target.value)}
+              placeholder="e.g., Prague to Vienna via Brno"
               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Note (optional)</label>
+            <label className="block text-sm font-medium mb-1">Date*</label>
+            <input
+              type="date"
+              value={journeyDate}
+              onChange={(e) => setJourneyDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Description</label>
             <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
+              value={journeyDescription}
+              onChange={(e) => setJourneyDescription(e.target.value)}
               rows={2}
-              placeholder="Optional notes..."
+              placeholder="Optional notes about this journey..."
               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
         </div>
+      </div>
+
+      {/* Journey Planner Section */}
+      <div className="pt-3 border-t border-gray-200">
+        <JourneyPlanner
+          onHighlightRoutes={onHighlightRoutes}
+          onAddRoutesToSelection={onAddRoutesFromPlanner}
+          onStationClickHandler={onStationClickHandler}
+        />
       </div>
 
       {/* Selected Routes Section */}
@@ -191,24 +229,26 @@ export default function LocalTripLogger({
       {/* Submit Button */}
       <div className="pt-3 border-t border-gray-200">
         <button
-          onClick={handleLogRoutes}
-          disabled={isSaving || !date || selectedRoutes.length === 0 || !canAddMore}
+          onClick={handleCreateJourney}
+          disabled={isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0 || !canAddMore}
           className={`w-full px-4 py-2 text-white rounded font-medium transition-colors ${
-            isSaving || !date || selectedRoutes.length === 0 || !canAddMore
+            isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0 || !canAddMore
               ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-green-600 hover:bg-green-700 cursor-pointer'
           }`}
           title={
             !canAddMore
-              ? 'Trip limit reached (50/50). Please register to log more routes.'
-              : !date
+              ? 'Journey limit reached (5/5). Please register to log more journeys.'
+              : !journeyName.trim()
+              ? 'Journey name is required'
+              : !journeyDate
               ? 'Date is required'
               : selectedRoutes.length === 0
               ? 'Select at least one route'
               : ''
           }
         >
-          {isSaving ? 'Saving...' : `Log ${selectedRoutes.length} Route(s)`}
+          {isSaving ? 'Creating...' : `Create Journey & Log ${selectedRoutes.length} Routes`}
         </button>
       </div>
     </div>
