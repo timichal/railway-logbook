@@ -17,11 +17,12 @@ nedodělané tratě
 - jokeri v helsinkách asi nepočítat
 
 dodělat s aičkem:
+- problém koblenz: návaznost když dvě stanice se stejným jménem - limit 1 km mezi body? staniční ID?
 - atlas část: europe by rail trasy
 - user popupy jsou teď jen hover, nejde kliknout na odkazy, ať po nějakém čase zůstanou
 - about/faq
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
-- preferred routing: save route presets (brno-praha)
+- preferred routing: save route presets (brno-praha) / šlo by vyřešit atlasem
 - dont backtrack in pathfind (hotovo při tvoření, podobně user)
 - correct utf8 sorting in admin routes
 
