@@ -10,7 +10,6 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshrani
 rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
-- Calw oprava nové trati, fix 14. 1.
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
