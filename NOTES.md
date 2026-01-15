@@ -11,6 +11,7 @@ rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Franci
 
 osm úpravy
 - svojšín bor: fix typu trati u Boru (15. 1.)
+- innertkirchen: fix typu (15. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
