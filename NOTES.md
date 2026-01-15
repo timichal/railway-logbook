@@ -10,6 +10,7 @@ hotovo: Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshrani
 rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
+- svojšín bor: fix typu trati u Boru (15. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
