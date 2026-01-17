@@ -6,12 +6,13 @@ poznámky
 - junctions mají v OSM dané názvy (aspoň Německo) - projít opravit?
 
 STAV
-hotovo: Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshraniční do Maďarska + scénické značení)
-rozdělané: Česko, Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
+hotovo: Česko (chybí scénické značení), Litva, Lotyšsko, Estonsko, Finsko, Polsko, Slovensko (chybí přeshraniční do Maďarska + scénické značení)
+rozdělané: Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
-- svojšín bor: fix typu trati u Boru (15. 1.)
-- innertkirchen: fix typu (15. 1.)
+- innertkirchen: fix typu (17. 1.)
+- bex-col: fix typu (17. 1.)
+- aigle: fix typu (17. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
