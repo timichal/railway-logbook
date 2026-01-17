@@ -13,6 +13,7 @@ osm úpravy
 - innertkirchen: fix typu (17. 1.)
 - bex-col: fix typu (17. 1.)
 - aigle: fix typu (17. 1.)
+- pertuis: split (17. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
