@@ -92,6 +92,15 @@ export function useMapLibre(
       'top-right'
     );
 
+    // Add scale control
+    map.current.addControl(
+      new maplibregl.ScaleControl({
+        maxWidth: 100,
+        unit: 'metric',
+      }),
+      'bottom-left'
+    );
+
     // Save map state on move or zoom
     const saveState = () => {
       if (map.current) {
