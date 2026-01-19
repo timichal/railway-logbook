@@ -10,6 +10,7 @@ hotovo: Česko (chybí scénické značení), Litva, Lotyšsko, Estonsko, Finsko
 rozdělané: Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
+- piacenza hsl nájezd (19. 1.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
