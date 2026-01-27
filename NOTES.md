@@ -11,7 +11,6 @@ rozdělané: Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
 - piacenza hsl nájezd (19. 1.)
-- miramas curve (24. 1.)
 - zwierzyniec fix návazností (27. 1.)
 
 nedodělané tratě
