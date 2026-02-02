@@ -49,7 +49,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - `src/scripts/pruneData.ts` - Removes subways and unwanted features
 - `src/scripts/importMapData.ts` - Loads stations and railway_parts into database, recalculates existing routes
 
-### Database Tables
+### Database Tables 
 - `users` - User accounts with authentication
 - `stations` - Railway stations (Point features)
 - `railway_parts` - Raw railway segments from OSM
