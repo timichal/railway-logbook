@@ -11,9 +11,7 @@ rozdělané: Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
 - piacenza hsl nájezd (19. 1.)
-- zwierzyniec fix návazností (27. 1.)
-- avignon nimes fix nájezd (27. 1.)
-
+- 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
 - polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
