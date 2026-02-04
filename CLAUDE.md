@@ -34,9 +34,6 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
   - Creates table with id, coordinate (PostGIS POINT), text, created_at, updated_at
   - Adds spatial index and auto-update trigger
   - Safe to run multiple times (checks if table exists)
-- `npm run addScenicField` - Run migration to add scenic field to railway_routes table (one-time setup)
-  - Adds scenic BOOLEAN column with default FALSE
-  - Safe to run multiple times (uses IF NOT EXISTS)
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate

@@ -6,6 +6,7 @@ import { getUsageLabel, type UsageType } from '@/lib/constants';
 export function formatRouteMetadataBadges(properties: {
   usage_type: UsageType;
   scenic?: boolean;
+  hsl?: boolean;
   frequency?: string;
 }): string {
   let badges = "";
@@ -19,6 +20,11 @@ export function formatRouteMetadataBadges(properties: {
   // Scenic badge
   if (properties.scenic) {
     badges += ` <span style="background-color: #fbbf24; color: #78350f; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Scenic</span>`;
+  }
+
+  // High-speed line badge
+  if (properties.hsl) {
+    badges += ` <span style="background-color: #ef4444; color: #ffffff; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">HSL</span>`;
   }
 
   // Frequency badges

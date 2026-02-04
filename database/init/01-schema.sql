@@ -47,6 +47,7 @@ CREATE TABLE railway_routes (
     frequency TEXT[] DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
     link TEXT, -- External URL/link for the route
     scenic BOOLEAN DEFAULT FALSE, -- Flag to mark route as scenic
+    hsl BOOLEAN DEFAULT FALSE, -- Flag to mark route as high-speed line
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
     start_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of start point

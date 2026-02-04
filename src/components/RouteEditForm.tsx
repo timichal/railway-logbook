@@ -12,6 +12,7 @@ interface EditFormData {
   frequency: string[];
   link: string;
   scenic: boolean;
+  hsl: boolean;
   intended_backtracking: boolean;
 }
 
@@ -214,6 +215,19 @@ export default function RouteEditForm({
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
               />
               <span className="text-sm font-medium text-gray-700">Scenic route</span>
+            </label>
+          </div>
+
+          {/* High-speed line */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editForm.hsl}
+                onChange={(e) => onEditFormChange({ ...editForm, hsl: e.target.checked })}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+              <span className="text-sm font-medium text-gray-700">High-speed line</span>
             </label>
           </div>
 

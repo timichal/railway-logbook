@@ -46,6 +46,7 @@ export default function AdminRoutesTab({
     frequency: string[];
     link: string;
     scenic: boolean;
+    hsl: boolean;
     intended_backtracking: boolean;
   } | null>(null);
 
@@ -120,6 +121,7 @@ export default function AdminRoutesTab({
         frequency: routeDetail.frequency || [],
         link: routeDetail.link || '',
         scenic: routeDetail.scenic || false,
+        hsl: routeDetail.hsl || false,
         intended_backtracking: routeDetail.intended_backtracking || false
       });
 
@@ -163,6 +165,7 @@ export default function AdminRoutesTab({
         editForm.frequency,
         editForm.link || null,
         editForm.scenic,
+        editForm.hsl,
         editForm.intended_backtracking
       );
 

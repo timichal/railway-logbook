@@ -129,6 +129,7 @@ BEGIN
             rr.frequency,
             rr.link,
             rr.scenic,
+            rr.hsl,
             rr.length_km,
             rr.start_country,
             rr.end_country,

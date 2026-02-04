@@ -22,7 +22,7 @@ interface AdminSidebarProps {
   onCreateFormCoordinatesChange?: (coords: {startingCoordinate: [number, number] | null, endingCoordinate: [number, number] | null}) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: {from_station: string, to_station: string, description: string, usage_type: 0 | 1, track_number: string, frequency: string[], link: string, scenic: boolean, intended_backtracking: boolean}) => void;
+  onSaveRoute?: (routeData: {from_station: string, to_station: string, description: string, usage_type: 0 | 1, track_number: string, frequency: string[], link: string, scenic: boolean, hsl: boolean, intended_backtracking: boolean}) => void;
   onFormReset?: () => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;

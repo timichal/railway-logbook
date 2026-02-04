@@ -182,10 +182,11 @@ export function setupAdminMapInteractions(
       if (properties) {
         let formattedDescription = "";
 
-        // Route metadata badges (usage type, scenic, frequency)
+        // Route metadata badges (usage type, scenic, hsl, frequency)
         formattedDescription += formatRouteMetadataBadges({
           usage_type: properties.usage_type,
           scenic: properties.scenic,
+          hsl: properties.hsl,
           frequency: properties.frequency
         });
         if (properties.description) {
