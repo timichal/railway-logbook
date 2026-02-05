@@ -12,6 +12,7 @@ rozdělané: Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 osm úpravy
 - piacenza hsl nájezd (19. 1.)
 - fleurier st sulpice (5. 2.)
+- neuchatel littorail (5. 2.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
