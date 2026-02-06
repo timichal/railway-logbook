@@ -48,33 +48,17 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Store current state in refs to avoid stale closures
+  // Refs for stable callback access (assigned during render, read only in callbacks)
   const activeSearchRef = useRef(activeSearch);
   const fromStationRef = useRef(fromStation);
   const toStationRef = useRef(toStation);
   const viaStationsRef = useRef(viaStations);
   const viaSearchQueriesRef = useRef(viaSearchQueries);
-
-  // Update refs when state changes
-  useEffect(() => {
-    activeSearchRef.current = activeSearch;
-  }, [activeSearch]);
-
-  useEffect(() => {
-    fromStationRef.current = fromStation;
-  }, [fromStation]);
-
-  useEffect(() => {
-    toStationRef.current = toStation;
-  }, [toStation]);
-
-  useEffect(() => {
-    viaStationsRef.current = viaStations;
-  }, [viaStations]);
-
-  useEffect(() => {
-    viaSearchQueriesRef.current = viaSearchQueries;
-  }, [viaSearchQueries]);
+  activeSearchRef.current = activeSearch;
+  fromStationRef.current = fromStation;
+  toStationRef.current = toStation;
+  viaStationsRef.current = viaStations;
+  viaSearchQueriesRef.current = viaSearchQueries;
 
   // Debounced station search
   const performSearch = useCallback(async (query: string) => {

@@ -30,10 +30,6 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
-- `npm run addAdminNotes` - Run migration to create admin_notes table (one-time setup)
-  - Creates table with id, coordinate (PostGIS POINT), text, created_at, updated_at
-  - Adds spatial index and auto-update trigger
-  - Safe to run multiple times (checks if table exists)
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate
@@ -48,7 +44,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
   - Uses `docker exec` to run `psql` inside the container
 
 ### Data Transfer Operations
-- `npm run uploadMapData` - Upload GeoJSON files from `./data/` to remote server via pscp
+- `npm run deployMapData` - Upload GeoJSON files from `./data/` to remote server via pscp
 - `npm run downloadMapData` - Download GeoJSON files from remote server to `./data/` via pscp
 - `npm run downloadRouteData` - Download SQL dump files from remote server to `./data/` via pscp
 
@@ -117,7 +113,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension); floating search box in top-right
 - **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
-- **Unified User Sidebar** - Left-side resizable tabbed sidebar (400px-1200px) with five sections: Route Logger, Journey Planner, Country Settings & Stats, How To Use, and Railway Notes (see dedicated section below)
+- **Unified User Sidebar** - Left-side resizable tabbed sidebar (400px-1200px) with three tabs (Route Logger, My Journeys, Country Settings & Stats) plus two article views (How To Use, Railway Notes); auth-aware rendering with JourneyLogger/LocalTripLogger
 - **Article Tabs** - "How To Use" and "Railway Notes" buttons in navbar open full-screen article tabs in sidebar with close button to return to Route Logger
 
 ### 5. Admin System Architecture
@@ -155,7 +151,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Eliminates need for railway part splitting - click precision replaces segmentation
   - Route recalculation uses stored coordinates to rebuild geometry after OSM updates
   - Pathfinding tolerance: 50m to find nearest part vertex
-- **Components**: `AdminPageClient` → `VectorAdminMapWrapper` → `VectorAdminMap`
+- **Components**: `AdminPageClient` → `VectorAdminMap` (dynamic import) + `AdminLayerControls`
 
 ## Simplified Project Structure
 
@@ -173,28 +169,27 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### App Pages (`src/app/`)
 - `layout.tsx` - Root layout with authentication
 - `page.tsx` - Main user map page (server component that renders MainLayout with user data and preferences)
-- `login/page.tsx` - Login page
-- `register/page.tsx` - Registration page
 - `admin/page.tsx` - Admin route management page (user_id=1 only)
 
 #### Components (`src/components/`)
 
 **User Map Components:**
-- `MainLayout.tsx` - Client component wrapper managing activeTab state and resizable sidebar (400px-1200px)
+- `MainLayout.tsx` - Client component wrapper managing activeTab state and resizable sidebar (400px-1200px); dynamically imports VectorRailwayMap
 - `VectorRailwayMap.tsx` - Main user map with unified sidebar, station search, progress stats, and resizer handle
-- `VectorMapWrapper.tsx` - Wrapper for user map with authentication; passes server-side user preferences to avoid flash
-- `UserSidebar.tsx` - Unified tab-based sidebar (Route Logger / Journey Planner / Journey Log / Country Settings & Stats / How To Use / Railway Notes)
-- `SelectedRoutesList.tsx` - Route Logger tab: route selection list and bulk logging form with journey creation
-- `JourneyPlanner.tsx` - Journey Planner tab: pathfinding between stations (from → via → to with drag-and-drop reordering); stations clickable on map
-- `JourneyLogTab.tsx` - Journey Log tab: list of user's journeys with route details and editing capabilities
+- `UserSidebar.tsx` - Unified tab-based sidebar (Route Logger / My Journeys / Country Settings & Stats) plus article views (How To Use / Railway Notes)
+- `JourneyLogger.tsx` - Route Logger tab for authenticated users: route selection list with integrated journey planner, bulk logging form
+- `LocalTripLogger.tsx` - Route Logger tab for unauthenticated users: localStorage-based route logging with trip limit
+- `JourneyPlanner.tsx` - Journey Planner embedded in JourneyLogger: pathfinding between stations (from → via → to with drag-and-drop reordering); stations clickable on map
+- `JourneyLogTab.tsx` - My Journeys tab for authenticated users: list of journeys with route details and editing
+- `LocalJourneyLogTab.tsx` - My Journeys tab for unauthenticated users: localStorage-based journey list
 - `CountriesStatsTab.tsx` - Country Settings & Stats tab: country filter checkboxes (CZ, SK, AT, PL, DE, LT, LV, EE) with per-country stats and total
-- `HowToUseArticle.tsx` - Article tab with header and close button (empty content area for user instructions)
-- `RailwayNotesArticle.tsx` - Article tab with header and close button (empty content area for railway notes)
+- `HowToUseArticle.tsx` - Article view with header and close button (content area for user instructions)
+- `RailwayNotesArticle.tsx` - Article view with header and close button (content area for railway notes)
 
 **Admin Map Components:**
+- `AdminPageClient.tsx` - Admin page container with state management; dynamically imports VectorAdminMap
 - `VectorAdminMap.tsx` - Admin map for route management with railway parts selection and notes system (right-click to create/edit notes)
-- `VectorAdminMapWrapper.tsx` - Wrapper for admin map
-- `AdminPageClient.tsx` - Admin page container with state management
+- `AdminLayerControls.tsx` - Layer visibility checkboxes for admin map (Railway Parts, Railway Routes, Stations, Route Endpoints, Admin Notes)
 - `AdminSidebar.tsx` - Tab-based sidebar (Create Route / Routes List)
 - `AdminCreateRouteTab.tsx` - Route creation interface with start/end point selection
 - `AdminRoutesTab.tsx` - Route list with search and edit functionality
@@ -203,40 +198,60 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `NotesPopup.tsx` - Popup component for creating/editing admin notes (text field, save/delete buttons, keyboard shortcuts)
 
 **Shared Components:**
-- `Navbar.tsx` - Navigation bar with title, login/logout, and article buttons ("How To Use" and "Railway Notes")
-- `LoginForm.tsx` - Login form with email/password
-- `RegisterForm.tsx` - Registration form
+- `Navbar.tsx` - Navigation bar with title, login/logout dropdown, and article buttons ("How To Use" and "Railway Notes")
+- `LoginForm.tsx` - Login form with email/password (rendered in navbar dropdown)
+- `RegisterForm.tsx` - Registration form (rendered in navbar dropdown)
 
 #### Library (`src/lib/`)
 
 **Database & Actions:**
 - `db.ts` - PostgreSQL connection pool (exports pool as default; uses .env for credentials)
 - `dbConfig.ts` - Database configuration utilities (reads from .env file)
-- `userActions.ts` - User-facing server actions (search stations, get GeoJSON data, journey management, get progress with country filtering)
+- `userActions.ts` - User-facing server actions (search stations, get GeoJSON data, get progress with country filtering)
 - `userPreferencesActions.ts` - User preferences management (get/update selected countries, ensure defaults)
+- `journeyActions.ts` - Journey CRUD server actions (create/update/delete journeys and logged parts)
 - `adminRouteActions.ts` - Admin-only route creation/update/deletion with security checks and automatic country detection
 - `adminMapActions.ts` - Admin-only coordinate-based pathfinding (`findRailwayPathFromCoordinates`) and railway parts fetching by IDs
 - `adminNotesActions.ts` - Admin-only notes CRUD operations (getAllAdminNotes, getAdminNote, createAdminNote, updateAdminNote, deleteAdminNote)
 - `routePathFinder.ts` - Route-level pathfinding for journey planner (user-facing, uses station name matching)
 - `authActions.ts` - Authentication actions (login, register, logout, getUser)
+- `migrationActions.ts` - Data migration actions (migrate localStorage data to database on login)
+
+**Data Access:**
+- `dataAccess.ts` - Abstraction layer providing unified interface for database (authenticated) and localStorage (unauthenticated) data access
+- `localStorage.ts` - LocalStorageManager class for unauthenticated user data persistence (journeys, logged parts, preferences)
 
 **Utilities:**
-- `types.ts` - Core TypeScript type definitions (Station, GeoJSONFeature, RailwayRoute, UserJourney, UserLoggedPart, UserPreferences, etc.)
+- `types.ts` - Core TypeScript type definitions (Station, GeoJSONFeature, RailwayRoute, UserJourney, UserLoggedPart, UserPreferences, SelectedRoute, etc.)
 - `constants.ts` - Usage type options (Regular=0, Special=1), frequency options (Daily, Weekdays, Weekends, Once a week, Seasonal), UsageType type export
 - `coordinateUtils.ts` - Coordinate utilities (mergeLinearChain algorithm, coordinatesToWKT)
 - `countryUtils.ts` - Country detection from coordinates using @rapideditor/country-coder (worldwide boundary detection, ISO 3166-1 alpha-2 codes)
+- `getUntimezonedDateStr.ts` - Date utility for timezone-agnostic date string formatting
+
+**Toast System (`src/lib/toast/`):**
+- `index.ts` - Toast module exports (useToast hook, ToastContainer, ConfirmDialog)
+- `ToastContext.tsx` - Toast context provider with showSuccess/showError/confirm functions
+- `ToastContainer.tsx` - Toast notification display component
+- `ConfirmDialog.tsx` - Confirmation dialog component for destructive actions
+- `types.ts` - Toast type definitions
 
 #### Map Library (`src/lib/map/`)
 
 **Core:**
-- `index.ts` - Map constants (MAPLIBRE_STYLE, MARTIN_URL), layer factories (createRailwayRoutesSource/Layer, createScenicRoutesOutlineLayer, createStationsSource/Layer), closeAllPopups utility
-- `mapState.ts` - Shared map state management
+- `index.ts` - Map constants, COLORS, layer factories (createRailwayRoutesSource/Layer, createScenicRoutesOutlineLayer, createStationsSource/Layer, createRailwayPartsSource/Layer, createAdminNotesSource/Layer), closeAllPopups utility
+- `mapState.ts` - Shared map state management (save/load map position)
 
 **Hooks:**
 - `hooks/useMapLibre.ts` - Base hook for MapLibre GL initialization with sources, layers, navigation controls, and geolocation control
-- `hooks/useRouteEditor.ts` - Hook for route editing functionality (manage trips modal state, add/update/delete trips, progress tracking with country filtering, map refresh)
+- `hooks/useRouteEditor.ts` - Hook for progress tracking with country filtering, special lines toggle, map refresh
 - `hooks/useStationSearch.ts` - Hook for station search with debouncing and keyboard navigation
 - `hooks/useRouteLength.ts` - Hook for calculating route length display
+- `hooks/useAdminLayerVisibility.ts` - Manages visibility toggles for all admin map layers and edit-geometry mode sync
+- `hooks/useAdminMapOverlays.ts` - Manages GeoJSON overlay layers on admin map (preview route, selected points, route endpoints)
+- `hooks/useAdminNotesPopup.tsx` - Right-click notes popup system (create/edit notes, cache busting)
+- `hooks/useMapTileRefresh.ts` - Manages railway routes tile cache busting for user map
+- `hooks/useRouteHighlighting.ts` - Manages highlight overlay layers (gold journey planner, green/red/orange selection)
+- `hooks/useLayerFilters.ts` - Manages special lines filter and scenic outline visibility on user map
 
 **Interactions:**
 - `interactions/userMapInteractions.ts` - User map click handlers (route click to add to selection, badge-style hover popups)
@@ -253,7 +268,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `pruneData.ts` - Filters unwanted railway features (removes subways, etc.)
 - `importMapData.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
 - `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
-- `addAdminNotes.ts` - Migration script to create admin_notes table with spatial index and auto-update trigger
+- `applyVectorTiles.ts` - Applies/updates vector tile functions from SQL file
 - `markAllRoutesInvalid.ts` - Marks all routes as invalid for rechecking (utility script; **use as example for database migration scripts**)
 - `listStations.ts` - Lists all unique station names from railway_routes (debugging utility)
 - `exportRoutes.ts` - Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
@@ -355,21 +370,24 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Click routes to add them to the selected routes panel (no popups)
 
 ### Unified User Sidebar
-- **Purpose**: Consolidated tabbed interface for route logging, journey planning, journey management, country filtering, and documentation
+- **Purpose**: Consolidated tabbed interface for route logging, journey management, country filtering, and documentation
 - **Location**: Resizable left-side sidebar (default 600px, range 400px-1200px)
-- **Architecture**: Six tabs with activeTab state managed in MainLayout component
+- **Architecture**: Three visible tabs (Route Logger, My Journeys, Country Settings & Stats) plus two article views (How To Use, Railway Notes) with activeTab state managed in MainLayout component
+- **Auth-Aware**: Renders `JourneyLogger` for authenticated users, `LocalTripLogger` for unauthenticated users in Route Logger tab; similar split for My Journeys tab
 - **Resizing**: Blue drag handle between sidebar and map (same as admin interface)
-- **Tab Switching**: Affects map interaction behavior (route clicking only works in Route Logger tab, station clicking only in Journey Planner tab)
-- **State Management**: activeTab state in MainLayout flows down through VectorMapWrapper → VectorRailwayMap → UserSidebar (no useEffect synchronization)
+- **Tab Switching**: Affects map interaction behavior (route clicking and station clicking only work in Route Logger tab)
+- **State Management**: activeTab state in MainLayout flows down through VectorRailwayMap → UserSidebar (no useEffect synchronization)
 
 #### Tab 1: Route Logger
 - **Purpose**: Build a selection of routes for batch logging to a new or existing journey
-- **Map Interaction**: Click routes on map to add them to the selection (only active in this tab)
+- **Components**: `JourneyLogger.tsx` (authenticated) / `LocalTripLogger.tsx` (unauthenticated)
+- **Map Interaction**: Click routes on map to add them to the selection; click stations to fill journey planner fields (both only active in this tab)
 - **UI Features**:
   - Each route shows: track number, stations, description, length, partial checkbox, remove button
   - Compact single-line layout with text truncation for long names
   - Remove button (×) removes route from selection
   - "Clear all" button to empty the entire selection
+  - Integrated Journey Planner (collapsible section within the tab)
 - **Route Highlighting**:
   - Selected routes highlighted with thick colored overlay (width: 7, opacity: 0.9)
   - Green highlight (#059669) for logged routes (fully completed)
@@ -382,49 +400,18 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Partial checkbox per route (individual control)
   - "Log Journey" button creates new journey with all selected routes
   - Automatically refreshes map data and clears selection after successful save
-
-#### Tab 2: Journey Planner
-- **Purpose**: Find routes between stations using pathfinding and add them to Route Logger for batch logging
-- **Map Interaction**: Click stations on map to fill form fields (only active in this tab)
-- **Station Filling Logic**:
-  - If any field is focused (activeSearch) → fill that field
-  - Else if "from" is empty → fill from
-  - Else if "to" is empty → fill to
-  - Via stations also supported with focused field
-- **UI Features**:
-  - "Clear All" button to reset all form fields
+- **Embedded Journey Planner** (`JourneyPlanner.tsx`):
+  - Find routes between stations using pathfinding and add them to route selection
+  - Click stations on map to fill form fields
+  - Station Filling Logic: if field focused → fill that field; else fill from → to in order
   - From/To station selection with autocomplete search
   - Multiple optional "via" stations (add/remove dynamically with drag-and-drop reordering)
-  - All inputs support arrow key navigation and keyboard shortcuts
   - Diacritic-insensitive search (e.g., "bialystok" finds "Białystok")
-  - Search prioritizes name-start matches over contains matches
-  - Auto-clear station selection when user edits input
-  - Drag handle (☰) for reordering via stations
-- **Pathfinding** (`src/lib/routePathFinder.ts`):
-  - Sequential segment pathfinding (A→B, B→C, C→D for via stations)
-  - In-memory BFS graph search for performance
-  - Progressive buffer search: 50km → 100km → 200km → 500km → 1000km
-  - Route connections based on station name matching (not distance)
-  - Station-to-route tolerance: Progressive 100m → 500m → 1km → 2km → 5km
-  - Continues from previous segment's end route for path continuity
-  - Supports unlimited journey length through via stations
-  - **Excludes special routes** - Only uses regular routes (usage_type=0) for pathfinding
-- **Route Highlighting**:
+  - **Pathfinding** (`src/lib/routePathFinder.ts`): Sequential segment BFS, progressive buffer (50km→1000km), station name matching, excludes special routes
   - Found routes highlighted in gold (#FFD700) on map
-  - Uses separate `highlighted_routes` layer with vector tile source
-- **Results Display**:
-  - Shows found routes in compact list format (one route per line)
-  - Displays route sequence: "1. Station A ⟷ Station B"
-  - Shows individual route distance and total journey distance
-  - "Add Routes to Selection" button adds routes and switches to Route Logger tab
-  - Automatically filters out duplicates (routes already in selection)
-  - Resets form after adding routes
-- **Error Handling**:
-  - Validates all via stations are selected before pathfinding
-  - Shows helpful errors if stations/routes not found
-  - Suggests adding via stations for segments >1000km
+  - "Add Routes to Selection" button adds routes to the selection list above
 
-#### Tab 3: Journey Log
+#### Tab 2: My Journeys
 - **Purpose**: View and manage user's logged journeys
 - **UI Features**:
   - List of all journeys sorted by date (newest first)
@@ -436,7 +423,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Toggle partial flag for routes within journeys
 - **Real-time Updates**: Map refreshes automatically after any changes
 
-#### Tab 4: Country Settings & Stats
+#### Tab 3: Country Settings & Stats
 - **Purpose**: Filter railway routes by country and view per-country statistics
 - **UI Features**:
   - Country checkboxes with flag emojis (🇨🇿 🇸🇰 🇦🇹 🇵🇱 🇩🇪 🇱🇹 🇱🇻 🇪🇪)
@@ -472,7 +459,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Uses ISO 3166-1 alpha-2 codes (2-letter country codes)
   - Detection based on first and last coordinate of route geometry
 
-#### Tab 5: How To Use
+#### Article View: How To Use
 - **Purpose**: User documentation and instructions article
 - **Access**: Click "How To Use" button in navbar (blue button next to title)
 - **UI Features**:
@@ -481,7 +468,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Close button returns to Route Logger tab
   - Empty content area for user to fill with instructions
 
-#### Tab 6: Railway Notes
+#### Article View: Railway Notes
 - **Purpose**: Railway information and notes article
 - **Access**: Click "Railway Notes" button in navbar (green button next to title)
 - **UI Features**:

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import type { FilterSpecification } from 'maplibre-gl';
 import type { User } from '@/lib/authActions';
 import type { Station, SelectedRoute } from '@/lib/types';
 import { createDataAccess } from '@/lib/dataAccess';
@@ -9,6 +8,9 @@ import { LocalStorageManager } from '@/lib/localStorage';
 import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
 import { useStationSearch } from '@/lib/map/hooks/useStationSearch';
 import { useRouteEditor } from '@/lib/map/hooks/useRouteEditor';
+import { useMapTileRefresh } from '@/lib/map/hooks/useMapTileRefresh';
+import { useRouteHighlighting } from '@/lib/map/hooks/useRouteHighlighting';
+import { useLayerFilters } from '@/lib/map/hooks/useLayerFilters';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
@@ -45,25 +47,18 @@ export default function VectorRailwayMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const { showError } = useToast();
 
-  // Extract userId for tiles (or null for unlogged users)
   const userId = user?.id || null;
-
-  // Create data access layer based on auth state
   const dataAccess = useMemo(() => createDataAccess(user), [user]);
 
-  // Country filter state - initialize with server-provided preferences
+  // Country filter state
   const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
-  const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
 
-  // Scenic routes outline toggle state (default: off)
+  // Scenic routes outline toggle
   const [showScenicOutline, setShowScenicOutline] = useState<boolean>(false);
 
   // Station click handler from Journey Planner
   const [journeyStationClickHandler, setJourneyStationClickHandler] = useState<((station: Station | null) => void) | null>(null);
-
-  // Wrapper for setting station click handler
   const handleSetStationClickHandler = useCallback((handler: ((station: Station | null) => void) | null) => {
-    // When setting a function in state, need to wrap in another function
     setJourneyStationClickHandler(() => handler ? handler : null);
   }, []);
 
@@ -73,30 +68,33 @@ export default function VectorRailwayMap({
   // Selected routes state
   const [selectedRoutes, setSelectedRoutes] = useState<SelectedRoute[]>([]);
 
-  // Station search hook
   const stationSearch = useStationSearch();
 
-  // Initialize map with shared hook (don't include cacheBuster in deps to avoid full rebuild)
+  // Shared layer configs
+  const defaultFilter: ['!=', ['get', string], number] = ['!=', ['get', 'usage_type'], 1];
+
+  const routeLayerConfig = useMemo(() => ({
+    colorExpression: getUserRouteColorExpression(),
+    widthExpression: getUserRouteWidthExpression(),
+    filter: defaultFilter,
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const scenicLayerConfig = useMemo(() => ({
+    widthExpression: getUserRouteWidthExpression(),
+    filter: defaultFilter,
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initialize map
   const { map, mapLoaded } = useMapLibre(
     mapContainer,
     {
       sources: {
-        railway_routes: createRailwayRoutesSource({
-          userId: userId || undefined,
-          selectedCountries
-        }),
+        railway_routes: createRailwayRoutesSource({ userId: userId || undefined, selectedCountries }),
         stations: createStationsSource(),
       },
       layers: [
-        createScenicRoutesOutlineLayer({
-          widthExpression: getUserRouteWidthExpression(),
-          filter: ['!=', ['get', 'usage_type'], 1], // Hide special routes by default (matches showSpecialLines initial state)
-        }),
-        createRailwayRoutesLayer({
-          colorExpression: getUserRouteColorExpression(),
-          widthExpression: getUserRouteWidthExpression(),
-          filter: ['!=', ['get', 'usage_type'], 1], // Hide special routes by default (matches showSpecialLines initial state)
-        }),
+        createScenicRoutesOutlineLayer(scenicLayerConfig),
+        createRailwayRoutesLayer(routeLayerConfig),
         createStationsLayer(),
       ],
     },
@@ -110,91 +108,75 @@ export default function VectorRailwayMap({
   const updateLocalStorageFeatureStates = useCallback(async () => {
     if (!map.current || user) return;
 
-    // Get all localStorage trips
     const allParts = LocalStorageManager.getLoggedParts();
-    console.log('Updating feature states for localStorage logged parts:', allParts.length, 'parts');
-
-    // Group parts by track_id and determine status for each route
     const routeStatus = new Map<string, {hasComplete: boolean; hasPartial: boolean}>();
 
     for (const part of allParts) {
       const trackId = String(part.track_id);
       const existing = routeStatus.get(trackId) || {hasComplete: false, hasPartial: false};
-
       if (!part.partial) {
         existing.hasComplete = true;
       } else {
         existing.hasPartial = true;
       }
-
       routeStatus.set(trackId, existing);
     }
 
-    console.log('Applying feature states for', routeStatus.size, 'routes');
-
-    // Track new set of track_ids with logged parts
     const newTrackIds = new Set<number>();
 
-    // Apply feature states to map
     routeStatus.forEach((status, trackId) => {
       if (!map.current) return;
       const featureId = parseInt(trackId);
       newTrackIds.add(featureId);
-
-      // Route is partial only if it has partial parts but NO complete parts
       const isPartial = status.hasPartial && !status.hasComplete;
-
-      console.log('Setting feature state for track_id', featureId, ':', {hasComplete: status.hasComplete, isPartial});
       map.current.setFeatureState(
         { source: 'railway_routes', sourceLayer: 'railway_routes', id: featureId },
-        {
-          hasTrip: true,
-          date: new Date().toISOString().split('T')[0], // Dummy date for coloring
-          partial: isPartial
-        }
+        { hasTrip: true, date: new Date().toISOString().split('T')[0], partial: isPartial }
       );
     });
 
-    // Remove feature states for routes that no longer have logged parts
     featureStateTrackIdsRef.current.forEach(trackId => {
       if (!newTrackIds.has(trackId) && map.current) {
-        console.log('Removing feature state for track_id', trackId);
         map.current.removeFeatureState(
           { source: 'railway_routes', sourceLayer: 'railway_routes', id: trackId }
         );
       }
     });
 
-    // Update tracked set
     featureStateTrackIdsRef.current = newTrackIds;
   }, [map, user]);
 
-  // Route editor hook (uses data access layer)
+  // Route editor hook
   const routeEditor = useRouteEditor(dataAccess, map, selectedCountries);
 
-  // Handler to toggle route selection (only works in Route Logger tab)
+  // Tile refresh hook (for logged-in user route logging)
+  const { refreshTiles } = useMapTileRefresh({
+    map, mapLoaded,
+    userId,
+    selectedCountries,
+    routeLayerConfig,
+    scenicLayerConfig,
+  });
+
+  // Route highlighting hooks
+  useRouteHighlighting(map, highlightedRoutes, selectedRoutes);
+
+  // Layer filter hooks
+  useLayerFilters(map, routeEditor.showSpecialLines, showScenicOutline);
+
+  // Route click handler
   const handleRouteClick = useCallback(async (route: SelectedRoute) => {
-    // Only allow route clicking when in Route Logger tab
     if (activeTab !== 'routes') return;
 
-    // Check if route is already selected using a temporary variable
     let isSelected = false;
     setSelectedRoutes(prev => {
       isSelected = prev.some(r => r.track_id === route.track_id);
-
-      if (isSelected) {
-        // Remove from selection
-        return prev.filter(r => r.track_id !== route.track_id);
-      }
-
-      // Don't add yet, just return unchanged
+      if (isSelected) return prev.filter(r => r.track_id !== route.track_id);
       return prev;
     });
 
-    // If we just removed it, we're done
     if (isSelected) return;
 
-    // For unlogged users, check trip limit before adding
     if (!user) {
       const canAdd = await dataAccess.canAddMoreJourneys();
       if (!canAdd) {
@@ -203,30 +185,24 @@ export default function VectorRailwayMap({
       }
     }
 
-    // Add to selection
     setSelectedRoutes(prev => [...prev, route]);
   }, [activeTab, user, dataAccess, showError]);
 
-  // Handler to remove route from selection
   const handleRemoveRoute = useCallback((trackId: string) => {
     setSelectedRoutes(prev => prev.filter(r => r.track_id !== trackId));
   }, []);
 
-  // Handler to clear all selected routes
   const handleClearAll = useCallback(() => {
     setSelectedRoutes([]);
   }, []);
 
-  // Handler to update partial status for a route
   const handleUpdateRoutePartial = useCallback((trackId: string, partial: boolean) => {
     setSelectedRoutes(routes =>
       routes.map(r => r.track_id === trackId ? { ...r, partial } : r)
     );
   }, []);
 
-  // Handler to add routes from multi-route logger
   const handleAddRoutesFromLogger = useCallback(async (routes: Array<{track_id: number; from_station: string; to_station: string; description: string; length_km: number}>) => {
-    // For unlogged users, check trip limit before adding
     if (!user) {
       const canAdd = await dataAccess.canAddMoreJourneys();
       if (!canAdd) {
@@ -235,12 +211,11 @@ export default function VectorRailwayMap({
       }
     }
 
-    // Convert RouteNode to SelectedRoute format
     const newRoutes = routes.map(route => ({
       track_id: route.track_id.toString(),
       from_station: route.from_station,
       to_station: route.to_station,
-      track_number: null, // Not available from pathfinding
+      track_number: null,
       description: route.description || '',
       usage_types: '',
       link: null,
@@ -250,7 +225,6 @@ export default function VectorRailwayMap({
       length_km: route.length_km
     }));
 
-    // Filter out routes already in selection
     setSelectedRoutes(prev => {
       const routesToAdd = newRoutes.filter(
         newRoute => !prev.some(existingRoute => existingRoute.track_id === newRoute.track_id)
@@ -259,29 +233,21 @@ export default function VectorRailwayMap({
     });
   }, [user, dataAccess, showError]);
 
-  // Handler called after routes are logged
   const handleRoutesLogged = useCallback(() => {
     if (user) {
-      // For logged users: refresh map tiles to show updated route colors from database
-      setCacheBuster(Date.now());
-      // Also refresh progress stats
+      refreshTiles();
       routeEditor.refreshProgress();
     } else {
-      // For unlogged users: update feature states based on localStorage
       updateLocalStorageFeatureStates();
-      // Refresh progress stats
       routeEditor.refreshProgress();
     }
-  }, [user, updateLocalStorageFeatureStates, routeEditor.refreshProgress]);
+  }, [user, refreshTiles, updateLocalStorageFeatureStates, routeEditor.refreshProgress]);
 
   // Set up localStorage feature states when map loads (for unlogged users)
   useEffect(() => {
     if (!map.current || !mapLoaded || user) return;
 
-    // Wait for tiles to load, then apply feature states
-    const applyStates = () => {
-      updateLocalStorageFeatureStates();
-    };
+    const applyStates = () => { updateLocalStorageFeatureStates(); };
 
     if (map.current.isMoving()) {
       map.current.once('idle', applyStates);
@@ -293,250 +259,61 @@ export default function VectorRailwayMap({
   // Force map refresh when user changes (login/logout)
   useEffect(() => {
     if (!map.current) return;
+    refreshTiles();
+  }, [user, map]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Update cache buster to force tile reload with new/no user data
-    setCacheBuster(Date.now());
-  }, [user, map]);
-
-  // Reload railway_routes tiles when cacheBuster changes - used when logged in user logs a route
-  useEffect(() => {
-    if (!map.current || !mapLoaded || !user) return;
-
-    // Remove existing railway_routes source and layers (including dependent layers)
-    const layersToRemove = ['selected_routes_highlight', 'highlighted_routes', 'railway_routes', 'railway_routes_scenic_outline'];
-    layersToRemove.forEach(layerId => {
-      if (map.current?.getLayer(layerId)) {
-        map.current.removeLayer(layerId);
-      }
-    });
-
-    if (map.current.getSource('railway_routes')) {
-      map.current.removeSource('railway_routes');
-    }
-
-    // Re-add source with new cache buster
-    map.current.addSource('railway_routes', createRailwayRoutesSource({
-      userId: userId || undefined,
-      cacheBuster,
-      selectedCountries
-    }));
-
-    // Re-add layers (scenic outline first, then main routes layer on top)
-    map.current.addLayer(createScenicRoutesOutlineLayer({
-      widthExpression: getUserRouteWidthExpression(),
-      filter: ['!=', ['get', 'usage_type'], 1],
-    }), 'stations'); // Add before stations layer
-
-    map.current.addLayer(createRailwayRoutesLayer({
-      colorExpression: getUserRouteColorExpression(),
-      widthExpression: getUserRouteWidthExpression(),
-      filter: ['!=', ['get', 'usage_type'], 1],
-    }), 'stations'); // Add before stations layer
-  }, [cacheBuster]);
-
-  // Setup map interactions after map loads
+  // Setup map interactions
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
     let cleanup: (() => void) | undefined;
 
-    // Wait for tiles to be loaded using 'idle' event
     const setupWhenReady = () => {
-      if (!map.current) return;
-
-      // Check if layer exists
-      if (!map.current.getLayer('railway_routes')) {
-        console.warn('railway_routes layer not found when setting up interactions');
-        return;
-      }
-
-      console.log('Setting up map interactions');
+      if (!map.current || !map.current.getLayer('railway_routes')) return;
 
       cleanup = setupUserMapInteractions(map.current, {
         onRouteClick: handleRouteClick,
-        // Enable station clicking in Route Logger tab (for integrated planner)
         onStationClick: activeTab === 'routes' && journeyStationClickHandler
           ? journeyStationClickHandler
           : undefined,
       });
     };
 
-    // If map is idle (tiles loaded), set up immediately
     if (!map.current.isMoving()) {
       setupWhenReady();
     } else {
-      // Otherwise wait for 'idle' event (fires after tiles load)
       map.current.once('idle', setupWhenReady);
     }
 
-    return () => {
-      if (cleanup) {
-        cleanup();
-      }
-    };
+    return () => { if (cleanup) cleanup(); };
   }, [map, mapLoaded, handleRouteClick, activeTab, journeyStationClickHandler]);
 
-  // Fetch progress stats on component mount
+  // Fetch progress stats on mount
   useEffect(() => {
-    if (mapLoaded) {
-      // Just fetch progress stats (localStorage feature states handled separately)
-      routeEditor.refreshProgress();
-    }
+    if (mapLoaded) routeEditor.refreshProgress();
   }, [mapLoaded, routeEditor.refreshProgress]);
 
-  // Handler for country filter changes
+  // Country filter handler
   const handleCountriesChange = async (countries: string[]) => {
     try {
-      // Update local state immediately
       setSelectedCountries(countries);
-
-      // Save preferences (database for logged users, localStorage for unlogged users)
       await dataAccess.updateUserPreferences(countries);
-
-      // Force map refresh by updating cache buster
-      setCacheBuster(Date.now());
+      refreshTiles();
     } catch (error) {
       console.error('Error updating country preferences:', error);
     }
   };
 
-  // Update layer filter when showSpecialLines changes
-  useEffect(() => {
-    if (!map.current || !map.current.getLayer('railway_routes')) return;
-
-    const filter: FilterSpecification | null = routeEditor.showSpecialLines
-      ? null // Show all routes
-      : ['!=', ['get', 'usage_type'], 1]; // Hide special routes (usage_type === 1)
-
-    // Apply filter to main routes layer
-    map.current.setFilter('railway_routes', filter);
-
-    // For scenic outline layer, combine scenic check with special lines filter
-    if (map.current.getLayer('railway_routes_scenic_outline')) {
-      const scenicFilter: FilterSpecification = routeEditor.showSpecialLines
-        ? ['==', ['get', 'scenic'], true] // Show all scenic routes
-        : ['all', ['==', ['get', 'scenic'], true], ['!=', ['get', 'usage_type'], 1]]; // Show scenic routes that are not special
-      map.current.setFilter('railway_routes_scenic_outline', scenicFilter);
-    }
-  }, [map, routeEditor.showSpecialLines]);
-
-  // Toggle scenic routes outline layer visibility
-  useEffect(() => {
-    if (!map.current || !map.current.getLayer('railway_routes_scenic_outline')) return;
-
-    map.current.setLayoutProperty(
-      'railway_routes_scenic_outline',
-      'visibility',
-      showScenicOutline ? 'visible' : 'none'
-    );
-  }, [map, showScenicOutline]);
-
-  // Highlight routes from multi-route logger (gold)
-  useEffect(() => {
-    if (!map.current || !map.current.getLayer('railway_routes')) return;
-
-    if (highlightedRoutes.length > 0) {
-      // Add a highlight layer for the multi-route logger routes
-      if (!map.current.getLayer('highlighted_routes')) {
-        map.current.addLayer({
-          id: 'highlighted_routes',
-          type: 'line',
-          source: 'railway_routes',
-          'source-layer': 'railway_routes', // Required for vector tile sources
-          paint: {
-            'line-color': '#FFD700', // Gold color for highlight
-            'line-width': 6,
-            'line-opacity': 0.8,
-          },
-          filter: ['in', ['id'], ['literal', highlightedRoutes]],
-        });
-      } else {
-        map.current.setFilter('highlighted_routes', [
-          'in',
-          ['id'],
-          ['literal', highlightedRoutes],
-        ]);
-      }
-    } else {
-      // Remove highlight layer when no routes are highlighted
-      if (map.current.getLayer('highlighted_routes')) {
-        map.current.removeLayer('highlighted_routes');
-      }
-    }
-  }, [map, highlightedRoutes]);
-
-  // Highlight selected routes (green if logged, red if not)
-  useEffect(() => {
-    if (!map.current || !map.current.getLayer('railway_routes')) return;
-
-    const selectedTrackIds = selectedRoutes.map(r => parseInt(r.track_id));
-
-    if (selectedTrackIds.length > 0) {
-      // Add a highlight layer for the selected routes
-      if (!map.current.getLayer('selected_routes_highlight')) {
-        map.current.addLayer({
-          id: 'selected_routes_highlight',
-          type: 'line',
-          source: 'railway_routes',
-          'source-layer': 'railway_routes', // Required for vector tile sources
-          paint: {
-            'line-color': [
-              'case',
-              // Logged users: Has at least one complete trip (from tile data)
-              ['all', ['has', 'date'], ['==', ['get', 'has_complete_trip'], true]],
-              '#059669', // Green
-              // Logged users: Has trips but no complete trip (from tile data)
-              ['has', 'date'],
-              '#d97706', // Orange
-              // Unlogged users: Has partial trip (from feature-state)
-              ['all', ['==', ['feature-state', 'hasTrip'], true], ['==', ['feature-state', 'partial'], true]],
-              '#d97706', // Orange
-              // Unlogged users: Has complete trip (from feature-state)
-              ['==', ['feature-state', 'hasTrip'], true],
-              '#059669', // Green
-              // No trips
-              '#DC2626'  // Red
-            ],
-            'line-width': 7,
-            'line-opacity': 0.9,
-          },
-          filter: ['in', ['id'], ['literal', selectedTrackIds]],
-        }, 'railway_routes'); // Insert before railway_routes layer so it's underneath
-      } else {
-        map.current.setFilter('selected_routes_highlight', [
-          'in',
-          ['id'],
-          ['literal', selectedTrackIds],
-        ]);
-      }
-    } else {
-      // Remove highlight layer when no routes are selected
-      if (map.current.getLayer('selected_routes_highlight')) {
-        map.current.removeLayer('selected_routes_highlight');
-      }
-    }
-  }, [map, selectedRoutes]);
-
-  // Handle station selection from search
+  // Station search handler
   const handleStationSelect = (station: Station) => {
     if (!map.current) return;
-
     const [lon, lat] = station.coordinates;
-
-    // Fly to the station
-    map.current.flyTo({
-      center: [lon, lat],
-      zoom: 14,
-      duration: 1500
-    });
-
-    // Clear search
+    map.current.flyTo({ center: [lon, lat], zoom: 14, duration: 1500 });
     stationSearch.setSearchQuery('');
     stationSearch.setShowSuggestions(false);
     stationSearch.setSelectedStationIndex(-1);
   };
 
-  // Handle keyboard navigation in search
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!stationSearch.showSuggestions || stationSearch.searchResults.length === 0) return;
 
@@ -566,7 +343,6 @@ export default function VectorRailwayMap({
 
   return (
     <div className="h-full flex relative">
-      {/* User Sidebar */}
       <UserSidebar
         user={user}
         dataAccess={dataAccess}
@@ -696,9 +472,6 @@ export default function VectorRailwayMap({
         </div>
       </div>
       </div>
-
-      {/* Manage Trips Modal - REMOVED: Replaced with journey system */}
-      {/* Trip management functionality has been moved to journey-based logging */}
     </div>
   );
 }
