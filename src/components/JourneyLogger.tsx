@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/lib/toast';
 import type { SelectedRoute, Station } from '@/lib/types';
 import { createJourney } from '@/lib/journeyActions';
+import { getAllTrips } from '@/lib/tripActions';
+import type { TripWithStats } from '@/lib/tripActions';
 import JourneyPlanner from './JourneyPlanner';
 
 interface RouteNode {
@@ -42,7 +44,19 @@ export default function JourneyLogger({
   const [journeyName, setJourneyName] = useState('');
   const [journeyDate, setJourneyDate] = useState(today);
   const [journeyDescription, setJourneyDescription] = useState('');
+  const [journeyTripId, setJourneyTripId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Available trips for dropdown
+  const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
+
+  useEffect(() => {
+    getAllTrips().then(result => {
+      if (!result.error) {
+        setAvailableTrips(result.trips || []);
+      }
+    });
+  }, []);
 
   const handleCreateJourney = async () => {
     if (!journeyName.trim() || !journeyDate || selectedRoutes.length === 0) {
@@ -60,7 +74,8 @@ export default function JourneyLogger({
         journeyDescription.trim() || null,
         journeyDate,
         trackIds,
-        partialFlags
+        partialFlags,
+        journeyTripId
       );
 
       if (result.error) {
@@ -72,6 +87,7 @@ export default function JourneyLogger({
       setJourneyName('');
       setJourneyDate(today);
       setJourneyDescription('');
+      setJourneyTripId(null);
       onClearSelection();
 
       // Trigger map refresh
@@ -126,6 +142,22 @@ export default function JourneyLogger({
               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
+
+          {availableTrips.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Trip</label>
+              <select
+                value={journeyTripId ?? ''}
+                onChange={(e) => setJourneyTripId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">None</option>
+                {availableTrips.map(trip => (
+                  <option key={trip.id} value={trip.id}>{trip.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import LocalTripLogger from './LocalTripLogger';
 import JourneyLogTab from './JourneyLogTab';
 import LocalJourneyLogTab from './LocalJourneyLogTab';
 import CountriesStatsTab from './CountriesStatsTab';
+import TripsTab from './TripsTab';
 import HowToUseArticle from './HowToUseArticle';
 import RailwayNotesArticle from './RailwayNotesArticle';
 import type { SelectedRoute, Station } from '@/lib/types';
@@ -20,7 +21,7 @@ interface RouteNode {
   length_km: number;
 }
 
-export type ActiveTab = 'routes' | 'journeylog' | 'filter' | 'howto' | 'notes';
+export type ActiveTab = 'routes' | 'journeylog' | 'trips' | 'filter' | 'howto' | 'notes';
 
 interface UserSidebarProps {
   user: User | null;
@@ -91,6 +92,18 @@ export default function UserSidebar({
         >
           My Journeys
         </button>
+        {user && (
+          <button
+            onClick={() => setActiveTab('trips')}
+            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+              activeTab === 'trips'
+                ? 'border-blue-500 text-blue-600 bg-blue-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            My Trips
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('filter')}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
@@ -142,6 +155,13 @@ export default function UserSidebar({
           <LocalJourneyLogTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
+          />
+        )}
+
+        {activeTab === 'trips' && user && (
+          <TripsTab
+            onHighlightRoutes={onHighlightRoutes}
+            onTripChanged={onRoutesLogged}
           />
         )}
 

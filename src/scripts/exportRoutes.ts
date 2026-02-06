@@ -5,10 +5,10 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 
 /**
- * Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
+ * Export railway_routes, user_trips, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
  */
 async function exportRoutes() {
-  console.log('Exporting railway_routes, user_journeys, user_logged_parts, and admin_notes...');
+  console.log('Exporting railway_routes, user_trips, user_journeys, user_logged_parts, and admin_notes...');
 
   // Create data directory if it doesn't exist
   const dataDir = path.join(process.cwd(), 'data');
@@ -49,6 +49,38 @@ async function exportRoutes() {
     // Read the dump from the temp file
     const sqlDump = fs.readFileSync(tempFilepath, 'utf-8');
 
+    // Get user_trips for user_id=1
+    console.log('Exporting user_trips for user_id=1...');
+    const tripsResult = await query(`
+      SELECT
+        id,
+        user_id,
+        name,
+        description,
+        created_at,
+        updated_at
+      FROM user_trips
+      WHERE user_id = 1
+      ORDER BY id
+    `);
+
+    // Generate SQL INSERT statements for user_trips
+    let tripsSQL = '\n-- User trips for user_id=1\n';
+    if (tripsResult.rows.length > 0) {
+      tripsSQL += 'DELETE FROM public.user_trips WHERE user_id = 1;\n\n';
+      for (const row of tripsResult.rows) {
+        const nameValue = `'${row.name.replace(/'/g, "''")}'`;
+        const descValue = row.description ? `'${row.description.replace(/'/g, "''")}'` : 'NULL';
+        const createdValue = `'${row.created_at.toISOString()}'`;
+        const updatedValue = `'${row.updated_at.toISOString()}'`;
+
+        tripsSQL += `INSERT INTO public.user_trips (id, user_id, name, description, created_at, updated_at) VALUES (${row.id}, ${row.user_id}, ${nameValue}, ${descValue}, ${createdValue}, ${updatedValue});\n`;
+      }
+      tripsSQL += '\nSELECT setval(\'user_trips_id_seq\', (SELECT MAX(id) FROM user_trips));\n';
+    } else {
+      tripsSQL += '-- No trips found for user_id=1\n';
+    }
+
     // Get user_journeys for user_id=1
     console.log('Exporting user_journeys for user_id=1...');
     const journeysResult = await query(`
@@ -58,6 +90,7 @@ async function exportRoutes() {
         name,
         description,
         date,
+        trip_id,
         created_at,
         updated_at
       FROM user_journeys
@@ -76,7 +109,9 @@ async function exportRoutes() {
         const createdValue = `'${row.created_at.toISOString()}'`;
         const updatedValue = `'${row.updated_at.toISOString()}'`;
 
-        journeysSQL += `INSERT INTO public.user_journeys (id, user_id, name, description, date, created_at, updated_at) VALUES (${row.id}, ${row.user_id}, ${nameValue}, ${descValue}, ${dateValue}, ${createdValue}, ${updatedValue});\n`;
+        const tripIdValue = row.trip_id !== null ? row.trip_id : 'NULL';
+
+        journeysSQL += `INSERT INTO public.user_journeys (id, user_id, name, description, date, trip_id, created_at, updated_at) VALUES (${row.id}, ${row.user_id}, ${nameValue}, ${descValue}, ${dateValue}, ${tripIdValue}, ${createdValue}, ${updatedValue});\n`;
       }
       journeysSQL += '\nSELECT setval(\'user_journeys_id_seq\', (SELECT MAX(id) FROM user_journeys));\n';
     } else {
@@ -158,9 +193,10 @@ async function exportRoutes() {
     const fullDump = `-- Railway Data Export (${timestamp})
 -- This file contains:
 --   1. railway_routes table (full export)
---   2. user_journeys for user_id=1
---   3. user_logged_parts for user_id=1
---   4. admin_notes (admin-only annotations)
+--   2. user_trips for user_id=1
+--   3. user_journeys for user_id=1
+--   4. user_logged_parts for user_id=1
+--   5. admin_notes (admin-only annotations)
 
 -- Clear existing data
 DELETE FROM public.railway_routes;
@@ -169,6 +205,8 @@ DELETE FROM public.railway_routes;
 SET session_replication_role = replica;
 
 ${sqlDump}
+
+${tripsSQL}
 
 ${journeysSQL}
 
@@ -189,6 +227,7 @@ SET session_replication_role = DEFAULT;
     }
 
     console.log(`✓ Exported railway_routes (${sqlDump.split('\n').filter(l => l.startsWith('INSERT')).length} routes)`);
+    console.log(`✓ Exported user_trips (${tripsResult.rows.length} trips)`);
     console.log(`✓ Exported user_journeys (${journeysResult.rows.length} journeys)`);
     console.log(`✓ Exported user_logged_parts (${loggedPartsResult.rows.length} logged parts)`);
     console.log(`✓ Exported admin_notes (${notesCount} notes)`);

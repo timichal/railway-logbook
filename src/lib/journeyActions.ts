@@ -8,7 +8,7 @@ import type { Journey, LoggedPart, RailwayRoute } from './types'
  * Get all journeys for a user with route counts and total distance
  */
 export async function getAllJourneys(): Promise<{
-  journeys: (Journey & { route_count: number; total_distance: string })[];
+  journeys: (Journey & { route_count: number; total_distance: string; trip_name: string | null })[];
   error?: string
 }> {
   try {
@@ -17,16 +17,18 @@ export async function getAllJourneys(): Promise<{
       return { journeys: [], error: 'Not authenticated' }
     }
 
-    const result = await pool.query<Journey & { route_count: number; total_distance: string }>(
+    const result = await pool.query<Journey & { route_count: number; total_distance: string; trip_name: string | null }>(
       `SELECT
         uj.*,
         COUNT(ulp.id)::int as route_count,
-        COALESCE(SUM(rr.length_km), 0) as total_distance
+        COALESCE(SUM(rr.length_km), 0) as total_distance,
+        ut.name as trip_name
       FROM user_journeys uj
       LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
       LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
+      LEFT JOIN user_trips ut ON uj.trip_id = ut.id
       WHERE uj.user_id = $1
-      GROUP BY uj.id
+      GROUP BY uj.id, ut.name
       ORDER BY uj.date DESC NULLS LAST, uj.created_at DESC`,
       [user.id]
     )
@@ -93,7 +95,8 @@ export async function createJourney(
   description: string | null,
   date: string, // YYYY-MM-DD
   trackIds: number[],
-  partialFlags: boolean[]
+  partialFlags: boolean[],
+  tripId?: number | null
 ): Promise<{ journey: Journey | null; error?: string }> {
   const client = await pool.connect()
 
@@ -120,10 +123,10 @@ export async function createJourney(
 
     // Create journey
     const journeyResult = await client.query<Journey>(
-      `INSERT INTO user_journeys (user_id, name, description, date)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO user_journeys (user_id, name, description, date, trip_id)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [user.id, name.trim(), description, date]
+      [user.id, name.trim(), description, date, tripId || null]
     )
 
     const journey = journeyResult.rows[0]

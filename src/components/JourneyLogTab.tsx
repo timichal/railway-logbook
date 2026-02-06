@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/lib/toast';
 import { getAllJourneys, deleteJourney, getJourney, updateJourney } from '@/lib/journeyActions';
+import { getAllTrips, assignJourneyToTrip, unassignJourneyFromTrip } from '@/lib/tripActions';
+import type { TripWithStats } from '@/lib/tripActions';
 import type { Journey, RailwayRoute } from '@/lib/types';
 import { getUntimezonedDateStr } from '@/lib/getUntimezonedDateStr';
 
 interface JourneyWithStats extends Journey {
   route_count: number;
   total_distance: string;
+  trip_name: string | null;
 }
 
 interface JourneyLogTabProps {
@@ -33,7 +36,11 @@ export default function JourneyLogTab({
   const [editName, setEditName] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editTripId, setEditTripId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Trips for assignment dropdown
+  const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
 
   // Load journeys on mount
   useEffect(() => {
@@ -97,6 +104,13 @@ export default function JourneyLogTab({
         const dateStr = getUntimezonedDateStr(result.journey.date);
         setEditDate(dateStr);
         setEditDescription(result.journey.description || '');
+        setEditTripId(result.journey.trip_id);
+
+        // Load available trips for the dropdown
+        const tripsResult = await getAllTrips();
+        if (!tripsResult.error) {
+          setAvailableTrips(tripsResult.trips || []);
+        }
       }
 
       // Highlight routes on map
@@ -155,6 +169,30 @@ export default function JourneyLogTab({
       const dateStr = getUntimezonedDateStr(journey.date);
       setEditDate(dateStr);
       setEditDescription(journey.description || '');
+      setEditTripId(journey.trip_id);
+    }
+  };
+
+  const handleTripChange = async (journeyId: number, newTripId: number | null) => {
+    try {
+      let result;
+      if (newTripId) {
+        result = await assignJourneyToTrip(journeyId, newTripId);
+      } else {
+        result = await unassignJourneyFromTrip(journeyId);
+      }
+
+      if (result.error) {
+        showError(result.error);
+      } else {
+        setEditTripId(newTripId);
+        showSuccess(newTripId ? 'Journey assigned to trip' : 'Journey unassigned from trip');
+        loadJourneys();
+        if (onJourneyChanged) onJourneyChanged();
+      }
+    } catch (error) {
+      console.error('Error changing trip assignment:', error);
+      showError('Failed to change trip assignment');
     }
   };
 
@@ -239,7 +277,14 @@ export default function JourneyLogTab({
               {/* Journey Header */}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-base truncate">{journey.name}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-base truncate">{journey.name}</h4>
+                    {journey.trip_name && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 flex-shrink-0">
+                        {journey.trip_name}
+                      </span>
+                    )}
+                  </div>
                   {journey.description && (
                     <div className="text-xs text-gray-600 mt-1">
                       {journey.description}
@@ -337,6 +382,22 @@ export default function JourneyLogTab({
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                           disabled={isSaving}
                         />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Trip</label>
+                        <select
+                          value={editTripId ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value ? Number(e.target.value) : null;
+                            handleTripChange(journey.id, val);
+                          }}
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">None</option>
+                          {availableTrips.map(trip => (
+                            <option key={trip.id} value={trip.id}>{trip.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="flex items-center gap-2">
                         <button

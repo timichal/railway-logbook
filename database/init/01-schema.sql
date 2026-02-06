@@ -64,6 +64,16 @@ CREATE TABLE railway_routes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User trips (groups of journeys, e.g., "Summer Holiday in Austria")
+CREATE TABLE user_trips (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL CHECK (name != ''), -- User-defined trip name (required, non-empty)
+    description TEXT, -- Optional trip description
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- User journeys (named, dated collections of routes)
 CREATE TABLE user_journeys (
     id SERIAL PRIMARY KEY,
@@ -71,6 +81,7 @@ CREATE TABLE user_journeys (
     name TEXT NOT NULL CHECK (name != ''), -- User-defined journey name (required, non-empty)
     description TEXT, -- Optional journey description
     date DATE NOT NULL, -- Journey date (required)
+    trip_id INTEGER REFERENCES user_trips(id) ON DELETE SET NULL, -- Optional trip grouping
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -115,9 +126,13 @@ CREATE INDEX idx_railway_routes_end_country ON railway_routes (end_country);
 CREATE INDEX idx_railway_routes_starting_part ON railway_routes (starting_part_id);
 CREATE INDEX idx_railway_routes_ending_part ON railway_routes (ending_part_id);
 
+-- User trips indexes
+CREATE INDEX idx_user_trips_user_id ON user_trips (user_id);
+
 -- User journeys indexes
 CREATE INDEX idx_user_journeys_user_id ON user_journeys (user_id);
 CREATE INDEX idx_user_journeys_date ON user_journeys (date);
+CREATE INDEX idx_user_journeys_trip_id ON user_journeys (trip_id);
 CREATE INDEX idx_user_journeys_user_date ON user_journeys (user_id, date DESC); -- Composite index for common query pattern
 
 -- User logged parts indexes
@@ -137,6 +152,12 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Trigger to auto-update updated_at on user_trips updates
+CREATE TRIGGER user_trips_update_timestamp
+BEFORE UPDATE ON user_trips
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
 
 -- Trigger to auto-update updated_at on user_journeys updates
 CREATE TRIGGER user_journeys_update_timestamp

@@ -99,6 +99,16 @@ export type RailwayRoute = {
   partial?: boolean | null // From most recent journey
 }
 
+// User trip from database (groups of journeys)
+export type Trip = {
+  id: number
+  user_id: number
+  name: string // User-defined trip name (required, non-empty)
+  description: string | null
+  created_at: string
+  updated_at: string
+}
+
 // User journey from database (named, dated collection of routes)
 export type Journey = {
   id: number
@@ -106,6 +116,7 @@ export type Journey = {
   name: string // User-defined journey name (required, non-empty)
   description: string | null
   date: string // Journey date (required, YYYY-MM-DD)
+  trip_id: number | null // Optional trip grouping
   created_at: string
   updated_at: string
 }

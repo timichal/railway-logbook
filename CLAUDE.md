@@ -30,13 +30,14 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
+- `npm run addTripsTable` - Migration: creates user_trips table and adds trip_id FK to user_journeys
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate
 - `npm run listStations` - List all unique station names from railway_routes table (sorted alphabetically)
   - Debugging utility for viewing station data
   - Combines from_station and to_station columns
-- `npm run exportRouteData` - Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
+- `npm run exportRouteData` - Export railway_routes, user_trips, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump using Docker (saved to `data/railway_data_YYYY-MM-DD.sql`)
   - Requires `db` container to be running
   - Uses `docker exec` to run `pg_dump` inside the container
 - `npm run importRouteData <filename>` - Import railway data from SQL dump using Docker (e.g., `npm run importRouteData railway_data_2025-01-15.sql`)
@@ -91,13 +92,15 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
   - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), scenic (BOOLEAN flag for particularly scenic routes), PostGIS geometry, length_km, start_country (ISO 3166-1 alpha-2), end_country (ISO 3166-1 alpha-2), **starting_coordinate (POINT)**, **ending_coordinate (POINT)**, is_valid flag, error_message, intended_backtracking flag, and has_backtracking flag
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and pathfinding)
-  - `user_journeys` - Named, dated collections of routes; id, user_id, name (required, non-empty), description (optional), date (required), created_at, updated_at; represents actual trips/journeys taken by users
+  - `user_trips` - Trip groupings for journeys (e.g., "Summer Holiday in Austria"); id, user_id, name (required, non-empty), description (optional), created_at, updated_at; authenticated users only
+  - `user_journeys` - Named, dated collections of routes; id, user_id, name (required, non-empty), description (optional), date (required), trip_id (nullable FK to user_trips, ON DELETE SET NULL), created_at, updated_at; represents actual trips/journeys taken by users
   - `user_logged_parts` - Connects journeys to routes with partial flags; id, user_id, journey_id, track_id (nullable to preserve history), partial flag, created_at; UNIQUE constraint prevents duplicate routes within same journey
   - `user_preferences` - User preferences for country filtering; stores selected_countries as TEXT[] array of ISO country codes (defaults: CZ, SK, AT, PL, DE, LT, LV, EE)
   - `admin_notes` - Admin-only map notes with id, coordinate (PostGIS POINT), text, created_at, updated_at; auto-updates timestamp on edit
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
 - **Auto-generated IDs**: track_id uses PostgreSQL SERIAL for automatic ID generation
 - **Coordinate-Based Routing**: Routes store exact starting_coordinate and ending_coordinate (exact click points on railway parts) for precise recalculation; is_valid flag marks routes that can't be recalculated after OSM updates
+- **Trip Grouping**: user_trips table groups journeys into named trips; journeys optionally reference a trip via trip_id FK (ON DELETE SET NULL); trip date range computed from min/max of assigned journey dates
 - **Journey-Based Logging**: user_journeys table stores named trips with dates; user_logged_parts connects routes to journeys with partial flags; same route can appear in multiple journeys; UNIQUE constraint per journey prevents duplicates within a single journey
 - **Country Tracking**: Routes automatically store start_country and end_country (2-letter ISO codes) determined from route geometry; uses @rapideditor/country-coder for worldwide boundary detection
 
@@ -113,7 +116,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension); floating search box in top-right
 - **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
-- **Unified User Sidebar** - Left-side resizable tabbed sidebar (400px-1200px) with three tabs (Route Logger, My Journeys, Country Settings & Stats) plus two article views (How To Use, Railway Notes); auth-aware rendering with JourneyLogger/LocalTripLogger
+- **Unified User Sidebar** - Left-side resizable tabbed sidebar (400px-1200px) with tabs (Route Logger, My Journeys, My Trips [auth only], Country Settings & Stats) plus two article views (How To Use, Railway Notes); auth-aware rendering with JourneyLogger/LocalTripLogger
 - **Article Tabs** - "How To Use" and "Railway Notes" buttons in navbar open full-screen article tabs in sidebar with close button to return to Route Logger
 
 ### 5. Admin System Architecture
@@ -180,8 +183,9 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `JourneyLogger.tsx` - Route Logger tab for authenticated users: route selection list with integrated journey planner, bulk logging form
 - `LocalTripLogger.tsx` - Route Logger tab for unauthenticated users: localStorage-based route logging with trip limit
 - `JourneyPlanner.tsx` - Journey Planner embedded in JourneyLogger: pathfinding between stations (from → via → to with drag-and-drop reordering); stations clickable on map
-- `JourneyLogTab.tsx` - My Journeys tab for authenticated users: list of journeys with route details and editing
+- `JourneyLogTab.tsx` - My Journeys tab for authenticated users: list of journeys with route details, editing, and trip assignment
 - `LocalJourneyLogTab.tsx` - My Journeys tab for unauthenticated users: localStorage-based journey list
+- `TripsTab.tsx` - My Trips tab for authenticated users: trip CRUD, journey assignment/unassignment, computed date ranges and stats
 - `CountriesStatsTab.tsx` - Country Settings & Stats tab: country filter checkboxes (CZ, SK, AT, PL, DE, LT, LV, EE) with per-country stats and total
 - `HowToUseArticle.tsx` - Article view with header and close button (content area for user instructions)
 - `RailwayNotesArticle.tsx` - Article view with header and close button (content area for railway notes)
@@ -209,7 +213,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `dbConfig.ts` - Database configuration utilities (reads from .env file)
 - `userActions.ts` - User-facing server actions (search stations, get GeoJSON data, get progress with country filtering)
 - `userPreferencesActions.ts` - User preferences management (get/update selected countries, ensure defaults)
-- `journeyActions.ts` - Journey CRUD server actions (create/update/delete journeys and logged parts)
+- `journeyActions.ts` - Journey CRUD server actions (create/update/delete journeys and logged parts, optional trip assignment on create)
+- `tripActions.ts` - Trip CRUD server actions (create/update/delete trips, assign/unassign journeys, get unassigned journeys)
 - `adminRouteActions.ts` - Admin-only route creation/update/deletion with security checks and automatic country detection
 - `adminMapActions.ts` - Admin-only coordinate-based pathfinding (`findRailwayPathFromCoordinates`) and railway parts fetching by IDs
 - `adminNotesActions.ts` - Admin-only notes CRUD operations (getAllAdminNotes, getAdminNote, createAdminNote, updateAdminNote, deleteAdminNote)
@@ -269,6 +274,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `importMapData.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
 - `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
 - `applyVectorTiles.ts` - Applies/updates vector tile functions from SQL file
+- `addTripsTable.ts` - Migration: creates user_trips table and adds trip_id FK to user_journeys
 - `markAllRoutesInvalid.ts` - Marks all routes as invalid for rechecking (utility script; **use as example for database migration scripts**)
 - `listStations.ts` - Lists all unique station names from railway_routes (debugging utility)
 - `exportRoutes.ts` - Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
@@ -289,7 +295,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `stations_tile` - Stations visible at zoom 10+
   - `admin_notes_tile` - Admin notes visible at all zoom levels (admin-only)
   - Web Mercator (EPSG:3857) geometry columns and sync triggers for all spatial tables including admin_notes
-- Contains tables for users, stations, railway_routes (with frequency, link, scenic flag, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message, backtracking flags), railway_parts, user_journeys (named trips with dates), user_logged_parts (journey-route connections with partial flags), user_preferences (selected_countries array), and admin_notes (coordinate, text, timestamps)
+- Contains tables for users, stations, railway_routes (with frequency, link, scenic flag, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message, backtracking flags), railway_parts, user_trips (trip groupings with name/description), user_journeys (named trips with dates, optional trip_id FK), user_logged_parts (journey-route connections with partial flags), user_preferences (selected_countries array), and admin_notes (coordinate, text, timestamps)
 
 ### Configuration Files
 - `eslint.config.mjs` - ESLint configuration
@@ -301,7 +307,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `<country>-rail.tmp.osm.pbf` - Filtered railway data
 - `<country>-rail.tmp.geojson` - Converted to GeoJSON
 - `<country>-pruned.geojson` - Custom filtered data (ready for database loading)
-- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes (from `npm run exportRouteData`)
+- `railway_data_YYYY-MM-DD.sql` - Exported railway_routes, user_trips, user_journeys, user_logged_parts (user_id=1), and admin_notes (from `npm run exportRouteData`)
 
 ## Development Workflow
 
@@ -372,7 +378,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 ### Unified User Sidebar
 - **Purpose**: Consolidated tabbed interface for route logging, journey management, country filtering, and documentation
 - **Location**: Resizable left-side sidebar (default 600px, range 400px-1200px)
-- **Architecture**: Three visible tabs (Route Logger, My Journeys, Country Settings & Stats) plus two article views (How To Use, Railway Notes) with activeTab state managed in MainLayout component
+- **Architecture**: Visible tabs (Route Logger, My Journeys, My Trips [auth only], Country Settings & Stats) plus two article views (How To Use, Railway Notes) with activeTab state managed in MainLayout component
 - **Auth-Aware**: Renders `JourneyLogger` for authenticated users, `LocalTripLogger` for unauthenticated users in Route Logger tab; similar split for My Journeys tab
 - **Resizing**: Blue drag handle between sidebar and map (same as admin interface)
 - **Tab Switching**: Affects map interaction behavior (route clicking and station clicking only work in Route Logger tab)
@@ -423,7 +429,19 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Toggle partial flag for routes within journeys
 - **Real-time Updates**: Map refreshes automatically after any changes
 
-#### Tab 3: Country Settings & Stats
+#### Tab 3: My Trips (authenticated only)
+- **Purpose**: Group journeys into named trips (e.g., "Summer Holiday in Austria")
+- **Components**: `TripsTab.tsx`
+- **UI Features**:
+  - "New Trip" button to create trips (name required, description optional)
+  - Trip cards showing: name, description, computed date range, journey count, route count, total km
+  - Expand trip to: edit form (name, description), list of assigned journeys with "Remove" buttons, "Add Journeys" picker
+  - Picker shows unassigned journeys with "Add" button for each
+  - Search bar to filter trips by name/description
+- **Data Model**: `user_trips` table; journeys link via `trip_id` FK (ON DELETE SET NULL)
+- **Integration**: Trip badges shown as purple pills in My Journeys tab; trip dropdown in journey creation and edit forms
+
+#### Tab 4: Country Settings & Stats
 - **Purpose**: Filter railway routes by country and view per-country statistics
 - **UI Features**:
   - Country checkboxes with flag emojis (🇨🇿 🇸🇰 🇦🇹 🇵🇱 🇩🇪 🇱🇹 🇱🇻 🇪🇪)
