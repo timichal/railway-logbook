@@ -11,7 +11,6 @@ rozdělané: Rakousko, Německo, Švýcarsko, Itálie, Slovinsko, Francie
 
 osm úpravy
 - piacenza hsl nájezd (19. 1.)
-- lerouville nájezd (6. 2.)
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
@@ -69,24 +68,3 @@ traťová mapa https://www.rfi.it/it/rete/la-rete-oggi.html
 SLOVINSKO
 čísla: z OSM
 traťová mapa https://potniski.sz.si/en/plan-your-journey/map-rail/
-
----
-
-## Development Log
-
-### 2025-02-04: Added HSL (High-speed line) Field
-
-Added a new boolean column `hsl` to the `railway_routes` table to mark high-speed railway lines.
-
-**Database Changes:**
-- Added `hsl BOOLEAN DEFAULT FALSE` column to `railway_routes` table in schema
-- Created migration script `src/scripts/addHslField.ts` (run with `npm run addHslField`)
-
-**Code Changes:**
-- Updated all admin forms to include HSL checkbox (after Scenic checkbox)
-- Updated all database queries and server actions to handle HSL field
-- Added red "HSL" badge to route tooltips when hsl=true
-
-**Visual Design:**
-- Red badge background (#ef4444) with white text
-- Appears after Scenic badge in tooltips
