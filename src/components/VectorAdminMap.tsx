@@ -7,6 +7,7 @@ import { useRouteLength } from '@/lib/map/hooks/useRouteLength';
 import { useAdminLayerVisibility } from '@/lib/map/hooks/useAdminLayerVisibility';
 import { useAdminMapOverlays } from '@/lib/map/hooks/useAdminMapOverlays';
 import { useAdminNotesPopup } from '@/lib/map/hooks/useAdminNotesPopup';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
@@ -53,6 +54,7 @@ export default function VectorAdminMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
+  const isMobile = useIsMobile();
 
   const { previewLength, selectedRouteLength } = useRouteLength(previewRoute, selectedRouteId);
 
@@ -253,7 +255,7 @@ export default function VectorAdminMap({
     <div className={`${className} relative`}>
       <div ref={mapContainer} className="w-full h-full" />
 
-      <AdminLayerControls {...layerVisibility} />
+      <AdminLayerControls {...layerVisibility} isMobile={isMobile} />
 
       {(previewLength !== null || selectedRouteLength !== null) && (
         <div className="absolute top-4 right-4 bg-white p-3 rounded shadow-lg text-black z-10">

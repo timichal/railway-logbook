@@ -28,13 +28,13 @@ interface AdminSidebarProps {
   onRouteUpdated?: () => void;
   onEditingGeometryChange?: (trackId: string | null) => void;
   onRouteFocus?: (geometry: string) => void;
-  sidebarWidth?: number;
+  sidebarWidth?: number | null;
   onRefreshMap?: () => void;
   showError?: (message: string) => void;
   showSuccess?: (message: string) => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedCoordinate, coordinateClickTrigger, onPreviewRoute, onCreateFormCoordinatesChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth = 400, onRefreshMap, showError: showErrorProp, showSuccess: showSuccessProp }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedCoordinate, coordinateClickTrigger, onPreviewRoute, onCreateFormCoordinatesChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth, onRefreshMap, showError: showErrorProp, showSuccess: showSuccessProp }: AdminSidebarProps) {
   const { showError: showErrorToast } = useToast();
   const showError = showErrorProp || showErrorToast;
   const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
@@ -180,7 +180,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
   }, [onEditingGeometryChange, onRouteSelect]);
 
   return (
-    <div style={{ width: `${sidebarWidth}px` }} className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+    <div style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined} className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
       {/* Tab Headers */}
       <div className="flex border-b border-gray-200">
         <button

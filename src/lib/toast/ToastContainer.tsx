@@ -11,10 +11,10 @@ const toastStyles: Record<ToastType, string> = {
 };
 
 const toastIcons: Record<ToastType, string> = {
-  success: '✓',
-  error: '✕',
-  warning: '⚠',
-  info: 'ℹ',
+  success: '\u2713',
+  error: '\u2715',
+  warning: '\u26A0',
+  info: '\u2139',
 };
 
 function ToastItem({ toast }: { toast: Toast }) {
@@ -24,7 +24,7 @@ function ToastItem({ toast }: { toast: Toast }) {
 
   return (
     <div
-      className={`${styles} text-white px-4 py-3 rounded-md shadow-lg border flex items-center gap-3 min-w-[300px] max-w-[500px] animate-slide-in`}
+      className={`${styles} text-white px-4 py-3 rounded-md shadow-lg border flex items-center gap-3 min-w-0 md:min-w-[300px] max-w-full md:max-w-[500px] animate-slide-in`}
       role="alert"
     >
       <span className="text-lg font-bold flex-shrink-0">{icon}</span>
@@ -34,7 +34,7 @@ function ToastItem({ toast }: { toast: Toast }) {
         className="flex-shrink-0 text-white hover:text-gray-200 text-lg font-bold leading-none cursor-pointer"
         aria-label="Close notification"
       >
-        ×
+        &times;
       </button>
     </div>
   );
@@ -46,7 +46,7 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-16 left-4 z-50 flex flex-col gap-2">
+    <div className="fixed bottom-16 left-2 right-2 md:left-4 md:right-auto z-50 flex flex-col gap-2">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />
       ))}

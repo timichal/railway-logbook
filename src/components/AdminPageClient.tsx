@@ -9,6 +9,7 @@ import { saveRailwayRoute } from '@/lib/adminRouteActions';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 import { useResizableSidebar } from '@/hooks/useResizableSidebar';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
 const VectorAdminMap = dynamic(() => import('./VectorAdminMap'), {
@@ -30,6 +31,7 @@ interface AdminPageClientProps {
 
 export default function AdminPageClient({ user }: AdminPageClientProps) {
   const { showError, showSuccess } = useToast();
+  const isMobile = useIsMobile();
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedCoordinate, setSelectedCoordinate] = useState<[number, number] | null>(null);
   const [coordinateClickTrigger, setCoordinateClickTrigger] = useState<number>(0); // Trigger to force effect to run
@@ -51,7 +53,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
 
   // Resizable sidebar hook
-  const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar();
+  const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } = useResizableSidebar({ isMobile });
 
   const handleRouteSelect = useCallback((routeId: string) => {
     // If empty string, unselect the route
@@ -60,7 +62,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
       return;
     }
 
-    setSelectedRouteId(prevId => {      
+    setSelectedRouteId(prevId => {
       // Only clear coordinates/preview if the route ID actually changed
       // This prevents clearing coordinates when re-selecting the same route
       // (which happens during "Edit Route Geometry")
@@ -192,41 +194,78 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     await logout();
   }
 
+  const sidebarContent = (
+    <AdminSidebar
+      selectedRouteId={selectedRouteId}
+      onRouteSelect={handleRouteSelect}
+      selectedCoordinate={selectedCoordinate}
+      coordinateClickTrigger={coordinateClickTrigger}
+      onPreviewRoute={handlePreviewRoute}
+      onCreateFormCoordinatesChange={handleCreateFormCoordinatesChange}
+      isPreviewMode={isPreviewMode}
+      onCancelPreview={handleCancelPreview}
+      onSaveRoute={handleSaveRoute}
+      onFormReset={handleFormReset}
+      onRouteDeleted={handleRouteDeleted}
+      onRouteUpdated={handleRouteUpdated}
+      onEditingGeometryChange={handleEditingGeometryChange}
+      onRouteFocus={handleRouteFocus}
+      sidebarWidth={isMobile ? null : sidebarWidth}
+      showError={showError}
+      showSuccess={showSuccess}
+    />
+  );
+
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-dvh flex flex-col bg-white">
       <Navbar
         user={user}
         onLogout={handleLogout}
         isAdminPage={true}
+        isMobile={isMobile}
+        onToggleSidebar={toggleSidebar}
       />
 
       <main className="flex-1 overflow-hidden flex relative">
-        <AdminSidebar
-          selectedRouteId={selectedRouteId}
-          onRouteSelect={handleRouteSelect}
-          selectedCoordinate={selectedCoordinate}
-          coordinateClickTrigger={coordinateClickTrigger}
-          onPreviewRoute={handlePreviewRoute}
-          onCreateFormCoordinatesChange={handleCreateFormCoordinatesChange}
-          isPreviewMode={isPreviewMode}
-          onCancelPreview={handleCancelPreview}
-          onSaveRoute={handleSaveRoute}
-          onFormReset={handleFormReset}
-          onRouteDeleted={handleRouteDeleted}
-          onRouteUpdated={handleRouteUpdated}
-          onEditingGeometryChange={handleEditingGeometryChange}
-          onRouteFocus={handleRouteFocus}
-          sidebarWidth={sidebarWidth}
-          showError={showError}
-          showSuccess={showSuccess}
-        />
+        {/* Desktop sidebar */}
+        {!isMobile && (
+          <>
+            {sidebarContent}
+            {/* Resizer */}
+            <div
+              onMouseDown={handleMouseDown}
+              className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? 'bg-blue-400' : ''}`}
+              style={{ userSelect: 'none' }}
+            />
+          </>
+        )}
 
-        {/* Resizer */}
-        <div
-          onMouseDown={handleMouseDown}
-          className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? 'bg-blue-400' : ''}`}
-          style={{ userSelect: 'none' }}
-        />
+        {/* Mobile drawer overlay */}
+        {isMobile && sidebarOpen && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/40 z-30"
+              onClick={toggleSidebar}
+            />
+            <div className="fixed inset-y-0 left-0 z-40 w-full max-w-md bg-white flex flex-col sidebar-drawer-open">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 flex-shrink-0">
+                <span className="text-sm font-medium text-gray-700">Admin Sidebar</span>
+                <button
+                  onClick={toggleSidebar}
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded cursor-pointer"
+                  aria-label="Close sidebar"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {sidebarContent}
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="flex-1 overflow-hidden">
           <VectorAdminMap

@@ -32,6 +32,9 @@ interface VectorRailwayMapProps {
   sidebarWidth: number;
   onSidebarResize: () => void;
   isResizing: boolean;
+  isMobile: boolean;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
 }
 
 export default function VectorRailwayMap({
@@ -42,7 +45,10 @@ export default function VectorRailwayMap({
   setActiveTab,
   sidebarWidth,
   onSidebarResize,
-  isResizing
+  isResizing,
+  isMobile,
+  sidebarOpen,
+  onToggleSidebar
 }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const { showError } = useToast();
@@ -341,32 +347,81 @@ export default function VectorRailwayMap({
     }
   };
 
+  // Resize map when sidebar opens/closes on mobile
+  useEffect(() => {
+    if (!map.current) return;
+    // Small delay to let CSS transitions finish
+    const timer = setTimeout(() => {
+      map.current?.resize();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [sidebarOpen, isMobile, map]);
+
+  // Sidebar content (shared between mobile drawer and desktop inline)
+  const sidebarContent = (
+    <UserSidebar
+      user={user}
+      dataAccess={dataAccess}
+      selectedRoutes={selectedRoutes}
+      onRemoveRoute={handleRemoveRoute}
+      onClearAll={handleClearAll}
+      onUpdateRoutePartial={handleUpdateRoutePartial}
+      onHighlightRoutes={setHighlightedRoutes}
+      onAddRoutesFromPlanner={handleAddRoutesFromLogger}
+      onRoutesLogged={handleRoutesLogged}
+      selectedCountries={selectedCountries}
+      onCountryChange={handleCountriesChange}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      onStationClickHandler={handleSetStationClickHandler}
+      sidebarWidth={isMobile ? null : sidebarWidth}
+    />
+  );
+
   return (
     <div className="h-full flex relative">
-      <UserSidebar
-        user={user}
-        dataAccess={dataAccess}
-        selectedRoutes={selectedRoutes}
-        onRemoveRoute={handleRemoveRoute}
-        onClearAll={handleClearAll}
-        onUpdateRoutePartial={handleUpdateRoutePartial}
-        onHighlightRoutes={setHighlightedRoutes}
-        onAddRoutesFromPlanner={handleAddRoutesFromLogger}
-        onRoutesLogged={handleRoutesLogged}
-        selectedCountries={selectedCountries}
-        onCountryChange={handleCountriesChange}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onStationClickHandler={handleSetStationClickHandler}
-        sidebarWidth={sidebarWidth}
-      />
+      {/* Desktop sidebar */}
+      {!isMobile && (
+        <>
+          {sidebarContent}
+          {/* Resizer */}
+          <div
+            onMouseDown={onSidebarResize}
+            className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? 'bg-blue-400' : ''}`}
+            style={{ userSelect: 'none' }}
+          />
+        </>
+      )}
 
-      {/* Resizer */}
-      <div
-        onMouseDown={onSidebarResize}
-        className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? 'bg-blue-400' : ''}`}
-        style={{ userSelect: 'none' }}
-      />
+      {/* Mobile drawer overlay */}
+      {isMobile && sidebarOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/40 z-30"
+            onClick={onToggleSidebar}
+          />
+          {/* Drawer */}
+          <div className="fixed inset-y-0 left-0 z-40 w-full max-w-md bg-white flex flex-col sidebar-drawer-open">
+            {/* Drawer close header */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 flex-shrink-0">
+              <span className="text-sm font-medium text-gray-700">Sidebar</span>
+              <button
+                onClick={onToggleSidebar}
+                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded cursor-pointer"
+                aria-label="Close sidebar"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {sidebarContent}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Map Container */}
       <div className="flex-1 overflow-hidden relative">
@@ -378,12 +433,14 @@ export default function VectorRailwayMap({
 
       {/* Progress Stats Box */}
       {routeEditor.progress && (
-        <div className="absolute bottom-10 right-4 bg-white p-3 rounded shadow-lg text-black z-10">
-          <h3 className="font-bold mb-2 text-sm">Completed</h3>
-          <div className="text-lg font-semibold">
+        <div className={`absolute bg-white p-3 rounded shadow-lg text-black z-10 ${
+          isMobile ? 'bottom-4 left-3 text-xs' : 'bottom-10 right-4'
+        }`}>
+          <h3 className={`font-bold mb-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>Completed</h3>
+          <div className={`font-semibold ${isMobile ? 'text-sm' : 'text-lg'}`}>
             {routeEditor.progress.completedKm}/{routeEditor.progress.totalKm} km
           </div>
-          <div className="text-2xl font-bold text-green-600">
+          <div className={`font-bold text-green-600 ${isMobile ? 'text-lg' : 'text-2xl'}`}>
             {routeEditor.progress.percentage}%
           </div>
           <div className="text-xs text-gray-600 mt-1">
@@ -413,7 +470,9 @@ export default function VectorRailwayMap({
       )}
 
       {/* Station Search Box */}
-      <div className="absolute top-4 right-12 w-80 z-10">
+      <div className={`absolute z-10 ${
+        isMobile ? 'top-3 left-3 right-3' : 'top-4 right-12 w-80'
+      }`}>
         <div className="relative">
           <input
             ref={stationSearch.searchInputRef}

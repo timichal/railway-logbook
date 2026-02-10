@@ -38,7 +38,7 @@ interface UserSidebarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
-  sidebarWidth?: number;
+  sidebarWidth?: number | null;
 }
 
 export default function UserSidebar({
@@ -56,7 +56,7 @@ export default function UserSidebar({
   activeTab,
   setActiveTab,
   onStationClickHandler,
-  sidebarWidth = 600
+  sidebarWidth
 }: UserSidebarProps) {
 
   // Close article tabs - switches back to Route Logger
@@ -68,51 +68,55 @@ export default function UserSidebar({
   const isArticleMode = activeTab === 'howto' || activeTab === 'notes';
 
   return (
-    <div style={{ width: `${sidebarWidth}px` }} className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+    <div style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined} className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
       {/* Tab Headers - hide when in article mode */}
       {!isArticleMode && (
         <div className="flex border-b border-gray-200">
         <button
           onClick={() => setActiveTab('routes')}
-          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+          className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
             activeTab === 'routes'
               ? 'border-blue-500 text-blue-600 bg-blue-50'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
           }`}
         >
-          Route Logger
+          <span className="md:hidden">Logger</span>
+          <span className="hidden md:inline">Route Logger</span>
         </button>
         <button
           onClick={() => setActiveTab('journeylog')}
-          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+          className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
             activeTab === 'journeylog'
               ? 'border-blue-500 text-blue-600 bg-blue-50'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
           }`}
         >
-          My Journeys
+          <span className="md:hidden">Journeys</span>
+          <span className="hidden md:inline">My Journeys</span>
         </button>
         {user && (
           <button
             onClick={() => setActiveTab('trips')}
-            className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+            className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
               activeTab === 'trips'
                 ? 'border-blue-500 text-blue-600 bg-blue-50'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             }`}
           >
-            My Trips
+            <span className="md:hidden">Trips</span>
+            <span className="hidden md:inline">My Trips</span>
           </button>
         )}
         <button
           onClick={() => setActiveTab('filter')}
-          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+          className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
             activeTab === 'filter'
               ? 'border-blue-500 text-blue-600 bg-blue-50'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
           }`}
         >
-          Country Settings & Stats
+          <span className="md:hidden">Countries</span>
+          <span className="hidden md:inline">Country Settings & Stats</span>
         </button>
         </div>
       )}
