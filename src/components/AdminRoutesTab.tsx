@@ -107,7 +107,7 @@ export default function AdminRoutesTab({
   }, [searchQuery, showInvalidOnly, showUnintendedBacktrackingOnly]);
 
   // Route selection
-  const handleRouteClick = useCallback(async (trackId: string) => {
+  const handleRouteClick = useCallback(async (trackId: string, { skipFocus = false } = {}) => {
     try {
       setIsLoading(true);
       const routeDetail = await getRailwayRoute(trackId);
@@ -129,7 +129,7 @@ export default function AdminRoutesTab({
         onRouteSelect(trackId);
       }
 
-      if (onRouteFocus && routeDetail.geometry) {
+      if (!skipFocus && onRouteFocus && routeDetail.geometry) {
         onRouteFocus(routeDetail.geometry);
       }
     } catch (error) {
@@ -142,7 +142,7 @@ export default function AdminRoutesTab({
 
   useEffect(() => {
     if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
-      handleRouteClick(selectedRouteId);
+      handleRouteClick(selectedRouteId, { skipFocus: true });
     } else if (!selectedRouteId) {
       setSelectedRoute(null);
       setEditForm(null);

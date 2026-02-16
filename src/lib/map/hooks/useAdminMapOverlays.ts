@@ -58,16 +58,6 @@ export function useAdminMapOverlays(
         paint: { 'line-color': COLORS.preview, 'line-width': 8, 'line-opacity': 1.0 },
       });
 
-      // Zoom to preview route (but not in edit geometry mode)
-      if (!isEditingGeometry) {
-        const lngs = previewRoute.coordinates.map(c => c[0]);
-        const lats = previewRoute.coordinates.map(c => c[1]);
-        const bounds: [[number, number], [number, number]] = [
-          [Math.min(...lngs), Math.min(...lats)],
-          [Math.max(...lngs), Math.max(...lats)],
-        ];
-        map.current.fitBounds(bounds, { padding: 80, duration: 500, maxZoom: 14 });
-      }
     }
   }, [previewRoute, mapLoaded, isEditingGeometry, map]);
 
