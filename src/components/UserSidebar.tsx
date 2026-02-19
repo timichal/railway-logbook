@@ -39,6 +39,8 @@ interface UserSidebarProps {
   setActiveTab: (tab: ActiveTab) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
   sidebarWidth?: number | null;
+  onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
+  onJourneyEditEnd?: () => void;
 }
 
 export default function UserSidebar({
@@ -56,7 +58,9 @@ export default function UserSidebar({
   activeTab,
   setActiveTab,
   onStationClickHandler,
-  sidebarWidth
+  sidebarWidth,
+  onJourneyEditStart,
+  onJourneyEditEnd
 }: UserSidebarProps) {
 
   // Close article tabs - switches back to Route Logger
@@ -152,6 +156,8 @@ export default function UserSidebar({
           <JourneyLogTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
+            onJourneyEditStart={onJourneyEditStart}
+            onJourneyEditEnd={onJourneyEditEnd}
           />
         )}
 

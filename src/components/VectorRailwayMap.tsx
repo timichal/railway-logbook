@@ -68,6 +68,18 @@ export default function VectorRailwayMap({
     setJourneyStationClickHandler(() => handler ? handler : null);
   }, []);
 
+  // Journey edit mode: route clicks in My Journeys tab go to the edit handler
+  const journeyRouteClickHandlerRef = useRef<((route: SelectedRoute) => void) | null>(null);
+  const [journeyEditActive, setJourneyEditActive] = useState(false);
+  const handleJourneyEditStart = useCallback((handler: (route: SelectedRoute) => void) => {
+    journeyRouteClickHandlerRef.current = handler;
+    setJourneyEditActive(true);
+  }, []);
+  const handleJourneyEditEnd = useCallback(() => {
+    journeyRouteClickHandlerRef.current = null;
+    setJourneyEditActive(false);
+  }, []);
+
   // Highlighted routes state (for journey planner)
   const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
 
@@ -172,6 +184,12 @@ export default function VectorRailwayMap({
 
   // Route click handler
   const handleRouteClick = useCallback(async (route: SelectedRoute) => {
+    // Journey edit mode: delegate to the journey edit handler
+    if (journeyEditActive && journeyRouteClickHandlerRef.current) {
+      journeyRouteClickHandlerRef.current(route);
+      return;
+    }
+
     if (activeTab !== 'routes') return;
 
     let isSelected = false;
@@ -192,7 +210,7 @@ export default function VectorRailwayMap({
     }
 
     setSelectedRoutes(prev => [...prev, route]);
-  }, [activeTab, user, dataAccess, showError]);
+  }, [activeTab, journeyEditActive, user, dataAccess, showError]);
 
   const handleRemoveRoute = useCallback((trackId: string) => {
     setSelectedRoutes(prev => prev.filter(r => r.track_id !== trackId));
@@ -375,6 +393,8 @@ export default function VectorRailwayMap({
       setActiveTab={setActiveTab}
       onStationClickHandler={handleSetStationClickHandler}
       sidebarWidth={isMobile ? null : sidebarWidth}
+      onJourneyEditStart={handleJourneyEditStart}
+      onJourneyEditEnd={handleJourneyEditEnd}
     />
   );
 
