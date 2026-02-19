@@ -1,5 +1,6 @@
 import { Client, Pool, PoolClient } from 'pg';
 import type { PathResult } from '../../lib/types';
+import { calculateBearing } from '../../lib/geoUtils';
 
 export type { PathResult };
 
@@ -460,8 +461,8 @@ export class RailwayPathFinder {
 
     if (!exitSegment || !entrySegment) return false;
 
-    const exitBearing = this.calculateBearing(exitSegment[0], exitSegment[1]);
-    const entryBearing = this.calculateBearing(entrySegment[0], entrySegment[1]);
+    const exitBearing = calculateBearing(exitSegment[0], exitSegment[1]);
+    const entryBearing = calculateBearing(entrySegment[0], entrySegment[1]);
 
     const diff = Math.abs(entryBearing - exitBearing);
     const normalizedDiff = diff > 180 ? 360 - diff : diff;
@@ -490,8 +491,8 @@ export class RailwayPathFinder {
 
       if (!exitSegment || !entrySegment) continue;
 
-      const exitBearing = this.calculateBearing(exitSegment[0], exitSegment[1]);
-      const entryBearing = this.calculateBearing(entrySegment[0], entrySegment[1]);
+      const exitBearing = calculateBearing(exitSegment[0], exitSegment[1]);
+      const entryBearing = calculateBearing(entrySegment[0], entrySegment[1]);
 
       const diff = Math.abs(entryBearing - exitBearing);
       const normalizedDiff = diff > 180 ? 360 - diff : diff;
@@ -1082,26 +1083,6 @@ export class RailwayPathFinder {
     segmentEnd: [number, number]
   ): number {
     return this.projectPointOnSegment(point, segmentStart, segmentEnd).distance;
-  }
-
-  /**
-   * Calculate bearing from coord1 to coord2 in degrees (0-360)
-   */
-  private calculateBearing(
-    coord1: [number, number],
-    coord2: [number, number]
-  ): number {
-    const lon1 = coord1[0] * Math.PI / 180;
-    const lon2 = coord2[0] * Math.PI / 180;
-    const lat1 = coord1[1] * Math.PI / 180;
-    const lat2 = coord2[1] * Math.PI / 180;
-
-    const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) -
-      Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
-    const bearing = Math.atan2(y, x) * 180 / Math.PI;
-
-    return (bearing + 360) % 360;
   }
 
   /**

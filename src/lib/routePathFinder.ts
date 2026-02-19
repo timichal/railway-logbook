@@ -1,6 +1,7 @@
 'use server';
 
 import pool from './db';
+import { calculateBearing } from './geoUtils';
 
 interface RouteNode {
   track_id: number;
@@ -14,6 +15,27 @@ interface PathResult {
   routes: RouteNode[];
   totalDistance: number;
   error?: string;
+}
+
+/** Bearing info for backtracking detection at route connection points */
+interface RouteBearingInfo {
+  track_id: number;
+  from_station: string;
+  to_station: string;
+  length_km: number;
+  /** First coordinate of route geometry */
+  startCoord: [number, number];
+  /** Second coordinate of route geometry (near start) */
+  nearStartCoord: [number, number];
+  /** Second-to-last coordinate of route geometry (near end) */
+  nearEndCoord: [number, number];
+  /** Last coordinate of route geometry */
+  endCoord: [number, number];
+}
+
+interface GraphWithBearingInfo {
+  graph: RouteGraph;
+  routeInfo: Map<number, RouteBearingInfo>;
 }
 
 /**
@@ -79,20 +101,35 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
 }
 
 /**
- * Build route graph for routes within a buffer area around start/end stations
- * Routes are connected based on station name matching (not distance)
+ * Build route graph for routes within a buffer area around start/end stations.
+ * Also fetches endpoint coordinates for backtracking detection.
+ * Routes are connected based on station name matching (not distance).
  */
 async function buildRouteGraphInBuffer(
   fromStationId: number,
   toStationId: number,
   bufferMeters: number
-): Promise<RouteGraph> {
+): Promise<GraphWithBearingInfo> {
   const client = await pool.connect();
   const graph = new RouteGraph();
+  const routeInfo = new Map<number, RouteBearingInfo>();
 
   try {
-    // Get all route connections within buffer area based on station name matching
-    const result = await client.query<{ from_route: number; to_route: number }>(
+    // Fetch routes in area with endpoint coordinates for bearing calculation
+    const result = await client.query<{
+      track_id: number;
+      from_station: string;
+      to_station: string;
+      length_km: string | number;
+      start_x: number;
+      start_y: number;
+      near_start_x: number;
+      near_start_y: number;
+      near_end_x: number;
+      near_end_y: number;
+      end_x: number;
+      end_y: number;
+    }>(
       `
       WITH station_points AS (
         SELECT coordinates
@@ -108,42 +145,158 @@ async function buildRouteGraphInBuffer(
           4326
         ) as buffer_geom
         FROM station_points
-      ),
-      routes_in_area AS (
-        SELECT DISTINCT r.track_id, r.from_station, r.to_station
-        FROM railway_routes r, search_area
-        WHERE ST_Intersects(r.geometry, search_area.buffer_geom)
-          AND r.usage_type = 0
       )
       SELECT DISTINCT
-        r1.track_id as from_route,
-        r2.track_id as to_route
-      FROM routes_in_area r1
-      CROSS JOIN routes_in_area r2
-      WHERE r1.track_id != r2.track_id
-        AND (
-          -- r1's to_station matches r2's from_station
-          r1.to_station = r2.from_station
-          -- r1's to_station matches r2's to_station (bidirectional)
-          OR r1.to_station = r2.to_station
-          -- r1's from_station matches r2's from_station (bidirectional)
-          OR r1.from_station = r2.from_station
-          -- r1's from_station matches r2's to_station
-          OR r1.from_station = r2.to_station
-        )
+        r.track_id,
+        r.from_station,
+        r.to_station,
+        r.length_km,
+        ST_X(ST_PointN(r.geometry, 1)) as start_x,
+        ST_Y(ST_PointN(r.geometry, 1)) as start_y,
+        ST_X(ST_PointN(r.geometry, 2)) as near_start_x,
+        ST_Y(ST_PointN(r.geometry, 2)) as near_start_y,
+        ST_X(ST_PointN(r.geometry, GREATEST(ST_NPoints(r.geometry) - 1, 1))) as near_end_x,
+        ST_Y(ST_PointN(r.geometry, GREATEST(ST_NPoints(r.geometry) - 1, 1))) as near_end_y,
+        ST_X(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_x,
+        ST_Y(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_y
+      FROM railway_routes r, search_area
+      WHERE ST_Intersects(r.geometry, search_area.buffer_geom)
+        AND r.usage_type = 0
       `,
       [fromStationId, toStationId, bufferMeters]
     );
 
-    for (const row of result.rows) {
-      graph.addConnection(row.from_route, row.to_route);
+    // Store route info and build connections in JS
+    const routes = result.rows;
+    for (const row of routes) {
+      const lengthKm = typeof row.length_km === 'string' ? parseFloat(row.length_km) : row.length_km;
+      routeInfo.set(row.track_id, {
+        track_id: row.track_id,
+        from_station: row.from_station,
+        to_station: row.to_station,
+        length_km: lengthKm,
+        startCoord: [row.start_x, row.start_y],
+        nearStartCoord: [row.near_start_x, row.near_start_y],
+        nearEndCoord: [row.near_end_x, row.near_end_y],
+        endCoord: [row.end_x, row.end_y],
+      });
     }
 
-    return graph;
+    // Build connections via station name matching (O(n^2) but in JS, no SQL CROSS JOIN)
+    for (let i = 0; i < routes.length; i++) {
+      for (let j = i + 1; j < routes.length; j++) {
+        const r1 = routes[i];
+        const r2 = routes[j];
+        if (
+          r1.from_station === r2.from_station ||
+          r1.from_station === r2.to_station ||
+          r1.to_station === r2.from_station ||
+          r1.to_station === r2.to_station
+        ) {
+          graph.addConnection(r1.track_id, r2.track_id);
+          graph.addConnection(r2.track_id, r1.track_id);
+        }
+      }
+    }
+
+    return { graph, routeInfo };
   } finally {
     client.release();
   }
 }
+
+// ============================================================================
+// BACKTRACKING DETECTION
+// ============================================================================
+
+/**
+ * Find the shared station name between two connected routes.
+ * Returns null if routes don't share a station.
+ */
+function findConnectionStation(
+  infoA: RouteBearingInfo,
+  infoB: RouteBearingInfo
+): string | null {
+  // Check all 4 combinations; prefer from→to connections (more common direction)
+  if (infoA.to_station === infoB.from_station) return infoA.to_station;
+  if (infoA.to_station === infoB.to_station) return infoA.to_station;
+  if (infoA.from_station === infoB.from_station) return infoA.from_station;
+  if (infoA.from_station === infoB.to_station) return infoA.from_station;
+  return null;
+}
+
+/**
+ * Get the exit bearing of a route at a given station.
+ * This is the bearing of the route as it approaches/exits the connection station.
+ */
+function getExitBearing(info: RouteBearingInfo, station: string): number {
+  if (station === info.to_station) {
+    // Route exits forward (toward end): bearing from near-end to end
+    return calculateBearing(info.nearEndCoord, info.endCoord);
+  } else {
+    // Route exits backward (toward start): bearing from near-start to start
+    return calculateBearing(info.nearStartCoord, info.startCoord);
+  }
+}
+
+/**
+ * Get the entry bearing of a route at a given station.
+ * This is the bearing of the route as it departs from the connection station.
+ */
+function getEntryBearing(info: RouteBearingInfo, station: string): number {
+  if (station === info.from_station) {
+    // Route enters forward (from start): bearing from start to near-start
+    return calculateBearing(info.startCoord, info.nearStartCoord);
+  } else {
+    // Route enters backward (from end): bearing from end to near-end
+    return calculateBearing(info.endCoord, info.nearEndCoord);
+  }
+}
+
+/**
+ * Check if transitioning from routeA to routeB constitutes backtracking.
+ * Returns true if the bearing difference at the connection point exceeds 140°.
+ */
+function isBacktrackingTransition(
+  infoA: RouteBearingInfo,
+  infoB: RouteBearingInfo
+): boolean {
+  const station = findConnectionStation(infoA, infoB);
+  if (!station) return false;
+
+  const exitBear = getExitBearing(infoA, station);
+  const entryBear = getEntryBearing(infoB, station);
+
+  const diff = Math.abs(entryBear - exitBear);
+  const normalizedDiff = diff > 180 ? 360 - diff : diff;
+
+  return normalizedDiff > 140;
+}
+
+/**
+ * Check if a route path has any backtracking transitions between consecutive routes.
+ */
+function hasRoutePathBacktracking(
+  path: number[],
+  routeInfo: Map<number, RouteBearingInfo>
+): boolean {
+  if (path.length < 2) return false;
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const infoA = routeInfo.get(path[i]);
+    const infoB = routeInfo.get(path[i + 1]);
+    if (!infoA || !infoB) continue;
+
+    if (isBacktrackingTransition(infoA, infoB)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ============================================================================
+// PATH FINDING
+// ============================================================================
 
 /**
  * BFS to find shortest path through route graph (in-memory)
@@ -192,6 +345,92 @@ function findShortestPath(
 }
 
 /**
+ * BFS that avoids backtracking transitions between consecutive routes.
+ * Uses best-distance tracking to allow alternative paths through the same node.
+ * Distance-bounded to prevent excessive search.
+ */
+function findShortestPathAvoidingBacktracking(
+  graph: RouteGraph,
+  startRoutes: number[],
+  endRoutes: number[],
+  routeInfo: Map<number, RouteBearingInfo>,
+  maxDistanceKm: number
+): number[] | null {
+  if (startRoutes.length === 0 || endRoutes.length === 0) {
+    return null;
+  }
+
+  const endSet = new Set(endRoutes);
+  const queue: { route: number; path: number[]; distanceKm: number }[] = [];
+  const bestDistance = new Map<number, number>();
+
+  let shortestPath: number[] | null = null;
+  let shortestDistance = Infinity;
+
+  // Initialize queue with start routes
+  for (const route of startRoutes) {
+    queue.push({ route, path: [route], distanceKm: 0 });
+    bestDistance.set(route, 0);
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+
+    // Skip if we already found a better path to this node
+    const currentBest = bestDistance.get(current.route);
+    if (currentBest !== undefined && current.distanceKm > currentBest) {
+      continue;
+    }
+
+    // Prune if exceeding max distance
+    if (current.distanceKm > maxDistanceKm) {
+      continue;
+    }
+
+    // Check if we reached the end
+    if (endSet.has(current.route)) {
+      if (current.distanceKm < shortestDistance) {
+        shortestPath = current.path;
+        shortestDistance = current.distanceKm;
+      }
+      continue;
+    }
+
+    // Explore neighbors
+    const neighbors = graph.getNeighbors(current.route);
+    for (const neighbor of neighbors) {
+      // Prevent cycles
+      if (current.path.includes(neighbor)) {
+        continue;
+      }
+
+      // Check for backtracking at the transition
+      const currentInfo = routeInfo.get(current.route);
+      const neighborInfo = routeInfo.get(neighbor);
+      if (currentInfo && neighborInfo && isBacktrackingTransition(currentInfo, neighborInfo)) {
+        continue;
+      }
+
+      const neighborLengthKm = neighborInfo?.length_km ?? 0;
+      const newDistanceKm = current.distanceKm + neighborLengthKm;
+
+      // Only explore if this is the best path to this node so far
+      const bestToNode = bestDistance.get(neighbor);
+      if (bestToNode === undefined || newDistanceKm < bestToNode) {
+        bestDistance.set(neighbor, newDistanceKm);
+        queue.push({
+          route: neighbor,
+          path: [...current.path, neighbor],
+          distanceKm: newDistanceKm,
+        });
+      }
+    }
+  }
+
+  return shortestPath;
+}
+
+/**
  * Get route details for a list of route IDs
  */
 async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
@@ -225,6 +464,21 @@ async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
   } finally {
     client.release();
   }
+}
+
+/**
+ * Calculate total distance of a path using routeInfo
+ */
+function calculatePathDistanceKm(
+  path: number[],
+  routeInfo: Map<number, RouteBearingInfo>
+): number {
+  let total = 0;
+  for (const trackId of path) {
+    const info = routeInfo.get(trackId);
+    if (info) total += info.length_km;
+  }
+  return total;
 }
 
 /**
@@ -278,14 +532,29 @@ export async function findRoutePathBetweenStations(
       let segmentPath: number[] | null = null;
 
       // Try with increasing buffer sizes until we find a path
-      // Start with reasonable sizes and go up to very large for long journeys
       const bufferSizes = [50000, 100000, 200000, 500000, 1000000]; // 50km, 100km, 200km, 500km, 1000km
 
       for (const bufferSize of bufferSizes) {
-        const graph = await buildRouteGraphInBuffer(segmentFromStation, segmentToStation, bufferSize);
+        const { graph, routeInfo } = await buildRouteGraphInBuffer(segmentFromStation, segmentToStation, bufferSize);
         segmentPath = findShortestPath(graph, segmentFromRoutes, segmentToRoutes);
 
-        if (segmentPath) break;
+        if (segmentPath) {
+          // Check for backtracking and try to find alternative
+          if (hasRoutePathBacktracking(segmentPath, routeInfo)) {
+            const originalDistanceKm = calculatePathDistanceKm(segmentPath, routeInfo);
+            const maxDistanceKm = Math.min(originalDistanceKm * 2, originalDistanceKm + 10);
+
+            const alternative = findShortestPathAvoidingBacktracking(
+              graph, segmentFromRoutes, segmentToRoutes, routeInfo, maxDistanceKm
+            );
+
+            if (alternative) {
+              segmentPath = alternative;
+            }
+          }
+
+          break;
+        }
       }
 
       if (!segmentPath) {
