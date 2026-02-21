@@ -299,25 +299,57 @@ function hasRoutePathBacktracking(
 // ============================================================================
 
 /**
- * BFS to find shortest path through route graph (in-memory)
+ * BFS to find shortest path through route graph (in-memory).
+ * Tracks exit station at each step to prevent "teleportation" between route endpoints.
+ * When traversing a route, you enter at one station and exit at the other — the next
+ * route must connect at your exit station.
+ *
+ * @param entryStation - If provided, constrains the direction for start routes
+ *   (used when continuing from a previous segment in multi-segment paths)
  */
 function findShortestPath(
   graph: RouteGraph,
   startRoutes: number[],
-  endRoutes: number[]
+  endRoutes: number[],
+  routeInfo: Map<number, RouteBearingInfo>,
+  entryStation?: string | null
 ): number[] | null {
   if (startRoutes.length === 0 || endRoutes.length === 0) {
     return null;
   }
 
   const endSet = new Set(endRoutes);
-  const queue: { route: number; path: number[] }[] = [];
-  const visited = new Set<number>();
+  const queue: { route: number; path: number[]; exitStation: string }[] = [];
+  const visited = new Set<string>();
 
   // Initialize queue with start routes
   for (const route of startRoutes) {
-    queue.push({ route, path: [route] });
-    visited.add(route);
+    const info = routeInfo.get(route);
+    if (!info) continue;
+
+    // Determine possible exit stations
+    let exitStations: string[];
+    if (entryStation) {
+      // Constrained: enter from entryStation, exit at the other end
+      if (info.from_station === entryStation) {
+        exitStations = [info.to_station];
+      } else if (info.to_station === entryStation) {
+        exitStations = [info.from_station];
+      } else {
+        continue; // Route doesn't connect at entry station
+      }
+    } else {
+      // Try both directions
+      exitStations = [info.from_station, info.to_station];
+    }
+
+    for (const exitStation of exitStations) {
+      const key = `${route}_${exitStation}`;
+      if (!visited.has(key)) {
+        visited.add(key);
+        queue.push({ route, path: [route], exitStation });
+      }
+    }
   }
 
   while (queue.length > 0) {
@@ -331,11 +363,26 @@ function findShortestPath(
     // Explore neighbors
     const neighbors = graph.getNeighbors(current.route);
     for (const neighbor of neighbors) {
-      if (!visited.has(neighbor)) {
-        visited.add(neighbor);
+      const neighborInfo = routeInfo.get(neighbor);
+      if (!neighborInfo) continue;
+
+      // Only follow connections at our exit station
+      let newExitStation: string;
+      if (neighborInfo.from_station === current.exitStation) {
+        newExitStation = neighborInfo.to_station;
+      } else if (neighborInfo.to_station === current.exitStation) {
+        newExitStation = neighborInfo.from_station;
+      } else {
+        continue; // Neighbor doesn't connect at our exit station
+      }
+
+      const key = `${neighbor}_${newExitStation}`;
+      if (!visited.has(key)) {
+        visited.add(key);
         queue.push({
           route: neighbor,
           path: [...current.path, neighbor],
+          exitStation: newExitStation,
         });
       }
     }
@@ -348,36 +395,60 @@ function findShortestPath(
  * BFS that avoids backtracking transitions between consecutive routes.
  * Uses best-distance tracking to allow alternative paths through the same node.
  * Distance-bounded to prevent excessive search.
+ * Tracks exit station to prevent teleportation between route endpoints.
+ *
+ * @param entryStation - If provided, constrains the direction for start routes
  */
 function findShortestPathAvoidingBacktracking(
   graph: RouteGraph,
   startRoutes: number[],
   endRoutes: number[],
   routeInfo: Map<number, RouteBearingInfo>,
-  maxDistanceKm: number
+  maxDistanceKm: number,
+  entryStation?: string | null
 ): number[] | null {
   if (startRoutes.length === 0 || endRoutes.length === 0) {
     return null;
   }
 
   const endSet = new Set(endRoutes);
-  const queue: { route: number; path: number[]; distanceKm: number }[] = [];
-  const bestDistance = new Map<number, number>();
+  const queue: { route: number; path: number[]; distanceKm: number; exitStation: string }[] = [];
+  const bestDistance = new Map<string, number>();
 
   let shortestPath: number[] | null = null;
   let shortestDistance = Infinity;
 
   // Initialize queue with start routes
   for (const route of startRoutes) {
-    queue.push({ route, path: [route], distanceKm: 0 });
-    bestDistance.set(route, 0);
+    const info = routeInfo.get(route);
+    if (!info) continue;
+
+    let exitStations: string[];
+    if (entryStation) {
+      if (info.from_station === entryStation) {
+        exitStations = [info.to_station];
+      } else if (info.to_station === entryStation) {
+        exitStations = [info.from_station];
+      } else {
+        continue;
+      }
+    } else {
+      exitStations = [info.from_station, info.to_station];
+    }
+
+    for (const exitStation of exitStations) {
+      const key = `${route}_${exitStation}`;
+      queue.push({ route, path: [route], distanceKm: 0, exitStation });
+      bestDistance.set(key, 0);
+    }
   }
 
   while (queue.length > 0) {
     const current = queue.shift()!;
 
-    // Skip if we already found a better path to this node
-    const currentBest = bestDistance.get(current.route);
+    // Skip if we already found a better path to this node+direction
+    const currentKey = `${current.route}_${current.exitStation}`;
+    const currentBest = bestDistance.get(currentKey);
     if (currentBest !== undefined && current.distanceKm > currentBest) {
       continue;
     }
@@ -399,6 +470,19 @@ function findShortestPathAvoidingBacktracking(
     // Explore neighbors
     const neighbors = graph.getNeighbors(current.route);
     for (const neighbor of neighbors) {
+      const neighborInfo = routeInfo.get(neighbor);
+      if (!neighborInfo) continue;
+
+      // Only follow connections at our exit station
+      let newExitStation: string;
+      if (neighborInfo.from_station === current.exitStation) {
+        newExitStation = neighborInfo.to_station;
+      } else if (neighborInfo.to_station === current.exitStation) {
+        newExitStation = neighborInfo.from_station;
+      } else {
+        continue;
+      }
+
       // Prevent cycles
       if (current.path.includes(neighbor)) {
         continue;
@@ -406,22 +490,23 @@ function findShortestPathAvoidingBacktracking(
 
       // Check for backtracking at the transition
       const currentInfo = routeInfo.get(current.route);
-      const neighborInfo = routeInfo.get(neighbor);
       if (currentInfo && neighborInfo && isBacktrackingTransition(currentInfo, neighborInfo)) {
         continue;
       }
 
-      const neighborLengthKm = neighborInfo?.length_km ?? 0;
+      const neighborLengthKm = neighborInfo.length_km ?? 0;
       const newDistanceKm = current.distanceKm + neighborLengthKm;
 
-      // Only explore if this is the best path to this node so far
-      const bestToNode = bestDistance.get(neighbor);
+      // Only explore if this is the best path to this node+direction so far
+      const neighborKey = `${neighbor}_${newExitStation}`;
+      const bestToNode = bestDistance.get(neighborKey);
       if (bestToNode === undefined || newDistanceKm < bestToNode) {
-        bestDistance.set(neighbor, newDistanceKm);
+        bestDistance.set(neighborKey, newDistanceKm);
         queue.push({
           route: neighbor,
           path: [...current.path, neighbor],
           distanceKm: newDistanceKm,
+          exitStation: newExitStation,
         });
       }
     }
@@ -517,6 +602,7 @@ export async function findRoutePathBetweenStations(
     // Find path sequentially between each pair of stations
     const allSegments: number[][] = [];
     let previousEndRoute: number | null = null;
+    let previousExitStation: string | null = null;
 
     for (let i = 0; i < stationSequence.length - 1; i++) {
       const segmentFromStation = stationSequence[i];
@@ -525,27 +611,32 @@ export async function findRoutePathBetweenStations(
       const segmentToRoutes = routeSequence[i + 1];
 
       // Continue from the previous segment's end route if possible
+      let entryStation: string | null = null;
       if (previousEndRoute !== null && segmentFromRoutes.includes(previousEndRoute)) {
         segmentFromRoutes = [previousEndRoute];
+        entryStation = previousExitStation;
       }
 
       let segmentPath: number[] | null = null;
+      let segmentRouteInfo: Map<number, RouteBearingInfo> | null = null;
 
       // Try with increasing buffer sizes until we find a path
       const bufferSizes = [50000, 100000, 200000, 500000, 1000000]; // 50km, 100km, 200km, 500km, 1000km
 
       for (const bufferSize of bufferSizes) {
         const { graph, routeInfo } = await buildRouteGraphInBuffer(segmentFromStation, segmentToStation, bufferSize);
-        segmentPath = findShortestPath(graph, segmentFromRoutes, segmentToRoutes);
+        segmentPath = findShortestPath(graph, segmentFromRoutes, segmentToRoutes, routeInfo, entryStation);
 
         if (segmentPath) {
+          segmentRouteInfo = routeInfo;
+
           // Check for backtracking and try to find alternative
           if (hasRoutePathBacktracking(segmentPath, routeInfo)) {
             const originalDistanceKm = calculatePathDistanceKm(segmentPath, routeInfo);
             const maxDistanceKm = Math.min(originalDistanceKm * 2, originalDistanceKm + 10);
 
             const alternative = findShortestPathAvoidingBacktracking(
-              graph, segmentFromRoutes, segmentToRoutes, routeInfo, maxDistanceKm
+              graph, segmentFromRoutes, segmentToRoutes, routeInfo, maxDistanceKm, entryStation
             );
 
             if (alternative) {
@@ -557,7 +648,7 @@ export async function findRoutePathBetweenStations(
         }
       }
 
-      if (!segmentPath) {
+      if (!segmentPath || !segmentRouteInfo) {
         return {
           routes: [],
           totalDistance: 0,
@@ -567,6 +658,19 @@ export async function findRoutePathBetweenStations(
 
       allSegments.push(segmentPath);
       previousEndRoute = segmentPath[segmentPath.length - 1];
+
+      // Compute exit station of the last route for the next segment's entry
+      previousExitStation = null;
+      if (segmentPath.length >= 2) {
+        const lastInfo = segmentRouteInfo.get(segmentPath[segmentPath.length - 1]);
+        const prevInfo = segmentRouteInfo.get(segmentPath[segmentPath.length - 2]);
+        if (lastInfo && prevInfo) {
+          const conn = findConnectionStation(prevInfo, lastInfo);
+          if (conn) {
+            previousExitStation = lastInfo.from_station === conn ? lastInfo.to_station : lastInfo.from_station;
+          }
+        }
+      }
     }
 
     // Concatenate segments, removing duplicate routes at connection points
