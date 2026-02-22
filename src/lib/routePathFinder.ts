@@ -63,6 +63,8 @@ class RouteGraph {
 /**
  * Find all routes that pass near a given station
  * Uses progressive tolerance: 100m → 500m → 1km → 2km → 5km
+ * When routes are found, extends to the next tolerance level to catch
+ * nearby routes at slightly different distances (e.g. parallel tracks).
  */
 async function findRoutesNearStation(stationId: number): Promise<number[]> {
   const client = await pool.connect();
@@ -70,7 +72,7 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
     // Progressive tolerance values (in meters)
     const tolerances = [100, 500, 1000, 2000, 5000];
 
-    for (const tolerance of tolerances) {
+    for (let i = 0; i < tolerances.length; i++) {
       const result = await client.query<{ track_id: number }>(
         `
         SELECT DISTINCT r.track_id
@@ -84,11 +86,30 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
           AND r.usage_type = 0
         ORDER BY r.track_id
         `,
-        [stationId, tolerance]
+        [stationId, tolerances[i]]
       );
 
-      // If we found routes, return them
       if (result.rows.length > 0) {
+        // Extend to next tolerance level to catch nearby routes at slightly
+        // different distances (e.g. parallel tracks at the same station)
+        if (i + 1 < tolerances.length) {
+          const extended = await client.query<{ track_id: number }>(
+            `
+            SELECT DISTINCT r.track_id
+            FROM railway_routes r, stations s
+            WHERE s.id = $1
+              AND ST_DWithin(
+                r.geometry::geography,
+                s.coordinates::geography,
+                $2
+              )
+              AND r.usage_type = 0
+            ORDER BY r.track_id
+            `,
+            [stationId, tolerances[i + 1]]
+          );
+          return extended.rows.map(row => row.track_id);
+        }
         return result.rows.map(row => row.track_id);
       }
     }
