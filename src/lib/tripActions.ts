@@ -63,12 +63,13 @@ export async function getAllTrips(): Promise<{
 export async function getTrip(tripId: number): Promise<{
   trip: Trip | null;
   journeys: JourneyInTrip[];
+  routeIds: number[];
   error?: string
 }> {
   try {
     const user = await getUser()
     if (!user) {
-      return { trip: null, journeys: [], error: 'Not authenticated' }
+      return { trip: null, journeys: [], routeIds: [], error: 'Not authenticated' }
     }
 
     const tripResult = await pool.query<Trip>(
@@ -77,7 +78,7 @@ export async function getTrip(tripId: number): Promise<{
     )
 
     if (tripResult.rows.length === 0) {
-      return { trip: null, journeys: [], error: 'Trip not found' }
+      return { trip: null, journeys: [], routeIds: [], error: 'Trip not found' }
     }
 
     const journeysResult = await pool.query<JourneyInTrip>(
@@ -94,10 +95,23 @@ export async function getTrip(tripId: number): Promise<{
       [tripId, user.id]
     )
 
-    return { trip: tripResult.rows[0], journeys: journeysResult.rows }
+    // Fetch all distinct route IDs across all journeys in this trip
+    const routeIdsResult = await pool.query<{ track_id: number }>(
+      `SELECT DISTINCT ulp.track_id
+      FROM user_logged_parts ulp
+      JOIN user_journeys uj ON ulp.journey_id = uj.id
+      WHERE uj.trip_id = $1 AND uj.user_id = $2 AND ulp.track_id IS NOT NULL`,
+      [tripId, user.id]
+    )
+
+    return {
+      trip: tripResult.rows[0],
+      journeys: journeysResult.rows,
+      routeIds: routeIdsResult.rows.map(r => r.track_id),
+    }
   } catch (error) {
     console.error('Error fetching trip:', error)
-    return { trip: null, journeys: [], error: 'Failed to fetch trip' }
+    return { trip: null, journeys: [], routeIds: [], error: 'Failed to fetch trip' }
   }
 }
 

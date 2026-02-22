@@ -143,13 +143,8 @@ export default function TripsTab({
       }
 
       // Highlight all routes from all journeys in this trip
-      if (onHighlightRoutes && result.journeys) {
-        // We need to get route IDs from the journeys - fetch them
-        const allRouteIds: number[] = [];
-        // The JourneyInTrip doesn't include route IDs directly,
-        // so we highlight nothing for now until routes are loaded per-journey
-        // Actually, we can query them - let's just highlight based on trip's journeys
-        onHighlightRoutes(allRouteIds);
+      if (onHighlightRoutes && result.routeIds) {
+        onHighlightRoutes(result.routeIds);
       }
     } catch (error) {
       console.error('Error expanding trip:', error);
@@ -221,10 +216,13 @@ export default function TripsTab({
         showError(result.error);
       } else {
         showSuccess('Journey unassigned from trip');
-        // Refresh expanded trip
+        // Refresh expanded trip and highlights
         if (expandedTripId) {
           const tripResult = await getTrip(expandedTripId);
           setExpandedJourneys(tripResult.journeys || []);
+          if (onHighlightRoutes) {
+            onHighlightRoutes(tripResult.routeIds || []);
+          }
         }
         loadTrips();
         if (onTripChanged) onTripChanged();
@@ -266,9 +264,12 @@ export default function TripsTab({
         showSuccess('Journey added to trip');
         // Remove from unassigned list
         setUnassignedJourneys(prev => prev.filter(j => j.id !== journeyId));
-        // Refresh expanded trip
+        // Refresh expanded trip and highlights
         const tripResult = await getTrip(expandedTripId);
         setExpandedJourneys(tripResult.journeys || []);
+        if (onHighlightRoutes) {
+          onHighlightRoutes(tripResult.routeIds || []);
+        }
         loadTrips();
         if (onTripChanged) onTripChanged();
       }
