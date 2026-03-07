@@ -51,7 +51,6 @@ traťové jř https://www.oebb.at/en/fahrplan/fahrplanbilder
 traťová mapa https://www.oebb.at/de/dam/jcr:7fc18e86-1c23-4cf0-b9e0-94eb05d32c3e/bahnnetz-oebb.pdf
 síťová čísla https://infrastruktur.oebb.at/de/geschaeftspartner/schienennetz/dokumente-und-daten/netzkarten/karte-oebb-netz.pdf
 
-
 NĚMECKO
 čísla: z OSM
 fanmapa regiovlaků: https://www.reddit.com/r/TransitDiagrams/comments/1htftoy/oc_regional_train_services_germany_2025/#lightbox
@@ -68,3 +67,7 @@ traťová mapa https://www.rfi.it/it/rete/la-rete-oggi.html
 SLOVINSKO
 čísla: z OSM
 traťová mapa https://potniski.sz.si/en/plan-your-journey/map-rail/
+
+FRANCIE
+čísla: z traťové mapy
+traťová mapa https://www.sncf-reseau.com/medias-publics/2025-04/poster_rfn_avril2025.pdf
