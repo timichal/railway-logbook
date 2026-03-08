@@ -67,3 +67,7 @@ traťová mapa https://www.rfi.it/it/rete/la-rete-oggi.html
 SLOVINSKO
 čísla: z OSM
 traťová mapa https://potniski.sz.si/en/plan-your-journey/map-rail/
+
+FRANCIE
+čísla: z traťové mapy
+traťová mapa https://www.sncf-reseau.com/medias-publics/2025-04/poster_rfn_avril2025.pdf
