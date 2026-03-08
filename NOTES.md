@@ -7,7 +7,7 @@ poznámky
 
 STAV
 hotovo: Česko, Švýcarsko (chybí scénické značení); Litva, Lotyšsko, Estonsko, Finsko, Polsko; Slovensko a Rakousko (chybí přeshraniční do Maďarska + scénické značení)
-rozdělané: Německo, Itálie, Slovinsko, Francie
+rozdělané: Německo, Itálie, Slovinsko, Francie, Španělsko
 
 osm úpravy
 - piacenza hsl nájezd (19. 1.)
@@ -50,7 +50,6 @@ RAKOUSKO
 traťové jř https://www.oebb.at/en/fahrplan/fahrplanbilder
 traťová mapa https://www.oebb.at/de/dam/jcr:7fc18e86-1c23-4cf0-b9e0-94eb05d32c3e/bahnnetz-oebb.pdf
 síťová čísla https://infrastruktur.oebb.at/de/geschaeftspartner/schienennetz/dokumente-und-daten/netzkarten/karte-oebb-netz.pdf
-
 
 NĚMECKO
 čísla: z OSM

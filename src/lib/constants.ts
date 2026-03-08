@@ -60,6 +60,7 @@ export const SUPPORTED_COUNTRIES = [
   { code: 'AT', name: 'Austria' },
   { code: 'CZ', name: 'Czechia' },
   { code: 'EE', name: 'Estonia' },
+  { code: 'ES', name: 'Spain' },
   { code: 'FI', name: 'Finland' },
   { code: 'FR', name: 'France' },
   { code: 'DE', name: 'Germany' },
