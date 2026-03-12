@@ -40,7 +40,7 @@ export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
           The <b>Journey Planner</b> allows you to select all parts between two stations. You can select stations by clicking them on the map or enter their names and select them from the dropdown. The planner is not always following the routes used in reality, just finding the shortest path - but you can customize the route by adding <i>via</i> stations.
         </p>
         <p className="mb-4">
-          In the <b>Country Settings & Stats</b> tab, you can choose to display or hide railways by each country. Croos-border lines are shown only when both countries are enabled. The stats section shows your progress per country and for the whole network. The special lines are not counted in the stats.
+          In the <b>Countries</b> tab, you can choose to display or hide railways by each country. Croos-border lines are shown only when both countries are enabled. The stats section shows your progress per country and for the whole network. The special lines are not counted in the stats.
         </p>
         <p className="mb-4">
           Made by Michal Zlatkovský with a lot of help from the Claude Code AI tool. The code is <a href="http://github.com/timichal/osm-trains" target="_blank" className="underline">available on GitHub</a>.
