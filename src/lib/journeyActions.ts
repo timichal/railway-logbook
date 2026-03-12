@@ -64,12 +64,14 @@ export async function getJourney(journeyId: number): Promise<{
       return { journey: null, routes: [], error: 'Journey not found' }
     }
 
-    // Fetch all routes in this journey
+    // Fetch all routes in this journey (exclude heavy geometry column)
     const routesResult = await pool.query<RailwayRoute & LoggedPart>(
       `SELECT
-        rr.*,
-        ulp.partial,
-        ST_AsGeoJSON(rr.geometry)::text as geometry
+        rr.track_id, rr.from_station, rr.to_station, rr.track_number,
+        rr.description, rr.usage_type, rr.frequency, rr.link, rr.scenic, rr.hsl,
+        rr.length_km, rr.start_country, rr.end_country,
+        rr.is_valid, rr.error_message,
+        ulp.partial
       FROM user_logged_parts ulp
       LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
       WHERE ulp.journey_id = $1 AND ulp.user_id = $2
