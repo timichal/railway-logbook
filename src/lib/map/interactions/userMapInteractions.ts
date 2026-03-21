@@ -68,11 +68,11 @@ export function setupUserMapInteractions(
 
     let formattedDescription = "";
 
-    // Route metadata badges (usage type, scenic, hsl, frequency)
+    // Route metadata badges (usage type, line class, scenic, frequency)
     formattedDescription += formatRouteMetadataBadges({
       usage_type: properties.usage_type,
       scenic: properties.scenic,
-      hsl: properties.hsl,
+      line_class: properties.line_class,
       frequency: properties.frequency
     });
     if (properties.description) {

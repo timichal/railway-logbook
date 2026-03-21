@@ -22,7 +22,7 @@ interface AdminCreateRouteTabProps {
   ) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: UsageType, frequency: string[], link: string, scenic: boolean, hsl: boolean, intended_backtracking: boolean }) => void;
+  onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: UsageType, frequency: string[], link: string, scenic: boolean, intended_backtracking: boolean }) => void;
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
   editingRouteInfo?: { from_station: string, to_station: string, track_number: string } | null;
@@ -58,7 +58,6 @@ export default function AdminCreateRouteTab({
     frequency: [] as string[],
     link: '',
     scenic: false,
-    hsl: false,
     intended_backtracking: false
   });
 
@@ -83,7 +82,6 @@ export default function AdminCreateRouteTab({
       frequency: [],
       link: '',
       scenic: false,
-      hsl: false,
       intended_backtracking: false
     });
     // Clear the coordinates managed by parent via callback
@@ -160,7 +158,6 @@ export default function AdminCreateRouteTab({
       frequency: createForm.frequency,
       link: createForm.link,
       scenic: createForm.scenic,
-      hsl: createForm.hsl,
       intended_backtracking: createForm.intended_backtracking
     });
 
@@ -177,9 +174,9 @@ export default function AdminCreateRouteTab({
 
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
-      // Metadata (name, description, usage_type, track_number, frequency, link, scenic, hsl, intended_backtracking) won't be used in update mode
+      // Metadata (name, description, usage_type, track_number, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
       await saveRailwayRoute(
-        { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '', scenic: false, hsl: false, intended_backtracking: false }, // Dummy data, not used in UPDATE mode
+        { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '', scenic: false, intended_backtracking: false }, // Dummy data, not used in UPDATE mode
         { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates, hasBacktracking: currentPathResult.hasBacktracking },
         currentPathResult.startCoordinate,
         currentPathResult.endCoordinate,
@@ -446,19 +443,6 @@ export default function AdminCreateRouteTab({
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   />
                   <span className="text-sm font-medium text-gray-700">Scenic route</span>
-                </label>
-              </div>
-
-              {/* High-speed line */}
-              <div className="flex-[0_1_30%]">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={createForm.hsl}
-                    onChange={(e) => setCreateForm({ ...createForm, hsl: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <span className="text-sm font-medium text-gray-700">High-speed line</span>
                 </label>
               </div>
 

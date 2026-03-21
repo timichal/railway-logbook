@@ -6,7 +6,7 @@ import { getUser } from './authActions';
 import { GeoJSONFeatureCollection, GeoJSONFeature, PathResult, RailwayPart } from './types';
 import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinateUtils';
 import { getRouteCountries } from './countryUtils';
-import type { UsageType } from './constants';
+import type { UsageType, LineClass } from './constants';
 
 /**
  * Interface for route metadata used during creation
@@ -20,7 +20,6 @@ export interface SaveRouteData {
   frequency: string[];
   link: string;
   scenic: boolean;
-  hsl: boolean;
   intended_backtracking: boolean;
 }
 
@@ -34,7 +33,7 @@ export async function getAllRailwayRoutes() {
   }
 
   const result = await query(`
-    SELECT track_id, from_station, to_station, track_number, description, usage_type, scenic, hsl,
+    SELECT track_id, from_station, to_station, track_number, description, usage_type, scenic, line_class,
            starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking, has_backtracking
     FROM railway_routes
     ORDER BY from_station, to_station
@@ -53,7 +52,7 @@ export async function getRailwayRoute(trackId: string) {
   }
 
   const result = await query(`
-    SELECT track_id, from_station, to_station, track_number, description, usage_type, frequency, link, scenic, hsl,
+    SELECT track_id, from_station, to_station, track_number, description, usage_type, frequency, link, scenic, line_class,
            ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
            ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json,
@@ -251,7 +250,6 @@ export async function saveRailwayRoute(
           frequency,
           link,
           scenic,
-          hsl,
           geometry,
           length_km,
           start_country,
@@ -272,18 +270,17 @@ export async function saveRailwayRoute(
           $6,
           $7,
           $8,
-          $9,
-          ST_GeomFromText($10, 4326),
-          ST_Length(ST_GeomFromText($10, 4326)::geography) / 1000,
+          ST_GeomFromText($9, 4326),
+          ST_Length(ST_GeomFromText($9, 4326)::geography) / 1000,
+          $10,
           $11,
-          $12,
+          ST_GeomFromText($12, 4326),
           ST_GeomFromText($13, 4326),
-          ST_GeomFromText($14, 4326),
           NULL,
           NULL,
           TRUE,
-          $15,
-          $16
+          $14,
+          $15
         )
         RETURNING track_id, length_km
       `;
@@ -297,7 +294,6 @@ export async function saveRailwayRoute(
         routeData.frequency || [],
         routeData.link || null,
         routeData.scenic,
-        routeData.hsl,
         geometryWKT,
         startCountry,
         endCountry,
@@ -314,8 +310,52 @@ export async function saveRailwayRoute(
 
     if (trackId) {
       console.log('Successfully updated railway route geometry:', trackId);
+
+      // Re-classify line_class after geometry change
+      await client.query(`
+        UPDATE railway_routes rr
+        SET line_class = COALESCE((
+          SELECT
+            CASE
+              WHEN SUM(CASE WHEN rp.highspeed = TRUE THEN ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) ELSE 0 END) >
+                   SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) * 0.5
+              THEN 'highspeed'
+              WHEN SUM(CASE WHEN rp.usage = 'main' THEN ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) ELSE 0 END) >
+                   SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) * 0.5
+              THEN 'main'
+              ELSE 'branch'
+            END
+          FROM railway_parts rp
+          WHERE ST_Intersects(rr.geometry, rp.geometry) AND rp.geometry IS NOT NULL
+          HAVING SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) > 0
+        ), 'branch')
+        WHERE rr.track_id = $1
+      `, [trackId]);
+      console.log('Re-classified line_class for route:', trackId);
     } else {
       console.log('Successfully saved railway route with auto-generated track_id:', savedTrackId);
+
+      // Auto-classify line_class based on overlapping railway_parts
+      await client.query(`
+        UPDATE railway_routes rr
+        SET line_class = COALESCE((
+          SELECT
+            CASE
+              WHEN SUM(CASE WHEN rp.highspeed = TRUE THEN ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) ELSE 0 END) >
+                   SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) * 0.5
+              THEN 'highspeed'
+              WHEN SUM(CASE WHEN rp.usage = 'main' THEN ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) ELSE 0 END) >
+                   SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) * 0.5
+              THEN 'main'
+              ELSE 'branch'
+            END
+          FROM railway_parts rp
+          WHERE ST_Intersects(rr.geometry, rp.geometry) AND rp.geometry IS NOT NULL
+          HAVING SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) > 0
+        ), 'branch')
+        WHERE rr.track_id = $1
+      `, [savedTrackId]);
+      console.log('Auto-classified line_class for route:', savedTrackId);
     }
     console.log('Final geometry has', sortedCoordinates.length, 'coordinate points');
     console.log('Calculated route length:', lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : 'N/A');
@@ -344,7 +384,7 @@ export async function updateRailwayRoute(
   frequency: string[],
   link: string | null,
   scenic: boolean,
-  hsl: boolean,
+  lineClass: LineClass,
   intendedBacktracking: boolean
 ) {
   const user = await getUser();
@@ -355,9 +395,9 @@ export async function updateRailwayRoute(
   await query(`
     UPDATE railway_routes
     SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, frequency = $7, link = $8,
-        scenic = $9, hsl = $10, intended_backtracking = $11, is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+        scenic = $9, line_class = $10, intended_backtracking = $11, is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [trackId, fromStation, toStation, trackNumber, description, usageType, frequency || [], link, scenic, hsl, intendedBacktracking]);
+  `, [trackId, fromStation, toStation, trackNumber, description, usageType, frequency || [], link, scenic, lineClass, intendedBacktracking]);
 }
 
 /**

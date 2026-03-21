@@ -43,12 +43,11 @@ export const COLORS = {
     selected: '#16a34a',
   },
   railwayRoutes: {
-    default: '#dc2626',
-    created: '#dc2626',
+    default: { branch: '#dc2626', main: '#dc2626', highspeed: '#991b1b' },
     selected: '#ff6b35',
-    visited: 'DarkGreen',
-    unvisited: 'Crimson',
-    partial: '#d97706', // Dark orange/amber
+    visited: { branch: '#15803d', main: '#15803d', highspeed: '#14532d' },
+    unvisited: { branch: '#dc2626', main: '#dc2626', highspeed: '#991b1b' },
+    partial: { branch: '#d97706', main: '#d97706', highspeed: '#92400e' },
     invalid: '#9ca3af', // Grey for invalid routes
   },
   stations: {
@@ -77,10 +76,23 @@ export interface RailwayRoutesPaintConfig {
   colorExpression?: maplibregl.ExpressionSpecification;
   widthExpression?: maplibregl.ExpressionSpecification;
   opacityExpression?: maplibregl.ExpressionSpecification;
-  defaultColor?: string;
   defaultWidth?: number;
   defaultOpacity?: number;
   filter?: maplibregl.FilterSpecification | null;
+}
+
+/**
+ * Helper: returns a MapLibre expression that picks a color based on line_class
+ */
+export function lineClassColorExpression(
+  colors: { branch: string; main: string; highspeed: string }
+): maplibregl.ExpressionSpecification {
+  return [
+    'case',
+    ['==', ['get', 'line_class'], 'highspeed'], colors.highspeed,
+    ['==', ['get', 'line_class'], 'main'], colors.main,
+    colors.branch
+  ] as maplibregl.ExpressionSpecification;
 }
 
 // ============================================================================
@@ -141,7 +153,6 @@ export function createRailwayRoutesLayer(
     colorExpression,
     widthExpression,
     opacityExpression,
-    defaultColor = COLORS.railwayRoutes.default,
     defaultWidth = 3,
     defaultOpacity = 0.8,
     filter,
@@ -157,7 +168,7 @@ export function createRailwayRoutesLayer(
       visibility: 'visible',
     },
     paint: {
-      'line-color': colorExpression || defaultColor,
+      'line-color': colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
       'line-width': widthExpression || defaultWidth,
       'line-opacity': opacityExpression || defaultOpacity,
     },

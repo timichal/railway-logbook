@@ -30,7 +30,8 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
-- `npm run addTripsTable` - Migration: creates user_trips table and adds trip_id FK to user_journeys
+- `npm run addLineClass` - Migration: adds usage/highspeed to railway_parts, adds line_class to railway_routes, drops hsl
+- `npm run classifyRoutes` - Auto-classify all routes' line_class from overlapping railway_parts (run after importMapData to populate usage/highspeed tags)
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate
@@ -90,8 +91,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Tables**:
   - `users` - User accounts and authentication (email as username, password field for bcrypt hashes)
   - `stations` - Railway stations (Point features from OSM with PostGIS coordinates)
-  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), scenic (BOOLEAN flag for particularly scenic routes), PostGIS geometry, length_km, start_country (ISO 3166-1 alpha-2), end_country (ISO 3166-1 alpha-2), **starting_coordinate (POINT)**, **ending_coordinate (POINT)**, is_valid flag, error_message, intended_backtracking flag, and has_backtracking flag
-  - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and pathfinding)
+  - `railway_routes` - Railway lines with auto-generated track_id (SERIAL), from_station, to_station, track_number, description, usage_type (0=Regular, 1=Special), frequency (array of tags: Daily, Weekdays, Weekends, Once a week, Seasonal), link (external URL), scenic (BOOLEAN flag for particularly scenic routes), line_class (VARCHAR: 'highspeed', 'main', 'branch' — auto-classified on create, editable after), PostGIS geometry, length_km, start_country (ISO 3166-1 alpha-2), end_country (ISO 3166-1 alpha-2), **starting_coordinate (POINT)**, **ending_coordinate (POINT)**, is_valid flag, error_message, intended_backtracking flag, and has_backtracking flag
+  - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and pathfinding); includes `usage` (TEXT, from OSM: main/branch/industrial/tourism) and `highspeed` (BOOLEAN) columns for line classification
   - `user_trips` - Trip groupings for journeys (e.g., "Summer Holiday in Austria"); id, user_id, name (required, non-empty), description (optional), created_at, updated_at; authenticated users only
   - `user_journeys` - Named, dated collections of routes; id, user_id, name (required, non-empty), description (optional), date (required), trip_id (nullable FK to user_trips, ON DELETE SET NULL), created_at, updated_at; represents actual trips/journeys taken by users
   - `user_logged_parts` - Connects journeys to routes with partial flags; id, user_id, journey_id, track_id (nullable to preserve history), partial flag, created_at; UNIQUE constraint prevents duplicate routes within same journey
@@ -110,8 +111,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Martin Tile Server** - PostGIS vector tile server (port 3001) serving railway_routes, railway_parts, and stations as MVT tiles
 - **Server Actions** - Type-safe database operations with automatic serialization
 - **Authentication** - Email/password authentication with bcrypt, session management
-- **Dynamic Styling** - Three-way route colors based on user data (dark green=fully completed, dark orange=partial, crimson=unvisited), weight based on usage type (thinner for Special), amber outline effect for scenic routes
-- **Badge-Style Tooltips** - Hover popups display color-coded badges: usage type (blue=Regular, purple=Special), frequency tags (green badges), and scenic flag (amber badge)
+- **Dynamic Styling** - Route colors based on visit status (green=completed, orange=partial, red=unvisited) with darker shades for highspeed lines; width varies by line_class (branch=2, main/highspeed=3.5), thinnest for Special usage (1.5); amber outline effect for scenic routes
+- **Badge-Style Tooltips** - Hover popups display color-coded badges: usage type (blue=Regular, purple=Special), line class (red badge=High-speed, blue badge=Main), frequency tags (green badges), and scenic flag (amber badge)
 - **Connection Pooling** - PostgreSQL pool for database performance
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension); floating search box in top-right
@@ -198,7 +199,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `AdminCreateRouteTab.tsx` - Route creation interface with start/end point selection
 - `AdminRoutesTab.tsx` - Route list with search and edit functionality
 - `RoutesList.tsx` - Paginated route table with validity indicators
-- `RouteEditForm.tsx` - Form for editing route metadata (from/to/track/description/usage/scenic/frequency/link)
+- `RouteEditForm.tsx` - Form for editing route metadata (from/to/track/description/usage/scenic/frequency/link/line_class)
 - `NotesPopup.tsx` - Popup component for creating/editing admin notes (text field, save/delete buttons, keyboard shortcuts)
 
 **Shared Components:**
@@ -215,10 +216,10 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `userPreferencesActions.ts` - User preferences management (get/update selected countries, ensure defaults)
 - `journeyActions.ts` - Journey CRUD server actions (create/update/delete journeys and logged parts, optional trip assignment on create)
 - `tripActions.ts` - Trip CRUD server actions (create/update/delete trips, assign/unassign journeys, get unassigned journeys)
-- `adminRouteActions.ts` - Admin-only route creation/update/deletion with security checks and automatic country detection
+- `adminRouteActions.ts` - Admin-only route creation/update/deletion with security checks, automatic country detection, and auto line_class classification
 - `adminMapActions.ts` - Admin-only coordinate-based pathfinding (`findRailwayPathFromCoordinates`) and railway parts fetching by IDs
 - `adminNotesActions.ts` - Admin-only notes CRUD operations (getAllAdminNotes, getAdminNote, createAdminNote, updateAdminNote, deleteAdminNote)
-- `routePathFinder.ts` - Route-level pathfinding for journey planner (user-facing, uses station name matching)
+- `routePathFinder.ts` - Route-level weighted Dijkstra pathfinding for journey planner (user-facing, uses station name matching, prefers main/highspeed routes via cost multipliers)
 - `authActions.ts` - Authentication actions (login, register, logout, getUser)
 - `migrationActions.ts` - Data migration actions (migrate localStorage data to database on login)
 
@@ -228,7 +229,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 **Utilities:**
 - `types.ts` - Core TypeScript type definitions (Station, GeoJSONFeature, RailwayRoute, UserJourney, UserLoggedPart, UserPreferences, SelectedRoute, etc.)
-- `constants.ts` - Usage type options (Regular=0, Special=1), frequency options (Daily, Weekdays, Weekends, Once a week, Seasonal), UsageType type export
+- `constants.ts` - Usage type options (Regular=0, Special=1), frequency options (Daily, Weekdays, Weekends, Once a week, Seasonal), line class options (highspeed, main, branch), UsageType and LineClass type exports
 - `coordinateUtils.ts` - Coordinate utilities (mergeLinearChain algorithm, coordinatesToWKT)
 - `countryUtils.ts` - Country detection from coordinates using @rapideditor/country-coder (worldwide boundary detection, ISO 3166-1 alpha-2 codes)
 - `getUntimezonedDateStr.ts` - Date utility for timezone-agnostic date string formatting
@@ -243,7 +244,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### Map Library (`src/lib/map/`)
 
 **Core:**
-- `index.ts` - Map constants, COLORS, layer factories (createRailwayRoutesSource/Layer, createScenicRoutesOutlineLayer, createStationsSource/Layer, createRailwayPartsSource/Layer, createAdminNotesSource/Layer), closeAllPopups utility
+- `index.ts` - Map constants, COLORS, layer factories (createRailwayRoutesSource/Layer, createScenicRoutesOutlineLayer, createStationsSource/Layer, createRailwayPartsSource/Layer, createAdminNotesSource/Layer), lineClassColorExpression helper, closeAllPopups utility
 - `mapState.ts` - Shared map state management (save/load map position)
 
 **Hooks:**
@@ -263,7 +264,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `interactions/adminMapInteractions.ts` - Admin map click handlers (coordinate capture from railway parts, route editing, badge-style hover popups)
 
 **Utilities:**
-- `utils/userRouteStyling.ts` - User route color/width expressions (three-way colors: dark green=completed, dark orange=partial, crimson=unvisited; scenic routes use same colors with outline layer)
+- `utils/userRouteStyling.ts` - User route color/width expressions (colors by visit status × line_class: each status has normal + darker highspeed shade; width by line_class: branch=2, main/highspeed=3.5; scenic routes use same colors with outline layer)
 - `utils/tooltipFormatting.ts` - Shared tooltip badge formatting (usage type, frequency, scenic badges)
 - `utils/distance.ts` - Distance calculation utilities
 
@@ -274,28 +275,29 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `importMapData.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
 - `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
 - `applyVectorTiles.ts` - Applies/updates vector tile functions from SQL file
-- `addTripsTable.ts` - Migration: creates user_trips table and adds trip_id FK to user_journeys
+- `addLineClass.ts` - Migration: adds usage/highspeed columns to railway_parts, adds line_class column to railway_routes, drops old hsl column
+- `classifyRoutes.ts` - Auto-classifies all routes' line_class using spatial intersection with railway_parts (length-weighted majority: >50% highspeed→'highspeed', >50% main→'main', else 'branch')
 - `markAllRoutesInvalid.ts` - Marks all routes as invalid for rechecking (utility script; **use as example for database migration scripts**)
 - `listStations.ts` - Lists all unique station names from railway_routes (debugging utility)
 - `exportRoutes.ts` - Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
-- `importRoutes.ts` - Import railway data from SQL dump
+- `importRoutes.ts` - Import railway data from SQL dump (backward-compatible with old hsl column schema)
 
 **Script Utilities (`src/scripts/lib/`):**
-- `loadRailwayData.ts` - Shared data loading logic
-- `railwayPathFinder.ts` - Shared BFS pathfinding class for admin route creation and recalculation
+- `loadRailwayData.ts` - Shared data loading logic (loads stations and railway_parts with usage/highspeed tags from OSM)
+- `railwayPathFinder.ts` - Shared weighted Dijkstra pathfinding class for admin route creation and recalculation (cost multipliers: highspeed=0.5x, main=1.0x, branch=2.0x)
 
 ### OSM Processing Scripts (`osmium-scripts/`)
 - `prepare.sh` - Unified pipeline script that downloads OSM data, filters rail features, and converts to GeoJSON
 
 ### Database Schema
-- `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes, route validity tracking fields, country tracking (start_country, end_country), and user_preferences table
+- `database/init/01-schema.sql` - PostgreSQL schema with PostGIS spatial indexes, route validity tracking fields, country tracking (start_country, end_country), line_class classification, railway_parts usage/highspeed tags, and user_preferences table
 - `database/init/02-vector-tiles.sql` - Vector tile functions with country filtering support and admin notes:
-  - `railway_routes_tile` - Shows routes at all zoom levels with country filtering via selected_countries query param; includes start_country and end_country in tile attributes
+  - `railway_routes_tile` - Shows routes at all zoom levels with country filtering via selected_countries query param; includes start_country, end_country, and line_class in tile attributes
   - `railway_parts_tile` - Zoom-based filtering for raw OSM segments
   - `stations_tile` - Stations visible at zoom 10+
   - `admin_notes_tile` - Admin notes visible at all zoom levels (admin-only)
   - Web Mercator (EPSG:3857) geometry columns and sync triggers for all spatial tables including admin_notes
-- Contains tables for users, stations, railway_routes (with frequency, link, scenic flag, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message, backtracking flags), railway_parts, user_trips (trip groupings with name/description), user_journeys (named trips with dates, optional trip_id FK), user_logged_parts (journey-route connections with partial flags), user_preferences (selected_countries array), and admin_notes (coordinate, text, timestamps)
+- Contains tables for users, stations, railway_routes (with frequency, link, scenic flag, line_class, start_country, end_country, starting_coordinate, ending_coordinate, is_valid, error_message, backtracking flags), railway_parts (with usage, highspeed), user_trips (trip groupings with name/description), user_journeys (named trips with dates, optional trip_id FK), user_logged_parts (journey-route connections with partial flags), user_preferences (selected_countries array), and admin_notes (coordinate, text, timestamps)
 
 ### Configuration Files
 - `eslint.config.mjs` - ESLint configuration
@@ -336,7 +338,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - Routes are built by selecting start/end coordinates, stored as PostGIS POINT geometries
 - Shared pathfinding (`RailwayPathFinder` class):
   - `findPathFromCoordinates()` method accepts exact coordinates
-  - Uses BFS with PostGIS spatial queries (50km → 100km → 220km progressive buffer)
+  - Uses weighted Dijkstra with PostGIS spatial queries (50km → 100km → 220km progressive buffer)
+  - Cost multipliers prefer main/highspeed lines: highspeed=0.5x, main=1.0x, branch=2.0x
   - Automatically finds which railway parts contain the coordinates (50m tolerance)
   - Truncates edge parts from click point to connection
   - Returns properly ordered coordinate chain
@@ -345,6 +348,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - track_id is auto-generated using PostgreSQL SERIAL
 - Routes store `starting_coordinate` and `ending_coordinate` for recalculation after OSM updates
 - `saveRailwayRoute` handles both INSERT (new routes) and UPDATE (edit geometry) with coordinate parameters
+- **Auto Line Classification**: `line_class` is automatically computed on route create and geometry edit via spatial intersection with railway_parts (length-weighted majority: >50% highspeed parts→'highspeed', >50% main→'main', else 'branch'); admin can manually override via edit form
 - Uses `mergeLinearChain` algorithm to properly order and connect coordinate sublists
 
 ### Database Updates and Route Recalculation
@@ -367,10 +371,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Unvisited: Route never logged
 - **Country Filtering**: Progress stats (km/%) respect selected countries from user preferences; filters routes where both start AND end countries are in selected list
 - Progress stats show completed/total km and percentage (excludes partial routes)
-- Frontend displays three-way color coding:
-  - Dark green (#006400 / DarkGreen) for fully completed routes
-  - Dark orange (#d97706) for partially completed routes
-  - Crimson for unvisited routes
+- Frontend displays color coding by visit status and line class:
+  - Green shades for fully completed routes (branch=#15803d, main=#15803d, highspeed=#14532d)
+  - Orange shades for partially completed routes (branch=#d97706, main=#d97706, highspeed=#92400e)
+  - Red shades for unvisited routes (branch=#dc2626, main=#dc2626, highspeed=#991b1b)
+  - Branch and main share the same color; highspeed uses a darker shade
+  - Width differentiates branch (2px) from main/highspeed (3.5px); Special usage thinnest (1.5px)
 - Map interactions:
   - Hover over routes shows popup with details
   - Click routes to add them to the selected routes panel (no popups)
@@ -413,7 +419,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - From/To station selection with autocomplete search
   - Multiple optional "via" stations (add/remove dynamically with drag-and-drop reordering)
   - Diacritic-insensitive search (e.g., "bialystok" finds "Białystok")
-  - **Pathfinding** (`src/lib/routePathFinder.ts`): Sequential segment BFS, progressive buffer (50km→1000km), station name matching, excludes special routes
+  - **Pathfinding** (`src/lib/routePathFinder.ts`): Sequential segment weighted Dijkstra (prefers main/highspeed routes), progressive buffer (50km→1000km), station name matching, excludes special routes
   - Found routes highlighted in gold (#FFD700) on map
   - "Add Routes to Selection" button adds routes to the selection list above
 

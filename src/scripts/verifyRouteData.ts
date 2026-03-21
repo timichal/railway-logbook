@@ -132,8 +132,6 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
       if (lengthDiff > 0.1 && lengthDiffPercent > 1) {
         const errorMsg = `Distance mismatch: original ${originalLength.toFixed(2)} km, recalculated ${newLength.toFixed(2)} km (diff: ${lengthDiff.toFixed(2)} km, ${lengthDiffPercent.toFixed(1)}%)`;
 
-        console.log(`  [${track_number}] ${from_station} → ${to_station}: ${errorMsg}`);
-
         // Mark route as invalid due to distance mismatch
         await client.query(`
           UPDATE railway_routes
@@ -175,10 +173,6 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
             to_station
           });
         }
-
-        if (result.successfulRoutes % 100 === 0) {
-          console.log(`  Recalculated ${result.successfulRoutes}/${result.totalRoutes} routes...`);
-        }
       }
     } else {
       // Mark route as invalid
@@ -198,6 +192,11 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
         to_station,
         error: recalcResult.error || 'Unknown error'
       });
+    }
+
+    const processed = result.successfulRoutes + result.invalidRoutes;
+    if (processed % 10 === 0 || processed === result.totalRoutes) {
+      process.stdout.write(`\r  ${processed}/${result.totalRoutes} routes recalculated...`);
     }
   }
 
@@ -229,7 +228,7 @@ export async function verifyAndRecalculateRoutes(client: Client): Promise<void> 
   // Recalculate all railway routes
   const recalcResult = await recalculateAllRoutes(client);
 
-  console.log('');
+  console.log('\n');
   console.log('=== Route Recalculation Summary ===');
   console.log(`Total routes: ${recalcResult.totalRoutes}`);
   console.log(`Successfully recalculated: ${recalcResult.successfulRoutes}`);

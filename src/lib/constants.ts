@@ -48,6 +48,22 @@ export const frequencyOptions = [
   }
 ] as const;
 
+/**
+ * Line class options (derived from OSM data)
+ */
+export const lineClassOptions = [
+  { id: 'highspeed', label: 'High-speed' },
+  { id: 'main', label: 'Main' },
+  { id: 'branch', label: 'Branch' },
+] as const;
+
+export type LineClass = typeof lineClassOptions[number]['id'];
+
+export const getLineClassLabel = (lineClass: LineClass): string => {
+  const option = lineClassOptions.find(opt => opt.id === lineClass);
+  return option ? option.label : 'Unknown';
+};
+
 export const getFrequencyLabel = (frequency: string): string => {
   const option = frequencyOptions.find(opt => opt.key === frequency);
   return option ? option.label : frequency;

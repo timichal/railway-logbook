@@ -23,6 +23,7 @@ interface RouteBearingInfo {
   from_station: string;
   to_station: string;
   length_km: number;
+  line_class: string | null;
   /** First coordinate of route geometry */
   startCoord: [number, number];
   /** Second coordinate of route geometry (near start) */
@@ -31,6 +32,16 @@ interface RouteBearingInfo {
   nearEndCoord: [number, number];
   /** Last coordinate of route geometry */
   endCoord: [number, number];
+}
+
+/**
+ * Cost multiplier for route-level pathfinding based on line_class.
+ * Lower = preferred. Main/highspeed routes are preferred over branch routes.
+ */
+function getRouteCostMultiplier(info: RouteBearingInfo): number {
+  if (info.line_class === 'highspeed') return 0.5;
+  if (info.line_class === 'main') return 1.0;
+  return 2.0; // branch or unknown
 }
 
 interface GraphWithBearingInfo {
@@ -142,6 +153,7 @@ async function buildRouteGraphInBuffer(
       from_station: string;
       to_station: string;
       length_km: string | number;
+      line_class: string | null;
       start_x: number;
       start_y: number;
       near_start_x: number;
@@ -172,6 +184,7 @@ async function buildRouteGraphInBuffer(
         r.from_station,
         r.to_station,
         r.length_km,
+        r.line_class,
         ST_X(ST_PointN(r.geometry, 1)) as start_x,
         ST_Y(ST_PointN(r.geometry, 1)) as start_y,
         ST_X(ST_PointN(r.geometry, 2)) as near_start_x,
@@ -196,6 +209,7 @@ async function buildRouteGraphInBuffer(
         from_station: row.from_station,
         to_station: row.to_station,
         length_km: lengthKm,
+        line_class: row.line_class,
         startCoord: [row.start_x, row.start_y],
         nearStartCoord: [row.near_start_x, row.near_start_y],
         nearEndCoord: [row.near_end_x, row.near_end_y],
@@ -320,7 +334,8 @@ function hasRoutePathBacktracking(
 // ============================================================================
 
 /**
- * BFS to find shortest path through route graph (in-memory).
+ * Weighted Dijkstra-like search through route graph (in-memory).
+ * Costs are weighted by line_class: highspeed (0.5x), main (1.0x), branch (2.0x).
  * Tracks exit station at each step to prevent "teleportation" between route endpoints.
  * When traversing a route, you enter at one station and exit at the other — the next
  * route must connect at your exit station.
@@ -336,8 +351,11 @@ function findShortestPath(
   }
 
   const endSet = new Set(endRoutes);
-  const queue: { route: number; path: number[]; exitStation: string }[] = [];
-  const visited = new Set<string>();
+  const queue: { route: number; path: number[]; exitStation: string; cost: number }[] = [];
+  const bestCost = new Map<string, number>();
+
+  let bestPath: number[] | null = null;
+  let bestPathCost = Infinity;
 
   // Initialize queue with start routes (try both directions)
   for (const route of startRoutes) {
@@ -346,19 +364,38 @@ function findShortestPath(
 
     for (const exitStation of [info.from_station, info.to_station]) {
       const key = `${route}_${exitStation}`;
-      if (!visited.has(key)) {
-        visited.add(key);
-        queue.push({ route, path: [route], exitStation });
+      if (!bestCost.has(key)) {
+        bestCost.set(key, 0);
+        queue.push({ route, path: [route], exitStation, cost: 0 });
       }
     }
   }
 
   while (queue.length > 0) {
-    const current = queue.shift()!;
+    // Pick lowest-cost entry
+    let minIdx = 0;
+    for (let i = 1; i < queue.length; i++) {
+      if (queue[i].cost < queue[minIdx].cost) minIdx = i;
+    }
+    const current = queue.splice(minIdx, 1)[0];
+
+    const currentKey = `${current.route}_${current.exitStation}`;
+    const currentBest = bestCost.get(currentKey);
+    if (currentBest !== undefined && current.cost > currentBest) {
+      continue;
+    }
+
+    if (current.cost >= bestPathCost) {
+      continue;
+    }
 
     // Check if we reached the end
     if (endSet.has(current.route)) {
-      return current.path;
+      if (current.cost < bestPathCost) {
+        bestPath = current.path;
+        bestPathCost = current.cost;
+      }
+      continue;
     }
 
     // Explore neighbors
@@ -377,19 +414,24 @@ function findShortestPath(
         continue; // Neighbor doesn't connect at our exit station
       }
 
+      const weightedCost = (neighborInfo.length_km ?? 0) * getRouteCostMultiplier(neighborInfo);
+      const newCost = current.cost + weightedCost;
+
       const key = `${neighbor}_${newExitStation}`;
-      if (!visited.has(key)) {
-        visited.add(key);
+      const prevBest = bestCost.get(key);
+      if (prevBest === undefined || newCost < prevBest) {
+        bestCost.set(key, newCost);
         queue.push({
           route: neighbor,
           path: [...current.path, neighbor],
           exitStation: newExitStation,
+          cost: newCost,
         });
       }
     }
   }
 
-  return null; // No path found
+  return bestPath;
 }
 
 /**
@@ -479,8 +521,8 @@ function findShortestPathAvoidingBacktracking(
         continue;
       }
 
-      const neighborLengthKm = neighborInfo.length_km ?? 0;
-      const newDistanceKm = current.distanceKm + neighborLengthKm;
+      const weightedCost = (neighborInfo.length_km ?? 0) * getRouteCostMultiplier(neighborInfo);
+      const newDistanceKm = current.distanceKm + weightedCost;
 
       // Only explore if this is the best path to this node+direction so far
       const neighborKey = `${neighbor}_${newExitStation}`;

@@ -121,8 +121,10 @@ export async function loadStationsAndParts(
             .join(',');
           const lineString = `LINESTRING(${coordsStr})`;
           const id = properties['@id'];
+          const usage = properties.usage ? `'${String(properties.usage).replace(/'/g, "''")}'` : 'NULL';
+          const highspeed = properties.highspeed === 'yes' ? 'TRUE' : 'FALSE';
 
-          partRows.push(`(${id}, ST_GeomFromText('${lineString}', 4326))`);
+          partRows.push(`(${id}, ST_GeomFromText('${lineString}', 4326), ${usage}, ${highspeed})`);
           partsCount++;
         }
 
@@ -138,15 +140,15 @@ export async function loadStationsAndParts(
 
         if (partRows.length >= BATCH_SIZE) {
           await client.query(`
-            INSERT INTO railway_parts (id, geometry)
+            INSERT INTO railway_parts (id, geometry, usage, highspeed)
             VALUES ${partRows.join(', ')}
-            ON CONFLICT (id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+            ON CONFLICT (id) DO UPDATE SET usage = EXCLUDED.usage, highspeed = EXCLUDED.highspeed, updated_at = CURRENT_TIMESTAMP
           `);
           partRows = [];
         }
 
         if (featureCount % 10000 === 0) {
-          console.log(`Processed ${featureCount} features...`);
+          process.stdout.write(`\rProcessed ${featureCount} features (${stationsCount} stations, ${partsCount} parts)...`);
         }
 
       } catch (_e) {
@@ -157,7 +159,7 @@ export async function loadStationsAndParts(
     }
   }
 
-  console.log(`Processed ${featureCount} features total`);
+  console.log(`\nProcessed ${featureCount} features total`);
 
   // Insert remaining batches
   if (stationRows.length > 0) {
@@ -172,9 +174,9 @@ export async function loadStationsAndParts(
   if (partRows.length > 0) {
     console.log(`Inserting final batch of ${partRows.length} railway parts...`);
     await client.query(`
-      INSERT INTO railway_parts (id, geometry)
+      INSERT INTO railway_parts (id, geometry, usage, highspeed)
       VALUES ${partRows.join(', ')}
-      ON CONFLICT (id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+      ON CONFLICT (id) DO UPDATE SET usage = EXCLUDED.usage, highspeed = EXCLUDED.highspeed, updated_at = CURRENT_TIMESTAMP
     `);
   }
 

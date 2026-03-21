@@ -9,6 +9,18 @@ interface RailwayPart {
   coordinates: [number, number][];
   startPoint: [number, number];
   endPoint: [number, number];
+  usage: string | null;    // OSM usage tag (main, branch, etc.)
+  highspeed: boolean;      // OSM highspeed=yes
+}
+
+/**
+ * Cost multiplier for pathfinding based on part classification.
+ * Lower = preferred. Highspeed and main lines are preferred over branch lines.
+ */
+function getPartCostMultiplier(part: RailwayPart): number {
+  if (part.highspeed) return 0.5;
+  if (part.usage === 'main') return 1.0;
+  return 2.0; // branch, industrial, tourism, unknown
 }
 
 interface PointOnSegment {
@@ -68,7 +80,9 @@ export class RailwayPathFinder {
         )
         SELECT
           id::TEXT as id,
-          ST_AsGeoJSON(geometry) as geometry_json
+          ST_AsGeoJSON(geometry) as geometry_json,
+          usage,
+          COALESCE(highspeed, false) as highspeed
         FROM railway_parts rp, search_area
         WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
           AND rp.geometry IS NOT NULL
@@ -104,7 +118,9 @@ export class RailwayPathFinder {
         )
         SELECT
           id::TEXT as id,
-          ST_AsGeoJSON(geometry) as geometry_json
+          ST_AsGeoJSON(geometry) as geometry_json,
+          usage,
+          COALESCE(highspeed, false) as highspeed
         FROM railway_parts rp, search_area
         WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
           AND rp.geometry IS NOT NULL
@@ -275,32 +291,79 @@ export class RailwayPathFinder {
   // ============================================================================
 
   /**
-   * Find shortest path using standard BFS with global visited set
+   * Find shortest path using weighted Dijkstra-like search.
+   * Edge costs are weighted by line class: highspeed (0.5x), main (1.0x), branch (2.0x).
+   * This ensures the algorithm prefers main lines over branch lines.
    */
   private findShortestPath(startId: string, endId: string): string[] | null {
-    const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
-    const visited = new Set<string>([startId]);
+    const queue: { id: string; path: string[]; cost: number }[] = [{
+      id: startId,
+      path: [startId],
+      cost: 0
+    }];
+    const bestCost = new Map<string, number>();
+    bestCost.set(startId, 0);
+
+    let bestPath: string[] | null = null;
+    let bestPathCost = Infinity;
 
     while (queue.length > 0) {
-      const current = queue.shift()!;
+      // Pick lowest-cost entry (simple linear scan — fast enough for railway graphs)
+      let minIdx = 0;
+      for (let i = 1; i < queue.length; i++) {
+        if (queue[i].cost < queue[minIdx].cost) minIdx = i;
+      }
+      const current = queue.splice(minIdx, 1)[0];
+
+      // Skip if we already found a cheaper path to this node
+      const currentBest = bestCost.get(current.id);
+      if (currentBest !== undefined && current.cost > currentBest) {
+        continue;
+      }
+
+      // Early exit if this path can't beat the best complete path
+      if (current.cost >= bestPathCost) {
+        continue;
+      }
+
       const connected = this.getConnectedPartIds(current.id);
 
       for (const connectedId of connected) {
+        const connectedPart = this.parts.get(connectedId);
+        if (!connectedPart) continue;
+
+        // Calculate weighted cost for this segment
+        let segmentDist = 0;
+        for (let i = 0; i < connectedPart.coordinates.length - 1; i++) {
+          segmentDist += this.haversineDistance(
+            connectedPart.coordinates[i],
+            connectedPart.coordinates[i + 1]
+          );
+        }
+        const weightedCost = segmentDist * getPartCostMultiplier(connectedPart);
+        const newCost = current.cost + weightedCost;
+
         if (connectedId === endId) {
-          return [...current.path, connectedId];
+          if (newCost < bestPathCost) {
+            bestPath = [...current.path, connectedId];
+            bestPathCost = newCost;
+          }
+          continue;
         }
 
-        if (!visited.has(connectedId)) {
-          visited.add(connectedId);
+        const prevBest = bestCost.get(connectedId);
+        if (prevBest === undefined || newCost < prevBest) {
+          bestCost.set(connectedId, newCost);
           queue.push({
             id: connectedId,
-            path: [...current.path, connectedId]
+            path: [...current.path, connectedId],
+            cost: newCost
           });
         }
       }
     }
 
-    return null;
+    return bestPath;
   }
 
   /**
@@ -377,7 +440,7 @@ export class RailwayPathFinder {
           continue;
         }
 
-        // Calculate distance efficiently (only add new segment)
+        // Calculate weighted distance efficiently (only add new segment)
         const connectedPart = this.parts.get(connectedId);
         if (!connectedPart) continue;
 
@@ -388,7 +451,7 @@ export class RailwayPathFinder {
             connectedPart.coordinates[i + 1]
           );
         }
-        const newDistance = current.distance + segmentDist;
+        const newDistance = current.distance + segmentDist * getPartCostMultiplier(connectedPart);
 
         // Only explore if this is best path to this node so far
         const bestToNode = bestDistance.get(connectedId);
@@ -1216,7 +1279,9 @@ export class RailwayPathFinder {
           id,
           coordinates,
           startPoint,
-          endPoint
+          endPoint,
+          usage: row.usage || null,
+          highspeed: row.highspeed === true || row.highspeed === 't',
         };
 
         this.parts.set(id, part);

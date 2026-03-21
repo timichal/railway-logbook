@@ -6,7 +6,7 @@ import RoutesList from './RoutesList';
 import RouteEditForm from './RouteEditForm';
 import { useToast, ConfirmDialog } from '@/lib/toast';
 import type { RailwayRoute } from '@/lib/types';
-import type { UsageType } from '@/lib/constants';
+import type { UsageType, LineClass } from '@/lib/constants';
 
 interface AdminRoutesTabProps {
   selectedRouteId?: string | null;
@@ -46,7 +46,7 @@ export default function AdminRoutesTab({
     frequency: string[];
     link: string;
     scenic: boolean;
-    hsl: boolean;
+    line_class: LineClass;
     intended_backtracking: boolean;
   } | null>(null);
 
@@ -121,7 +121,7 @@ export default function AdminRoutesTab({
         frequency: routeDetail.frequency || [],
         link: routeDetail.link || '',
         scenic: routeDetail.scenic || false,
-        hsl: routeDetail.hsl || false,
+        line_class: routeDetail.line_class || 'branch',
         intended_backtracking: routeDetail.intended_backtracking || false
       });
 
@@ -165,7 +165,7 @@ export default function AdminRoutesTab({
         editForm.frequency,
         editForm.link || null,
         editForm.scenic,
-        editForm.hsl,
+        editForm.line_class,
         editForm.intended_backtracking
       );
 

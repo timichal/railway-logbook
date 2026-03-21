@@ -19,8 +19,10 @@ import {
   createAdminNotesSource,
   createAdminNotesLayer,
   COLORS,
+  lineClassColorExpression,
 } from '@/lib/map';
 import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapInteractions';
+import { getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
 import { getAllRouteEndpoints } from '@/lib/adminRouteActions';
 import AdminLayerControls from './AdminLayerControls';
 
@@ -132,15 +134,13 @@ export default function VectorAdminMap({
         COLORS.railwayRoutes.selected,
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid,
-        COLORS.railwayRoutes.created,
+        lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', [
         'case',
         ['==', ['id'], trackIdNum],
         5,
-        ['==', ['get', 'usage_type'], 1],
-        2,
-        3,
+        getUserRouteWidthExpression(),
       ]);
       map.current.setPaintProperty('railway_routes', 'line-opacity', [
         'case',
@@ -153,14 +153,9 @@ export default function VectorAdminMap({
         'case',
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid,
-        COLORS.railwayRoutes.created,
+        lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
-      map.current.setPaintProperty('railway_routes', 'line-width', [
-        'case',
-        ['==', ['get', 'usage_type'], 1],
-        2,
-        3,
-      ]);
+      map.current.setPaintProperty('railway_routes', 'line-width', getUserRouteWidthExpression());
       map.current.setPaintProperty('railway_routes', 'line-opacity', 0.8);
     }
   }, [selectedRouteId, mapLoaded, map]);
@@ -196,15 +191,13 @@ export default function VectorAdminMap({
         COLORS.railwayRoutes.selected,
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid,
-        COLORS.railwayRoutes.created,
+        lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
       m.setPaintProperty('railway_routes', 'line-width', [
         'case',
         ['==', ['id'], trackIdNum],
         5,
-        ['==', ['get', 'usage_type'], 1],
-        2,
-        3,
+        getUserRouteWidthExpression(),
       ]);
       m.setPaintProperty('railway_routes', 'line-opacity', [
         'case',
@@ -217,14 +210,9 @@ export default function VectorAdminMap({
         'case',
         ['==', ['get', 'is_valid'], false],
         COLORS.railwayRoutes.invalid,
-        COLORS.railwayRoutes.created,
+        lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
-      m.setPaintProperty('railway_routes', 'line-width', [
-        'case',
-        ['==', ['get', 'usage_type'], 1],
-        2,
-        3,
-      ]);
+      m.setPaintProperty('railway_routes', 'line-width', getUserRouteWidthExpression());
     }
 
     m.triggerRepaint();

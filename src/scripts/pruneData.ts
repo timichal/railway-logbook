@@ -59,7 +59,7 @@ function pruneFeatureProperties(feat: Feature): Feature {
           if (["name", "railway"].includes(key)) return true;
         }
         if (feat.geometry.type === "LineString") {
-          if (["name", "railway", "usage"].includes(key)) return true;
+          if (["name", "railway", "usage", "highspeed"].includes(key)) return true;
         }
         return false;
       })
@@ -131,7 +131,7 @@ async function processStdin(outputFilePath: string) {
         }
 
         if (featureCount % 10000 === 0) {
-          console.log(`  Processed ${featureCount} features, kept ${processedCount}`);
+          process.stdout.write(`\r  Processed ${featureCount} features, kept ${processedCount}...`);
         }
       } catch (_e) {
         // Skip malformed features
@@ -149,7 +149,7 @@ async function processStdin(outputFilePath: string) {
 
   return new Promise<void>((resolve, reject) => {
     writeStream.on('finish', () => {
-      console.log(`  Final: processed ${featureCount} features, kept ${processedCount}`);
+      console.log(`\n  Final: processed ${featureCount} features, kept ${processedCount}`);
       resolve();
     });
     writeStream.on('error', reject);

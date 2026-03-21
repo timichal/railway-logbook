@@ -28,6 +28,14 @@ async function importRoutes() {
     process.exit(1);
   }
 
+  // Detect if dump uses old schema (hsl column instead of line_class)
+  const sqlContent = fs.readFileSync(filename, 'utf-8');
+  const hasOldHslColumn = sqlContent.includes(' hsl,') || sqlContent.includes(' hsl)');
+
+  if (hasOldHslColumn) {
+    console.log('Detected old schema (hsl column) in dump file — will migrate to line_class after import');
+  }
+
   console.log(`Importing railway data from ${filename}...`);
   console.log('This will import: railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes\n');
 
@@ -36,10 +44,16 @@ async function importRoutes() {
     const dbName = process.env.POSTGRES_DB || '';
     const dbUser = process.env.DB_USER || '';
 
-    console.log('Copying SQL file to container...');
-
     const containerName = 'db';
     const containerPath = '/tmp/import.sql';
+
+    // If old schema, temporarily add hsl column so the dump can load
+    if (hasOldHslColumn) {
+      console.log('Adding temporary hsl column for compatibility...');
+      await query('ALTER TABLE railway_routes ADD COLUMN IF NOT EXISTS hsl BOOLEAN DEFAULT FALSE');
+    }
+
+    console.log('Copying SQL file to container...');
 
     // Copy file to container
     try {
@@ -84,6 +98,12 @@ async function importRoutes() {
         // Ignore cleanup errors
       }
 
+      // If old schema, drop the temp hsl column (line_class will be set by classifyRoutes)
+      if (hasOldHslColumn) {
+        await query('ALTER TABLE railway_routes DROP COLUMN IF EXISTS hsl');
+        console.log('✓ Dropped temporary hsl column (run classifyRoutes to set line_class)');
+      }
+
       // Verify what was imported
       console.log('\nVerifying imported data...');
 
@@ -107,6 +127,10 @@ async function importRoutes() {
 
       process.exit(0);
     } catch (error) {
+      // If old schema migration was in progress, clean up temp column
+      if (hasOldHslColumn) {
+        try { await query('ALTER TABLE railway_routes DROP COLUMN IF EXISTS hsl'); } catch { /* ignore */ }
+      }
       console.error('Error executing psql command:');
       if (error && typeof error === 'object' && 'stderr' in error) {
         console.error(String(error.stderr));

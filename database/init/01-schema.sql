@@ -32,6 +32,8 @@ CREATE TABLE stations (
 CREATE TABLE railway_parts (
     id BIGINT PRIMARY KEY, -- OSM @id
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
+    usage TEXT, -- OSM usage tag (main, branch, industrial, tourism, etc.)
+    highspeed BOOLEAN DEFAULT FALSE, -- OSM highspeed=yes tag
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -47,7 +49,7 @@ CREATE TABLE railway_routes (
     frequency TEXT[] DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
     link TEXT, -- External URL/link for the route
     scenic BOOLEAN DEFAULT FALSE, -- Flag to mark route as scenic
-    hsl BOOLEAN DEFAULT FALSE, -- Flag to mark route as high-speed line
+    line_class VARCHAR(20) DEFAULT 'branch' CHECK (line_class IN ('highspeed', 'main', 'branch')), -- Line classification derived from OSM data
     geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
     length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
     start_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of start point

@@ -1,4 +1,4 @@
-import { getUsageLabel, type UsageType } from '@/lib/constants';
+import { getUsageLabel, getLineClassLabel, type UsageType, type LineClass } from '@/lib/constants';
 
 /**
  * Format route metadata as color-coded badges for tooltips
@@ -6,7 +6,7 @@ import { getUsageLabel, type UsageType } from '@/lib/constants';
 export function formatRouteMetadataBadges(properties: {
   usage_type: UsageType;
   scenic?: boolean;
-  hsl?: boolean;
+  line_class?: LineClass;
   frequency?: string;
 }): string {
   let badges = "";
@@ -17,14 +17,18 @@ export function formatRouteMetadataBadges(properties: {
   const usageBgColor = properties.usage_type === 1 ? '#f3e8ff' : '#dbeafe';
   badges += `<span style="background-color: ${usageBgColor}; color: ${usageColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${usageLabel}</span>`;
 
+  // Line class badge
+  if (properties.line_class && properties.line_class !== 'branch') {
+    const lineClassLabel = getLineClassLabel(properties.line_class);
+    const isHighspeed = properties.line_class === 'highspeed';
+    const lcColor = isHighspeed ? '#ffffff' : '#1e40af';
+    const lcBgColor = isHighspeed ? '#ef4444' : '#bfdbfe';
+    badges += ` <span style="background-color: ${lcBgColor}; color: ${lcColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${lineClassLabel}</span>`;
+  }
+
   // Scenic badge
   if (properties.scenic) {
     badges += ` <span style="background-color: #fbbf24; color: #78350f; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Scenic</span>`;
-  }
-
-  // High-speed line badge
-  if (properties.hsl) {
-    badges += ` <span style="background-color: #ef4444; color: #ffffff; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">HSL</span>`;
   }
 
   // Frequency badges
