@@ -56,23 +56,12 @@ export function useRouteHighlighting(
           source: 'railway_routes',
           'source-layer': 'railway_routes',
           paint: {
-            'line-color': [
-              'case',
-              ['all', ['has', 'date'], ['==', ['get', 'has_complete_trip'], true]],
-              '#059669', // Green
-              ['has', 'date'],
-              '#d97706', // Orange
-              ['all', ['==', ['feature-state', 'hasTrip'], true], ['==', ['feature-state', 'partial'], true]],
-              '#d97706', // Orange
-              ['==', ['feature-state', 'hasTrip'], true],
-              '#059669', // Green
-              '#DC2626',  // Red
-            ],
+            'line-color': '#FFD700',
             'line-width': 7,
             'line-opacity': 0.9,
           },
           filter: ['in', ['id'], ['literal', selectedTrackIds]],
-        }, 'railway_routes');
+        });
       } else {
         map.current.setFilter('selected_routes_highlight', [
           'in', ['id'], ['literal', selectedTrackIds],

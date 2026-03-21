@@ -18,19 +18,22 @@ export function setupUserMapInteractions(
   const { onRouteClick, onStationClick } = callbacks;
   let currentPopup: maplibregl.Popup | null = null;
 
-  // Click handler for adding routes to selection
-  const handleClick = (e: maplibreglType.MapLayerMouseEvent) => {
-    if (!e.features || e.features.length === 0) return;
+  // Click handler for routes — queries all route-related layers (base + highlights)
+  const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
+    const routeLayers = ['railway_routes', 'selected_routes_highlight', 'highlighted_routes']
+      .filter(id => mapInstance.getLayer(id));
+    if (routeLayers.length === 0) return;
 
-    const feature = e.features[0];
+    const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
+    if (features.length === 0) return;
+
+    const feature = features[0];
     const properties = feature.properties;
     if (!properties) return;
 
-    // track_id is the feature ID (not in properties)
     const trackId = feature.id;
     if (!trackId) return;
 
-    // Add route to selection
     onRouteClick({
       track_id: String(trackId),
       from_station: properties.from_station,
@@ -187,8 +190,20 @@ export function setupUserMapInteractions(
     onStationClick(station);
   };
 
-  // Attach route handlers
-  mapInstance.on('click', 'railway_routes', handleClick);
+  // Prevent double-click zoom on routes (fast select/unselect triggers dblclick)
+  const handleDblClick = (e: maplibreglType.MapMouseEvent) => {
+    const routeLayers = ['railway_routes', 'selected_routes_highlight', 'highlighted_routes']
+      .filter(id => mapInstance.getLayer(id));
+    if (routeLayers.length === 0) return;
+    const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
+    if (features.length > 0) {
+      e.preventDefault();
+    }
+  };
+  mapInstance.on('dblclick', handleDblClick);
+
+  // Attach route click as general map handler (works through highlight layers on top)
+  mapInstance.on('click', handleRouteClick);
   mapInstance.on('mousemove', 'railway_routes', handleRouteMouseMove);
   mapInstance.on('mouseenter', 'railway_routes', handleRouteMouseEnter);
   mapInstance.on('mouseleave', 'railway_routes', handleRouteMouseLeave);
@@ -205,7 +220,8 @@ export function setupUserMapInteractions(
       currentPopup.remove();
     }
     // Remove route handlers
-    mapInstance.off('click', 'railway_routes', handleClick);
+    mapInstance.off('dblclick', handleDblClick);
+    mapInstance.off('click', handleRouteClick);
     mapInstance.off('mousemove', 'railway_routes', handleRouteMouseMove);
     mapInstance.off('mouseenter', 'railway_routes', handleRouteMouseEnter);
     mapInstance.off('mouseleave', 'railway_routes', handleRouteMouseLeave);

@@ -85,6 +85,8 @@ export default function VectorRailwayMap({
 
   // Selected routes state
   const [selectedRoutes, setSelectedRoutes] = useState<SelectedRoute[]>([]);
+  const selectedRoutesRef = useRef<SelectedRoute[]>([]);
+  selectedRoutesRef.current = selectedRoutes;
 
   const stationSearch = useStationSearch();
 
@@ -192,14 +194,12 @@ export default function VectorRailwayMap({
 
     if (activeTab !== 'routes') return;
 
-    let isSelected = false;
-    setSelectedRoutes(prev => {
-      isSelected = prev.some(r => r.track_id === route.track_id);
-      if (isSelected) return prev.filter(r => r.track_id !== route.track_id);
-      return prev;
-    });
-
-    if (isSelected) return;
+    // Toggle: if already selected, remove it
+    const isSelected = selectedRoutesRef.current.some(r => r.track_id === route.track_id);
+    if (isSelected) {
+      setSelectedRoutes(prev => prev.filter(r => r.track_id !== route.track_id));
+      return;
+    }
 
     if (!user) {
       const canAdd = await dataAccess.canAddMoreJourneys();
