@@ -44,6 +44,35 @@ function getRouteCostMultiplier(info: RouteBearingInfo): number {
   return 2.0; // branch or unknown
 }
 
+/** Tolerance in meters for matching route endpoints as connected */
+const ENDPOINT_TOLERANCE_METERS = 500;
+
+type EndpointSide = 'start' | 'end';
+
+/**
+ * Check if two coordinates are within a distance tolerance (in meters).
+ * Coordinates are [longitude, latitude]. Uses Haversine formula.
+ */
+function coordsNear(a: [number, number], b: [number, number], toleranceMeters: number): boolean {
+  // Quick reject (~5km at mid-latitudes)
+  if (Math.abs(a[1] - b[1]) > 0.05 || Math.abs(a[0] - b[0]) > 0.05) return false;
+
+  const R = 6371000;
+  const dLat = (b[1] - a[1]) * Math.PI / 180;
+  const dLon = (b[0] - a[0]) * Math.PI / 180;
+  const lat1 = a[1] * Math.PI / 180;
+  const lat2 = b[1] * Math.PI / 180;
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLon = Math.sin(dLon / 2);
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+  const d = 2 * R * Math.asin(Math.sqrt(h));
+  return d <= toleranceMeters;
+}
+
+function getEndpointCoord(info: RouteBearingInfo, side: EndpointSide): [number, number] {
+  return side === 'start' ? info.startCoord : info.endCoord;
+}
+
 interface GraphWithBearingInfo {
   graph: RouteGraph;
   routeInfo: Map<number, RouteBearingInfo>;
@@ -217,19 +246,19 @@ async function buildRouteGraphInBuffer(
       });
     }
 
-    // Build connections via station name matching (O(n^2) but in JS, no SQL CROSS JOIN)
+    // Build connections via endpoint coordinate proximity (O(n^2) but in JS, no SQL CROSS JOIN)
     for (let i = 0; i < routes.length; i++) {
       for (let j = i + 1; j < routes.length; j++) {
-        const r1 = routes[i];
-        const r2 = routes[j];
+        const r1Info = routeInfo.get(routes[i].track_id)!;
+        const r2Info = routeInfo.get(routes[j].track_id)!;
         if (
-          r1.from_station === r2.from_station ||
-          r1.from_station === r2.to_station ||
-          r1.to_station === r2.from_station ||
-          r1.to_station === r2.to_station
+          coordsNear(r1Info.startCoord, r2Info.startCoord, ENDPOINT_TOLERANCE_METERS) ||
+          coordsNear(r1Info.startCoord, r2Info.endCoord, ENDPOINT_TOLERANCE_METERS) ||
+          coordsNear(r1Info.endCoord, r2Info.startCoord, ENDPOINT_TOLERANCE_METERS) ||
+          coordsNear(r1Info.endCoord, r2Info.endCoord, ENDPOINT_TOLERANCE_METERS)
         ) {
-          graph.addConnection(r1.track_id, r2.track_id);
-          graph.addConnection(r2.track_id, r1.track_id);
+          graph.addConnection(routes[i].track_id, routes[j].track_id);
+          graph.addConnection(routes[j].track_id, routes[i].track_id);
         }
       }
     }
@@ -245,45 +274,38 @@ async function buildRouteGraphInBuffer(
 // ============================================================================
 
 /**
- * Find the shared station name between two connected routes.
- * Returns null if routes don't share a station.
+ * Find which endpoints connect between two routes via coordinate proximity.
+ * Returns the endpoint sides, or null if routes don't connect.
  */
-function findConnectionStation(
+function findConnectionEndpoint(
   infoA: RouteBearingInfo,
   infoB: RouteBearingInfo
-): string | null {
-  // Check all 4 combinations; prefer from→to connections (more common direction)
-  if (infoA.to_station === infoB.from_station) return infoA.to_station;
-  if (infoA.to_station === infoB.to_station) return infoA.to_station;
-  if (infoA.from_station === infoB.from_station) return infoA.from_station;
-  if (infoA.from_station === infoB.to_station) return infoA.from_station;
+): { sideA: EndpointSide; sideB: EndpointSide } | null {
+  if (coordsNear(infoA.endCoord, infoB.startCoord, ENDPOINT_TOLERANCE_METERS)) return { sideA: 'end', sideB: 'start' };
+  if (coordsNear(infoA.endCoord, infoB.endCoord, ENDPOINT_TOLERANCE_METERS)) return { sideA: 'end', sideB: 'end' };
+  if (coordsNear(infoA.startCoord, infoB.startCoord, ENDPOINT_TOLERANCE_METERS)) return { sideA: 'start', sideB: 'start' };
+  if (coordsNear(infoA.startCoord, infoB.endCoord, ENDPOINT_TOLERANCE_METERS)) return { sideA: 'start', sideB: 'end' };
   return null;
 }
 
 /**
- * Get the exit bearing of a route at a given station.
- * This is the bearing of the route as it approaches/exits the connection station.
+ * Get the exit bearing of a route at a given endpoint side.
  */
-function getExitBearing(info: RouteBearingInfo, station: string): number {
-  if (station === info.to_station) {
-    // Route exits forward (toward end): bearing from near-end to end
+function getExitBearing(info: RouteBearingInfo, side: EndpointSide): number {
+  if (side === 'end') {
     return calculateBearing(info.nearEndCoord, info.endCoord);
   } else {
-    // Route exits backward (toward start): bearing from near-start to start
     return calculateBearing(info.nearStartCoord, info.startCoord);
   }
 }
 
 /**
- * Get the entry bearing of a route at a given station.
- * This is the bearing of the route as it departs from the connection station.
+ * Get the entry bearing of a route at a given endpoint side.
  */
-function getEntryBearing(info: RouteBearingInfo, station: string): number {
-  if (station === info.from_station) {
-    // Route enters forward (from start): bearing from start to near-start
+function getEntryBearing(info: RouteBearingInfo, side: EndpointSide): number {
+  if (side === 'start') {
     return calculateBearing(info.startCoord, info.nearStartCoord);
   } else {
-    // Route enters backward (from end): bearing from end to near-end
     return calculateBearing(info.endCoord, info.nearEndCoord);
   }
 }
@@ -296,11 +318,11 @@ function isBacktrackingTransition(
   infoA: RouteBearingInfo,
   infoB: RouteBearingInfo
 ): boolean {
-  const station = findConnectionStation(infoA, infoB);
-  if (!station) return false;
+  const connection = findConnectionEndpoint(infoA, infoB);
+  if (!connection) return false;
 
-  const exitBear = getExitBearing(infoA, station);
-  const entryBear = getEntryBearing(infoB, station);
+  const exitBear = getExitBearing(infoA, connection.sideA);
+  const entryBear = getEntryBearing(infoB, connection.sideB);
 
   const diff = Math.abs(entryBear - exitBear);
   const normalizedDiff = diff > 180 ? 360 - diff : diff;
@@ -336,9 +358,9 @@ function hasRoutePathBacktracking(
 /**
  * Weighted Dijkstra-like search through route graph (in-memory).
  * Costs are weighted by line_class: highspeed (0.5x), main (1.0x), branch (2.0x).
- * Tracks exit station at each step to prevent "teleportation" between route endpoints.
- * When traversing a route, you enter at one station and exit at the other — the next
- * route must connect at your exit station.
+ * Tracks exit endpoint coordinate at each step to prevent "teleportation" between route endpoints.
+ * When traversing a route, you enter at one endpoint and exit at the other — the next
+ * route must have an endpoint near your exit coordinate.
  */
 function findShortestPath(
   graph: RouteGraph,
@@ -351,7 +373,7 @@ function findShortestPath(
   }
 
   const endSet = new Set(endRoutes);
-  const queue: { route: number; path: number[]; exitStation: string; cost: number }[] = [];
+  const queue: { route: number; path: number[]; exitSide: EndpointSide; cost: number }[] = [];
   const bestCost = new Map<string, number>();
 
   let bestPath: number[] | null = null;
@@ -362,11 +384,11 @@ function findShortestPath(
     const info = routeInfo.get(route);
     if (!info) continue;
 
-    for (const exitStation of [info.from_station, info.to_station]) {
-      const key = `${route}_${exitStation}`;
+    for (const exitSide of ['start', 'end'] as EndpointSide[]) {
+      const key = `${route}_${exitSide}`;
       if (!bestCost.has(key)) {
         bestCost.set(key, 0);
-        queue.push({ route, path: [route], exitStation, cost: 0 });
+        queue.push({ route, path: [route], exitSide, cost: 0 });
       }
     }
   }
@@ -379,7 +401,7 @@ function findShortestPath(
     }
     const current = queue.splice(minIdx, 1)[0];
 
-    const currentKey = `${current.route}_${current.exitStation}`;
+    const currentKey = `${current.route}_${current.exitSide}`;
     const currentBest = bestCost.get(currentKey);
     if (currentBest !== undefined && current.cost > currentBest) {
       continue;
@@ -398,33 +420,38 @@ function findShortestPath(
       continue;
     }
 
+    // Get exit coordinate for this route
+    const currentInfo = routeInfo.get(current.route);
+    if (!currentInfo) continue;
+    const exitCoord = getEndpointCoord(currentInfo, current.exitSide);
+
     // Explore neighbors
     const neighbors = graph.getNeighbors(current.route);
     for (const neighbor of neighbors) {
       const neighborInfo = routeInfo.get(neighbor);
       if (!neighborInfo) continue;
 
-      // Only follow connections at our exit station
-      let newExitStation: string;
-      if (neighborInfo.from_station === current.exitStation) {
-        newExitStation = neighborInfo.to_station;
-      } else if (neighborInfo.to_station === current.exitStation) {
-        newExitStation = neighborInfo.from_station;
+      // Determine which endpoint of neighbor connects to our exit coordinate
+      let newExitSide: EndpointSide;
+      if (coordsNear(neighborInfo.startCoord, exitCoord, ENDPOINT_TOLERANCE_METERS)) {
+        newExitSide = 'end'; // enters at start, exits at end
+      } else if (coordsNear(neighborInfo.endCoord, exitCoord, ENDPOINT_TOLERANCE_METERS)) {
+        newExitSide = 'start'; // enters at end, exits at start
       } else {
-        continue; // Neighbor doesn't connect at our exit station
+        continue; // Neighbor doesn't connect at our exit coordinate
       }
 
       const weightedCost = (neighborInfo.length_km ?? 0) * getRouteCostMultiplier(neighborInfo);
       const newCost = current.cost + weightedCost;
 
-      const key = `${neighbor}_${newExitStation}`;
+      const key = `${neighbor}_${newExitSide}`;
       const prevBest = bestCost.get(key);
       if (prevBest === undefined || newCost < prevBest) {
         bestCost.set(key, newCost);
         queue.push({
           route: neighbor,
           path: [...current.path, neighbor],
-          exitStation: newExitStation,
+          exitSide: newExitSide,
           cost: newCost,
         });
       }
@@ -438,7 +465,7 @@ function findShortestPath(
  * BFS that avoids backtracking transitions between consecutive routes.
  * Uses best-distance tracking to allow alternative paths through the same node.
  * Distance-bounded to prevent excessive search.
- * Tracks exit station to prevent teleportation between route endpoints.
+ * Tracks exit endpoint coordinate to prevent teleportation between route endpoints.
  */
 function findShortestPathAvoidingBacktracking(
   graph: RouteGraph,
@@ -452,7 +479,7 @@ function findShortestPathAvoidingBacktracking(
   }
 
   const endSet = new Set(endRoutes);
-  const queue: { route: number; path: number[]; distanceKm: number; exitStation: string }[] = [];
+  const queue: { route: number; path: number[]; distanceKm: number; exitSide: EndpointSide }[] = [];
   const bestDistance = new Map<string, number>();
 
   let shortestPath: number[] | null = null;
@@ -463,9 +490,9 @@ function findShortestPathAvoidingBacktracking(
     const info = routeInfo.get(route);
     if (!info) continue;
 
-    for (const exitStation of [info.from_station, info.to_station]) {
-      const key = `${route}_${exitStation}`;
-      queue.push({ route, path: [route], distanceKm: 0, exitStation });
+    for (const exitSide of ['start', 'end'] as EndpointSide[]) {
+      const key = `${route}_${exitSide}`;
+      queue.push({ route, path: [route], distanceKm: 0, exitSide });
       bestDistance.set(key, 0);
     }
   }
@@ -474,7 +501,7 @@ function findShortestPathAvoidingBacktracking(
     const current = queue.shift()!;
 
     // Skip if we already found a better path to this node+direction
-    const currentKey = `${current.route}_${current.exitStation}`;
+    const currentKey = `${current.route}_${current.exitSide}`;
     const currentBest = bestDistance.get(currentKey);
     if (currentBest !== undefined && current.distanceKm > currentBest) {
       continue;
@@ -494,18 +521,23 @@ function findShortestPathAvoidingBacktracking(
       continue;
     }
 
+    // Get exit coordinate for this route
+    const currentInfo = routeInfo.get(current.route);
+    if (!currentInfo) continue;
+    const exitCoord = getEndpointCoord(currentInfo, current.exitSide);
+
     // Explore neighbors
     const neighbors = graph.getNeighbors(current.route);
     for (const neighbor of neighbors) {
       const neighborInfo = routeInfo.get(neighbor);
       if (!neighborInfo) continue;
 
-      // Only follow connections at our exit station
-      let newExitStation: string;
-      if (neighborInfo.from_station === current.exitStation) {
-        newExitStation = neighborInfo.to_station;
-      } else if (neighborInfo.to_station === current.exitStation) {
-        newExitStation = neighborInfo.from_station;
+      // Determine which endpoint of neighbor connects to our exit coordinate
+      let newExitSide: EndpointSide;
+      if (coordsNear(neighborInfo.startCoord, exitCoord, ENDPOINT_TOLERANCE_METERS)) {
+        newExitSide = 'end';
+      } else if (coordsNear(neighborInfo.endCoord, exitCoord, ENDPOINT_TOLERANCE_METERS)) {
+        newExitSide = 'start';
       } else {
         continue;
       }
@@ -516,8 +548,7 @@ function findShortestPathAvoidingBacktracking(
       }
 
       // Check for backtracking at the transition
-      const currentInfo = routeInfo.get(current.route);
-      if (currentInfo && neighborInfo && isBacktrackingTransition(currentInfo, neighborInfo)) {
+      if (isBacktrackingTransition(currentInfo, neighborInfo)) {
         continue;
       }
 
@@ -525,7 +556,7 @@ function findShortestPathAvoidingBacktracking(
       const newDistanceKm = current.distanceKm + weightedCost;
 
       // Only explore if this is the best path to this node+direction so far
-      const neighborKey = `${neighbor}_${newExitStation}`;
+      const neighborKey = `${neighbor}_${newExitSide}`;
       const bestToNode = bestDistance.get(neighborKey);
       if (bestToNode === undefined || newDistanceKm < bestToNode) {
         bestDistance.set(neighborKey, newDistanceKm);
@@ -533,7 +564,7 @@ function findShortestPathAvoidingBacktracking(
           route: neighbor,
           path: [...current.path, neighbor],
           distanceKm: newDistanceKm,
-          exitStation: newExitStation,
+          exitSide: newExitSide,
         });
       }
     }
