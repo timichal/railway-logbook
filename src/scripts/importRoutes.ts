@@ -98,12 +98,6 @@ async function importRoutes() {
         // Ignore cleanup errors
       }
 
-      // If old schema, drop the temp hsl column (line_class will be set by classifyRoutes)
-      if (hasOldHslColumn) {
-        await query('ALTER TABLE railway_routes DROP COLUMN IF EXISTS hsl');
-        console.log('✓ Dropped temporary hsl column (run classifyRoutes to set line_class)');
-      }
-
       // Verify what was imported
       console.log('\nVerifying imported data...');
 

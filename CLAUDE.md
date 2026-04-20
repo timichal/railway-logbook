@@ -30,8 +30,6 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
-- `npm run addLineClass` - Migration: adds usage/highspeed to railway_parts, adds line_class to railway_routes, drops hsl
-- `npm run classifyRoutes` - Auto-classify all routes' line_class from overlapping railway_parts (run after importMapData to populate usage/highspeed tags)
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate
@@ -275,8 +273,6 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `importMapData.ts` - Database loading script (loads stations and railway_parts, recalculates existing routes)
 - `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
 - `applyVectorTiles.ts` - Applies/updates vector tile functions from SQL file
-- `addLineClass.ts` - Migration: adds usage/highspeed columns to railway_parts, adds line_class column to railway_routes, drops old hsl column
-- `classifyRoutes.ts` - Auto-classifies all routes' line_class using spatial intersection with railway_parts (length-weighted majority: >50% highspeed→'highspeed', >50% main→'main', else 'branch')
 - `markAllRoutesInvalid.ts` - Marks all routes as invalid for rechecking (utility script; **use as example for database migration scripts**)
 - `listStations.ts` - Lists all unique station names from railway_routes (debugging utility)
 - `exportRoutes.ts` - Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
