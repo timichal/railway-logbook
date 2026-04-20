@@ -6,6 +6,7 @@ import { createAdminNote, updateAdminNote, deleteAdminNote } from '@/lib/adminNo
 interface NotesPopupProps {
   noteId?: number | null; // If set, editing existing note; if null, creating new note
   initialText?: string;
+  updatedAt?: string; // ISO timestamp of last update (existing notes only)
   coordinate: [number, number]; // [lng, lat]
   onClose: () => void;
   onSaved: () => void; // Callback after save/delete to refresh map
@@ -20,6 +21,7 @@ interface NotesPopupProps {
 export default function NotesPopup({
   noteId,
   initialText = '',
+  updatedAt,
   coordinate,
   onClose,
   onSaved,
@@ -94,9 +96,16 @@ export default function NotesPopup({
   return (
     <div className="w-64 bg-white">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-800">
-          {noteId ? 'Edit Note' : 'New Note'}
-        </h3>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">
+            {noteId ? 'Edit Note' : 'New Note'}
+          </h3>
+          {noteId && updatedAt && (
+            <div className="text-xs text-gray-500 mt-0.5">
+              Last updated {new Date(updatedAt).toISOString().replace('T', ' ').slice(0, 19)}
+            </div>
+          )}
+        </div>
         <button
           onClick={onClose}
           className="text-gray-500 hover:text-gray-700 text-lg leading-none"

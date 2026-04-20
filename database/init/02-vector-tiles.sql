@@ -313,6 +313,7 @@ BEGIN
         SELECT
             id,
             text,
+            updated_at,
             -- Point geometry doesn't need much simplification
             ST_AsMVTGeom(
                 coordinate_3857,

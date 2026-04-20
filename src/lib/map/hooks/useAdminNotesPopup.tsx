@@ -45,6 +45,7 @@ export function useAdminNotesPopup({
 
       let noteId: number | null = null;
       let noteText = '';
+      let noteUpdatedAt: string | undefined;
 
       if (noteFeatures && noteFeatures.length > 0) {
         noteId = noteFeatures[0].properties?.id;
@@ -53,6 +54,7 @@ export function useAdminNotesPopup({
             const note = await getAdminNote(noteId);
             if (note) {
               noteText = note.text;
+              noteUpdatedAt = note.updated_at;
             }
           } catch (error) {
             console.error('Failed to load note:', error);
@@ -102,6 +104,7 @@ export function useAdminNotesPopup({
         <NotesPopup
           noteId={noteId}
           initialText={noteText}
+          updatedAt={noteUpdatedAt}
           coordinate={coordinate}
           onClose={handleClose}
           onSaved={handleSaved}

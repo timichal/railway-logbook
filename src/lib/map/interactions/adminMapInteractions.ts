@@ -363,6 +363,10 @@ export function setupAdminMapInteractions(
           noteHoverPopup.remove();
         }
 
+        const updatedAtStr = properties.updated_at
+          ? new Date(properties.updated_at).toISOString().replace('T', ' ').slice(0, 19)
+          : '';
+
         noteHoverPopup = new maplibregl.Popup({
           closeButton: false,
           closeOnClick: false,
@@ -374,7 +378,8 @@ export function setupAdminMapInteractions(
             <div style="color: black;">
               <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note</h3>
               <div style="font-size: 0.85rem; color: #374151;">${properties.text || ''}</div>
-              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Right-click to edit</div>
+              ${updatedAtStr ? `<div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ''}
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Right-click to edit</div>
             </div>
           `)
           .addTo(mapInstance);
