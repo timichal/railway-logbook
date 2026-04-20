@@ -33,7 +33,6 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate
-- `npm run migrateLoggedPartsCascade` - Migration: switch `user_logged_parts.track_id` FK to `ON DELETE CASCADE` so deleting a route also removes it from all journeys
 - `npm run listStations` - List all unique station names from railway_routes table (sorted alphabetically)
   - Debugging utility for viewing station data
   - Combines from_station and to_station columns
@@ -275,7 +274,6 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
 - `applyVectorTiles.ts` - Applies/updates vector tile functions from SQL file
 - `markAllRoutesInvalid.ts` - Marks all routes as invalid for rechecking (utility script; **use as example for database migration scripts**)
-- `migrateLoggedPartsCascade.ts` - Migration: switches `user_logged_parts.track_id` FK from `ON DELETE SET NULL` to `ON DELETE CASCADE`
 - `listStations.ts` - Lists all unique station names from railway_routes (debugging utility)
 - `exportRoutes.ts` - Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
 - `importRoutes.ts` - Import railway data from SQL dump (backward-compatible with old hsl column schema)
