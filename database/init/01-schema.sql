@@ -93,7 +93,7 @@ CREATE TABLE user_logged_parts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     journey_id INTEGER NOT NULL REFERENCES user_journeys(id) ON DELETE CASCADE,
-    track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE SET NULL, -- Nullable to preserve journey history
+    track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE CASCADE, -- Deleted when the route is deleted
     partial BOOLEAN DEFAULT FALSE, -- Per-journey partial flag
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

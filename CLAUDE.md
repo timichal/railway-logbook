@@ -33,6 +33,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate
+- `npm run migrateLoggedPartsCascade` - Migration: switch `user_logged_parts.track_id` FK to `ON DELETE CASCADE` so deleting a route also removes it from all journeys
 - `npm run listStations` - List all unique station names from railway_routes table (sorted alphabetically)
   - Debugging utility for viewing station data
   - Combines from_station and to_station columns
@@ -93,7 +94,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - `railway_parts` - Raw railway segments from OSM data (used for admin route creation and pathfinding); includes `usage` (TEXT, from OSM: main/branch/industrial/tourism) and `highspeed` (BOOLEAN) columns for line classification
   - `user_trips` - Trip groupings for journeys (e.g., "Summer Holiday in Austria"); id, user_id, name (required, non-empty), description (optional), created_at, updated_at; authenticated users only
   - `user_journeys` - Named, dated collections of routes; id, user_id, name (required, non-empty), description (optional), date (required), trip_id (nullable FK to user_trips, ON DELETE SET NULL), created_at, updated_at; represents actual trips/journeys taken by users
-  - `user_logged_parts` - Connects journeys to routes with partial flags; id, user_id, journey_id, track_id (nullable to preserve history), partial flag, created_at; UNIQUE constraint prevents duplicate routes within same journey
+  - `user_logged_parts` - Connects journeys to routes with partial flags; id, user_id, journey_id, track_id (FK ON DELETE CASCADE — deleting a route removes it from all journeys), partial flag, created_at; UNIQUE constraint prevents duplicate routes within same journey
   - `user_preferences` - User preferences for country filtering; stores selected_countries as TEXT[] array of ISO country codes (defaults: CZ, SK, AT, PL, DE, LT, LV, EE)
   - `admin_notes` - Admin-only map notes with id, coordinate (PostGIS POINT), text, created_at, updated_at; auto-updates timestamp on edit
 - **Spatial Indexing**: GIST indexes for efficient geographic queries
@@ -274,6 +275,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `verifyRouteData.ts` - Recalculates all railway routes and marks invalid routes (verification only, doesn't reload map data)
 - `applyVectorTiles.ts` - Applies/updates vector tile functions from SQL file
 - `markAllRoutesInvalid.ts` - Marks all routes as invalid for rechecking (utility script; **use as example for database migration scripts**)
+- `migrateLoggedPartsCascade.ts` - Migration: switches `user_logged_parts.track_id` FK from `ON DELETE SET NULL` to `ON DELETE CASCADE`
 - `listStations.ts` - Lists all unique station names from railway_routes (debugging utility)
 - `exportRoutes.ts` - Export railway_routes, user_journeys, user_logged_parts (user_id=1), and admin_notes to SQL dump
 - `importRoutes.ts` - Import railway data from SQL dump (backward-compatible with old hsl column schema)
@@ -308,6 +310,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `railway_data_YYYY-MM-DD.sql` - Exported railway_routes, user_trips, user_journeys, user_logged_parts (user_id=1), and admin_notes (from `npm run exportRouteData`)
 
 ## Development Workflow
+
+### Database Migrations
+- **Whenever you modify the database schema or need to transform existing data, create a TypeScript migration script in `src/scripts/`**
+- Use `src/scripts/markAllRoutesInvalid.ts` as the reference example for migration scripts (pattern: import pool from `@/lib/db`, run SQL, log progress, exit cleanly)
+- Register the script in `package.json` under `scripts` so it can be run via `npm run <name>`
+- Document the new script in the "Database Operations" section and the "Scripts" section of CLAUDE.md
 
 ### Type Checking
 - **ALWAYS run `npx tsc --noEmit` after completing a batch of related code changes** to verify type correctness

@@ -8,6 +8,22 @@ import type { TripWithStats } from '@/lib/tripActions';
 import type { Journey, RailwayRoute, SelectedRoute } from '@/lib/types';
 import { getUntimezonedDateStr } from '@/lib/getUntimezonedDateStr';
 
+function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
+  return {
+    track_id: route.track_id,
+    from_station: route.from_station,
+    to_station: route.to_station,
+    track_number: route.track_number ?? null,
+    description: route.description,
+    usage_type: 0 as RailwayRoute['usage_type'],
+    frequency: [],
+    link: route.link ?? null,
+    geometry: '',
+    length_km: route.length_km,
+    partial: false,
+  };
+}
+
 interface JourneyWithStats extends Journey {
   route_count: number;
   total_distance: string;
@@ -34,7 +50,6 @@ export default function JourneyLogTab({
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [viewedJourneyId, setViewedJourneyId] = useState<number | null>(null);
   const [viewedJourneyRoutes, setViewedJourneyRoutes] = useState<RailwayRoute[]>([]);
-  const [originalJourneyRoutes, setOriginalJourneyRoutes] = useState<RailwayRoute[]>([]);
 
   // Edit state
   const [editingJourneyId, setEditingJourneyId] = useState<number | null>(null);
@@ -42,7 +57,9 @@ export default function JourneyLogTab({
   const [editDate, setEditDate] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editTripId, setEditTripId] = useState<number | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+
+  // Baseline metadata used to detect "did this field actually change" on blur
+  const [metadataBaseline, setMetadataBaseline] = useState<{ name: string; date: string; description: string } | null>(null);
 
   // Trips for assignment dropdown
   const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
@@ -52,9 +69,9 @@ export default function JourneyLogTab({
   editStateRef.current = { editingJourneyId, viewedJourneyRoutes };
 
   // Mutable handler ref updated every render so it always closes over latest state.
-  // Only updates local state — DB writes happen on Save Changes.
+  // Persists route toggle immediately (no Save button).
   const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | undefined>(undefined);
-  handleMapRouteClickRef.current = (route: SelectedRoute) => {
+  handleMapRouteClickRef.current = async (route: SelectedRoute) => {
     const { editingJourneyId, viewedJourneyRoutes } = editStateRef.current;
     if (!editingJourneyId) return;
 
@@ -62,28 +79,32 @@ export default function JourneyLogTab({
     const routeId = String(route.track_id);
     const isInJourney = viewedJourneyRoutes.some(r => String(r.track_id) === routeId);
 
-    let newRoutes: RailwayRoute[];
-    if (isInJourney) {
-      newRoutes = viewedJourneyRoutes.filter(r => String(r.track_id) !== routeId);
-    } else {
-      const newRoute: RailwayRoute = {
-        track_id: route.track_id,
-        from_station: route.from_station,
-        to_station: route.to_station,
-        track_number: route.track_number ?? null,
-        description: route.description,
-        usage_type: 0 as RailwayRoute['usage_type'],
-        frequency: [],
-        link: route.link ?? null,
-        geometry: '',
-        length_km: route.length_km,
-        partial: false,
-      };
-      newRoutes = [...viewedJourneyRoutes, newRoute];
+    try {
+      if (isInJourney) {
+        const result = await removeRouteFromJourney(editingJourneyId, parseInt(route.track_id));
+        if (result.error) {
+          showError(result.error);
+          return;
+        }
+        const newRoutes = viewedJourneyRoutes.filter(r => String(r.track_id) !== routeId);
+        setViewedJourneyRoutes(newRoutes);
+        onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+      } else {
+        const result = await addRoutesToJourney(editingJourneyId, [parseInt(route.track_id)], [false]);
+        if (result.error) {
+          showError(result.error);
+          return;
+        }
+        const newRoutes = [...viewedJourneyRoutes, buildRouteFromSelected(route)];
+        setViewedJourneyRoutes(newRoutes);
+        onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+      }
+      loadJourneys();
+      onJourneyChanged?.();
+    } catch (error) {
+      console.error('Error toggling route in journey:', error);
+      showError('Failed to update journey');
     }
-
-    setViewedJourneyRoutes(newRoutes);
-    onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
   };
 
   // Stable wrapper passed to VectorRailwayMap once per edit session
@@ -93,7 +114,7 @@ export default function JourneyLogTab({
 
   // Load journeys on mount
   useEffect(() => {
-    loadJourneys();
+    loadJourneys(true);
   }, []);
 
   // Clear highlights and edit mode when component unmounts (tab switched)
@@ -104,8 +125,8 @@ export default function JourneyLogTab({
     };
   }, [onHighlightRoutes, onJourneyEditEnd]);
 
-  const loadJourneys = async () => {
-    setIsLoading(true);
+  const loadJourneys = async (showSpinner = false) => {
+    if (showSpinner) setIsLoading(true);
     try {
       const result = await getAllJourneys();
       if (result.error) {
@@ -128,8 +149,8 @@ export default function JourneyLogTab({
     if (viewedJourneyId === journeyId) {
       setViewedJourneyId(null);
       setViewedJourneyRoutes([]);
-      setOriginalJourneyRoutes([]);
       setEditingJourneyId(null);
+      setMetadataBaseline(null);
       onHighlightRoutes?.([]);
       onJourneyEditEnd?.();
       return;
@@ -144,7 +165,6 @@ export default function JourneyLogTab({
 
       setViewedJourneyId(journeyId);
       setViewedJourneyRoutes(result.routes || []);
-      setOriginalJourneyRoutes(result.routes || []);
 
       // Set up edit mode with current journey data
       if (result.journey) {
@@ -154,6 +174,11 @@ export default function JourneyLogTab({
         setEditDate(dateStr);
         setEditDescription(result.journey.description || '');
         setEditTripId(result.journey.trip_id);
+        setMetadataBaseline({
+          name: result.journey.name,
+          date: dateStr,
+          description: result.journey.description || '',
+        });
 
         // Load available trips for the dropdown
         const tripsResult = await getAllTrips();
@@ -176,97 +201,86 @@ export default function JourneyLogTab({
     }
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingJourneyId) return;
+  const handleMetadataBlur = async () => {
+    if (!editingJourneyId || !metadataBaseline) return;
 
-    if (!editName.trim() || !editDate) {
-      showError('Journey name and date are required');
+    const trimmedName = editName.trim();
+    const trimmedDescription = editDescription.trim();
+
+    // No-op if nothing meaningful changed
+    if (
+      trimmedName === metadataBaseline.name &&
+      editDate === metadataBaseline.date &&
+      trimmedDescription === metadataBaseline.description
+    ) {
       return;
     }
 
-    setIsSaving(true);
+    if (!trimmedName || !editDate) {
+      showError('Journey name and date are required');
+      // Restore baseline so fields don't stay invalid
+      setEditName(metadataBaseline.name);
+      setEditDate(metadataBaseline.date);
+      setEditDescription(metadataBaseline.description);
+      return;
+    }
+
     try {
-      // Save journey metadata
       const result = await updateJourney(
         editingJourneyId,
-        editName.trim(),
-        editDescription.trim() || null,
+        trimmedName,
+        trimmedDescription || null,
         editDate
       );
       if (result.error) {
         showError(result.error);
         return;
       }
-
-      // Apply pending route changes (diff against original)
-      const originalIds = new Set(originalJourneyRoutes.map(r => String(r.track_id)));
-      const pendingIds = new Set(viewedJourneyRoutes.map(r => String(r.track_id)));
-
-      const toAdd = viewedJourneyRoutes.filter(r => !originalIds.has(String(r.track_id)));
-      const toRemove = originalJourneyRoutes.filter(r => !pendingIds.has(String(r.track_id)));
-
-      if (toAdd.length > 0) {
-        const addResult = await addRoutesToJourney(
-          editingJourneyId,
-          toAdd.map(r => parseInt(r.track_id)),
-          toAdd.map(r => r.partial ?? false)
-        );
-        if (addResult.error) {
-          showError(addResult.error);
-          return;
-        }
-      }
-
-      for (const route of toRemove) {
-        const removeResult = await removeRouteFromJourney(editingJourneyId, parseInt(route.track_id));
-        if (removeResult.error) {
-          showError(removeResult.error);
-          return;
-        }
-      }
-
-      // Update partial flags for routes that existed before and had their partial changed
-      for (const route of viewedJourneyRoutes) {
-        const original = originalJourneyRoutes.find(r => String(r.track_id) === String(route.track_id));
-        if (original && (original.partial ?? false) !== (route.partial ?? false)) {
-          const partialResult = await updateLoggedPartPartial(
-            editingJourneyId,
-            parseInt(route.track_id),
-            route.partial ?? false
-          );
-          if (partialResult.error) {
-            showError(partialResult.error);
-            return;
-          }
-        }
-      }
-
-      // Commit: pending routes are now the new original
-      setOriginalJourneyRoutes(viewedJourneyRoutes);
-      showSuccess('Journey updated successfully');
+      setMetadataBaseline({ name: trimmedName, date: editDate, description: trimmedDescription });
       loadJourneys();
       onJourneyChanged?.();
     } catch (error) {
-      console.error('Error updating journey:', error);
+      console.error('Error updating journey metadata:', error);
       showError('Failed to update journey');
-    } finally {
-      setIsSaving(false);
     }
   };
 
-  const handleCancelEdit = () => {
-    // Restore original metadata from the journey list
-    const journey = journeys.find(j => j.id === editingJourneyId);
-    if (journey) {
-      setEditName(journey.name);
-      const dateStr = getUntimezonedDateStr(journey.date);
-      setEditDate(dateStr);
-      setEditDescription(journey.description || '');
-      setEditTripId(journey.trip_id);
+  const handleTogglePartial = async (trackId: string, nextPartial: boolean) => {
+    if (!editingJourneyId) return;
+    try {
+      const result = await updateLoggedPartPartial(editingJourneyId, parseInt(trackId), nextPartial);
+      if (result.error) {
+        showError(result.error);
+        return;
+      }
+      setViewedJourneyRoutes(prev =>
+        prev.map(r => String(r.track_id) === String(trackId) ? { ...r, partial: nextPartial } : r)
+      );
+      loadJourneys();
+      onJourneyChanged?.();
+    } catch (error) {
+      console.error('Error updating partial flag:', error);
+      showError('Failed to update partial flag');
     }
-    // Revert pending route changes
-    setViewedJourneyRoutes(originalJourneyRoutes);
-    onHighlightRoutes?.(originalJourneyRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+  };
+
+  const handleRemoveRoute = async (trackId: string) => {
+    if (!editingJourneyId) return;
+    try {
+      const result = await removeRouteFromJourney(editingJourneyId, parseInt(trackId));
+      if (result.error) {
+        showError(result.error);
+        return;
+      }
+      const newRoutes = viewedJourneyRoutes.filter(r => String(r.track_id) !== String(trackId));
+      setViewedJourneyRoutes(newRoutes);
+      onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+      loadJourneys();
+      onJourneyChanged?.();
+    } catch (error) {
+      console.error('Error removing route from journey:', error);
+      showError('Failed to remove route');
+    }
   };
 
   const handleTripChange = async (journeyId: number, newTripId: number | null) => {
@@ -459,8 +473,8 @@ export default function JourneyLogTab({
                           type="text"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
+                          onBlur={handleMetadataBlur}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          disabled={isSaving}
                         />
                       </div>
                       <div>
@@ -469,8 +483,8 @@ export default function JourneyLogTab({
                           type="date"
                           value={editDate}
                           onChange={(e) => setEditDate(e.target.value)}
+                          onBlur={handleMetadataBlur}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          disabled={isSaving}
                         />
                       </div>
                       <div>
@@ -478,9 +492,9 @@ export default function JourneyLogTab({
                         <textarea
                           value={editDescription}
                           onChange={(e) => setEditDescription(e.target.value)}
+                          onBlur={handleMetadataBlur}
                           rows={2}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                          disabled={isSaving}
                         />
                       </div>
                       <div>
@@ -521,21 +535,30 @@ export default function JourneyLogTab({
                                 {route.track_number && `${route.track_number} `}
                                 {route.from_station} ⟷ {route.to_station}
                               </span>
-                              <label className="flex items-center gap-1 flex-shrink-0 cursor-pointer select-none">
-                                <input
-                                  type="checkbox"
-                                  checked={route.partial ?? false}
-                                  onChange={() => setViewedJourneyRoutes(prev =>
-                                    prev.map(r => String(r.track_id) === String(route.track_id)
-                                      ? { ...r, partial: !(r.partial ?? false) }
-                                      : r
-                                    )
-                                  )}
-                                  disabled={isSaving}
-                                  className="w-3 h-3 cursor-pointer"
-                                />
-                                <span className="text-gray-500">partial</span>
-                              </label>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <label className="flex items-center gap-1 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={route.partial ?? false}
+                                    onChange={() => handleTogglePartial(route.track_id, !(route.partial ?? false))}
+                                    className="w-3 h-3 cursor-pointer"
+                                  />
+                                  <span className="text-gray-500">partial</span>
+                                </label>
+                                <button
+                                  onClick={() => handleRemoveRoute(route.track_id)}
+                                  title="Remove route from journey"
+                                  className="w-6 h-6 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                    <path d="M10 11v6" />
+                                    <path d="M14 11v6" />
+                                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                             <div className="text-gray-500 mt-0.5">
                               {Number(route.length_km)?.toFixed(1)} km
@@ -546,28 +569,6 @@ export default function JourneyLogTab({
                     )}
                   </div>
 
-                  {/* Save/Cancel */}
-                  {editingJourneyId === journey.id && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleSaveEdit}
-                        disabled={isSaving || !editName.trim() || !editDate}
-                        className={`flex-1 px-3 py-1.5 rounded text-xs font-medium ${isSaving || !editName.trim() || !editDate
-                          ? 'bg-gray-400 text-white cursor-not-allowed'
-                          : 'bg-green-600 text-white hover:bg-green-700'
-                          }`}
-                      >
-                        {isSaving ? 'Saving...' : 'Save Changes'}
-                      </button>
-                      <button
-                        onClick={handleCancelEdit}
-                        disabled={isSaving}
-                        className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-xs font-medium hover:bg-gray-400"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

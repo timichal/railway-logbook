@@ -11,6 +11,8 @@ export function useRouteHighlighting(
   map: React.MutableRefObject<maplibregl.Map | null>,
   highlightedRoutes: number[],
   selectedRoutes: SelectedRoute[],
+  /** Bumped when the railway_routes source/layer is recreated so highlights re-apply. */
+  tileRefreshKey?: number,
 ) {
   // Journey planner highlights (gold)
   useEffect(() => {
@@ -40,7 +42,7 @@ export function useRouteHighlighting(
         map.current.removeLayer('highlighted_routes');
       }
     }
-  }, [map, highlightedRoutes]);
+  }, [map, highlightedRoutes, tileRefreshKey]);
 
   // Selected routes highlights (green/orange/red)
   useEffect(() => {
@@ -72,5 +74,5 @@ export function useRouteHighlighting(
         map.current.removeLayer('selected_routes_highlight');
       }
     }
-  }, [map, selectedRoutes]);
+  }, [map, selectedRoutes, tileRefreshKey]);
 }

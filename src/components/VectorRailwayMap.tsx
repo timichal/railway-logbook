@@ -170,7 +170,7 @@ export default function VectorRailwayMap({
   const routeEditor = useRouteEditor(dataAccess, map, selectedCountries);
 
   // Tile refresh hook (for logged-in user route logging)
-  const { refreshTiles } = useMapTileRefresh({
+  const { refreshTiles, cacheBuster } = useMapTileRefresh({
     map, mapLoaded,
     userId,
     selectedCountries,
@@ -178,8 +178,8 @@ export default function VectorRailwayMap({
     scenicLayerConfig,
   });
 
-  // Route highlighting hooks
-  useRouteHighlighting(map, highlightedRoutes, selectedRoutes);
+  // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)
+  useRouteHighlighting(map, highlightedRoutes, selectedRoutes, cacheBuster);
 
   // Layer filter hooks
   useLayerFilters(map, routeEditor.showSpecialLines, showScenicOutline);
