@@ -108,7 +108,8 @@ export function createOSMBackgroundLayer(): maplibregl.RasterLayerSpecification 
     maxzoom: 19, // has to be higher than the map max zoom
     paint: {
       'raster-fade-duration': 0,
-      'raster-opacity': 1,
+      'raster-saturation': -0.2,
+      'raster-opacity': 0.8,
     },
   };
 }
