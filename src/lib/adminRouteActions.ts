@@ -308,53 +308,38 @@ export async function saveRailwayRoute(
     const savedTrackId = result.rows[0].track_id;
     const lengthKm = result.rows[0].length_km;
 
+    const classifyLineClassSQL = `
+      WITH part_lengths AS (
+        SELECT
+          rp.highspeed,
+          rp.usage,
+          ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) AS len
+        FROM railway_routes rr
+        JOIN railway_parts rp ON ST_Intersects(rr.geometry, rp.geometry)
+        WHERE rr.track_id = $1 AND rp.geometry IS NOT NULL
+      ),
+      classification AS (
+        SELECT
+          CASE
+            WHEN SUM(CASE WHEN highspeed = TRUE THEN len ELSE 0 END) > SUM(len) * 0.5 THEN 'highspeed'
+            WHEN SUM(CASE WHEN usage = 'main' THEN len ELSE 0 END) > SUM(len) * 0.5 THEN 'main'
+            ELSE 'branch'
+          END AS line_class
+        FROM part_lengths
+        HAVING SUM(len) > 0
+      )
+      UPDATE railway_routes
+      SET line_class = COALESCE((SELECT line_class FROM classification), 'branch')
+      WHERE track_id = $1
+    `;
+
     if (trackId) {
       console.log('Successfully updated railway route geometry:', trackId);
-
-      // Re-classify line_class after geometry change
-      await client.query(`
-        UPDATE railway_routes rr
-        SET line_class = COALESCE((
-          SELECT
-            CASE
-              WHEN SUM(CASE WHEN rp.highspeed = TRUE THEN ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) ELSE 0 END) >
-                   SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) * 0.5
-              THEN 'highspeed'
-              WHEN SUM(CASE WHEN rp.usage = 'main' THEN ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) ELSE 0 END) >
-                   SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) * 0.5
-              THEN 'main'
-              ELSE 'branch'
-            END
-          FROM railway_parts rp
-          WHERE ST_Intersects(rr.geometry, rp.geometry) AND rp.geometry IS NOT NULL
-          HAVING SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) > 0
-        ), 'branch')
-        WHERE rr.track_id = $1
-      `, [trackId]);
+      await client.query(classifyLineClassSQL, [trackId]);
       console.log('Re-classified line_class for route:', trackId);
     } else {
       console.log('Successfully saved railway route with auto-generated track_id:', savedTrackId);
-
-      // Auto-classify line_class based on overlapping railway_parts
-      await client.query(`
-        UPDATE railway_routes rr
-        SET line_class = COALESCE((
-          SELECT
-            CASE
-              WHEN SUM(CASE WHEN rp.highspeed = TRUE THEN ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) ELSE 0 END) >
-                   SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) * 0.5
-              THEN 'highspeed'
-              WHEN SUM(CASE WHEN rp.usage = 'main' THEN ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography)) ELSE 0 END) >
-                   SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) * 0.5
-              THEN 'main'
-              ELSE 'branch'
-            END
-          FROM railway_parts rp
-          WHERE ST_Intersects(rr.geometry, rp.geometry) AND rp.geometry IS NOT NULL
-          HAVING SUM(ST_Length(ST_Intersection(rr.geometry::geography, rp.geometry::geography))) > 0
-        ), 'branch')
-        WHERE rr.track_id = $1
-      `, [savedTrackId]);
+      await client.query(classifyLineClassSQL, [savedTrackId]);
       console.log('Auto-classified line_class for route:', savedTrackId);
     }
     console.log('Final geometry has', sortedCoordinates.length, 'coordinate points');
