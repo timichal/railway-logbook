@@ -98,7 +98,6 @@ export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSigna
         <div className="flex flex-wrap gap-1.5">
           {filterButton('all', 'All')}
           {noteTypeOptions.map((opt) => filterButton(opt.id, opt.label, opt.color))}
-          {filterButton('none', 'No type', '#fbbf24')}
         </div>
       </div>
 
@@ -119,7 +118,7 @@ export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSigna
                   <span
                     className="inline-block w-3 h-3 rounded-full border border-gray-700 mt-1 flex-shrink-0"
                     style={{ backgroundColor: getNoteTypeColor(note.note_type) }}
-                    title={note.note_type ?? 'No type'}
+                    title={note.note_type}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-900 whitespace-pre-wrap break-words">

@@ -9,7 +9,7 @@ type AdminNoteRow = {
   id: number;
   coordinate: { coordinates: [number, number] };
   text: string;
-  note_type: NoteType | null;
+  note_type: NoteType;
   created_at: Date;
   updated_at: Date;
 };
