@@ -36,6 +36,9 @@ interface VectorAdminMapProps {
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
+  focusCoordinate?: { coordinate: [number, number]; nonce: number } | null;
+  notesRefreshTrigger?: number;
+  onNotesChanged?: () => void;
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
 }
@@ -50,6 +53,9 @@ export default function VectorAdminMap({
   refreshTrigger,
   isEditingGeometry,
   focusGeometry,
+  focusCoordinate,
+  notesRefreshTrigger,
+  onNotesChanged,
   showSuccess,
   showError,
 }: VectorAdminMapProps) {
@@ -111,6 +117,8 @@ export default function VectorAdminMap({
     showNotesLayer: layerVisibility.showNotesLayer,
     showSuccess,
     showError,
+    externalRefreshSignal: notesRefreshTrigger,
+    onNotesChanged,
   });
 
   // Fetch route endpoints
@@ -217,6 +225,14 @@ export default function VectorAdminMap({
 
     m.triggerRepaint();
   }, [refreshTrigger, mapLoaded, layerVisibility.showRoutesLayer, selectedRouteId, map]);
+
+  // Focus on a single coordinate (e.g. admin note clicked in Notes tab)
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !focusCoordinate) return;
+    const m = map.current;
+    const targetZoom = Math.max(m.getZoom(), 13);
+    m.flyTo({ center: focusCoordinate.coordinate, zoom: targetZoom, duration: 800 });
+  }, [focusCoordinate, mapLoaded, map]);
 
   // Focus on route geometry
   useEffect(() => {

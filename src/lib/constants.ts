@@ -70,6 +70,26 @@ export const getFrequencyLabel = (frequency: string): string => {
 };
 
 /**
+ * Admin note types (optional categorization).
+ * Legacy notes stored before this feature have NULL `note_type`.
+ */
+export const noteTypeOptions = [
+  { id: 'Usage', label: 'Usage', color: '#2563eb' },   // blue
+  { id: 'Works', label: 'Works', color: '#ea580c' },   // orange
+  { id: 'Todo',  label: 'Todo',  color: '#9333ea' },   // purple
+] as const;
+
+export type NoteType = typeof noteTypeOptions[number]['id'];
+
+export const NO_TYPE_COLOR = '#fbbf24'; // amber (legacy / untyped notes)
+
+export const getNoteTypeColor = (noteType: NoteType | null | undefined): string => {
+  if (!noteType) return NO_TYPE_COLOR;
+  const option = noteTypeOptions.find((opt) => opt.id === noteType);
+  return option ? option.color : NO_TYPE_COLOR;
+};
+
+/**
  * Supported countries for filtering
  */
 export const SUPPORTED_COUNTRIES = [

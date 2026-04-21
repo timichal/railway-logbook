@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import AdminRoutesTab from './AdminRoutesTab';
 import AdminCreateRouteTab from './AdminCreateRouteTab';
+import AdminNotesTab from './AdminNotesTab';
 import type { RailwayPart } from '@/lib/types';
 import { useToast } from '@/lib/toast';
 
@@ -30,14 +31,17 @@ interface AdminSidebarProps {
   onRouteFocus?: (geometry: string) => void;
   sidebarWidth?: number | null;
   onRefreshMap?: () => void;
+  onFocusNote?: (coordinate: [number, number]) => void;
+  onNoteChanged?: () => void;
+  notesRefreshSignal?: number;
   showError?: (message: string) => void;
   showSuccess?: (message: string) => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedCoordinate, coordinateClickTrigger, onPreviewRoute, onCreateFormCoordinatesChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth, onRefreshMap, showError: showErrorProp, showSuccess: showSuccessProp }: AdminSidebarProps) {
+export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedCoordinate, coordinateClickTrigger, onPreviewRoute, onCreateFormCoordinatesChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth, onRefreshMap, onFocusNote, onNoteChanged, notesRefreshSignal, showError: showErrorProp, showSuccess: showSuccessProp }: AdminSidebarProps) {
   const { showError: showErrorToast } = useToast();
   const showError = showErrorProp || showErrorToast;
-  const [activeTab, setActiveTab] = useState<'routes' | 'create'>('routes');
+  const [activeTab, setActiveTab] = useState<'routes' | 'create' | 'notes'>('routes');
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
   const [editingRouteInfo, setEditingRouteInfo] = useState<{ from_station: string, to_station: string, track_number: string } | null>(null);
 
@@ -213,6 +217,20 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
         >
           Create New
         </button>
+        <button
+          onClick={() => {
+            setActiveTab('notes');
+            if (onRouteSelect) onRouteSelect('');
+            setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+          }}
+          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+            activeTab === 'notes'
+              ? 'border-blue-500 text-blue-600 bg-blue-50'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Notes
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -256,6 +274,14 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
             onRefreshMap={onRefreshMap}
+          />
+        )}
+
+        {activeTab === 'notes' && (
+          <AdminNotesTab
+            onFocusNote={onFocusNote}
+            onNoteChanged={onNoteChanged}
+            refreshSignal={notesRefreshSignal}
           />
         )}
       </div>

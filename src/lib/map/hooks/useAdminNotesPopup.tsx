@@ -11,6 +11,8 @@ interface UseAdminNotesPopupOptions {
   showNotesLayer: boolean;
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
+  externalRefreshSignal?: number; // Parent bumps this to force notes tile refresh
+  onNotesChanged?: () => void; // Called after any popup-driven save/delete
 }
 
 /**
@@ -25,9 +27,17 @@ export function useAdminNotesPopup({
   showNotesLayer,
   showSuccess,
   showError,
+  externalRefreshSignal,
+  onNotesChanged,
 }: UseAdminNotesPopupOptions) {
   const [notesCacheBuster, setNotesCacheBuster] = useState(Date.now());
   const notesPopupRef = useRef<maplibregl.Popup | null>(null);
+
+  // Bump cache buster when parent forces a refresh (e.g. after tab-driven edits)
+  useEffect(() => {
+    if (externalRefreshSignal === undefined || externalRefreshSignal === 0) return;
+    setNotesCacheBuster(Date.now());
+  }, [externalRefreshSignal]);
 
   // Right-click handler for notes
   useEffect(() => {
@@ -46,6 +56,7 @@ export function useAdminNotesPopup({
       let noteId: number | null = null;
       let noteText = '';
       let noteUpdatedAt: string | undefined;
+      let noteTypeValue: 'Usage' | 'Works' | 'Todo' | null = null;
 
       if (noteFeatures && noteFeatures.length > 0) {
         noteId = noteFeatures[0].properties?.id;
@@ -55,6 +66,7 @@ export function useAdminNotesPopup({
             if (note) {
               noteText = note.text;
               noteUpdatedAt = note.updated_at;
+              noteTypeValue = note.note_type;
             }
           } catch (error) {
             console.error('Failed to load note:', error);
@@ -98,12 +110,14 @@ export function useAdminNotesPopup({
 
       const handleSaved = () => {
         setNotesCacheBuster(Date.now());
+        onNotesChanged?.();
       };
 
       root.render(
         <NotesPopup
           noteId={noteId}
           initialText={noteText}
+          initialNoteType={noteTypeValue}
           updatedAt={noteUpdatedAt}
           coordinate={coordinate}
           onClose={handleClose}
@@ -145,7 +159,7 @@ export function useAdminNotesPopup({
         notesPopupRef.current = null;
       }
     };
-  }, [mapLoaded, map, showSuccess, showError]);
+  }, [mapLoaded, map, showSuccess, showError, onNotesChanged]);
 
   // Refresh notes layer when cache buster changes
   useEffect(() => {

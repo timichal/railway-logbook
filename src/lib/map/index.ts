@@ -297,6 +297,16 @@ export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorS
 }
 
 export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
+  // Color by note_type; untyped (legacy) notes keep the amber default
+  const colorByType: maplibregl.ExpressionSpecification = [
+    'match',
+    ['get', 'note_type'],
+    'Usage', '#2563eb',  // blue
+    'Works', '#ea580c',  // orange
+    'Todo',  '#9333ea',  // purple
+    COLORS.adminNotes.fill, // fallback for NULL / unknown
+  ];
+
   return {
     id: 'admin_notes',
     type: 'circle',
@@ -314,7 +324,7 @@ export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
         'case',
         ['boolean', ['feature-state', 'hover'], false],
         COLORS.adminNotes.hover,
-        COLORS.adminNotes.fill
+        colorByType,
       ],
       'circle-stroke-color': COLORS.adminNotes.stroke,
       'circle-stroke-width': 2,

@@ -51,6 +51,8 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
   const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
+  const [focusCoordinate, setFocusCoordinate] = useState<{ coordinate: [number, number]; nonce: number } | null>(null);
+  const [notesRefreshTrigger, setNotesRefreshTrigger] = useState<number>(0);
 
   // Resizable sidebar hook
   const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } = useResizableSidebar({ isMobile });
@@ -189,6 +191,14 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setFocusGeometry(geometry);
   };
 
+  const handleFocusNote = useCallback((coordinate: [number, number]) => {
+    setFocusCoordinate({ coordinate, nonce: Date.now() });
+  }, []);
+
+  const handleNoteChanged = useCallback(() => {
+    setNotesRefreshTrigger((prev) => prev + 1);
+  }, []);
+
   async function handleLogout() {
     await logout();
   }
@@ -210,6 +220,9 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
       onEditingGeometryChange={handleEditingGeometryChange}
       onRouteFocus={handleRouteFocus}
       sidebarWidth={isMobile ? null : sidebarWidth}
+      onFocusNote={handleFocusNote}
+      onNoteChanged={handleNoteChanged}
+      notesRefreshSignal={notesRefreshTrigger}
       showError={showError}
       showSuccess={showSuccess}
     />
@@ -280,6 +293,9 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
             refreshTrigger={refreshTrigger}
             isEditingGeometry={!!editingGeometryForTrackId}
             focusGeometry={focusGeometry}
+            focusCoordinate={focusCoordinate}
+            notesRefreshTrigger={notesRefreshTrigger}
+            onNotesChanged={handleNoteChanged}
             showSuccess={showSuccess}
             showError={showError}
           />

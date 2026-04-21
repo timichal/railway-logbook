@@ -30,6 +30,7 @@ This is a unified OSM (OpenStreetMap) railway data processing and visualization 
 - `docker-compose up -d db` - Start PostgreSQL database with PostGIS
 - `npm run verifyRouteData` - Recalculate all railway routes and mark invalid routes (verifies route validity without reloading map data)
 - `npm run applyVectorTiles` - Apply/update vector tile functions from `database/init/02-vector-tiles.sql` (useful after modifying tile queries)
+- `npm run addNoteTypeColumn` - Add nullable `note_type` column to `admin_notes` (values: Usage / Works / Todo; existing notes remain NULL)
 - `npm run markAllRoutesInvalid` - Mark all routes as invalid for rechecking (sets is_valid=false and error_message='Route recheck')
   - Useful for forcing recalculation of all routes
   - Run `verifyRouteData` after to recalculate

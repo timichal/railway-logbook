@@ -173,6 +173,7 @@ export type AdminNote = {
   id: number
   coordinate: [number, number] // [longitude, latitude]
   text: string
+  note_type: 'Usage' | 'Works' | 'Todo' | null // Nullable: legacy notes have no type
   created_at: string
   updated_at: string
 }

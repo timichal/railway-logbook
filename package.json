@@ -15,6 +15,7 @@
     "importRouteData": "tsx src/scripts/importRoutes.ts",
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
+    "addNoteTypeColumn": "tsx src/scripts/addNoteTypeColumn.ts",
     "listStations": "tsx src/scripts/listStations.ts",
     "downloadMapData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.geojson ./data/",
     "downloadRouteData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.sql ./data/",

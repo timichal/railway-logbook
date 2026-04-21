@@ -111,6 +111,7 @@ CREATE TABLE admin_notes (
     id SERIAL PRIMARY KEY,
     coordinate GEOMETRY(POINT, 4326) NOT NULL, -- PostGIS point (lon, lat)
     text TEXT NOT NULL, -- Note content
+    note_type VARCHAR(20) CHECK (note_type IN ('Usage', 'Works', 'Todo')), -- Optional categorization (nullable for legacy)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

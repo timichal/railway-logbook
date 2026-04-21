@@ -292,6 +292,10 @@ BEGIN
 
         CREATE INDEX IF NOT EXISTS idx_admin_notes_coordinate_3857
         ON admin_notes USING GIST (coordinate_3857);
+
+        -- Ensure note_type column exists for tile function reference
+        ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS note_type VARCHAR(20)
+        CHECK (note_type IN ('Usage', 'Works', 'Todo'));
     END IF;
 END $$;
 
@@ -313,6 +317,7 @@ BEGIN
         SELECT
             id,
             text,
+            note_type,
             updated_at,
             -- Point geometry doesn't need much simplification
             ST_AsMVTGeom(

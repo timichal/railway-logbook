@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createAdminNote, updateAdminNote, deleteAdminNote } from '@/lib/adminNotesActions';
+import { noteTypeOptions, type NoteType } from '@/lib/constants';
 
 interface NotesPopupProps {
   noteId?: number | null; // If set, editing existing note; if null, creating new note
   initialText?: string;
+  initialNoteType?: NoteType | null;
   updatedAt?: string; // ISO timestamp of last update (existing notes only)
   coordinate: [number, number]; // [lng, lat]
   onClose: () => void;
@@ -21,6 +23,7 @@ interface NotesPopupProps {
 export default function NotesPopup({
   noteId,
   initialText = '',
+  initialNoteType = null,
   updatedAt,
   coordinate,
   onClose,
@@ -29,30 +32,36 @@ export default function NotesPopup({
   showError
 }: NotesPopupProps) {
   const [text, setText] = useState(initialText);
+  const [noteType, setNoteType] = useState<NoteType | ''>(initialNoteType ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-focus textarea on mount
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
+
+  // Type is required for new notes; for existing notes, allow clearing is not exposed in UI
+  // but we still require selecting a type before saving edits (once one is set, picker can't go back to empty).
+  const canSave = !!text.trim() && !!noteType;
 
   const handleSave = async () => {
     if (!text.trim()) {
       showError('Note text cannot be empty');
       return;
     }
+    if (!noteType) {
+      showError('Please select a note type');
+      return;
+    }
 
     setIsSaving(true);
     try {
       if (noteId) {
-        // Update existing note
-        await updateAdminNote(noteId, text.trim());
+        await updateAdminNote(noteId, text.trim(), noteType);
         showSuccess('Note updated successfully');
       } else {
-        // Create new note
-        await createAdminNote(coordinate, text.trim());
+        await createAdminNote(coordinate, text.trim(), noteType);
         showSuccess('Note created successfully');
       }
       onSaved();
@@ -81,12 +90,10 @@ export default function NotesPopup({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Ctrl+Enter or Cmd+Enter to save
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       handleSave();
     }
-    // Escape to close
     if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
@@ -115,6 +122,20 @@ export default function NotesPopup({
         </button>
       </div>
 
+      <label className="block text-xs font-medium text-gray-700 mb-1">
+        Type <span className="text-red-500">*</span>
+      </label>
+      <select
+        value={noteType}
+        onChange={(e) => setNoteType(e.target.value as NoteType | '')}
+        className="w-full px-2 py-1 mb-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
+      >
+        <option value="">-- Select type --</option>
+        {noteTypeOptions.map((opt) => (
+          <option key={opt.id} value={opt.id}>{opt.label}</option>
+        ))}
+      </select>
+
       <textarea
         ref={textareaRef}
         value={text}
@@ -127,7 +148,7 @@ export default function NotesPopup({
       <div className="flex gap-2 mt-2">
         <button
           onClick={handleSave}
-          disabled={isSaving || !text.trim()}
+          disabled={isSaving || !canSave}
           className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
           {isSaving ? 'Saving...' : 'Save'}
