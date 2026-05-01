@@ -58,8 +58,17 @@ export default function JourneyLogTab({
   const [editDescription, setEditDescription] = useState('');
   const [editTripId, setEditTripId] = useState<number | null>(null);
 
-  // Baseline metadata used to detect "did this field actually change" on blur
-  const [metadataBaseline, setMetadataBaseline] = useState<{ name: string; date: string; description: string } | null>(null);
+  // Snapshot taken when entering edit. Save() diffs current state vs this to
+  // figure out which routes/partials/metadata to persist. Cancel() discards.
+  const [originalSnapshot, setOriginalSnapshot] = useState<{
+    routes: RailwayRoute[];
+    name: string;
+    date: string;
+    description: string;
+    tripId: number | null;
+  } | null>(null);
+
+  const [isSaving, setIsSaving] = useState(false);
 
   // Trips for assignment dropdown
   const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
@@ -69,9 +78,9 @@ export default function JourneyLogTab({
   editStateRef.current = { editingJourneyId, viewedJourneyRoutes };
 
   // Mutable handler ref updated every render so it always closes over latest state.
-  // Persists route toggle immediately (no Save button).
+  // Edits are local until Save — no API calls here.
   const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | undefined>(undefined);
-  handleMapRouteClickRef.current = async (route: SelectedRoute) => {
+  handleMapRouteClickRef.current = (route: SelectedRoute) => {
     const { editingJourneyId, viewedJourneyRoutes } = editStateRef.current;
     if (!editingJourneyId) return;
 
@@ -79,32 +88,12 @@ export default function JourneyLogTab({
     const routeId = String(route.track_id);
     const isInJourney = viewedJourneyRoutes.some(r => String(r.track_id) === routeId);
 
-    try {
-      if (isInJourney) {
-        const result = await removeRouteFromJourney(editingJourneyId, parseInt(route.track_id));
-        if (result.error) {
-          showError(result.error);
-          return;
-        }
-        const newRoutes = viewedJourneyRoutes.filter(r => String(r.track_id) !== routeId);
-        setViewedJourneyRoutes(newRoutes);
-        onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
-      } else {
-        const result = await addRoutesToJourney(editingJourneyId, [parseInt(route.track_id)], [false]);
-        if (result.error) {
-          showError(result.error);
-          return;
-        }
-        const newRoutes = [...viewedJourneyRoutes, buildRouteFromSelected(route)];
-        setViewedJourneyRoutes(newRoutes);
-        onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
-      }
-      loadJourneys();
-      onJourneyChanged?.();
-    } catch (error) {
-      console.error('Error toggling route in journey:', error);
-      showError('Failed to update journey');
-    }
+    const newRoutes = isInJourney
+      ? viewedJourneyRoutes.filter(r => String(r.track_id) !== routeId)
+      : [...viewedJourneyRoutes, buildRouteFromSelected(route)];
+
+    setViewedJourneyRoutes(newRoutes);
+    onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
   };
 
   // Stable wrapper passed to VectorRailwayMap once per edit session
@@ -144,15 +133,19 @@ export default function JourneyLogTab({
     }
   };
 
+  const closeEditMode = () => {
+    setViewedJourneyId(null);
+    setViewedJourneyRoutes([]);
+    setEditingJourneyId(null);
+    setOriginalSnapshot(null);
+    onHighlightRoutes?.([]);
+    onJourneyEditEnd?.();
+  };
+
   const handleViewJourney = async (journeyId: number) => {
-    // Toggle view - if already viewing this journey, collapse it
+    // Toggle view - if already viewing this journey, treat as Cancel (discard edits)
     if (viewedJourneyId === journeyId) {
-      setViewedJourneyId(null);
-      setViewedJourneyRoutes([]);
-      setEditingJourneyId(null);
-      setMetadataBaseline(null);
-      onHighlightRoutes?.([]);
-      onJourneyEditEnd?.();
+      closeEditMode();
       return;
     }
 
@@ -163,8 +156,9 @@ export default function JourneyLogTab({
         return;
       }
 
+      const routes = result.routes || [];
       setViewedJourneyId(journeyId);
-      setViewedJourneyRoutes(result.routes || []);
+      setViewedJourneyRoutes(routes);
 
       // Set up edit mode with current journey data
       if (result.journey) {
@@ -174,10 +168,12 @@ export default function JourneyLogTab({
         setEditDate(dateStr);
         setEditDescription(result.journey.description || '');
         setEditTripId(result.journey.trip_id);
-        setMetadataBaseline({
+        setOriginalSnapshot({
+          routes,
           name: result.journey.name,
           date: dateStr,
           description: result.journey.description || '',
+          tripId: result.journey.trip_id,
         });
 
         // Load available trips for the dropdown
@@ -189,7 +185,7 @@ export default function JourneyLogTab({
 
       // Highlight routes on map and register map click handler
       if (onHighlightRoutes) {
-        const routeIds = result.routes
+        const routeIds = routes
           .map(r => r.track_id ? parseInt(r.track_id) : null)
           .filter((id): id is number => id !== null);
         onHighlightRoutes(routeIds);
@@ -201,108 +197,109 @@ export default function JourneyLogTab({
     }
   };
 
-  const handleMetadataBlur = async () => {
-    if (!editingJourneyId || !metadataBaseline) return;
+  // Local-only edit handlers — actual persistence happens in handleSave
+  const handleTogglePartial = (trackId: string, nextPartial: boolean) => {
+    setViewedJourneyRoutes(prev =>
+      prev.map(r => String(r.track_id) === String(trackId) ? { ...r, partial: nextPartial } : r)
+    );
+  };
+
+  const handleRemoveRoute = (trackId: string) => {
+    const newRoutes = viewedJourneyRoutes.filter(r => String(r.track_id) !== String(trackId));
+    setViewedJourneyRoutes(newRoutes);
+    onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+  };
+
+  const handleTripChange = (newTripId: number | null) => {
+    setEditTripId(newTripId);
+  };
+
+  const handleCancel = () => {
+    closeEditMode();
+  };
+
+  const handleSave = async () => {
+    if (!editingJourneyId || !originalSnapshot) return;
 
     const trimmedName = editName.trim();
     const trimmedDescription = editDescription.trim();
 
-    // No-op if nothing meaningful changed
-    if (
-      trimmedName === metadataBaseline.name &&
-      editDate === metadataBaseline.date &&
-      trimmedDescription === metadataBaseline.description
-    ) {
-      return;
-    }
-
     if (!trimmedName || !editDate) {
       showError('Journey name and date are required');
-      // Restore baseline so fields don't stay invalid
-      setEditName(metadataBaseline.name);
-      setEditDate(metadataBaseline.date);
-      setEditDescription(metadataBaseline.description);
       return;
     }
 
+    setIsSaving(true);
     try {
-      const result = await updateJourney(
-        editingJourneyId,
-        trimmedName,
-        trimmedDescription || null,
-        editDate
-      );
-      if (result.error) {
-        showError(result.error);
-        return;
+      // 1. Metadata
+      const metaChanged =
+        trimmedName !== originalSnapshot.name ||
+        editDate !== originalSnapshot.date ||
+        trimmedDescription !== originalSnapshot.description;
+      if (metaChanged) {
+        const result = await updateJourney(
+          editingJourneyId,
+          trimmedName,
+          trimmedDescription || null,
+          editDate
+        );
+        if (result.error) { showError(result.error); return; }
       }
-      setMetadataBaseline({ name: trimmedName, date: editDate, description: trimmedDescription });
+
+      // 2. Trip assignment
+      if (editTripId !== originalSnapshot.tripId) {
+        const result = editTripId
+          ? await assignJourneyToTrip(editingJourneyId, editTripId)
+          : await unassignJourneyFromTrip(editingJourneyId);
+        if (result.error) { showError(result.error); return; }
+      }
+
+      // 3. Route diff: add new, remove dropped, update partial flag where it changed
+      const origMap = new Map(originalSnapshot.routes.map(r => [String(r.track_id), r]));
+      const editedMap = new Map(viewedJourneyRoutes.map(r => [String(r.track_id), r]));
+
+      const toAdd: { trackId: number; partial: boolean }[] = [];
+      const toUpdatePartial: { trackId: number; partial: boolean }[] = [];
+      editedMap.forEach((edited, id) => {
+        const orig = origMap.get(id);
+        const partial = edited.partial ?? false;
+        if (!orig) {
+          toAdd.push({ trackId: parseInt(edited.track_id), partial });
+        } else if ((orig.partial ?? false) !== partial) {
+          toUpdatePartial.push({ trackId: parseInt(edited.track_id), partial });
+        }
+      });
+      const toRemove: number[] = [];
+      origMap.forEach((orig, id) => {
+        if (!editedMap.has(id)) toRemove.push(parseInt(orig.track_id));
+      });
+
+      if (toAdd.length > 0) {
+        const result = await addRoutesToJourney(
+          editingJourneyId,
+          toAdd.map(a => a.trackId),
+          toAdd.map(a => a.partial)
+        );
+        if (result.error) { showError(result.error); return; }
+      }
+      for (const trackId of toRemove) {
+        const result = await removeRouteFromJourney(editingJourneyId, trackId);
+        if (result.error) { showError(result.error); return; }
+      }
+      for (const { trackId, partial } of toUpdatePartial) {
+        const result = await updateLoggedPartPartial(editingJourneyId, trackId, partial);
+        if (result.error) { showError(result.error); return; }
+      }
+
+      showSuccess('Journey updated');
+      closeEditMode();
       loadJourneys();
       onJourneyChanged?.();
     } catch (error) {
-      console.error('Error updating journey metadata:', error);
-      showError('Failed to update journey');
-    }
-  };
-
-  const handleTogglePartial = async (trackId: string, nextPartial: boolean) => {
-    if (!editingJourneyId) return;
-    try {
-      const result = await updateLoggedPartPartial(editingJourneyId, parseInt(trackId), nextPartial);
-      if (result.error) {
-        showError(result.error);
-        return;
-      }
-      setViewedJourneyRoutes(prev =>
-        prev.map(r => String(r.track_id) === String(trackId) ? { ...r, partial: nextPartial } : r)
-      );
-      loadJourneys();
-      onJourneyChanged?.();
-    } catch (error) {
-      console.error('Error updating partial flag:', error);
-      showError('Failed to update partial flag');
-    }
-  };
-
-  const handleRemoveRoute = async (trackId: string) => {
-    if (!editingJourneyId) return;
-    try {
-      const result = await removeRouteFromJourney(editingJourneyId, parseInt(trackId));
-      if (result.error) {
-        showError(result.error);
-        return;
-      }
-      const newRoutes = viewedJourneyRoutes.filter(r => String(r.track_id) !== String(trackId));
-      setViewedJourneyRoutes(newRoutes);
-      onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
-      loadJourneys();
-      onJourneyChanged?.();
-    } catch (error) {
-      console.error('Error removing route from journey:', error);
-      showError('Failed to remove route');
-    }
-  };
-
-  const handleTripChange = async (journeyId: number, newTripId: number | null) => {
-    try {
-      let result;
-      if (newTripId) {
-        result = await assignJourneyToTrip(journeyId, newTripId);
-      } else {
-        result = await unassignJourneyFromTrip(journeyId);
-      }
-
-      if (result.error) {
-        showError(result.error);
-      } else {
-        setEditTripId(newTripId);
-        showSuccess(newTripId ? 'Journey assigned to trip' : 'Journey unassigned from trip');
-        loadJourneys();
-        if (onJourneyChanged) onJourneyChanged();
-      }
-    } catch (error) {
-      console.error('Error changing trip assignment:', error);
-      showError('Failed to change trip assignment');
+      console.error('Error saving journey:', error);
+      showError('Failed to save journey');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -315,10 +312,7 @@ export default function JourneyLogTab({
         showSuccess('Journey deleted successfully');
         // If we were viewing this journey, clear the view
         if (viewedJourneyId === journeyId) {
-          setViewedJourneyId(null);
-          setViewedJourneyRoutes([]);
-          onHighlightRoutes?.([]);
-          onJourneyEditEnd?.();
+          closeEditMode();
         }
         loadJourneys(); // Reload list
         // Trigger map refresh to update route colors
@@ -433,16 +427,30 @@ export default function JourneyLogTab({
                     Cancel
                   </button>
                 </div>
+              ) : viewedJourneyId === journey.id ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="flex-1 px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    disabled={isSaving}
+                    className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleViewJourney(journey.id)}
-                    className={`flex-1 px-3 py-1.5 rounded text-sm font-medium ${viewedJourneyId === journey.id
-                      ? 'bg-amber-600 text-white hover:bg-amber-700'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
+                    className="flex-1 px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
                   >
-                    {viewedJourneyId === journey.id ? 'Hide Details' : 'View / Edit'}
+                    View / Edit
                   </button>
                   <button
                     onClick={() => setDeleteConfirmId(journey.id)}
@@ -473,7 +481,6 @@ export default function JourneyLogTab({
                           type="text"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          onBlur={handleMetadataBlur}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -483,7 +490,6 @@ export default function JourneyLogTab({
                           type="date"
                           value={editDate}
                           onChange={(e) => setEditDate(e.target.value)}
-                          onBlur={handleMetadataBlur}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -492,7 +498,6 @@ export default function JourneyLogTab({
                         <textarea
                           value={editDescription}
                           onChange={(e) => setEditDescription(e.target.value)}
-                          onBlur={handleMetadataBlur}
                           rows={2}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                         />
@@ -501,10 +506,7 @@ export default function JourneyLogTab({
                         <label className="block text-xs font-medium mb-1">Trip</label>
                         <select
                           value={editTripId ?? ''}
-                          onChange={(e) => {
-                            const val = e.target.value ? Number(e.target.value) : null;
-                            handleTripChange(journey.id, val);
-                          }}
+                          onChange={(e) => handleTripChange(e.target.value ? Number(e.target.value) : null)}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">None</option>
