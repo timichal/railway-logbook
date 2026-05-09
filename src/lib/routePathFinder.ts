@@ -194,15 +194,18 @@ async function buildRouteGraphInBuffer(
     }>(
       `
       WITH station_points AS (
-        SELECT coordinates
+        SELECT ST_Collect(coordinates) AS geom
         FROM stations
         WHERE id IN ($1, $2)
       ),
       search_area AS (
+        -- Buffer in Web Mercator with 1/cos(lat) scaling so the real ground radius
+        -- matches $3 meters (a plain ST_Buffer in 3857 is short by cos(lat) at
+        -- mid-latitudes and would miss routes near the buffer edge).
         SELECT ST_Transform(
           ST_Buffer(
-            ST_Transform(ST_Collect(coordinates), 3857),
-            $3
+            ST_Transform(geom, 3857),
+            $3 / GREATEST(cos(radians(ST_Y(ST_Centroid(geom)))), 0.01)
           ),
           4326
         ) as buffer_geom

@@ -50,17 +50,20 @@ export class RailwayPathFinder {
     const client = await this.getClient(dbClient);
 
     try {
+      // Buffer in Web Mercator (uses GIST index on rp.geometry, fast).
+      // Compensate for Mercator latitude distortion: ST_Buffer(N) in 3857 yields an
+      // actual on-ground radius of N*cos(lat), so we scale by 1/cos(lat) to hit N m.
       const result = await client.query(`
         WITH endpoints AS (
-          SELECT geometry
+          SELECT ST_Collect(geometry) AS geom
           FROM railway_parts
           WHERE id::TEXT = $1 OR id::TEXT = $2
         ),
         search_area AS (
           SELECT ST_Transform(
             ST_Buffer(
-              ST_Transform(ST_Collect(geometry), 3857),
-              $3
+              ST_Transform(geom, 3857),
+              $3 / GREATEST(cos(radians(ST_Y(ST_Centroid(geom)))), 0.01)
             ),
             4326
           ) as buffer_geom
@@ -92,12 +95,13 @@ export class RailwayPathFinder {
     const client = await this.getClient(dbClient);
 
     try {
+      // See loadRailwayParts: Mercator buffer scaled by 1/cos(lat) to undo distortion.
       const result = await client.query(`
         WITH search_area AS (
           SELECT ST_Transform(
             ST_Buffer(
               ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 3857),
-              $3
+              $3 / GREATEST(cos(radians($2)), 0.01)
             ),
             4326
           ) as buffer_geom
