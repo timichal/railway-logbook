@@ -27,7 +27,6 @@ docker compose up -d db tiles
 ```bash
 npm run prepareMapData              # Downloads and transforms OSM data
 npm run importMapData               # Loads data and recalculates routes (if any exist)
-npm run migration:addCountries      # One-time: Add country tracking (if upgrading)
 ```
 
 3. **Run application**
