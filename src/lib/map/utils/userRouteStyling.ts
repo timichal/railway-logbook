@@ -90,20 +90,16 @@ export function getUserRouteClickBufferWidthExpression(): maplibregl.ExpressionS
 export function getAdminRouteWidthExpression(
   selectedTrackId: number | null
 ): maplibregl.ExpressionSpecification {
-  if (selectedTrackId === null) {
-    return getUserRouteWidthExpression();
-  }
-  const SELECTED_WIDTH = 5;
-  const sel = (
-    normal: maplibregl.ExpressionSpecification | number
-  ): maplibregl.ExpressionSpecification =>
-    ['case', ['==', ['id'], selectedTrackId], SELECTED_WIDTH, normal] as maplibregl.ExpressionSpecification;
+  const normal = widthByClass(2.5, 3, 3);
+  const stop = (selectedTrackId === null)
+    ? normal
+    : ['case', ['==', ['id'], selectedTrackId], 5, normal] as maplibregl.ExpressionSpecification;
 
   return [
     'interpolate', ['linear'], ['zoom'],
-    4,    sel(widthByClass(0, 0.6, 0.8)),
-    6.5,  sel(widthByClass(0, 1.3, 1.5)),
-    7,    sel(widthByClass(2, 2.5, 3))
+    4,   stop,
+    6.5, stop,
+    7,   stop
   ] as maplibregl.ExpressionSpecification;
 }
 

@@ -61,6 +61,7 @@ export function useAdminLayerVisibility({
     const routesVisible = isEditingGeometry ? false : showRoutesLayer;
     setVisibility('railway_routes', routesVisible);
     setVisibility('railway_routes_scenic_outline', routesVisible);
+    setVisibility('railway_routes_click', routesVisible);
 
     setVisibility('stations', showStationsLayer);
     setVisibility('admin_notes', showNotesLayer);

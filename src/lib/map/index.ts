@@ -307,15 +307,14 @@ export function createRailwayPartsLayer(): maplibregl.LineLayerSpecification {
       ],
       'line-width': [
         'interpolate', ['linear'], ['zoom'],
-        4, 0.4,
-        7, 1,
-        12, [
+        4, 0.8,
+        7, [
           'case',
-          ['boolean', ['feature-state', 'hover'], false], 3.5,
-          1.6
+          ['boolean', ['feature-state', 'hover'], false], 5,
+          3
         ]
       ],
-      'line-opacity': 0.6,
+      'line-opacity': 0.7,
     },
   };
 }

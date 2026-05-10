@@ -17,10 +17,6 @@ export type Feature = {
   }
 }
 
-export type EntryData = {
-  features: Feature[]
-}
-
 // GeoJSON types for database queries
 export type GeoJSONFeature = {
   type: 'Feature'

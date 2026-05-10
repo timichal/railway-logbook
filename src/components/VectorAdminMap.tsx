@@ -11,6 +11,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
+  createRailwayRoutesClickLayer,
   createScenicRoutesOutlineLayer,
   createRailwayPartsSource,
   createRailwayPartsLayer,
@@ -22,7 +23,7 @@ import {
   lineClassColorExpression,
 } from '@/lib/map';
 import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapInteractions';
-import { getUserRouteWidthExpression, getAdminRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
+import { getAdminRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
 import { getAllRouteEndpoints } from '@/lib/adminRouteActions';
 import AdminLayerControls from './AdminLayerControls';
 
@@ -86,6 +87,7 @@ export default function VectorAdminMap({
         createRailwayPartsLayer(),
         createScenicRoutesOutlineLayer(),
         createRailwayRoutesLayer(),
+        createRailwayRoutesClickLayer(),
         createStationsLayer(),
         createAdminNotesLayer(),
       ],
@@ -158,7 +160,7 @@ export default function VectorAdminMap({
         COLORS.railwayRoutes.invalid,
         lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
-      map.current.setPaintProperty('railway_routes', 'line-width', getUserRouteWidthExpression());
+      map.current.setPaintProperty('railway_routes', 'line-width', getAdminRouteWidthExpression(null));
       map.current.setPaintProperty('railway_routes', 'line-opacity', 0.8);
     }
   }, [selectedRouteId, mapLoaded, map]);
@@ -172,6 +174,7 @@ export default function VectorAdminMap({
 
     // Remove layers → source → re-add
     const m = map.current;
+    if (m.getLayer('railway_routes_click')) m.removeLayer('railway_routes_click');
     if (m.getLayer('railway_routes')) m.removeLayer('railway_routes');
     if (m.getLayer('railway_routes_scenic_outline')) m.removeLayer('railway_routes_scenic_outline');
     if (m.getSource('railway_routes')) m.removeSource('railway_routes');
@@ -179,11 +182,13 @@ export default function VectorAdminMap({
     m.addSource('railway_routes', createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
     m.addLayer(createScenicRoutesOutlineLayer());
     m.addLayer(createRailwayRoutesLayer());
+    m.addLayer(createRailwayRoutesClickLayer());
 
     // Re-apply visibility
     const visibility = layerVisibility.showRoutesLayer ? 'visible' : 'none';
     m.setLayoutProperty('railway_routes', 'visibility', visibility);
     m.setLayoutProperty('railway_routes_scenic_outline', 'visibility', visibility);
+    m.setLayoutProperty('railway_routes_click', 'visibility', visibility);
 
     // Re-apply selected route highlighting
     if (selectedRouteId) {
@@ -210,7 +215,7 @@ export default function VectorAdminMap({
         COLORS.railwayRoutes.invalid,
         lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
-      m.setPaintProperty('railway_routes', 'line-width', getUserRouteWidthExpression());
+      m.setPaintProperty('railway_routes', 'line-width', getAdminRouteWidthExpression(null));
     }
 
     m.triggerRepaint();

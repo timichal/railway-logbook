@@ -31,9 +31,9 @@ export function setupAdminMapInteractions(
       }
     }
 
-    // Don't handle part clicks if we also clicked on a route
+    // Don't handle part clicks if we also clicked on a route (wide hit-area buffer included)
     const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ['railway_routes']
+      layers: ['railway_routes_click', 'railway_routes']
     });
     if (routeFeatures && routeFeatures.length > 0) {
       return;
@@ -72,8 +72,8 @@ export function setupAdminMapInteractions(
   // We can't use layer-specific click for dynamic layers, so use general map click
   mapInstance.on('click', handleMapClick);
 
-  // Click handler for railway routes
-  mapInstance.on('click', 'railway_routes', (e) => {
+  // Click handler for railway routes (uses wide invisible click buffer layer for easier tapping)
+  mapInstance.on('click', 'railway_routes_click', (e) => {
     if (!e.features || e.features.length === 0) return;
     const feature = e.features[0];
 
@@ -89,9 +89,9 @@ export function setupAdminMapInteractions(
 
   // Click handler for map (when clicking outside features) to unselect route
   mapInstance.on('click', (e) => {
-    // Check if we clicked on any features
+    // Check if we clicked on any features (use click buffer layer for routes)
     const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ['railway_routes']
+      layers: ['railway_routes_click', 'railway_routes']
     });
     const partFeatures = mapInstance.queryRenderedFeatures(e.point, {
       layers: ['railway_parts']
@@ -119,9 +119,9 @@ export function setupAdminMapInteractions(
   let hoveredPartId: number | string | null = null;
 
   mapInstance.on('mouseenter', 'railway_parts', (e) => {
-    // Check if we're also hovering over a railway route
+    // Check if we're also hovering over a railway route (wide hit-area buffer included)
     const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ['railway_routes']
+      layers: ['railway_routes_click', 'railway_routes']
     });
 
     // If hovering over a route, don't show part hover
@@ -172,7 +172,7 @@ export function setupAdminMapInteractions(
   // Hover effects for railway routes with popup
   let routeHoverPopup: maplibregl.Popup | null = null;
 
-  mapInstance.on('mouseenter', 'railway_routes', (e) => {
+  mapInstance.on('mouseenter', 'railway_routes_click', (e) => {
     mapInstance.getCanvas().style.cursor = 'pointer';
 
     if (e.features && e.features.length > 0) {
@@ -218,7 +218,7 @@ export function setupAdminMapInteractions(
     }
   });
 
-  mapInstance.on('mouseleave', 'railway_routes', () => {
+  mapInstance.on('mouseleave', 'railway_routes_click', () => {
     mapInstance.getCanvas().style.cursor = '';
 
     if (routeHoverPopup) {
