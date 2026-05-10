@@ -1,5 +1,5 @@
 import type maplibregl from 'maplibre-gl';
-import { COLORS, lineClassColorExpression } from '@/lib/map';
+import { COLORS, WIDTHS, lineClassColorExpression } from '@/lib/map';
 
 /**
  * Get color expression for user railway routes based on visit status AND line class
@@ -30,70 +30,64 @@ export function getUserRouteColorExpression(): maplibregl.ExpressionSpecificatio
   ] as maplibregl.ExpressionSpecification;
 }
 
+type WidthStop = { branch: number; main: number; highspeed: number };
+
 /**
- * Per-route width chooser given a target stop width — used inside the
- * zoom interpolate stops below. Branch/special width is supplied separately
- * so we can hide them entirely at low zoom by passing 0.
+ * Per-route width chooser given a target stop. Special-usage routes are
+ * rendered slightly thinner than branch via WIDTHS.specialUsageMultiplier.
  */
-function widthByClass(
-  branchOrSpecial: number,
-  main: number,
-  highspeed: number,
-): maplibregl.ExpressionSpecification {
+function widthByClass(stop: WidthStop): maplibregl.ExpressionSpecification {
   return [
     'case',
-    ['==', ['get', 'usage_type'], 1], branchOrSpecial * 0.85, // Special slightly thinner than branch
-    ['==', ['get', 'line_class'], 'branch'], branchOrSpecial,
-    ['==', ['get', 'line_class'], 'highspeed'], highspeed,
-    main
+    ['==', ['get', 'usage_type'], 1], stop.branch * WIDTHS.specialUsageMultiplier,
+    ['==', ['get', 'line_class'], 'branch'], stop.branch,
+    ['==', ['get', 'line_class'], 'highspeed'], stop.highspeed,
+    stop.main
   ] as maplibregl.ExpressionSpecification;
 }
 
 /**
  * Width expression for user railway routes. Single top-level zoom interpolate
- * (MapLibre only allows one zoom expression per property). Branch + special
- * routes have width 0 below zoom 7 so the zoomed-out map shows only main +
- * highspeed lines.
+ * (MapLibre only allows one zoom expression per property). All line classes
+ * are visible at every zoom; widths just shrink when zoomed out.
  */
 export function getUserRouteWidthExpression(): maplibregl.ExpressionSpecification {
+  const s = WIDTHS.userRoute;
   return [
     'interpolate', ['linear'], ['zoom'],
-    4,    widthByClass(0, 0.6, 0.8),
-    6.5,  widthByClass(0, 1.3, 1.5),
-    7,   widthByClass(2, 2.5, 3)
+    4, widthByClass(s.z4),
+    7, widthByClass(s.z7),
   ] as maplibregl.ExpressionSpecification;
 }
 
 /**
  * Wide transparent line used purely as a click/hover hit area so the visible
  * railway line can stay thin without becoming hard to tap on touch devices.
- * Width is 0 below zoom 7 for branch/special so phantom hidden lines don't
- * catch clicks; constant 16 for main/highspeed once visible.
  */
 export function getUserRouteClickBufferWidthExpression(): maplibregl.ExpressionSpecification {
+  const s = WIDTHS.clickBuffer;
   return [
     'interpolate', ['linear'], ['zoom'],
-    4,   widthByClass(0, 14, 14),
-    6.5, widthByClass(0, 14, 14),
-    7,   widthByClass(14, 14, 14),
-    12,  widthByClass(16, 16, 16)
+    4,  widthByClass(s.z4),
+    12, widthByClass(s.z12),
   ] as maplibregl.ExpressionSpecification;
 }
 
 /**
  * Admin map width expression with selected-route override. Equivalent to
- * getUserRouteWidthExpression() but with the selected track_id rendered at
- * a constant ~5px so it stands out. The selection case lives inside each
- * interpolate stop because MapLibre forbids wrapping a zoom-interpolate
- * inside another expression like ['case', ...].
+ * getUserRouteWidthExpression() but constant across zoom (admin map shows all
+ * line classes at every zoom) and with the selected track_id rendered at
+ * WIDTHS.selectedRoute. The selection case lives inside each interpolate stop
+ * because MapLibre forbids wrapping a zoom-interpolate inside another
+ * expression like ['case', ...].
  */
 export function getAdminRouteWidthExpression(
   selectedTrackId: number | null
 ): maplibregl.ExpressionSpecification {
-  const normal = widthByClass(2.5, 3, 3);
+  const normal = widthByClass(WIDTHS.adminRoute);
   const stop = (selectedTrackId === null)
     ? normal
-    : ['case', ['==', ['id'], selectedTrackId], 5, normal] as maplibregl.ExpressionSpecification;
+    : ['case', ['==', ['id'], selectedTrackId], WIDTHS.selectedRoute, normal] as maplibregl.ExpressionSpecification;
 
   return [
     'interpolate', ['linear'], ['zoom'],
@@ -110,10 +104,10 @@ export function getAdminRouteWidthExpression(
  * expression like ['+', ...].
  */
 export function getUserRouteScenicOutlineWidthExpression(): maplibregl.ExpressionSpecification {
+  const s = WIDTHS.scenicOutline;
   return [
     'interpolate', ['linear'], ['zoom'],
-    4,    widthByClass(0, 6.6, 6.8),
-    6.5,  widthByClass(0, 7.3, 7.5),
-    7,   widthByClass(8, 8.5, 9)
+    4, widthByClass(s.z4),
+    7, widthByClass(s.z7),
   ] as maplibregl.ExpressionSpecification;
 }

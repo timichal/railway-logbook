@@ -1,4 +1,8 @@
 import maplibregl from 'maplibre-gl';
+import { COLORS, WIDTHS, OPACITIES, CIRCLES } from './style';
+
+// Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
+export { COLORS, WIDTHS, OPACITIES, CIRCLES } from './style';
 
 // ============================================================================
 // CONSTANTS
@@ -34,32 +38,6 @@ export const ZOOM_RANGES = {
   railwayParts: { min: 4, max: 18 }, // Matches Martin configuration
   stations: { min: 9, max: 18 }, // Matches Martin configuration
   adminNotes: { min: 4, max: 18 }, // Admin notes visible at all zooms
-} as const;
-
-export const COLORS = {
-  railwayParts: {
-    default: '#2563eb',
-    hover: '#dc2626',
-    selected: '#16a34a',
-  },
-  railwayRoutes: {
-    default: { branch: '#b8554f', main: '#b8554f', highspeed: '#7a3633' },
-    selected: '#ff6b35',
-    visited: { branch: '#1f8a4c', main: '#1f8a4c', highspeed: '#155e34' },
-    unvisited: { branch: '#b8554f', main: '#b8554f', highspeed: '#7a3633' },
-    partial: { branch: '#d97706', main: '#d97706', highspeed: '#92400e' },
-    invalid: '#9ca3af', // Grey for invalid routes
-  },
-  stations: {
-    fill: '#ff7800',
-    stroke: '#000',
-  },
-  adminNotes: {
-    fill: '#fbbf24', // Yellow/amber for notes
-    stroke: '#78350f', // Dark brown stroke
-    hover: '#f59e0b', // Darker amber on hover
-  },
-  preview: '#ff6600',
 } as const;
 
 // ============================================================================
@@ -155,7 +133,7 @@ export function createRailwayRoutesLayer(
     widthExpression,
     opacityExpression,
     defaultWidth = 3,
-    defaultOpacity = 0.8,
+    defaultOpacity = OPACITIES.defaultRoute,
     filter,
   } = config;
 
@@ -214,6 +192,8 @@ export function createRailwayRoutesClickLayer(
   return layer;
 }
 
+const SCENIC_OUTLINE_DEFAULT_OFFSET = 6; // px added to the visible width when no widthExpression is supplied
+
 export function createScenicRoutesOutlineLayer(
   config: RailwayRoutesPaintConfig = {}
 ): maplibregl.LineLayerSpecification {
@@ -227,7 +207,7 @@ export function createScenicRoutesOutlineLayer(
   // ['+', expr, 6], so the caller must supply a fully-formed width expression
   // (typically getUserRouteScenicOutlineWidthExpression).
   const outlineWidth: maplibregl.ExpressionSpecification | number =
-    widthExpression ?? (defaultWidth + 6);
+    widthExpression ?? (defaultWidth + SCENIC_OUTLINE_DEFAULT_OFFSET);
 
   const layer: maplibregl.LineLayerSpecification = {
     id: 'railway_routes_scenic_outline',
@@ -239,9 +219,9 @@ export function createScenicRoutesOutlineLayer(
       visibility: 'none', // Default to hidden, controlled by "Highlight scenic lines" checkbox
     },
     paint: {
-      'line-color': '#fbbf24', // Amber outline
+      'line-color': COLORS.scenicOutline,
       'line-width': outlineWidth,
-      'line-opacity': 0.6,
+      'line-opacity': OPACITIES.scenicOutline,
     },
     filter: [
       'all',
@@ -270,11 +250,11 @@ export function createStationsLayer(): maplibregl.CircleLayerSpecification {
     'source-layer': 'stations',
     minzoom: ZOOM_RANGES.stations.min,
     paint: {
-      'circle-radius': 4,
+      'circle-radius': CIRCLES.station.radius,
       'circle-color': COLORS.stations.fill,
       'circle-stroke-color': COLORS.stations.stroke,
-      'circle-stroke-width': 1,
-      'circle-opacity': 0.8,
+      'circle-stroke-width': CIRCLES.station.strokeWidth,
+      'circle-opacity': OPACITIES.stations,
     },
   };
 }
@@ -314,7 +294,7 @@ export function createRailwayPartsLayer(): maplibregl.LineLayerSpecification {
           3
         ]
       ],
-      'line-opacity': 0.7,
+      'line-opacity': OPACITIES.railwayParts,
     },
   };
 }
@@ -352,8 +332,8 @@ export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
       'circle-radius': [
         'case',
         ['boolean', ['feature-state', 'hover'], false],
-        8,
-        6
+        CIRCLES.adminNote.hoverRadius,
+        CIRCLES.adminNote.radius,
       ],
       'circle-color': [
         'case',
@@ -362,8 +342,8 @@ export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
         colorByType,
       ],
       'circle-stroke-color': COLORS.adminNotes.stroke,
-      'circle-stroke-width': 2,
-      'circle-opacity': 0.9,
+      'circle-stroke-width': CIRCLES.adminNote.strokeWidth,
+      'circle-opacity': OPACITIES.adminNotes,
     },
   };
 }

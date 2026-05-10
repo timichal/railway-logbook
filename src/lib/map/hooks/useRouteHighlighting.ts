@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type maplibregl from 'maplibre-gl';
 import type { SelectedRoute } from '@/lib/types';
+import { COLORS, WIDTHS, OPACITIES } from '@/lib/map';
 
 /**
  * 'planner'  — pathfinder result between two stations (gold)
@@ -25,7 +26,7 @@ export function useRouteHighlighting(
 ) {
   // Journey planner uses gold; My Trips view uses the same orange as
   // the admin-map selected-route style.
-  const highlightColor = highlightKind === 'planner' ? '#FFD700' : '#ff6b35';
+  const highlightColor = highlightKind === 'planner' ? COLORS.highlight.planner : COLORS.highlight.view;
 
   useEffect(() => {
     if (!map.current || !map.current.getLayer('railway_routes')) return;
@@ -39,8 +40,8 @@ export function useRouteHighlighting(
           'source-layer': 'railway_routes',
           paint: {
             'line-color': highlightColor,
-            'line-width': 5,
-            'line-opacity': 1.0,
+            'line-width': WIDTHS.selectedRoute,
+            'line-opacity': OPACITIES.highlight,
           },
           filter: ['in', ['id'], ['literal', highlightedRoutes]],
         });
@@ -72,9 +73,9 @@ export function useRouteHighlighting(
           source: 'railway_routes',
           'source-layer': 'railway_routes',
           paint: {
-            'line-color': '#ff6b35',
-            'line-width': 5,
-            'line-opacity': 1.0,
+            'line-color': COLORS.highlight.view,
+            'line-width': WIDTHS.selectedRoute,
+            'line-opacity': OPACITIES.highlight,
           },
           filter: ['in', ['id'], ['literal', selectedTrackIds]],
         });

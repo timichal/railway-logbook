@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type maplibregl from 'maplibre-gl';
 import type { RailwayPart, GeoJSONFeatureCollection } from '@/lib/types';
-import { COLORS } from '../index';
+import { COLORS, WIDTHS, OPACITIES, CIRCLES } from '../index';
 
 interface OverlayData {
   previewRoute?: { partIds: string[]; coordinates: [number, number][]; railwayParts?: RailwayPart[] } | null;
@@ -55,7 +55,7 @@ export function useAdminMapOverlays(
         type: 'line',
         source: 'preview-route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': COLORS.preview, 'line-width': 8, 'line-opacity': 1.0 },
+        paint: { 'line-color': COLORS.preview, 'line-width': WIDTHS.preview, 'line-opacity': OPACITIES.preview },
       });
 
     }
@@ -100,15 +100,15 @@ export function useAdminMapOverlays(
         type: 'circle',
         source: 'selected-points',
         paint: {
-          'circle-radius': 8,
+          'circle-radius': CIRCLES.pickedPoint.radius,
           'circle-color': [
             'case',
             ['==', ['get', 'type'], 'start'],
-            '#16a34a', // Green for start
-            '#dc2626', // Red for end
+            COLORS.adminMarkers.start,
+            COLORS.adminMarkers.end,
           ],
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 2,
+          'circle-stroke-color': COLORS.adminMarkers.stroke,
+          'circle-stroke-width': CIRCLES.pickedPoint.strokeWidth,
           'circle-opacity': 1.0,
         },
       });
@@ -132,11 +132,11 @@ export function useAdminMapOverlays(
         type: 'circle',
         source: 'route-endpoints',
         paint: {
-          'circle-radius': 5,
-          'circle-color': '#3b82f6',
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 1.5,
-          'circle-opacity': 0.8,
+          'circle-radius': CIRCLES.routeEndpoint.radius,
+          'circle-color': COLORS.adminMarkers.routeEndpoint,
+          'circle-stroke-color': COLORS.adminMarkers.stroke,
+          'circle-stroke-width': CIRCLES.routeEndpoint.strokeWidth,
+          'circle-opacity': OPACITIES.routeEndpoint,
         },
       });
     }

@@ -20,6 +20,7 @@ import {
   createAdminNotesSource,
   createAdminNotesLayer,
   COLORS,
+  OPACITIES,
   lineClassColorExpression,
 } from '@/lib/map';
 import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapInteractions';
@@ -150,8 +151,8 @@ export default function VectorAdminMap({
       map.current.setPaintProperty('railway_routes', 'line-opacity', [
         'case',
         ['==', ['id'], trackIdNum],
-        1.0,
-        0.8,
+        OPACITIES.selectedRoute,
+        OPACITIES.defaultRoute,
       ]);
     } else {
       map.current.setPaintProperty('railway_routes', 'line-color', [
@@ -161,7 +162,7 @@ export default function VectorAdminMap({
         lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
       map.current.setPaintProperty('railway_routes', 'line-width', getAdminRouteWidthExpression(null));
-      map.current.setPaintProperty('railway_routes', 'line-opacity', 0.8);
+      map.current.setPaintProperty('railway_routes', 'line-opacity', OPACITIES.defaultRoute);
     }
   }, [selectedRouteId, mapLoaded, map]);
 
@@ -205,8 +206,8 @@ export default function VectorAdminMap({
       m.setPaintProperty('railway_routes', 'line-opacity', [
         'case',
         ['==', ['id'], trackIdNum],
-        1.0,
-        0.8,
+        OPACITIES.selectedRoute,
+        OPACITIES.defaultRoute,
       ]);
     } else {
       m.setPaintProperty('railway_routes', 'line-color', [

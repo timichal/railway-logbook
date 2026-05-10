@@ -109,7 +109,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Martin Tile Server** - PostGIS vector tile server (port 3001) serving railway_routes, railway_parts, and stations as MVT tiles
 - **Server Actions** - Type-safe database operations with automatic serialization
 - **Authentication** - Email/password authentication with bcrypt, session management
-- **Dynamic Styling** - Route colors based on visit status (green=completed, orange=partial, muted red=unvisited) with darker shades for highspeed lines; width is zoom-aware (main/highspeed thin when zoomed out, fuller when zoomed in; branch + special hidden at zoom ≤ 6.5 to keep zoomed-out maps readable, fade in by zoom 7); amber outline effect for scenic routes; an invisible wide `railway_routes_click` layer sits over the visible line as a hit area so thin lines stay tappable on touch screens
+- **Dynamic Styling** - Route colors based on visit status (green=completed, orange=partial, muted red=unvisited) with darker shades for highspeed lines; width is zoom-aware via a single z4→z7 interpolate (all line classes thin when zoomed out, fuller when zoomed in); amber outline effect for scenic routes; an invisible wide `railway_routes_click` layer sits over the visible line as a hit area so thin lines stay tappable on touch screens. All map colors, widths, and opacities are centralized in `src/lib/map/style.ts` (`COLORS`, `WIDTHS`, `OPACITIES`)
 - **Badge-Style Tooltips** - Hover popups display color-coded badges: usage type (blue=Regular, purple=Special), line class (red badge=High-speed, blue badge=Main), frequency tags (green badges), and scenic flag (amber badge)
 - **Connection Pooling** - PostgreSQL pool for database performance
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
@@ -245,7 +245,8 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### Map Library (`src/lib/map/`)
 
 **Core:**
-- `index.ts` - Map constants, COLORS, layer factories (createRailwayRoutesSource/Layer, createRailwayRoutesClickLayer, createScenicRoutesOutlineLayer, createStationsSource/Layer, createRailwayPartsSource/Layer, createAdminNotesSource/Layer), lineClassColorExpression helper, closeAllPopups utility
+- `index.ts` - Map constants (MAP_CENTER, MAP_ZOOM, ZOOM_RANGES, etc.), layer factories (createRailwayRoutesSource/Layer, createRailwayRoutesClickLayer, createScenicRoutesOutlineLayer, createStationsSource/Layer, createRailwayPartsSource/Layer, createAdminNotesSource/Layer), lineClassColorExpression helper, closeAllPopups utility. Re-exports `COLORS`, `WIDTHS`, `OPACITIES` from `style.ts`.
+- `style.ts` - **Single source of truth for map styling.** Exports `COLORS` (railway parts/routes, highlight overlays, scenic outline, preview line, stations, admin notes, admin coordinate markers), `WIDTHS` (per-zoom-stop user route / scenic outline / click buffer widths, admin route widths, `selectedRoute`, `preview`, `specialUsageMultiplier`), `CIRCLES` (radius + stroke width for stations / admin notes / picked-point markers / route endpoints), and `OPACITIES`. All map paint expressions pull values from here.
 - `mapState.ts` - Shared map state management (save/load map position)
 
 **Hooks:**
@@ -265,7 +266,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `interactions/adminMapInteractions.ts` - Admin map click handlers (coordinate capture from railway parts, route editing, badge-style hover popups)
 
 **Utilities:**
-- `utils/userRouteStyling.ts` - User route color/width expressions. Color: by visit status × line_class (each status has normal + darker highspeed shade). Width: zoom-aware top-level interpolate — main/highspeed thin when zoomed out and full size zoomed in; branch + special are 0 width below zoom 7 so they disappear when zoomed out. Helpers: `getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression` (16px hit area, 0 where the visible line is hidden), `getUserRouteScenicOutlineWidthExpression` (visible width + ~6px, used by the scenic outline layer — written as its own interpolate because MapLibre forbids wrapping a zoom-interpolate in another expression like `['+', expr, 6]`), `getAdminRouteWidthExpression(selectedTrackId)` (admin map equivalent with the selected route at constant 5px; selection `case` lives inside each interpolate stop for the same MapLibre rule).
+- `utils/userRouteStyling.ts` - User route color/width expressions. Color: by visit status × line_class (each status has normal + darker highspeed shade). Width: zoom-aware top-level interpolate from z4 to z7 — all line classes visible at every zoom, just thinner when zoomed out. Stop values come from `WIDTHS` in `src/lib/map/style.ts`. Helpers: `getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression` (14→16px hit area), `getUserRouteScenicOutlineWidthExpression` (visible width + ~6px, used by the scenic outline layer — written as its own interpolate because MapLibre forbids wrapping a zoom-interpolate in another expression like `['+', expr, 6]`), `getAdminRouteWidthExpression(selectedTrackId)` (admin map equivalent with the selected route at constant `WIDTHS.selectedRoute`; selection `case` lives inside each interpolate stop for the same MapLibre rule).
 - `utils/tooltipFormatting.ts` - Shared tooltip badge formatting (usage type, frequency, scenic badges)
 - `utils/distance.ts` - Distance calculation utilities
 

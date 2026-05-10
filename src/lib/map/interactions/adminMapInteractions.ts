@@ -75,6 +75,17 @@ export function setupAdminMapInteractions(
   // Click handler for railway routes (uses wide invisible click buffer layer for easier tapping)
   mapInstance.on('click', 'railway_routes_click', (e) => {
     if (!e.features || e.features.length === 0) return;
+
+    // Routes pass through their own start/end markers, so a click on a route-endpoint
+    // dot also lands on the route. The endpoint handler already set the coordinate —
+    // don't also select the route.
+    if (mapInstance.getLayer('route-endpoints')) {
+      const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
+        layers: ['route-endpoints']
+      });
+      if (endpointFeatures && endpointFeatures.length > 0) return;
+    }
+
     const feature = e.features[0];
 
     if (!onRouteSelectRef.current) return;
