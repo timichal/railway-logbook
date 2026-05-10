@@ -77,3 +77,17 @@ html, body, #__next {
 .sidebar-drawer-open {
   animation: slide-in-left 0.25s ease-out;
 }
+
+/* Mobile top-half sidebar drop-down animation */
+@keyframes slide-in-top {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.sidebar-drawer-top-open {
+  animation: slide-in-top 0.25s ease-out;
+}

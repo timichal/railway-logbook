@@ -23,7 +23,7 @@ interface MergedTripCardProps {
   onRequestOpen: () => void;
   onRequestClose: () => void;
   onChanged: () => void;
-  onHighlightRoutes?: (routeIds: number[]) => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
   // Forwarded to nested journey cards
   openNestedJourneyId: number | null;
   onNestedJourneyOpenChange: (journeyId: number | null) => void;

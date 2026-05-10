@@ -22,6 +22,10 @@ export function useLayerFilters(
 
     map.current.setFilter('railway_routes', filter);
 
+    if (map.current.getLayer('railway_routes_click')) {
+      map.current.setFilter('railway_routes_click', filter);
+    }
+
     if (map.current.getLayer('railway_routes_scenic_outline')) {
       const scenicFilter: FilterSpecification = showSpecialLines
         ? ['==', ['get', 'scenic'], true]

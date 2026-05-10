@@ -46,7 +46,7 @@ interface MergedJourneyCardProps {
   // Mutation lifecycle
   onChanged: () => void; // After save/delete/route changes — refresh the list and map
   // Map interaction
-  onHighlightRoutes?: (routeIds: number[]) => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
   onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
   onJourneyEditEnd?: () => void;
   // Visual nesting (when rendered inside a trip card)

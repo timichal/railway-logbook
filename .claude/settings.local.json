@@ -18,7 +18,8 @@
       "Bash(docker exec:*)",
       "Bash(rm:*)",
       "Bash(npx tsx:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "PowerShell(npx tsc --noEmit)"
     ],
     "deny": []
   }

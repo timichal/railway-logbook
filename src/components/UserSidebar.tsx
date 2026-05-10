@@ -29,7 +29,7 @@ interface UserSidebarProps {
   onRemoveRoute: (trackId: string) => void;
   onClearAll: () => void;
   onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
-  onHighlightRoutes?: (routeIds: number[]) => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
   onRoutesLogged?: () => void;
   selectedCountries: string[];
@@ -71,7 +71,12 @@ export default function UserSidebar({
   const isArticleMode = activeTab === 'howto' || activeTab === 'notes';
 
   return (
-    <div style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined} className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+    <div
+      style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined}
+      className={`bg-white border-r border-gray-200 flex flex-col ${
+        sidebarWidth != null ? 'flex-shrink-0' : 'flex-1 min-h-0'
+      }`}
+    >
       {/* Tab Headers - hide when in article mode */}
       {!isArticleMode && (
         <div className="flex border-b border-gray-200">

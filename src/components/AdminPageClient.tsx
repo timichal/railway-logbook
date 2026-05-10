@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import AdminSidebar from '@/components/AdminSidebar';
 import { logout } from '@/lib/authActions';
@@ -260,16 +261,18 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
               onClick={toggleSidebar}
             />
             <div className="fixed inset-y-0 left-0 z-40 w-full max-w-md bg-white flex flex-col sidebar-drawer-open">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 flex-shrink-0">
-                <span className="text-sm font-medium text-gray-700">Admin Sidebar</span>
-                <button
-                  onClick={toggleSidebar}
-                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded cursor-pointer"
-                  aria-label="Close sidebar"
+              <div className="border-b border-gray-200 px-3 py-2 flex flex-wrap gap-2 flex-shrink-0">
+                <Link
+                  href="/"
+                  className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-1.5 px-3 rounded-md text-xs"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  Back to Map
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-600 hover:bg-red-700 text-white font-medium py-1.5 px-3 rounded-md text-xs cursor-pointer ml-auto"
+                >
+                  Logout
                 </button>
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">

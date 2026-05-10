@@ -18,9 +18,9 @@ export function setupUserMapInteractions(
   const { onRouteClick, onStationClick } = callbacks;
   let currentPopup: maplibregl.Popup | null = null;
 
-  // Click handler for routes — queries all route-related layers (base + highlights)
+  // Click handler for routes — queries all route-related layers (base + click buffer + highlights)
   const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
-    const routeLayers = ['railway_routes', 'selected_routes_highlight', 'highlighted_routes']
+    const routeLayers = ['railway_routes_click', 'railway_routes', 'selected_routes_highlight', 'highlighted_routes']
       .filter(id => mapInstance.getLayer(id));
     if (routeLayers.length === 0) return;
 
@@ -192,7 +192,7 @@ export function setupUserMapInteractions(
 
   // Prevent double-click zoom on routes (fast select/unselect triggers dblclick)
   const handleDblClick = (e: maplibreglType.MapMouseEvent) => {
-    const routeLayers = ['railway_routes', 'selected_routes_highlight', 'highlighted_routes']
+    const routeLayers = ['railway_routes_click', 'railway_routes', 'selected_routes_highlight', 'highlighted_routes']
       .filter(id => mapInstance.getLayer(id));
     if (routeLayers.length === 0) return;
     const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
@@ -202,11 +202,13 @@ export function setupUserMapInteractions(
   };
   mapInstance.on('dblclick', handleDblClick);
 
-  // Attach route click as general map handler (works through highlight layers on top)
+  // Attach route click as general map handler (works through highlight layers on top).
+  // Hover/cursor handlers fire from the wide click-buffer layer so thin visible
+  // lines don't make hover/cursor feedback finicky.
   mapInstance.on('click', handleRouteClick);
-  mapInstance.on('mousemove', 'railway_routes', handleRouteMouseMove);
-  mapInstance.on('mouseenter', 'railway_routes', handleRouteMouseEnter);
-  mapInstance.on('mouseleave', 'railway_routes', handleRouteMouseLeave);
+  mapInstance.on('mousemove', 'railway_routes_click', handleRouteMouseMove);
+  mapInstance.on('mouseenter', 'railway_routes_click', handleRouteMouseEnter);
+  mapInstance.on('mouseleave', 'railway_routes_click', handleRouteMouseLeave);
 
   // Attach station handlers (added after routes, so they take precedence due to layer order)
   mapInstance.on('click', 'stations', handleStationClick);
@@ -222,9 +224,9 @@ export function setupUserMapInteractions(
     // Remove route handlers
     mapInstance.off('dblclick', handleDblClick);
     mapInstance.off('click', handleRouteClick);
-    mapInstance.off('mousemove', 'railway_routes', handleRouteMouseMove);
-    mapInstance.off('mouseenter', 'railway_routes', handleRouteMouseEnter);
-    mapInstance.off('mouseleave', 'railway_routes', handleRouteMouseLeave);
+    mapInstance.off('mousemove', 'railway_routes_click', handleRouteMouseMove);
+    mapInstance.off('mouseenter', 'railway_routes_click', handleRouteMouseEnter);
+    mapInstance.off('mouseleave', 'railway_routes_click', handleRouteMouseLeave);
     // Remove station handlers
     mapInstance.off('click', 'stations', handleStationClick);
     mapInstance.off('mousemove', 'stations', handleStationMouseMove);

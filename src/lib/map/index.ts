@@ -43,10 +43,10 @@ export const COLORS = {
     selected: '#16a34a',
   },
   railwayRoutes: {
-    default: { branch: '#dc2626', main: '#dc2626', highspeed: '#991b1b' },
+    default: { branch: '#b8554f', main: '#b8554f', highspeed: '#7a3633' },
     selected: '#ff6b35',
-    visited: { branch: '#15803d', main: '#15803d', highspeed: '#14532d' },
-    unvisited: { branch: '#dc2626', main: '#dc2626', highspeed: '#991b1b' },
+    visited: { branch: '#1f8a4c', main: '#1f8a4c', highspeed: '#155e34' },
+    unvisited: { branch: '#b8554f', main: '#b8554f', highspeed: '#7a3633' },
     partial: { branch: '#d97706', main: '#d97706', highspeed: '#92400e' },
     invalid: '#9ca3af', // Grey for invalid routes
   },
@@ -108,8 +108,8 @@ export function createOSMBackgroundLayer(): maplibregl.RasterLayerSpecification 
     maxzoom: 19, // has to be higher than the map max zoom
     paint: {
       'raster-fade-duration': 0,
-      'raster-saturation': -0.2,
-      'raster-opacity': 0.8,
+      'raster-saturation': 0,
+      'raster-opacity': 0.6,
     },
   };
 }
@@ -183,6 +183,37 @@ export function createRailwayRoutesLayer(
   return layer;
 }
 
+/**
+ * Invisible wide line layer used as a click/hover hit area for routes.
+ * Sits underneath the visible railway_routes layer; queryRenderedFeatures
+ * picks it up so thin visible lines stay easy to tap on touch screens.
+ */
+export function createRailwayRoutesClickLayer(
+  config: RailwayRoutesPaintConfig = {}
+): maplibregl.LineLayerSpecification {
+  const { widthExpression, defaultWidth = 16, filter } = config;
+
+  const layer: maplibregl.LineLayerSpecification = {
+    id: 'railway_routes_click',
+    type: 'line',
+    source: 'railway_routes',
+    'source-layer': 'railway_routes',
+    minzoom: ZOOM_RANGES.railwayRoutes.min,
+    layout: { visibility: 'visible' },
+    paint: {
+      'line-color': '#000000',
+      'line-width': widthExpression || defaultWidth,
+      'line-opacity': 0,
+    },
+  };
+
+  if (filter !== undefined) {
+    layer.filter = filter as maplibregl.FilterSpecification;
+  }
+
+  return layer;
+}
+
 export function createScenicRoutesOutlineLayer(
   config: RailwayRoutesPaintConfig = {}
 ): maplibregl.LineLayerSpecification {
@@ -192,10 +223,11 @@ export function createScenicRoutesOutlineLayer(
     filter,
   } = config;
 
-  // Calculate outline width (add 2px to the base width)
-  const outlineWidth: maplibregl.ExpressionSpecification | number = widthExpression
-    ? (['+', widthExpression, 6] as maplibregl.ExpressionSpecification)
-    : (defaultWidth + 6);
+  // MapLibre forbids wrapping a zoom-interpolate inside another expression like
+  // ['+', expr, 6], so the caller must supply a fully-formed width expression
+  // (typically getUserRouteScenicOutlineWidthExpression).
+  const outlineWidth: maplibregl.ExpressionSpecification | number =
+    widthExpression ?? (defaultWidth + 6);
 
   const layer: maplibregl.LineLayerSpecification = {
     id: 'railway_routes_scenic_outline',
@@ -274,12 +306,16 @@ export function createRailwayPartsLayer(): maplibregl.LineLayerSpecification {
         COLORS.railwayParts.default
       ],
       'line-width': [
-        'case',
-        ['boolean', ['feature-state', 'hover'], false],
-        5,
-        3
+        'interpolate', ['linear'], ['zoom'],
+        4, 0.4,
+        7, 1,
+        12, [
+          'case',
+          ['boolean', ['feature-state', 'hover'], false], 3.5,
+          1.6
+        ]
       ],
-      'line-opacity': 0.7,
+      'line-opacity': 0.6,
     },
   };
 }

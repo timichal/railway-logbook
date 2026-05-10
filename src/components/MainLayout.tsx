@@ -65,6 +65,8 @@ export default function MainLayout({ user, onLogout, initialSelectedCountries }:
           isMobile={isMobile}
           sidebarOpen={sidebarOpen}
           onToggleSidebar={toggleSidebar}
+          onLogout={handleLogout}
+          onAuthSuccess={handleAuthSuccess}
         />
       </main>
     </>

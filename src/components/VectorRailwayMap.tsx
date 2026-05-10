@@ -14,14 +14,16 @@ import { useLayerFilters } from '@/lib/map/hooks/useLayerFilters';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
+  createRailwayRoutesClickLayer,
   createScenicRoutesOutlineLayer,
   createStationsSource,
   createStationsLayer,
 } from '@/lib/map';
 import { setupUserMapInteractions } from '@/lib/map/interactions/userMapInteractions';
-import { getUserRouteColorExpression, getUserRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
+import { getUserRouteColorExpression, getUserRouteWidthExpression, getUserRouteClickBufferWidthExpression, getUserRouteScenicOutlineWidthExpression } from '@/lib/map/utils/userRouteStyling';
 import { useToast } from '@/lib/toast';
 import UserSidebar, { type ActiveTab } from './UserSidebar';
+import MobileMenuPanel from './MobileMenuPanel';
 
 interface VectorRailwayMapProps {
   className?: string;
@@ -35,6 +37,8 @@ interface VectorRailwayMapProps {
   isMobile: boolean;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  onLogout: () => void;
+  onAuthSuccess: () => void;
 }
 
 export default function VectorRailwayMap({
@@ -48,7 +52,9 @@ export default function VectorRailwayMap({
   isResizing,
   isMobile,
   sidebarOpen,
-  onToggleSidebar
+  onToggleSidebar,
+  onLogout,
+  onAuthSuccess
 }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const { showError } = useToast();
@@ -80,8 +86,14 @@ export default function VectorRailwayMap({
     setJourneyEditActive(false);
   }, []);
 
-  // Highlighted routes state (for journey planner)
+  // Highlighted routes state. `kind` controls the highlight color: 'planner'
+  // (gold) for pathfinder results, 'view' (orange) for My Trips browsing.
   const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
+  const [highlightKind, setHighlightKind] = useState<'planner' | 'view'>('view');
+  const handleHighlightRoutes = useCallback((ids: number[], kind: 'planner' | 'view' = 'view') => {
+    setHighlightedRoutes(ids);
+    setHighlightKind(kind);
+  }, []);
 
   // Selected routes state
   const [selectedRoutes, setSelectedRoutes] = useState<SelectedRoute[]>([]);
@@ -100,7 +112,12 @@ export default function VectorRailwayMap({
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scenicLayerConfig = useMemo(() => ({
-    widthExpression: getUserRouteWidthExpression(),
+    widthExpression: getUserRouteScenicOutlineWidthExpression(),
+    filter: defaultFilter,
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clickBufferLayerConfig = useMemo(() => ({
+    widthExpression: getUserRouteClickBufferWidthExpression(),
     filter: defaultFilter,
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -115,6 +132,7 @@ export default function VectorRailwayMap({
       layers: [
         createScenicRoutesOutlineLayer(scenicLayerConfig),
         createRailwayRoutesLayer(routeLayerConfig),
+        createRailwayRoutesClickLayer(clickBufferLayerConfig),
         createStationsLayer(),
       ],
     },
@@ -176,10 +194,11 @@ export default function VectorRailwayMap({
     selectedCountries,
     routeLayerConfig,
     scenicLayerConfig,
+    clickBufferLayerConfig,
   });
 
   // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)
-  useRouteHighlighting(map, highlightedRoutes, selectedRoutes, cacheBuster);
+  useRouteHighlighting(map, highlightedRoutes, highlightKind, selectedRoutes, cacheBuster);
 
   // Layer filter hooks
   useLayerFilters(map, routeEditor.showSpecialLines, showScenicOutline);
@@ -384,7 +403,7 @@ export default function VectorRailwayMap({
       onRemoveRoute={handleRemoveRoute}
       onClearAll={handleClearAll}
       onUpdateRoutePartial={handleUpdateRoutePartial}
-      onHighlightRoutes={setHighlightedRoutes}
+      onHighlightRoutes={handleHighlightRoutes}
       onAddRoutesFromPlanner={handleAddRoutesFromLogger}
       onRoutesLogged={handleRoutesLogged}
       selectedCountries={selectedCountries}
@@ -399,7 +418,7 @@ export default function VectorRailwayMap({
   );
 
   return (
-    <div className="h-full flex relative">
+    <div className={`h-full relative ${isMobile ? 'flex flex-col' : 'flex'}`}>
       {/* Desktop sidebar */}
       {!isMobile && (
         <>
@@ -413,34 +432,20 @@ export default function VectorRailwayMap({
         </>
       )}
 
-      {/* Mobile drawer overlay */}
+      {/* Mobile top-half sidebar (map fills the bottom half) */}
       {isMobile && sidebarOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/40 z-30"
-            onClick={onToggleSidebar}
+        <div className="h-1/2 flex-shrink-0 bg-white border-b border-gray-200 flex flex-col sidebar-drawer-top-open">
+          <MobileMenuPanel
+            user={user}
+            onLogout={onLogout}
+            onAuthSuccess={onAuthSuccess}
+            onOpenHowTo={() => setActiveTab('howto')}
+            onOpenNotes={() => setActiveTab('notes')}
           />
-          {/* Drawer */}
-          <div className="fixed inset-y-0 left-0 z-40 w-full max-w-md bg-white flex flex-col sidebar-drawer-open">
-            {/* Drawer close header */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 flex-shrink-0">
-              <span className="text-sm font-medium text-gray-700">Sidebar</span>
-              <button
-                onClick={onToggleSidebar}
-                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded cursor-pointer"
-                aria-label="Close sidebar"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden flex flex-col">
-              {sidebarContent}
-            </div>
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {sidebarContent}
           </div>
-        </>
+        </div>
       )}
 
       {/* Map Container */}
@@ -454,7 +459,7 @@ export default function VectorRailwayMap({
       {/* Progress Stats Box */}
       {routeEditor.progress && (
         <div className={`absolute bg-white p-3 rounded shadow-lg text-black z-10 ${
-          isMobile ? 'bottom-4 left-3 text-xs' : 'bottom-10 right-4'
+          isMobile ? 'bottom-10 left-3 text-xs' : 'bottom-10 right-4'
         }`}>
           <h3 className={`font-bold mb-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>Completed</h3>
           <div className={`font-semibold ${isMobile ? 'text-sm' : 'text-lg'}`}>
@@ -491,7 +496,7 @@ export default function VectorRailwayMap({
 
       {/* Station Search Box */}
       <div className={`absolute z-10 ${
-        isMobile ? 'top-3 left-3 right-3' : 'top-4 right-12 w-80'
+        isMobile ? 'top-3 left-3 right-14' : 'top-4 right-12 w-80'
       }`}>
         <div className="relative">
           <input

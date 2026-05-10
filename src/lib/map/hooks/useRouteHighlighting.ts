@@ -3,18 +3,30 @@ import type maplibregl from 'maplibre-gl';
 import type { SelectedRoute } from '@/lib/types';
 
 /**
+ * 'planner'  — pathfinder result between two stations (gold)
+ * 'view'     — viewing journeys/trips in My Trips (orange, matches admin selection)
+ */
+export type HighlightKind = 'planner' | 'view';
+
+export type HighlightRoutesFn = (routeIds: number[], kind?: HighlightKind) => void;
+
+/**
  * Manages highlight overlay layers on the user map:
- * - Gold highlights from Journey Planner
- * - Green/Red/Orange highlights from Route Logger selection
+ * - Gold highlights from Journey Planner pathfinding
+ * - Orange highlights from Route Logger selection and My Trips views
  */
 export function useRouteHighlighting(
   map: React.MutableRefObject<maplibregl.Map | null>,
   highlightedRoutes: number[],
+  highlightKind: HighlightKind,
   selectedRoutes: SelectedRoute[],
   /** Bumped when the railway_routes source/layer is recreated so highlights re-apply. */
   tileRefreshKey?: number,
 ) {
-  // Journey planner highlights (gold)
+  // Journey planner uses gold; My Trips view uses the same orange as
+  // the admin-map selected-route style.
+  const highlightColor = highlightKind === 'planner' ? '#FFD700' : '#ff6b35';
+
   useEffect(() => {
     if (!map.current || !map.current.getLayer('railway_routes')) return;
 
@@ -26,13 +38,14 @@ export function useRouteHighlighting(
           source: 'railway_routes',
           'source-layer': 'railway_routes',
           paint: {
-            'line-color': '#FFD700',
-            'line-width': 6,
-            'line-opacity': 0.8,
+            'line-color': highlightColor,
+            'line-width': 5,
+            'line-opacity': 1.0,
           },
           filter: ['in', ['id'], ['literal', highlightedRoutes]],
         });
       } else {
+        map.current.setPaintProperty('highlighted_routes', 'line-color', highlightColor);
         map.current.setFilter('highlighted_routes', [
           'in', ['id'], ['literal', highlightedRoutes],
         ]);
@@ -42,9 +55,10 @@ export function useRouteHighlighting(
         map.current.removeLayer('highlighted_routes');
       }
     }
-  }, [map, highlightedRoutes, tileRefreshKey]);
+  }, [map, highlightedRoutes, highlightColor, tileRefreshKey]);
 
-  // Selected routes highlights (green/orange/red)
+  // Route Logger selection highlights — match the admin map's selected-route style
+  // (orange #ff6b35, constant 5px, full opacity).
   useEffect(() => {
     if (!map.current || !map.current.getLayer('railway_routes')) return;
 
@@ -58,9 +72,9 @@ export function useRouteHighlighting(
           source: 'railway_routes',
           'source-layer': 'railway_routes',
           paint: {
-            'line-color': '#FFD700',
-            'line-width': 7,
-            'line-opacity': 0.9,
+            'line-color': '#ff6b35',
+            'line-width': 5,
+            'line-opacity': 1.0,
           },
           filter: ['in', ['id'], ['literal', selectedTrackIds]],
         });

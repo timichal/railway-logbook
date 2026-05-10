@@ -20,12 +20,10 @@ interface NavbarProps {
 export default function Navbar({ user, onLogout, onAuthSuccess, onOpenHowTo, onOpenNotes, isAdminPage = false, isMobile = false, onToggleSidebar }: NavbarProps) {
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
   const [showRegisterDropdown, setShowRegisterDropdown] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const loginRef = useRef<HTMLDivElement>(null);
   const registerRef = useRef<HTMLDivElement>(null);
-  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdowns when clicking outside
+  // Close desktop login/register dropdowns when clicking outside.
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (loginRef.current && !loginRef.current.contains(event.target as Node)) {
@@ -33,9 +31,6 @@ export default function Navbar({ user, onLogout, onAuthSuccess, onOpenHowTo, onO
       }
       if (registerRef.current && !registerRef.current.contains(event.target as Node)) {
         setShowRegisterDropdown(false);
-      }
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
-        setMobileMenuOpen(false);
       }
     }
 
@@ -45,172 +40,38 @@ export default function Navbar({ user, onLogout, onAuthSuccess, onOpenHowTo, onO
     };
   }, []);
 
-  // Close mobile menu when switching to desktop
-  useEffect(() => {
-    if (!isMobile) setMobileMenuOpen(false);
-  }, [isMobile]);
-
-  // Close dropdown after successful login/register
   const handleLoginSuccess = () => {
     setShowLoginDropdown(false);
-    setMobileMenuOpen(false);
-    if (onAuthSuccess) {
-      onAuthSuccess();
-    }
+    if (onAuthSuccess) onAuthSuccess();
   };
 
   const handleRegisterSuccess = () => {
     setShowRegisterDropdown(false);
-    setMobileMenuOpen(false);
-    if (onAuthSuccess) {
-      onAuthSuccess();
-    }
+    if (onAuthSuccess) onAuthSuccess();
   };
 
-  const closeMobileMenu = () => setMobileMenuOpen(false);
-
-  // Mobile navbar
+  // Mobile navbar — sidebar toggle only. All menu actions (auth, articles,
+  // admin link, back-to-map, logout) live inside each page's sidebar drawer.
   if (isMobile) {
     return (
-      <header className="bg-white border-b border-gray-200 px-3 py-2 flex-shrink-0" ref={mobileMenuRef}>
+      <header className="bg-white border-b border-gray-200 px-3 py-2 flex-shrink-0">
         <div className="flex justify-between items-center">
           <h1 className="text-lg font-bold text-gray-900 truncate">
             {isAdminPage ? 'Admin' : 'Railway Logbook'}
           </h1>
 
-          <div className="flex items-center gap-2">
-            {/* Sidebar toggle */}
-            {onToggleSidebar && (
-              <button
-                onClick={onToggleSidebar}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md cursor-pointer"
-                aria-label="Toggle sidebar"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            )}
-
-            {/* Hamburger menu button */}
+          {onToggleSidebar && (
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              onClick={onToggleSidebar}
               className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md cursor-pointer"
-              aria-label="Menu"
+              aria-label="Toggle sidebar"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01" />
-                )}
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-          </div>
+          )}
         </div>
-
-        {/* Mobile dropdown panel */}
-        {mobileMenuOpen && (
-          <div className="mt-2 pb-2 border-t border-gray-200 pt-2 space-y-2">
-            <p className="text-xs text-gray-500 px-1">
-              {isAdminPage
-                ? `Welcome, ${user?.name || user?.email}`
-                : user
-                  ? `Welcome, ${user.name || user.email}!`
-                  : 'Log your rail journeys around Europe'}
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              {!isAdminPage && (
-                <>
-                  <button
-                    onClick={() => { onOpenHowTo?.(); closeMobileMenu(); }}
-                    className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-1.5 px-3 rounded-md text-xs border border-blue-300 cursor-pointer"
-                  >
-                    How To Use
-                  </button>
-                  <button
-                    onClick={() => { onOpenNotes?.(); closeMobileMenu(); }}
-                    className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-1.5 px-3 rounded-md text-xs border border-green-300 cursor-pointer"
-                  >
-                    Railway Notes
-                  </button>
-                </>
-              )}
-
-              {user?.id === 1 && !isAdminPage && (
-                <Link
-                  href="/admin"
-                  onClick={closeMobileMenu}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-3 rounded-md text-xs"
-                >
-                  Admin
-                </Link>
-              )}
-              {isAdminPage && (
-                <Link
-                  href="/"
-                  onClick={closeMobileMenu}
-                  className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-1.5 px-3 rounded-md text-xs"
-                >
-                  Back to Map
-                </Link>
-              )}
-            </div>
-
-            {/* Auth controls */}
-            {user ? (
-              onLogout && (
-                <button
-                  onClick={() => { onLogout(); closeMobileMenu(); }}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-3 rounded-md text-sm cursor-pointer"
-                >
-                  Logout
-                </button>
-              )
-            ) : (
-              <div className="space-y-2">
-                {/* Login section */}
-                <div>
-                  <button
-                    onClick={() => {
-                      setShowLoginDropdown(!showLoginDropdown);
-                      setShowRegisterDropdown(false);
-                    }}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-md text-sm cursor-pointer"
-                  >
-                    Login
-                  </button>
-                  {showLoginDropdown && (
-                    <div className="mt-2 bg-gray-50 rounded-lg border border-gray-200 p-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Sign in to your account</h3>
-                      <LoginForm onSuccess={handleLoginSuccess} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Register section */}
-                <div>
-                  <button
-                    onClick={() => {
-                      setShowRegisterDropdown(!showRegisterDropdown);
-                      setShowLoginDropdown(false);
-                    }}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-3 rounded-md text-sm cursor-pointer"
-                  >
-                    Register
-                  </button>
-                  {showRegisterDropdown && (
-                    <div className="mt-2 bg-gray-50 rounded-lg border border-gray-200 p-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Create your account</h3>
-                      <RegisterForm onSuccess={handleRegisterSuccess} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </header>
     );
   }

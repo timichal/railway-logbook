@@ -109,14 +109,15 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Martin Tile Server** - PostGIS vector tile server (port 3001) serving railway_routes, railway_parts, and stations as MVT tiles
 - **Server Actions** - Type-safe database operations with automatic serialization
 - **Authentication** - Email/password authentication with bcrypt, session management
-- **Dynamic Styling** - Route colors based on visit status (green=completed, orange=partial, red=unvisited) with darker shades for highspeed lines; width varies by line_class (branch=2, main/highspeed=3.5), thinnest for Special usage (1.5); amber outline effect for scenic routes
+- **Dynamic Styling** - Route colors based on visit status (green=completed, orange=partial, muted red=unvisited) with darker shades for highspeed lines; width is zoom-aware (main/highspeed thin when zoomed out, fuller when zoomed in; branch + special hidden at zoom ≤ 6.5 to keep zoomed-out maps readable, fade in by zoom 7); amber outline effect for scenic routes; an invisible wide `railway_routes_click` layer sits over the visible line as a hit area so thin lines stay tappable on touch screens
 - **Badge-Style Tooltips** - Hover popups display color-coded badges: usage type (blue=Regular, purple=Special), line class (red badge=High-speed, blue badge=Main), frequency tags (green badges), and scenic flag (amber badge)
 - **Connection Pooling** - PostgreSQL pool for database performance
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension); floating search box in top-right
 - **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
-- **Unified User Sidebar** - Left-side resizable tabbed sidebar (400px-1200px) with tabs (Route Logger, My Trips [auth] / My Journeys [unauth], Country Settings & Stats) plus two article views (How To Use, Railway Notes); auth-aware rendering with JourneyLogger/LocalTripLogger
-- **Article Tabs** - "How To Use" and "Railway Notes" buttons in navbar open full-screen article tabs in sidebar with close button to return to Route Logger
+- **Unified User Sidebar** - On desktop: left-side resizable tabbed sidebar (400px-1200px). On mobile: top-half drawer with map filling the bottom half (the navbar's hamburger toggles it). Tabs: Route Logger, My Trips [auth] / My Journeys [unauth], Country Settings & Stats. Two article views (How To Use, Railway Notes); auth-aware rendering with JourneyLogger/LocalTripLogger
+- **Article Tabs** - "How To Use" and "Railway Notes" buttons (in desktop navbar / mobile sidebar menu strip) open full-screen article tabs in sidebar with close button to return to Route Logger
+- **Mobile Menu Strip** - On the main map's mobile drawer, a `MobileMenuPanel` strip at the top hosts auth (Login/Register/Logout), article buttons, and the Admin link. The navbar is title + sidebar-toggle only — no separate three-dot menu. Admin page's mobile drawer has its own Back-to-Map / Logout strip.
 
 ### 5. Admin System Architecture
 - **Admin Access Control** - Restricted to user_id=1 with server-side authentication checks in all admin actions
@@ -202,9 +203,10 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `NotesPopup.tsx` - Popup component for creating/editing admin notes (text field, save/delete buttons, keyboard shortcuts)
 
 **Shared Components:**
-- `Navbar.tsx` - Navigation bar with title, login/logout dropdown, and article buttons ("How To Use" and "Railway Notes")
-- `LoginForm.tsx` - Login form with email/password (rendered in navbar dropdown)
-- `RegisterForm.tsx` - Registration form (rendered in navbar dropdown)
+- `Navbar.tsx` - Navigation bar. Desktop: title, login/logout dropdown, Admin/Back link, article buttons. Mobile: title + sidebar-toggle (hamburger) only — every other action lives inside the sidebar drawer.
+- `MobileMenuPanel.tsx` - Strip rendered at the top of the main map's mobile drawer: auth controls (Login/Register/Logout with inline forms), "How To Use", "Railway Notes", Admin link.
+- `LoginForm.tsx` - Login form with email/password (rendered in navbar dropdown / mobile menu panel)
+- `RegisterForm.tsx` - Registration form (rendered in navbar dropdown / mobile menu panel)
 
 #### Library (`src/lib/`)
 
@@ -243,7 +245,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 #### Map Library (`src/lib/map/`)
 
 **Core:**
-- `index.ts` - Map constants, COLORS, layer factories (createRailwayRoutesSource/Layer, createScenicRoutesOutlineLayer, createStationsSource/Layer, createRailwayPartsSource/Layer, createAdminNotesSource/Layer), lineClassColorExpression helper, closeAllPopups utility
+- `index.ts` - Map constants, COLORS, layer factories (createRailwayRoutesSource/Layer, createRailwayRoutesClickLayer, createScenicRoutesOutlineLayer, createStationsSource/Layer, createRailwayPartsSource/Layer, createAdminNotesSource/Layer), lineClassColorExpression helper, closeAllPopups utility
 - `mapState.ts` - Shared map state management (save/load map position)
 
 **Hooks:**
@@ -255,7 +257,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `hooks/useAdminMapOverlays.ts` - Manages GeoJSON overlay layers on admin map (preview route, selected points, route endpoints)
 - `hooks/useAdminNotesPopup.tsx` - Right-click notes popup system (create/edit notes, cache busting)
 - `hooks/useMapTileRefresh.ts` - Manages railway routes tile cache busting for user map
-- `hooks/useRouteHighlighting.ts` - Manages highlight overlay layers (gold journey planner, green/red/orange selection)
+- `hooks/useRouteHighlighting.ts` - Manages highlight overlay layers. Two kinds of highlight, distinguished by a `kind` flag passed via `onHighlightRoutes(ids, kind)`: 'planner' (Journey Planner pathfinder result) renders gold #FFD700; 'view' (My Trips browsing) renders orange #ff6b35 — same as the admin map's selected-route style. Selection from the Route Logger uses a separate `selected_routes_highlight` layer in the same orange.
 - `hooks/useLayerFilters.ts` - Manages special lines filter and scenic outline visibility on user map
 
 **Interactions:**
@@ -263,7 +265,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - `interactions/adminMapInteractions.ts` - Admin map click handlers (coordinate capture from railway parts, route editing, badge-style hover popups)
 
 **Utilities:**
-- `utils/userRouteStyling.ts` - User route color/width expressions (colors by visit status × line_class: each status has normal + darker highspeed shade; width by line_class: branch=2, main/highspeed=3.5; scenic routes use same colors with outline layer)
+- `utils/userRouteStyling.ts` - User route color/width expressions. Color: by visit status × line_class (each status has normal + darker highspeed shade). Width: zoom-aware top-level interpolate — main/highspeed thin when zoomed out and full size zoomed in; branch + special are 0 width below zoom 7 so they disappear when zoomed out. Helpers: `getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression` (16px hit area, 0 where the visible line is hidden), `getUserRouteScenicOutlineWidthExpression` (visible width + ~6px, used by the scenic outline layer — written as its own interpolate because MapLibre forbids wrapping a zoom-interpolate in another expression like `['+', expr, 6]`), `getAdminRouteWidthExpression(selectedTrackId)` (admin map equivalent with the selected route at constant 5px; selection `case` lives inside each interpolate stop for the same MapLibre rule).
 - `utils/tooltipFormatting.ts` - Shared tooltip badge formatting (usage type, frequency, scenic badges)
 - `utils/distance.ts` - Distance calculation utilities
 
@@ -386,12 +388,12 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 
 ### Unified User Sidebar
 - **Purpose**: Consolidated tabbed interface for route logging, journey management, country filtering, and documentation
-- **Location**: Resizable left-side sidebar (default 600px, range 400px-1200px)
+- **Location**: Desktop — resizable left-side sidebar (default 600px, range 400px-1200px). Mobile — top-half drawer (`h-1/2`) with the map filling the bottom half, toggled by the navbar hamburger; uses the `sidebar-drawer-top-open` slide-down animation.
 - **Architecture**: Visible tabs (Route Logger, My Journeys, My Trips [auth only], Country Settings & Stats) plus two article views (How To Use, Railway Notes) with activeTab state managed in MainLayout component
 - **Auth-Aware**: Renders `JourneyLogger` for authenticated users, `LocalTripLogger` for unauthenticated users in Route Logger tab; similar split for My Journeys tab
-- **Resizing**: Blue drag handle between sidebar and map (same as admin interface)
+- **Resizing**: Blue drag handle between sidebar and map (desktop only; same as admin interface)
 - **Tab Switching**: Affects map interaction behavior (route clicking and station clicking only work in Route Logger tab)
-- **State Management**: activeTab state in MainLayout flows down through VectorRailwayMap → UserSidebar (no useEffect synchronization)
+- **State Management**: activeTab state in MainLayout flows down through VectorRailwayMap → UserSidebar (no useEffect synchronization). UserSidebar is `flex-shrink-0` on desktop (fixed width) and `flex-1 min-h-0` on mobile so its inner tab content scrolls independently of the menu strip and tab headers.
 
 #### Tab 1: Route Logger
 - **Purpose**: Build a selection of routes for batch logging to a new or existing journey
@@ -404,9 +406,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - "Clear all" button to empty the entire selection
   - Integrated Journey Planner (collapsible section within the tab)
 - **Route Highlighting**:
-  - Selected routes highlighted with thick colored overlay (width: 7, opacity: 0.9)
-  - Green highlight (#059669) for logged routes (fully completed)
-  - Red highlight (#DC2626) for unlogged routes
+  - Selected routes highlighted with an orange overlay (color #ff6b35, constant 5px, opacity 1.0) — same style as the admin map's selected-route highlight
   - Highlights update automatically as routes are logged/unlogged
 - **Journey Logging**:
   - Journey name field (required, non-empty)

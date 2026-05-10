@@ -22,7 +22,7 @@ interface SelectedStation {
 type MaybeStation = SelectedStation | null;
 
 interface JourneyPlannerProps {
-  onHighlightRoutes?: (routeIds: number[]) => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
   onAddRoutesToSelection?: (routes: RouteNode[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
@@ -247,13 +247,13 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
         setPathError(result.error);
         setFoundPath([]);
         setTotalDistance(0);
-        if (onHighlightRoutes) onHighlightRoutes([]);
+        if (onHighlightRoutes) onHighlightRoutes([], 'planner');
       } else {
         setFoundPath(result.routes);
         setTotalDistance(result.totalDistance);
         setPathError(null);
         if (onHighlightRoutes) {
-          onHighlightRoutes(result.routes.map(r => r.track_id));
+          onHighlightRoutes(result.routes.map(r => r.track_id), 'planner');
         }
       }
     } catch (error) {
@@ -289,7 +289,7 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
     setFromSearchQuery('');
     setToSearchQuery('');
     setViaSearchQueries([]);
-    if (onHighlightRoutes) onHighlightRoutes([]);
+    if (onHighlightRoutes) onHighlightRoutes([], 'planner');
   };
 
   // Add new via station

@@ -12,7 +12,7 @@ interface JourneyWithRoutes {
 }
 
 interface LocalJourneyLogTabProps {
-  onHighlightRoutes?: (routeIds: number[]) => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
   onJourneyChanged?: () => void;
 }
 

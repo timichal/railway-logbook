@@ -20,7 +20,7 @@ interface LocalTripLoggerProps {
   onClearSelection: () => void;
   onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
   onRoutesLogged: () => void;
-  onHighlightRoutes?: (routeIds: number[]) => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }

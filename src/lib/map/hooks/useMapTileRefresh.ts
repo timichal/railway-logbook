@@ -3,6 +3,7 @@ import type maplibregl from 'maplibre-gl';
 import {
   createRailwayRoutesSource,
   createRailwayRoutesLayer,
+  createRailwayRoutesClickLayer,
   createScenicRoutesOutlineLayer,
   type RailwayRoutesSourceOptions,
   type RailwayRoutesPaintConfig,
@@ -18,6 +19,8 @@ interface UseMapTileRefreshOptions {
   routeLayerConfig: RailwayRoutesPaintConfig;
   /** Paint/filter config for scenic outline layer */
   scenicLayerConfig: RailwayRoutesPaintConfig;
+  /** Paint/filter config for invisible click-buffer layer */
+  clickBufferLayerConfig: RailwayRoutesPaintConfig;
 }
 
 /**
@@ -31,6 +34,7 @@ export function useMapTileRefresh({
   selectedCountries,
   routeLayerConfig,
   scenicLayerConfig,
+  clickBufferLayerConfig,
 }: UseMapTileRefreshOptions) {
   const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
 
@@ -39,7 +43,7 @@ export function useMapTileRefresh({
     if (!map.current || !mapLoaded || !userId) return;
 
     const m = map.current;
-    const layersToRemove = ['selected_routes_highlight', 'highlighted_routes', 'railway_routes', 'railway_routes_scenic_outline'];
+    const layersToRemove = ['selected_routes_highlight', 'highlighted_routes', 'railway_routes_click', 'railway_routes', 'railway_routes_scenic_outline'];
     layersToRemove.forEach(layerId => {
       if (m.getLayer(layerId)) m.removeLayer(layerId);
     });
@@ -55,6 +59,7 @@ export function useMapTileRefresh({
     m.addSource('railway_routes', createRailwayRoutesSource(sourceOptions));
     m.addLayer(createScenicRoutesOutlineLayer(scenicLayerConfig), 'stations');
     m.addLayer(createRailwayRoutesLayer(routeLayerConfig), 'stations');
+    m.addLayer(createRailwayRoutesClickLayer(clickBufferLayerConfig), 'stations');
   }, [cacheBuster]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshTiles = () => setCacheBuster(Date.now());
