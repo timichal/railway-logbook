@@ -137,22 +137,6 @@ export default function MergedTripCard({
     }
   };
 
-  const handleUnassignJourney = async (journeyId: number) => {
-    try {
-      const result = await unassignJourneyFromTrip(journeyId);
-      if (result.error) {
-        showError(result.error);
-      } else {
-        showSuccess('Journey unassigned from trip');
-        await refreshTripHighlights();
-        onChanged();
-      }
-    } catch (error) {
-      console.error('Error unassigning journey:', error);
-      showError('Failed to unassign journey');
-    }
-  };
-
   const handleShowPicker = async () => {
     setShowPicker(true);
     setIsLoadingUnassigned(true);
@@ -209,64 +193,59 @@ export default function MergedTripCard({
   };
 
   return (
-    <div className="p-3 bg-white border border-purple-300 rounded shadow-sm">
-      <div className="flex items-start justify-between gap-2 mb-2">
+    <div className="bg-white border border-purple-300 rounded shadow-sm">
+      <div className="px-3 py-2 flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-800 flex-shrink-0 uppercase tracking-wide">
+          <div className="flex items-baseline gap-2 overflow-hidden">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold text-xs bg-purple-100 text-purple-800 flex-shrink-0 tracking-wide">
               Trip
             </span>
-            <h4 className="font-bold text-base truncate">{trip.name}</h4>
+            <span className="font-semibold text-sm truncate" title={trip.name}>{trip.name}</span>
+            {trip.description && (
+              <span className="text-xs text-gray-500 truncate" title={trip.description}>{trip.description}</span>
+            )}
           </div>
-          {trip.description && (
-            <div className="text-xs text-gray-600 mt-1">{trip.description}</div>
-          )}
+          <div className="text-xs text-gray-600 mt-0.5">
+            {formatDateRange(trip.start_date, trip.end_date)} · {trip.journey_count} journey{trip.journey_count === 1 ? '' : 's'} · {trip.route_count} route{trip.route_count === 1 ? '' : 's'} · {Number(trip.total_distance).toFixed(1)} km
+          </div>
         </div>
+        {deleteConfirm ? (
+          <>
+            <button
+              onClick={handleDelete}
+              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
+            >
+              Confirm Delete
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(false)}
+              className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 flex-shrink-0"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={isOpen ? onRequestClose : onRequestOpen}
+              className={`px-3 py-1.5 rounded text-sm font-medium flex-shrink-0 ${
+                isOpen ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {isOpen ? 'Hide' : 'View / Edit'}
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
+            >
+              Delete
+            </button>
+          </>
+        )}
       </div>
-
-      <div className="flex items-center gap-4 text-xs text-gray-700 mb-3 flex-wrap">
-        <span className="font-medium">{formatDateRange(trip.start_date, trip.end_date)}</span>
-        <span><span className="font-medium">{trip.journey_count}</span> journeys</span>
-        <span><span className="font-medium">{trip.route_count}</span> routes</span>
-        <span><span className="font-medium">{Number(trip.total_distance).toFixed(1)}</span> km</span>
-      </div>
-
-      {deleteConfirm ? (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDelete}
-            className="flex-1 px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700"
-          >
-            Confirm Delete
-          </button>
-          <button
-            onClick={() => setDeleteConfirm(false)}
-            className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={isOpen ? onRequestClose : onRequestOpen}
-            className={`flex-1 px-3 py-1.5 rounded text-sm font-medium ${
-              isOpen ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            {isOpen ? 'Hide Details' : 'View / Edit'}
-          </button>
-          <button
-            onClick={() => setDeleteConfirm(true)}
-            className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700"
-          >
-            Delete
-          </button>
-        </div>
-      )}
 
       {isOpen && (
-        <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+        <div className="px-3 pb-3 pt-2 border-t border-gray-200 space-y-3">
           <div className="space-y-2">
             <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Trip</h5>
             <div>

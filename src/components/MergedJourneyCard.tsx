@@ -268,81 +268,71 @@ export default function MergedJourneyCard({
   };
 
   return (
-    <div className={`p-3 border rounded shadow-sm ${nested ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'}`}>
-      <div className="flex items-start justify-between gap-2 mb-2">
+    <div className={`border rounded shadow-sm ${nested ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'}`}>
+      <div className="px-3 py-2 flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <h4 className="font-bold text-base truncate">{journey.name}</h4>
-          {journey.description && (
-            <div className="text-xs text-gray-600 mt-1">{journey.description}</div>
-          )}
+          <div className="flex items-baseline gap-2 overflow-hidden">
+            <span className="font-semibold text-sm truncate" title={journey.name}>{journey.name}</span>
+            {journey.description && (
+              <span className="text-xs text-gray-500 truncate" title={journey.description}>{journey.description}</span>
+            )}
+          </div>
+          <div className="text-xs text-gray-600 mt-0.5">
+            {new Date(journey.date).toLocaleDateString('cs-CZ')} · {journey.route_count} route{journey.route_count === 1 ? '' : 's'} · {Number(journey.total_distance).toFixed(1)} km
+          </div>
         </div>
+        {deleteConfirm ? (
+          <>
+            <button
+              onClick={handleDelete}
+              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
+            >
+              Confirm Delete
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(false)}
+              className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 flex-shrink-0"
+            >
+              Cancel
+            </button>
+          </>
+        ) : isOpen ? (
+          <>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            >
+              {isSaving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              onClick={onRequestClose}
+              disabled={isSaving}
+              className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={onRequestOpen}
+              className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 flex-shrink-0"
+            >
+              View / Edit
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
+            >
+              Delete
+            </button>
+          </>
+        )}
       </div>
-
-      <div className="flex items-center gap-4 text-xs text-gray-700 mb-3">
-        <span className="font-medium">
-          {new Date(journey.date).toLocaleDateString('cs-CZ')}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="font-medium">{journey.route_count}</span>
-          <span>routes</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="font-medium">{Number(journey.total_distance).toFixed(1)}</span>
-          <span>km</span>
-        </span>
-      </div>
-
-      {deleteConfirm ? (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDelete}
-            className="flex-1 px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700"
-          >
-            Confirm Delete
-          </button>
-          <button
-            onClick={() => setDeleteConfirm(false)}
-            className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : isOpen ? (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex-1 px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            onClick={onRequestClose}
-            disabled={isSaving}
-            className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onRequestOpen}
-            className="flex-1 px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
-          >
-            View / Edit
-          </button>
-          <button
-            onClick={() => setDeleteConfirm(true)}
-            className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700"
-          >
-            Delete
-          </button>
-        </div>
-      )}
 
       {isOpen && (
-        <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+        <div className="px-3 pb-3 pt-2 border-t border-gray-200 space-y-3">
           <div className="px-2 py-1.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
             Click routes on the map to add or remove them from this journey
           </div>
