@@ -6,8 +6,8 @@ poznámky
 - junctions mají v OSM dané názvy (aspoň Německo) - projít opravit?
 
 STAV
-hotovo: Česko, Švýcarsko (chybí scénické značení); Litva, Lotyšsko, Estonsko, Finsko, Polsko; Slovensko a Rakousko (chybí přeshraniční do Maďarska + scénické značení)
-rozdělané: Německo, Itálie, Slovinsko, Francie, Španělsko, Belgie, Nizozemsko, Lucembursko
+hotovo: Česko, Švýcarsko, Lucembursko (chybí scénické značení); Litva, Lotyšsko, Estonsko, Finsko, Polsko; Slovensko a Rakousko (chybí přeshraniční do Maďarska + scénické značení)
+rozdělané: Německo, Itálie, Slovinsko, Francie, Španělsko, Belgie, Nizozemsko
 
 osm úpravy
 - piacenza hsl nájezd (19. 1.)
