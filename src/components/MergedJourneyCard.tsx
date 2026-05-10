@@ -1,0 +1,455 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useToast } from '@/lib/toast';
+import {
+  getJourney,
+  updateJourney,
+  deleteJourney,
+  addRoutesToJourney,
+  removeRouteFromJourney,
+  updateLoggedPartPartial,
+} from '@/lib/journeyActions';
+import { assignJourneyToTrip, unassignJourneyFromTrip } from '@/lib/tripActions';
+import type { TripWithStats } from '@/lib/tripActions';
+import type { Journey, RailwayRoute, SelectedRoute } from '@/lib/types';
+import { getUntimezonedDateStr } from '@/lib/getUntimezonedDateStr';
+
+function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
+  return {
+    track_id: route.track_id,
+    from_station: route.from_station,
+    to_station: route.to_station,
+    track_number: route.track_number ?? null,
+    description: route.description,
+    usage_type: 0 as RailwayRoute['usage_type'],
+    frequency: [],
+    link: route.link ?? null,
+    geometry: '',
+    length_km: route.length_km,
+    partial: false,
+  };
+}
+
+interface JourneyDisplay extends Journey {
+  route_count: number;
+  total_distance: string;
+}
+
+interface MergedJourneyCardProps {
+  journey: JourneyDisplay;
+  availableTrips: TripWithStats[];
+  // Tells parent whether this card is the currently-open one. Parent enforces single-open.
+  isOpen: boolean;
+  onRequestOpen: () => void;
+  onRequestClose: () => void;
+  // Mutation lifecycle
+  onChanged: () => void; // After save/delete/route changes — refresh the list and map
+  // Map interaction
+  onHighlightRoutes?: (routeIds: number[]) => void;
+  onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
+  onJourneyEditEnd?: () => void;
+  // Visual nesting (when rendered inside a trip card)
+  nested?: boolean;
+}
+
+export default function MergedJourneyCard({
+  journey,
+  availableTrips,
+  isOpen,
+  onRequestOpen,
+  onRequestClose,
+  onChanged,
+  onHighlightRoutes,
+  onJourneyEditStart,
+  onJourneyEditEnd,
+  nested = false,
+}: MergedJourneyCardProps) {
+  const { showSuccess, showError } = useToast();
+
+  const [viewedRoutes, setViewedRoutes] = useState<RailwayRoute[]>([]);
+  const [editName, setEditName] = useState(journey.name);
+  const [editDate, setEditDate] = useState(getUntimezonedDateStr(journey.date));
+  const [editDescription, setEditDescription] = useState(journey.description || '');
+  const [editTripId, setEditTripId] = useState<number | null>(journey.trip_id);
+  const [originalSnapshot, setOriginalSnapshot] = useState<{
+    routes: RailwayRoute[];
+    name: string;
+    date: string;
+    description: string;
+    tripId: number | null;
+  } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  // Mutable handler ref so the stable map click callback always sees fresh state
+  const editStateRef = useRef({ isOpen, viewedRoutes });
+  editStateRef.current = { isOpen, viewedRoutes };
+
+  const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | undefined>(undefined);
+  handleMapRouteClickRef.current = (route: SelectedRoute) => {
+    const { isOpen, viewedRoutes } = editStateRef.current;
+    if (!isOpen) return;
+
+    const routeId = String(route.track_id);
+    const isInJourney = viewedRoutes.some(r => String(r.track_id) === routeId);
+    const newRoutes = isInJourney
+      ? viewedRoutes.filter(r => String(r.track_id) !== routeId)
+      : [...viewedRoutes, buildRouteFromSelected(route)];
+
+    setViewedRoutes(newRoutes);
+    onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+  };
+
+  const stableHandleMapRouteClick = useCallback((route: SelectedRoute) => {
+    handleMapRouteClickRef.current?.(route);
+  }, []);
+
+  // Load journey details when this card opens
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    setIsLoadingDetails(true);
+    (async () => {
+      const result = await getJourney(journey.id);
+      if (cancelled) return;
+      if (result.error) {
+        showError(result.error);
+        setIsLoadingDetails(false);
+        return;
+      }
+      const routes = result.routes || [];
+      setViewedRoutes(routes);
+      if (result.journey) {
+        const dateStr = getUntimezonedDateStr(result.journey.date);
+        setEditName(result.journey.name);
+        setEditDate(dateStr);
+        setEditDescription(result.journey.description || '');
+        setEditTripId(result.journey.trip_id);
+        setOriginalSnapshot({
+          routes,
+          name: result.journey.name,
+          date: dateStr,
+          description: result.journey.description || '',
+          tripId: result.journey.trip_id,
+        });
+      }
+      setIsLoadingDetails(false);
+      onHighlightRoutes?.(
+        routes
+          .map(r => (r.track_id ? parseInt(r.track_id) : null))
+          .filter((id): id is number => id !== null)
+      );
+      onJourneyEditStart?.(stableHandleMapRouteClick);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, journey.id]);
+
+  // When this card closes (or unmounts), tear down the edit session
+  useEffect(() => {
+    if (isOpen) return;
+    setViewedRoutes([]);
+    setOriginalSnapshot(null);
+    setDeleteConfirm(false);
+    onJourneyEditEnd?.();
+    // Don't clear highlights here — parent owns coordination across cards
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const handleTogglePartial = (trackId: string, nextPartial: boolean) => {
+    setViewedRoutes(prev =>
+      prev.map(r => (String(r.track_id) === String(trackId) ? { ...r, partial: nextPartial } : r))
+    );
+  };
+
+  const handleRemoveRoute = (trackId: string) => {
+    const newRoutes = viewedRoutes.filter(r => String(r.track_id) !== String(trackId));
+    setViewedRoutes(newRoutes);
+    onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+  };
+
+  const handleSave = async () => {
+    if (!originalSnapshot) return;
+    const trimmedName = editName.trim();
+    const trimmedDescription = editDescription.trim();
+
+    if (!trimmedName || !editDate) {
+      showError('Journey name and date are required');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const metaChanged =
+        trimmedName !== originalSnapshot.name ||
+        editDate !== originalSnapshot.date ||
+        trimmedDescription !== originalSnapshot.description;
+      if (metaChanged) {
+        const result = await updateJourney(journey.id, trimmedName, trimmedDescription || null, editDate);
+        if (result.error) { showError(result.error); return; }
+      }
+
+      if (editTripId !== originalSnapshot.tripId) {
+        const result = editTripId
+          ? await assignJourneyToTrip(journey.id, editTripId)
+          : await unassignJourneyFromTrip(journey.id);
+        if (result.error) { showError(result.error); return; }
+      }
+
+      const origMap = new Map(originalSnapshot.routes.map(r => [String(r.track_id), r]));
+      const editedMap = new Map(viewedRoutes.map(r => [String(r.track_id), r]));
+
+      const toAdd: { trackId: number; partial: boolean }[] = [];
+      const toUpdatePartial: { trackId: number; partial: boolean }[] = [];
+      editedMap.forEach((edited, id) => {
+        const orig = origMap.get(id);
+        const partial = edited.partial ?? false;
+        if (!orig) {
+          toAdd.push({ trackId: parseInt(edited.track_id), partial });
+        } else if ((orig.partial ?? false) !== partial) {
+          toUpdatePartial.push({ trackId: parseInt(edited.track_id), partial });
+        }
+      });
+      const toRemove: number[] = [];
+      origMap.forEach((orig, id) => {
+        if (!editedMap.has(id)) toRemove.push(parseInt(orig.track_id));
+      });
+
+      if (toAdd.length > 0) {
+        const result = await addRoutesToJourney(
+          journey.id,
+          toAdd.map(a => a.trackId),
+          toAdd.map(a => a.partial)
+        );
+        if (result.error) { showError(result.error); return; }
+      }
+      for (const trackId of toRemove) {
+        const result = await removeRouteFromJourney(journey.id, trackId);
+        if (result.error) { showError(result.error); return; }
+      }
+      for (const { trackId, partial } of toUpdatePartial) {
+        const result = await updateLoggedPartPartial(journey.id, trackId, partial);
+        if (result.error) { showError(result.error); return; }
+      }
+
+      showSuccess('Journey updated');
+      onRequestClose();
+      onChanged();
+    } catch (error) {
+      console.error('Error saving journey:', error);
+      showError('Failed to save journey');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      const result = await deleteJourney(journey.id);
+      if (result.error) {
+        showError(result.error);
+      } else {
+        showSuccess('Journey deleted');
+        onRequestClose();
+        onChanged();
+      }
+    } catch (error) {
+      console.error('Error deleting journey:', error);
+      showError('Failed to delete journey');
+    } finally {
+      setDeleteConfirm(false);
+    }
+  };
+
+  return (
+    <div className={`p-3 border rounded shadow-sm ${nested ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'}`}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-bold text-base truncate">{journey.name}</h4>
+          {journey.description && (
+            <div className="text-xs text-gray-600 mt-1">{journey.description}</div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4 text-xs text-gray-700 mb-3">
+        <span className="font-medium">
+          {new Date(journey.date).toLocaleDateString('cs-CZ')}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="font-medium">{journey.route_count}</span>
+          <span>routes</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="font-medium">{Number(journey.total_distance).toFixed(1)}</span>
+          <span>km</span>
+        </span>
+      </div>
+
+      {deleteConfirm ? (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDelete}
+            className="flex-1 px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700"
+          >
+            Confirm Delete
+          </button>
+          <button
+            onClick={() => setDeleteConfirm(false)}
+            className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : isOpen ? (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex-1 px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            onClick={onRequestClose}
+            disabled={isSaving}
+            className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRequestOpen}
+            className="flex-1 px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+          >
+            View / Edit
+          </button>
+          <button
+            onClick={() => setDeleteConfirm(true)}
+            className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
+      {isOpen && (
+        <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+          <div className="px-2 py-1.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+            Click routes on the map to add or remove them from this journey
+          </div>
+
+          {isLoadingDetails ? (
+            <div className="text-xs text-gray-500 text-center py-2">Loading…</div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Journey</h5>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Journey Name*</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Date*</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Description</label>
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    rows={2}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Trip</label>
+                  <select
+                    value={editTripId ?? ''}
+                    onChange={(e) => setEditTripId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">None</option>
+                    {availableTrips.map(trip => (
+                      <option key={trip.id} value={trip.id}>{trip.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <h5 className="text-sm font-semibold text-gray-700 mb-2">
+                  Routes in this journey:
+                </h5>
+                {viewedRoutes.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">No routes — click routes on the map to add them.</p>
+                ) : (
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {viewedRoutes.map((route) => (
+                      <div
+                        key={route.track_id}
+                        className="p-2 bg-white border border-gray-200 rounded text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium truncate">
+                            {route.track_number && `${route.track_number} `}
+                            {route.from_station} ⟷ {route.to_station}
+                          </span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <label className="flex items-center gap-1 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={route.partial ?? false}
+                                onChange={() => handleTogglePartial(route.track_id, !(route.partial ?? false))}
+                                className="w-3 h-3 cursor-pointer"
+                              />
+                              <span className="text-gray-500">partial</span>
+                            </label>
+                            <button
+                              onClick={() => handleRemoveRoute(route.track_id)}
+                              title="Remove route from journey"
+                              className="w-6 h-6 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                <path d="M10 11v6" />
+                                <path d="M14 11v6" />
+                                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-gray-500 mt-0.5">
+                          {Number(route.length_km)?.toFixed(1)} km
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

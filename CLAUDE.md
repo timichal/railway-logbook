@@ -115,7 +115,7 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 - **Shared Map Utilities** - Modular map initialization, hooks, interactions, and styling in `src/lib/map/`
 - **Station Search** - Diacritic-insensitive autocomplete search (requires PostgreSQL `unaccent` extension); floating search box in top-right
 - **Geolocation Control** - Built-in "show current location" button with high-accuracy positioning and user heading
-- **Unified User Sidebar** - Left-side resizable tabbed sidebar (400px-1200px) with tabs (Route Logger, My Journeys, My Trips [auth only], Country Settings & Stats) plus two article views (How To Use, Railway Notes); auth-aware rendering with JourneyLogger/LocalTripLogger
+- **Unified User Sidebar** - Left-side resizable tabbed sidebar (400px-1200px) with tabs (Route Logger, My Trips [auth] / My Journeys [unauth], Country Settings & Stats) plus two article views (How To Use, Railway Notes); auth-aware rendering with JourneyLogger/LocalTripLogger
 - **Article Tabs** - "How To Use" and "Railway Notes" buttons in navbar open full-screen article tabs in sidebar with close button to return to Route Logger
 
 ### 5. Admin System Architecture
@@ -178,13 +178,14 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
 **User Map Components:**
 - `MainLayout.tsx` - Client component wrapper managing activeTab state and resizable sidebar (400px-1200px); dynamically imports VectorRailwayMap
 - `VectorRailwayMap.tsx` - Main user map with unified sidebar, station search, progress stats, and resizer handle
-- `UserSidebar.tsx` - Unified tab-based sidebar (Route Logger / My Journeys / Country Settings & Stats) plus article views (How To Use / Railway Notes)
+- `UserSidebar.tsx` - Unified tab-based sidebar (Route Logger / My Trips [auth] or My Journeys [unauth] / Country Settings & Stats) plus article views (How To Use / Railway Notes)
 - `JourneyLogger.tsx` - Route Logger tab for authenticated users: route selection list with integrated journey planner, bulk logging form
 - `LocalTripLogger.tsx` - Route Logger tab for unauthenticated users: localStorage-based route logging with trip limit
 - `JourneyPlanner.tsx` - Journey Planner embedded in JourneyLogger: pathfinding between stations (from → via → to with drag-and-drop reordering); stations clickable on map
-- `JourneyLogTab.tsx` - My Journeys tab for authenticated users: list of journeys with route details, editing, and trip assignment
+- `JourneysAndTripsTab.tsx` - My Trips tab for authenticated users: paginated (10/page) merged list of trips and standalone journeys sorted by date desc; server-side search; "New Trip" button; coordinates single-open state across cards
+- `MergedTripCard.tsx` - Trip card used in JourneysAndTripsTab: edit name/description, delete trip, expand to manage assigned journeys (each rendered as a nested MergedJourneyCard with "Remove from trip" overlay), Add Journeys picker
+- `MergedJourneyCard.tsx` - Journey card used in JourneysAndTripsTab (both top-level and nested in trips): full edit (name, date, description, trip assignment), route list with partial toggles and remove, click routes on map to add/remove
 - `LocalJourneyLogTab.tsx` - My Journeys tab for unauthenticated users: localStorage-based journey list
-- `TripsTab.tsx` - My Trips tab for authenticated users: trip CRUD, journey assignment/unassignment, computed date ranges and stats
 - `CountriesStatsTab.tsx` - Country Settings & Stats tab: country filter checkboxes (CZ, SK, AT, PL, DE, LT, LV, EE) with per-country stats and total
 - `HowToUseArticle.tsx` - Article view with header and close button (content area for user instructions)
 - `RailwayNotesArticle.tsx` - Article view with header and close button (content area for railway notes)
@@ -425,31 +426,25 @@ Raw Railway    Railway Only  Stations &  Cleaned    PostgreSQL   Interactive
   - Found routes highlighted in gold (#FFD700) on map
   - "Add Routes to Selection" button adds routes to the selection list above
 
-#### Tab 2: My Journeys
-- **Purpose**: View and manage user's logged journeys
-- **UI Features**:
-  - List of all journeys sorted by date (newest first)
-  - Each journey shows: name, description, date, route count, total distance
-  - Expandable journey details showing all routes in the journey
-  - Edit journey details (name, description, date)
-  - Delete entire journeys
-  - Remove individual routes from journeys
-  - Toggle partial flag for routes within journeys
-- **Real-time Updates**: Map refreshes automatically after any changes
+#### Tab 2: My Trips (authenticated) / My Journeys (unauthenticated)
+- **Purpose** (auth): Unified view of trips and journeys. Top-level rows are either a trip (with its assigned journeys nested inside) or a standalone journey not assigned to any trip.
+- **Components** (auth): `JourneysAndTripsTab.tsx` (paginated container) + `MergedTripCard.tsx` + `MergedJourneyCard.tsx`
+- **Components** (unauth): `LocalJourneyLogTab.tsx` (no trip concept; flat journey list)
+- **Pagination**: 10 items per page, server-side via `getJourneysAndTrips(page, pageSize, search)` in `tripActions.ts`. Top-level items sorted by effective date desc — trip's effective date = MAX(journey.date), standalone journey's date = its own date.
+- **Search**: Server-side, debounced (300ms), matches trip/journey name, description, or date string. Resets to page 1 on change.
+- **Single-open coordination**: Only one top-level card can be expanded at a time. When a trip is expanded, exactly one nested journey can additionally be in edit mode.
+- **Trip card UI**:
+  - Header with purple "TRIP" badge, name, description, date range, journey/route/km counts
+  - "View / Edit" expands to: edit form (name, description), nested journey list (each rendered as MergedJourneyCard), "Add Journeys" picker
+- **Journey card UI** (used both standalone and nested in trips):
+  - Header, date, route count, km
+  - "View / Edit" expands to: edit form (name, date, description, trip dropdown) and route list with per-route partial toggle and remove button
+  - When open, click routes on the map to add/remove them from the journey
+- **Map highlights**: When a trip is open, all routes from all its journeys are highlighted. When a nested or standalone journey is open, only that journey's routes are highlighted.
+- **Data Model**: `user_trips` (groups), `user_journeys` (link via `trip_id` FK ON DELETE SET NULL), `user_logged_parts`
+- **Integration**: Trip dropdown in journey creation form (JourneyLogger) still uses `getAllTrips` for the picker.
 
-#### Tab 3: My Trips (authenticated only)
-- **Purpose**: Group journeys into named trips (e.g., "Summer Holiday in Austria")
-- **Components**: `TripsTab.tsx`
-- **UI Features**:
-  - "New Trip" button to create trips (name required, description optional)
-  - Trip cards showing: name, description, computed date range, journey count, route count, total km
-  - Expand trip to: edit form (name, description), list of assigned journeys with "Remove" buttons, "Add Journeys" picker
-  - Picker shows unassigned journeys with "Add" button for each
-  - Search bar to filter trips by name/description
-- **Data Model**: `user_trips` table; journeys link via `trip_id` FK (ON DELETE SET NULL)
-- **Integration**: Trip badges shown as purple pills in My Journeys tab; trip dropdown in journey creation and edit forms
-
-#### Tab 4: Country Settings & Stats
+#### Tab 3: Country Settings & Stats
 - **Purpose**: Filter railway routes by country and view per-country statistics
 - **UI Features**:
   - Country checkboxes with flag emojis (🇨🇿 🇸🇰 🇦🇹 🇵🇱 🇩🇪 🇱🇹 🇱🇻 🇪🇪)

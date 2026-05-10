@@ -5,10 +5,9 @@ import type { User } from '@/lib/authActions';
 import type { DataAccess } from '@/lib/dataAccess';
 import JourneyLogger from './JourneyLogger';
 import LocalTripLogger from './LocalTripLogger';
-import JourneyLogTab from './JourneyLogTab';
+import JourneysAndTripsTab from './JourneysAndTripsTab';
 import LocalJourneyLogTab from './LocalJourneyLogTab';
 import CountriesStatsTab from './CountriesStatsTab';
-import TripsTab from './TripsTab';
 import HowToUseArticle from './HowToUseArticle';
 import RailwayNotesArticle from './RailwayNotesArticle';
 import type { SelectedRoute, Station } from '@/lib/types';
@@ -21,7 +20,7 @@ interface RouteNode {
   length_km: number;
 }
 
-export type ActiveTab = 'routes' | 'journeylog' | 'trips' | 'filter' | 'howto' | 'notes';
+export type ActiveTab = 'routes' | 'journeylog' | 'filter' | 'howto' | 'notes';
 
 interface UserSidebarProps {
   user: User | null;
@@ -95,22 +94,9 @@ export default function UserSidebar({
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
           }`}
         >
-          <span className="md:hidden">Journeys</span>
-          <span className="hidden md:inline">My Journeys</span>
+          <span className="md:hidden">{user ? 'Trips' : 'Journeys'}</span>
+          <span className="hidden md:inline">{user ? 'My Trips' : 'My Journeys'}</span>
         </button>
-        {user && (
-          <button
-            onClick={() => setActiveTab('trips')}
-            className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
-              activeTab === 'trips'
-                ? 'border-blue-500 text-blue-600 bg-blue-50'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <span className="md:hidden">Trips</span>
-            <span className="hidden md:inline">My Trips</span>
-          </button>
-        )}
         <button
           onClick={() => setActiveTab('filter')}
           className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
@@ -153,7 +139,7 @@ export default function UserSidebar({
         )}
 
         {activeTab === 'journeylog' && user && (
-          <JourneyLogTab
+          <JourneysAndTripsTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
             onJourneyEditStart={onJourneyEditStart}
@@ -165,13 +151,6 @@ export default function UserSidebar({
           <LocalJourneyLogTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
-          />
-        )}
-
-        {activeTab === 'trips' && user && (
-          <TripsTab
-            onHighlightRoutes={onHighlightRoutes}
-            onTripChanged={onRoutesLogged}
           />
         )}
 

@@ -275,6 +275,174 @@ export async function unassignJourneyFromTrip(
   }
 }
 
+// Standalone journey (not assigned to a trip) with stats — for the merged list
+export type StandaloneJourneyWithStats = Journey & {
+  route_count: number
+  total_distance: string
+}
+
+// One row in the merged trips+journeys list. A trip carries its assigned journeys; a standalone journey stands on its own.
+export type TripsAndJourneysItem =
+  | { type: 'trip'; trip: TripWithStats; journeys: JourneyInTrip[] }
+  | { type: 'journey'; journey: StandaloneJourneyWithStats }
+
+/**
+ * Get a paginated, search-filtered list of top-level items (trips and standalone journeys),
+ * sorted by date desc. Trip date = max date of its assigned journeys; standalone journey date = its own date.
+ */
+export async function getJourneysAndTrips(
+  page: number,
+  pageSize: number,
+  search: string = ''
+): Promise<{ items: TripsAndJourneysItem[]; total: number; error?: string }> {
+  try {
+    const user = await getUser()
+    if (!user) {
+      return { items: [], total: 0, error: 'Not authenticated' }
+    }
+
+    const safePage = Math.max(1, Math.floor(page))
+    const safePageSize = Math.max(1, Math.min(100, Math.floor(pageSize)))
+    const offset = (safePage - 1) * safePageSize
+    const searchPattern = search.trim() ? `%${search.trim().toLowerCase()}%` : null
+
+    // Build the union of trips + standalone journeys with effective_date for sorting.
+    // The search predicate (when present) is applied per branch to keep it index-friendly.
+    const baseCte = `
+      WITH ordered AS (
+        SELECT 'trip'::text AS type, ut.id AS item_id,
+               MAX(uj.date)::text AS effective_date,
+               ut.created_at AS sort_created_at
+        FROM user_trips ut
+        LEFT JOIN user_journeys uj ON ut.id = uj.trip_id AND uj.user_id = $1
+        WHERE ut.user_id = $1
+          ${searchPattern ? `AND (LOWER(ut.name) LIKE $2 OR LOWER(COALESCE(ut.description, '')) LIKE $2)` : ''}
+        GROUP BY ut.id
+
+        UNION ALL
+
+        SELECT 'journey'::text AS type, uj.id AS item_id,
+               uj.date::text AS effective_date,
+               uj.created_at AS sort_created_at
+        FROM user_journeys uj
+        WHERE uj.user_id = $1 AND uj.trip_id IS NULL
+          ${searchPattern ? `AND (LOWER(uj.name) LIKE $2 OR LOWER(COALESCE(uj.description, '')) LIKE $2 OR uj.date::text LIKE $2)` : ''}
+      )
+    `
+
+    // Total count for pagination UI
+    const countParams: any[] = [user.id]
+    if (searchPattern) countParams.push(searchPattern)
+    const countResult = await pool.query<{ total: string }>(
+      `${baseCte} SELECT COUNT(*)::text AS total FROM ordered`,
+      countParams
+    )
+    const total = parseInt(countResult.rows[0]?.total ?? '0', 10)
+
+    // Page of (type, id) ordered by effective_date desc, then created_at desc as tiebreaker
+    const pageParams: any[] = [user.id]
+    if (searchPattern) pageParams.push(searchPattern)
+    const limitIdx = pageParams.length + 1
+    const offsetIdx = pageParams.length + 2
+    pageParams.push(safePageSize, offset)
+
+    const pageResult = await pool.query<{ type: 'trip' | 'journey'; item_id: number }>(
+      `${baseCte}
+       SELECT type, item_id FROM ordered
+       ORDER BY effective_date DESC NULLS LAST, sort_created_at DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      pageParams
+    )
+
+    const tripIds = pageResult.rows.filter(r => r.type === 'trip').map(r => r.item_id)
+    const journeyIds = pageResult.rows.filter(r => r.type === 'journey').map(r => r.item_id)
+
+    // Hydrate trips on the page (with stats)
+    const tripsById = new Map<number, TripWithStats>()
+    if (tripIds.length > 0) {
+      const tripsResult = await pool.query<TripWithStats>(
+        `SELECT
+          ut.*,
+          COUNT(DISTINCT uj.id)::int as journey_count,
+          COUNT(DISTINCT ulp.id)::int as route_count,
+          COALESCE(SUM(DISTINCT CASE WHEN rr.track_id IS NOT NULL THEN rr.length_km ELSE 0 END), 0) as total_distance,
+          MIN(uj.date)::text as start_date,
+          MAX(uj.date)::text as end_date
+        FROM user_trips ut
+        LEFT JOIN user_journeys uj ON ut.id = uj.trip_id AND uj.user_id = $1
+        LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
+        LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
+        WHERE ut.user_id = $1 AND ut.id = ANY($2::int[])
+        GROUP BY ut.id`,
+        [user.id, tripIds]
+      )
+      tripsResult.rows.forEach(t => tripsById.set(t.id, t))
+    }
+
+    // Hydrate journeys assigned to those trips (one query for all)
+    const tripJourneysByTripId = new Map<number, JourneyInTrip[]>()
+    if (tripIds.length > 0) {
+      const tripJourneysResult = await pool.query<JourneyInTrip>(
+        `SELECT
+          uj.*,
+          COUNT(ulp.id)::int as route_count,
+          COALESCE(SUM(rr.length_km), 0) as total_distance
+        FROM user_journeys uj
+        LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
+        LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
+        WHERE uj.user_id = $1 AND uj.trip_id = ANY($2::int[])
+        GROUP BY uj.id
+        ORDER BY uj.date ASC`,
+        [user.id, tripIds]
+      )
+      tripJourneysResult.rows.forEach(j => {
+        const arr = tripJourneysByTripId.get(j.trip_id!) ?? []
+        arr.push(j)
+        tripJourneysByTripId.set(j.trip_id!, arr)
+      })
+    }
+
+    // Hydrate standalone journeys on the page
+    const journeysById = new Map<number, StandaloneJourneyWithStats>()
+    if (journeyIds.length > 0) {
+      const journeysResult = await pool.query<StandaloneJourneyWithStats>(
+        `SELECT
+          uj.*,
+          COUNT(ulp.id)::int as route_count,
+          COALESCE(SUM(rr.length_km), 0) as total_distance
+        FROM user_journeys uj
+        LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
+        LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
+        WHERE uj.user_id = $1 AND uj.id = ANY($2::int[])
+        GROUP BY uj.id`,
+        [user.id, journeyIds]
+      )
+      journeysResult.rows.forEach(j => journeysById.set(j.id, j))
+    }
+
+    // Reassemble in the page's original order
+    const items: TripsAndJourneysItem[] = []
+    for (const row of pageResult.rows) {
+      if (row.type === 'trip') {
+        const trip = tripsById.get(row.item_id)
+        if (trip) {
+          items.push({ type: 'trip', trip, journeys: tripJourneysByTripId.get(row.item_id) ?? [] })
+        }
+      } else {
+        const journey = journeysById.get(row.item_id)
+        if (journey) {
+          items.push({ type: 'journey', journey })
+        }
+      }
+    }
+
+    return { items, total }
+  } catch (error) {
+    console.error('Error fetching journeys and trips:', error)
+    return { items: [], total: 0, error: 'Failed to fetch journeys and trips' }
+  }
+}
+
 /**
  * Get journeys not assigned to any trip (for the assignment picker)
  */
