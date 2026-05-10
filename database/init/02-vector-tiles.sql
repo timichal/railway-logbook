@@ -71,10 +71,10 @@ BEGIN
             AND (
                 -- At zoom < 8, only show longer segments (main lines)
                 (z < 8 AND ST_Length(geometry_3857) > 1000) OR
-                -- At zoom 8-10, show medium+ segments
-                (z >= 8 AND z < 10 AND ST_Length(geometry_3857) > 500) OR
-                -- At zoom 10+, show all segments
-                (z >= 10)
+                -- At zoom 8-9, show medium+ segments
+                (z >= 8 AND z < 9 AND ST_Length(geometry_3857) > 500) OR
+                -- At zoom 9+, show all segments
+                (z >= 9)
             )
         -- Order doesn't matter for parts, but consistent ordering helps caching
         ORDER BY id
