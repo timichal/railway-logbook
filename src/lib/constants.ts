@@ -94,6 +94,7 @@ export const getNoteTypeColor = (noteType: NoteType | null | undefined): string 
  */
 export const SUPPORTED_COUNTRIES = [
   { code: 'AT', name: 'Austria' },
+  { code: 'BE', name: 'Belgium' },
   { code: 'CZ', name: 'Czechia' },
   { code: 'EE', name: 'Estonia' },
   { code: 'ES', name: 'Spain' },
@@ -104,6 +105,7 @@ export const SUPPORTED_COUNTRIES = [
   { code: 'LV', name: 'Latvia' },
   { code: 'LT', name: 'Lithuania' },
   { code: 'LU', name: 'Luxembourg' },
+  { code: 'NL', name: 'Netherlands' },
   { code: 'PL', name: 'Poland' },
   { code: 'SK', name: 'Slovakia' },
   { code: 'SI', name: 'Slovenia' },
