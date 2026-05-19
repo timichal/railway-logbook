@@ -278,7 +278,7 @@ export default function MergedJourneyCard({
             )}
           </div>
           <div className="text-xs text-gray-600 mt-0.5">
-            {new Date(journey.date).toLocaleDateString('cs-CZ')} · {journey.route_count} route{journey.route_count === 1 ? '' : 's'} · {Number(journey.total_distance).toFixed(1)} km
+            {new Date(journey.date).toLocaleDateString()} · {journey.route_count} route{journey.route_count === 1 ? '' : 's'} · {Number(journey.total_distance).toFixed(1)} km
           </div>
         </div>
         {deleteConfirm ? (

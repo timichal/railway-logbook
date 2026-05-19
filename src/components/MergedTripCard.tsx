@@ -177,19 +177,11 @@ export default function MergedTripCard({
   const formatDateRange = (startDate: string | null, endDate: string | null): string => {
     if (!startDate) return 'No journeys';
     const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : start;
-
-    const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const endStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-    if (startDate === endDate) {
-      return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (startDate === endDate || !endDate) {
+      return start.toLocaleDateString();
     }
-    if (start.getFullYear() === end.getFullYear()) {
-      return `${startStr} - ${endStr}`;
-    }
-    const startFull = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    return `${startFull} - ${endStr}`;
+    const end = new Date(endDate);
+    return `${start.toLocaleDateString()} – ${end.toLocaleDateString()}`;
   };
 
   return (
@@ -356,7 +348,7 @@ export default function MergedTripCard({
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{j.name}</div>
                         <div className="text-gray-600 flex items-center gap-3 mt-0.5">
-                          <span>{new Date(j.date).toLocaleDateString('cs-CZ')}</span>
+                          <span>{new Date(j.date).toLocaleDateString()}</span>
                           <span>{Number(j.total_distance).toFixed(1)} km</span>
                         </div>
                       </div>

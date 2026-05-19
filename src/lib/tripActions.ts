@@ -349,7 +349,7 @@ export async function getJourneysAndTrips(
     const pageResult = await pool.query<{ type: 'trip' | 'journey'; item_id: number }>(
       `${baseCte}
        SELECT type, item_id FROM ordered
-       ORDER BY effective_date DESC NULLS LAST, sort_created_at DESC
+       ORDER BY effective_date DESC NULLS FIRST, sort_created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       pageParams
     )
