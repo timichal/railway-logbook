@@ -44,18 +44,8 @@ else
         --overwrite \
         -o "${FILTERED_FILE}" \
         "${DOWNLOAD_FILE}" \
-        nwr/railway \
-        nwr/disused:railway \
-        nwr/abandoned:railway \
-        nwr/razed:railway \
-        nwr/construction:railway \
-        nwr/proposed:railway \
-        n/public_transport=stop_position \
-        nwr/public_transport=platform \
-        r/route=train \
-        r/route=tram \
-        r/route=light_rail \
-        r/route=subway || {
+        w/railway=rail,narrow_gauge,light_rail \
+        n/railway=station,halt || {
             echo "ERROR: Failed to filter rail features"
             exit 1
         }
