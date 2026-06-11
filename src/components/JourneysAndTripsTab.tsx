@@ -170,8 +170,11 @@ export default function JourneysAndTripsTab({
         <div className="p-3 bg-blue-50 border border-blue-200 rounded space-y-2">
           <h4 className="text-sm font-semibold">Create New Trip</h4>
           <div>
-            <label className="block text-xs font-medium mb-1">Trip Name*</label>
+            <label htmlFor="new-trip-name" className="block text-xs font-medium mb-1">
+              Trip Name*
+            </label>
             <input
+              id="new-trip-name"
               type="text"
               value={newTripName}
               onChange={(e) => setNewTripName(e.target.value)}
@@ -181,8 +184,11 @@ export default function JourneysAndTripsTab({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1">Description</label>
+            <label htmlFor="new-trip-description" className="block text-xs font-medium mb-1">
+              Description
+            </label>
             <textarea
+              id="new-trip-description"
               value={newTripDescription}
               onChange={(e) => setNewTripDescription(e.target.value)}
               rows={2}

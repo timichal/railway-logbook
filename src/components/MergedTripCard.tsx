@@ -252,8 +252,11 @@ export default function MergedTripCard({
           <div className="space-y-2">
             <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Trip</h5>
             <div>
-              <label className="block text-xs font-medium mb-1">Trip Name*</label>
+              <label htmlFor={`trip-${trip.id}-name`} className="block text-xs font-medium mb-1">
+                Trip Name*
+              </label>
               <input
+                id={`trip-${trip.id}-name`}
                 type="text"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
@@ -262,8 +265,14 @@ export default function MergedTripCard({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1">Description</label>
+              <label
+                htmlFor={`trip-${trip.id}-description`}
+                className="block text-xs font-medium mb-1"
+              >
+                Description
+              </label>
               <textarea
+                id={`trip-${trip.id}-description`}
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
                 rows={2}

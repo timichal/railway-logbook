@@ -120,8 +120,16 @@ export default function AdminNotesTab({
             {filteredNotes.map((note) => (
               <li
                 key={note.id}
+                role="button"
+                tabIndex={0}
                 className="p-3 hover:bg-gray-50 cursor-pointer"
                 onClick={() => onFocusNote?.(note.coordinate)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onFocusNote?.(note.coordinate);
+                  }
+                }}
               >
                 <div className="flex items-start gap-2">
                   <span
@@ -134,10 +142,17 @@ export default function AdminNotesTab({
                       {note.text}
                     </div>
                     <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-500">
-                      <label className="text-gray-600" onClick={(e) => e.stopPropagation()}>
+                      {/* biome-ignore lint/a11y/useKeyWithClickEvents: onClick only stops the click
+                          from bubbling to the parent list item; the label has no action of its own. */}
+                      <label
+                        htmlFor={`note-${note.id}-type`}
+                        className="text-gray-600"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         Type:
                       </label>
                       <select
+                        id={`note-${note.id}-type`}
                         value={note.note_type ?? ""}
                         disabled={savingId === note.id}
                         onClick={(e) => e.stopPropagation()}

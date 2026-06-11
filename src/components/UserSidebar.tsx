@@ -117,6 +117,7 @@ export default function UserSidebar({
               className="inline-block w-4 h-4 mr-1 -mt-0.5"
               viewBox="0 0 20 20"
               fill="currentColor"
+              aria-hidden="true"
             >
               <path
                 fillRule="evenodd"

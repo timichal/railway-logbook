@@ -104,13 +104,10 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
       track_number,
       from_station,
       to_station,
-      starting_part_id,
-      ending_part_id,
       start_lng,
       start_lat,
       end_lng,
       end_lat,
-      geometry_json,
       length_km,
       intended_backtracking,
     } = route;

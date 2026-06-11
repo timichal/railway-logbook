@@ -308,8 +308,14 @@ export default function LocalJourneyLogTab({
                     <div className="space-y-2">
                       <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Journey</h5>
                       <div>
-                        <label className="block text-xs font-medium mb-1">Journey Name*</label>
+                        <label
+                          htmlFor={`local-journey-${journey.id}-name`}
+                          className="block text-xs font-medium mb-1"
+                        >
+                          Journey Name*
+                        </label>
                         <input
+                          id={`local-journey-${journey.id}-name`}
                           type="text"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
@@ -317,8 +323,14 @@ export default function LocalJourneyLogTab({
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium mb-1">Date*</label>
+                        <label
+                          htmlFor={`local-journey-${journey.id}-date`}
+                          className="block text-xs font-medium mb-1"
+                        >
+                          Date*
+                        </label>
                         <input
+                          id={`local-journey-${journey.id}-date`}
                           type="date"
                           value={editDate}
                           onChange={(e) => setEditDate(e.target.value)}
@@ -326,8 +338,14 @@ export default function LocalJourneyLogTab({
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium mb-1">Description</label>
+                        <label
+                          htmlFor={`local-journey-${journey.id}-description`}
+                          className="block text-xs font-medium mb-1"
+                        >
+                          Description
+                        </label>
                         <textarea
+                          id={`local-journey-${journey.id}-description`}
                           value={editDescription}
                           onChange={(e) => setEditDescription(e.target.value)}
                           rows={2}

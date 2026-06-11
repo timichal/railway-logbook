@@ -368,9 +368,12 @@ export default function JourneyPlanner({
 
       {/* From Station */}
       <div>
-        <label className="block text-xs font-medium mb-1">From Station</label>
+        <label htmlFor="planner-from-station" className="block text-xs font-medium mb-1">
+          From Station
+        </label>
         <div className="relative">
           <input
+            id="planner-from-station"
             type="text"
             value={fromSearchQuery}
             onChange={(e) => handleSearchChange("from", e.target.value)}
@@ -426,9 +429,11 @@ export default function JourneyPlanner({
       {/* Via Stations */}
       {viaStations.map((station, viaIndex) => (
         <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: via rows are positional parallel arrays (viaStations[i] ↔ viaSearchQueries[i]) reordered together, so the index is the row identity.
           key={viaIndex}
           className={`flex items-center gap-2 ${draggedIndex === viaIndex ? "opacity-50" : ""}`}
         >
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: native HTML5 drag handle; drag-and-drop reordering has no keyboard equivalent, and the via input below is fully keyboard-operable. */}
           <div
             draggable
             onDragStart={() => handleDragStart(viaIndex)}
@@ -501,9 +506,12 @@ export default function JourneyPlanner({
 
       {/* To Station */}
       <div>
-        <label className="block text-xs font-medium mb-1">To Station</label>
+        <label htmlFor="planner-to-station" className="block text-xs font-medium mb-1">
+          To Station
+        </label>
         <div className="relative">
           <input
+            id="planner-to-station"
             type="text"
             value={toSearchQuery}
             onChange={(e) => handleSearchChange("to", e.target.value)}

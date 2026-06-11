@@ -118,8 +118,11 @@ export default function LocalTripLogger({
 
         <div className="space-y-2">
           <div>
-            <label className="block text-sm font-medium mb-1">Journey Name*</label>
+            <label htmlFor="local-new-journey-name" className="block text-sm font-medium mb-1">
+              Journey Name*
+            </label>
             <input
+              id="local-new-journey-name"
               type="text"
               value={journeyName}
               onChange={(e) => setJourneyName(e.target.value)}
@@ -129,8 +132,11 @@ export default function LocalTripLogger({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Date*</label>
+            <label htmlFor="local-new-journey-date" className="block text-sm font-medium mb-1">
+              Date*
+            </label>
             <input
+              id="local-new-journey-date"
               type="date"
               value={journeyDate}
               onChange={(e) => setJourneyDate(e.target.value)}
@@ -139,8 +145,14 @@ export default function LocalTripLogger({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
+            <label
+              htmlFor="local-new-journey-description"
+              className="block text-sm font-medium mb-1"
+            >
+              Description
+            </label>
             <textarea
+              id="local-new-journey-description"
               value={journeyDescription}
               onChange={(e) => setJourneyDescription(e.target.value)}
               rows={2}

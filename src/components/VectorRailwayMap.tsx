@@ -472,6 +472,8 @@ export default function VectorRailwayMap({
           {sidebarContent}
           {/* Resizer */}
           <div
+            role="separator"
+            aria-orientation="vertical"
             onMouseDown={onSidebarResize}
             className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? "bg-blue-400" : ""}`}
             style={{ userSelect: "none" }}
@@ -565,6 +567,7 @@ export default function VectorRailwayMap({
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"

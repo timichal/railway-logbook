@@ -294,9 +294,15 @@ export default function AdminCreateRouteTab({
       <div className="space-y-4">
         {/* Starting Coordinate */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Starting Point *</label>
+          <label
+            htmlFor="route-starting-point"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Starting Point *
+          </label>
           <div className="flex gap-2">
             <input
+              id="route-starting-point"
               type="text"
               value={formatCoordinate(startingCoordinate)}
               readOnly
@@ -319,9 +325,15 @@ export default function AdminCreateRouteTab({
 
         {/* Ending Coordinate */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Ending Point *</label>
+          <label
+            htmlFor="route-ending-point"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Ending Point *
+          </label>
           <div className="flex gap-2">
             <input
+              id="route-ending-point"
               type="text"
               value={formatCoordinate(endingCoordinate)}
               readOnly
@@ -347,10 +359,14 @@ export default function AdminCreateRouteTab({
           <>
             {/* Track Number */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="route-track-number"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
                 Local route number(s)
               </label>
               <input
+                id="route-track-number"
                 type="text"
                 value={createForm.track_number}
                 onChange={(e) => setCreateForm({ ...createForm, track_number: e.target.value })}
@@ -361,8 +377,11 @@ export default function AdminCreateRouteTab({
 
             {/* From Station */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From *</label>
+              <label htmlFor="route-from" className="block text-sm font-medium text-gray-700 mb-1">
+                From *
+              </label>
               <input
+                id="route-from"
                 type="text"
                 value={createForm.from_station}
                 onChange={(e) => setCreateForm({ ...createForm, from_station: e.target.value })}
@@ -373,8 +392,11 @@ export default function AdminCreateRouteTab({
 
             {/* To Station */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">To *</label>
+              <label htmlFor="route-to" className="block text-sm font-medium text-gray-700 mb-1">
+                To *
+              </label>
               <input
+                id="route-to"
                 type="text"
                 value={createForm.to_station}
                 onChange={(e) => setCreateForm({ ...createForm, to_station: e.target.value })}
@@ -385,8 +407,14 @@ export default function AdminCreateRouteTab({
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label
+                htmlFor="route-description"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Description
+              </label>
               <textarea
+                id="route-description"
                 value={createForm.description}
                 onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                 rows={3}
@@ -397,8 +425,11 @@ export default function AdminCreateRouteTab({
 
             {/* Link */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Link (URL)</label>
+              <label htmlFor="route-link" className="block text-sm font-medium text-gray-700 mb-1">
+                Link (URL)
+              </label>
               <input
+                id="route-link"
                 type="url"
                 value={createForm.link}
                 onChange={(e) => setCreateForm({ ...createForm, link: e.target.value })}
@@ -409,7 +440,7 @@ export default function AdminCreateRouteTab({
 
             {/* Usage Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Usage Type *</label>
+              <span className="block text-sm font-medium text-gray-700 mb-2">Usage Type *</span>
               <div className="flex gap-4">
                 {usageOptions.map((option) => (
                   <label key={option.key} className="flex items-center gap-2 cursor-pointer">
@@ -434,7 +465,7 @@ export default function AdminCreateRouteTab({
 
             {/* Frequency Tags */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Frequency Tags</label>
+              <span className="block text-sm font-medium text-gray-700 mb-2">Frequency Tags</span>
               <div className="flex flex-wrap gap-4">
                 {frequencyOptions.map((option) => (
                   <label
@@ -465,7 +496,7 @@ export default function AdminCreateRouteTab({
               </div>
             </div>
 
-            <label className="block text-sm font-medium text-gray-700 mb-2">Other</label>
+            <span className="block text-sm font-medium text-gray-700 mb-2">Other</span>
             <div className="flex flex-wrap gap-4">
               {/* Scenic */}
               <div className="flex-[0_1_30%]">

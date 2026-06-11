@@ -112,8 +112,11 @@ export default function JourneyLogger({
 
         <div className="space-y-2">
           <div>
-            <label className="block text-sm font-medium mb-1">Journey Name*</label>
+            <label htmlFor="new-journey-name" className="block text-sm font-medium mb-1">
+              Journey Name*
+            </label>
             <input
+              id="new-journey-name"
               type="text"
               value={journeyName}
               onChange={(e) => setJourneyName(e.target.value)}
@@ -123,8 +126,11 @@ export default function JourneyLogger({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Date*</label>
+            <label htmlFor="new-journey-date" className="block text-sm font-medium mb-1">
+              Date*
+            </label>
             <input
+              id="new-journey-date"
               type="date"
               value={journeyDate}
               onChange={(e) => setJourneyDate(e.target.value)}
@@ -133,8 +139,11 @@ export default function JourneyLogger({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
+            <label htmlFor="new-journey-description" className="block text-sm font-medium mb-1">
+              Description
+            </label>
             <textarea
+              id="new-journey-description"
               value={journeyDescription}
               onChange={(e) => setJourneyDescription(e.target.value)}
               rows={2}
@@ -145,8 +154,11 @@ export default function JourneyLogger({
 
           {availableTrips.length > 0 && (
             <div>
-              <label className="block text-sm font-medium mb-1">Trip</label>
+              <label htmlFor="new-journey-trip" className="block text-sm font-medium mb-1">
+                Trip
+              </label>
               <select
+                id="new-journey-trip"
                 value={journeyTripId ?? ""}
                 onChange={(e) => setJourneyTripId(e.target.value ? Number(e.target.value) : null)}
                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

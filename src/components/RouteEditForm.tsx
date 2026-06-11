@@ -79,7 +79,12 @@ export default function RouteEditForm({
             <div className="bg-red-50 border border-red-200 rounded-md p-3">
               <div className="flex items-start">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg
+                    className="h-5 w-5 text-red-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
                     <path
                       fillRule="evenodd"
                       d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -101,10 +106,14 @@ export default function RouteEditForm({
 
           {/* Track Number */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="edit-track-number"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               Local route number(s)
             </label>
             <input
+              id="edit-track-number"
               type="text"
               value={editForm.track_number}
               onChange={(e) => onEditFormChange({ ...editForm, track_number: e.target.value })}
@@ -115,8 +124,11 @@ export default function RouteEditForm({
 
           {/* From Station */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">From *</label>
+            <label htmlFor="edit-from" className="block text-sm font-medium text-gray-700 mb-1">
+              From *
+            </label>
             <input
+              id="edit-from"
               type="text"
               value={editForm.from_station}
               onChange={(e) => onEditFormChange({ ...editForm, from_station: e.target.value })}
@@ -126,8 +138,11 @@ export default function RouteEditForm({
 
           {/* To Station */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">To *</label>
+            <label htmlFor="edit-to" className="block text-sm font-medium text-gray-700 mb-1">
+              To *
+            </label>
             <input
+              id="edit-to"
               type="text"
               value={editForm.to_station}
               onChange={(e) => onEditFormChange({ ...editForm, to_station: e.target.value })}
@@ -137,8 +152,14 @@ export default function RouteEditForm({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label
+              htmlFor="edit-description"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Description
+            </label>
             <textarea
+              id="edit-description"
               value={editForm.description}
               onChange={(e) => onEditFormChange({ ...editForm, description: e.target.value })}
               rows={5}
@@ -148,8 +169,11 @@ export default function RouteEditForm({
 
           {/* Link */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Link (URL)</label>
+            <label htmlFor="edit-link" className="block text-sm font-medium text-gray-700 mb-1">
+              Link (URL)
+            </label>
             <input
+              id="edit-link"
               type="url"
               value={editForm.link}
               onChange={(e) => onEditFormChange({ ...editForm, link: e.target.value })}
@@ -160,7 +184,7 @@ export default function RouteEditForm({
 
           {/* Usage Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Usage Type *</label>
+            <span className="block text-sm font-medium text-gray-700 mb-2">Usage Type *</span>
             <div className="flex gap-4">
               {usageOptions.map((option) => (
                 <label key={option.key} className="flex items-center gap-2 cursor-pointer">
@@ -185,7 +209,7 @@ export default function RouteEditForm({
 
           {/* Frequency Tags */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Frequency Tags</label>
+            <span className="block text-sm font-medium text-gray-700 mb-2">Frequency Tags</span>
             <div className="space-y-2">
               {frequencyOptions.map((option) => (
                 <label key={option.key} className="flex items-center gap-2 cursor-pointer">
@@ -213,7 +237,7 @@ export default function RouteEditForm({
             </div>
           </div>
 
-          <label className="block text-sm font-medium text-gray-700 mb-2">Other</label>
+          <span className="block text-sm font-medium text-gray-700 mb-2">Other</span>
           {/* Scenic */}
           <div>
             <label className="flex items-center gap-2 cursor-pointer">
@@ -229,8 +253,14 @@ export default function RouteEditForm({
 
           {/* Line Class */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Line class</label>
+            <label
+              htmlFor="edit-line-class"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Line class
+            </label>
             <select
+              id="edit-line-class"
               value={editForm.line_class}
               onChange={(e) =>
                 onEditFormChange({ ...editForm, line_class: e.target.value as LineClass })

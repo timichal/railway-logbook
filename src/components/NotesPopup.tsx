@@ -124,10 +124,11 @@ export default function NotesPopup({
         </button>
       </div>
 
-      <label className="block text-xs font-medium text-gray-700 mb-1">
+      <label htmlFor="note-type" className="block text-xs font-medium text-gray-700 mb-1">
         Type <span className="text-red-500">*</span>
       </label>
       <select
+        id="note-type"
         value={noteType}
         onChange={(e) => setNoteType(e.target.value as NoteType | "")}
         className="w-full px-2 py-1 mb-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
