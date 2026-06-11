@@ -263,10 +263,10 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
         {!isMobile && (
           <>
             {sidebarContent}
-            {/* Resizer */}
+            {/* Resizer: mouse-only drag handle (keyboard resize intentionally unsupported) */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only resize affordance, see below */}
+            {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: mouse-only resize affordance with no keyboard equivalent; the sidebar remains fully usable without resizing. */}
             <div
-              role="separator"
-              aria-orientation="vertical"
               onMouseDown={handleMouseDown}
               className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? "bg-blue-400" : ""}`}
               style={{ userSelect: "none" }}
@@ -277,15 +277,11 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
         {/* Mobile drawer overlay */}
         {isMobile && sidebarOpen && (
           <>
-            <div
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
               aria-label="Close menu"
               className="fixed inset-0 bg-black/40 z-30"
               onClick={toggleSidebar}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") toggleSidebar();
-              }}
             />
             <div className="fixed inset-y-0 left-0 z-40 w-full max-w-md bg-white flex flex-col sidebar-drawer-open">
               <div className="border-b border-gray-200 px-3 py-2 flex flex-wrap gap-2 flex-shrink-0">

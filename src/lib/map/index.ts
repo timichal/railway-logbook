@@ -359,7 +359,9 @@ export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
 export function closeAllPopups(): void {
   const popups = document.getElementsByClassName("maplibregl-popup");
   if (popups.length) {
-    Array.from(popups).forEach((popup) => popup.remove());
+    Array.from(popups).forEach((popup) => {
+      popup.remove();
+    });
   }
 }
 

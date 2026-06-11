@@ -118,62 +118,45 @@ export default function AdminNotesTab({
         ) : (
           <ul className="divide-y divide-gray-200">
             {filteredNotes.map((note) => (
-              <li
-                key={note.id}
-                role="button"
-                tabIndex={0}
-                className="p-3 hover:bg-gray-50 cursor-pointer"
-                onClick={() => onFocusNote?.(note.coordinate)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onFocusNote?.(note.coordinate);
-                  }
-                }}
-              >
-                <div className="flex items-start gap-2">
+              <li key={note.id} className="p-3 hover:bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => onFocusNote?.(note.coordinate)}
+                  className="w-full text-left flex items-start gap-2 cursor-pointer"
+                >
                   <span
                     className="inline-block w-3 h-3 rounded-full border border-gray-700 mt-1 flex-shrink-0"
                     style={{ backgroundColor: getNoteTypeColor(note.note_type) }}
                     title={note.note_type}
                   />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-900 whitespace-pre-wrap break-words">
-                      {note.text}
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-500">
-                      {/* biome-ignore lint/a11y/useKeyWithClickEvents: onClick only stops the click
-                          from bubbling to the parent list item; the label has no action of its own. */}
-                      <label
-                        htmlFor={`note-${note.id}-type`}
-                        className="text-gray-600"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Type:
-                      </label>
-                      <select
-                        id={`note-${note.id}-type`}
-                        value={note.note_type ?? ""}
-                        disabled={savingId === note.id}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          const v = e.target.value as NoteType | "";
-                          if (v) handleTypeChange(note, v);
-                        }}
-                        className="text-xs px-1.5 py-0.5 border border-gray-300 rounded bg-white text-gray-800"
-                      >
-                        {!note.note_type && <option value="">-- none --</option>}
-                        {noteTypeOptions.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="ml-auto">
-                        {new Date(note.updated_at).toISOString().slice(0, 10)}
-                      </span>
-                    </div>
-                  </div>
+                  <span className="flex-1 min-w-0 text-sm text-gray-900 whitespace-pre-wrap break-words">
+                    {note.text}
+                  </span>
+                </button>
+                <div className="mt-1.5 ml-5 flex items-center gap-2 text-xs text-gray-500">
+                  <label htmlFor={`note-${note.id}-type`} className="text-gray-600">
+                    Type:
+                  </label>
+                  <select
+                    id={`note-${note.id}-type`}
+                    value={note.note_type ?? ""}
+                    disabled={savingId === note.id}
+                    onChange={(e) => {
+                      const v = e.target.value as NoteType | "";
+                      if (v) handleTypeChange(note, v);
+                    }}
+                    className="text-xs px-1.5 py-0.5 border border-gray-300 rounded bg-white text-gray-800"
+                  >
+                    {!note.note_type && <option value="">-- none --</option>}
+                    {noteTypeOptions.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="ml-auto">
+                    {new Date(note.updated_at).toISOString().slice(0, 10)}
+                  </span>
                 </div>
               </li>
             ))}

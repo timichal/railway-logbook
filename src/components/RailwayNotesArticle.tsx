@@ -35,22 +35,17 @@ function CollapsibleSection({
 
   return (
     <div className="mb-4">
-      <h3
-        role="button"
-        tabIndex={0}
-        aria-expanded={isOpen}
-        className="text-xl font-bold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-gray-700 select-none mb-4"
-        onClick={handleToggle}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleToggle();
-          }
-        }}
-      >
-        <span className="text-sm">{isOpen ? "▼" : "▶"}</span>
-        <span className="text-2xl">{getCountryFlag(countryCode)}</span>
-        {countryName}
+      <h3 className="mb-4">
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          onClick={handleToggle}
+          className="w-full text-xl font-bold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-gray-700 select-none text-left"
+        >
+          <span className="text-sm">{isOpen ? "▼" : "▶"}</span>
+          <span className="text-2xl">{getCountryFlag(countryCode)}</span>
+          {countryName}
+        </button>
       </h3>
       {isOpen && <div className="ml-6 mb-8">{children}</div>}
     </div>

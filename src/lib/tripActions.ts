@@ -376,7 +376,9 @@ export async function getJourneysAndTrips(
         GROUP BY ut.id`,
         [user.id, tripIds],
       );
-      tripsResult.rows.forEach((t) => tripsById.set(t.id, t));
+      tripsResult.rows.forEach((t) => {
+        tripsById.set(t.id, t);
+      });
     }
 
     // Hydrate journeys assigned to those trips (one query for all)
@@ -417,7 +419,9 @@ export async function getJourneysAndTrips(
         GROUP BY uj.id`,
         [user.id, journeyIds],
       );
-      journeysResult.rows.forEach((j) => journeysById.set(j.id, j));
+      journeysResult.rows.forEach((j) => {
+        journeysById.set(j.id, j);
+      });
     }
 
     // Reassemble in the page's original order
