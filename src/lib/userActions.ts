@@ -3,7 +3,7 @@
 import { getUser } from "./authActions";
 import { SUPPORTED_COUNTRIES } from "./constants";
 import { query } from "./db";
-import { type RailwayRoute, type Station } from "./types";
+import type { RailwayRoute, Station } from "./types";
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {

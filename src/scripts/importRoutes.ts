@@ -121,7 +121,7 @@ async function importRoutes() {
 
         const notesCount = await query("SELECT COUNT(*) FROM admin_notes");
         console.log(`✓ Admin notes: ${notesCount.rows[0].count}`);
-      } catch (verifyError) {
+      } catch {
         console.warn("Warning: Could not verify imported data counts");
       }
 

@@ -202,7 +202,7 @@ export class RailwayPathFinder {
         const result = this.buildPathResult(bestAlternative);
         result.hasBacktracking = false;
         return result;
-      } catch (error) {
+      } catch {
         console.log(`  ⚠️  Alternative path has broken chain, using backtracking path instead`);
         const result = this.buildPathResult(firstPath);
         result.hasBacktracking = true;
@@ -717,7 +717,7 @@ export class RailwayPathFinder {
             startCoordinate,
             endCoordinate,
           );
-        } catch (error) {
+        } catch {
           // Chain is broken - this path doesn't connect properly
           console.log(`    ❌ Chain broken - skipping this combination`);
           continue;
