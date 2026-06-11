@@ -66,8 +66,13 @@ export async function migrateLocalJourneys(
         journeysSkipped++;
       }
     } catch (error) {
+      // Duplicates are already filtered above, so anything here is a real
+      // failure (e.g. a broken id sequence). Surface it instead of silently
+      // dropping the journey — the duplicate check above makes a retry safe.
       console.error("Error migrating journey:", error);
-      journeysSkipped++;
+      throw new Error(
+        `Failed to migrate journey "${localJourney.name}": ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -104,7 +109,9 @@ export async function migrateLocalJourneys(
       }
     } catch (error) {
       console.error("Error migrating logged part:", error);
-      partsSkipped++;
+      throw new Error(
+        `Failed to migrate logged part (track ${localPart.track_id}): ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 

@@ -104,6 +104,39 @@ async function importRoutes() {
         // Ignore cleanup errors
       }
 
+      // Resync id sequences with imported data. Dumps that predate the
+      // setval lines (or any partial dump) leave sequences behind the
+      // explicit ids just inserted, causing later "duplicate key" errors on
+      // SERIAL inserts. Bump every owned sequence to MAX(column).
+      console.log("\nResyncing id sequences...");
+      try {
+        await query(`
+          DO $$
+          DECLARE r RECORD; max_id BIGINT;
+          BEGIN
+            FOR r IN
+              SELECT seq.relname AS seq, tbl.relname AS tbl, col.attname AS col
+              FROM pg_class seq
+              JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype = 'a'
+              JOIN pg_class tbl ON tbl.oid = dep.refobjid
+              JOIN pg_attribute col ON col.attrelid = tbl.oid AND col.attnum = dep.refobjsubid
+              JOIN pg_namespace ns ON ns.oid = seq.relnamespace
+              WHERE seq.relkind = 'S' AND ns.nspname = 'public'
+            LOOP
+              EXECUTE format('SELECT MAX(%I) FROM %I', r.col, r.tbl) INTO max_id;
+              IF max_id IS NULL THEN
+                PERFORM setval(r.seq, 1, false);
+              ELSE
+                PERFORM setval(r.seq, max_id);
+              END IF;
+            END LOOP;
+          END $$;
+        `);
+        console.log("✓ Sequences resynced");
+      } catch {
+        console.warn("Warning: Could not resync sequences (run `npm run fixSequences`)");
+      }
+
       // Verify what was imported
       console.log("\nVerifying imported data...");
 
