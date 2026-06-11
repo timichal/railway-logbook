@@ -3,7 +3,7 @@
  * Provides worldwide country boundary detection from coordinates
  */
 
-import * as countryCoder from '@rapideditor/country-coder';
+import * as countryCoder from "@rapideditor/country-coder";
 
 /**
  * Determines the ISO 3166-1 alpha-2 country code from geographic coordinates
@@ -16,7 +16,7 @@ export function getCountryFromCoordinates(lng: number, lat: number): string | nu
     // country-coder uses [longitude, latitude] format
     const feature = countryCoder.feature([lng, lat]);
 
-    if (!feature || !feature.properties) {
+    if (!feature?.properties) {
       console.warn(`No country found for coordinates: ${lng}, ${lat}`);
       return null;
     }
@@ -46,7 +46,7 @@ export function getStartCoordinate(geometry: any): [number, number] | null {
     if (!geometry) return null;
 
     // Handle GeoJSON format
-    if (geometry.type === 'LineString' && geometry.coordinates && geometry.coordinates.length > 0) {
+    if (geometry.type === "LineString" && geometry.coordinates && geometry.coordinates.length > 0) {
       const [lng, lat] = geometry.coordinates[0];
       return [lng, lat];
     }
@@ -57,10 +57,10 @@ export function getStartCoordinate(geometry: any): [number, number] | null {
       return [lng, lat];
     }
 
-    console.warn('Unable to extract start coordinate from geometry:', geometry);
+    console.warn("Unable to extract start coordinate from geometry:", geometry);
     return null;
   } catch (error) {
-    console.error('Error extracting start coordinate:', error);
+    console.error("Error extracting start coordinate:", error);
     return null;
   }
 }
@@ -75,7 +75,7 @@ export function getEndCoordinate(geometry: any): [number, number] | null {
     if (!geometry) return null;
 
     // Handle GeoJSON format
-    if (geometry.type === 'LineString' && geometry.coordinates && geometry.coordinates.length > 0) {
+    if (geometry.type === "LineString" && geometry.coordinates && geometry.coordinates.length > 0) {
       const coords = geometry.coordinates;
       const [lng, lat] = coords[coords.length - 1];
       return [lng, lat];
@@ -87,10 +87,10 @@ export function getEndCoordinate(geometry: any): [number, number] | null {
       return [lng, lat];
     }
 
-    console.warn('Unable to extract end coordinate from geometry:', geometry);
+    console.warn("Unable to extract end coordinate from geometry:", geometry);
     return null;
   } catch (error) {
-    console.error('Error extracting end coordinate:', error);
+    console.error("Error extracting end coordinate:", error);
     return null;
   }
 }
@@ -100,7 +100,10 @@ export function getEndCoordinate(geometry: any): [number, number] | null {
  * @param geometry - GeoJSON LineString geometry or coordinate array
  * @returns Object with startCountry and endCountry (2-letter codes or null)
  */
-export function getRouteCountries(geometry: any): { startCountry: string | null; endCountry: string | null } {
+export function getRouteCountries(geometry: any): {
+  startCountry: string | null;
+  endCountry: string | null;
+} {
   const startCoord = getStartCoordinate(geometry);
   const endCoord = getEndCoordinate(geometry);
 
@@ -118,5 +121,5 @@ export function getRouteCountries(geometry: any): { startCountry: string | null;
 export function getCountryFlag(countryCode: string): string {
   return countryCode
     .toUpperCase()
-    .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt(0)));
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
 }

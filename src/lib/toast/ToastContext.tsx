@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import type { Toast, ToastType, ToastContextValue, ConfirmDialogOptions } from './types';
-import { ConfirmDialog } from './ConfirmDialog';
+import type React from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { ConfirmDialog } from "./ConfirmDialog";
+import type { ConfirmDialogOptions, Toast, ToastContextValue, ToastType } from "./types";
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
@@ -15,34 +16,49 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  const showToast = useCallback((message: string, type: ToastType = 'info', duration: number = 5000) => {
-    const id = `toast-${nextIdRef.current++}`;
-    const toast: Toast = { id, message, type, duration };
+  const showToast = useCallback(
+    (message: string, type: ToastType = "info", duration: number = 5000) => {
+      const id = `toast-${nextIdRef.current++}`;
+      const toast: Toast = { id, message, type, duration };
 
-    setToasts((prev) => [...prev, toast]);
+      setToasts((prev) => [...prev, toast]);
 
-    if (duration > 0) {
-      setTimeout(() => {
-        removeToast(id);
-      }, duration);
-    }
-  }, [removeToast]);
+      if (duration > 0) {
+        setTimeout(() => {
+          removeToast(id);
+        }, duration);
+      }
+    },
+    [removeToast],
+  );
 
-  const showSuccess = useCallback((message: string, duration?: number) => {
-    showToast(message, 'success', duration);
-  }, [showToast]);
+  const showSuccess = useCallback(
+    (message: string, duration?: number) => {
+      showToast(message, "success", duration);
+    },
+    [showToast],
+  );
 
-  const showError = useCallback((message: string, duration?: number) => {
-    showToast(message, 'error', duration);
-  }, [showToast]);
+  const showError = useCallback(
+    (message: string, duration?: number) => {
+      showToast(message, "error", duration);
+    },
+    [showToast],
+  );
 
-  const showWarning = useCallback((message: string, duration?: number) => {
-    showToast(message, 'warning', duration);
-  }, [showToast]);
+  const showWarning = useCallback(
+    (message: string, duration?: number) => {
+      showToast(message, "warning", duration);
+    },
+    [showToast],
+  );
 
-  const showInfo = useCallback((message: string, duration?: number) => {
-    showToast(message, 'info', duration);
-  }, [showToast]);
+  const showInfo = useCallback(
+    (message: string, duration?: number) => {
+      showToast(message, "info", duration);
+    },
+    [showToast],
+  );
 
   const showConfirm = useCallback((options: ConfirmDialogOptions) => {
     setConfirmDialog(options);
@@ -85,8 +101,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <ConfirmDialog
         isOpen={!!confirmDialog}
-        title={confirmDialog?.title || ''}
-        message={confirmDialog?.message || ''}
+        title={confirmDialog?.title || ""}
+        message={confirmDialog?.message || ""}
         confirmLabel={confirmDialog?.confirmLabel}
         cancelLabel={confirmDialog?.cancelLabel}
         thirdLabel={confirmDialog?.thirdLabel}
@@ -102,7 +118,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 export function useToast(): ToastContextValue {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
+    throw new Error("useToast must be used within a ToastProvider");
   }
   return context;
 }

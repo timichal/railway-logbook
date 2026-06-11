@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import React, { useState, useCallback } from 'react';
-import type { User } from '@/lib/authActions';
-import type { DataAccess } from '@/lib/dataAccess';
-import JourneyLogger from './JourneyLogger';
-import LocalTripLogger from './LocalTripLogger';
-import JourneysAndTripsTab from './JourneysAndTripsTab';
-import LocalJourneyLogTab from './LocalJourneyLogTab';
-import CountriesStatsTab from './CountriesStatsTab';
-import HowToUseArticle from './HowToUseArticle';
-import RailwayNotesArticle from './RailwayNotesArticle';
-import type { SelectedRoute, Station } from '@/lib/types';
+import { useCallback } from "react";
+import type { User } from "@/lib/authActions";
+import type { DataAccess } from "@/lib/dataAccess";
+import type { SelectedRoute, Station } from "@/lib/types";
+import CountriesStatsTab from "./CountriesStatsTab";
+import HowToUseArticle from "./HowToUseArticle";
+import JourneyLogger from "./JourneyLogger";
+import JourneysAndTripsTab from "./JourneysAndTripsTab";
+import LocalJourneyLogTab from "./LocalJourneyLogTab";
+import LocalTripLogger from "./LocalTripLogger";
+import RailwayNotesArticle from "./RailwayNotesArticle";
 
 interface RouteNode {
   track_id: number;
@@ -20,7 +20,7 @@ interface RouteNode {
   length_km: number;
 }
 
-export type ActiveTab = 'routes' | 'journeylog' | 'filter' | 'howto' | 'notes';
+export type ActiveTab = "routes" | "journeylog" | "filter" | "howto" | "notes";
 
 interface UserSidebarProps {
   user: User | null;
@@ -29,7 +29,7 @@ interface UserSidebarProps {
   onRemoveRoute: (trackId: string) => void;
   onClearAll: () => void;
   onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
-  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
   onRoutesLogged?: () => void;
   selectedCountries: string[];
@@ -59,66 +59,79 @@ export default function UserSidebar({
   onStationClickHandler,
   sidebarWidth,
   onJourneyEditStart,
-  onJourneyEditEnd
+  onJourneyEditEnd,
 }: UserSidebarProps) {
-
   // Close article tabs - switches back to Route Logger
   const handleCloseArticle = useCallback(() => {
-    setActiveTab('routes');
+    setActiveTab("routes");
   }, [setActiveTab]);
 
   // Check if we're in article mode
-  const isArticleMode = activeTab === 'howto' || activeTab === 'notes';
+  const isArticleMode = activeTab === "howto" || activeTab === "notes";
 
   return (
     <div
       style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined}
       className={`bg-white border-r border-gray-200 flex flex-col ${
-        sidebarWidth != null ? 'flex-shrink-0' : 'flex-1 min-h-0'
+        sidebarWidth != null ? "flex-shrink-0" : "flex-1 min-h-0"
       }`}
     >
       {/* Tab Headers - hide when in article mode */}
       {!isArticleMode && (
         <div className="flex border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('routes')}
-          className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
-            activeTab === 'routes'
-              ? 'border-blue-500 text-blue-600 bg-blue-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          <span className="md:hidden">Logger</span>
-          <span className="hidden md:inline">Route Logger</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('journeylog')}
-          className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
-            activeTab === 'journeylog'
-              ? 'border-blue-500 text-blue-600 bg-blue-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          <span className="md:hidden">{user ? 'Trips' : 'Journeys'}</span>
-          <span className="hidden md:inline">{user ? 'My Trips' : 'My Journeys'}</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('filter')}
-          className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
-            activeTab === 'filter'
-              ? 'border-blue-500 text-blue-600 bg-blue-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="inline-block w-4 h-4 mr-1 -mt-0.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
-          Countries
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("routes")}
+            className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
+              activeTab === "routes"
+                ? "border-blue-500 text-blue-600 bg-blue-50"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <span className="md:hidden">Logger</span>
+            <span className="hidden md:inline">Route Logger</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("journeylog")}
+            className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
+              activeTab === "journeylog"
+                ? "border-blue-500 text-blue-600 bg-blue-50"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <span className="md:hidden">{user ? "Trips" : "Journeys"}</span>
+            <span className="hidden md:inline">{user ? "My Trips" : "My Journeys"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("filter")}
+            className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
+              activeTab === "filter"
+                ? "border-blue-500 text-blue-600 bg-blue-50"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="inline-block w-4 h-4 mr-1 -mt-0.5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Countries
+          </button>
         </div>
       )}
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'routes' && user && (
+        {activeTab === "routes" && user && (
           <JourneyLogger
             selectedRoutes={selectedRoutes}
             onRemoveRoute={onRemoveRoute}
@@ -130,7 +143,7 @@ export default function UserSidebar({
             onStationClickHandler={onStationClickHandler}
           />
         )}
-        {activeTab === 'routes' && !user && (
+        {activeTab === "routes" && !user && (
           <LocalTripLogger
             selectedRoutes={selectedRoutes}
             onRemoveRoute={onRemoveRoute}
@@ -143,7 +156,7 @@ export default function UserSidebar({
           />
         )}
 
-        {activeTab === 'journeylog' && user && (
+        {activeTab === "journeylog" && user && (
           <JourneysAndTripsTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
@@ -152,14 +165,14 @@ export default function UserSidebar({
           />
         )}
 
-        {activeTab === 'journeylog' && !user && (
+        {activeTab === "journeylog" && !user && (
           <LocalJourneyLogTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
           />
         )}
 
-        {activeTab === 'filter' && (
+        {activeTab === "filter" && (
           <CountriesStatsTab
             dataAccess={dataAccess}
             selectedCountries={selectedCountries}
@@ -167,13 +180,9 @@ export default function UserSidebar({
           />
         )}
 
-        {activeTab === 'howto' && (
-          <HowToUseArticle onClose={handleCloseArticle} />
-        )}
+        {activeTab === "howto" && <HowToUseArticle onClose={handleCloseArticle} />}
 
-        {activeTab === 'notes' && (
-          <RailwayNotesArticle onClose={handleCloseArticle} />
-        )}
+        {activeTab === "notes" && <RailwayNotesArticle onClose={handleCloseArticle} />}
       </div>
     </div>
   );

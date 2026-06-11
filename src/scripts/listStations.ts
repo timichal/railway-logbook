@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 
-import dotenv from 'dotenv';
-import { Pool } from 'pg';
-import { getDbConfig } from '../lib/dbConfig';
+import dotenv from "dotenv";
+import { Pool } from "pg";
+import { getDbConfig } from "../lib/dbConfig";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -15,7 +15,7 @@ async function listStations() {
   const client = await pool.connect();
 
   try {
-    console.log('Fetching unique station names from railway_routes...\n');
+    console.log("Fetching unique station names from railway_routes...\n");
 
     // Query to get all unique station names from both from_station and to_station
     // UNION automatically removes duplicates
@@ -27,17 +27,16 @@ async function listStations() {
     `);
 
     console.log(`Found ${result.rows.length} unique stations:\n`);
-    console.log('─'.repeat(60));
+    console.log("─".repeat(60));
 
     result.rows.forEach((row, index) => {
-      console.log(`${(index + 1).toString().padStart(4, ' ')}. ${row.station_name}`);
+      console.log(`${(index + 1).toString().padStart(4, " ")}. ${row.station_name}`);
     });
 
-    console.log('─'.repeat(60));
+    console.log("─".repeat(60));
     console.log(`\nTotal: ${result.rows.length} unique stations`);
-
   } catch (error) {
-    console.error('Error fetching stations:', error);
+    console.error("Error fetching stations:", error);
     throw error;
   } finally {
     client.release();
@@ -46,7 +45,7 @@ async function listStations() {
 }
 
 // Run the script
-listStations().catch(error => {
-  console.error('Script failed:', error);
+listStations().catch((error) => {
+  console.error("Script failed:", error);
   process.exit(1);
 });

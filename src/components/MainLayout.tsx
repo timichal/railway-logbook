@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import dynamic from 'next/dynamic';
-import type { User } from '@/lib/authActions';
-import Navbar from './Navbar';
-import type { ActiveTab } from './UserSidebar';
-import { useResizableSidebar } from '@/hooks/useResizableSidebar';
-import { useIsMobile } from '@/hooks/useIsMobile';
+import dynamic from "next/dynamic";
+import { useState } from "react";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { useResizableSidebar } from "@/hooks/useResizableSidebar";
+import type { User } from "@/lib/authActions";
+import Navbar from "./Navbar";
+import type { ActiveTab } from "./UserSidebar";
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
-const VectorRailwayMap = dynamic(() => import('./VectorRailwayMap'), {
+const VectorRailwayMap = dynamic(() => import("./VectorRailwayMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
@@ -25,19 +25,20 @@ interface MainLayoutProps {
 }
 
 export default function MainLayout({ user, onLogout, initialSelectedCountries }: MainLayoutProps) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('routes');
+  const [activeTab, setActiveTab] = useState<ActiveTab>("routes");
   const isMobile = useIsMobile();
-  const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } = useResizableSidebar({ isMobile });
+  const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } =
+    useResizableSidebar({ isMobile });
 
   // Wrap logout to also switch to Route Logger tab
   const handleLogout = () => {
-    setActiveTab('routes');
+    setActiveTab("routes");
     onLogout();
   };
 
   // Handle successful login/register - switch to Route Logger tab
   const handleAuthSuccess = () => {
-    setActiveTab('routes');
+    setActiveTab("routes");
   };
 
   return (
@@ -46,8 +47,8 @@ export default function MainLayout({ user, onLogout, initialSelectedCountries }:
         user={user}
         onLogout={handleLogout}
         onAuthSuccess={handleAuthSuccess}
-        onOpenHowTo={() => setActiveTab('howto')}
-        onOpenNotes={() => setActiveTab('notes')}
+        onOpenHowTo={() => setActiveTab("howto")}
+        onOpenNotes={() => setActiveTab("notes")}
         isMobile={isMobile}
         onToggleSidebar={toggleSidebar}
       />

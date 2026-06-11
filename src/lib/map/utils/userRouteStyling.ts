@@ -1,5 +1,5 @@
-import type maplibregl from 'maplibre-gl';
-import { COLORS, WIDTHS, lineClassColorExpression } from '@/lib/map';
+import type maplibregl from "maplibre-gl";
+import { COLORS, lineClassColorExpression, WIDTHS } from "@/lib/map";
 
 /**
  * Get color expression for user railway routes based on visit status AND line class
@@ -12,21 +12,21 @@ import { COLORS, WIDTHS, lineClassColorExpression } from '@/lib/map';
  */
 export function getUserRouteColorExpression(): maplibregl.ExpressionSpecification {
   return [
-    'case',
+    "case",
     // Logged users: Has at least one complete trip (from tile data) → green shades
-    ['all', ['has', 'date'], ['==', ['get', 'has_complete_trip'], true]],
+    ["all", ["has", "date"], ["==", ["get", "has_complete_trip"], true]],
     lineClassColorExpression(COLORS.railwayRoutes.visited),
     // Logged users: Has trips but no complete trip (from tile data) → orange shades
-    ['has', 'date'],
+    ["has", "date"],
     lineClassColorExpression(COLORS.railwayRoutes.partial),
     // Unlogged users: Has partial trip (from feature-state) → orange shades
-    ['all', ['==', ['feature-state', 'hasTrip'], true], ['==', ['feature-state', 'partial'], true]],
+    ["all", ["==", ["feature-state", "hasTrip"], true], ["==", ["feature-state", "partial"], true]],
     lineClassColorExpression(COLORS.railwayRoutes.partial),
     // Unlogged users: Has complete trip (from feature-state) → green shades
-    ['==', ['feature-state', 'hasTrip'], true],
+    ["==", ["feature-state", "hasTrip"], true],
     lineClassColorExpression(COLORS.railwayRoutes.visited),
     // No trips → red shades
-    lineClassColorExpression(COLORS.railwayRoutes.unvisited)
+    lineClassColorExpression(COLORS.railwayRoutes.unvisited),
   ] as maplibregl.ExpressionSpecification;
 }
 
@@ -38,11 +38,14 @@ type WidthStop = { branch: number; main: number; highspeed: number };
  */
 function widthByClass(stop: WidthStop): maplibregl.ExpressionSpecification {
   return [
-    'case',
-    ['==', ['get', 'usage_type'], 1], stop.branch * WIDTHS.specialUsageMultiplier,
-    ['==', ['get', 'line_class'], 'branch'], stop.branch,
-    ['==', ['get', 'line_class'], 'highspeed'], stop.highspeed,
-    stop.main
+    "case",
+    ["==", ["get", "usage_type"], 1],
+    stop.branch * WIDTHS.specialUsageMultiplier,
+    ["==", ["get", "line_class"], "branch"],
+    stop.branch,
+    ["==", ["get", "line_class"], "highspeed"],
+    stop.highspeed,
+    stop.main,
   ] as maplibregl.ExpressionSpecification;
 }
 
@@ -54,9 +57,13 @@ function widthByClass(stop: WidthStop): maplibregl.ExpressionSpecification {
 export function getUserRouteWidthExpression(): maplibregl.ExpressionSpecification {
   const s = WIDTHS.userRoute;
   return [
-    'interpolate', ['linear'], ['zoom'],
-    4, widthByClass(s.z4),
-    7, widthByClass(s.z7),
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    4,
+    widthByClass(s.z4),
+    7,
+    widthByClass(s.z7),
   ] as maplibregl.ExpressionSpecification;
 }
 
@@ -67,9 +74,13 @@ export function getUserRouteWidthExpression(): maplibregl.ExpressionSpecificatio
 export function getUserRouteClickBufferWidthExpression(): maplibregl.ExpressionSpecification {
   const s = WIDTHS.clickBuffer;
   return [
-    'interpolate', ['linear'], ['zoom'],
-    4,  widthByClass(s.z4),
-    12, widthByClass(s.z12),
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    4,
+    widthByClass(s.z4),
+    12,
+    widthByClass(s.z12),
   ] as maplibregl.ExpressionSpecification;
 }
 
@@ -82,18 +93,29 @@ export function getUserRouteClickBufferWidthExpression(): maplibregl.ExpressionS
  * expression like ['case', ...].
  */
 export function getAdminRouteWidthExpression(
-  selectedTrackId: number | null
+  selectedTrackId: number | null,
 ): maplibregl.ExpressionSpecification {
   const normal = widthByClass(WIDTHS.adminRoute);
-  const stop = (selectedTrackId === null)
-    ? normal
-    : ['case', ['==', ['id'], selectedTrackId], WIDTHS.selectedRoute, normal] as maplibregl.ExpressionSpecification;
+  const stop =
+    selectedTrackId === null
+      ? normal
+      : ([
+          "case",
+          ["==", ["id"], selectedTrackId],
+          WIDTHS.selectedRoute,
+          normal,
+        ] as maplibregl.ExpressionSpecification);
 
   return [
-    'interpolate', ['linear'], ['zoom'],
-    4,   stop,
-    6.5, stop,
-    7,   stop
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    4,
+    stop,
+    6.5,
+    stop,
+    7,
+    stop,
   ] as maplibregl.ExpressionSpecification;
 }
 
@@ -106,8 +128,12 @@ export function getAdminRouteWidthExpression(
 export function getUserRouteScenicOutlineWidthExpression(): maplibregl.ExpressionSpecification {
   const s = WIDTHS.scenicOutline;
   return [
-    'interpolate', ['linear'], ['zoom'],
-    4, widthByClass(s.z4),
-    7, widthByClass(s.z7),
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    4,
+    widthByClass(s.z4),
+    7,
+    widthByClass(s.z7),
   ] as maplibregl.ExpressionSpecification;
 }

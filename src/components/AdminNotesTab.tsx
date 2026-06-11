@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { getAllAdminNotes, updateAdminNote } from '@/lib/adminNotesActions';
-import { noteTypeOptions, getNoteTypeColor, type NoteType } from '@/lib/constants';
-import { useToast } from '@/lib/toast';
-import type { AdminNote } from '@/lib/types';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getAllAdminNotes, updateAdminNote } from "@/lib/adminNotesActions";
+import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/constants";
+import { useToast } from "@/lib/toast";
+import type { AdminNote } from "@/lib/types";
 
-type TypeFilter = NoteType | 'none' | 'all';
+type TypeFilter = NoteType | "none" | "all";
 
 interface AdminNotesTabProps {
   onFocusNote?: (coordinate: [number, number]) => void;
@@ -14,11 +14,15 @@ interface AdminNotesTabProps {
   refreshSignal?: number; // Parent bumps this to force a reload (e.g. after popup edits)
 }
 
-export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSignal }: AdminNotesTabProps) {
+export default function AdminNotesTab({
+  onFocusNote,
+  onNoteChanged,
+  refreshSignal,
+}: AdminNotesTabProps) {
   const { showError, showSuccess } = useToast();
   const [notes, setNotes] = useState<AdminNote[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [filter, setFilter] = useState<TypeFilter>('all');
+  const [filter, setFilter] = useState<TypeFilter>("all");
   const [savingId, setSavingId] = useState<number | null>(null);
 
   const loadNotes = useCallback(async () => {
@@ -27,7 +31,9 @@ export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSigna
       const data = await getAllAdminNotes();
       setNotes(data);
     } catch (error) {
-      showError(`Failed to load notes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(
+        `Failed to load notes: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setIsLoading(false);
     }
@@ -48,8 +54,8 @@ export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSigna
   }, [notes]);
 
   const filteredNotes = useMemo(() => {
-    if (filter === 'all') return notes;
-    if (filter === 'none') return notes.filter((n) => !n.note_type);
+    if (filter === "all") return notes;
+    if (filter === "none") return notes.filter((n) => !n.note_type);
     return notes.filter((n) => n.note_type === filter);
   }, [notes, filter]);
 
@@ -58,10 +64,12 @@ export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSigna
     try {
       const updated = await updateAdminNote(note.id, note.text, newType);
       setNotes((prev) => prev.map((n) => (n.id === note.id ? updated : n)));
-      showSuccess('Note type updated');
+      showSuccess("Note type updated");
       onNoteChanged?.();
     } catch (error) {
-      showError(`Failed to update type: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(
+        `Failed to update type: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setSavingId(null);
     }
@@ -72,12 +80,13 @@ export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSigna
     const count = counts[key] ?? 0;
     return (
       <button
+        type="button"
         key={key}
         onClick={() => setFilter(key)}
         className={`px-2 py-1 text-xs rounded border flex items-center gap-1.5 ${
           active
-            ? 'bg-blue-100 border-blue-500 text-blue-800'
-            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+            ? "bg-blue-100 border-blue-500 text-blue-800"
+            : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
         }`}
       >
         {color && (
@@ -96,7 +105,7 @@ export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSigna
     <div className="h-full flex flex-col">
       <div className="p-3 border-b border-gray-200 flex-shrink-0 bg-gray-50">
         <div className="flex flex-wrap gap-1.5">
-          {filterButton('all', 'All')}
+          {filterButton("all", "All")}
           {noteTypeOptions.map((opt) => filterButton(opt.id, opt.label, opt.color))}
         </div>
       </div>
@@ -125,25 +134,24 @@ export default function AdminNotesTab({ onFocusNote, onNoteChanged, refreshSigna
                       {note.text}
                     </div>
                     <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-500">
-                      <label
-                        className="text-gray-600"
-                        onClick={(e) => e.stopPropagation()}
-                      >
+                      <label className="text-gray-600" onClick={(e) => e.stopPropagation()}>
                         Type:
                       </label>
                       <select
-                        value={note.note_type ?? ''}
+                        value={note.note_type ?? ""}
                         disabled={savingId === note.id}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
-                          const v = e.target.value as NoteType | '';
+                          const v = e.target.value as NoteType | "";
                           if (v) handleTypeChange(note, v);
                         }}
                         className="text-xs px-1.5 py-0.5 border border-gray-300 rounded bg-white text-gray-800"
                       >
                         {!note.note_type && <option value="">-- none --</option>}
                         {noteTypeOptions.map((opt) => (
-                          <option key={opt.id} value={opt.id}>{opt.label}</option>
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
                         ))}
                       </select>
                       <span className="ml-auto">

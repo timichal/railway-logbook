@@ -1,7 +1,7 @@
-import type maplibreglType from 'maplibre-gl';
-import maplibregl from 'maplibre-gl';
-import type { MutableRefObject } from 'react';
-import { formatRouteMetadataBadges } from '@/lib/map/utils/tooltipFormatting';
+import type maplibreglType from "maplibre-gl";
+import maplibregl from "maplibre-gl";
+import type { MutableRefObject } from "react";
+import { formatRouteMetadataBadges } from "@/lib/map/utils/tooltipFormatting";
 
 interface AdminMapCallbacks {
   onCoordinateClickRef: MutableRefObject<((coordinate: [number, number]) => void) | undefined>;
@@ -13,7 +13,7 @@ interface AdminMapCallbacks {
  */
 export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
-  callbacks: AdminMapCallbacks
+  callbacks: AdminMapCallbacks,
 ) {
   const { onCoordinateClickRef, onRouteSelectRef } = callbacks;
 
@@ -22,9 +22,9 @@ export function setupAdminMapInteractions(
     if (!e.features || e.features.length === 0) return;
 
     // Don't handle part clicks if we clicked on a route endpoint (only if layer exists)
-    if (mapInstance.getLayer('route-endpoints')) {
+    if (mapInstance.getLayer("route-endpoints")) {
       const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ['route-endpoints']
+        layers: ["route-endpoints"],
       });
       if (endpointFeatures && endpointFeatures.length > 0) {
         return; // Let the endpoint handler handle this
@@ -33,7 +33,7 @@ export function setupAdminMapInteractions(
 
     // Don't handle part clicks if we also clicked on a route (wide hit-area buffer included)
     const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ['railway_routes_click', 'railway_routes']
+      layers: ["railway_routes_click", "railway_routes"],
     });
     if (routeFeatures && routeFeatures.length > 0) {
       return;
@@ -43,25 +43,25 @@ export function setupAdminMapInteractions(
 
     // Extract exact click coordinate
     const clickedCoordinate: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-    console.log('adminMapInteractions: Part clicked at coordinate:', clickedCoordinate);
+    console.log("adminMapInteractions: Part clicked at coordinate:", clickedCoordinate);
     onCoordinateClickRef.current(clickedCoordinate);
   };
 
   // Click handler for railway_parts
-  mapInstance.on('click', 'railway_parts', handlePartClick);
+  mapInstance.on("click", "railway_parts", handlePartClick);
 
   // Click handler for route endpoints - conditionally add if layer exists
   // Note: This layer is dynamically added/removed, so we handle clicks through a wrapper
   const handleMapClick = (e: maplibreglType.MapMouseEvent) => {
     // Check if we have the route-endpoints layer and if we clicked on an endpoint
-    if (mapInstance.getLayer('route-endpoints')) {
+    if (mapInstance.getLayer("route-endpoints")) {
       const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ['route-endpoints']
+        layers: ["route-endpoints"],
       });
       if (endpointFeatures && endpointFeatures.length > 0) {
         // Manually call the endpoint click handler with proper features
         const feature = endpointFeatures[0];
-        if (feature.geometry.type === 'Point' && onCoordinateClickRef.current) {
+        if (feature.geometry.type === "Point" && onCoordinateClickRef.current) {
           const clickedCoordinate = feature.geometry.coordinates as [number, number];
           onCoordinateClickRef.current(clickedCoordinate);
         }
@@ -70,18 +70,18 @@ export function setupAdminMapInteractions(
   };
 
   // We can't use layer-specific click for dynamic layers, so use general map click
-  mapInstance.on('click', handleMapClick);
+  mapInstance.on("click", handleMapClick);
 
   // Click handler for railway routes (uses wide invisible click buffer layer for easier tapping)
-  mapInstance.on('click', 'railway_routes_click', (e) => {
+  mapInstance.on("click", "railway_routes_click", (e) => {
     if (!e.features || e.features.length === 0) return;
 
     // Routes pass through their own start/end markers, so a click on a route-endpoint
     // dot also lands on the route. The endpoint handler already set the coordinate —
     // don't also select the route.
-    if (mapInstance.getLayer('route-endpoints')) {
+    if (mapInstance.getLayer("route-endpoints")) {
       const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ['route-endpoints']
+        layers: ["route-endpoints"],
       });
       if (endpointFeatures && endpointFeatures.length > 0) return;
     }
@@ -99,29 +99,31 @@ export function setupAdminMapInteractions(
   });
 
   // Click handler for map (when clicking outside features) to unselect route
-  mapInstance.on('click', (e) => {
+  mapInstance.on("click", (e) => {
     // Check if we clicked on any features (use click buffer layer for routes)
     const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ['railway_routes_click', 'railway_routes']
+      layers: ["railway_routes_click", "railway_routes"],
     });
     const partFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ['railway_parts']
+      layers: ["railway_parts"],
     });
 
     // Also check for endpoint clicks
     let endpointFeatures = null;
-    if (mapInstance.getLayer('route-endpoints')) {
+    if (mapInstance.getLayer("route-endpoints")) {
       endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ['route-endpoints']
+        layers: ["route-endpoints"],
       });
     }
 
     // If we didn't click on any features, unselect the route
-    if ((!routeFeatures || routeFeatures.length === 0) &&
+    if (
+      (!routeFeatures || routeFeatures.length === 0) &&
       (!partFeatures || partFeatures.length === 0) &&
-      (!endpointFeatures || endpointFeatures.length === 0)) {
+      (!endpointFeatures || endpointFeatures.length === 0)
+    ) {
       if (onRouteSelectRef.current) {
-        onRouteSelectRef.current('');  // Empty string to unselect
+        onRouteSelectRef.current(""); // Empty string to unselect
       }
     }
   });
@@ -129,10 +131,10 @@ export function setupAdminMapInteractions(
   // Hover effects for railway parts
   let hoveredPartId: number | string | null = null;
 
-  mapInstance.on('mouseenter', 'railway_parts', (e) => {
+  mapInstance.on("mouseenter", "railway_parts", (e) => {
     // Check if we're also hovering over a railway route (wide hit-area buffer included)
     const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ['railway_routes_click', 'railway_routes']
+      layers: ["railway_routes_click", "railway_routes"],
     });
 
     // If hovering over a route, don't show part hover
@@ -140,7 +142,7 @@ export function setupAdminMapInteractions(
       return;
     }
 
-    mapInstance.getCanvas().style.cursor = 'pointer';
+    mapInstance.getCanvas().style.cursor = "pointer";
 
     // Set hover state for the feature
     if (e.features && e.features.length > 0) {
@@ -152,29 +154,29 @@ export function setupAdminMapInteractions(
         // Remove hover from previous part
         if (hoveredPartId !== null) {
           mapInstance.setFeatureState(
-            { source: 'railway_parts', sourceLayer: 'railway_parts', id: hoveredPartId },
-            { hover: false }
+            { source: "railway_parts", sourceLayer: "railway_parts", id: hoveredPartId },
+            { hover: false },
           );
         }
 
         // Add hover to current part
         hoveredPartId = partId;
         mapInstance.setFeatureState(
-          { source: 'railway_parts', sourceLayer: 'railway_parts', id: partId },
-          { hover: true }
+          { source: "railway_parts", sourceLayer: "railway_parts", id: partId },
+          { hover: true },
         );
       }
     }
   });
 
-  mapInstance.on('mouseleave', 'railway_parts', () => {
-    mapInstance.getCanvas().style.cursor = '';
+  mapInstance.on("mouseleave", "railway_parts", () => {
+    mapInstance.getCanvas().style.cursor = "";
 
     // Remove hover state from the last hovered feature
     if (hoveredPartId !== null) {
       mapInstance.setFeatureState(
-        { source: 'railway_parts', sourceLayer: 'railway_parts', id: hoveredPartId },
-        { hover: false }
+        { source: "railway_parts", sourceLayer: "railway_parts", id: hoveredPartId },
+        { hover: false },
       );
       hoveredPartId = null;
     }
@@ -183,8 +185,8 @@ export function setupAdminMapInteractions(
   // Hover effects for railway routes with popup
   let routeHoverPopup: maplibregl.Popup | null = null;
 
-  mapInstance.on('mouseenter', 'railway_routes_click', (e) => {
-    mapInstance.getCanvas().style.cursor = 'pointer';
+  mapInstance.on("mouseenter", "railway_routes_click", (e) => {
+    mapInstance.getCanvas().style.cursor = "pointer";
 
     if (e.features && e.features.length > 0) {
       const feature = e.features[0];
@@ -198,7 +200,7 @@ export function setupAdminMapInteractions(
           usage_type: properties.usage_type,
           scenic: properties.scenic,
           line_class: properties.line_class,
-          frequency: properties.frequency
+          frequency: properties.frequency,
         });
         if (properties.description) {
           formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
@@ -215,7 +217,7 @@ export function setupAdminMapInteractions(
           closeButton: false,
           closeOnClick: false,
           offset: 10,
-          className: 'railway-route-hover-popup'
+          className: "railway-route-hover-popup",
         })
           .setLngLat(e.lngLat)
           .setHTML(`
@@ -229,8 +231,8 @@ export function setupAdminMapInteractions(
     }
   });
 
-  mapInstance.on('mouseleave', 'railway_routes_click', () => {
-    mapInstance.getCanvas().style.cursor = '';
+  mapInstance.on("mouseleave", "railway_routes_click", () => {
+    mapInstance.getCanvas().style.cursor = "";
 
     if (routeHoverPopup) {
       routeHoverPopup.remove();
@@ -241,8 +243,8 @@ export function setupAdminMapInteractions(
   // Hover effects for stations with popup
   let stationHoverPopup: maplibregl.Popup | null = null;
 
-  mapInstance.on('mouseenter', 'stations', (e) => {
-    mapInstance.getCanvas().style.cursor = 'pointer';
+  mapInstance.on("mouseenter", "stations", (e) => {
+    mapInstance.getCanvas().style.cursor = "pointer";
 
     if (e.features && e.features.length > 0) {
       const feature = e.features[0];
@@ -257,12 +259,12 @@ export function setupAdminMapInteractions(
           closeButton: false,
           closeOnClick: false,
           offset: 10,
-          className: 'station-hover-popup'
+          className: "station-hover-popup",
         })
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="color: black;">
-              <h3 style="font-weight: bold; margin-bottom: 2px;">${properties.name || 'Unknown Station'}</h3>
+              <h3 style="font-weight: bold; margin-bottom: 2px;">${properties.name || "Unknown Station"}</h3>
               <div style="font-size: 0.75rem; color: #6b7280;">Station</div>
             </div>
           `)
@@ -271,8 +273,8 @@ export function setupAdminMapInteractions(
     }
   });
 
-  mapInstance.on('mouseleave', 'stations', () => {
-    mapInstance.getCanvas().style.cursor = '';
+  mapInstance.on("mouseleave", "stations", () => {
+    mapInstance.getCanvas().style.cursor = "";
 
     if (stationHoverPopup) {
       stationHoverPopup.remove();
@@ -284,9 +286,9 @@ export function setupAdminMapInteractions(
   let endpointHoverPopup: maplibregl.Popup | null = null;
   let isOverEndpoint = false;
 
-  mapInstance.on('mousemove', (e) => {
+  mapInstance.on("mousemove", (e) => {
     // Only check if the layer exists
-    if (!mapInstance.getLayer('route-endpoints')) {
+    if (!mapInstance.getLayer("route-endpoints")) {
       if (endpointHoverPopup) {
         endpointHoverPopup.remove();
         endpointHoverPopup = null;
@@ -296,7 +298,7 @@ export function setupAdminMapInteractions(
     }
 
     const features = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ['route-endpoints']
+      layers: ["route-endpoints"],
     });
 
     if (features && features.length > 0) {
@@ -304,20 +306,20 @@ export function setupAdminMapInteractions(
       const properties = feature.properties;
 
       if (properties && !isOverEndpoint) {
-        mapInstance.getCanvas().style.cursor = 'pointer';
+        mapInstance.getCanvas().style.cursor = "pointer";
         isOverEndpoint = true;
 
         if (endpointHoverPopup) {
           endpointHoverPopup.remove();
         }
 
-        const endpointTypeLabel = properties.endpoint_type === 'start' ? 'Start' : 'End';
+        const endpointTypeLabel = properties.endpoint_type === "start" ? "Start" : "End";
 
         endpointHoverPopup = new maplibregl.Popup({
           closeButton: false,
           closeOnClick: false,
           offset: 10,
-          className: 'endpoint-hover-popup'
+          className: "endpoint-hover-popup",
         })
           .setLngLat(e.lngLat)
           .setHTML(`
@@ -343,8 +345,8 @@ export function setupAdminMapInteractions(
   let noteHoverPopup: maplibregl.Popup | null = null;
   let hoveredNoteId: number | string | null = null;
 
-  mapInstance.on('mouseenter', 'admin_notes', (e) => {
-    mapInstance.getCanvas().style.cursor = 'pointer';
+  mapInstance.on("mouseenter", "admin_notes", (e) => {
+    mapInstance.getCanvas().style.cursor = "pointer";
 
     if (e.features && e.features.length > 0) {
       const feature = e.features[0];
@@ -356,16 +358,16 @@ export function setupAdminMapInteractions(
         // Remove hover from previous note
         if (hoveredNoteId !== null) {
           mapInstance.setFeatureState(
-            { source: 'admin_notes', sourceLayer: 'admin_notes', id: hoveredNoteId },
-            { hover: false }
+            { source: "admin_notes", sourceLayer: "admin_notes", id: hoveredNoteId },
+            { hover: false },
           );
         }
 
         // Add hover to current note
         hoveredNoteId = noteId;
         mapInstance.setFeatureState(
-          { source: 'admin_notes', sourceLayer: 'admin_notes', id: noteId },
-          { hover: true }
+          { source: "admin_notes", sourceLayer: "admin_notes", id: noteId },
+          { hover: true },
         );
       }
 
@@ -375,21 +377,21 @@ export function setupAdminMapInteractions(
         }
 
         const updatedAtStr = properties.updated_at
-          ? new Date(properties.updated_at).toISOString().replace('T', ' ').slice(0, 19)
-          : '';
+          ? new Date(properties.updated_at).toISOString().replace("T", " ").slice(0, 19)
+          : "";
 
         noteHoverPopup = new maplibregl.Popup({
           closeButton: false,
           closeOnClick: false,
           offset: 10,
-          className: 'admin-note-hover-popup'
+          className: "admin-note-hover-popup",
         })
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="color: black;">
               <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note</h3>
-              <div style="font-size: 0.85rem; color: #374151;">${properties.text || ''}</div>
-              ${updatedAtStr ? `<div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ''}
+              <div style="font-size: 0.85rem; color: #374151;">${properties.text || ""}</div>
+              ${updatedAtStr ? `<div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
               <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Right-click to edit</div>
             </div>
           `)
@@ -398,14 +400,14 @@ export function setupAdminMapInteractions(
     }
   });
 
-  mapInstance.on('mouseleave', 'admin_notes', () => {
-    mapInstance.getCanvas().style.cursor = '';
+  mapInstance.on("mouseleave", "admin_notes", () => {
+    mapInstance.getCanvas().style.cursor = "";
 
     // Remove hover state from the last hovered note
     if (hoveredNoteId !== null) {
       mapInstance.setFeatureState(
-        { source: 'admin_notes', sourceLayer: 'admin_notes', id: hoveredNoteId },
-        { hover: false }
+        { source: "admin_notes", sourceLayer: "admin_notes", id: hoveredNoteId },
+        { hover: false },
       );
       hoveredNoteId = null;
     }

@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import type { Station } from '@/lib/types';
-import { searchStations } from '@/lib/userActions';
-import { findRoutePathBetweenStations } from '@/lib/routePathFinder';
-import { useToast } from '@/lib/toast';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
+import { useToast } from "@/lib/toast";
+import type { Station } from "@/lib/types";
+import { searchStations } from "@/lib/userActions";
 
 interface RouteNode {
   track_id: number;
@@ -22,12 +22,16 @@ interface SelectedStation {
 type MaybeStation = SelectedStation | null;
 
 interface JourneyPlannerProps {
-  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onAddRoutesToSelection?: (routes: RouteNode[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
 
-export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelection, onStationClickHandler }: JourneyPlannerProps) {
+export default function JourneyPlanner({
+  onHighlightRoutes,
+  onAddRoutesToSelection,
+  onStationClickHandler,
+}: JourneyPlannerProps) {
   const { showSuccess } = useToast();
   const [fromStation, setFromStation] = useState<SelectedStation | null>(null);
   const [viaStations, setViaStations] = useState<MaybeStation[]>([]);
@@ -40,10 +44,10 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   // Station search for each input
-  const [activeSearch, setActiveSearch] = useState<'from' | 'to' | number | null>(null); // number for via index
-  const [fromSearchQuery, setFromSearchQuery] = useState('');
+  const [activeSearch, setActiveSearch] = useState<"from" | "to" | number | null>(null); // number for via index
+  const [fromSearchQuery, setFromSearchQuery] = useState("");
   const [viaSearchQueries, setViaSearchQueries] = useState<string[]>([]);
-  const [toSearchQuery, setToSearchQuery] = useState('');
+  const [toSearchQuery, setToSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Station[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,20 +75,20 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
       const results = await searchStations(query);
       setSearchResults(results);
     } catch (error) {
-      console.error('Error searching stations:', error);
+      console.error("Error searching stations:", error);
       setSearchResults([]);
     }
   }, []);
 
   // Handle search input change
-  const handleSearchChange = (field: 'from' | 'to' | number, value: string) => {
-    if (field === 'from') {
+  const handleSearchChange = (field: "from" | "to" | number, value: string) => {
+    if (field === "from") {
       setFromSearchQuery(value);
       // Clear selection when user edits
       if (value !== fromStation?.name) {
         setFromStation(null);
       }
-    } else if (field === 'to') {
+    } else if (field === "to") {
       setToSearchQuery(value);
       // Clear selection when user edits
       if (value !== toStation?.name) {
@@ -121,13 +125,13 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
   const handleStationSelect = (station: Station) => {
     const selected = { id: station.id, name: station.name };
 
-    if (activeSearch === 'from') {
+    if (activeSearch === "from") {
       setFromStation(selected);
       setFromSearchQuery(station.name);
-    } else if (activeSearch === 'to') {
+    } else if (activeSearch === "to") {
       setToStation(selected);
       setToSearchQuery(station.name);
-    } else if (typeof activeSearch === 'number') {
+    } else if (typeof activeSearch === "number") {
       // Via station
       const newStations = [...viaStations];
       newStations[activeSearch] = selected;
@@ -144,7 +148,7 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
   // Handle station click from map - using refs to avoid dependency issues
   const handleStationClickFromMap = useCallback((station: Station | null) => {
     // Guard against null station
-    if (!station || !station.id || !station.name) {
+    if (!station?.id || !station.name) {
       return;
     }
 
@@ -159,13 +163,16 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
 
     // Logic: if activeSearch is set, use that field
     // Otherwise, fill from → to in order
-    if (currentActiveSearch === 'from' || (!currentFromStation && currentActiveSearch === null)) {
+    if (currentActiveSearch === "from" || (!currentFromStation && currentActiveSearch === null)) {
       setFromStation(selected);
       setFromSearchQuery(station.name);
-    } else if (currentActiveSearch === 'to' || (currentFromStation && !currentToStation && currentActiveSearch === null)) {
+    } else if (
+      currentActiveSearch === "to" ||
+      (currentFromStation && !currentToStation && currentActiveSearch === null)
+    ) {
       setToStation(selected);
       setToSearchQuery(station.name);
-    } else if (typeof currentActiveSearch === 'number') {
+    } else if (typeof currentActiveSearch === "number") {
       // Via station
       const newStations = [...currentViaStations];
       newStations[currentActiveSearch] = selected;
@@ -194,21 +201,21 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
     if (searchResults.length === 0) return;
 
     switch (e.key) {
-      case 'ArrowDown':
+      case "ArrowDown":
         e.preventDefault();
-        setSelectedIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev));
+        setSelectedIndex((prev) => (prev < searchResults.length - 1 ? prev + 1 : prev));
         break;
-      case 'ArrowUp':
+      case "ArrowUp":
         e.preventDefault();
-        setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1));
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
         break;
-      case 'Enter':
+      case "Enter":
         e.preventDefault();
         if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
           handleStationSelect(searchResults[selectedIndex]);
         }
         break;
-      case 'Escape':
+      case "Escape":
         setSearchResults([]);
         setSelectedIndex(-1);
         break;
@@ -218,14 +225,14 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
   // Find path
   const handleFindPath = async () => {
     if (!fromStation || !toStation) {
-      setPathError('Please select both from and to stations');
+      setPathError("Please select both from and to stations");
       return;
     }
 
     // Check if all via stations are filled
-    const hasEmptyVia = viaStations.some(s => s === null);
+    const hasEmptyVia = viaStations.some((s) => s === null);
     if (hasEmptyVia) {
-      setPathError('Please select all via stations or remove empty ones');
+      setPathError("Please select all via stations or remove empty ones");
       return;
     }
 
@@ -235,11 +242,12 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
 
     try {
       // Convert station IDs to numbers, filtering out nulls
-      const fromId = typeof fromStation.id === 'string' ? parseInt(fromStation.id) : fromStation.id;
-      const toId = typeof toStation.id === 'string' ? parseInt(toStation.id) : toStation.id;
+      const fromId =
+        typeof fromStation.id === "string" ? parseInt(fromStation.id, 10) : fromStation.id;
+      const toId = typeof toStation.id === "string" ? parseInt(toStation.id, 10) : toStation.id;
       const viaIds = viaStations
         .filter((s): s is SelectedStation => s !== null) // Filter out nulls
-        .map(s => typeof s.id === 'string' ? parseInt(s.id) : s.id);
+        .map((s) => (typeof s.id === "string" ? parseInt(s.id, 10) : s.id));
 
       const result = await findRoutePathBetweenStations(fromId, toId, viaIds);
 
@@ -247,18 +255,21 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
         setPathError(result.error);
         setFoundPath([]);
         setTotalDistance(0);
-        if (onHighlightRoutes) onHighlightRoutes([], 'planner');
+        if (onHighlightRoutes) onHighlightRoutes([], "planner");
       } else {
         setFoundPath(result.routes);
         setTotalDistance(result.totalDistance);
         setPathError(null);
         if (onHighlightRoutes) {
-          onHighlightRoutes(result.routes.map(r => r.track_id), 'planner');
+          onHighlightRoutes(
+            result.routes.map((r) => r.track_id),
+            "planner",
+          );
         }
       }
     } catch (error) {
-      console.error('Error finding path:', error);
-      setPathError('An error occurred while finding the path');
+      console.error("Error finding path:", error);
+      setPathError("An error occurred while finding the path");
       setFoundPath([]);
       setTotalDistance(0);
     } finally {
@@ -275,7 +286,9 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
     // Reset form after adding to selection
     resetForm();
 
-    showSuccess(`${foundPath.length} route${foundPath.length !== 1 ? 's' : ''} added to selection!`);
+    showSuccess(
+      `${foundPath.length} route${foundPath.length !== 1 ? "s" : ""} added to selection!`,
+    );
   };
 
   // Clear all fields
@@ -286,16 +299,16 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
     setFromStation(null);
     setToStation(null);
     setViaStations([]);
-    setFromSearchQuery('');
-    setToSearchQuery('');
+    setFromSearchQuery("");
+    setToSearchQuery("");
     setViaSearchQueries([]);
-    if (onHighlightRoutes) onHighlightRoutes([], 'planner');
+    if (onHighlightRoutes) onHighlightRoutes([], "planner");
   };
 
   // Add new via station
   const addViaStation = () => {
     setViaStations([...viaStations, null]);
-    setViaSearchQueries([...viaSearchQueries, '']);
+    setViaSearchQueries([...viaSearchQueries, ""]);
   };
 
   // Remove via station
@@ -345,6 +358,7 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-bold">Journey Planner</h3>
         <button
+          type="button"
           onClick={resetForm}
           className="text-xs text-gray-500 hover:text-gray-700 underline"
         >
@@ -359,41 +373,47 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
           <input
             type="text"
             value={fromSearchQuery}
-            onChange={(e) => handleSearchChange('from', e.target.value)}
+            onChange={(e) => handleSearchChange("from", e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => {
-              setActiveSearch('from');
+              setActiveSearch("from");
               if (fromSearchQuery.length >= 2) performSearch(fromSearchQuery);
             }}
-            onBlur={() => setTimeout(() => {
-              setActiveSearch(null);
-              setSearchResults([]);
-              setSelectedIndex(-1);
-            }, 200)}
+            onBlur={() =>
+              setTimeout(() => {
+                setActiveSearch(null);
+                setSearchResults([]);
+                setSelectedIndex(-1);
+              }, 200)
+            }
             placeholder="Search from station..."
-            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${fromStation ? 'border-blue-300 bg-blue-50' : 'border-gray-300'
-              }`}
+            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              fromStation ? "border-blue-300 bg-blue-50" : "border-gray-300"
+            }`}
           />
           {fromStation && (
             <button
+              type="button"
               onClick={() => {
                 setFromStation(null);
-                setFromSearchQuery('');
+                setFromSearchQuery("");
               }}
               className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
             >
               ×
             </button>
           )}
-          {activeSearch === 'from' && searchResults.length > 0 && (
+          {activeSearch === "from" && searchResults.length > 0 && (
             <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
               {searchResults.map((station, index) => (
                 <button
+                  type="button"
                   key={station.id}
                   onClick={() => handleStationSelect(station)}
                   onMouseEnter={() => setSelectedIndex(index)}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${selectedIndex === index ? 'bg-blue-50' : ''
-                    }`}
+                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
+                    selectedIndex === index ? "bg-blue-50" : ""
+                  }`}
                 >
                   {station.name}
                 </button>
@@ -407,7 +427,7 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
       {viaStations.map((station, viaIndex) => (
         <div
           key={viaIndex}
-          className={`flex items-center gap-2 ${draggedIndex === viaIndex ? 'opacity-50' : ''}`}
+          className={`flex items-center gap-2 ${draggedIndex === viaIndex ? "opacity-50" : ""}`}
         >
           <div
             draggable
@@ -422,23 +442,28 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
           <div className="relative flex-1">
             <input
               type="text"
-              value={viaSearchQueries[viaIndex] || ''}
+              value={viaSearchQueries[viaIndex] || ""}
               onChange={(e) => handleSearchChange(viaIndex, e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => {
                 setActiveSearch(viaIndex);
-                if ((viaSearchQueries[viaIndex] || '').length >= 2) performSearch(viaSearchQueries[viaIndex] || '');
+                if ((viaSearchQueries[viaIndex] || "").length >= 2)
+                  performSearch(viaSearchQueries[viaIndex] || "");
               }}
-              onBlur={() => setTimeout(() => {
-                setActiveSearch(null);
-                setSearchResults([]);
-                setSelectedIndex(-1);
-              }, 200)}
+              onBlur={() =>
+                setTimeout(() => {
+                  setActiveSearch(null);
+                  setSearchResults([]);
+                  setSelectedIndex(-1);
+                }, 200)
+              }
               placeholder={`Search via station ${viaIndex + 1}...`}
-              className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${station ? 'border-green-300 bg-green-50' : 'border-gray-300'
-                }`}
+              className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                station ? "border-green-300 bg-green-50" : "border-gray-300"
+              }`}
             />
             <button
+              type="button"
               onClick={() => removeViaStation(viaIndex)}
               className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
             >
@@ -448,11 +473,13 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
               <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
                 {searchResults.map((searchStation, index) => (
                   <button
+                    type="button"
                     key={searchStation.id}
                     onClick={() => handleStationSelect(searchStation)}
                     onMouseEnter={() => setSelectedIndex(index)}
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${selectedIndex === index ? 'bg-blue-50' : ''
-                      }`}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
+                      selectedIndex === index ? "bg-blue-50" : ""
+                    }`}
                   >
                     {searchStation.name}
                   </button>
@@ -465,6 +492,7 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
 
       {/* Add Via Station Button */}
       <button
+        type="button"
         onClick={addViaStation}
         className="w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded text-sm text-gray-600 hover:border-gray-400 hover:text-gray-800"
       >
@@ -478,41 +506,47 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
           <input
             type="text"
             value={toSearchQuery}
-            onChange={(e) => handleSearchChange('to', e.target.value)}
+            onChange={(e) => handleSearchChange("to", e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => {
-              setActiveSearch('to');
+              setActiveSearch("to");
               if (toSearchQuery.length >= 2) performSearch(toSearchQuery);
             }}
-            onBlur={() => setTimeout(() => {
-              setActiveSearch(null);
-              setSearchResults([]);
-              setSelectedIndex(-1);
-            }, 200)}
+            onBlur={() =>
+              setTimeout(() => {
+                setActiveSearch(null);
+                setSearchResults([]);
+                setSelectedIndex(-1);
+              }, 200)
+            }
             placeholder="Search to station..."
-            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${toStation ? 'border-blue-300 bg-blue-50' : 'border-gray-300'
-              }`}
+            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              toStation ? "border-blue-300 bg-blue-50" : "border-gray-300"
+            }`}
           />
           {toStation && (
             <button
+              type="button"
               onClick={() => {
                 setToStation(null);
-                setToSearchQuery('');
+                setToSearchQuery("");
               }}
               className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
             >
               ×
             </button>
           )}
-          {activeSearch === 'to' && searchResults.length > 0 && (
+          {activeSearch === "to" && searchResults.length > 0 && (
             <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
               {searchResults.map((station, index) => (
                 <button
+                  type="button"
                   key={station.id}
                   onClick={() => handleStationSelect(station)}
                   onMouseEnter={() => setSelectedIndex(index)}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${selectedIndex === index ? 'bg-blue-50' : ''
-                    }`}
+                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
+                    selectedIndex === index ? "bg-blue-50" : ""
+                  }`}
                 >
                   {station.name}
                 </button>
@@ -524,14 +558,16 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
 
       {/* Find Path Button */}
       <button
+        type="button"
         onClick={handleFindPath}
         disabled={!fromStation || !toStation || isSearchingPath}
-        className={`w-full px-4 py-2 text-white rounded font-medium ${!fromStation || !toStation || isSearchingPath
-            ? 'bg-gray-400 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
-          }`}
+        className={`w-full px-4 py-2 text-white rounded font-medium ${
+          !fromStation || !toStation || isSearchingPath
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
+        }`}
       >
-        {isSearchingPath ? 'Finding path...' : 'Find Path'}
+        {isSearchingPath ? "Finding path..." : "Find Path"}
       </button>
 
       {/* Path Error */}
@@ -546,7 +582,8 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
         <div>
           <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
             <span className="font-medium text-green-800">
-              Found {foundPath.length} route{foundPath.length !== 1 ? 's' : ''} ({totalDistance.toFixed(1)} km)
+              Found {foundPath.length} route{foundPath.length !== 1 ? "s" : ""} (
+              {totalDistance.toFixed(1)} km)
             </span>
           </div>
 
@@ -562,6 +599,7 @@ export default function JourneyPlanner({ onHighlightRoutes, onAddRoutesToSelecti
           </div>
 
           <button
+            type="button"
             onClick={handleAddToSelection}
             className="w-full px-4 py-2 text-white rounded font-medium bg-blue-600 hover:bg-blue-700 cursor-pointer"
           >

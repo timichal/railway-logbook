@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Station } from '@/lib/types';
-import { searchStations } from '@/lib/userActions';
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Station } from "@/lib/types";
+import { searchStations } from "@/lib/userActions";
 
 /**
  * Hook to manage station search with debouncing and keyboard navigation
  */
 export function useStationSearch() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Station[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedStationIndex, setSelectedStationIndex] = useState(-1);
@@ -30,7 +30,7 @@ export function useStationSearch() {
       setShowSuggestions(results.length > 0);
       setSelectedStationIndex(-1);
     } catch (error) {
-      console.error('Error searching stations:', error);
+      console.error("Error searching stations:", error);
       setSearchResults([]);
       setShowSuggestions(false);
     } finally {

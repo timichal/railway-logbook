@@ -1,12 +1,17 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getAllRailwayRoutes, getRailwayRoute, updateRailwayRoute, deleteRailwayRoute } from '@/lib/adminRouteActions';
-import RoutesList from './RoutesList';
-import RouteEditForm from './RouteEditForm';
-import { useToast, ConfirmDialog } from '@/lib/toast';
-import type { RailwayRoute } from '@/lib/types';
-import type { UsageType, LineClass } from '@/lib/constants';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  deleteRailwayRoute,
+  getAllRailwayRoutes,
+  getRailwayRoute,
+  updateRailwayRoute,
+} from "@/lib/adminRouteActions";
+import type { LineClass, UsageType } from "@/lib/constants";
+import { ConfirmDialog, useToast } from "@/lib/toast";
+import type { RailwayRoute } from "@/lib/types";
+import RouteEditForm from "./RouteEditForm";
+import RoutesList from "./RoutesList";
 
 interface AdminRoutesTabProps {
   selectedRouteId?: string | null;
@@ -23,7 +28,7 @@ export default function AdminRoutesTab({
   onRouteDeleted,
   onRouteUpdated,
   onEditGeometry,
-  onRouteFocus
+  onRouteFocus,
 }: AdminRoutesTabProps) {
   const { showError, showSuccess } = useToast();
 
@@ -31,7 +36,7 @@ export default function AdminRoutesTab({
   const [routes, setRoutes] = useState<RailwayRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RailwayRoute | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [showInvalidOnly, setShowInvalidOnly] = useState(false);
   const [showUnintendedBacktrackingOnly, setShowUnintendedBacktrackingOnly] = useState(false);
@@ -57,8 +62,10 @@ export default function AdminRoutesTab({
       const routesData = await getAllRailwayRoutes();
       setRoutes(routesData);
     } catch (error) {
-      console.error('Error loading routes:', error);
-      showError(`Failed to load routes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error loading routes:", error);
+      showError(
+        `Failed to load routes: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setIsLoading(false);
     }
@@ -73,11 +80,13 @@ export default function AdminRoutesTab({
     let filtered = routes;
 
     if (showInvalidOnly) {
-      filtered = filtered.filter(route => route.is_valid === false);
+      filtered = filtered.filter((route) => route.is_valid === false);
     }
 
     if (showUnintendedBacktrackingOnly) {
-      filtered = filtered.filter(route => route.has_backtracking === true && route.intended_backtracking !== true);
+      filtered = filtered.filter(
+        (route) => route.has_backtracking === true && route.intended_backtracking !== true,
+      );
     }
 
     if (searchQuery.trim()) {
@@ -99,46 +108,53 @@ export default function AdminRoutesTab({
     return filteredRoutes.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredRoutes, currentPage]);
 
-  const invalidRouteCount = routes.filter(route => route.is_valid === false).length;
-  const unintendedBacktrackingCount = routes.filter(route => route.has_backtracking === true && route.intended_backtracking !== true).length;
+  const invalidRouteCount = routes.filter((route) => route.is_valid === false).length;
+  const unintendedBacktrackingCount = routes.filter(
+    (route) => route.has_backtracking === true && route.intended_backtracking !== true,
+  ).length;
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, showInvalidOnly, showUnintendedBacktrackingOnly]);
 
   // Route selection
-  const handleRouteClick = useCallback(async (trackId: string, { skipFocus = false } = {}) => {
-    try {
-      setIsLoading(true);
-      const routeDetail = await getRailwayRoute(trackId);
-      setSelectedRoute(routeDetail);
-      setEditForm({
-        from_station: routeDetail.from_station,
-        to_station: routeDetail.to_station,
-        track_number: routeDetail.track_number || '',
-        description: routeDetail.description || '',
-        usage_type: routeDetail.usage_type,
-        frequency: routeDetail.frequency || [],
-        link: routeDetail.link || '',
-        scenic: routeDetail.scenic || false,
-        line_class: routeDetail.line_class || 'branch',
-        intended_backtracking: routeDetail.intended_backtracking || false
-      });
+  const handleRouteClick = useCallback(
+    async (trackId: string, { skipFocus = false } = {}) => {
+      try {
+        setIsLoading(true);
+        const routeDetail = await getRailwayRoute(trackId);
+        setSelectedRoute(routeDetail);
+        setEditForm({
+          from_station: routeDetail.from_station,
+          to_station: routeDetail.to_station,
+          track_number: routeDetail.track_number || "",
+          description: routeDetail.description || "",
+          usage_type: routeDetail.usage_type,
+          frequency: routeDetail.frequency || [],
+          link: routeDetail.link || "",
+          scenic: routeDetail.scenic || false,
+          line_class: routeDetail.line_class || "branch",
+          intended_backtracking: routeDetail.intended_backtracking || false,
+        });
 
-      if (onRouteSelect) {
-        onRouteSelect(trackId);
-      }
+        if (onRouteSelect) {
+          onRouteSelect(trackId);
+        }
 
-      if (!skipFocus && onRouteFocus && routeDetail.geometry) {
-        onRouteFocus(routeDetail.geometry);
+        if (!skipFocus && onRouteFocus && routeDetail.geometry) {
+          onRouteFocus(routeDetail.geometry);
+        }
+      } catch (error) {
+        console.error("Error loading route detail:", error);
+        showError(
+          `Failed to load route details: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading route detail:', error);
-      showError(`Failed to load route details: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [onRouteSelect, onRouteFocus, showError]);
+    },
+    [onRouteSelect, onRouteFocus, showError],
+  );
 
   useEffect(() => {
     if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
@@ -166,7 +182,7 @@ export default function AdminRoutesTab({
         editForm.link || null,
         editForm.scenic,
         editForm.line_class,
-        editForm.intended_backtracking
+        editForm.intended_backtracking,
       );
 
       await loadRoutes();
@@ -175,14 +191,14 @@ export default function AdminRoutesTab({
       const trimmedForm = {
         ...editForm,
         from_station: editForm.from_station.trim(),
-        to_station: editForm.to_station.trim()
+        to_station: editForm.to_station.trim(),
       };
 
       setSelectedRoute({
         ...selectedRoute,
         ...trimmedForm,
         track_number: editForm.track_number || null,
-        description: editForm.description || null
+        description: editForm.description || null,
       });
 
       setEditForm(trimmedForm);
@@ -191,10 +207,12 @@ export default function AdminRoutesTab({
         onRouteUpdated();
       }
 
-      showSuccess('Route updated successfully!');
+      showSuccess("Route updated successfully!");
     } catch (error) {
-      console.error('Error updating route:', error);
-      showError(`Failed to update route: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error updating route:", error);
+      showError(
+        `Failed to update route: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setIsLoading(false);
     }
@@ -219,17 +237,21 @@ export default function AdminRoutesTab({
       setEditForm(null);
 
       if (onRouteSelect) {
-        onRouteSelect('');
+        onRouteSelect("");
       }
 
       if (onRouteDeleted) {
         onRouteDeleted();
       }
 
-      showSuccess(`Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" has been deleted successfully.`);
+      showSuccess(
+        `Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" has been deleted successfully.`,
+      );
     } catch (error) {
-      console.error('Error deleting route:', error);
-      showError(`Error deleting route: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error deleting route:", error);
+      showError(
+        `Error deleting route: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setIsLoading(false);
     }
@@ -239,7 +261,7 @@ export default function AdminRoutesTab({
     setSelectedRoute(null);
     setEditForm(null);
     if (onRouteSelect) {
-      onRouteSelect('');
+      onRouteSelect("");
     }
   };
 
@@ -248,9 +270,10 @@ export default function AdminRoutesTab({
       <ConfirmDialog
         isOpen={deleteConfirmOpen}
         title="Delete Railway Route"
-        message={selectedRoute ?
-          `Are you sure you want to delete the route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}"?\n\nTrack ID: ${selectedRoute.track_id}\n\nThis action cannot be undone.`
-          : ''
+        message={
+          selectedRoute
+            ? `Are you sure you want to delete the route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}"?\n\nTrack ID: ${selectedRoute.track_id}\n\nThis action cannot be undone.`
+            : ""
         }
         confirmLabel="Delete"
         cancelLabel="Cancel"
@@ -261,36 +284,36 @@ export default function AdminRoutesTab({
 
       <div className="h-full flex">
         <RoutesList
-        routes={routes}
-        paginatedRoutes={paginatedRoutes}
-        totalRoutes={routes.length}
-        invalidRouteCount={invalidRouteCount}
-        unintendedBacktrackingCount={unintendedBacktrackingCount}
-        isLoading={isLoading && !selectedRoute}
-        selectedRouteId={selectedRouteId}
-        searchQuery={searchQuery}
-        showInvalidOnly={showInvalidOnly}
-        showUnintendedBacktrackingOnly={showUnintendedBacktrackingOnly}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        filteredCount={filteredRoutes.length}
-        onSearchChange={setSearchQuery}
-        onInvalidOnlyChange={setShowInvalidOnly}
-        onUnintendedBacktrackingOnlyChange={setShowUnintendedBacktrackingOnly}
-        onRouteClick={handleRouteClick}
-        onPageChange={setCurrentPage}
-      />
+          routes={routes}
+          paginatedRoutes={paginatedRoutes}
+          totalRoutes={routes.length}
+          invalidRouteCount={invalidRouteCount}
+          unintendedBacktrackingCount={unintendedBacktrackingCount}
+          isLoading={isLoading && !selectedRoute}
+          selectedRouteId={selectedRouteId}
+          searchQuery={searchQuery}
+          showInvalidOnly={showInvalidOnly}
+          showUnintendedBacktrackingOnly={showUnintendedBacktrackingOnly}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          filteredCount={filteredRoutes.length}
+          onSearchChange={setSearchQuery}
+          onInvalidOnlyChange={setShowInvalidOnly}
+          onUnintendedBacktrackingOnlyChange={setShowUnintendedBacktrackingOnly}
+          onRouteClick={handleRouteClick}
+          onPageChange={setCurrentPage}
+        />
 
-      <RouteEditForm
-        selectedRoute={selectedRoute}
-        editForm={editForm}
-        isLoading={isLoading}
-        onEditFormChange={setEditForm}
-        onSave={handleSaveRoute}
-        onDelete={handleDeleteRoute}
-        onEditGeometry={onEditGeometry || (() => {})}
-        onUnselect={handleUnselect}
-      />
+        <RouteEditForm
+          selectedRoute={selectedRoute}
+          editForm={editForm}
+          isLoading={isLoading}
+          onEditFormChange={setEditForm}
+          onSave={handleSaveRoute}
+          onDelete={handleDeleteRoute}
+          onEditGeometry={onEditGeometry || (() => {})}
+          onUnselect={handleUnselect}
+        />
       </div>
     </>
   );

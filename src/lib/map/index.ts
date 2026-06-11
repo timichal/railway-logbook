@@ -1,8 +1,8 @@
-import maplibregl from 'maplibre-gl';
-import { COLORS, WIDTHS, OPACITIES, CIRCLES } from './style';
+import type maplibregl from "maplibre-gl";
+import { CIRCLES, COLORS, OPACITIES } from "./style";
 
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
-export { COLORS, WIDTHS, OPACITIES, CIRCLES } from './style';
+export { CIRCLES, COLORS, OPACITIES, WIDTHS } from "./style";
 
 // ============================================================================
 // CONSTANTS
@@ -11,14 +11,14 @@ export { COLORS, WIDTHS, OPACITIES, CIRCLES } from './style';
 export const MAP_CENTER: [number, number] = [14.5, 49.2]; // Czech Republic/Austria border region
 export const MAP_ZOOM = 7;
 export const TILE_SERVER_PORT = 3001;
-export const OSM_TILES_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+export const OSM_TILES_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 // Use /tiles/ path in production (proxied through nginx), direct port in development
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const getTileBaseUrl = () => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     // Server-side rendering
-    return IS_PRODUCTION ? 'https://localhost/tiles' : 'http://localhost:3001';
+    return IS_PRODUCTION ? "https://localhost/tiles" : "http://localhost:3001";
   }
   // Client-side
   return IS_PRODUCTION
@@ -30,7 +30,7 @@ const TILE_BASE_URL = getTileBaseUrl();
 // Europe bounds: [west, south, east, north]
 export const EUROPE_BOUNDS: [[number, number], [number, number]] = [
   [-12, 35], // Southwest corner (Portugal/Spain)
-  [40, 71],  // Northeast corner (Western Russia/Scandinavia)
+  [40, 71], // Northeast corner (Western Russia/Scandinavia)
 ];
 
 export const ZOOM_RANGES = {
@@ -62,14 +62,18 @@ export interface RailwayRoutesPaintConfig {
 /**
  * Helper: returns a MapLibre expression that picks a color based on line_class
  */
-export function lineClassColorExpression(
-  colors: { branch: string; main: string; highspeed: string }
-): maplibregl.ExpressionSpecification {
+export function lineClassColorExpression(colors: {
+  branch: string;
+  main: string;
+  highspeed: string;
+}): maplibregl.ExpressionSpecification {
   return [
-    'case',
-    ['==', ['get', 'line_class'], 'highspeed'], colors.highspeed,
-    ['==', ['get', 'line_class'], 'main'], colors.main,
-    colors.branch
+    "case",
+    ["==", ["get", "line_class"], "highspeed"],
+    colors.highspeed,
+    ["==", ["get", "line_class"], "main"],
+    colors.main,
+    colors.branch,
   ] as maplibregl.ExpressionSpecification;
 }
 
@@ -79,46 +83,47 @@ export function lineClassColorExpression(
 
 export function createOSMBackgroundLayer(): maplibregl.RasterLayerSpecification {
   return {
-    id: 'background',
-    type: 'raster',
-    source: 'osm',
+    id: "background",
+    type: "raster",
+    source: "osm",
     minzoom: 4,
     maxzoom: 19, // has to be higher than the map max zoom
     paint: {
-      'raster-fade-duration': 0,
-      'raster-saturation': 0,
-      'raster-opacity': 0.6,
+      "raster-fade-duration": 0,
+      "raster-saturation": 0,
+      "raster-opacity": 0.6,
     },
   };
 }
 
 export function createOSMBackgroundSource(): maplibregl.RasterSourceSpecification {
   return {
-    type: 'raster',
+    type: "raster",
     tiles: [OSM_TILES_URL],
     tileSize: 256,
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    attribution:
+      '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   };
 }
 
 export function createRailwayRoutesSource(
-  options: RailwayRoutesSourceOptions = {}
+  options: RailwayRoutesSourceOptions = {},
 ): maplibregl.VectorSourceSpecification {
   const { userId, cacheBuster, selectedCountries } = options;
   const baseUrl = `${TILE_BASE_URL}/railway_routes_tile/{z}/{x}/{y}`;
   const params = new URLSearchParams();
 
-  if (userId !== undefined) params.append('user_id', userId.toString());
-  if (cacheBuster !== undefined) params.append('v', cacheBuster.toString());
+  if (userId !== undefined) params.append("user_id", userId.toString());
+  if (cacheBuster !== undefined) params.append("v", cacheBuster.toString());
   if (selectedCountries !== undefined) {
-    params.append('selected_countries', JSON.stringify(selectedCountries));
+    params.append("selected_countries", JSON.stringify(selectedCountries));
   }
 
   const queryString = params.toString();
   const tilesUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
 
   return {
-    type: 'vector',
+    type: "vector",
     tiles: [tilesUrl],
     minzoom: ZOOM_RANGES.railwayRoutes.min,
     maxzoom: ZOOM_RANGES.railwayRoutes.max,
@@ -126,7 +131,7 @@ export function createRailwayRoutesSource(
 }
 
 export function createRailwayRoutesLayer(
-  config: RailwayRoutesPaintConfig = {}
+  config: RailwayRoutesPaintConfig = {},
 ): maplibregl.LineLayerSpecification {
   const {
     colorExpression,
@@ -138,18 +143,18 @@ export function createRailwayRoutesLayer(
   } = config;
 
   const layer: maplibregl.LineLayerSpecification = {
-    id: 'railway_routes',
-    type: 'line',
-    source: 'railway_routes',
-    'source-layer': 'railway_routes',
+    id: "railway_routes",
+    type: "line",
+    source: "railway_routes",
+    "source-layer": "railway_routes",
     minzoom: ZOOM_RANGES.railwayRoutes.min,
     layout: {
-      visibility: 'visible',
+      visibility: "visible",
     },
     paint: {
-      'line-color': colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
-      'line-width': widthExpression || defaultWidth,
-      'line-opacity': opacityExpression || defaultOpacity,
+      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
+      "line-width": widthExpression || defaultWidth,
+      "line-opacity": opacityExpression || defaultOpacity,
     },
   };
 
@@ -167,21 +172,21 @@ export function createRailwayRoutesLayer(
  * picks it up so thin visible lines stay easy to tap on touch screens.
  */
 export function createRailwayRoutesClickLayer(
-  config: RailwayRoutesPaintConfig = {}
+  config: RailwayRoutesPaintConfig = {},
 ): maplibregl.LineLayerSpecification {
   const { widthExpression, defaultWidth = 16, filter } = config;
 
   const layer: maplibregl.LineLayerSpecification = {
-    id: 'railway_routes_click',
-    type: 'line',
-    source: 'railway_routes',
-    'source-layer': 'railway_routes',
+    id: "railway_routes_click",
+    type: "line",
+    source: "railway_routes",
+    "source-layer": "railway_routes",
     minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: { visibility: 'visible' },
+    layout: { visibility: "visible" },
     paint: {
-      'line-color': '#000000',
-      'line-width': widthExpression || defaultWidth,
-      'line-opacity': 0,
+      "line-color": "#000000",
+      "line-width": widthExpression || defaultWidth,
+      "line-opacity": 0,
     },
   };
 
@@ -195,38 +200,34 @@ export function createRailwayRoutesClickLayer(
 const SCENIC_OUTLINE_DEFAULT_OFFSET = 6; // px added to the visible width when no widthExpression is supplied
 
 export function createScenicRoutesOutlineLayer(
-  config: RailwayRoutesPaintConfig = {}
+  config: RailwayRoutesPaintConfig = {},
 ): maplibregl.LineLayerSpecification {
-  const {
-    widthExpression,
-    defaultWidth = 3,
-    filter,
-  } = config;
+  const { widthExpression, defaultWidth = 3, filter } = config;
 
   // MapLibre forbids wrapping a zoom-interpolate inside another expression like
   // ['+', expr, 6], so the caller must supply a fully-formed width expression
   // (typically getUserRouteScenicOutlineWidthExpression).
   const outlineWidth: maplibregl.ExpressionSpecification | number =
-    widthExpression ?? (defaultWidth + SCENIC_OUTLINE_DEFAULT_OFFSET);
+    widthExpression ?? defaultWidth + SCENIC_OUTLINE_DEFAULT_OFFSET;
 
   const layer: maplibregl.LineLayerSpecification = {
-    id: 'railway_routes_scenic_outline',
-    type: 'line',
-    source: 'railway_routes',
-    'source-layer': 'railway_routes',
+    id: "railway_routes_scenic_outline",
+    type: "line",
+    source: "railway_routes",
+    "source-layer": "railway_routes",
     minzoom: ZOOM_RANGES.railwayRoutes.min,
     layout: {
-      visibility: 'none', // Default to hidden, controlled by "Highlight scenic lines" checkbox
+      visibility: "none", // Default to hidden, controlled by "Highlight scenic lines" checkbox
     },
     paint: {
-      'line-color': COLORS.scenicOutline,
-      'line-width': outlineWidth,
-      'line-opacity': OPACITIES.scenicOutline,
+      "line-color": COLORS.scenicOutline,
+      "line-width": outlineWidth,
+      "line-opacity": OPACITIES.scenicOutline,
     },
     filter: [
-      'all',
-      ['==', ['get', 'scenic'], true],
-      ...(filter ? [filter] : [])
+      "all",
+      ["==", ["get", "scenic"], true],
+      ...(filter ? [filter] : []),
     ] as maplibregl.FilterSpecification,
   };
 
@@ -235,7 +236,7 @@ export function createScenicRoutesOutlineLayer(
 
 export function createStationsSource(): maplibregl.VectorSourceSpecification {
   return {
-    type: 'vector',
+    type: "vector",
     tiles: [`${TILE_BASE_URL}/stations_tile/{z}/{x}/{y}`],
     minzoom: ZOOM_RANGES.stations.min,
     maxzoom: ZOOM_RANGES.stations.max,
@@ -244,24 +245,24 @@ export function createStationsSource(): maplibregl.VectorSourceSpecification {
 
 export function createStationsLayer(): maplibregl.CircleLayerSpecification {
   return {
-    id: 'stations',
-    type: 'circle',
-    source: 'stations',
-    'source-layer': 'stations',
+    id: "stations",
+    type: "circle",
+    source: "stations",
+    "source-layer": "stations",
     minzoom: ZOOM_RANGES.stations.min,
     paint: {
-      'circle-radius': CIRCLES.station.radius,
-      'circle-color': COLORS.stations.fill,
-      'circle-stroke-color': COLORS.stations.stroke,
-      'circle-stroke-width': CIRCLES.station.strokeWidth,
-      'circle-opacity': OPACITIES.stations,
+      "circle-radius": CIRCLES.station.radius,
+      "circle-color": COLORS.stations.fill,
+      "circle-stroke-color": COLORS.stations.stroke,
+      "circle-stroke-width": CIRCLES.station.strokeWidth,
+      "circle-opacity": OPACITIES.stations,
     },
   };
 }
 
 export function createRailwayPartsSource(): maplibregl.VectorSourceSpecification {
   return {
-    type: 'vector',
+    type: "vector",
     tiles: [`${TILE_BASE_URL}/railway_parts_tile/{z}/{x}/{y}`],
     minzoom: ZOOM_RANGES.railwayParts.min,
     maxzoom: ZOOM_RANGES.railwayParts.max,
@@ -270,31 +271,31 @@ export function createRailwayPartsSource(): maplibregl.VectorSourceSpecification
 
 export function createRailwayPartsLayer(): maplibregl.LineLayerSpecification {
   return {
-    id: 'railway_parts',
-    type: 'line',
-    source: 'railway_parts',
-    'source-layer': 'railway_parts',
+    id: "railway_parts",
+    type: "line",
+    source: "railway_parts",
+    "source-layer": "railway_parts",
     minzoom: ZOOM_RANGES.railwayParts.min,
     layout: {
-      visibility: 'visible',
+      visibility: "visible",
     },
     paint: {
-      'line-color': [
-        'case',
-        ['boolean', ['feature-state', 'hover'], false],
+      "line-color": [
+        "case",
+        ["boolean", ["feature-state", "hover"], false],
         COLORS.railwayParts.hover,
-        COLORS.railwayParts.default
+        COLORS.railwayParts.default,
       ],
-      'line-width': [
-        'interpolate', ['linear'], ['zoom'],
-        4, 0.8,
-        7, [
-          'case',
-          ['boolean', ['feature-state', 'hover'], false], 5,
-          3
-        ]
+      "line-width": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        4,
+        0.8,
+        7,
+        ["case", ["boolean", ["feature-state", "hover"], false], 5, 3],
       ],
-      'line-opacity': OPACITIES.railwayParts,
+      "line-opacity": OPACITIES.railwayParts,
     },
   };
 }
@@ -304,7 +305,7 @@ export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorS
   const tilesUrl = cacheBuster ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
 
   return {
-    type: 'vector',
+    type: "vector",
     tiles: [tilesUrl],
     minzoom: ZOOM_RANGES.adminNotes.min,
     maxzoom: ZOOM_RANGES.adminNotes.max,
@@ -314,36 +315,39 @@ export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorS
 export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
   // Color by note_type; untyped (legacy) notes keep the amber default
   const colorByType: maplibregl.ExpressionSpecification = [
-    'match',
-    ['get', 'note_type'],
-    'Usage', '#2563eb',  // blue
-    'Works', '#ea580c',  // orange
-    'Todo',  '#9333ea',  // purple
+    "match",
+    ["get", "note_type"],
+    "Usage",
+    "#2563eb", // blue
+    "Works",
+    "#ea580c", // orange
+    "Todo",
+    "#9333ea", // purple
     COLORS.adminNotes.fill, // fallback for NULL / unknown
   ];
 
   return {
-    id: 'admin_notes',
-    type: 'circle',
-    source: 'admin_notes',
-    'source-layer': 'admin_notes',
+    id: "admin_notes",
+    type: "circle",
+    source: "admin_notes",
+    "source-layer": "admin_notes",
     minzoom: ZOOM_RANGES.adminNotes.min,
     paint: {
-      'circle-radius': [
-        'case',
-        ['boolean', ['feature-state', 'hover'], false],
+      "circle-radius": [
+        "case",
+        ["boolean", ["feature-state", "hover"], false],
         CIRCLES.adminNote.hoverRadius,
         CIRCLES.adminNote.radius,
       ],
-      'circle-color': [
-        'case',
-        ['boolean', ['feature-state', 'hover'], false],
+      "circle-color": [
+        "case",
+        ["boolean", ["feature-state", "hover"], false],
         COLORS.adminNotes.hover,
         colorByType,
       ],
-      'circle-stroke-color': COLORS.adminNotes.stroke,
-      'circle-stroke-width': CIRCLES.adminNote.strokeWidth,
-      'circle-opacity': OPACITIES.adminNotes,
+      "circle-stroke-color": COLORS.adminNotes.stroke,
+      "circle-stroke-width": CIRCLES.adminNote.strokeWidth,
+      "circle-opacity": OPACITIES.adminNotes,
     },
   };
 }
@@ -353,9 +357,9 @@ export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
 // ============================================================================
 
 export function closeAllPopups(): void {
-  const popups = document.getElementsByClassName('maplibregl-popup');
+  const popups = document.getElementsByClassName("maplibregl-popup");
   if (popups.length) {
-    Array.from(popups).forEach(popup => popup.remove());
+    Array.from(popups).forEach((popup) => popup.remove());
   }
 }
 
@@ -363,4 +367,4 @@ export function closeAllPopups(): void {
 // MAP STATE PERSISTENCE
 // ============================================================================
 
-export { loadMapState, saveMapState, clearMapState, type MapState } from './mapState';
+export { clearMapState, loadMapState, type MapState, saveMapState } from "./mapState";

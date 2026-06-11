@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import AdminRoutesTab from './AdminRoutesTab';
-import AdminCreateRouteTab from './AdminCreateRouteTab';
-import AdminNotesTab from './AdminNotesTab';
-import type { RailwayPart } from '@/lib/types';
-import { useToast } from '@/lib/toast';
+import React, { useState } from "react";
+import { useToast } from "@/lib/toast";
+import type { RailwayPart } from "@/lib/types";
+import AdminCreateRouteTab from "./AdminCreateRouteTab";
+import AdminNotesTab from "./AdminNotesTab";
+import AdminRoutesTab from "./AdminRoutesTab";
 
 interface AdminSidebarProps {
   selectedRouteId?: string | null;
@@ -18,12 +18,25 @@ interface AdminSidebarProps {
     railwayParts: RailwayPart[],
     startCoordinate: [number, number],
     endCoordinate: [number, number],
-    hasBacktracking?: boolean
+    hasBacktracking?: boolean,
   ) => void;
-  onCreateFormCoordinatesChange?: (coords: {startingCoordinate: [number, number] | null, endingCoordinate: [number, number] | null}) => void;
+  onCreateFormCoordinatesChange?: (coords: {
+    startingCoordinate: [number, number] | null;
+    endingCoordinate: [number, number] | null;
+  }) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: {from_station: string, to_station: string, description: string, usage_type: 0 | 1, track_number: string, frequency: string[], link: string, scenic: boolean, intended_backtracking: boolean}) => void;
+  onSaveRoute?: (routeData: {
+    from_station: string;
+    to_station: string;
+    description: string;
+    usage_type: 0 | 1;
+    track_number: string;
+    frequency: string[];
+    link: string;
+    scenic: boolean;
+    intended_backtracking: boolean;
+  }) => void;
   onFormReset?: () => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
@@ -38,24 +51,50 @@ interface AdminSidebarProps {
   showSuccess?: (message: string) => void;
 }
 
-export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedCoordinate, coordinateClickTrigger, onPreviewRoute, onCreateFormCoordinatesChange, isPreviewMode, onCancelPreview, onSaveRoute, onFormReset, onRouteDeleted, onRouteUpdated, onEditingGeometryChange, onRouteFocus, sidebarWidth, onRefreshMap, onFocusNote, onNoteChanged, notesRefreshSignal, showError: showErrorProp, showSuccess: showSuccessProp }: AdminSidebarProps) {
+export default function AdminSidebar({
+  selectedRouteId,
+  onRouteSelect,
+  selectedCoordinate,
+  coordinateClickTrigger,
+  onPreviewRoute,
+  onCreateFormCoordinatesChange,
+  isPreviewMode,
+  onCancelPreview,
+  onSaveRoute,
+  onFormReset,
+  onRouteDeleted,
+  onRouteUpdated,
+  onEditingGeometryChange,
+  onRouteFocus,
+  sidebarWidth,
+  onRefreshMap,
+  onFocusNote,
+  onNoteChanged,
+  notesRefreshSignal,
+  showError: showErrorProp,
+  showSuccess: showSuccessProp,
+}: AdminSidebarProps) {
   const { showError: showErrorToast } = useToast();
   const showError = showErrorProp || showErrorToast;
-  const [activeTab, setActiveTab] = useState<'routes' | 'create' | 'notes'>('routes');
+  const [activeTab, setActiveTab] = useState<"routes" | "create" | "notes">("routes");
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
-  const [editingRouteInfo, setEditingRouteInfo] = useState<{ from_station: string, to_station: string, track_number: string } | null>(null);
+  const [editingRouteInfo, setEditingRouteInfo] = useState<{
+    from_station: string;
+    to_station: string;
+    track_number: string;
+  } | null>(null);
 
   // Switch to create tab when a coordinate is clicked
   React.useEffect(() => {
     if (selectedCoordinate) {
-      setActiveTab('create');
+      setActiveTab("create");
     }
   }, [selectedCoordinate, coordinateClickTrigger]);
 
   // Switch to routes tab when a route is selected
   React.useEffect(() => {
     if (selectedRouteId) {
-      setActiveTab('routes');
+      setActiveTab("routes");
       // Clear the local form coordinates when switching to routes
       setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
     }
@@ -67,13 +106,13 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
     endingCoordinate: [number, number] | null;
   }>({
     startingCoordinate: null,
-    endingCoordinate: null
+    endingCoordinate: null,
   });
 
   // Handle selectedCoordinate to auto-fill form inputs
   React.useEffect(() => {
     if (selectedCoordinate) {
-      setCreateFormCoordinates(prev => {
+      setCreateFormCoordinates((prev) => {
         // If starting coordinate is empty, fill it
         if (!prev.startingCoordinate) {
           return { ...prev, startingCoordinate: selectedCoordinate };
@@ -112,64 +151,74 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
   }, [onFormReset]);
 
   // Handle edit geometry button click
-  const handleEditGeometry = React.useCallback(async (trackId: string) => {
-    console.log('Edit geometry for track:', trackId);
-    setEditingGeometryForTrackId(trackId);
-    setActiveTab('create');
+  const handleEditGeometry = React.useCallback(
+    async (trackId: string) => {
+      console.log("Edit geometry for track:", trackId);
+      setEditingGeometryForTrackId(trackId);
+      setActiveTab("create");
 
-    // Notify parent component about editing state
-    if (onEditingGeometryChange) {
-      onEditingGeometryChange(trackId);
-    }
-
-    // Fetch the route details to get starting_coordinate and ending_coordinate
-    try {
-      const { getRailwayRoute } = await import('@/lib/adminRouteActions');
-      const routeDetail = await getRailwayRoute(trackId);
-
-      console.log('Route detail:', routeDetail);
-      console.log('Starting coordinate:', routeDetail.starting_coordinate);
-      console.log('Ending coordinate:', routeDetail.ending_coordinate);
-
-      // Store route info for display
-      setEditingRouteInfo({
-        from_station: routeDetail.from_station,
-        to_station: routeDetail.to_station,
-        track_number: routeDetail.track_number || ''
-      });
-
-      // Prefill the starting/ending coordinates if they exist
-      if (routeDetail.starting_coordinate && routeDetail.ending_coordinate) {
-        setCreateFormCoordinates({
-          startingCoordinate: routeDetail.starting_coordinate,
-          endingCoordinate: routeDetail.ending_coordinate
-        });
-
-        // Also notify parent of the coordinate changes
-        if (onCreateFormCoordinatesChange) {
-          onCreateFormCoordinatesChange({
-            startingCoordinate: routeDetail.starting_coordinate,
-            endingCoordinate: routeDetail.ending_coordinate
-          });
-        }
-      } else {
-        console.warn('Route does not have starting/ending coordinates stored');
-        setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+      // Notify parent component about editing state
+      if (onEditingGeometryChange) {
+        onEditingGeometryChange(trackId);
       }
 
-    } catch (error) {
-      console.error('Error fetching route details for geometry edit:', error);
-      showError(`Failed to load route details: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
-    }
-  }, [onRouteSelect, onEditingGeometryChange, onCreateFormCoordinatesChange, onRouteFocus, showError]);
+      // Fetch the route details to get starting_coordinate and ending_coordinate
+      try {
+        const { getRailwayRoute } = await import("@/lib/adminRouteActions");
+        const routeDetail = await getRailwayRoute(trackId);
+
+        console.log("Route detail:", routeDetail);
+        console.log("Starting coordinate:", routeDetail.starting_coordinate);
+        console.log("Ending coordinate:", routeDetail.ending_coordinate);
+
+        // Store route info for display
+        setEditingRouteInfo({
+          from_station: routeDetail.from_station,
+          to_station: routeDetail.to_station,
+          track_number: routeDetail.track_number || "",
+        });
+
+        // Prefill the starting/ending coordinates if they exist
+        if (routeDetail.starting_coordinate && routeDetail.ending_coordinate) {
+          setCreateFormCoordinates({
+            startingCoordinate: routeDetail.starting_coordinate,
+            endingCoordinate: routeDetail.ending_coordinate,
+          });
+
+          // Also notify parent of the coordinate changes
+          if (onCreateFormCoordinatesChange) {
+            onCreateFormCoordinatesChange({
+              startingCoordinate: routeDetail.starting_coordinate,
+              endingCoordinate: routeDetail.ending_coordinate,
+            });
+          }
+        } else {
+          console.warn("Route does not have starting/ending coordinates stored");
+          setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+        }
+      } catch (error) {
+        console.error("Error fetching route details for geometry edit:", error);
+        showError(
+          `Failed to load route details: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+        setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+      }
+    },
+    [
+      onRouteSelect,
+      onEditingGeometryChange,
+      onCreateFormCoordinatesChange,
+      onRouteFocus,
+      showError,
+    ],
+  );
 
   // Handle cancel geometry edit
   const handleCancelGeometryEdit = React.useCallback(() => {
-    console.log('Cancel geometry edit');
+    console.log("Cancel geometry edit");
     setEditingGeometryForTrackId(null);
     setEditingRouteInfo(null);
-    setActiveTab('routes');
+    setActiveTab("routes");
     setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
 
     // Notify parent component
@@ -179,54 +228,60 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
 
     // Unselect the route
     if (onRouteSelect) {
-      onRouteSelect('');
+      onRouteSelect("");
     }
   }, [onEditingGeometryChange, onRouteSelect]);
 
   return (
-    <div style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined} className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+    <div
+      style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined}
+      className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0"
+    >
       {/* Tab Headers */}
       <div className="flex border-b border-gray-200">
         <button
+          type="button"
           onClick={() => {
-            setActiveTab('routes');
+            setActiveTab("routes");
             // Clear form coordinates when manually switching to Railway Routes
             setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
           }}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
-            activeTab === 'routes'
-              ? 'border-blue-500 text-blue-600 bg-blue-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            activeTab === "routes"
+              ? "border-blue-500 text-blue-600 bg-blue-50"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
           }`}
         >
           Railway Routes
         </button>
         <button
+          type="button"
           onClick={() => {
-            setActiveTab('create');
+            setActiveTab("create");
             // Unselect any selected route when switching to Create New
             if (onRouteSelect) {
-              onRouteSelect('');
+              onRouteSelect("");
             }
           }}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
-            activeTab === 'create'
-              ? 'border-blue-500 text-blue-600 bg-blue-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            activeTab === "create"
+              ? "border-blue-500 text-blue-600 bg-blue-50"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
           }`}
         >
           Create New
         </button>
         <button
+          type="button"
           onClick={() => {
-            setActiveTab('notes');
-            if (onRouteSelect) onRouteSelect('');
+            setActiveTab("notes");
+            if (onRouteSelect) onRouteSelect("");
             setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
           }}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
-            activeTab === 'notes'
-              ? 'border-blue-500 text-blue-600 bg-blue-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            activeTab === "notes"
+              ? "border-blue-500 text-blue-600 bg-blue-50"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
           }`}
         >
           Notes
@@ -235,7 +290,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'routes' && (
+        {activeTab === "routes" && (
           <AdminRoutesTab
             selectedRouteId={selectedRouteId}
             onRouteSelect={onRouteSelect}
@@ -246,12 +301,16 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
           />
         )}
 
-        {activeTab === 'create' && (
+        {activeTab === "create" && (
           <AdminCreateRouteTab
             startingCoordinate={createFormCoordinates.startingCoordinate}
             endingCoordinate={createFormCoordinates.endingCoordinate}
-            onStartingCoordinateChange={(coord) => setCreateFormCoordinates(prev => ({ ...prev, startingCoordinate: coord }))}
-            onEndingCoordinateChange={(coord) => setCreateFormCoordinates(prev => ({ ...prev, endingCoordinate: coord }))}
+            onStartingCoordinateChange={(coord) =>
+              setCreateFormCoordinates((prev) => ({ ...prev, startingCoordinate: coord }))
+            }
+            onEndingCoordinateChange={(coord) =>
+              setCreateFormCoordinates((prev) => ({ ...prev, endingCoordinate: coord }))
+            }
             onPreviewRoute={onPreviewRoute}
             isPreviewMode={isPreviewMode}
             onCancelPreview={onCancelPreview}
@@ -262,7 +321,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
             onGeometryEditComplete={() => {
               setEditingGeometryForTrackId(null);
               setEditingRouteInfo(null);
-              setActiveTab('routes');
+              setActiveTab("routes");
 
               // Trigger map refresh after geometry edit
               // Use setTimeout to allow showRoutesLayer state to update first
@@ -277,7 +336,7 @@ export default function AdminSidebar({ selectedRouteId, onRouteSelect, selectedC
           />
         )}
 
-        {activeTab === 'notes' && (
+        {activeTab === "notes" && (
           <AdminNotesTab
             onFocusNote={onFocusNote}
             onNoteChanged={onNoteChanged}

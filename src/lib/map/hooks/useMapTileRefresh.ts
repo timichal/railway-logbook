@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
-import type maplibregl from 'maplibre-gl';
+import type maplibregl from "maplibre-gl";
+import { useEffect, useState } from "react";
 import {
-  createRailwayRoutesSource,
-  createRailwayRoutesLayer,
   createRailwayRoutesClickLayer,
+  createRailwayRoutesLayer,
+  createRailwayRoutesSource,
   createScenicRoutesOutlineLayer,
-  type RailwayRoutesSourceOptions,
   type RailwayRoutesPaintConfig,
-} from '../index';
+  type RailwayRoutesSourceOptions,
+} from "../index";
 
 interface UseMapTileRefreshOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
@@ -43,12 +43,18 @@ export function useMapTileRefresh({
     if (!map.current || !mapLoaded || !userId) return;
 
     const m = map.current;
-    const layersToRemove = ['selected_routes_highlight', 'highlighted_routes', 'railway_routes_click', 'railway_routes', 'railway_routes_scenic_outline'];
-    layersToRemove.forEach(layerId => {
+    const layersToRemove = [
+      "selected_routes_highlight",
+      "highlighted_routes",
+      "railway_routes_click",
+      "railway_routes",
+      "railway_routes_scenic_outline",
+    ];
+    layersToRemove.forEach((layerId) => {
       if (m.getLayer(layerId)) m.removeLayer(layerId);
     });
 
-    if (m.getSource('railway_routes')) m.removeSource('railway_routes');
+    if (m.getSource("railway_routes")) m.removeSource("railway_routes");
 
     const sourceOptions: RailwayRoutesSourceOptions = {
       userId: userId || undefined,
@@ -56,10 +62,10 @@ export function useMapTileRefresh({
       selectedCountries,
     };
 
-    m.addSource('railway_routes', createRailwayRoutesSource(sourceOptions));
-    m.addLayer(createScenicRoutesOutlineLayer(scenicLayerConfig), 'stations');
-    m.addLayer(createRailwayRoutesLayer(routeLayerConfig), 'stations');
-    m.addLayer(createRailwayRoutesClickLayer(clickBufferLayerConfig), 'stations');
+    m.addSource("railway_routes", createRailwayRoutesSource(sourceOptions));
+    m.addLayer(createScenicRoutesOutlineLayer(scenicLayerConfig), "stations");
+    m.addLayer(createRailwayRoutesLayer(routeLayerConfig), "stations");
+    m.addLayer(createRailwayRoutesClickLayer(clickBufferLayerConfig), "stations");
   }, [cacheBuster]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshTiles = () => setCacheBuster(Date.now());

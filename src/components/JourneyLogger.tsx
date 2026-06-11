@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useToast } from '@/lib/toast';
-import type { SelectedRoute, Station } from '@/lib/types';
-import { createJourney } from '@/lib/journeyActions';
-import { getAllTrips } from '@/lib/tripActions';
-import type { TripWithStats } from '@/lib/tripActions';
-import JourneyPlanner from './JourneyPlanner';
+import { useEffect, useState } from "react";
+import { createJourney } from "@/lib/journeyActions";
+import { useToast } from "@/lib/toast";
+import type { TripWithStats } from "@/lib/tripActions";
+import { getAllTrips } from "@/lib/tripActions";
+import type { SelectedRoute, Station } from "@/lib/types";
+import JourneyPlanner from "./JourneyPlanner";
 
 interface RouteNode {
   track_id: number;
@@ -22,7 +22,7 @@ interface JourneyLoggerProps {
   onClearSelection: () => void;
   onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
   onRoutesLogged: () => void;
-  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
@@ -35,15 +35,15 @@ export default function JourneyLogger({
   onRoutesLogged,
   onHighlightRoutes,
   onAddRoutesFromPlanner,
-  onStationClickHandler
+  onStationClickHandler,
 }: JourneyLoggerProps) {
   const { showSuccess, showError } = useToast();
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split("T")[0];
 
   // Journey form state
-  const [journeyName, setJourneyName] = useState('');
+  const [journeyName, setJourneyName] = useState("");
   const [journeyDate, setJourneyDate] = useState(today);
-  const [journeyDescription, setJourneyDescription] = useState('');
+  const [journeyDescription, setJourneyDescription] = useState("");
   const [journeyTripId, setJourneyTripId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -51,7 +51,7 @@ export default function JourneyLogger({
   const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
 
   useEffect(() => {
-    getAllTrips().then(result => {
+    getAllTrips().then((result) => {
       if (!result.error) {
         setAvailableTrips(result.trips || []);
       }
@@ -60,14 +60,14 @@ export default function JourneyLogger({
 
   const handleCreateJourney = async () => {
     if (!journeyName.trim() || !journeyDate || selectedRoutes.length === 0) {
-      showError('Please fill in journey name, date, and select at least one route');
+      showError("Please fill in journey name, date, and select at least one route");
       return;
     }
 
     setIsSaving(true);
     try {
-      const trackIds = selectedRoutes.map(r => parseInt(r.track_id));
-      const partialFlags = selectedRoutes.map(r => r.partial ?? false);
+      const trackIds = selectedRoutes.map((r) => parseInt(r.track_id, 10));
+      const partialFlags = selectedRoutes.map((r) => r.partial ?? false);
 
       const result = await createJourney(
         journeyName.trim(),
@@ -75,7 +75,7 @@ export default function JourneyLogger({
         journeyDate,
         trackIds,
         partialFlags,
-        journeyTripId
+        journeyTripId,
       );
 
       if (result.error) {
@@ -84,9 +84,9 @@ export default function JourneyLogger({
       }
 
       // Clear form and selection
-      setJourneyName('');
+      setJourneyName("");
       setJourneyDate(today);
-      setJourneyDescription('');
+      setJourneyDescription("");
       setJourneyTripId(null);
       onClearSelection();
 
@@ -95,8 +95,8 @@ export default function JourneyLogger({
 
       showSuccess(`Journey "${result.journey?.name}" created successfully!`);
     } catch (error) {
-      console.error('Error creating journey:', error);
-      showError(error instanceof Error ? error.message : 'Failed to create journey');
+      console.error("Error creating journey:", error);
+      showError(error instanceof Error ? error.message : "Failed to create journey");
     } finally {
       setIsSaving(false);
     }
@@ -147,13 +147,15 @@ export default function JourneyLogger({
             <div>
               <label className="block text-sm font-medium mb-1">Trip</label>
               <select
-                value={journeyTripId ?? ''}
+                value={journeyTripId ?? ""}
                 onChange={(e) => setJourneyTripId(e.target.value ? Number(e.target.value) : null)}
                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">None</option>
-                {availableTrips.map(trip => (
-                  <option key={trip.id} value={trip.id}>{trip.name}</option>
+                {availableTrips.map((trip) => (
+                  <option key={trip.id} value={trip.id}>
+                    {trip.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -178,6 +180,7 @@ export default function JourneyLogger({
           </h3>
           {selectedRoutes.length > 0 && (
             <button
+              type="button"
               onClick={onClearSelection}
               className="text-xs text-gray-500 hover:text-gray-700 underline"
             >
@@ -219,6 +222,7 @@ export default function JourneyLogger({
                   </div>
                   <div className="flex items-center gap-1">
                     <button
+                      type="button"
                       onClick={() => onRemoveRoute(route.track_id)}
                       className="text-gray-500 hover:text-gray-700 text-lg leading-none"
                       title="Remove route"
@@ -242,24 +246,25 @@ export default function JourneyLogger({
       {/* Submit Button */}
       <div className="pt-3 border-t border-gray-200">
         <button
+          type="button"
           onClick={handleCreateJourney}
           disabled={isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0}
           className={`w-full px-4 py-2 text-white rounded font-medium transition-colors ${
             isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 cursor-pointer'
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-green-600 hover:bg-green-700 cursor-pointer"
           }`}
           title={
             !journeyName.trim()
-              ? 'Journey name is required'
+              ? "Journey name is required"
               : !journeyDate
-              ? 'Date is required'
-              : selectedRoutes.length === 0
-              ? 'Select at least one route'
-              : ''
+                ? "Date is required"
+                : selectedRoutes.length === 0
+                  ? "Select at least one route"
+                  : ""
           }
         >
-          {isSaving ? 'Creating...' : `Create Journey & Log ${selectedRoutes.length} Routes`}
+          {isSaving ? "Creating..." : `Create Journey & Log ${selectedRoutes.length} Routes`}
         </button>
       </div>
     </div>

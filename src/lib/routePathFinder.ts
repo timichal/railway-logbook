@@ -1,7 +1,7 @@
-'use server';
+"use server";
 
-import pool from './db';
-import { calculateBearing } from './geoUtils';
+import pool from "./db";
+import { calculateBearing } from "./geoUtils";
 
 interface RouteNode {
   track_id: number;
@@ -39,15 +39,15 @@ interface RouteBearingInfo {
  * Lower = preferred. Main/highspeed routes are preferred over branch routes.
  */
 function getRouteCostMultiplier(info: RouteBearingInfo): number {
-  if (info.line_class === 'highspeed') return 0.5;
-  if (info.line_class === 'main') return 1.0;
+  if (info.line_class === "highspeed") return 0.5;
+  if (info.line_class === "main") return 1.0;
   return 2.0; // branch or unknown
 }
 
 /** Tolerance in meters for matching route endpoints as connected */
 const ENDPOINT_TOLERANCE_METERS = 500;
 
-type EndpointSide = 'start' | 'end';
+type EndpointSide = "start" | "end";
 
 /**
  * Check if two coordinates are within a distance tolerance (in meters).
@@ -58,10 +58,10 @@ function coordsNear(a: [number, number], b: [number, number], toleranceMeters: n
   if (Math.abs(a[1] - b[1]) > 0.05 || Math.abs(a[0] - b[0]) > 0.05) return false;
 
   const R = 6371000;
-  const dLat = (b[1] - a[1]) * Math.PI / 180;
-  const dLon = (b[0] - a[0]) * Math.PI / 180;
-  const lat1 = a[1] * Math.PI / 180;
-  const lat2 = b[1] * Math.PI / 180;
+  const dLat = ((b[1] - a[1]) * Math.PI) / 180;
+  const dLon = ((b[0] - a[0]) * Math.PI) / 180;
+  const lat1 = (a[1] * Math.PI) / 180;
+  const lat2 = (b[1] * Math.PI) / 180;
   const sinDLat = Math.sin(dLat / 2);
   const sinDLon = Math.sin(dLon / 2);
   const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
@@ -70,7 +70,7 @@ function coordsNear(a: [number, number], b: [number, number], toleranceMeters: n
 }
 
 function getEndpointCoord(info: RouteBearingInfo, side: EndpointSide): [number, number] {
-  return side === 'start' ? info.startCoord : info.endCoord;
+  return side === "start" ? info.startCoord : info.endCoord;
 }
 
 interface GraphWithBearingInfo {
@@ -126,7 +126,7 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
           AND r.usage_type = 0
         ORDER BY r.track_id
         `,
-        [stationId, tolerances[i]]
+        [stationId, tolerances[i]],
       );
 
       if (result.rows.length > 0) {
@@ -146,11 +146,11 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
               AND r.usage_type = 0
             ORDER BY r.track_id
             `,
-            [stationId, tolerances[i + 1]]
+            [stationId, tolerances[i + 1]],
           );
-          return extended.rows.map(row => row.track_id);
+          return extended.rows.map((row) => row.track_id);
         }
-        return result.rows.map(row => row.track_id);
+        return result.rows.map((row) => row.track_id);
       }
     }
 
@@ -169,7 +169,7 @@ async function findRoutesNearStation(stationId: number): Promise<number[]> {
 async function buildRouteGraphInBuffer(
   fromStationId: number,
   toStationId: number,
-  bufferMeters: number
+  bufferMeters: number,
 ): Promise<GraphWithBearingInfo> {
   const client = await pool.connect();
   const graph = new RouteGraph();
@@ -229,13 +229,14 @@ async function buildRouteGraphInBuffer(
       WHERE ST_Intersects(r.geometry, search_area.buffer_geom)
         AND r.usage_type = 0
       `,
-      [fromStationId, toStationId, bufferMeters]
+      [fromStationId, toStationId, bufferMeters],
     );
 
     // Store route info and build connections in JS
     const routes = result.rows;
     for (const row of routes) {
-      const lengthKm = typeof row.length_km === 'string' ? parseFloat(row.length_km) : row.length_km;
+      const lengthKm =
+        typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km;
       routeInfo.set(row.track_id, {
         track_id: row.track_id,
         from_station: row.from_station,
@@ -282,12 +283,16 @@ async function buildRouteGraphInBuffer(
  */
 function findConnectionEndpoint(
   infoA: RouteBearingInfo,
-  infoB: RouteBearingInfo
+  infoB: RouteBearingInfo,
 ): { sideA: EndpointSide; sideB: EndpointSide } | null {
-  if (coordsNear(infoA.endCoord, infoB.startCoord, ENDPOINT_TOLERANCE_METERS)) return { sideA: 'end', sideB: 'start' };
-  if (coordsNear(infoA.endCoord, infoB.endCoord, ENDPOINT_TOLERANCE_METERS)) return { sideA: 'end', sideB: 'end' };
-  if (coordsNear(infoA.startCoord, infoB.startCoord, ENDPOINT_TOLERANCE_METERS)) return { sideA: 'start', sideB: 'start' };
-  if (coordsNear(infoA.startCoord, infoB.endCoord, ENDPOINT_TOLERANCE_METERS)) return { sideA: 'start', sideB: 'end' };
+  if (coordsNear(infoA.endCoord, infoB.startCoord, ENDPOINT_TOLERANCE_METERS))
+    return { sideA: "end", sideB: "start" };
+  if (coordsNear(infoA.endCoord, infoB.endCoord, ENDPOINT_TOLERANCE_METERS))
+    return { sideA: "end", sideB: "end" };
+  if (coordsNear(infoA.startCoord, infoB.startCoord, ENDPOINT_TOLERANCE_METERS))
+    return { sideA: "start", sideB: "start" };
+  if (coordsNear(infoA.startCoord, infoB.endCoord, ENDPOINT_TOLERANCE_METERS))
+    return { sideA: "start", sideB: "end" };
   return null;
 }
 
@@ -295,7 +300,7 @@ function findConnectionEndpoint(
  * Get the exit bearing of a route at a given endpoint side.
  */
 function getExitBearing(info: RouteBearingInfo, side: EndpointSide): number {
-  if (side === 'end') {
+  if (side === "end") {
     return calculateBearing(info.nearEndCoord, info.endCoord);
   } else {
     return calculateBearing(info.nearStartCoord, info.startCoord);
@@ -306,7 +311,7 @@ function getExitBearing(info: RouteBearingInfo, side: EndpointSide): number {
  * Get the entry bearing of a route at a given endpoint side.
  */
 function getEntryBearing(info: RouteBearingInfo, side: EndpointSide): number {
-  if (side === 'start') {
+  if (side === "start") {
     return calculateBearing(info.startCoord, info.nearStartCoord);
   } else {
     return calculateBearing(info.endCoord, info.nearEndCoord);
@@ -317,10 +322,7 @@ function getEntryBearing(info: RouteBearingInfo, side: EndpointSide): number {
  * Check if transitioning from routeA to routeB constitutes backtracking.
  * Returns true if the bearing difference at the connection point exceeds 140°.
  */
-function isBacktrackingTransition(
-  infoA: RouteBearingInfo,
-  infoB: RouteBearingInfo
-): boolean {
+function isBacktrackingTransition(infoA: RouteBearingInfo, infoB: RouteBearingInfo): boolean {
   const connection = findConnectionEndpoint(infoA, infoB);
   if (!connection) return false;
 
@@ -338,7 +340,7 @@ function isBacktrackingTransition(
  */
 function hasRoutePathBacktracking(
   path: number[],
-  routeInfo: Map<number, RouteBearingInfo>
+  routeInfo: Map<number, RouteBearingInfo>,
 ): boolean {
   if (path.length < 2) return false;
 
@@ -369,7 +371,7 @@ function findShortestPath(
   graph: RouteGraph,
   startRoutes: number[],
   endRoutes: number[],
-  routeInfo: Map<number, RouteBearingInfo>
+  routeInfo: Map<number, RouteBearingInfo>,
 ): number[] | null {
   if (startRoutes.length === 0 || endRoutes.length === 0) {
     return null;
@@ -387,7 +389,7 @@ function findShortestPath(
     const info = routeInfo.get(route);
     if (!info) continue;
 
-    for (const exitSide of ['start', 'end'] as EndpointSide[]) {
+    for (const exitSide of ["start", "end"] as EndpointSide[]) {
       const key = `${route}_${exitSide}`;
       if (!bestCost.has(key)) {
         bestCost.set(key, 0);
@@ -437,9 +439,9 @@ function findShortestPath(
       // Determine which endpoint of neighbor connects to our exit coordinate
       let newExitSide: EndpointSide;
       if (coordsNear(neighborInfo.startCoord, exitCoord, ENDPOINT_TOLERANCE_METERS)) {
-        newExitSide = 'end'; // enters at start, exits at end
+        newExitSide = "end"; // enters at start, exits at end
       } else if (coordsNear(neighborInfo.endCoord, exitCoord, ENDPOINT_TOLERANCE_METERS)) {
-        newExitSide = 'start'; // enters at end, exits at start
+        newExitSide = "start"; // enters at end, exits at start
       } else {
         continue; // Neighbor doesn't connect at our exit coordinate
       }
@@ -475,7 +477,7 @@ function findShortestPathAvoidingBacktracking(
   startRoutes: number[],
   endRoutes: number[],
   routeInfo: Map<number, RouteBearingInfo>,
-  maxDistanceKm: number
+  maxDistanceKm: number,
 ): number[] | null {
   if (startRoutes.length === 0 || endRoutes.length === 0) {
     return null;
@@ -493,7 +495,7 @@ function findShortestPathAvoidingBacktracking(
     const info = routeInfo.get(route);
     if (!info) continue;
 
-    for (const exitSide of ['start', 'end'] as EndpointSide[]) {
+    for (const exitSide of ["start", "end"] as EndpointSide[]) {
       const key = `${route}_${exitSide}`;
       queue.push({ route, path: [route], distanceKm: 0, exitSide });
       bestDistance.set(key, 0);
@@ -538,9 +540,9 @@ function findShortestPathAvoidingBacktracking(
       // Determine which endpoint of neighbor connects to our exit coordinate
       let newExitSide: EndpointSide;
       if (coordsNear(neighborInfo.startCoord, exitCoord, ENDPOINT_TOLERANCE_METERS)) {
-        newExitSide = 'end';
+        newExitSide = "end";
       } else if (coordsNear(neighborInfo.endCoord, exitCoord, ENDPOINT_TOLERANCE_METERS)) {
-        newExitSide = 'start';
+        newExitSide = "start";
       } else {
         continue;
       }
@@ -589,7 +591,7 @@ async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
       from_station: string;
       to_station: string;
       description: string;
-      length_km: string | number
+      length_km: string | number;
     }>(
       `
       SELECT track_id, from_station, to_station, description, length_km
@@ -597,15 +599,15 @@ async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
       WHERE track_id = ANY($1)
       ORDER BY array_position($1, track_id)
       `,
-      [routeIds]
+      [routeIds],
     );
     // Convert length_km to number (PostgreSQL returns it as string)
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       track_id: row.track_id,
       from_station: row.from_station,
       to_station: row.to_station,
       description: row.description,
-      length_km: typeof row.length_km === 'string' ? parseFloat(row.length_km) : row.length_km
+      length_km: typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km,
     }));
   } finally {
     client.release();
@@ -615,10 +617,7 @@ async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
 /**
  * Calculate total distance of a path using routeInfo
  */
-function calculatePathDistanceKm(
-  path: number[],
-  routeInfo: Map<number, RouteBearingInfo>
-): number {
+function calculatePathDistanceKm(path: number[], routeInfo: Map<number, RouteBearingInfo>): number {
   let total = 0;
   for (const trackId of path) {
     const info = routeInfo.get(trackId);
@@ -633,22 +632,20 @@ function calculatePathDistanceKm(
 export async function findRoutePathBetweenStations(
   fromStationId: number,
   toStationId: number,
-  viaStationIds: number[] = []
+  viaStationIds: number[] = [],
 ): Promise<PathResult> {
   try {
     // Find routes near each station
     const fromRoutes = await findRoutesNearStation(fromStationId);
     const toRoutes = await findRoutesNearStation(toStationId);
-    const viaRouteSets = await Promise.all(
-      viaStationIds.map(id => findRoutesNearStation(id))
-    );
+    const viaRouteSets = await Promise.all(viaStationIds.map((id) => findRoutesNearStation(id)));
 
     // Validate we found routes near all stations
     if (fromRoutes.length === 0) {
-      return { routes: [], totalDistance: 0, error: 'No routes found near starting station' };
+      return { routes: [], totalDistance: 0, error: "No routes found near starting station" };
     }
     if (toRoutes.length === 0) {
-      return { routes: [], totalDistance: 0, error: 'No routes found near ending station' };
+      return { routes: [], totalDistance: 0, error: "No routes found near ending station" };
     }
     for (let i = 0; i < viaRouteSets.length; i++) {
       if (viaRouteSets[i].length === 0) {
@@ -681,7 +678,11 @@ export async function findRoutePathBetweenStations(
       const bufferSizes = [50000, 100000, 200000, 500000, 1000000]; // 50km, 100km, 200km, 500km, 1000km
 
       for (const bufferSize of bufferSizes) {
-        const { graph, routeInfo } = await buildRouteGraphInBuffer(segmentFromStation, segmentToStation, bufferSize);
+        const { graph, routeInfo } = await buildRouteGraphInBuffer(
+          segmentFromStation,
+          segmentToStation,
+          bufferSize,
+        );
         segmentPath = findShortestPath(graph, segmentFromRoutes, segmentToRoutes, routeInfo);
 
         if (segmentPath) {
@@ -691,7 +692,11 @@ export async function findRoutePathBetweenStations(
             const maxDistanceKm = Math.min(originalDistanceKm * 2, originalDistanceKm + 10);
 
             const alternative = findShortestPathAvoidingBacktracking(
-              graph, segmentFromRoutes, segmentToRoutes, routeInfo, maxDistanceKm
+              graph,
+              segmentFromRoutes,
+              segmentToRoutes,
+              routeInfo,
+              maxDistanceKm,
             );
 
             if (alternative) {
@@ -707,7 +712,7 @@ export async function findRoutePathBetweenStations(
         return {
           routes: [],
           totalDistance: 0,
-          error: `No path found for segment ${i + 1}. The stations might be too far apart (tried up to 1000km). Try adding via stations to break up the journey.`
+          error: `No path found for segment ${i + 1}. The stations might be too far apart (tried up to 1000km). Try adding via stations to break up the journey.`,
         };
       }
 
@@ -734,11 +739,11 @@ export async function findRoutePathBetweenStations(
 
     return { routes, totalDistance };
   } catch (error) {
-    console.error('Error finding route path:', error);
+    console.error("Error finding route path:", error);
     return {
       routes: [],
       totalDistance: 0,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }

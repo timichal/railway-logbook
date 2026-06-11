@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { register } from '@/lib/authActions';
-import { LocalStorageManager } from '@/lib/localStorage';
-import { migrateLocalJourneys } from '@/lib/migrationActions';
-import { useToast } from '@/lib/toast';
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { register } from "@/lib/authActions";
+import { LocalStorageManager } from "@/lib/localStorage";
+import { migrateLocalJourneys } from "@/lib/migrationActions";
+import { useToast } from "@/lib/toast";
 
 interface RegisterFormProps {
   onSuccess?: () => void;
 }
 
 export default function RegisterForm({ onSuccess }: RegisterFormProps) {
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { showSuccess } = useToast();
 
   async function handleSubmit(formData: FormData) {
-    setError('');
+    setError("");
     setLoading(true);
 
     try {
@@ -38,16 +38,20 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
           LocalStorageManager.clearAll();
 
           if (migrationResult.journeysMigrated > 0) {
-            showSuccess(`Account created! ${migrationResult.journeysMigrated} journey${migrationResult.journeysMigrated !== 1 ? 's' : ''} and ${migrationResult.partsMigrated} route${migrationResult.partsMigrated !== 1 ? 's' : ''} migrated successfully.`);
+            showSuccess(
+              `Account created! ${migrationResult.journeysMigrated} journey${migrationResult.journeysMigrated !== 1 ? "s" : ""} and ${migrationResult.partsMigrated} route${migrationResult.partsMigrated !== 1 ? "s" : ""} migrated successfully.`,
+            );
           } else {
-            showSuccess('Account created successfully!');
+            showSuccess("Account created successfully!");
           }
         } catch (migrationErr) {
-          console.error('Error migrating journeys:', migrationErr);
-          showSuccess('Account created, but journey migration failed. Your local journeys are still saved.');
+          console.error("Error migrating journeys:", migrationErr);
+          showSuccess(
+            "Account created, but journey migration failed. Your local journeys are still saved.",
+          );
         }
       } else {
-        showSuccess('Account created successfully!');
+        showSuccess("Account created successfully!");
       }
 
       // Call onSuccess callback if provided (for dropdown mode)
@@ -57,20 +61,17 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
         router.refresh();
       } else {
         // Redirect to home page (for standalone register page)
-        router.push('/');
+        router.push("/");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : "An error occurred");
       setLoading(false);
     }
   }
 
   return (
     <div className="space-y-4">
-      <form
-        className="space-y-4"
-        action={handleSubmit}
-      >
+      <form className="space-y-4" action={handleSubmit}>
         <div className="rounded-md shadow-sm -space-y-px">
           <div>
             <label htmlFor="name" className="sr-only">
@@ -141,7 +142,7 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
             disabled={loading}
             className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 cursor-pointer"
           >
-            {loading ? 'Creating account...' : 'Create account'}
+            {loading ? "Creating account..." : "Create account"}
           </button>
         </div>
       </form>

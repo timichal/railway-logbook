@@ -24,7 +24,8 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 - `npm run deployMapData` / `npm run downloadMapData` / `npm run downloadRouteData`.
 
 ### Frontend
-- `npm run dev` (Turbopack), `npm run build`, `npm run start`, `npm run lint`.
+- `npm run dev` (Turbopack), `npm run build`, `npm run start`.
+- `npm run lint` (Biome check — formatter + linter), `npm run lint:fix` (apply safe fixes), `npm run format` (format only). **All code must conform to Biome** (config in `biome.json`); run `npm run lint` and resolve findings before considering a change done.
 - `npx tsc --noEmit` — **always run this after a batch of code changes**. Do not run full builds unless the user asks.
 
 ### Prerequisites
@@ -130,6 +131,9 @@ When changing schema or transforming existing data, create a TS script in `src/s
 
 ### Type checking
 Run `npx tsc --noEmit` after each batch of related changes. Don't run full builds unless asked.
+
+### Linting & formatting
+Biome is the single linter + formatter (`biome.json`). All code must conform — run `npm run lint` and fix findings before finishing. Use `npm run lint:fix` for safe autofixes, but **never blanket-apply `--unsafe`**: Biome's `useExhaustiveDependencies` autofix mangles intentional hook dependency arrays (drops trigger deps, adds recreated-every-render objects → infinite loops). Fix hook-deps findings by hand — memoize with `useCallback`/`useMemo`, or add a `// biome-ignore lint/correctness/useExhaustiveDependencies: <reason>` comment when the omission is intentional.
 
 ### TypeScript
 ESNext modules, strict mode, run scripts via `tsx`.

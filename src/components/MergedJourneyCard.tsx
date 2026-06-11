@@ -1,19 +1,19 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useToast } from '@/lib/toast';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getUntimezonedDateStr } from "@/lib/getUntimezonedDateStr";
 import {
-  getJourney,
-  updateJourney,
-  deleteJourney,
   addRoutesToJourney,
+  deleteJourney,
+  getJourney,
   removeRouteFromJourney,
+  updateJourney,
   updateLoggedPartPartial,
-} from '@/lib/journeyActions';
-import { assignJourneyToTrip, unassignJourneyFromTrip } from '@/lib/tripActions';
-import type { TripWithStats } from '@/lib/tripActions';
-import type { Journey, RailwayRoute, SelectedRoute } from '@/lib/types';
-import { getUntimezonedDateStr } from '@/lib/getUntimezonedDateStr';
+} from "@/lib/journeyActions";
+import { useToast } from "@/lib/toast";
+import type { TripWithStats } from "@/lib/tripActions";
+import { assignJourneyToTrip, unassignJourneyFromTrip } from "@/lib/tripActions";
+import type { Journey, RailwayRoute, SelectedRoute } from "@/lib/types";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
   return {
@@ -22,10 +22,10 @@ function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
     to_station: route.to_station,
     track_number: route.track_number ?? null,
     description: route.description,
-    usage_type: 0 as RailwayRoute['usage_type'],
+    usage_type: 0 as RailwayRoute["usage_type"],
     frequency: [],
     link: route.link ?? null,
-    geometry: '',
+    geometry: "",
     length_km: route.length_km,
     partial: false,
   };
@@ -46,7 +46,7 @@ interface MergedJourneyCardProps {
   // Mutation lifecycle
   onChanged: () => void; // After save/delete/route changes — refresh the list and map
   // Map interaction
-  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
   onJourneyEditEnd?: () => void;
   // Visual nesting (when rendered inside a trip card)
@@ -70,7 +70,7 @@ export default function MergedJourneyCard({
   const [viewedRoutes, setViewedRoutes] = useState<RailwayRoute[]>([]);
   const [editName, setEditName] = useState(journey.name);
   const [editDate, setEditDate] = useState(getUntimezonedDateStr(journey.date));
-  const [editDescription, setEditDescription] = useState(journey.description || '');
+  const [editDescription, setEditDescription] = useState(journey.description || "");
   const [editTripId, setEditTripId] = useState<number | null>(journey.trip_id);
   const [originalSnapshot, setOriginalSnapshot] = useState<{
     routes: RailwayRoute[];
@@ -93,13 +93,15 @@ export default function MergedJourneyCard({
     if (!isOpen) return;
 
     const routeId = String(route.track_id);
-    const isInJourney = viewedRoutes.some(r => String(r.track_id) === routeId);
+    const isInJourney = viewedRoutes.some((r) => String(r.track_id) === routeId);
     const newRoutes = isInJourney
-      ? viewedRoutes.filter(r => String(r.track_id) !== routeId)
+      ? viewedRoutes.filter((r) => String(r.track_id) !== routeId)
       : [...viewedRoutes, buildRouteFromSelected(route)];
 
     setViewedRoutes(newRoutes);
-    onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+    onHighlightRoutes?.(
+      newRoutes.map((r) => parseInt(r.track_id, 10)).filter((id) => !Number.isNaN(id)),
+    );
   };
 
   const stableHandleMapRouteClick = useCallback((route: SelectedRoute) => {
@@ -126,21 +128,21 @@ export default function MergedJourneyCard({
         const dateStr = getUntimezonedDateStr(result.journey.date);
         setEditName(result.journey.name);
         setEditDate(dateStr);
-        setEditDescription(result.journey.description || '');
+        setEditDescription(result.journey.description || "");
         setEditTripId(result.journey.trip_id);
         setOriginalSnapshot({
           routes,
           name: result.journey.name,
           date: dateStr,
-          description: result.journey.description || '',
+          description: result.journey.description || "",
           tripId: result.journey.trip_id,
         });
       }
       setIsLoadingDetails(false);
       onHighlightRoutes?.(
         routes
-          .map(r => (r.track_id ? parseInt(r.track_id) : null))
-          .filter((id): id is number => id !== null)
+          .map((r) => (r.track_id ? parseInt(r.track_id, 10) : null))
+          .filter((id): id is number => id !== null),
       );
       onJourneyEditStart?.(stableHandleMapRouteClick);
     })();
@@ -163,15 +165,19 @@ export default function MergedJourneyCard({
   }, [isOpen]);
 
   const handleTogglePartial = (trackId: string, nextPartial: boolean) => {
-    setViewedRoutes(prev =>
-      prev.map(r => (String(r.track_id) === String(trackId) ? { ...r, partial: nextPartial } : r))
+    setViewedRoutes((prev) =>
+      prev.map((r) =>
+        String(r.track_id) === String(trackId) ? { ...r, partial: nextPartial } : r,
+      ),
     );
   };
 
   const handleRemoveRoute = (trackId: string) => {
-    const newRoutes = viewedRoutes.filter(r => String(r.track_id) !== String(trackId));
+    const newRoutes = viewedRoutes.filter((r) => String(r.track_id) !== String(trackId));
     setViewedRoutes(newRoutes);
-    onHighlightRoutes?.(newRoutes.map(r => parseInt(r.track_id)).filter(id => !isNaN(id)));
+    onHighlightRoutes?.(
+      newRoutes.map((r) => parseInt(r.track_id, 10)).filter((id) => !Number.isNaN(id)),
+    );
   };
 
   const handleSave = async () => {
@@ -180,7 +186,7 @@ export default function MergedJourneyCard({
     const trimmedDescription = editDescription.trim();
 
     if (!trimmedName || !editDate) {
-      showError('Journey name and date are required');
+      showError("Journey name and date are required");
       return;
     }
 
@@ -191,19 +197,30 @@ export default function MergedJourneyCard({
         editDate !== originalSnapshot.date ||
         trimmedDescription !== originalSnapshot.description;
       if (metaChanged) {
-        const result = await updateJourney(journey.id, trimmedName, trimmedDescription || null, editDate);
-        if (result.error) { showError(result.error); return; }
+        const result = await updateJourney(
+          journey.id,
+          trimmedName,
+          trimmedDescription || null,
+          editDate,
+        );
+        if (result.error) {
+          showError(result.error);
+          return;
+        }
       }
 
       if (editTripId !== originalSnapshot.tripId) {
         const result = editTripId
           ? await assignJourneyToTrip(journey.id, editTripId)
           : await unassignJourneyFromTrip(journey.id);
-        if (result.error) { showError(result.error); return; }
+        if (result.error) {
+          showError(result.error);
+          return;
+        }
       }
 
-      const origMap = new Map(originalSnapshot.routes.map(r => [String(r.track_id), r]));
-      const editedMap = new Map(viewedRoutes.map(r => [String(r.track_id), r]));
+      const origMap = new Map(originalSnapshot.routes.map((r) => [String(r.track_id), r]));
+      const editedMap = new Map(viewedRoutes.map((r) => [String(r.track_id), r]));
 
       const toAdd: { trackId: number; partial: boolean }[] = [];
       const toUpdatePartial: { trackId: number; partial: boolean }[] = [];
@@ -211,39 +228,48 @@ export default function MergedJourneyCard({
         const orig = origMap.get(id);
         const partial = edited.partial ?? false;
         if (!orig) {
-          toAdd.push({ trackId: parseInt(edited.track_id), partial });
+          toAdd.push({ trackId: parseInt(edited.track_id, 10), partial });
         } else if ((orig.partial ?? false) !== partial) {
-          toUpdatePartial.push({ trackId: parseInt(edited.track_id), partial });
+          toUpdatePartial.push({ trackId: parseInt(edited.track_id, 10), partial });
         }
       });
       const toRemove: number[] = [];
       origMap.forEach((orig, id) => {
-        if (!editedMap.has(id)) toRemove.push(parseInt(orig.track_id));
+        if (!editedMap.has(id)) toRemove.push(parseInt(orig.track_id, 10));
       });
 
       if (toAdd.length > 0) {
         const result = await addRoutesToJourney(
           journey.id,
-          toAdd.map(a => a.trackId),
-          toAdd.map(a => a.partial)
+          toAdd.map((a) => a.trackId),
+          toAdd.map((a) => a.partial),
         );
-        if (result.error) { showError(result.error); return; }
+        if (result.error) {
+          showError(result.error);
+          return;
+        }
       }
       for (const trackId of toRemove) {
         const result = await removeRouteFromJourney(journey.id, trackId);
-        if (result.error) { showError(result.error); return; }
+        if (result.error) {
+          showError(result.error);
+          return;
+        }
       }
       for (const { trackId, partial } of toUpdatePartial) {
         const result = await updateLoggedPartPartial(journey.id, trackId, partial);
-        if (result.error) { showError(result.error); return; }
+        if (result.error) {
+          showError(result.error);
+          return;
+        }
       }
 
-      showSuccess('Journey updated');
+      showSuccess("Journey updated");
       onRequestClose();
       onChanged();
     } catch (error) {
-      console.error('Error saving journey:', error);
-      showError('Failed to save journey');
+      console.error("Error saving journey:", error);
+      showError("Failed to save journey");
     } finally {
       setIsSaving(false);
     }
@@ -255,41 +281,50 @@ export default function MergedJourneyCard({
       if (result.error) {
         showError(result.error);
       } else {
-        showSuccess('Journey deleted');
+        showSuccess("Journey deleted");
         onRequestClose();
         onChanged();
       }
     } catch (error) {
-      console.error('Error deleting journey:', error);
-      showError('Failed to delete journey');
+      console.error("Error deleting journey:", error);
+      showError("Failed to delete journey");
     } finally {
       setDeleteConfirm(false);
     }
   };
 
   return (
-    <div className={`border rounded shadow-sm ${nested ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'}`}>
+    <div
+      className={`border rounded shadow-sm ${nested ? "bg-gray-50 border-gray-200" : "bg-white border-gray-300"}`}
+    >
       <div className="px-3 py-2 flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 overflow-hidden">
-            <span className="font-semibold text-sm truncate" title={journey.name}>{journey.name}</span>
+            <span className="font-semibold text-sm truncate" title={journey.name}>
+              {journey.name}
+            </span>
             {journey.description && (
-              <span className="text-xs text-gray-500 truncate" title={journey.description}>{journey.description}</span>
+              <span className="text-xs text-gray-500 truncate" title={journey.description}>
+                {journey.description}
+              </span>
             )}
           </div>
           <div className="text-xs text-gray-600 mt-0.5">
-            {new Date(journey.date).toLocaleDateString()} · {journey.route_count} route{journey.route_count === 1 ? '' : 's'} · {Number(journey.total_distance).toFixed(1)} km
+            {new Date(journey.date).toLocaleDateString()} · {journey.route_count} route
+            {journey.route_count === 1 ? "" : "s"} · {Number(journey.total_distance).toFixed(1)} km
           </div>
         </div>
         {deleteConfirm ? (
           <>
             <button
+              type="button"
               onClick={handleDelete}
               className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
             >
               Confirm Delete
             </button>
             <button
+              type="button"
               onClick={() => setDeleteConfirm(false)}
               className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 flex-shrink-0"
             >
@@ -299,13 +334,15 @@ export default function MergedJourneyCard({
         ) : isOpen ? (
           <>
             <button
+              type="button"
               onClick={handleSave}
               disabled={isSaving}
               className="px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
             >
-              {isSaving ? 'Saving…' : 'Save'}
+              {isSaving ? "Saving…" : "Save"}
             </button>
             <button
+              type="button"
               onClick={onRequestClose}
               disabled={isSaving}
               className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
@@ -316,12 +353,14 @@ export default function MergedJourneyCard({
         ) : (
           <>
             <button
+              type="button"
               onClick={onRequestOpen}
               className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 flex-shrink-0"
             >
               View / Edit
             </button>
             <button
+              type="button"
               onClick={() => setDeleteConfirm(true)}
               className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
             >
@@ -373,13 +412,15 @@ export default function MergedJourneyCard({
                 <div>
                   <label className="block text-xs font-medium mb-1">Trip</label>
                   <select
-                    value={editTripId ?? ''}
+                    value={editTripId ?? ""}
                     onChange={(e) => setEditTripId(e.target.value ? Number(e.target.value) : null)}
                     className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">None</option>
-                    {availableTrips.map(trip => (
-                      <option key={trip.id} value={trip.id}>{trip.name}</option>
+                    {availableTrips.map((trip) => (
+                      <option key={trip.id} value={trip.id}>
+                        {trip.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -390,7 +431,9 @@ export default function MergedJourneyCard({
                   Routes in this journey:
                 </h5>
                 {viewedRoutes.length === 0 ? (
-                  <p className="text-xs text-gray-500 italic">No routes — click routes on the map to add them.</p>
+                  <p className="text-xs text-gray-500 italic">
+                    No routes — click routes on the map to add them.
+                  </p>
                 ) : (
                   <div className="space-y-1 max-h-64 overflow-y-auto">
                     {viewedRoutes.map((route) => (
@@ -408,17 +451,30 @@ export default function MergedJourneyCard({
                               <input
                                 type="checkbox"
                                 checked={route.partial ?? false}
-                                onChange={() => handleTogglePartial(route.track_id, !(route.partial ?? false))}
+                                onChange={() =>
+                                  handleTogglePartial(route.track_id, !(route.partial ?? false))
+                                }
                                 className="w-3 h-3 cursor-pointer"
                               />
                               <span className="text-gray-500">partial</span>
                             </label>
                             <button
+                              type="button"
                               onClick={() => handleRemoveRoute(route.track_id)}
                               title="Remove route from journey"
                               className="w-6 h-6 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
                                 <polyline points="3 6 5 6 21 6" />
                                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                                 <path d="M10 11v6" />

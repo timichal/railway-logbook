@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import type { User } from '@/lib/authActions';
-import LoginForm from './LoginForm';
-import RegisterForm from './RegisterForm';
+import Link from "next/link";
+import { useState } from "react";
+import type { User } from "@/lib/authActions";
+import LoginForm from "./LoginForm";
+import RegisterForm from "./RegisterForm";
 
 interface MobileMenuPanelProps {
   user: User | null;
@@ -38,12 +38,14 @@ export default function MobileMenuPanel({
     <div className="border-b border-gray-200 px-3 py-2 space-y-2 flex-shrink-0">
       <div className="flex flex-wrap gap-2">
         <button
+          type="button"
           onClick={onOpenHowTo}
           className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-1.5 px-3 rounded-md text-xs border border-blue-300 cursor-pointer"
         >
           How To Use
         </button>
         <button
+          type="button"
           onClick={onOpenNotes}
           className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-1.5 px-3 rounded-md text-xs border border-green-300 cursor-pointer"
         >
@@ -60,6 +62,7 @@ export default function MobileMenuPanel({
 
         {user ? (
           <button
+            type="button"
             onClick={onLogout}
             className="bg-red-600 hover:bg-red-700 text-white font-medium py-1.5 px-3 rounded-md text-xs cursor-pointer ml-auto"
           >
@@ -68,13 +71,21 @@ export default function MobileMenuPanel({
         ) : (
           <div className="flex gap-2 ml-auto">
             <button
-              onClick={() => { setShowLogin(v => !v); setShowRegister(false); }}
+              type="button"
+              onClick={() => {
+                setShowLogin((v) => !v);
+                setShowRegister(false);
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-3 rounded-md text-xs cursor-pointer"
             >
               Login
             </button>
             <button
-              onClick={() => { setShowRegister(v => !v); setShowLogin(false); }}
+              type="button"
+              onClick={() => {
+                setShowRegister((v) => !v);
+                setShowLogin(false);
+              }}
               className="bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 px-3 rounded-md text-xs cursor-pointer"
             >
               Register

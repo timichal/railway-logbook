@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
 interface UseResizableSidebarOptions {
   initialWidth?: number;
@@ -11,7 +11,7 @@ export function useResizableSidebar({
   initialWidth = 600,
   minWidth = 400,
   maxWidth = 1200,
-  isMobile = false
+  isMobile = false,
 }: UseResizableSidebarOptions = {}) {
   const [sidebarWidth, setSidebarWidth] = useState<number>(initialWidth);
   const [isResizing, setIsResizing] = useState<boolean>(false);
@@ -23,7 +23,7 @@ export function useResizableSidebar({
   }, [isMobile]);
 
   const toggleSidebar = useCallback(() => {
-    setSidebarOpen(prev => !prev);
+    setSidebarOpen((prev) => !prev);
   }, []);
 
   const handleMouseDown = () => {
@@ -47,12 +47,12 @@ export function useResizableSidebar({
       setIsResizing(false);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isResizing, isMobile, minWidth, maxWidth]);
 
@@ -62,6 +62,6 @@ export function useResizableSidebar({
     handleMouseDown,
     sidebarOpen,
     setSidebarOpen,
-    toggleSidebar
+    toggleSidebar,
   };
 }

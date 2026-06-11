@@ -1,7 +1,7 @@
-'use server';
+"use server";
 
-import { query } from './db';
-import { getUser } from './authActions';
+import { getUser } from "./authActions";
+import { query } from "./db";
 
 export interface MigrationResult {
   migrated: number;
@@ -21,12 +21,12 @@ export interface JourneyMigrationResult {
  */
 export async function migrateLocalJourneys(
   localJourneys: { id: string; name: string; description: string | null; date: string }[],
-  localParts: { journey_id: string; track_id: number; partial: boolean }[]
+  localParts: { journey_id: string; track_id: number; partial: boolean }[],
 ): Promise<JourneyMigrationResult> {
   const user = await getUser();
 
   if (!user) {
-    throw new Error('You must be logged in to migrate journeys');
+    throw new Error("You must be logged in to migrate journeys");
   }
 
   let journeysMigrated = 0;
@@ -45,7 +45,7 @@ export async function migrateLocalJourneys(
          WHERE user_id = $1
          AND name = $2
          AND date = $3`,
-        [user.id, localJourney.name, localJourney.date]
+        [user.id, localJourney.name, localJourney.date],
       );
 
       if (duplicateCheck.rows.length === 0) {
@@ -54,7 +54,7 @@ export async function migrateLocalJourneys(
           `INSERT INTO user_journeys (user_id, name, description, date)
            VALUES ($1, $2, $3, $4)
            RETURNING id`,
-          [user.id, localJourney.name, localJourney.description, localJourney.date]
+          [user.id, localJourney.name, localJourney.description, localJourney.date],
         );
 
         const newJourneyId = result.rows[0].id;
@@ -66,7 +66,7 @@ export async function migrateLocalJourneys(
         journeysSkipped++;
       }
     } catch (error) {
-      console.error('Error migrating journey:', error);
+      console.error("Error migrating journey:", error);
       journeysSkipped++;
     }
   }
@@ -88,7 +88,7 @@ export async function migrateLocalJourneys(
          WHERE user_id = $1
          AND journey_id = $2
          AND track_id = $3`,
-        [user.id, dbJourneyId, localPart.track_id]
+        [user.id, dbJourneyId, localPart.track_id],
       );
 
       if (duplicateCheck.rows.length === 0) {
@@ -96,14 +96,14 @@ export async function migrateLocalJourneys(
         await query(
           `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial)
            VALUES ($1, $2, $3, $4)`,
-          [user.id, dbJourneyId, localPart.track_id, localPart.partial]
+          [user.id, dbJourneyId, localPart.track_id, localPart.partial],
         );
         partsMigrated++;
       } else {
         partsSkipped++;
       }
     } catch (error) {
-      console.error('Error migrating logged part:', error);
+      console.error("Error migrating logged part:", error);
       partsSkipped++;
     }
   }

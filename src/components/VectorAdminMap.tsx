@@ -1,40 +1,47 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import type { RailwayPart, GeoJSONFeatureCollection } from '@/lib/types';
-import { useMapLibre } from '@/lib/map/hooks/useMapLibre';
-import { useRouteLength } from '@/lib/map/hooks/useRouteLength';
-import { useAdminLayerVisibility } from '@/lib/map/hooks/useAdminLayerVisibility';
-import { useAdminMapOverlays } from '@/lib/map/hooks/useAdminMapOverlays';
-import { useAdminNotesPopup } from '@/lib/map/hooks/useAdminNotesPopup';
-import { useIsMobile } from '@/hooks/useIsMobile';
+import { useEffect, useRef, useState } from "react";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { getAllRouteEndpoints } from "@/lib/adminRouteActions";
 import {
-  createRailwayRoutesSource,
-  createRailwayRoutesLayer,
-  createRailwayRoutesClickLayer,
-  createScenicRoutesOutlineLayer,
-  createRailwayPartsSource,
-  createRailwayPartsLayer,
-  createStationsSource,
-  createStationsLayer,
-  createAdminNotesSource,
-  createAdminNotesLayer,
   COLORS,
-  OPACITIES,
+  createAdminNotesLayer,
+  createAdminNotesSource,
+  createRailwayPartsLayer,
+  createRailwayPartsSource,
+  createRailwayRoutesClickLayer,
+  createRailwayRoutesLayer,
+  createRailwayRoutesSource,
+  createScenicRoutesOutlineLayer,
+  createStationsLayer,
+  createStationsSource,
   lineClassColorExpression,
-} from '@/lib/map';
-import { setupAdminMapInteractions } from '@/lib/map/interactions/adminMapInteractions';
-import { getAdminRouteWidthExpression } from '@/lib/map/utils/userRouteStyling';
-import { getAllRouteEndpoints } from '@/lib/adminRouteActions';
-import AdminLayerControls from './AdminLayerControls';
+  OPACITIES,
+} from "@/lib/map";
+import { useAdminLayerVisibility } from "@/lib/map/hooks/useAdminLayerVisibility";
+import { useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
+import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
+import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
+import { useRouteLength } from "@/lib/map/hooks/useRouteLength";
+import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
+import { getAdminRouteWidthExpression } from "@/lib/map/utils/userRouteStyling";
+import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/types";
+import AdminLayerControls from "./AdminLayerControls";
 
 interface VectorAdminMapProps {
   className?: string;
   onCoordinateClick?: (coordinate: [number, number]) => void;
   onRouteSelect?: (routeId: string) => void;
   selectedRouteId?: string | null;
-  previewRoute?: { partIds: string[], coordinates: [number, number][], railwayParts?: RailwayPart[] } | null;
-  selectedCoordinates?: { startingCoordinate: [number, number] | null, endingCoordinate: [number, number] | null };
+  previewRoute?: {
+    partIds: string[];
+    coordinates: [number, number][];
+    railwayParts?: RailwayPart[];
+  } | null;
+  selectedCoordinates?: {
+    startingCoordinate: [number, number] | null;
+    endingCoordinate: [number, number] | null;
+  };
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
@@ -46,7 +53,7 @@ interface VectorAdminMapProps {
 }
 
 export default function VectorAdminMap({
-  className = '',
+  className = "",
   onCoordinateClick,
   onRouteSelect,
   selectedRouteId,
@@ -99,7 +106,7 @@ export default function VectorAdminMap({
         });
       },
     },
-    []
+    [],
   );
 
   // Layer visibility management
@@ -129,7 +136,7 @@ export default function VectorAdminMap({
     if (!mapLoaded) return;
     getAllRouteEndpoints()
       .then(setRouteEndpoints)
-      .catch((error) => console.error('Error fetching route endpoints:', error));
+      .catch((error) => console.error("Error fetching route endpoints:", error));
   }, [mapLoaded, refreshTrigger]);
 
   // Selected route highlighting
@@ -139,30 +146,38 @@ export default function VectorAdminMap({
     if (selectedRouteId) {
       const trackIdNum = parseInt(selectedRouteId, 10);
 
-      map.current.setPaintProperty('railway_routes', 'line-color', [
-        'case',
-        ['==', ['id'], trackIdNum],
+      map.current.setPaintProperty("railway_routes", "line-color", [
+        "case",
+        ["==", ["id"], trackIdNum],
         COLORS.railwayRoutes.selected,
-        ['==', ['get', 'is_valid'], false],
+        ["==", ["get", "is_valid"], false],
         COLORS.railwayRoutes.invalid,
         lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
-      map.current.setPaintProperty('railway_routes', 'line-width', getAdminRouteWidthExpression(trackIdNum));
-      map.current.setPaintProperty('railway_routes', 'line-opacity', [
-        'case',
-        ['==', ['id'], trackIdNum],
+      map.current.setPaintProperty(
+        "railway_routes",
+        "line-width",
+        getAdminRouteWidthExpression(trackIdNum),
+      );
+      map.current.setPaintProperty("railway_routes", "line-opacity", [
+        "case",
+        ["==", ["id"], trackIdNum],
         OPACITIES.selectedRoute,
         OPACITIES.defaultRoute,
       ]);
     } else {
-      map.current.setPaintProperty('railway_routes', 'line-color', [
-        'case',
-        ['==', ['get', 'is_valid'], false],
+      map.current.setPaintProperty("railway_routes", "line-color", [
+        "case",
+        ["==", ["get", "is_valid"], false],
         COLORS.railwayRoutes.invalid,
         lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
-      map.current.setPaintProperty('railway_routes', 'line-width', getAdminRouteWidthExpression(null));
-      map.current.setPaintProperty('railway_routes', 'line-opacity', OPACITIES.defaultRoute);
+      map.current.setPaintProperty(
+        "railway_routes",
+        "line-width",
+        getAdminRouteWidthExpression(null),
+      );
+      map.current.setPaintProperty("railway_routes", "line-opacity", OPACITIES.defaultRoute);
     }
   }, [selectedRouteId, mapLoaded, map]);
 
@@ -175,48 +190,48 @@ export default function VectorAdminMap({
 
     // Remove layers → source → re-add
     const m = map.current;
-    if (m.getLayer('railway_routes_click')) m.removeLayer('railway_routes_click');
-    if (m.getLayer('railway_routes')) m.removeLayer('railway_routes');
-    if (m.getLayer('railway_routes_scenic_outline')) m.removeLayer('railway_routes_scenic_outline');
-    if (m.getSource('railway_routes')) m.removeSource('railway_routes');
+    if (m.getLayer("railway_routes_click")) m.removeLayer("railway_routes_click");
+    if (m.getLayer("railway_routes")) m.removeLayer("railway_routes");
+    if (m.getLayer("railway_routes_scenic_outline")) m.removeLayer("railway_routes_scenic_outline");
+    if (m.getSource("railway_routes")) m.removeSource("railway_routes");
 
-    m.addSource('railway_routes', createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
+    m.addSource("railway_routes", createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
     m.addLayer(createScenicRoutesOutlineLayer());
     m.addLayer(createRailwayRoutesLayer());
     m.addLayer(createRailwayRoutesClickLayer());
 
     // Re-apply visibility
-    const visibility = layerVisibility.showRoutesLayer ? 'visible' : 'none';
-    m.setLayoutProperty('railway_routes', 'visibility', visibility);
-    m.setLayoutProperty('railway_routes_scenic_outline', 'visibility', visibility);
-    m.setLayoutProperty('railway_routes_click', 'visibility', visibility);
+    const visibility = layerVisibility.showRoutesLayer ? "visible" : "none";
+    m.setLayoutProperty("railway_routes", "visibility", visibility);
+    m.setLayoutProperty("railway_routes_scenic_outline", "visibility", visibility);
+    m.setLayoutProperty("railway_routes_click", "visibility", visibility);
 
     // Re-apply selected route highlighting
     if (selectedRouteId) {
       const trackIdNum = parseInt(selectedRouteId, 10);
-      m.setPaintProperty('railway_routes', 'line-color', [
-        'case',
-        ['==', ['id'], trackIdNum],
+      m.setPaintProperty("railway_routes", "line-color", [
+        "case",
+        ["==", ["id"], trackIdNum],
         COLORS.railwayRoutes.selected,
-        ['==', ['get', 'is_valid'], false],
+        ["==", ["get", "is_valid"], false],
         COLORS.railwayRoutes.invalid,
         lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
-      m.setPaintProperty('railway_routes', 'line-width', getAdminRouteWidthExpression(trackIdNum));
-      m.setPaintProperty('railway_routes', 'line-opacity', [
-        'case',
-        ['==', ['id'], trackIdNum],
+      m.setPaintProperty("railway_routes", "line-width", getAdminRouteWidthExpression(trackIdNum));
+      m.setPaintProperty("railway_routes", "line-opacity", [
+        "case",
+        ["==", ["id"], trackIdNum],
         OPACITIES.selectedRoute,
         OPACITIES.defaultRoute,
       ]);
     } else {
-      m.setPaintProperty('railway_routes', 'line-color', [
-        'case',
-        ['==', ['get', 'is_valid'], false],
+      m.setPaintProperty("railway_routes", "line-color", [
+        "case",
+        ["==", ["get", "is_valid"], false],
         COLORS.railwayRoutes.invalid,
         lineClassColorExpression(COLORS.railwayRoutes.default),
       ]);
-      m.setPaintProperty('railway_routes', 'line-width', getAdminRouteWidthExpression(null));
+      m.setPaintProperty("railway_routes", "line-width", getAdminRouteWidthExpression(null));
     }
 
     m.triggerRepaint();
@@ -236,10 +251,10 @@ export default function VectorAdminMap({
 
     try {
       const geojson = JSON.parse(focusGeometry);
-      if (geojson?.type === 'LineString' && geojson.coordinates) {
+      if (geojson?.type === "LineString" && geojson.coordinates) {
         const coordinates = geojson.coordinates as [number, number][];
-        const lngs = coordinates.map(coord => coord[0]);
-        const lats = coordinates.map(coord => coord[1]);
+        const lngs = coordinates.map((coord) => coord[0]);
+        const lats = coordinates.map((coord) => coord[1]);
         const bounds: [[number, number], [number, number]] = [
           [Math.min(...lngs), Math.min(...lats)],
           [Math.max(...lngs), Math.max(...lats)],
@@ -247,7 +262,7 @@ export default function VectorAdminMap({
         map.current.fitBounds(bounds, { padding: 80, duration: 1000, maxZoom: 13 });
       }
     } catch (error) {
-      console.error('Error parsing geometry for focus:', error);
+      console.error("Error parsing geometry for focus:", error);
     }
   }, [focusGeometry, mapLoaded, isEditingGeometry, map]);
 

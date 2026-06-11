@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { createAdminNote, updateAdminNote, deleteAdminNote } from '@/lib/adminNotesActions';
-import { noteTypeOptions, type NoteType } from '@/lib/constants';
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import { createAdminNote, deleteAdminNote, updateAdminNote } from "@/lib/adminNotesActions";
+import { type NoteType, noteTypeOptions } from "@/lib/constants";
 
 interface NotesPopupProps {
   noteId?: number | null; // If set, editing existing note; if null, creating new note
@@ -22,17 +23,17 @@ interface NotesPopupProps {
  */
 export default function NotesPopup({
   noteId,
-  initialText = '',
+  initialText = "",
   initialNoteType = null,
   updatedAt,
   coordinate,
   onClose,
   onSaved,
   showSuccess,
-  showError
+  showError,
 }: NotesPopupProps) {
   const [text, setText] = useState(initialText);
-  const [noteType, setNoteType] = useState<NoteType | ''>(initialNoteType ?? '');
+  const [noteType, setNoteType] = useState<NoteType | "">(initialNoteType ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -47,11 +48,11 @@ export default function NotesPopup({
 
   const handleSave = async () => {
     if (!text.trim()) {
-      showError('Note text cannot be empty');
+      showError("Note text cannot be empty");
       return;
     }
     if (!noteType) {
-      showError('Please select a note type');
+      showError("Please select a note type");
       return;
     }
 
@@ -59,15 +60,15 @@ export default function NotesPopup({
     try {
       if (noteId) {
         await updateAdminNote(noteId, text.trim(), noteType);
-        showSuccess('Note updated successfully');
+        showSuccess("Note updated successfully");
       } else {
         await createAdminNote(coordinate, text.trim(), noteType);
-        showSuccess('Note created successfully');
+        showSuccess("Note created successfully");
       }
       onSaved();
       onClose();
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Failed to save note');
+      showError(error instanceof Error ? error.message : "Failed to save note");
     } finally {
       setIsSaving(false);
     }
@@ -79,22 +80,22 @@ export default function NotesPopup({
     setIsDeleting(true);
     try {
       await deleteAdminNote(noteId);
-      showSuccess('Note deleted successfully');
+      showSuccess("Note deleted successfully");
       onSaved();
       onClose();
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Failed to delete note');
+      showError(error instanceof Error ? error.message : "Failed to delete note");
     } finally {
       setIsDeleting(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       handleSave();
     }
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       e.preventDefault();
       onClose();
     }
@@ -105,15 +106,16 @@ export default function NotesPopup({
       <div className="flex items-center justify-between mb-2">
         <div>
           <h3 className="text-sm font-semibold text-gray-800">
-            {noteId ? 'Edit Note' : 'New Note'}
+            {noteId ? "Edit Note" : "New Note"}
           </h3>
           {noteId && updatedAt && (
             <div className="text-xs text-gray-500 mt-0.5">
-              Last updated {new Date(updatedAt).toISOString().replace('T', ' ').slice(0, 19)}
+              Last updated {new Date(updatedAt).toISOString().replace("T", " ").slice(0, 19)}
             </div>
           )}
         </div>
         <button
+          type="button"
           onClick={onClose}
           className="text-gray-500 hover:text-gray-700 text-lg leading-none"
           aria-label="Close"
@@ -127,12 +129,14 @@ export default function NotesPopup({
       </label>
       <select
         value={noteType}
-        onChange={(e) => setNoteType(e.target.value as NoteType | '')}
+        onChange={(e) => setNoteType(e.target.value as NoteType | "")}
         className="w-full px-2 py-1 mb-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
       >
         <option value="">-- Select type --</option>
         {noteTypeOptions.map((opt) => (
-          <option key={opt.id} value={opt.id}>{opt.label}</option>
+          <option key={opt.id} value={opt.id}>
+            {opt.label}
+          </option>
         ))}
       </select>
 
@@ -147,27 +151,30 @@ export default function NotesPopup({
 
       <div className="flex gap-2 mt-2">
         <button
+          type="button"
           onClick={handleSave}
           disabled={isSaving || !canSave}
           className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          {isSaving ? 'Saving...' : 'Save'}
+          {isSaving ? "Saving..." : "Save"}
         </button>
 
         {noteId && (
           <button
+            type="button"
             onClick={handleDelete}
             disabled={isDeleting}
             className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {isDeleting ? 'Deleting...' : 'Delete'}
+            {isDeleting ? "Deleting..." : "Delete"}
           </button>
         )}
       </div>
 
       <div className="mt-2 text-xs text-gray-500">
-        <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded">Ctrl+Enter</kbd> to save,{' '}
-        <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded">Esc</kbd> to close
+        <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded">Ctrl+Enter</kbd> to
+        save, <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded">Esc</kbd> to
+        close
       </div>
     </div>
   );

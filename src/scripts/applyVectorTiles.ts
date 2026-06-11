@@ -1,8 +1,8 @@
-import { Client } from 'pg';
-import dotenv from 'dotenv';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { getDbConfig } from '../lib/dbConfig';
+import dotenv from "dotenv";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { Client } from "pg";
+import { getDbConfig } from "../lib/dbConfig";
 
 dotenv.config();
 
@@ -13,25 +13,24 @@ async function applyVectorTilesSql() {
   const client = new Client(dbConfig);
 
   try {
-    console.log('Connecting to database...');
+    console.log("Connecting to database...");
     await client.connect();
-    console.log('Connected successfully');
+    console.log("Connected successfully");
 
     // Read the SQL file
-    const sqlPath = join(process.cwd(), 'database', 'init', '02-vector-tiles.sql');
+    const sqlPath = join(process.cwd(), "database", "init", "02-vector-tiles.sql");
     console.log(`Reading SQL file: ${sqlPath}`);
-    const sql = readFileSync(sqlPath, 'utf-8');
+    const sql = readFileSync(sqlPath, "utf-8");
 
-    console.log('Executing SQL...');
+    console.log("Executing SQL...");
     await client.query(sql);
-    console.log('✓ Vector tiles SQL applied successfully');
-
+    console.log("✓ Vector tiles SQL applied successfully");
   } catch (error) {
-    console.error('Error applying vector tiles SQL:', error);
+    console.error("Error applying vector tiles SQL:", error);
     process.exit(1);
   } finally {
     await client.end();
-    console.log('Database connection closed');
+    console.log("Database connection closed");
   }
 }
 

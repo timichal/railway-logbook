@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import { useToast } from './ToastContext';
-import type { Toast, ToastType } from './types';
+import { useToast } from "./ToastContext";
+import type { Toast, ToastType } from "./types";
 
 const toastStyles: Record<ToastType, string> = {
-  success: 'bg-green-600 border-green-700',
-  error: 'bg-red-600 border-red-700',
-  warning: 'bg-orange-600 border-orange-700',
-  info: 'bg-blue-600 border-blue-700',
+  success: "bg-green-600 border-green-700",
+  error: "bg-red-600 border-red-700",
+  warning: "bg-orange-600 border-orange-700",
+  info: "bg-blue-600 border-blue-700",
 };
 
 const toastIcons: Record<ToastType, string> = {
-  success: '\u2713',
-  error: '\u2715',
-  warning: '\u26A0',
-  info: '\u2139',
+  success: "\u2713",
+  error: "\u2715",
+  warning: "\u26A0",
+  info: "\u2139",
 };
 
 function ToastItem({ toast }: { toast: Toast }) {
@@ -30,6 +30,7 @@ function ToastItem({ toast }: { toast: Toast }) {
       <span className="text-lg font-bold flex-shrink-0">{icon}</span>
       <p className="flex-1 text-sm leading-relaxed">{toast.message}</p>
       <button
+        type="button"
         onClick={() => removeToast(toast.id)}
         className="flex-shrink-0 text-white hover:text-gray-200 text-lg font-bold leading-none cursor-pointer"
         aria-label="Close notification"

@@ -1,7 +1,7 @@
-import type maplibreglType from 'maplibre-gl';
-import maplibregl from 'maplibre-gl';
-import type { SelectedRoute, Station } from '@/lib/types';
-import { formatRouteMetadataBadges } from '@/lib/map/utils/tooltipFormatting';
+import type maplibreglType from "maplibre-gl";
+import maplibregl from "maplibre-gl";
+import { formatRouteMetadataBadges } from "@/lib/map/utils/tooltipFormatting";
+import type { SelectedRoute, Station } from "@/lib/types";
 
 interface UserMapInteractionCallbacks {
   onRouteClick: (feature: SelectedRoute) => void;
@@ -13,15 +13,19 @@ interface UserMapInteractionCallbacks {
  */
 export function setupUserMapInteractions(
   mapInstance: maplibreglType.Map,
-  callbacks: UserMapInteractionCallbacks
+  callbacks: UserMapInteractionCallbacks,
 ) {
   const { onRouteClick, onStationClick } = callbacks;
   let currentPopup: maplibregl.Popup | null = null;
 
   // Click handler for routes — queries all route-related layers (base + click buffer + highlights)
   const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
-    const routeLayers = ['railway_routes_click', 'railway_routes', 'selected_routes_highlight', 'highlighted_routes']
-      .filter(id => mapInstance.getLayer(id));
+    const routeLayers = [
+      "railway_routes_click",
+      "railway_routes",
+      "selected_routes_highlight",
+      "highlighted_routes",
+    ].filter((id) => mapInstance.getLayer(id));
     if (routeLayers.length === 0) return;
 
     const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
@@ -45,7 +49,7 @@ export function setupUserMapInteractions(
       date: properties.date,
       journey_name: properties.journey_name,
       partial: properties.partial,
-      length_km: Number(properties.length_km) || 0
+      length_km: Number(properties.length_km) || 0,
     });
   };
 
@@ -73,7 +77,7 @@ export function setupUserMapInteractions(
       usage_type: properties.usage_type,
       scenic: properties.scenic,
       line_class: properties.line_class,
-      frequency: properties.frequency
+      frequency: properties.frequency,
     });
     if (properties.description) {
       formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
@@ -143,11 +147,11 @@ export function setupUserMapInteractions(
 
   // Cursor handlers for routes
   const handleRouteMouseEnter = () => {
-    mapInstance.getCanvas().style.cursor = 'pointer';
+    mapInstance.getCanvas().style.cursor = "pointer";
   };
 
   const handleRouteMouseLeave = () => {
-    mapInstance.getCanvas().style.cursor = '';
+    mapInstance.getCanvas().style.cursor = "";
     if (currentPopup) {
       currentPopup.remove();
       currentPopup = null;
@@ -156,11 +160,11 @@ export function setupUserMapInteractions(
 
   // Cursor handlers for stations
   const handleStationMouseEnter = () => {
-    mapInstance.getCanvas().style.cursor = 'pointer';
+    mapInstance.getCanvas().style.cursor = "pointer";
   };
 
   const handleStationMouseLeave = () => {
-    mapInstance.getCanvas().style.cursor = '';
+    mapInstance.getCanvas().style.cursor = "";
     if (currentPopup) {
       currentPopup.remove();
       currentPopup = null;
@@ -175,7 +179,7 @@ export function setupUserMapInteractions(
     const properties = feature.properties;
     const geometry = feature.geometry;
 
-    if (!properties || !geometry || geometry.type !== 'Point') return;
+    if (!properties || !geometry || geometry.type !== "Point") return;
 
     // Validate station data before creating Station object
     if (!properties.id || !properties.name || !geometry.coordinates) return;
@@ -184,7 +188,7 @@ export function setupUserMapInteractions(
     const station: Station = {
       id: properties.id,
       name: properties.name,
-      coordinates: geometry.coordinates as [number, number]
+      coordinates: geometry.coordinates as [number, number],
     };
 
     onStationClick(station);
@@ -192,29 +196,33 @@ export function setupUserMapInteractions(
 
   // Prevent double-click zoom on routes (fast select/unselect triggers dblclick)
   const handleDblClick = (e: maplibreglType.MapMouseEvent) => {
-    const routeLayers = ['railway_routes_click', 'railway_routes', 'selected_routes_highlight', 'highlighted_routes']
-      .filter(id => mapInstance.getLayer(id));
+    const routeLayers = [
+      "railway_routes_click",
+      "railway_routes",
+      "selected_routes_highlight",
+      "highlighted_routes",
+    ].filter((id) => mapInstance.getLayer(id));
     if (routeLayers.length === 0) return;
     const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
     if (features.length > 0) {
       e.preventDefault();
     }
   };
-  mapInstance.on('dblclick', handleDblClick);
+  mapInstance.on("dblclick", handleDblClick);
 
   // Attach route click as general map handler (works through highlight layers on top).
   // Hover/cursor handlers fire from the wide click-buffer layer so thin visible
   // lines don't make hover/cursor feedback finicky.
-  mapInstance.on('click', handleRouteClick);
-  mapInstance.on('mousemove', 'railway_routes_click', handleRouteMouseMove);
-  mapInstance.on('mouseenter', 'railway_routes_click', handleRouteMouseEnter);
-  mapInstance.on('mouseleave', 'railway_routes_click', handleRouteMouseLeave);
+  mapInstance.on("click", handleRouteClick);
+  mapInstance.on("mousemove", "railway_routes_click", handleRouteMouseMove);
+  mapInstance.on("mouseenter", "railway_routes_click", handleRouteMouseEnter);
+  mapInstance.on("mouseleave", "railway_routes_click", handleRouteMouseLeave);
 
   // Attach station handlers (added after routes, so they take precedence due to layer order)
-  mapInstance.on('click', 'stations', handleStationClick);
-  mapInstance.on('mousemove', 'stations', handleStationMouseMove);
-  mapInstance.on('mouseenter', 'stations', handleStationMouseEnter);
-  mapInstance.on('mouseleave', 'stations', handleStationMouseLeave);
+  mapInstance.on("click", "stations", handleStationClick);
+  mapInstance.on("mousemove", "stations", handleStationMouseMove);
+  mapInstance.on("mouseenter", "stations", handleStationMouseEnter);
+  mapInstance.on("mouseleave", "stations", handleStationMouseLeave);
 
   // Cleanup function
   return () => {
@@ -222,15 +230,15 @@ export function setupUserMapInteractions(
       currentPopup.remove();
     }
     // Remove route handlers
-    mapInstance.off('dblclick', handleDblClick);
-    mapInstance.off('click', handleRouteClick);
-    mapInstance.off('mousemove', 'railway_routes_click', handleRouteMouseMove);
-    mapInstance.off('mouseenter', 'railway_routes_click', handleRouteMouseEnter);
-    mapInstance.off('mouseleave', 'railway_routes_click', handleRouteMouseLeave);
+    mapInstance.off("dblclick", handleDblClick);
+    mapInstance.off("click", handleRouteClick);
+    mapInstance.off("mousemove", "railway_routes_click", handleRouteMouseMove);
+    mapInstance.off("mouseenter", "railway_routes_click", handleRouteMouseEnter);
+    mapInstance.off("mouseleave", "railway_routes_click", handleRouteMouseLeave);
     // Remove station handlers
-    mapInstance.off('click', 'stations', handleStationClick);
-    mapInstance.off('mousemove', 'stations', handleStationMouseMove);
-    mapInstance.off('mouseenter', 'stations', handleStationMouseEnter);
-    mapInstance.off('mouseleave', 'stations', handleStationMouseLeave);
+    mapInstance.off("click", "stations", handleStationClick);
+    mapInstance.off("mousemove", "stations", handleStationMouseMove);
+    mapInstance.off("mouseenter", "stations", handleStationMouseEnter);
+    mapInstance.off("mouseleave", "stations", handleStationMouseLeave);
   };
 }

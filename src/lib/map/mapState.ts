@@ -7,7 +7,7 @@ export interface MapState {
   zoom: number;
 }
 
-const MAP_STATE_KEY = 'railway-map-state';
+const MAP_STATE_KEY = "railway-map-state";
 
 /**
  * Save map state to localStorage
@@ -16,7 +16,7 @@ export function saveMapState(state: MapState): void {
   try {
     localStorage.setItem(MAP_STATE_KEY, JSON.stringify(state));
   } catch (error) {
-    console.warn('Failed to save map state:', error);
+    console.warn("Failed to save map state:", error);
   }
 }
 
@@ -34,16 +34,16 @@ export function loadMapState(): MapState | null {
     if (
       Array.isArray(state.center) &&
       state.center.length === 2 &&
-      typeof state.center[0] === 'number' &&
-      typeof state.center[1] === 'number' &&
-      typeof state.zoom === 'number'
+      typeof state.center[0] === "number" &&
+      typeof state.center[1] === "number" &&
+      typeof state.zoom === "number"
     ) {
       return state;
     }
 
     return null;
   } catch (error) {
-    console.warn('Failed to load map state:', error);
+    console.warn("Failed to load map state:", error);
     return null;
   }
 }
@@ -55,6 +55,6 @@ export function clearMapState(): void {
   try {
     localStorage.removeItem(MAP_STATE_KEY);
   } catch (error) {
-    console.warn('Failed to clear map state:', error);
+    console.warn("Failed to clear map state:", error);
   }
 }

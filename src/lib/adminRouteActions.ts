@@ -1,12 +1,11 @@
-'use server';
+"use server";
 
-import pool from './db';
-import { query } from './db';
-import { getUser } from './authActions';
-import { GeoJSONFeatureCollection, GeoJSONFeature, PathResult, RailwayPart } from './types';
-import { mergeLinearChain, coordinatesToWKT, type Coord } from './coordinateUtils';
-import { getRouteCountries } from './countryUtils';
-import type { UsageType, LineClass } from './constants';
+import { getUser } from "./authActions";
+import type { LineClass, UsageType } from "./constants";
+import { coordinatesToWKT } from "./coordinateUtils";
+import { getRouteCountries } from "./countryUtils";
+import pool, { query } from "./db";
+import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult, RailwayPart } from "./types";
 
 /**
  * Interface for route metadata used during creation
@@ -28,8 +27,8 @@ export interface SaveRouteData {
  */
 export async function getAllRailwayRoutes() {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
   const result = await query(`
@@ -47,11 +46,12 @@ export async function getAllRailwayRoutes() {
  */
 export async function getRailwayRoute(trackId: string) {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
-  const result = await query(`
+  const result = await query(
+    `
     SELECT track_id, from_station, to_station, track_number, description, usage_type, frequency, link, scenic, line_class,
            ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
@@ -59,10 +59,12 @@ export async function getRailwayRoute(trackId: string) {
            starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking
     FROM railway_routes
     WHERE track_id = $1
-  `, [trackId]);
+  `,
+    [trackId],
+  );
 
   if (result.rows.length === 0) {
-    throw new Error('Route not found');
+    throw new Error("Route not found");
   }
 
   const row = result.rows[0];
@@ -73,14 +75,14 @@ export async function getRailwayRoute(trackId: string) {
 
   if (row.starting_coordinate_json) {
     const geojson = JSON.parse(row.starting_coordinate_json);
-    if (geojson.type === 'Point' && geojson.coordinates) {
+    if (geojson.type === "Point" && geojson.coordinates) {
       startingCoordinate = geojson.coordinates as [number, number];
     }
   }
 
   if (row.ending_coordinate_json) {
     const geojson = JSON.parse(row.ending_coordinate_json);
-    if (geojson.type === 'Point' && geojson.coordinates) {
+    if (geojson.type === "Point" && geojson.coordinates) {
       endingCoordinate = geojson.coordinates as [number, number];
     }
   }
@@ -88,7 +90,7 @@ export async function getRailwayRoute(trackId: string) {
   return {
     ...row,
     starting_coordinate: startingCoordinate,
-    ending_coordinate: endingCoordinate
+    ending_coordinate: endingCoordinate,
   };
 }
 
@@ -98,8 +100,8 @@ export async function getRailwayRoute(trackId: string) {
  */
 export async function getAllRouteEndpoints(): Promise<GeoJSONFeatureCollection> {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
   const result = await query(`
@@ -119,16 +121,16 @@ export async function getAllRouteEndpoints(): Promise<GeoJSONFeatureCollection> 
     // Parse starting coordinate
     if (row.starting_coordinate_json) {
       const geojson = JSON.parse(row.starting_coordinate_json);
-      if (geojson.type === 'Point' && geojson.coordinates) {
+      if (geojson.type === "Point" && geojson.coordinates) {
         features.push({
-          type: 'Feature' as const,
+          type: "Feature" as const,
           geometry: geojson,
           properties: {
             track_id: row.track_id,
-            endpoint_type: 'start',
+            endpoint_type: "start",
             station_name: row.from_station,
-            route_name: `${row.from_station} ⟷ ${row.to_station}`
-          }
+            route_name: `${row.from_station} ⟷ ${row.to_station}`,
+          },
         });
       }
     }
@@ -136,24 +138,24 @@ export async function getAllRouteEndpoints(): Promise<GeoJSONFeatureCollection> 
     // Parse ending coordinate
     if (row.ending_coordinate_json) {
       const geojson = JSON.parse(row.ending_coordinate_json);
-      if (geojson.type === 'Point' && geojson.coordinates) {
+      if (geojson.type === "Point" && geojson.coordinates) {
         features.push({
-          type: 'Feature' as const,
+          type: "Feature" as const,
           geometry: geojson,
           properties: {
             track_id: row.track_id,
-            endpoint_type: 'end',
+            endpoint_type: "end",
             station_name: row.to_station,
-            route_name: `${row.from_station} ⟷ ${row.to_station}`
-          }
+            route_name: `${row.from_station} ⟷ ${row.to_station}`,
+          },
         });
       }
     }
   }
 
   return {
-    type: 'FeatureCollection',
-    features
+    type: "FeatureCollection",
+    features,
   };
 }
 
@@ -169,26 +171,26 @@ export async function saveRailwayRoute(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
   railwayParts?: RailwayPart[],
-  trackId?: string
+  trackId?: string,
 ): Promise<string> {
   // Admin check
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
   const client = await pool.connect();
 
   try {
-    console.log('Saving railway route:', `${routeData.from_station} ⟷ ${routeData.to_station}`);
-    console.log('Path segments:', pathResult.partIds.length);
-    console.log('Start coordinate:', startCoordinate);
-    console.log('End coordinate:', endCoordinate);
+    console.log("Saving railway route:", `${routeData.from_station} ⟷ ${routeData.to_station}`);
+    console.log("Path segments:", pathResult.partIds.length);
+    console.log("Start coordinate:", startCoordinate);
+    console.log("End coordinate:", endCoordinate);
 
     // Use the truncated/merged coordinates from pathResult
     // The pathfinder already handles truncation and merging correctly
     const sortedCoordinates = pathResult.coordinates;
-    console.log('Using pathfinder coordinates:', sortedCoordinates.length, 'points');
+    console.log("Using pathfinder coordinates:", sortedCoordinates.length, "points");
 
     // Create LineString geometry from coordinates
     const geometryWKT = coordinatesToWKT(sortedCoordinates);
@@ -198,9 +200,12 @@ export async function saveRailwayRoute(
     const endPointWKT = `POINT(${endCoordinate[0]} ${endCoordinate[1]})`;
 
     // Determine countries from route geometry
-    const { startCountry, endCountry } = getRouteCountries({ type: 'LineString', coordinates: sortedCoordinates });
-    console.log('Route countries:', startCountry, '→', endCountry);
-    console.log('Has backtracking:', pathResult.hasBacktracking || false);
+    const { startCountry, endCountry } = getRouteCountries({
+      type: "LineString",
+      coordinates: sortedCoordinates,
+    });
+    console.log("Route countries:", startCountry, "→", endCountry);
+    console.log("Has backtracking:", pathResult.hasBacktracking || false);
 
     let queryStr: string;
     let values: (string | number | string[] | boolean | null)[];
@@ -235,7 +240,7 @@ export async function saveRailwayRoute(
         startPointWKT,
         endPointWKT,
         pathResult.hasBacktracking || false,
-        trackId
+        trackId,
       ];
     } else {
       // Insert new route with auto-generated track_id
@@ -300,7 +305,7 @@ export async function saveRailwayRoute(
         startPointWKT,
         endPointWKT,
         routeData.intended_backtracking,
-        pathResult.hasBacktracking || false
+        pathResult.hasBacktracking || false,
       ];
     }
 
@@ -334,22 +339,26 @@ export async function saveRailwayRoute(
     `;
 
     if (trackId) {
-      console.log('Successfully updated railway route geometry:', trackId);
+      console.log("Successfully updated railway route geometry:", trackId);
       await client.query(classifyLineClassSQL, [trackId]);
-      console.log('Re-classified line_class for route:', trackId);
+      console.log("Re-classified line_class for route:", trackId);
     } else {
-      console.log('Successfully saved railway route with auto-generated track_id:', savedTrackId);
+      console.log("Successfully saved railway route with auto-generated track_id:", savedTrackId);
       await client.query(classifyLineClassSQL, [savedTrackId]);
-      console.log('Auto-classified line_class for route:', savedTrackId);
+      console.log("Auto-classified line_class for route:", savedTrackId);
     }
-    console.log('Final geometry has', sortedCoordinates.length, 'coordinate points');
-    console.log('Calculated route length:', lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : 'N/A');
-    console.log('Stored coordinates:', startCoordinate, 'to', endCoordinate);
+    console.log("Final geometry has", sortedCoordinates.length, "coordinate points");
+    console.log(
+      "Calculated route length:",
+      lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : "N/A",
+    );
+    console.log("Stored coordinates:", startCoordinate, "to", endCoordinate);
     return String(savedTrackId);
-
   } catch (error) {
-    console.error('Error saving railway route:', error);
-    throw new Error(`Failed to save route: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("Error saving railway route:", error);
+    throw new Error(
+      `Failed to save route: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   } finally {
     client.release();
   }
@@ -370,19 +379,34 @@ export async function updateRailwayRoute(
   link: string | null,
   scenic: boolean,
   lineClass: LineClass,
-  intendedBacktracking: boolean
+  intendedBacktracking: boolean,
 ) {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
-  await query(`
+  await query(
+    `
     UPDATE railway_routes
     SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, frequency = $7, link = $8,
         scenic = $9, line_class = $10, intended_backtracking = $11, is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
-  `, [trackId, fromStation, toStation, trackNumber, description, usageType, frequency || [], link, scenic, lineClass, intendedBacktracking]);
+  `,
+    [
+      trackId,
+      fromStation,
+      toStation,
+      trackNumber,
+      description,
+      usageType,
+      frequency || [],
+      link,
+      scenic,
+      lineClass,
+      intendedBacktracking,
+    ],
+  );
 }
 
 /**
@@ -391,28 +415,29 @@ export async function updateRailwayRoute(
 export async function deleteRailwayRoute(trackId: string): Promise<void> {
   // Admin check
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
   const client = await pool.connect();
 
   try {
-    console.log('Deleting railway route with track_id:', trackId);
+    console.log("Deleting railway route with track_id:", trackId);
 
     // Delete from railway_routes table (CASCADE will handle user_trips)
-    const deleteQuery = 'DELETE FROM railway_routes WHERE track_id = $1';
+    const deleteQuery = "DELETE FROM railway_routes WHERE track_id = $1";
     const result = await client.query(deleteQuery, [trackId]);
 
     if (result.rowCount === 0) {
       throw new Error(`Route with track_id ${trackId} not found`);
     }
 
-    console.log('Successfully deleted railway route:', trackId);
-
+    console.log("Successfully deleted railway route:", trackId);
   } catch (error) {
-    console.error('Error deleting railway route:', error);
-    throw new Error(`Failed to delete route: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("Error deleting railway route:", error);
+    throw new Error(
+      `Failed to delete route: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   } finally {
     client.release();
   }

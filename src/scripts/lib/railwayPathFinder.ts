@@ -1,6 +1,6 @@
-import { Client, Pool, PoolClient } from 'pg';
-import type { PathResult } from '../../lib/types';
-import { calculateBearing } from '../../lib/geoUtils';
+import type { Client, Pool, PoolClient } from "pg";
+import { calculateBearing } from "../../lib/geoUtils";
+import type { PathResult } from "../../lib/types";
 
 export type { PathResult };
 
@@ -45,7 +45,7 @@ export class RailwayPathFinder {
     dbClient: Client | Pool,
     startId: string,
     endId: string,
-    bufferMeters: number = 50000
+    bufferMeters: number = 50000,
   ): Promise<void> {
     const client = await this.getClient(dbClient);
 
@@ -53,7 +53,8 @@ export class RailwayPathFinder {
       // Buffer in Web Mercator (uses GIST index on rp.geometry, fast).
       // Compensate for Mercator latitude distortion: ST_Buffer(N) in 3857 yields an
       // actual on-ground radius of N*cos(lat), so we scale by 1/cos(lat) to hit N m.
-      const result = await client.query(`
+      const result = await client.query(
+        `
         WITH endpoints AS (
           SELECT ST_Collect(geometry) AS geom
           FROM railway_parts
@@ -76,7 +77,9 @@ export class RailwayPathFinder {
         WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
           AND rp.geometry IS NOT NULL
         ORDER BY id
-      `, [startId, endId, bufferMeters]);
+      `,
+        [startId, endId, bufferMeters],
+      );
 
       this.parseAndStoreParts(result.rows);
     } finally {
@@ -90,13 +93,14 @@ export class RailwayPathFinder {
   async loadRailwayPartsAroundCoordinate(
     dbClient: Client | Pool,
     coordinate: [number, number],
-    bufferMeters: number = 50000
+    bufferMeters: number = 50000,
   ): Promise<void> {
     const client = await this.getClient(dbClient);
 
     try {
       // See loadRailwayParts: Mercator buffer scaled by 1/cos(lat) to undo distortion.
-      const result = await client.query(`
+      const result = await client.query(
+        `
         WITH search_area AS (
           SELECT ST_Transform(
             ST_Buffer(
@@ -113,7 +117,9 @@ export class RailwayPathFinder {
         WHERE ST_Intersects(rp.geometry, search_area.buffer_geom)
           AND rp.geometry IS NOT NULL
         ORDER BY id
-      `, [coordinate[0], coordinate[1], bufferMeters]);
+      `,
+        [coordinate[0], coordinate[1], bufferMeters],
+      );
 
       this.parseAndStoreParts(result.rows);
     } finally {
@@ -169,13 +175,11 @@ export class RailwayPathFinder {
     const firstDistance = this.calculatePathDistance(firstPath);
     // Allow searching for paths up to 10% longer or +5km (non-backtracking paths are often slightly longer)
     const searchDistance = Math.min(firstDistance * 1.1, firstDistance + 5000);
-    console.log(`  Searching for non-backtracking alternatives (max ${(searchDistance / 1000).toFixed(1)}km)...`);
-
-    const bestAlternative = this.findNonBacktrackingAlternative(
-      startId,
-      endId,
-      searchDistance
+    console.log(
+      `  Searching for non-backtracking alternatives (max ${(searchDistance / 1000).toFixed(1)}km)...`,
     );
+
+    const bestAlternative = this.findNonBacktrackingAlternative(startId, endId, searchDistance);
 
     if (!bestAlternative) {
       console.log(`  No non-backtracking alternative found, using original`);
@@ -189,7 +193,9 @@ export class RailwayPathFinder {
     const maxAcceptable = Math.min(firstDistance * 1.1, firstDistance + 5000);
 
     if (altDistance <= maxAcceptable) {
-      console.log(`  Using non-backtracking alternative (${(altDistance / 1000).toFixed(1)}km) over backtracking path (${(firstDistance / 1000).toFixed(1)}km)`);
+      console.log(
+        `  Using non-backtracking alternative (${(altDistance / 1000).toFixed(1)}km) over backtracking path (${(firstDistance / 1000).toFixed(1)}km)`,
+      );
 
       // Try to build the path - if it fails due to chain break, use original
       try {
@@ -204,7 +210,9 @@ export class RailwayPathFinder {
       }
     }
 
-    console.log(`  Alternative is too long (${(altDistance / 1000).toFixed(1)}km vs ${(firstDistance / 1000).toFixed(1)}km), using original`);
+    console.log(
+      `  Alternative is too long (${(altDistance / 1000).toFixed(1)}km vs ${(firstDistance / 1000).toFixed(1)}km), using original`,
+    );
     const result = this.buildPathResult(firstPath);
     result.hasBacktracking = true;
     return result;
@@ -226,12 +234,14 @@ export class RailwayPathFinder {
   async findPathFromCoordinates(
     dbClient: Client | Pool,
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
   ): Promise<PathResult | null> {
     const buffers = [50000, 100000, 222000]; // 50km, 100km, 222km
 
     for (const bufferMeters of buffers) {
-      console.log(`Attempting coordinate-based pathfinding with ${bufferMeters / 1000}km buffer...`);
+      console.log(
+        `Attempting coordinate-based pathfinding with ${bufferMeters / 1000}km buffer...`,
+      );
       this.clear();
 
       // Load parts around both coordinates
@@ -252,15 +262,15 @@ export class RailwayPathFinder {
         continue;
       }
 
-      console.log(`Found ${startPartIds.length} start part(s): ${startPartIds.join(', ')}`);
-      console.log(`Found ${endPartIds.length} end part(s): ${endPartIds.join(', ')}`);
+      console.log(`Found ${startPartIds.length} start part(s): ${startPartIds.join(", ")}`);
+      console.log(`Found ${endPartIds.length} end part(s): ${endPartIds.join(", ")}`);
 
       // Try all combinations
       const bestResult = this.findBestCoordinatePath(
         startPartIds,
         endPartIds,
         startCoordinate,
-        endCoordinate
+        endCoordinate,
       );
 
       if (bestResult) {
@@ -270,7 +280,7 @@ export class RailwayPathFinder {
       console.log(`No valid path found (buffer: ${bufferMeters / 1000}km)`);
     }
 
-    console.log('No path found with any buffer size');
+    console.log("No path found with any buffer size");
     return null;
   }
 
@@ -298,7 +308,7 @@ export class RailwayPathFinder {
           visited.add(connectedId);
           queue.push({
             id: connectedId,
-            path: [...current.path, connectedId]
+            path: [...current.path, connectedId],
           });
         }
       }
@@ -317,13 +327,15 @@ export class RailwayPathFinder {
     startId: string,
     endId: string,
     maxDistance: number,
-    forcedFirstHop?: string
+    forcedFirstHop?: string,
   ): string[] | null {
-    const queue: { id: string; path: string[]; distance: number }[] = [{
-      id: startId,
-      path: [startId],
-      distance: 0
-    }];
+    const queue: { id: string; path: string[]; distance: number }[] = [
+      {
+        id: startId,
+        path: [startId],
+        distance: 0,
+      },
+    ];
 
     const bestDistance = new Map<string, number>();
     bestDistance.set(startId, 0);
@@ -389,7 +401,7 @@ export class RailwayPathFinder {
         for (let i = 0; i < connectedPart.coordinates.length - 1; i++) {
           segmentDist += this.haversineDistance(
             connectedPart.coordinates[i],
-            connectedPart.coordinates[i + 1]
+            connectedPart.coordinates[i + 1],
           );
         }
         const newDistance = current.distance + segmentDist;
@@ -401,7 +413,7 @@ export class RailwayPathFinder {
           queue.push({
             id: connectedId,
             path: newPath,
-            distance: newDistance
+            distance: newDistance,
           });
         }
       }
@@ -416,7 +428,7 @@ export class RailwayPathFinder {
   private findNonBacktrackingAlternative(
     startId: string,
     endId: string,
-    maxDistance: number
+    maxDistance: number,
   ): string[] | null {
     console.log(`  Trying to find path without backtracking...`);
 
@@ -424,7 +436,9 @@ export class RailwayPathFinder {
     let path = this.findPathWithoutBacktracking(startId, endId, maxDistance);
     if (path) {
       const distance = this.calculatePathDistance(path);
-      console.log(`  ✓ Found non-backtracking path via ${path[1]} (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
+      console.log(
+        `  ✓ Found non-backtracking path via ${path[1]} (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`,
+      );
       return path;
     }
 
@@ -436,7 +450,9 @@ export class RailwayPathFinder {
       path = this.findPathWithoutBacktracking(startId, endId, maxDistance, firstHop);
       if (path) {
         const distance = this.calculatePathDistance(path);
-        console.log(`  ✓ Found non-backtracking path via ${firstHop} on retry (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`);
+        console.log(
+          `  ✓ Found non-backtracking path via ${firstHop} on retry (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`,
+        );
         return path;
       }
     }
@@ -491,7 +507,12 @@ export class RailwayPathFinder {
       const exitSegment = this.getConnectionSegment(currentPartId, prevPartId, nextPartId, true);
 
       // Get entry segment of next part (where it connects from current)
-      const entrySegment = this.getConnectionSegment(nextPartId, currentPartId, afterNextPartId, false);
+      const entrySegment = this.getConnectionSegment(
+        nextPartId,
+        currentPartId,
+        afterNextPartId,
+        false,
+      );
 
       if (!exitSegment || !entrySegment) continue;
 
@@ -502,7 +523,9 @@ export class RailwayPathFinder {
       const normalizedDiff = diff > 180 ? 360 - diff : diff;
 
       if (normalizedDiff > 140) {
-        console.log(`    ⚠️  BACKTRACKING DETECTED at ${currentPartId}→${nextPartId}: ${normalizedDiff.toFixed(1)}° > 140°`);
+        console.log(
+          `    ⚠️  BACKTRACKING DETECTED at ${currentPartId}→${nextPartId}: ${normalizedDiff.toFixed(1)}° > 140°`,
+        );
         return true;
       }
     }
@@ -519,7 +542,7 @@ export class RailwayPathFinder {
     partId: string,
     prevPartId: string | null,
     nextPartId: string | null,
-    isExit: boolean
+    isExit: boolean,
   ): [[number, number], [number, number]] | null {
     const part = this.parts.get(partId);
     if (!part || part.coordinates.length < 2) return null;
@@ -550,7 +573,7 @@ export class RailwayPathFinder {
   private isPartTraversedForward(
     partId: string,
     prevPartId: string | null,
-    nextPartId: string | null
+    nextPartId: string | null,
   ): boolean {
     const part = this.parts.get(partId);
     if (!part) return true;
@@ -603,7 +626,7 @@ export class RailwayPathFinder {
    */
   private findAllPartsContainingCoordinate(
     coordinate: [number, number],
-    toleranceMeters: number = 50
+    toleranceMeters: number = 50,
   ): string[] {
     const matchingParts: string[] = [];
 
@@ -612,7 +635,7 @@ export class RailwayPathFinder {
         const dist = this.pointToSegmentDistance(
           coordinate,
           part.coordinates[i],
-          part.coordinates[i + 1]
+          part.coordinates[i + 1],
         );
         if (dist <= toleranceMeters) {
           matchingParts.push(partId);
@@ -630,7 +653,7 @@ export class RailwayPathFinder {
    */
   private findNearestPointOnPart(
     partId: string,
-    coordinate: [number, number]
+    coordinate: [number, number],
   ): NearestPointResult | null {
     const part = this.parts.get(partId);
     if (!part) return null;
@@ -643,7 +666,7 @@ export class RailwayPathFinder {
       const projection = this.projectPointOnSegment(
         coordinate,
         part.coordinates[i],
-        part.coordinates[i + 1]
+        part.coordinates[i + 1],
       );
 
       if (projection.distance < minDistance) {
@@ -658,7 +681,7 @@ export class RailwayPathFinder {
     return {
       segmentIndex: bestSegmentIndex,
       projectedPoint: bestProjectedPoint,
-      distance: minDistance
+      distance: minDistance,
     };
   }
 
@@ -669,7 +692,7 @@ export class RailwayPathFinder {
     startPartIds: string[],
     endPartIds: string[],
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
   ): PathResult | null {
     let bestResult: PathResult | null = null;
     let bestDistance = Infinity;
@@ -692,7 +715,7 @@ export class RailwayPathFinder {
           coordinates = this.buildCoordinatesWithTruncation(
             pathResult.partIds,
             startCoordinate,
-            endCoordinate
+            endCoordinate,
           );
         } catch (error) {
           // Chain is broken - this path doesn't connect properly
@@ -706,14 +729,16 @@ export class RailwayPathFinder {
 
         // Selection logic: prefer non-backtracking paths when distances are close
         const isSameDistance = Math.abs(distance - bestDistance) < 10; // 10 meters tolerance
-        const replacingGoodWithBad = bestResult && !bestResult.hasBacktracking && pathResult.hasBacktracking;
+        const replacingGoodWithBad =
+          bestResult && !bestResult.hasBacktracking && pathResult.hasBacktracking;
         const betterQuality = bestResult?.hasBacktracking && !pathResult.hasBacktracking;
 
         // Update if:
         // 1. No best result yet, OR
         // 2. Shorter distance (but not if replacing non-backtracking with backtracking when close), OR
         // 3. Same distance and better quality (non-backtracking over backtracking)
-        const shouldUpdate = !bestResult ||
+        const shouldUpdate =
+          !bestResult ||
           (distance < bestDistance && !(isSameDistance && replacingGoodWithBad)) ||
           (isSameDistance && betterQuality);
 
@@ -742,7 +767,7 @@ export class RailwayPathFinder {
   private buildCoordinatesWithTruncation(
     partIds: string[],
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
   ): [number, number][] {
     if (partIds.length === 0) return [];
 
@@ -782,7 +807,7 @@ export class RailwayPathFinder {
   private buildSinglePartCoordinates(
     partId: string,
     startCoordinate: [number, number],
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
   ): [number, number][] {
     const part = this.parts.get(partId);
     if (!part) return [];
@@ -823,7 +848,7 @@ export class RailwayPathFinder {
   private buildFirstPartCoordinates(
     partId: string,
     nextPartId: string,
-    startCoordinate: [number, number]
+    startCoordinate: [number, number],
   ): [number, number][] {
     const part = this.parts.get(partId);
     const nextPart = this.parts.get(nextPartId);
@@ -833,7 +858,7 @@ export class RailwayPathFinder {
     const endKey = this.coordinateToKey(part.endPoint);
     const nextStartKey = this.coordinateToKey(nextPart.startPoint);
     const nextEndKey = this.coordinateToKey(nextPart.endPoint);
-    const endsConnect = (endKey === nextStartKey || endKey === nextEndKey);
+    const endsConnect = endKey === nextStartKey || endKey === nextEndKey;
 
     const startPoint = this.findNearestPointOnPart(partId, startCoordinate);
     if (!startPoint) return part.coordinates;
@@ -866,7 +891,7 @@ export class RailwayPathFinder {
   private buildLastPartCoordinates(
     partId: string,
     prevPartId: string,
-    endCoordinate: [number, number]
+    endCoordinate: [number, number],
   ): [number, number][] {
     const part = this.parts.get(partId);
     const prevPart = this.parts.get(prevPartId);
@@ -876,7 +901,7 @@ export class RailwayPathFinder {
     const startKey = this.coordinateToKey(part.startPoint);
     const prevStartKey = this.coordinateToKey(prevPart.startPoint);
     const prevEndKey = this.coordinateToKey(prevPart.endPoint);
-    const startsConnect = (startKey === prevStartKey || startKey === prevEndKey);
+    const startsConnect = startKey === prevStartKey || startKey === prevEndKey;
 
     const endPoint = this.findNearestPointOnPart(partId, endCoordinate);
     if (!endPoint) return part.coordinates;
@@ -933,14 +958,14 @@ export class RailwayPathFinder {
     if (sublists.length === 0) return [];
     if (sublists.length === 1) return sublists[0];
 
-    const remainingSublists = sublists.map(s => [...s]);
+    const remainingSublists = sublists.map((s) => [...s]);
 
     // Find starting sublist (prefer one with endpoint appearing only once)
     const coordCount = this.countEndpointFrequencies(remainingSublists);
     let startingIndex = this.findStartingSublistIndex(remainingSublists, coordCount);
 
     if (startingIndex === -1) {
-      console.log('[RailwayPathFinder] No clear endpoint found, using first sublist');
+      console.log("[RailwayPathFinder] No clear endpoint found, using first sublist");
       startingIndex = 0;
     }
 
@@ -955,8 +980,8 @@ export class RailwayPathFinder {
       const lastCoord = mergedChain[mergedChain.length - 1];
 
       const lastCoordKey = this.coordinateToKey(lastCoord);
-      const nextIndex = remainingSublists.findIndex(sublist =>
-        sublist.some(coord => this.coordinateToKey(coord) === lastCoordKey)
+      const nextIndex = remainingSublists.findIndex((sublist) =>
+        sublist.some((coord) => this.coordinateToKey(coord) === lastCoordKey),
       );
 
       if (nextIndex === -1) {
@@ -965,7 +990,7 @@ export class RailwayPathFinder {
 
       const nextSublist = [...remainingSublists[nextIndex]];
       const overlapIndex = nextSublist.findIndex(
-        coord => this.coordinateToKey(coord) === lastCoordKey
+        (coord) => this.coordinateToKey(coord) === lastCoordKey,
       );
 
       if (overlapIndex !== 0) {
@@ -982,12 +1007,10 @@ export class RailwayPathFinder {
   /**
    * Count how many times each endpoint coordinate appears
    */
-  private countEndpointFrequencies(
-    sublists: [number, number][][]
-  ): Map<string, number> {
+  private countEndpointFrequencies(sublists: [number, number][][]): Map<string, number> {
     const coordCount = new Map<string, number>();
 
-    sublists.forEach(sublist => {
+    sublists.forEach((sublist) => {
       const firstKey = `${sublist[0][0]},${sublist[0][1]}`;
       const lastKey = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
       coordCount.set(firstKey, (coordCount.get(firstKey) || 0) + 1);
@@ -1002,9 +1025,9 @@ export class RailwayPathFinder {
    */
   private findStartingSublistIndex(
     sublists: [number, number][][],
-    coordCount: Map<string, number>
+    coordCount: Map<string, number>,
   ): number {
-    return sublists.findIndex(sublist => {
+    return sublists.findIndex((sublist) => {
       const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
       const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
       return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
@@ -1016,7 +1039,7 @@ export class RailwayPathFinder {
    */
   private orientStartingSublist(
     mergedChain: [number, number][],
-    coordCount: Map<string, number>
+    coordCount: Map<string, number>,
   ): void {
     const firstCoord = `${mergedChain[0][0]},${mergedChain[0][1]}`;
     const lastCoord = `${mergedChain[mergedChain.length - 1][0]},${mergedChain[mergedChain.length - 1][1]}`;
@@ -1037,7 +1060,7 @@ export class RailwayPathFinder {
   private projectPointOnSegment(
     point: [number, number],
     segmentStart: [number, number],
-    segmentEnd: [number, number]
+    segmentEnd: [number, number],
   ): PointOnSegment {
     const x = point[0];
     const y = point[1];
@@ -1074,7 +1097,7 @@ export class RailwayPathFinder {
 
     return {
       projectedPoint: [xx, yy],
-      distance: this.haversineDistance(point, [xx, yy])
+      distance: this.haversineDistance(point, [xx, yy]),
     };
   }
 
@@ -1084,7 +1107,7 @@ export class RailwayPathFinder {
   private pointToSegmentDistance(
     point: [number, number],
     segmentStart: [number, number],
-    segmentEnd: [number, number]
+    segmentEnd: [number, number],
   ): number {
     return this.projectPointOnSegment(point, segmentStart, segmentEnd).distance;
   }
@@ -1092,19 +1115,16 @@ export class RailwayPathFinder {
   /**
    * Calculate geographic distance using Haversine formula
    */
-  private haversineDistance(
-    coord1: [number, number],
-    coord2: [number, number]
-  ): number {
+  private haversineDistance(coord1: [number, number], coord2: [number, number]): number {
     const R = 6371000; // Earth's radius in meters
-    const lat1 = coord1[1] * Math.PI / 180;
-    const lat2 = coord2[1] * Math.PI / 180;
-    const deltaLat = (coord2[1] - coord1[1]) * Math.PI / 180;
-    const deltaLon = (coord2[0] - coord1[0]) * Math.PI / 180;
+    const lat1 = (coord1[1] * Math.PI) / 180;
+    const lat2 = (coord2[1] * Math.PI) / 180;
+    const deltaLat = ((coord2[1] - coord1[1]) * Math.PI) / 180;
+    const deltaLon = ((coord2[0] - coord1[0]) * Math.PI) / 180;
 
-    const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-      Math.cos(lat1) * Math.cos(lat2) *
-      Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+    const a =
+      Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c;
@@ -1121,10 +1141,7 @@ export class RailwayPathFinder {
       if (!part) continue;
 
       for (let i = 0; i < part.coordinates.length - 1; i++) {
-        totalDistance += this.haversineDistance(
-          part.coordinates[i],
-          part.coordinates[i + 1]
-        );
+        totalDistance += this.haversineDistance(part.coordinates[i], part.coordinates[i + 1]);
       }
     }
 
@@ -1158,21 +1175,21 @@ export class RailwayPathFinder {
     // Check connections at start coordinate
     const startKey = this.coordinateToKey(part.startPoint);
     const startConnected = this.coordToPartIds.get(startKey) || [];
-    startConnected.forEach(id => {
+    startConnected.forEach((id) => {
       if (id !== partId) connected.add(id);
     });
 
     // Check connections at end coordinate
     const endKey = this.coordinateToKey(part.endPoint);
     const endConnected = this.coordToPartIds.get(endKey) || [];
-    endConnected.forEach(id => {
+    endConnected.forEach((id) => {
       if (id !== partId) connected.add(id);
     });
 
     // Sort for deterministic BFS ordering
     return Array.from(connected).sort((a, b) => {
-      const numA = parseInt(a);
-      const numB = parseInt(b);
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
       return numA - numB;
     });
   }
@@ -1185,7 +1202,7 @@ export class RailwayPathFinder {
    * Get a database client from Pool or Client
    */
   private async getClient(dbClient: Client | Pool): Promise<Client | PoolClient> {
-    if ('totalCount' in dbClient) {
+    if ("totalCount" in dbClient) {
       return await (dbClient as Pool).connect();
     }
     return dbClient as Client;
@@ -1194,11 +1211,8 @@ export class RailwayPathFinder {
   /**
    * Release client if it was obtained from a Pool
    */
-  private releaseClient(
-    original: Client | Pool,
-    client: Client | PoolClient
-  ): void {
-    if ('totalCount' in original && 'release' in client) {
+  private releaseClient(original: Client | Pool, client: Client | PoolClient): void {
+    if ("totalCount" in original && "release" in client) {
       client.release();
     }
   }
@@ -1211,7 +1225,7 @@ export class RailwayPathFinder {
       const id = String(row.id);
       const geom = JSON.parse(row.geometry_json);
 
-      if (geom.type === 'LineString' && geom.coordinates.length >= 2) {
+      if (geom.type === "LineString" && geom.coordinates.length >= 2) {
         const coordinates = geom.coordinates as [number, number][];
         const startPoint = coordinates[0];
         const endPoint = coordinates[coordinates.length - 1];
@@ -1220,7 +1234,7 @@ export class RailwayPathFinder {
           id,
           coordinates,
           startPoint,
-          endPoint
+          endPoint,
         };
 
         this.parts.set(id, part);

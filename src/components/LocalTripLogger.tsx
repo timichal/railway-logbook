@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useToast } from '@/lib/toast';
-import type { SelectedRoute, Station } from '@/lib/types';
-import { LocalStorageManager } from '@/lib/localStorage';
-import JourneyPlanner from './JourneyPlanner';
+import { useState } from "react";
+import { LocalStorageManager } from "@/lib/localStorage";
+import { useToast } from "@/lib/toast";
+import type { SelectedRoute, Station } from "@/lib/types";
+import JourneyPlanner from "./JourneyPlanner";
 
 interface RouteNode {
   track_id: number;
@@ -20,7 +20,7 @@ interface LocalTripLoggerProps {
   onClearSelection: () => void;
   onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
   onRoutesLogged: () => void;
-  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
@@ -33,15 +33,15 @@ export default function LocalTripLogger({
   onRoutesLogged,
   onHighlightRoutes,
   onAddRoutesFromPlanner,
-  onStationClickHandler
+  onStationClickHandler,
 }: LocalTripLoggerProps) {
   const { showSuccess, showError } = useToast();
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split("T")[0];
 
   // Journey form state
-  const [journeyName, setJourneyName] = useState('');
+  const [journeyName, setJourneyName] = useState("");
   const [journeyDate, setJourneyDate] = useState(today);
-  const [journeyDescription, setJourneyDescription] = useState('');
+  const [journeyDescription, setJourneyDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const journeyCount = LocalStorageManager.getJourneyCount();
@@ -50,7 +50,7 @@ export default function LocalTripLogger({
 
   const handleCreateJourney = async () => {
     if (!journeyName.trim() || !journeyDate || selectedRoutes.length === 0) {
-      showError('Please fill in journey name, date, and select at least one route');
+      showError("Please fill in journey name, date, and select at least one route");
       return;
     }
 
@@ -64,27 +64,29 @@ export default function LocalTripLogger({
       });
 
       // Add logged parts
-      const parts = selectedRoutes.map(r => ({
+      const parts = selectedRoutes.map((r) => ({
         journey_id: newJourney.id,
-        track_id: parseInt(r.track_id),
+        track_id: parseInt(r.track_id, 10),
         partial: r.partial ?? false,
       }));
 
       LocalStorageManager.addLoggedParts(parts);
 
       // Clear form and selection
-      setJourneyName('');
+      setJourneyName("");
       setJourneyDate(today);
-      setJourneyDescription('');
+      setJourneyDescription("");
       onClearSelection();
 
       // Trigger map refresh
       onRoutesLogged();
 
-      showSuccess(`Journey "${newJourney.name}" created successfully! (${journeyCount + 1}/5 journeys used)`);
+      showSuccess(
+        `Journey "${newJourney.name}" created successfully! (${journeyCount + 1}/5 journeys used)`,
+      );
     } catch (error) {
-      console.error('Error creating journey:', error);
-      showError(error instanceof Error ? error.message : 'Failed to create journey');
+      console.error("Error creating journey:", error);
+      showError(error instanceof Error ? error.message : "Failed to create journey");
     } finally {
       setIsSaving(false);
     }
@@ -95,17 +97,18 @@ export default function LocalTripLogger({
   return (
     <div className="p-4 text-black space-y-4">
       {/* Storage Info */}
-      <div className={`text-xs px-3 py-2 rounded border ${
-        remainingJourneys <= 2
-          ? 'bg-orange-50 border-orange-200 text-orange-800'
-          : 'bg-blue-50 border-blue-200 text-blue-700'
-      }`}>
+      <div
+        className={`text-xs px-3 py-2 rounded border ${
+          remainingJourneys <= 2
+            ? "bg-orange-50 border-orange-200 text-orange-800"
+            : "bg-blue-50 border-blue-200 text-blue-700"
+        }`}
+      >
         <div className="font-medium mb-1">Local Storage ({journeyCount}/5 journeys)</div>
         <div className="text-xs">
           {remainingJourneys > 0
-            ? `${remainingJourneys} journey${remainingJourneys === 1 ? '' : 's'} remaining. Register for unlimited journeys!`
-            : 'Limit reached! Register to log more journeys.'
-          }
+            ? `${remainingJourneys} journey${remainingJourneys === 1 ? "" : "s"} remaining. Register for unlimited journeys!`
+            : "Limit reached! Register to log more journeys."}
         </div>
       </div>
 
@@ -165,6 +168,7 @@ export default function LocalTripLogger({
           </h3>
           {selectedRoutes.length > 0 && (
             <button
+              type="button"
               onClick={onClearSelection}
               className="text-xs text-gray-500 hover:text-gray-700 underline"
             >
@@ -206,6 +210,7 @@ export default function LocalTripLogger({
                   </div>
                   <div className="flex items-center gap-1">
                     <button
+                      type="button"
                       onClick={() => onRemoveRoute(route.track_id)}
                       className="text-gray-500 hover:text-gray-700 text-lg leading-none"
                       title="Remove route"
@@ -229,26 +234,37 @@ export default function LocalTripLogger({
       {/* Submit Button */}
       <div className="pt-3 border-t border-gray-200">
         <button
+          type="button"
           onClick={handleCreateJourney}
-          disabled={isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0 || !canAddMore}
+          disabled={
+            isSaving ||
+            !journeyName.trim() ||
+            !journeyDate ||
+            selectedRoutes.length === 0 ||
+            !canAddMore
+          }
           className={`w-full px-4 py-2 text-white rounded font-medium transition-colors ${
-            isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0 || !canAddMore
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 cursor-pointer'
+            isSaving ||
+            !journeyName.trim() ||
+            !journeyDate ||
+            selectedRoutes.length === 0 ||
+            !canAddMore
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-green-600 hover:bg-green-700 cursor-pointer"
           }`}
           title={
             !canAddMore
-              ? 'Journey limit reached (5/5). Please register to log more journeys.'
+              ? "Journey limit reached (5/5). Please register to log more journeys."
               : !journeyName.trim()
-              ? 'Journey name is required'
-              : !journeyDate
-              ? 'Date is required'
-              : selectedRoutes.length === 0
-              ? 'Select at least one route'
-              : ''
+                ? "Journey name is required"
+                : !journeyDate
+                  ? "Date is required"
+                  : selectedRoutes.length === 0
+                    ? "Select at least one route"
+                    : ""
           }
         >
-          {isSaving ? 'Creating...' : `Create Journey & Log ${selectedRoutes.length} Routes`}
+          {isSaving ? "Creating..." : `Create Journey & Log ${selectedRoutes.length} Routes`}
         </button>
       </div>
     </div>

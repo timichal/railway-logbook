@@ -1,11 +1,18 @@
-import { useEffect } from 'react';
-import type maplibregl from 'maplibre-gl';
-import type { RailwayPart, GeoJSONFeatureCollection } from '@/lib/types';
-import { COLORS, WIDTHS, OPACITIES, CIRCLES } from '../index';
+import type maplibregl from "maplibre-gl";
+import { useEffect } from "react";
+import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/types";
+import { CIRCLES, COLORS, OPACITIES, WIDTHS } from "../index";
 
 interface OverlayData {
-  previewRoute?: { partIds: string[]; coordinates: [number, number][]; railwayParts?: RailwayPart[] } | null;
-  selectedCoordinates?: { startingCoordinate: [number, number] | null; endingCoordinate: [number, number] | null };
+  previewRoute?: {
+    partIds: string[];
+    coordinates: [number, number][];
+    railwayParts?: RailwayPart[];
+  } | null;
+  selectedCoordinates?: {
+    startingCoordinate: [number, number] | null;
+    endingCoordinate: [number, number] | null;
+  };
   routeEndpoints: GeoJSONFeatureCollection | null;
   isEditingGeometry?: boolean;
 }
@@ -35,29 +42,34 @@ export function useAdminMapOverlays(
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    removeGeoJSONLayer(map.current, 'preview-route');
+    removeGeoJSONLayer(map.current, "preview-route");
 
     if (previewRoute?.coordinates && previewRoute.coordinates.length > 0) {
-      map.current.addSource('preview-route', {
-        type: 'geojson',
+      map.current.addSource("preview-route", {
+        type: "geojson",
         data: {
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: previewRoute.coordinates },
-            properties: {},
-          }],
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              geometry: { type: "LineString", coordinates: previewRoute.coordinates },
+              properties: {},
+            },
+          ],
         },
       });
 
       map.current.addLayer({
-        id: 'preview-route',
-        type: 'line',
-        source: 'preview-route',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': COLORS.preview, 'line-width': WIDTHS.preview, 'line-opacity': OPACITIES.preview },
+        id: "preview-route",
+        type: "line",
+        source: "preview-route",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": COLORS.preview,
+          "line-width": WIDTHS.preview,
+          "line-opacity": OPACITIES.preview,
+        },
       });
-
     }
   }, [previewRoute, mapLoaded, isEditingGeometry, map]);
 
@@ -65,51 +77,51 @@ export function useAdminMapOverlays(
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    removeGeoJSONLayer(map.current, 'selected-points');
+    removeGeoJSONLayer(map.current, "selected-points");
 
     const features: Array<{
-      type: 'Feature';
-      geometry: { type: 'Point'; coordinates: [number, number] };
+      type: "Feature";
+      geometry: { type: "Point"; coordinates: [number, number] };
       properties: { type: string };
     }> = [];
 
     if (selectedCoordinates?.startingCoordinate) {
       features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: selectedCoordinates.startingCoordinate },
-        properties: { type: 'start' },
+        type: "Feature",
+        geometry: { type: "Point", coordinates: selectedCoordinates.startingCoordinate },
+        properties: { type: "start" },
       });
     }
 
     if (selectedCoordinates?.endingCoordinate) {
       features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: selectedCoordinates.endingCoordinate },
-        properties: { type: 'end' },
+        type: "Feature",
+        geometry: { type: "Point", coordinates: selectedCoordinates.endingCoordinate },
+        properties: { type: "end" },
       });
     }
 
     if (features.length > 0) {
-      map.current.addSource('selected-points', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features },
+      map.current.addSource("selected-points", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features },
       });
 
       map.current.addLayer({
-        id: 'selected-points',
-        type: 'circle',
-        source: 'selected-points',
+        id: "selected-points",
+        type: "circle",
+        source: "selected-points",
         paint: {
-          'circle-radius': CIRCLES.pickedPoint.radius,
-          'circle-color': [
-            'case',
-            ['==', ['get', 'type'], 'start'],
+          "circle-radius": CIRCLES.pickedPoint.radius,
+          "circle-color": [
+            "case",
+            ["==", ["get", "type"], "start"],
             COLORS.adminMarkers.start,
             COLORS.adminMarkers.end,
           ],
-          'circle-stroke-color': COLORS.adminMarkers.stroke,
-          'circle-stroke-width': CIRCLES.pickedPoint.strokeWidth,
-          'circle-opacity': 1.0,
+          "circle-stroke-color": COLORS.adminMarkers.stroke,
+          "circle-stroke-width": CIRCLES.pickedPoint.strokeWidth,
+          "circle-opacity": 1.0,
         },
       });
     }
@@ -119,24 +131,24 @@ export function useAdminMapOverlays(
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    removeGeoJSONLayer(map.current, 'route-endpoints');
+    removeGeoJSONLayer(map.current, "route-endpoints");
 
     if (routeEndpoints && routeEndpoints.features.length > 0) {
-      map.current.addSource('route-endpoints', {
-        type: 'geojson',
+      map.current.addSource("route-endpoints", {
+        type: "geojson",
         data: routeEndpoints,
       });
 
       map.current.addLayer({
-        id: 'route-endpoints',
-        type: 'circle',
-        source: 'route-endpoints',
+        id: "route-endpoints",
+        type: "circle",
+        source: "route-endpoints",
         paint: {
-          'circle-radius': CIRCLES.routeEndpoint.radius,
-          'circle-color': COLORS.adminMarkers.routeEndpoint,
-          'circle-stroke-color': COLORS.adminMarkers.stroke,
-          'circle-stroke-width': CIRCLES.routeEndpoint.strokeWidth,
-          'circle-opacity': OPACITIES.routeEndpoint,
+          "circle-radius": CIRCLES.routeEndpoint.radius,
+          "circle-color": COLORS.adminMarkers.routeEndpoint,
+          "circle-stroke-color": COLORS.adminMarkers.stroke,
+          "circle-stroke-width": CIRCLES.routeEndpoint.strokeWidth,
+          "circle-opacity": OPACITIES.routeEndpoint,
         },
       });
     }

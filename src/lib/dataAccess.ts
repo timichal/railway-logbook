@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Data Access Abstraction Layer
@@ -6,21 +6,21 @@
  * based on authentication state
  */
 
-import type { User } from './authActions';
-import type { LocalTrip, RailwayRoute } from './types';
-import { LocalStorageManager } from './localStorage';
+import type { User } from "./authActions";
+import { SUPPORTED_COUNTRIES } from "./constants";
+import { LocalStorageManager } from "./localStorage";
+import type { RailwayRoute } from "./types";
 import {
-  getUserProgress as dbGetUserProgress,
   getProgressByCountry as dbGetProgressByCountry,
+  getUserProgress as dbGetUserProgress,
   getAllRoutes,
-  type UserProgress,
   type ProgressByCountry,
-} from './userActions';
+  type UserProgress,
+} from "./userActions";
 import {
   getUserPreferences as dbGetUserPreferences,
   updateUserPreferences as dbUpdateUserPreferences,
-} from './userPreferencesActions';
-import { SUPPORTED_COUNTRIES } from './constants';
+} from "./userPreferencesActions";
 
 export interface DataAccess {
   // Progress operations
@@ -106,20 +106,24 @@ function createLocalStorageDataAccess(): DataAccess {
         // Apply country filter if provided
         let filteredRoutes = allRoutes;
         if (selectedCountries !== undefined && selectedCountries.length > 0) {
-          filteredRoutes = allRoutes.filter(route =>
-            route.start_country &&
-            route.end_country &&
-            selectedCountries.includes(route.start_country) &&
-            selectedCountries.includes(route.end_country)
+          filteredRoutes = allRoutes.filter(
+            (route) =>
+              route.start_country &&
+              route.end_country &&
+              selectedCountries.includes(route.start_country) &&
+              selectedCountries.includes(route.end_country),
           );
         }
 
         // Filter out Special routes (usage_type = 1)
-        filteredRoutes = filteredRoutes.filter(route => route.usage_type !== 1);
+        filteredRoutes = filteredRoutes.filter((route) => route.usage_type !== 1);
 
         // Calculate totals
         const totalRoutes = filteredRoutes.length;
-        const totalKm = filteredRoutes.reduce((sum, route) => sum + (Number(route.length_km) || 0), 0);
+        const totalKm = filteredRoutes.reduce(
+          (sum, route) => sum + (Number(route.length_km) || 0),
+          0,
+        );
 
         // Find completed routes (routes with at least one complete logged part)
         const completedRouteIds = new Set<string>();
@@ -130,12 +134,15 @@ function createLocalStorageDataAccess(): DataAccess {
           }
         }
 
-        const completedRoutes = filteredRoutes.filter(route =>
-          completedRouteIds.has(route.track_id)
+        const completedRoutes = filteredRoutes.filter((route) =>
+          completedRouteIds.has(route.track_id),
         );
 
         const completedRoutesCount = completedRoutes.length;
-        const completedKm = completedRoutes.reduce((sum, route) => sum + (Number(route.length_km) || 0), 0);
+        const completedKm = completedRoutes.reduce(
+          (sum, route) => sum + (Number(route.length_km) || 0),
+          0,
+        );
 
         const percentage = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
         const routePercentage = totalRoutes > 0 ? (completedRoutesCount / totalRoutes) * 100 : 0;
@@ -149,7 +156,7 @@ function createLocalStorageDataAccess(): DataAccess {
           completedRoutes: completedRoutesCount,
         };
       } catch (error) {
-        console.error('Error calculating progress for localStorage user:', error);
+        console.error("Error calculating progress for localStorage user:", error);
         // Return default values on error
         return {
           totalKm: 0,
@@ -181,21 +188,28 @@ function createLocalStorageDataAccess(): DataAccess {
         }
 
         // Calculate stats for each country
-        const byCountry = SUPPORTED_COUNTRIES.map(country => {
+        const byCountry = SUPPORTED_COUNTRIES.map((country) => {
           // Filter routes where BOTH start AND end are in this country (excluding Special)
-          const countryRoutes = allRoutes.filter(route =>
-            route.usage_type !== 1 &&
-            route.start_country === country.code &&
-            route.end_country === country.code
+          const countryRoutes = allRoutes.filter(
+            (route) =>
+              route.usage_type !== 1 &&
+              route.start_country === country.code &&
+              route.end_country === country.code,
           );
 
-          const totalKm = countryRoutes.reduce((sum, route) => sum + (Number(route.length_km) || 0), 0);
-
-          const completedCountryRoutes = countryRoutes.filter(route =>
-            completedRouteIds.has(route.track_id)
+          const totalKm = countryRoutes.reduce(
+            (sum, route) => sum + (Number(route.length_km) || 0),
+            0,
           );
 
-          const completedKm = completedCountryRoutes.reduce((sum, route) => sum + (Number(route.length_km) || 0), 0);
+          const completedCountryRoutes = countryRoutes.filter((route) =>
+            completedRouteIds.has(route.track_id),
+          );
+
+          const completedKm = completedCountryRoutes.reduce(
+            (sum, route) => sum + (Number(route.length_km) || 0),
+            0,
+          );
 
           return {
             countryCode: country.code,
@@ -206,13 +220,19 @@ function createLocalStorageDataAccess(): DataAccess {
         });
 
         // Calculate overall total (excluding Special)
-        const allNonSpecialRoutes = allRoutes.filter(route => route.usage_type !== 1);
-        const overallTotalKm = allNonSpecialRoutes.reduce((sum, route) => sum + (Number(route.length_km) || 0), 0);
-
-        const overallCompletedRoutes = allNonSpecialRoutes.filter(route =>
-          completedRouteIds.has(route.track_id)
+        const allNonSpecialRoutes = allRoutes.filter((route) => route.usage_type !== 1);
+        const overallTotalKm = allNonSpecialRoutes.reduce(
+          (sum, route) => sum + (Number(route.length_km) || 0),
+          0,
         );
-        const overallCompletedKm = overallCompletedRoutes.reduce((sum, route) => sum + (Number(route.length_km) || 0), 0);
+
+        const overallCompletedRoutes = allNonSpecialRoutes.filter((route) =>
+          completedRouteIds.has(route.track_id),
+        );
+        const overallCompletedKm = overallCompletedRoutes.reduce(
+          (sum, route) => sum + (Number(route.length_km) || 0),
+          0,
+        );
 
         return {
           byCountry,
@@ -222,10 +242,10 @@ function createLocalStorageDataAccess(): DataAccess {
           },
         };
       } catch (error) {
-        console.error('Error calculating progress by country for localStorage user:', error);
+        console.error("Error calculating progress by country for localStorage user:", error);
         // Return default values on error
         return {
-          byCountry: SUPPORTED_COUNTRIES.map(country => ({
+          byCountry: SUPPORTED_COUNTRIES.map((country) => ({
             countryCode: country.code,
             countryName: country.name,
             totalKm: 0,

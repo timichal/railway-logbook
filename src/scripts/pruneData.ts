@@ -1,20 +1,22 @@
-import { createWriteStream } from "fs";
-import { Feature } from "../lib/types";
+import { createWriteStream } from "node:fs";
 import { transliterate } from "transliteration";
+import type { Feature } from "../lib/types";
 
 const args = process.argv.slice(2);
 
 if (args.length < 1 || args.length > 2) {
-  console.error('Usage: tsx pruneData.ts country_code [version]');
-  console.error('  country_code: Single country code (e.g., croatia)');
-  console.error('  version: Optional version suffix (e.g., 250101)');
-  console.error('');
-  console.error('Reads GeoJSON from stdin and writes pruned output to data/{country_code}-pruned[-{version}].geojson');
+  console.error("Usage: tsx pruneData.ts country_code [version]");
+  console.error("  country_code: Single country code (e.g., croatia)");
+  console.error("  version: Optional version suffix (e.g., 250101)");
+  console.error("");
+  console.error(
+    "Reads GeoJSON from stdin and writes pruned output to data/{country_code}-pruned[-{version}].geojson",
+  );
   process.exit(1);
 }
 
 const countryCode = args[0];
-const version = args[1] || '';
+const version = args[1] || "";
 
 /**
  * Transliterates station names from Cyrillic and Greek to Latin characters.
@@ -40,11 +42,20 @@ function transliterateName(name: string | undefined): string | undefined {
 
 function filterFeature(feat: Feature): boolean {
   if (feat.geometry.type === "Point") {
-    if (!feat.properties.railway || !["station", "halt"].includes(feat.properties.railway) || feat.properties.subway) return false;
+    if (
+      !feat.properties.railway ||
+      !["station", "halt"].includes(feat.properties.railway) ||
+      feat.properties.subway
+    )
+      return false;
     return true;
   }
   if (feat.geometry.type === "LineString") {
-    if (feat.properties.railway && ["rail", "narrow_gauge", "light_rail"].includes(feat.properties.railway)) return true;
+    if (
+      feat.properties.railway &&
+      ["rail", "narrow_gauge", "light_rail"].includes(feat.properties.railway)
+    )
+      return true;
     return false;
   }
   return false;
@@ -69,7 +80,7 @@ function pruneFeatureProperties(feat: Feature): Feature {
           return [key, transliterateName(value as string)];
         }
         return [key, value];
-      })
+      }),
   );
 
   return {
@@ -78,18 +89,17 @@ function pruneFeatureProperties(feat: Feature): Feature {
   };
 }
 
-
 async function processStdin(outputFilePath: string) {
-  const writeStream = createWriteStream(outputFilePath, 'utf8');
+  const writeStream = createWriteStream(outputFilePath, "utf8");
   writeStream.write('{"type":"FeatureCollection","features":[');
 
   let isFirstFeature = true;
-  let buffer = '';
+  let buffer = "";
   let featureCount = 0;
   let processedCount = 0;
 
   // Read from stdin
-  process.stdin.setEncoding('utf8');
+  process.stdin.setEncoding("utf8");
 
   for await (const chunk of process.stdin) {
     buffer += chunk;
@@ -105,8 +115,8 @@ async function processStdin(outputFilePath: string) {
       let featureEnd = -1;
 
       for (let i = featureStart; i < buffer.length; i++) {
-        if (buffer[i] === '{') braceCount++;
-        else if (buffer[i] === '}') {
+        if (buffer[i] === "{") braceCount++;
+        else if (buffer[i] === "}") {
           braceCount--;
           if (braceCount === 0) {
             featureEnd = i;
@@ -124,7 +134,7 @@ async function processStdin(outputFilePath: string) {
 
         if (filterFeature(feature)) {
           const prunedFeature = pruneFeatureProperties(feature);
-          if (!isFirstFeature) writeStream.write(',');
+          if (!isFirstFeature) writeStream.write(",");
           writeStream.write(JSON.stringify(prunedFeature));
           isFirstFeature = false;
           processedCount++;
@@ -144,21 +154,21 @@ async function processStdin(outputFilePath: string) {
     buffer = buffer.substring(startIndex);
   }
 
-  writeStream.write(']}');
+  writeStream.write("]}");
   writeStream.end();
 
   return new Promise<void>((resolve, reject) => {
-    writeStream.on('finish', () => {
+    writeStream.on("finish", () => {
       console.log(`\n  Final: processed ${featureCount} features, kept ${processedCount}`);
       resolve();
     });
-    writeStream.on('error', reject);
+    writeStream.on("error", reject);
   });
 }
 
 // Main execution
 async function main() {
-  const versionSuffix = version ? `-${version}` : '';
+  const versionSuffix = version ? `-${version}` : "";
   const outputFilePath = `data/${countryCode}-pruned${versionSuffix}.geojson`;
 
   console.log(`Processing ${countryCode} from stdin...`);

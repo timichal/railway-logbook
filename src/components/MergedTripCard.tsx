@@ -1,18 +1,17 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useToast } from '@/lib/toast';
+import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/lib/toast";
+import type { JourneyInTrip, TripWithStats } from "@/lib/tripActions";
 import {
-  getTrip,
-  updateTrip,
-  deleteTrip,
-  unassignJourneyFromTrip,
   assignJourneyToTrip,
+  deleteTrip,
+  getTrip,
   getUnassignedJourneys,
-} from '@/lib/tripActions';
-import type { TripWithStats, JourneyInTrip } from '@/lib/tripActions';
-import type { SelectedRoute } from '@/lib/types';
-import MergedJourneyCard from './MergedJourneyCard';
+  updateTrip,
+} from "@/lib/tripActions";
+import type { SelectedRoute } from "@/lib/types";
+import MergedJourneyCard from "./MergedJourneyCard";
 
 interface MergedTripCardProps {
   trip: TripWithStats;
@@ -23,7 +22,7 @@ interface MergedTripCardProps {
   onRequestOpen: () => void;
   onRequestClose: () => void;
   onChanged: () => void;
-  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   // Forwarded to nested journey cards
   openNestedJourneyId: number | null;
   onNestedJourneyOpenChange: (journeyId: number | null) => void;
@@ -49,7 +48,7 @@ export default function MergedTripCard({
 
   const [journeys, setJourneys] = useState<JourneyInTrip[]>(initialJourneys);
   const [editName, setEditName] = useState(trip.name);
-  const [editDescription, setEditDescription] = useState(trip.description || '');
+  const [editDescription, setEditDescription] = useState(trip.description || "");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -64,7 +63,7 @@ export default function MergedTripCard({
 
   useEffect(() => {
     setEditName(trip.name);
-    setEditDescription(trip.description || '');
+    setEditDescription(trip.description || "");
   }, [trip.name, trip.description]);
 
   // When a nested journey is being edited, the journey card owns highlights.
@@ -94,7 +93,7 @@ export default function MergedTripCard({
 
   const handleSaveEdit = async () => {
     if (!editName.trim()) {
-      showError('Trip name is required');
+      showError("Trip name is required");
       return;
     }
     setIsSavingEdit(true);
@@ -103,12 +102,12 @@ export default function MergedTripCard({
       if (result.error) {
         showError(result.error);
       } else {
-        showSuccess('Trip updated');
+        showSuccess("Trip updated");
         onChanged();
       }
     } catch (error) {
-      console.error('Error updating trip:', error);
-      showError('Failed to update trip');
+      console.error("Error updating trip:", error);
+      showError("Failed to update trip");
     } finally {
       setIsSavingEdit(false);
     }
@@ -116,7 +115,7 @@ export default function MergedTripCard({
 
   const handleCancelEdit = () => {
     setEditName(trip.name);
-    setEditDescription(trip.description || '');
+    setEditDescription(trip.description || "");
   };
 
   const handleDelete = async () => {
@@ -125,13 +124,13 @@ export default function MergedTripCard({
       if (result.error) {
         showError(result.error);
       } else {
-        showSuccess('Trip deleted (journeys unassigned)');
+        showSuccess("Trip deleted (journeys unassigned)");
         onRequestClose();
         onChanged();
       }
     } catch (error) {
-      console.error('Error deleting trip:', error);
-      showError('Failed to delete trip');
+      console.error("Error deleting trip:", error);
+      showError("Failed to delete trip");
     } finally {
       setDeleteConfirm(false);
     }
@@ -149,8 +148,8 @@ export default function MergedTripCard({
         setUnassignedJourneys(result.journeys || []);
       }
     } catch (error) {
-      console.error('Error loading unassigned journeys:', error);
-      showError('Failed to load unassigned journeys');
+      console.error("Error loading unassigned journeys:", error);
+      showError("Failed to load unassigned journeys");
       setUnassignedJourneys([]);
     } finally {
       setIsLoadingUnassigned(false);
@@ -163,19 +162,19 @@ export default function MergedTripCard({
       if (result.error) {
         showError(result.error);
       } else {
-        showSuccess('Journey added to trip');
-        setUnassignedJourneys(prev => prev.filter(j => j.id !== journeyId));
+        showSuccess("Journey added to trip");
+        setUnassignedJourneys((prev) => prev.filter((j) => j.id !== journeyId));
         await refreshTripHighlights();
         onChanged();
       }
     } catch (error) {
-      console.error('Error assigning journey:', error);
-      showError('Failed to assign journey');
+      console.error("Error assigning journey:", error);
+      showError("Failed to assign journey");
     }
   };
 
   const formatDateRange = (startDate: string | null, endDate: string | null): string => {
-    if (!startDate) return 'No journeys';
+    if (!startDate) return "No journeys";
     const start = new Date(startDate);
     if (startDate === endDate || !endDate) {
       return start.toLocaleDateString();
@@ -192,24 +191,32 @@ export default function MergedTripCard({
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold text-xs bg-purple-100 text-purple-800 flex-shrink-0 tracking-wide">
               Trip
             </span>
-            <span className="font-semibold text-sm truncate" title={trip.name}>{trip.name}</span>
+            <span className="font-semibold text-sm truncate" title={trip.name}>
+              {trip.name}
+            </span>
             {trip.description && (
-              <span className="text-xs text-gray-500 truncate" title={trip.description}>{trip.description}</span>
+              <span className="text-xs text-gray-500 truncate" title={trip.description}>
+                {trip.description}
+              </span>
             )}
           </div>
           <div className="text-xs text-gray-600 mt-0.5">
-            {formatDateRange(trip.start_date, trip.end_date)} · {trip.journey_count} journey{trip.journey_count === 1 ? '' : 's'} · {trip.route_count} route{trip.route_count === 1 ? '' : 's'} · {Number(trip.total_distance).toFixed(1)} km
+            {formatDateRange(trip.start_date, trip.end_date)} · {trip.journey_count} journey
+            {trip.journey_count === 1 ? "" : "s"} · {trip.route_count} route
+            {trip.route_count === 1 ? "" : "s"} · {Number(trip.total_distance).toFixed(1)} km
           </div>
         </div>
         {deleteConfirm ? (
           <>
             <button
+              type="button"
               onClick={handleDelete}
               className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
             >
               Confirm Delete
             </button>
             <button
+              type="button"
               onClick={() => setDeleteConfirm(false)}
               className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 flex-shrink-0"
             >
@@ -219,14 +226,18 @@ export default function MergedTripCard({
         ) : (
           <>
             <button
+              type="button"
               onClick={isOpen ? onRequestClose : onRequestOpen}
               className={`px-3 py-1.5 rounded text-sm font-medium flex-shrink-0 ${
-                isOpen ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+                isOpen
+                  ? "bg-amber-600 text-white hover:bg-amber-700"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
               }`}
             >
-              {isOpen ? 'Hide' : 'View / Edit'}
+              {isOpen ? "Hide" : "View / Edit"}
             </button>
             <button
+              type="button"
               onClick={() => setDeleteConfirm(true)}
               className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
             >
@@ -262,17 +273,19 @@ export default function MergedTripCard({
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit || !editName.trim()}
                 className={`flex-1 px-3 py-1.5 rounded text-xs font-medium ${
                   isSavingEdit || !editName.trim()
-                    ? 'bg-gray-400 text-white cursor-not-allowed'
-                    : 'bg-green-600 text-white hover:bg-green-700'
+                    ? "bg-gray-400 text-white cursor-not-allowed"
+                    : "bg-green-600 text-white hover:bg-green-700"
                 }`}
               >
-                {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                {isSavingEdit ? "Saving..." : "Save Changes"}
               </button>
               <button
+                type="button"
                 onClick={handleCancelEdit}
                 disabled={isSavingEdit}
                 className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-xs font-medium hover:bg-gray-400"
@@ -284,10 +297,9 @@ export default function MergedTripCard({
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h5 className="text-sm font-semibold text-gray-700">
-                Journeys ({journeys.length})
-              </h5>
+              <h5 className="text-sm font-semibold text-gray-700">Journeys ({journeys.length})</h5>
               <button
+                type="button"
                 onClick={handleShowPicker}
                 className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-medium"
               >
@@ -326,6 +338,7 @@ export default function MergedTripCard({
               <div className="flex items-center justify-between mb-2">
                 <h5 className="text-xs font-semibold text-blue-800">Unassigned Journeys</h5>
                 <button
+                  type="button"
                   onClick={() => setShowPicker(false)}
                   className="text-xs text-gray-500 hover:text-gray-700"
                 >
@@ -353,6 +366,7 @@ export default function MergedTripCard({
                         </div>
                       </div>
                       <button
+                        type="button"
                         onClick={() => handleAssignJourney(j.id)}
                         className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 font-medium flex-shrink-0"
                       >

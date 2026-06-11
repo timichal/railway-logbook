@@ -1,9 +1,9 @@
-'use server';
+"use server";
 
-import pool from './db';
-import { getUser } from './authActions';
-import type { AdminNote } from './types';
-import type { NoteType } from './constants';
+import { getUser } from "./authActions";
+import type { NoteType } from "./constants";
+import pool from "./db";
+import type { AdminNote } from "./types";
 
 type AdminNoteRow = {
   id: number;
@@ -31,8 +31,8 @@ function rowToNote(row: AdminNoteRow): AdminNote {
  */
 export async function getAllAdminNotes(): Promise<AdminNote[]> {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
   const result = await pool.query<AdminNoteRow>(`
@@ -56,11 +56,12 @@ export async function getAllAdminNotes(): Promise<AdminNote[]> {
  */
 export async function getAdminNote(id: number): Promise<AdminNote | null> {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
-  const result = await pool.query<AdminNoteRow>(`
+  const result = await pool.query<AdminNoteRow>(
+    `
     SELECT
       id,
       ST_AsGeoJSON(coordinate)::json as coordinate,
@@ -70,7 +71,9 @@ export async function getAdminNote(id: number): Promise<AdminNote | null> {
       updated_at
     FROM admin_notes
     WHERE id = $1
-  `, [id]);
+  `,
+    [id],
+  );
 
   if (result.rows.length === 0) {
     return null;
@@ -86,16 +89,17 @@ export async function getAdminNote(id: number): Promise<AdminNote | null> {
 export async function createAdminNote(
   coordinate: [number, number],
   text: string,
-  noteType: NoteType
+  noteType: NoteType,
 ): Promise<AdminNote> {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
   const [lng, lat] = coordinate;
 
-  const result = await pool.query<AdminNoteRow>(`
+  const result = await pool.query<AdminNoteRow>(
+    `
     INSERT INTO admin_notes (coordinate, text, note_type)
     VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, $4)
     RETURNING
@@ -105,7 +109,9 @@ export async function createAdminNote(
       note_type,
       created_at,
       updated_at
-  `, [lng, lat, text, noteType]);
+  `,
+    [lng, lat, text, noteType],
+  );
 
   return rowToNote(result.rows[0]);
 }
@@ -118,14 +124,15 @@ export async function createAdminNote(
 export async function updateAdminNote(
   id: number,
   text: string,
-  noteType: NoteType | null
+  noteType: NoteType | null,
 ): Promise<AdminNote> {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
-  const result = await pool.query<AdminNoteRow>(`
+  const result = await pool.query<AdminNoteRow>(
+    `
     UPDATE admin_notes
     SET text = $1, note_type = $2
     WHERE id = $3
@@ -136,10 +143,12 @@ export async function updateAdminNote(
       note_type,
       created_at,
       updated_at
-  `, [text, noteType, id]);
+  `,
+    [text, noteType, id],
+  );
 
   if (result.rows.length === 0) {
-    throw new Error('Note not found');
+    throw new Error("Note not found");
   }
 
   return rowToNote(result.rows[0]);
@@ -151,16 +160,19 @@ export async function updateAdminNote(
  */
 export async function deleteAdminNote(id: number): Promise<void> {
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     DELETE FROM admin_notes
     WHERE id = $1
-  `, [id]);
+  `,
+    [id],
+  );
 
   if (result.rowCount === 0) {
-    throw new Error('Note not found');
+    throw new Error("Note not found");
   }
 }

@@ -1,28 +1,24 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useToast } from '@/lib/toast';
-import {
-  getJourneysAndTrips,
-  getAllTrips,
-  createTrip,
-} from '@/lib/tripActions';
-import type { TripsAndJourneysItem, TripWithStats } from '@/lib/tripActions';
-import type { SelectedRoute } from '@/lib/types';
-import MergedTripCard from './MergedTripCard';
-import MergedJourneyCard from './MergedJourneyCard';
+import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/lib/toast";
+import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
+import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
+import type { SelectedRoute } from "@/lib/types";
+import MergedJourneyCard from "./MergedJourneyCard";
+import MergedTripCard from "./MergedTripCard";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
 interface JourneysAndTripsTabProps {
-  onHighlightRoutes?: (routeIds: number[], kind?: 'planner' | 'view') => void;
+  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onJourneyChanged?: () => void;
   onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
   onJourneyEditEnd?: () => void;
 }
 
-type OpenItem = { type: 'trip' | 'journey'; id: number } | null;
+type OpenItem = { type: "trip" | "journey"; id: number } | null;
 
 export default function JourneysAndTripsTab({
   onHighlightRoutes,
@@ -35,8 +31,8 @@ export default function JourneysAndTripsTab({
   const [items, setItems] = useState<TripsAndJourneysItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [searchInput, setSearchInput] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
@@ -47,33 +43,36 @@ export default function JourneysAndTripsTab({
   const [openNestedJourneyId, setOpenNestedJourneyId] = useState<number | null>(null);
 
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
-  const [newTripName, setNewTripName] = useState('');
-  const [newTripDescription, setNewTripDescription] = useState('');
+  const [newTripName, setNewTripName] = useState("");
+  const [newTripDescription, setNewTripDescription] = useState("");
   const [isSavingNewTrip, setIsSavingNewTrip] = useState(false);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const loadItems = useCallback(async (showSpinner = false) => {
-    if (showSpinner) setIsLoading(true);
-    try {
-      const result = await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch);
-      if (result.error) {
-        showError(result.error);
+  const loadItems = useCallback(
+    async (showSpinner = false) => {
+      if (showSpinner) setIsLoading(true);
+      try {
+        const result = await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch);
+        if (result.error) {
+          showError(result.error);
+          setItems([]);
+          setTotal(0);
+        } else {
+          setItems(result.items);
+          setTotal(result.total);
+        }
+      } catch (error) {
+        console.error("Error loading items:", error);
+        showError("Failed to load journeys and trips");
         setItems([]);
         setTotal(0);
-      } else {
-        setItems(result.items);
-        setTotal(result.total);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading items:', error);
-      showError('Failed to load journeys and trips');
-      setItems([]);
-      setTotal(0);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [page, debouncedSearch, showError]);
+    },
+    [page, debouncedSearch, showError],
+  );
 
   const loadAvailableTrips = useCallback(async () => {
     const result = await getAllTrips();
@@ -126,7 +125,7 @@ export default function JourneysAndTripsTab({
 
   const handleCreateTrip = async () => {
     if (!newTripName.trim()) {
-      showError('Trip name is required');
+      showError("Trip name is required");
       return;
     }
     setIsSavingNewTrip(true);
@@ -136,14 +135,14 @@ export default function JourneysAndTripsTab({
         showError(result.error);
       } else {
         showSuccess(`Trip "${result.trip?.name}" created`);
-        setNewTripName('');
-        setNewTripDescription('');
+        setNewTripName("");
+        setNewTripDescription("");
         setIsCreatingTrip(false);
         handleChanged();
       }
     } catch (error) {
-      console.error('Error creating trip:', error);
-      showError('Failed to create trip');
+      console.error("Error creating trip:", error);
+      showError("Failed to create trip");
     } finally {
       setIsSavingNewTrip(false);
     }
@@ -158,6 +157,7 @@ export default function JourneysAndTripsTab({
         </div>
         {!isCreatingTrip && (
           <button
+            type="button"
             onClick={() => setIsCreatingTrip(true)}
             className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
           >
@@ -193,18 +193,24 @@ export default function JourneysAndTripsTab({
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleCreateTrip}
               disabled={isSavingNewTrip || !newTripName.trim()}
               className={`flex-1 px-3 py-1.5 rounded text-sm font-medium ${
                 isSavingNewTrip || !newTripName.trim()
-                  ? 'bg-gray-400 text-white cursor-not-allowed'
-                  : 'bg-green-600 text-white hover:bg-green-700'
+                  ? "bg-gray-400 text-white cursor-not-allowed"
+                  : "bg-green-600 text-white hover:bg-green-700"
               }`}
             >
-              {isSavingNewTrip ? 'Creating...' : 'Create Trip'}
+              {isSavingNewTrip ? "Creating..." : "Create Trip"}
             </button>
             <button
-              onClick={() => { setIsCreatingTrip(false); setNewTripName(''); setNewTripDescription(''); }}
+              type="button"
+              onClick={() => {
+                setIsCreatingTrip(false);
+                setNewTripName("");
+                setNewTripDescription("");
+              }}
               disabled={isSavingNewTrip}
               className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400"
             >
@@ -230,13 +236,13 @@ export default function JourneysAndTripsTab({
         ) : items.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             {debouncedSearch
-              ? 'No trips or journeys match your search'
-              : 'No trips or journeys yet. Create your first journey in the Route Logger tab!'}
+              ? "No trips or journeys match your search"
+              : "No trips or journeys yet. Create your first journey in the Route Logger tab!"}
           </div>
         ) : (
           items.map((item) => {
-            if (item.type === 'trip') {
-              const isOpen = openItem?.type === 'trip' && openItem.id === item.trip.id;
+            if (item.type === "trip") {
+              const isOpen = openItem?.type === "trip" && openItem.id === item.trip.id;
               return (
                 <MergedTripCard
                   key={`trip-${item.trip.id}`}
@@ -244,7 +250,7 @@ export default function JourneysAndTripsTab({
                   initialJourneys={item.journeys}
                   availableTrips={availableTrips}
                   isOpen={isOpen}
-                  onRequestOpen={() => handleRequestOpen({ type: 'trip', id: item.trip.id })}
+                  onRequestOpen={() => handleRequestOpen({ type: "trip", id: item.trip.id })}
                   onRequestClose={() => handleRequestOpen(null)}
                   onChanged={handleChanged}
                   onHighlightRoutes={onHighlightRoutes}
@@ -256,14 +262,14 @@ export default function JourneysAndTripsTab({
               );
             }
 
-            const isOpen = openItem?.type === 'journey' && openItem.id === item.journey.id;
+            const isOpen = openItem?.type === "journey" && openItem.id === item.journey.id;
             return (
               <MergedJourneyCard
                 key={`journey-${item.journey.id}`}
                 journey={item.journey}
                 availableTrips={availableTrips}
                 isOpen={isOpen}
-                onRequestOpen={() => handleRequestOpen({ type: 'journey', id: item.journey.id })}
+                onRequestOpen={() => handleRequestOpen({ type: "journey", id: item.journey.id })}
                 onRequestClose={() => handleRequestOpen(null)}
                 onChanged={handleChanged}
                 onHighlightRoutes={onHighlightRoutes}
@@ -278,17 +284,19 @@ export default function JourneysAndTripsTab({
       {!isLoading && total > 0 && (
         <div className="flex items-center justify-between gap-2 pt-2 border-t">
           <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
             className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-xs font-medium hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             ← Prev
           </button>
           <div className="text-xs text-gray-600">
-            Page {page} of {totalPages} · {total} item{total === 1 ? '' : 's'}
+            Page {page} of {totalPages} · {total} item{total === 1 ? "" : "s"}
           </div>
           <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
             className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-xs font-medium hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
           >

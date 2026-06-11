@@ -1,10 +1,9 @@
-'use server';
+"use server";
 
-import pool from './db';
-import { query } from './db';
-import { getUser } from './authActions';
-import { RailwayPathFinder } from '../scripts/lib/railwayPathFinder';
-import type { PathResult, RailwayPart, GeoJSONFeatureCollection, GeoJSONFeature } from './types';
+import { RailwayPathFinder } from "../scripts/lib/railwayPathFinder";
+import { getUser } from "./authActions";
+import pool from "./db";
+import type { PathResult, RailwayPart } from "./types";
 
 /**
  * Find a path between two coordinates using BFS pathfinding
@@ -12,23 +11,34 @@ import type { PathResult, RailwayPart, GeoJSONFeatureCollection, GeoJSONFeature 
  */
 export async function findRailwayPathFromCoordinates(
   startCoordinate: [number, number],
-  endCoordinate: [number, number]
+  endCoordinate: [number, number],
 ): Promise<PathResult | null> {
   // Admin check
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
-  console.log('Coordinate-based path finder: Finding path from', startCoordinate, 'to', endCoordinate);
+  console.log(
+    "Coordinate-based path finder: Finding path from",
+    startCoordinate,
+    "to",
+    endCoordinate,
+  );
 
   const pathFinder = new RailwayPathFinder();
   const result = await pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
 
   if (result) {
-    console.log('Coordinate-based path finder: Path found with', result.partIds.length, 'segments and', result.coordinates.length, 'coordinates');
+    console.log(
+      "Coordinate-based path finder: Path found with",
+      result.partIds.length,
+      "segments and",
+      result.coordinates.length,
+      "coordinates",
+    );
   } else {
-    console.log('Coordinate-based path finder: No path found');
+    console.log("Coordinate-based path finder: No path found");
   }
 
   return result;
@@ -40,8 +50,8 @@ export async function findRailwayPathFromCoordinates(
 export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPart[]> {
   // Admin check
   const user = await getUser();
-  if (!user || user.id !== 1) {
-    throw new Error('Admin access required');
+  if (user?.id !== 1) {
+    throw new Error("Admin access required");
   }
 
   if (partIds.length === 0) return [];
@@ -49,9 +59,9 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
   const client = await pool.connect();
 
   try {
-    console.log('Fetching railway parts for IDs:', partIds);
+    console.log("Fetching railway parts for IDs:", partIds);
 
-    const placeholders = partIds.map((_, index) => `$${index + 1}`).join(',');
+    const placeholders = partIds.map((_, index) => `$${index + 1}`).join(",");
     const queryStr = `
       SELECT
         id,
@@ -63,23 +73,24 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
 
     const result = await client.query(queryStr, partIds);
 
-    const features: RailwayPart[] = result.rows.map(row => {
+    const features: RailwayPart[] = result.rows.map((row) => {
       const geom = JSON.parse(row.geometry_json);
       return {
-        type: 'Feature' as const,
+        type: "Feature" as const,
         geometry: geom,
         properties: {
-          '@id': parseInt(row.id)
-        }
+          "@id": parseInt(row.id, 10),
+        },
       } as RailwayPart;
     });
 
-    console.log('Fetched', features.length, 'railway parts from database');
+    console.log("Fetched", features.length, "railway parts from database");
     return features;
-
   } catch (error) {
-    console.error('Error fetching railway parts by IDs:', error);
-    throw new Error(`Failed to fetch railway parts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("Error fetching railway parts by IDs:", error);
+    throw new Error(
+      `Failed to fetch railway parts: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   } finally {
     client.release();
   }

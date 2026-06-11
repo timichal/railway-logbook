@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { usageOptions, frequencyOptions, type UsageType } from '@/lib/constants';
-import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from '@/lib/adminMapActions';
-import { saveRailwayRoute } from '@/lib/adminRouteActions';
-import type { RailwayPart } from '@/lib/types';
-import { useToast } from '@/lib/toast';
+import { useEffect, useState } from "react";
+import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
+import { saveRailwayRoute } from "@/lib/adminRouteActions";
+import { frequencyOptions, type UsageType, usageOptions } from "@/lib/constants";
+import { useToast } from "@/lib/toast";
+import type { RailwayPart } from "@/lib/types";
 
 interface AdminCreateRouteTabProps {
   startingCoordinate: [number, number] | null;
@@ -18,14 +18,24 @@ interface AdminCreateRouteTabProps {
     railwayParts: RailwayPart[],
     startCoordinate: [number, number],
     endCoordinate: [number, number],
-    hasBacktracking?: boolean
+    hasBacktracking?: boolean,
   ) => void;
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: { from_station: string, to_station: string, track_number: string, description: string, usage_type: UsageType, frequency: string[], link: string, scenic: boolean, intended_backtracking: boolean }) => void;
+  onSaveRoute?: (routeData: {
+    from_station: string;
+    to_station: string;
+    track_number: string;
+    description: string;
+    usage_type: UsageType;
+    frequency: string[];
+    link: string;
+    scenic: boolean;
+    intended_backtracking: boolean;
+  }) => void;
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
-  editingRouteInfo?: { from_station: string, to_station: string, track_number: string } | null;
+  editingRouteInfo?: { from_station: string; to_station: string; track_number: string } | null;
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
   onRefreshMap?: () => void;
@@ -44,45 +54,45 @@ export default function AdminCreateRouteTab({
   editingGeometryForTrackId,
   editingRouteInfo,
   onGeometryEditComplete,
-  onCancelGeometryEdit
+  onCancelGeometryEdit,
 }: AdminCreateRouteTabProps) {
   const { showError, showSuccess } = useToast();
 
   // Create route form state (without the coordinates that are managed by parent)
   const [createForm, setCreateForm] = useState({
-    from_station: '',
-    to_station: '',
-    track_number: '',
-    description: '',
+    from_station: "",
+    to_station: "",
+    track_number: "",
+    description: "",
     usage_type: undefined as UsageType | undefined,
     frequency: [] as string[],
-    link: '',
+    link: "",
     scenic: false,
-    intended_backtracking: false
+    intended_backtracking: false,
   });
 
   // Store the current path result and railway parts for geometry updates
   const [currentPathResult, setCurrentPathResult] = useState<{
-    partIds: string[],
-    coordinates: [number, number][],
-    railwayParts: RailwayPart[],
-    startCoordinate: [number, number],
-    endCoordinate: [number, number],
-    hasBacktracking?: boolean
+    partIds: string[];
+    coordinates: [number, number][];
+    railwayParts: RailwayPart[];
+    startCoordinate: [number, number];
+    endCoordinate: [number, number];
+    hasBacktracking?: boolean;
   } | null>(null);
 
   // Reset form function
   const resetForm = () => {
     setCreateForm({
-      from_station: '',
-      to_station: '',
-      track_number: '',
-      description: '',
+      from_station: "",
+      to_station: "",
+      track_number: "",
+      description: "",
       usage_type: undefined,
       frequency: [],
-      link: '',
+      link: "",
       scenic: false,
-      intended_backtracking: false
+      intended_backtracking: false,
     });
     // Clear the coordinates managed by parent via callback
     if (onFormReset) {
@@ -109,23 +119,23 @@ export default function AdminCreateRouteTab({
   // Handle preview route functionality
   const handlePreviewRoute = async () => {
     if (!startingCoordinate || !endingCoordinate || !onPreviewRoute) {
-      console.error('Preview: Missing starting coordinate, ending coordinate, or preview callback');
+      console.error("Preview: Missing starting coordinate, ending coordinate, or preview callback");
       return;
     }
 
-    console.log('Preview: Finding path from', startingCoordinate, 'to', endingCoordinate);
+    console.log("Preview: Finding path from", startingCoordinate, "to", endingCoordinate);
 
     // Use coordinate-based server action to find path
     const result = await findRailwayPathFromCoordinates(startingCoordinate, endingCoordinate);
 
     if (result) {
-      console.log('Preview: Path found!');
-      console.log('Part IDs:', result.partIds);
-      console.log('Has backtracking:', result.hasBacktracking);
+      console.log("Preview: Path found!");
+      console.log("Part IDs:", result.partIds);
+      console.log("Has backtracking:", result.hasBacktracking);
 
       // Fetch the actual railway part geometries from the database
       const railwayParts = await getRailwayPartsByIds(result.partIds);
-      console.log('Preview: Fetched', railwayParts.length, 'railway part geometries');
+      console.log("Preview: Fetched", railwayParts.length, "railway part geometries");
 
       // Store the path result for potential geometry updates
       setCurrentPathResult({
@@ -134,14 +144,23 @@ export default function AdminCreateRouteTab({
         railwayParts,
         startCoordinate: startingCoordinate,
         endCoordinate: endingCoordinate,
-        hasBacktracking: result.hasBacktracking
+        hasBacktracking: result.hasBacktracking,
       });
 
       // Pass both the path result, the individual railway parts, and the start/end coordinates
-      onPreviewRoute(result.partIds, result.coordinates, railwayParts, startingCoordinate, endingCoordinate, result.hasBacktracking);
+      onPreviewRoute(
+        result.partIds,
+        result.coordinates,
+        railwayParts,
+        startingCoordinate,
+        endingCoordinate,
+        result.hasBacktracking,
+      );
     } else {
-      console.error('Preview: No path found between coordinates');
-      showError('No path found between the selected coordinates within 222km. Make sure both points are on connected railway parts.');
+      console.error("Preview: No path found between coordinates");
+      showError(
+        "No path found between the selected coordinates within 222km. Make sure both points are on connected railway parts.",
+      );
     }
   };
 
@@ -158,7 +177,7 @@ export default function AdminCreateRouteTab({
       frequency: createForm.frequency,
       link: createForm.link,
       scenic: createForm.scenic,
-      intended_backtracking: createForm.intended_backtracking
+      intended_backtracking: createForm.intended_backtracking,
     });
 
     // Reset form after successful save
@@ -168,7 +187,7 @@ export default function AdminCreateRouteTab({
   // Handle save geometry for existing route
   const handleSaveGeometry = async () => {
     if (!editingGeometryForTrackId || !currentPathResult) {
-      console.error('Cannot save geometry: missing track ID or path result');
+      console.error("Cannot save geometry: missing track ID or path result");
       return;
     }
 
@@ -176,15 +195,29 @@ export default function AdminCreateRouteTab({
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
       // Metadata (name, description, usage_type, track_number, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
       await saveRailwayRoute(
-        { from_station: '', to_station: '', description: '', usage_type: 0, track_number: '', frequency: [], link: '', scenic: false, intended_backtracking: false }, // Dummy data, not used in UPDATE mode
-        { partIds: currentPathResult.partIds, coordinates: currentPathResult.coordinates, hasBacktracking: currentPathResult.hasBacktracking },
+        {
+          from_station: "",
+          to_station: "",
+          description: "",
+          usage_type: 0,
+          track_number: "",
+          frequency: [],
+          link: "",
+          scenic: false,
+          intended_backtracking: false,
+        }, // Dummy data, not used in UPDATE mode
+        {
+          partIds: currentPathResult.partIds,
+          coordinates: currentPathResult.coordinates,
+          hasBacktracking: currentPathResult.hasBacktracking,
+        },
         currentPathResult.startCoordinate,
         currentPathResult.endCoordinate,
         currentPathResult.railwayParts,
-        editingGeometryForTrackId // Pass track ID to trigger UPDATE query
+        editingGeometryForTrackId, // Pass track ID to trigger UPDATE query
       );
 
-      showSuccess('Route geometry updated successfully!');
+      showSuccess("Route geometry updated successfully!");
 
       // Clear preview route
       if (onCancelPreview) {
@@ -199,8 +232,10 @@ export default function AdminCreateRouteTab({
         onGeometryEditComplete();
       }
     } catch (error) {
-      console.error('Error updating route geometry:', error);
-      showError(`Error updating route geometry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error updating route geometry:", error);
+      showError(
+        `Error updating route geometry: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   };
 
@@ -233,36 +268,33 @@ export default function AdminCreateRouteTab({
 
   // Format coordinate for display
   const formatCoordinate = (coord: [number, number] | null) => {
-    if (!coord) return '';
+    if (!coord) return "";
     return `${coord[1].toFixed(6)}, ${coord[0].toFixed(6)}`;
   };
 
   // Format header for edit mode
   const getEditModeHeader = () => {
     if (!isEditMode || !editingRouteInfo) {
-      return 'Create New Route';
+      return "Create New Route";
     }
 
-    const trackNum = editingRouteInfo.track_number ? `${editingRouteInfo.track_number} ` : '';
+    const trackNum = editingRouteInfo.track_number ? `${editingRouteInfo.track_number} ` : "";
     return `Edit Route Geometry (${trackNum}${editingRouteInfo.from_station} ⟷ ${editingRouteInfo.to_station})`;
   };
 
   return (
     <div className="p-4 overflow-y-auto">
-      <h3 className="font-semibold text-gray-900 mb-4">
-        {getEditModeHeader()}
-      </h3>
+      <h3 className="font-semibold text-gray-900 mb-4">{getEditModeHeader()}</h3>
       <p className="text-sm text-gray-600 mb-4">
-        Click on railway parts in the map to set starting and ending points. The route will be automatically previewed on the map.
-        {isEditMode && ' The route metadata (name, description) will remain unchanged.'}
+        Click on railway parts in the map to set starting and ending points. The route will be
+        automatically previewed on the map.
+        {isEditMode && " The route metadata (name, description) will remain unchanged."}
       </p>
 
       <div className="space-y-4">
         {/* Starting Coordinate */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Starting Point *
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Starting Point *</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -270,10 +302,12 @@ export default function AdminCreateRouteTab({
               readOnly
               placeholder="Click a railway part on the map"
               disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'
-                }`}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
+                isPreviewMode ? "bg-gray-100 cursor-not-allowed" : "bg-gray-50"
+              }`}
             />
             <button
+              type="button"
               onClick={clearStartingCoordinate}
               className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
               title="Clear starting coordinate"
@@ -285,9 +319,7 @@ export default function AdminCreateRouteTab({
 
         {/* Ending Coordinate */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Ending Point *
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Ending Point *</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -295,10 +327,12 @@ export default function AdminCreateRouteTab({
               readOnly
               placeholder="Click a railway part on the map"
               disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${isPreviewMode ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'
-                }`}
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
+                isPreviewMode ? "bg-gray-100 cursor-not-allowed" : "bg-gray-50"
+              }`}
             />
             <button
+              type="button"
               onClick={clearEndingCoordinate}
               className="px-2 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm border border-gray-300"
               title="Clear ending coordinate"
@@ -327,9 +361,7 @@ export default function AdminCreateRouteTab({
 
             {/* From Station */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                From *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">From *</label>
               <input
                 type="text"
                 value={createForm.from_station}
@@ -341,9 +373,7 @@ export default function AdminCreateRouteTab({
 
             {/* To Station */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                To *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">To *</label>
               <input
                 type="text"
                 value={createForm.to_station}
@@ -355,9 +385,7 @@ export default function AdminCreateRouteTab({
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea
                 value={createForm.description}
                 onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
@@ -369,9 +397,7 @@ export default function AdminCreateRouteTab({
 
             {/* Link */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Link (URL)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Link (URL)</label>
               <input
                 type="url"
                 value={createForm.link}
@@ -383,9 +409,7 @@ export default function AdminCreateRouteTab({
 
             {/* Usage Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Usage Type *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Usage Type *</label>
               <div className="flex gap-4">
                 {usageOptions.map((option) => (
                   <label key={option.key} className="flex items-center gap-2 cursor-pointer">
@@ -394,7 +418,12 @@ export default function AdminCreateRouteTab({
                       name="usage_type"
                       value={option.id}
                       checked={createForm.usage_type === option.id}
-                      onChange={(e) => setCreateForm({ ...createForm, usage_type: Number(e.target.value) as UsageType })}
+                      onChange={(e) =>
+                        setCreateForm({
+                          ...createForm,
+                          usage_type: Number(e.target.value) as UsageType,
+                        })
+                      }
                       className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500 cursor-pointer"
                     />
                     <span className="text-sm text-gray-700">{option.label}</span>
@@ -405,20 +434,27 @@ export default function AdminCreateRouteTab({
 
             {/* Frequency Tags */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Frequency Tags
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Frequency Tags</label>
               <div className="flex flex-wrap gap-4">
                 {frequencyOptions.map((option) => (
-                  <label key={option.key} className="flex flex-[0_1_30%] items-center gap-2 cursor-pointer">
+                  <label
+                    key={option.key}
+                    className="flex flex-[0_1_30%] items-center gap-2 cursor-pointer"
+                  >
                     <input
                       type="checkbox"
                       checked={createForm.frequency.includes(option.key)}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setCreateForm({ ...createForm, frequency: [...createForm.frequency, option.key] });
+                          setCreateForm({
+                            ...createForm,
+                            frequency: [...createForm.frequency, option.key],
+                          });
                         } else {
-                          setCreateForm({ ...createForm, frequency: createForm.frequency.filter(f => f !== option.key) });
+                          setCreateForm({
+                            ...createForm,
+                            frequency: createForm.frequency.filter((f) => f !== option.key),
+                          });
                         }
                       }}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
@@ -429,9 +465,7 @@ export default function AdminCreateRouteTab({
               </div>
             </div>
 
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Other
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Other</label>
             <div className="flex flex-wrap gap-4">
               {/* Scenic */}
               <div className="flex-[0_1_30%]">
@@ -452,7 +486,9 @@ export default function AdminCreateRouteTab({
                   <input
                     type="checkbox"
                     checked={createForm.intended_backtracking}
-                    onChange={(e) => setCreateForm({ ...createForm, intended_backtracking: e.target.checked })}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, intended_backtracking: e.target.checked })
+                    }
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   />
                   <span className="text-sm font-medium text-gray-700">Intended backtracking</span>
@@ -467,6 +503,7 @@ export default function AdminCreateRouteTab({
           {isEditMode ? (
             <>
               <button
+                type="button"
                 onClick={handleCancelGeometryEdit}
                 className="w-full bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer mb-2"
               >
@@ -474,6 +511,7 @@ export default function AdminCreateRouteTab({
               </button>
 
               <button
+                type="button"
                 onClick={handleSaveGeometry}
                 disabled={!isPreviewMode}
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
@@ -482,14 +520,21 @@ export default function AdminCreateRouteTab({
               </button>
 
               <p className="text-xs text-gray-500 mt-2">
-                Select new starting and ending points on the map, then click Save to update the route geometry.
+                Select new starting and ending points on the map, then click Save to update the
+                route geometry.
               </p>
             </>
           ) : (
             <>
               <button
+                type="button"
                 onClick={handleSaveRoute}
-                disabled={!isPreviewMode || !createForm.from_station || !createForm.to_station || createForm.usage_type === undefined}
+                disabled={
+                  !isPreviewMode ||
+                  !createForm.from_station ||
+                  !createForm.to_station ||
+                  createForm.usage_type === undefined
+                }
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
               >
                 Save Route to Database

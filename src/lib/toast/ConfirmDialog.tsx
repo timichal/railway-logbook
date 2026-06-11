@@ -1,6 +1,4 @@
-'use client';
-
-import React from 'react';
+"use client";
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -12,27 +10,27 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   onThird?: () => void;
-  variant?: 'danger' | 'warning' | 'info';
+  variant?: "danger" | "warning" | "info";
 }
 
 export function ConfirmDialog({
   isOpen,
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   thirdLabel,
   onConfirm,
   onCancel,
   onThird,
-  variant = 'warning'
+  variant = "warning",
 }: ConfirmDialogProps) {
   if (!isOpen) return null;
 
   const variantStyles = {
-    danger: 'bg-red-600 hover:bg-red-700',
-    warning: 'bg-orange-600 hover:bg-orange-700',
-    info: 'bg-blue-600 hover:bg-blue-700'
+    danger: "bg-red-600 hover:bg-red-700",
+    warning: "bg-orange-600 hover:bg-orange-700",
+    info: "bg-blue-600 hover:bg-blue-700",
   };
 
   return (
@@ -43,6 +41,7 @@ export function ConfirmDialog({
 
         <div className="flex gap-3 justify-end">
           <button
+            type="button"
             onClick={onCancel}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
           >
@@ -50,6 +49,7 @@ export function ConfirmDialog({
           </button>
           {thirdLabel && onThird && (
             <button
+              type="button"
               onClick={onThird}
               className="px-4 py-2 text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 rounded-md"
             >
@@ -57,6 +57,7 @@ export function ConfirmDialog({
             </button>
           )}
           <button
+            type="button"
             onClick={onConfirm}
             className={`px-4 py-2 text-sm font-medium text-white rounded-md ${variantStyles[variant]}`}
           >

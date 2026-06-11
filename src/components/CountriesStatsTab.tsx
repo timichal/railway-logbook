@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import type { DataAccess } from '@/lib/dataAccess';
-import { SUPPORTED_COUNTRIES } from '@/lib/constants';
-import type { ProgressByCountry } from '@/lib/userActions';
-import { getCountryFlag } from '@/lib/countryUtils';
+import { useEffect, useState } from "react";
+import { SUPPORTED_COUNTRIES } from "@/lib/constants";
+import { getCountryFlag } from "@/lib/countryUtils";
+import type { DataAccess } from "@/lib/dataAccess";
+import type { ProgressByCountry } from "@/lib/userActions";
 
 interface CountriesStatsTabProps {
   dataAccess: DataAccess;
@@ -12,7 +12,11 @@ interface CountriesStatsTabProps {
   onCountryChange: (countries: string[]) => void;
 }
 
-export default function CountriesStatsTab({ dataAccess, selectedCountries, onCountryChange }: CountriesStatsTabProps) {
+export default function CountriesStatsTab({
+  dataAccess,
+  selectedCountries,
+  onCountryChange,
+}: CountriesStatsTabProps) {
   const [stats, setStats] = useState<ProgressByCountry | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -24,7 +28,7 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
         const progressData = await dataAccess.getProgressByCountry();
         setStats(progressData);
       } catch (error) {
-        console.error('Failed to load country stats:', error);
+        console.error("Failed to load country stats:", error);
       } finally {
         setIsLoading(false);
       }
@@ -35,13 +39,13 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
 
   const handleCountryToggle = (countryCode: string) => {
     const newSelection = selectedCountries.includes(countryCode)
-      ? selectedCountries.filter(c => c !== countryCode)
+      ? selectedCountries.filter((c) => c !== countryCode)
       : [...selectedCountries, countryCode];
     onCountryChange(newSelection);
   };
 
   const handleSelectAll = () => {
-    onCountryChange(SUPPORTED_COUNTRIES.map(c => c.code));
+    onCountryChange(SUPPORTED_COUNTRIES.map((c) => c.code));
   };
 
   const handleSelectNone = () => {
@@ -49,7 +53,7 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
   };
 
   const formatKm = (km: number) => {
-    return km.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    return km.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   };
 
   return (
@@ -59,12 +63,14 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
       {/* Quick Actions */}
       <div className="flex gap-2 mb-4">
         <button
+          type="button"
           onClick={handleSelectAll}
           className="flex-1 px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
         >
           Select All
         </button>
         <button
+          type="button"
           onClick={handleSelectNone}
           className="flex-1 px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
         >
@@ -75,9 +81,7 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
       {/* Selection Status */}
       <div className="text-sm text-gray-600 mb-4">
         {selectedCountries.length === 0 && (
-          <div className="text-orange-600 font-medium">
-            ⚠️ No countries selected
-          </div>
+          <div className="text-orange-600 font-medium">⚠️ No countries selected</div>
         )}
         {selectedCountries.length > 0 && (
           <div>
@@ -91,15 +95,15 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
         {isLoading ? (
           <div className="text-sm text-gray-500 py-4 text-center">Loading statistics...</div>
         ) : (
-          SUPPORTED_COUNTRIES.map(country => {
-            const countryStat = stats?.byCountry.find(s => s.countryCode === country.code);
+          SUPPORTED_COUNTRIES.map((country) => {
+            const countryStat = stats?.byCountry.find((s) => s.countryCode === country.code);
             const isSelected = selectedCountries.includes(country.code);
 
             return (
               <label
                 key={country.code}
                 className={`flex items-center justify-between p-2 rounded cursor-pointer hover:bg-gray-50 ${
-                  isSelected ? 'bg-blue-50' : ''
+                  isSelected ? "bg-blue-50" : ""
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -109,7 +113,9 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
                     onChange={() => handleCountryToggle(country.code)}
                     className="w-4 h-4"
                   />
-                  <span className="text-2xl" title={country.code}>{getCountryFlag(country.code)}</span>
+                  <span className="text-2xl" title={country.code}>
+                    {getCountryFlag(country.code)}
+                  </span>
                   <span className="text-sm text-gray-600">{country.name}</span>
                 </div>
                 <div className="text-sm text-gray-600">
@@ -118,7 +124,7 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
                       {formatKm(countryStat.completedKm)} / {formatKm(countryStat.totalKm)} km
                     </>
                   ) : (
-                    '0.0 / 0.0 km'
+                    "0.0 / 0.0 km"
                   )}
                 </div>
               </label>
@@ -135,11 +141,9 @@ export default function CountriesStatsTab({ dataAccess, selectedCountries, onCou
             <span className="font-semibold text-green-600">
               {formatKm(stats.total.completedKm)}
             </span>
-            {' / '}
-            <span className="font-semibold">
-              {formatKm(stats.total.totalKm)}
-            </span>
-            {' km'}
+            {" / "}
+            <span className="font-semibold">{formatKm(stats.total.totalKm)}</span>
+            {" km"}
           </div>
           {stats.total.totalKm > 0 && (
             <div className="text-sm text-gray-600 mt-1">

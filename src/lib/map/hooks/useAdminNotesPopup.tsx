@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import maplibregl from 'maplibre-gl';
-import { getAdminNote } from '@/lib/adminNotesActions';
-import { createAdminNotesSource, createAdminNotesLayer } from '../index';
-import NotesPopup from '@/components/NotesPopup';
+import maplibregl from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import NotesPopup from "@/components/NotesPopup";
+import { getAdminNote } from "@/lib/adminNotesActions";
+import { createAdminNotesLayer, createAdminNotesSource } from "../index";
 
 interface UseAdminNotesPopupOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
@@ -50,13 +50,13 @@ export function useAdminNotesPopup({
 
       // Check if clicking on an existing note
       const noteFeatures = map.current!.queryRenderedFeatures(e.point, {
-        layers: ['admin_notes'],
+        layers: ["admin_notes"],
       });
 
       let noteId: number | null = null;
-      let noteText = '';
+      let noteText = "";
       let noteUpdatedAt: string | undefined;
-      let noteTypeValue: 'Usage' | 'Works' | 'Todo' | null = null;
+      let noteTypeValue: "Usage" | "Works" | "Todo" | null = null;
 
       if (noteFeatures && noteFeatures.length > 0) {
         noteId = noteFeatures[0].properties?.id;
@@ -69,7 +69,7 @@ export function useAdminNotesPopup({
               noteTypeValue = note.note_type;
             }
           } catch (error) {
-            console.error('Failed to load note:', error);
+            console.error("Failed to load note:", error);
             return;
           }
         }
@@ -80,17 +80,17 @@ export function useAdminNotesPopup({
         notesPopupRef.current.remove();
       }
 
-      const popupContainer = document.createElement('div');
+      const popupContainer = document.createElement("div");
 
       // Dynamic anchor based on click position
       const clickY = e.point.y;
       const mapHeight = map.current!.getContainer().clientHeight;
-      const anchor = clickY < mapHeight * 0.3 ? 'top' : 'bottom';
+      const anchor = clickY < mapHeight * 0.3 ? "top" : "bottom";
 
       const popup = new maplibregl.Popup({
         closeButton: false,
         closeOnClick: false,
-        maxWidth: 'none',
+        maxWidth: "none",
         anchor,
         offset: 15,
       })
@@ -124,7 +124,7 @@ export function useAdminNotesPopup({
           onSaved={handleSaved}
           showSuccess={showSuccess}
           showError={showError}
-        />
+        />,
       );
     };
 
@@ -133,7 +133,7 @@ export function useAdminNotesPopup({
       if (!notesPopupRef.current) return;
 
       const noteFeatures = map.current!.queryRenderedFeatures(e.point, {
-        layers: ['admin_notes'],
+        layers: ["admin_notes"],
       });
       if (noteFeatures && noteFeatures.length > 0) return;
 
@@ -146,13 +146,13 @@ export function useAdminNotesPopup({
       notesPopupRef.current = null;
     };
 
-    map.current.on('contextmenu', handleRightClick);
-    map.current.on('click', handleMapClick);
+    map.current.on("contextmenu", handleRightClick);
+    map.current.on("click", handleMapClick);
 
     return () => {
       if (map.current) {
-        map.current.off('contextmenu', handleRightClick);
-        map.current.off('click', handleMapClick);
+        map.current.off("contextmenu", handleRightClick);
+        map.current.off("click", handleMapClick);
       }
       if (notesPopupRef.current) {
         notesPopupRef.current.remove();
@@ -165,22 +165,18 @@ export function useAdminNotesPopup({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    const hasNotesLayer = map.current.getLayer('admin_notes');
-    const hasNotesSource = map.current.getSource('admin_notes');
+    const hasNotesLayer = map.current.getLayer("admin_notes");
+    const hasNotesSource = map.current.getSource("admin_notes");
 
     if (!hasNotesLayer && !hasNotesSource) return; // Initial load, layers not ready yet
 
-    if (hasNotesLayer) map.current.removeLayer('admin_notes');
-    if (hasNotesSource) map.current.removeSource('admin_notes');
+    if (hasNotesLayer) map.current.removeLayer("admin_notes");
+    if (hasNotesSource) map.current.removeSource("admin_notes");
 
-    map.current.addSource('admin_notes', createAdminNotesSource(notesCacheBuster));
+    map.current.addSource("admin_notes", createAdminNotesSource(notesCacheBuster));
     map.current.addLayer(createAdminNotesLayer());
 
-    map.current.setLayoutProperty(
-      'admin_notes',
-      'visibility',
-      showNotesLayer ? 'visible' : 'none',
-    );
+    map.current.setLayoutProperty("admin_notes", "visibility", showNotesLayer ? "visible" : "none");
 
     map.current.triggerRepaint();
   }, [notesCacheBuster, mapLoaded, map, showNotesLayer]);

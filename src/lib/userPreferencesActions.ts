@@ -1,9 +1,8 @@
-'use server';
+"use server";
 
-import { query } from './db';
-import { getUser } from './authActions';
-import type { UserPreferences } from './types';
-import { SUPPORTED_COUNTRIES } from './constants';
+import { getUser } from "./authActions";
+import { SUPPORTED_COUNTRIES } from "./constants";
+import { query } from "./db";
 
 /**
  * Get user preferences (selected countries for filtering)
@@ -13,14 +12,14 @@ export async function getUserPreferences(): Promise<string[]> {
   const user = await getUser();
 
   if (!user) {
-    throw new Error('User not authenticated');
+    throw new Error("User not authenticated");
   }
 
   try {
     // Try to fetch existing preferences
     const result = await query(
-      'SELECT selected_countries FROM user_preferences WHERE user_id = $1',
-      [user.id]
+      "SELECT selected_countries FROM user_preferences WHERE user_id = $1",
+      [user.id],
     );
 
     if (result.rows.length > 0) {
@@ -28,16 +27,16 @@ export async function getUserPreferences(): Promise<string[]> {
     }
 
     // No preferences found, create default preferences
-    const defaultCountries = SUPPORTED_COUNTRIES.map(c => c.code);
-    await query(
-      'INSERT INTO user_preferences (user_id, selected_countries) VALUES ($1, $2)',
-      [user.id, defaultCountries]
-    );
+    const defaultCountries = SUPPORTED_COUNTRIES.map((c) => c.code);
+    await query("INSERT INTO user_preferences (user_id, selected_countries) VALUES ($1, $2)", [
+      user.id,
+      defaultCountries,
+    ]);
 
     return defaultCountries;
   } catch (error) {
-    console.error('Error fetching user preferences:', error);
-    throw new Error('Failed to fetch user preferences');
+    console.error("Error fetching user preferences:", error);
+    throw new Error("Failed to fetch user preferences");
   }
 }
 
@@ -48,7 +47,7 @@ export async function updateUserPreferences(selectedCountries: string[]): Promis
   const user = await getUser();
 
   if (!user) {
-    throw new Error('User not authenticated');
+    throw new Error("User not authenticated");
   }
 
   try {
@@ -58,10 +57,10 @@ export async function updateUserPreferences(selectedCountries: string[]): Promis
        VALUES ($1, $2, NOW())
        ON CONFLICT (user_id)
        DO UPDATE SET selected_countries = $2, updated_at = NOW()`,
-      [user.id, selectedCountries]
+      [user.id, selectedCountries],
     );
   } catch (error) {
-    console.error('Error updating user preferences:', error);
-    throw new Error('Failed to update user preferences');
+    console.error("Error updating user preferences:", error);
+    throw new Error("Failed to update user preferences");
   }
 }

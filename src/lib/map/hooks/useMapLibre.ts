@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import { MAP_CENTER, MAP_ZOOM, EUROPE_BOUNDS, createOSMBackgroundSource, createOSMBackgroundLayer } from '../index';
-import { loadMapState, saveMapState } from '../mapState';
+import maplibregl from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
+import "maplibre-gl/dist/maplibre-gl.css";
+import {
+  createOSMBackgroundLayer,
+  createOSMBackgroundSource,
+  EUROPE_BOUNDS,
+  MAP_CENTER,
+  MAP_ZOOM,
+} from "../index";
+import { loadMapState, saveMapState } from "../mapState";
 
 export interface UseMapLibreOptions {
   center?: [number, number];
@@ -28,15 +34,9 @@ export interface UseMapLibreReturn {
 export function useMapLibre(
   containerRef: React.RefObject<HTMLDivElement | null>,
   options: UseMapLibreOptions = {},
-  deps: React.DependencyList = []
+  deps: React.DependencyList = [],
 ): UseMapLibreReturn {
-  const {
-    center = MAP_CENTER,
-    zoom = MAP_ZOOM,
-    sources = {},
-    layers = [],
-    onLoad,
-  } = options;
+  const { center = MAP_CENTER, zoom = MAP_ZOOM, sources = {}, layers = [], onLoad } = options;
 
   const map = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -56,10 +56,7 @@ export function useMapLibre(
     };
 
     // Build layers array (background + custom layers)
-    const allLayers: maplibregl.LayerSpecification[] = [
-      createOSMBackgroundLayer(),
-      ...layers,
-    ];
+    const allLayers: maplibregl.LayerSpecification[] = [createOSMBackgroundLayer(), ...layers];
 
     // Create map instance
     map.current = new maplibregl.Map({
@@ -79,26 +76,26 @@ export function useMapLibre(
     });
 
     // Add navigation controls
-    map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
 
     // Add geolocation control (show current location)
     map.current.addControl(
       new maplibregl.GeolocateControl({
         positionOptions: {
-          enableHighAccuracy: true
+          enableHighAccuracy: true,
         },
         trackUserLocation: true,
       }),
-      'top-right'
+      "top-right",
     );
 
     // Add scale control
     map.current.addControl(
       new maplibregl.ScaleControl({
         maxWidth: 100,
-        unit: 'metric',
+        unit: "metric",
       }),
-      'bottom-left'
+      "bottom-left",
     );
 
     // Save map state on move or zoom
@@ -114,11 +111,11 @@ export function useMapLibre(
     };
 
     // Listen for map movements
-    map.current.on('moveend', saveState);
-    map.current.on('zoomend', saveState);
+    map.current.on("moveend", saveState);
+    map.current.on("zoomend", saveState);
 
     // Wait for style to load
-    map.current.on('load', () => {
+    map.current.on("load", () => {
       setMapLoaded(true);
       if (onLoad && map.current) {
         onLoad(map.current);
@@ -128,8 +125,8 @@ export function useMapLibre(
     // Cleanup on unmount
     return () => {
       if (map.current) {
-        map.current.off('moveend', saveState);
-        map.current.off('zoomend', saveState);
+        map.current.off("moveend", saveState);
+        map.current.off("zoomend", saveState);
         map.current.remove();
         map.current = null;
         setMapLoaded(false);

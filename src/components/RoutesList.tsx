@@ -1,7 +1,6 @@
-'use client';
+"use client";
 
-import React from 'react';
-import type { RailwayRoute } from '@/lib/types';
+import type { RailwayRoute } from "@/lib/types";
 
 interface RoutesListProps {
   routes: RailwayRoute[];
@@ -41,7 +40,7 @@ export default function RoutesList({
   onInvalidOnlyChange,
   onUnintendedBacktrackingOnlyChange,
   onRouteClick,
-  onPageChange
+  onPageChange,
 }: RoutesListProps) {
   return (
     <div className="flex-1 border-r border-gray-200 flex flex-col overflow-hidden">
@@ -69,7 +68,9 @@ export default function RoutesList({
                 onChange={(e) => onUnintendedBacktrackingOnlyChange(e.target.checked)}
                 className="mr-2"
               />
-              <span className="text-gray-700">Unintended backtracking ({unintendedBacktrackingCount})</span>
+              <span className="text-gray-700">
+                Unintended backtracking ({unintendedBacktrackingCount})
+              </span>
             </label>
           </div>
         </div>
@@ -83,7 +84,7 @@ export default function RoutesList({
         />
         {searchQuery && (
           <div className="text-xs text-gray-500 mt-1">
-            Found {filteredCount} route{filteredCount !== 1 ? 's' : ''}
+            Found {filteredCount} route{filteredCount !== 1 ? "s" : ""}
           </div>
         )}
       </div>
@@ -96,10 +97,11 @@ export default function RoutesList({
           <div className="divide-y divide-gray-100">
             {paginatedRoutes.map((route) => (
               <button
+                type="button"
                 key={route.track_id}
                 onClick={() => onRouteClick(route.track_id)}
                 className={`w-full p-3 text-left hover:bg-gray-50 focus:bg-blue-50 focus:outline-none ${
-                  selectedRouteId === route.track_id ? 'bg-blue-50' : ''
+                  selectedRouteId === route.track_id ? "bg-blue-50" : ""
                 }`}
               >
                 <div className="font-medium text-sm text-gray-900 truncate">
@@ -116,6 +118,7 @@ export default function RoutesList({
         {totalPages > 1 && (
           <div className="p-3 flex items-center justify-between text-sm">
             <button
+              type="button"
               onClick={() => onPageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
               className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-black cursor-pointer"
@@ -126,6 +129,7 @@ export default function RoutesList({
               {currentPage}/{totalPages}
             </span>
             <button
+              type="button"
               onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
               className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-black cursor-pointer"

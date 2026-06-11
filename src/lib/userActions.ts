@@ -1,16 +1,17 @@
-'use server';
+"use server";
 
-import { query } from './db';
-import { getUser } from './authActions';
-import { Station, GeoJSONFeatureCollection, GeoJSONFeature, RailwayRoute } from './types';
-import { SUPPORTED_COUNTRIES } from './constants';
+import { getUser } from "./authActions";
+import { SUPPORTED_COUNTRIES } from "./constants";
+import { query } from "./db";
+import { type RailwayRoute, type Station } from "./types";
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
     return [];
   }
 
-  const result = await query(`
+  const result = await query(
+    `
     SELECT id, name,
            ST_X(coordinates) as lon,
            ST_Y(coordinates) as lat
@@ -23,12 +24,14 @@ export async function searchStations(searchQuery: string): Promise<Station[]> {
       END,
       name
     LIMIT 10
-  `, [`%${searchQuery}%`, `${searchQuery}%`]);
+  `,
+    [`%${searchQuery}%`, `${searchQuery}%`],
+  );
 
-  return result.rows.map(row => ({
+  return result.rows.map((row) => ({
     id: row.id,
     name: row.name,
-    coordinates: [row.lon, row.lat]
+    coordinates: [row.lon, row.lat],
   }));
 }
 
@@ -57,7 +60,7 @@ export async function getAllRoutes(): Promise<RailwayRoute[]> {
     ORDER BY track_id
   `);
 
-  return result.rows.map(row => ({
+  return result.rows.map((row) => ({
     ...row,
     track_id: row.track_id.toString(),
   }));
@@ -75,7 +78,7 @@ export interface UserProgress {
 export async function getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
   const user = await getUser();
   if (!user) {
-    throw new Error('User not authenticated');
+    throw new Error("User not authenticated");
   }
 
   const userId = user.id;
@@ -93,7 +96,7 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
       percentage: 0,
       routePercentage: 0,
       totalRoutes: 0,
-      completedRoutes: 0
+      completedRoutes: 0,
     };
   }
 
@@ -105,8 +108,8 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
     FROM railway_routes
     WHERE length_km IS NOT NULL
       AND usage_type != 1
-      ${hasCountries ? 'AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])' : ''}`,
-    hasCountries ? [selectedCountries] : []
+      ${hasCountries ? "AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])" : ""}`,
+    hasCountries ? [selectedCountries] : [],
   );
 
   // Get completed distance and count (routes with at least one complete journey, excluding Special usage_type=1)
@@ -119,7 +122,7 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
     FROM railway_routes rr
     WHERE rr.usage_type != 1
       AND rr.length_km IS NOT NULL
-      ${hasCountries ? 'AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])' : ''}
+      ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}
       AND EXISTS (
         SELECT 1
         FROM user_logged_parts
@@ -128,13 +131,13 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
           AND partial = FALSE
           AND track_id IS NOT NULL
       )`,
-    hasCountries ? [userId, selectedCountries] : [userId]
+    hasCountries ? [userId, selectedCountries] : [userId],
   );
 
   const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
   const completedKm = parseFloat(completedResult.rows[0].completed_km) || 0;
-  const totalRoutes = parseInt(totalResult.rows[0].total_routes) || 0;
-  const completedRoutes = parseInt(completedResult.rows[0].completed_routes) || 0;
+  const totalRoutes = parseInt(totalResult.rows[0].total_routes, 10) || 0;
+  const completedRoutes = parseInt(completedResult.rows[0].completed_routes, 10) || 0;
 
   const percentage = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
   const routePercentage = totalRoutes > 0 ? (completedRoutes / totalRoutes) * 100 : 0;
@@ -145,7 +148,7 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
     percentage: Math.round(percentage),
     routePercentage: Math.round(routePercentage),
     totalRoutes,
-    completedRoutes
+    completedRoutes,
   };
 }
 
@@ -172,7 +175,7 @@ export interface ProgressByCountry {
 export async function getProgressByCountry(): Promise<ProgressByCountry> {
   const user = await getUser();
   if (!user) {
-    throw new Error('User not authenticated');
+    throw new Error("User not authenticated");
   }
 
   const userId = user.id;
@@ -189,7 +192,7 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
          AND usage_type != 1
          AND start_country = $1
          AND end_country = $1`,
-      [country.code]
+      [country.code],
     );
 
     // Get completed km for routes in this country
@@ -208,7 +211,7 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
              AND partial = FALSE
              AND track_id IS NOT NULL
          )`,
-      [country.code, userId]
+      [country.code, userId],
     );
 
     const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
@@ -227,7 +230,7 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
     `SELECT COALESCE(SUM(length_km), 0) as total_km
      FROM railway_routes
      WHERE length_km IS NOT NULL
-       AND usage_type != 1`
+       AND usage_type != 1`,
   );
 
   const overallCompletedResult = await query(
@@ -243,7 +246,7 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
            AND partial = FALSE
            AND track_id IS NOT NULL
        )`,
-    [userId]
+    [userId],
   );
 
   const overallTotalKm = parseFloat(overallTotalResult.rows[0].total_km) || 0;
@@ -254,6 +257,6 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
     total: {
       totalKm: Math.round(overallTotalKm * 10) / 10,
       completedKm: Math.round(overallCompletedKm * 10) / 10,
-    }
+    },
   };
 }

@@ -23,11 +23,11 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
   if (sublists.length === 1) return sublists[0];
 
   // Make a copy to avoid mutating the original
-  const remainingSublists = sublists.map(s => [...s]);
+  const remainingSublists = sublists.map((s) => [...s]);
 
   // Step 1: Create a map of coordinate frequencies
   const coordCount = new Map<string, number>();
-  remainingSublists.forEach(sublist => {
+  remainingSublists.forEach((sublist) => {
     const firstKey = `${sublist[0][0]},${sublist[0][1]}`;
     const lastKey = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
     coordCount.set(firstKey, (coordCount.get(firstKey) || 0) + 1);
@@ -35,7 +35,7 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
   });
 
   // Step 2: Find the starting sublist (prefer one with an endpoint that appears only once)
-  let startingSublistIndex = remainingSublists.findIndex(sublist => {
+  let startingSublistIndex = remainingSublists.findIndex((sublist) => {
     const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
     const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
     return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
@@ -43,7 +43,9 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
 
   // If no clear endpoint found (e.g., circular routes or complex junctions), use first sublist
   if (startingSublistIndex === -1) {
-    console.log('[mergeLinearChain] No clear endpoint found, using first sublist as starting point');
+    console.log(
+      "[mergeLinearChain] No clear endpoint found, using first sublist as starting point",
+    );
     startingSublistIndex = 0;
   }
 
@@ -67,8 +69,8 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
     const lastCoordInChain = mergedChain[mergedChain.length - 1];
 
     // Find the next sublist that connects to the current chain
-    const nextIndex = remainingSublists.findIndex(sublist =>
-      sublist.some(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1])
+    const nextIndex = remainingSublists.findIndex((sublist) =>
+      sublist.some(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1]),
     );
 
     if (nextIndex === -1) {
@@ -77,7 +79,9 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
 
     // Extract the next sublist and reverse it if necessary
     const nextSublist = [...remainingSublists[nextIndex]];
-    const overlapIndex = nextSublist.findIndex(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1]);
+    const overlapIndex = nextSublist.findIndex(
+      ([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1],
+    );
 
     if (overlapIndex !== 0) {
       nextSublist.reverse(); // Reverse if the overlap is not at the start
@@ -99,5 +103,5 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
  * @returns WKT LINESTRING string
  */
 export function coordinatesToWKT(coordinates: Coord[]): string {
-  return `LINESTRING(${coordinates.map(coord => `${coord[0]} ${coord[1]}`).join(',')})`;
+  return `LINESTRING(${coordinates.map((coord) => `${coord[0]} ${coord[1]}`).join(",")})`;
 }
