@@ -13,7 +13,6 @@ export function useRouteEditor(
   map: React.MutableRefObject<maplibreglType.Map | null>,
   selectedCountries?: string[],
 ) {
-  const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [showSpecialLines, setShowSpecialLines] = useState(false);
 
@@ -60,6 +59,5 @@ export function useRouteEditor(
     progress,
     showSpecialLines,
     toggleShowSpecialLines,
-    cacheBuster,
   };
 }

@@ -47,14 +47,3 @@ export function loadMapState(): MapState | null {
     return null;
   }
 }
-
-/**
- * Clear map state from localStorage
- */
-export function clearMapState(): void {
-  try {
-    localStorage.removeItem(MAP_STATE_KEY);
-  } catch (error) {
-    console.warn("Failed to clear map state:", error);
-  }
-}

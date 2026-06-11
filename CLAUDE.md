@@ -89,7 +89,7 @@ Selection/highlight layers:
 - **Toast**: `toast/` (`useToast`, `ToastContainer`, `ConfirmDialog`).
 
 ### Map library (`src/lib/map/`)
-- `index.ts` — constants, layer/source factories, `lineClassColorExpression`, `closeAllPopups`. Re-exports from `style.ts`.
+- `index.ts` — constants, layer/source factories, `lineClassColorExpression`. Re-exports from `style.ts`.
 - `style.ts` — styling source of truth (see above).
 - `mapState.ts` — save/load map position.
 - **Hooks**: `useMapLibre`, `useRouteEditor`, `useStationSearch`, `useRouteLength`, `useAdminLayerVisibility`, `useAdminMapOverlays`, `useAdminNotesPopup`, `useMapTileRefresh`, `useRouteHighlighting` (takes `kind: 'planner' | 'view'`), `useLayerFilters`.

@@ -5,44 +5,6 @@ import pool from "./db";
 import type { Journey, LoggedPart, RailwayRoute } from "./types";
 
 /**
- * Get all journeys for a user with route counts and total distance
- */
-export async function getAllJourneys(): Promise<{
-  journeys: (Journey & { route_count: number; total_distance: string; trip_name: string | null })[];
-  error?: string;
-}> {
-  try {
-    const user = await getUser();
-    if (!user) {
-      return { journeys: [], error: "Not authenticated" };
-    }
-
-    const result = await pool.query<
-      Journey & { route_count: number; total_distance: string; trip_name: string | null }
-    >(
-      `SELECT
-        uj.*,
-        COUNT(ulp.id)::int as route_count,
-        COALESCE(SUM(rr.length_km), 0) as total_distance,
-        ut.name as trip_name
-      FROM user_journeys uj
-      LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
-      LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
-      LEFT JOIN user_trips ut ON uj.trip_id = ut.id
-      WHERE uj.user_id = $1
-      GROUP BY uj.id, ut.name
-      ORDER BY uj.date DESC NULLS LAST, uj.created_at DESC`,
-      [user.id],
-    );
-
-    return { journeys: result.rows };
-  } catch (error) {
-    console.error("Error fetching journeys:", error);
-    return { journeys: [], error: "Failed to fetch journeys" };
-  }
-}
-
-/**
  * Get a single journey with all its logged routes
  */
 export async function getJourney(journeyId: number): Promise<{

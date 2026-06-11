@@ -64,11 +64,6 @@ export const getLineClassLabel = (lineClass: LineClass): string => {
   return option ? option.label : "Unknown";
 };
 
-export const getFrequencyLabel = (frequency: string): string => {
-  const option = frequencyOptions.find((opt) => opt.key === frequency);
-  return option ? option.label : frequency;
-};
-
 /**
  * Admin note types (optional categorization).
  * Legacy notes stored before this feature have NULL `note_type`.

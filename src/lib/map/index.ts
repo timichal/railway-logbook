@@ -353,20 +353,7 @@ export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
 }
 
 // ============================================================================
-// POPUP UTILITIES
-// ============================================================================
-
-export function closeAllPopups(): void {
-  const popups = document.getElementsByClassName("maplibregl-popup");
-  if (popups.length) {
-    Array.from(popups).forEach((popup) => {
-      popup.remove();
-    });
-  }
-}
-
-// ============================================================================
 // MAP STATE PERSISTENCE
 // ============================================================================
 
-export { clearMapState, loadMapState, type MapState, saveMapState } from "./mapState";
+export { loadMapState, type MapState, saveMapState } from "./mapState";
