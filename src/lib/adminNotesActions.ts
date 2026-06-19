@@ -1,6 +1,6 @@
 "use server";
 
-import { getUser } from "./authActions";
+import { requireAdmin } from "./authHelpers";
 import type { NoteType } from "./constants";
 import pool from "./db";
 import type { AdminNote } from "./types";
@@ -30,10 +30,7 @@ function rowToNote(row: AdminNoteRow): AdminNote {
  * Admin-only (user_id=1)
  */
 export async function getAllAdminNotes(): Promise<AdminNote[]> {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const result = await pool.query<AdminNoteRow>(`
     SELECT
@@ -55,10 +52,7 @@ export async function getAllAdminNotes(): Promise<AdminNote[]> {
  * Admin-only (user_id=1)
  */
 export async function getAdminNote(id: number): Promise<AdminNote | null> {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const result = await pool.query<AdminNoteRow>(
     `
@@ -91,10 +85,7 @@ export async function createAdminNote(
   text: string,
   noteType: NoteType,
 ): Promise<AdminNote> {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const [lng, lat] = coordinate;
 
@@ -126,10 +117,7 @@ export async function updateAdminNote(
   text: string,
   noteType: NoteType | null,
 ): Promise<AdminNote> {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const result = await pool.query<AdminNoteRow>(
     `
@@ -159,10 +147,7 @@ export async function updateAdminNote(
  * Admin-only (user_id=1)
  */
 export async function deleteAdminNote(id: number): Promise<void> {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const result = await pool.query(
     `

@@ -1,7 +1,7 @@
 "use server";
 
 import { RailwayPathFinder } from "../scripts/lib/railwayPathFinder";
-import { getUser } from "./authActions";
+import { requireAdmin } from "./authHelpers";
 import pool from "./db";
 import type { PathResult, RailwayPart } from "./types";
 
@@ -13,11 +13,7 @@ export async function findRailwayPathFromCoordinates(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
 ): Promise<PathResult | null> {
-  // Admin check
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   console.log(
     "Coordinate-based path finder: Finding path from",
@@ -48,11 +44,7 @@ export async function findRailwayPathFromCoordinates(
  * Get railway parts by their IDs (used for route creation)
  */
 export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPart[]> {
-  // Admin check
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   if (partIds.length === 0) return [];
 

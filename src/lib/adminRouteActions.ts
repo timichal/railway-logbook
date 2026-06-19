@@ -1,6 +1,6 @@
 "use server";
 
-import { getUser } from "./authActions";
+import { requireAdmin } from "./authHelpers";
 import type { LineClass, UsageType } from "./constants";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
@@ -26,10 +26,7 @@ export interface SaveRouteData {
  * Get all railway routes (list view, no geometry)
  */
 export async function getAllRailwayRoutes() {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const result = await query(`
     SELECT track_id, from_station, to_station, track_number, description, usage_type, scenic, line_class,
@@ -45,10 +42,7 @@ export async function getAllRailwayRoutes() {
  * Get a single railway route by track_id
  */
 export async function getRailwayRoute(trackId: string) {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const result = await query(
     `
@@ -99,10 +93,7 @@ export async function getRailwayRoute(trackId: string) {
  * Returns GeoJSON FeatureCollection of Point features
  */
 export async function getAllRouteEndpoints(): Promise<GeoJSONFeatureCollection> {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const result = await query(`
     SELECT
@@ -173,11 +164,7 @@ export async function saveRailwayRoute(
   railwayParts?: RailwayPart[],
   trackId?: string,
 ): Promise<string> {
-  // Admin check
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const client = await pool.connect();
 
@@ -381,10 +368,7 @@ export async function updateRailwayRoute(
   lineClass: LineClass,
   intendedBacktracking: boolean,
 ) {
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   await query(
     `
@@ -413,11 +397,7 @@ export async function updateRailwayRoute(
  * Delete a railway route
  */
 export async function deleteRailwayRoute(trackId: string): Promise<void> {
-  // Admin check
-  const user = await getUser();
-  if (user?.id !== 1) {
-    throw new Error("Admin access required");
-  }
+  await requireAdmin();
 
   const client = await pool.connect();
 
