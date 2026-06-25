@@ -1,20 +1,15 @@
-import type maplibreglType from "maplibre-gl";
 import { useCallback, useState } from "react";
 import type { DataAccess } from "@/lib/dataAccess";
 import type { UserProgress } from "@/lib/userActions";
-import { getUserRouteColorExpression } from "../utils/userRouteStyling";
+import { loadLayerPrefs, saveLayerPref } from "../layerPrefs";
 
 /**
  * Simplified hook for progress tracking
  * Trip management has been replaced with journey-based system
  */
-export function useRouteEditor(
-  dataAccess: DataAccess,
-  map: React.MutableRefObject<maplibreglType.Map | null>,
-  selectedCountries?: string[],
-) {
+export function useRouteEditor(dataAccess: DataAccess, selectedCountries?: string[]) {
   const [progress, setProgress] = useState<UserProgress | null>(null);
-  const [showSpecialLines, setShowSpecialLines] = useState(false);
+  const [showSpecialLines, setShowSpecialLines] = useState(() => loadLayerPrefs().showSpecialLines);
 
   // Refresh progress stats
   const refreshProgress = useCallback(async () => {
@@ -26,33 +21,15 @@ export function useRouteEditor(
     }
   }, [dataAccess, selectedCountries]);
 
+  // Just flips state and persists it; the actual layer filters/visibility are
+  // applied by useLayerFilters (single source of truth) reacting to the change.
   const toggleShowSpecialLines = useCallback(() => {
-    if (!map.current) return;
-
-    const newShowSpecialLines = !showSpecialLines;
-    setShowSpecialLines(newShowSpecialLines);
-
-    // Update visibility filter for railway_routes layer
-    if (map.current.getLayer("railway_routes")) {
-      const colorExpression = getUserRouteColorExpression();
-      map.current.setPaintProperty("railway_routes", "line-color", colorExpression);
-
-      const newFilter = newShowSpecialLines
-        ? undefined // Show all routes
-        : ["!=", ["get", "usage_type"], 1]; // Hide Special routes (usage_type=1)
-
-      map.current.setFilter("railway_routes", newFilter as any);
-    }
-
-    // Update visibility filter for scenic outline layer
-    if (map.current.getLayer("railway_routes_scenic_outline")) {
-      const newFilter = newShowSpecialLines
-        ? ["==", ["get", "scenic"], true] // Show all scenic routes
-        : ["all", ["==", ["get", "scenic"], true], ["!=", ["get", "usage_type"], 1]]; // Hide Special scenic routes
-
-      map.current.setFilter("railway_routes_scenic_outline", newFilter as any);
-    }
-  }, [map, showSpecialLines]);
+    setShowSpecialLines((prev) => {
+      const next = !prev;
+      saveLayerPref("showSpecialLines", next);
+      return next;
+    });
+  }, []);
 
   return {
     refreshProgress,

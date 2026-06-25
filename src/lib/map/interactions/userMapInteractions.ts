@@ -80,22 +80,19 @@ export function setupUserMapInteractions(
       frequency: properties.frequency,
     });
     if (properties.description) {
-      formattedDescription += `<b>Note:</b> ${properties.description}<br />`;
+      formattedDescription += `<br /><b>Note:</b> ${properties.description}`;
     }
     if (properties.link) {
-      formattedDescription += `<a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a><br />`;
+      formattedDescription += `<br /><a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a>`;
     }
 
-    if (properties.date || properties.journey_name) {
-      formattedDescription += `<hr class="my-2" />`;
-    }
+    // `date` and `journey_name` are populated together from the most-recent
+    // logged journey (both NOT NULL in user_journeys), so either both are
+    // present or neither is.
     if (properties.date) {
       const dateStr = new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date));
-      if (properties.journey_name) {
-        formattedDescription += `<span style="color: black;">Most recent: ${dateStr} (${properties.journey_name})</span>`;
-      } else {
-        formattedDescription += `<span style="color: black;">Most recent: ${dateStr}</span>`;
-      }
+      formattedDescription += `<hr class="my-2" />`;
+      formattedDescription += `<span style="color: black;">Most recent: ${dateStr} (${properties.journey_name})</span>`;
     }
 
     popupContent += `<div class="mb-2">${formattedDescription}</div>`;

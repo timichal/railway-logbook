@@ -20,6 +20,7 @@ import { useRouteEditor } from "@/lib/map/hooks/useRouteEditor";
 import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
 import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
 import { setupUserMapInteractions } from "@/lib/map/interactions/userMapInteractions";
+import { loadLayerPrefs, saveLayerPref } from "@/lib/map/layerPrefs";
 import {
   getUserRouteClickBufferWidthExpression,
   getUserRouteColorExpression,
@@ -72,7 +73,9 @@ export default function VectorRailwayMap({
   const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
 
   // Scenic routes outline toggle
-  const [showScenicOutline, setShowScenicOutline] = useState<boolean>(false);
+  const [showScenicOutline, setShowScenicOutline] = useState<boolean>(
+    () => loadLayerPrefs().showScenicOutline,
+  );
 
   // Station click handler from Journey Planner
   const [journeyStationClickHandler, setJourneyStationClickHandler] = useState<
@@ -223,7 +226,7 @@ export default function VectorRailwayMap({
   }, [map, user]);
 
   // Route editor hook
-  const routeEditor = useRouteEditor(dataAccess, map, selectedCountries);
+  const routeEditor = useRouteEditor(dataAccess, selectedCountries);
 
   // Tile refresh hook (for logged-in user route logging)
   const { refreshTiles, cacheBuster } = useMapTileRefresh({
@@ -240,8 +243,9 @@ export default function VectorRailwayMap({
   // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)
   useRouteHighlighting(map, highlightedRoutes, highlightKind, selectedRoutes, cacheBuster);
 
-  // Layer filter hooks (cacheBuster re-applies filters after a tile refresh re-adds layers)
-  useLayerFilters(map, routeEditor.showSpecialLines, showScenicOutline, cacheBuster);
+  // Layer filter hooks. mapLoaded applies persisted prefs once layers exist;
+  // cacheBuster re-applies filters after a tile refresh re-adds layers.
+  useLayerFilters(map, routeEditor.showSpecialLines, showScenicOutline, mapLoaded, cacheBuster);
 
   // Route click handler
   const handleRouteClick = useCallback(
@@ -550,7 +554,10 @@ export default function VectorRailwayMap({
                 <input
                   type="checkbox"
                   checked={showScenicOutline}
-                  onChange={(e) => setShowScenicOutline(e.target.checked)}
+                  onChange={(e) => {
+                    setShowScenicOutline(e.target.checked);
+                    saveLayerPref("showScenicOutline", e.target.checked);
+                  }}
                   className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 />
                 <span>Highlight scenic lines</span>
