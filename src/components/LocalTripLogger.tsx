@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LocalStorageManager } from "@/lib/localStorage";
+import * as localStore from "@/lib/localStorage";
 import { useToast } from "@/lib/toast";
 import type { SelectedRoute, Station } from "@/lib/types";
 import JourneyPlanner from "./JourneyPlanner";
@@ -44,8 +44,8 @@ export default function LocalTripLogger({
   const [journeyDescription, setJourneyDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const journeyCount = LocalStorageManager.getJourneyCount();
-  const canAddMore = LocalStorageManager.canAddMoreJourneys();
+  const journeyCount = localStore.getJourneyCount();
+  const canAddMore = localStore.canAddMoreJourneys();
   const remainingJourneys = 5 - journeyCount;
 
   const handleCreateJourney = async () => {
@@ -57,7 +57,7 @@ export default function LocalTripLogger({
     setIsSaving(true);
     try {
       // Create journey
-      const newJourney = LocalStorageManager.addJourney({
+      const newJourney = localStore.addJourney({
         name: journeyName.trim(),
         description: journeyDescription.trim() || null,
         date: journeyDate,
@@ -70,7 +70,7 @@ export default function LocalTripLogger({
         partial: r.partial ?? false,
       }));
 
-      LocalStorageManager.addLoggedParts(parts);
+      localStore.addLoggedParts(parts);
 
       // Clear form and selection
       setJourneyName("");

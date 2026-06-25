@@ -5,6 +5,13 @@
 
 import * as countryCoder from "@rapideditor/country-coder";
 
+/** GeoJSON LineString geometry or a raw [lng, lat] coordinate array. */
+type RouteGeometry =
+  | { type?: string; coordinates?: [number, number][] }
+  | [number, number][]
+  | null
+  | undefined;
+
 /**
  * Determines the ISO 3166-1 alpha-2 country code from geographic coordinates
  * @param lng - Longitude in decimal degrees
@@ -41,19 +48,22 @@ export function getCountryFromCoordinates(lng: number, lat: number): string | nu
  * @param geometry - PostGIS geometry object or GeoJSON geometry
  * @returns [lng, lat] or null if extraction fails
  */
-export function getStartCoordinate(geometry: any): [number, number] | null {
+export function getStartCoordinate(geometry: RouteGeometry): [number, number] | null {
   try {
     if (!geometry) return null;
+
+    // Handle parsed geometry (raw coordinate array)
+    if (Array.isArray(geometry)) {
+      if (geometry.length > 0) {
+        const [lng, lat] = geometry[0];
+        return [lng, lat];
+      }
+      return null;
+    }
 
     // Handle GeoJSON format
     if (geometry.type === "LineString" && geometry.coordinates && geometry.coordinates.length > 0) {
       const [lng, lat] = geometry.coordinates[0];
-      return [lng, lat];
-    }
-
-    // Handle parsed geometry
-    if (Array.isArray(geometry) && geometry.length > 0) {
-      const [lng, lat] = geometry[0];
       return [lng, lat];
     }
 
@@ -70,20 +80,23 @@ export function getStartCoordinate(geometry: any): [number, number] | null {
  * @param geometry - PostGIS geometry object or GeoJSON geometry
  * @returns [lng, lat] or null if extraction fails
  */
-export function getEndCoordinate(geometry: any): [number, number] | null {
+export function getEndCoordinate(geometry: RouteGeometry): [number, number] | null {
   try {
     if (!geometry) return null;
+
+    // Handle parsed geometry (raw coordinate array)
+    if (Array.isArray(geometry)) {
+      if (geometry.length > 0) {
+        const [lng, lat] = geometry[geometry.length - 1];
+        return [lng, lat];
+      }
+      return null;
+    }
 
     // Handle GeoJSON format
     if (geometry.type === "LineString" && geometry.coordinates && geometry.coordinates.length > 0) {
       const coords = geometry.coordinates;
       const [lng, lat] = coords[coords.length - 1];
-      return [lng, lat];
-    }
-
-    // Handle parsed geometry
-    if (Array.isArray(geometry) && geometry.length > 0) {
-      const [lng, lat] = geometry[geometry.length - 1];
       return [lng, lat];
     }
 
@@ -100,7 +113,7 @@ export function getEndCoordinate(geometry: any): [number, number] | null {
  * @param geometry - GeoJSON LineString geometry or coordinate array
  * @returns Object with startCountry and endCountry (2-letter codes or null)
  */
-export function getRouteCountries(geometry: any): {
+export function getRouteCountries(geometry: RouteGeometry): {
   startCountry: string | null;
   endCountry: string | null;
 } {

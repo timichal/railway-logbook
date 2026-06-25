@@ -433,8 +433,7 @@ export default function JourneyPlanner({
           key={viaIndex}
           className={`flex items-center gap-2 ${draggedIndex === viaIndex ? "opacity-50" : ""}`}
         >
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: native HTML5 drag handle, see below */}
-          {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: native HTML5 drag handle; drag-and-drop reordering has no keyboard equivalent, and the via input below is fully keyboard-operable. */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: native HTML5 drag handle; drag-and-drop reordering has no keyboard equivalent, and the via input below is fully keyboard-operable. */}
           <div
             draggable
             onDragStart={() => handleDragStart(viaIndex)}

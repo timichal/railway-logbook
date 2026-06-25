@@ -100,7 +100,7 @@ export async function createJourney(
     // Log routes to journey (batch insert)
     if (trackIds.length > 0) {
       // Build VALUES clause for batch insert
-      const values: any[] = [];
+      const values: (number | boolean)[] = [];
       const valuePlaceholders: string[] = [];
 
       trackIds.forEach((trackId, index) => {
@@ -234,7 +234,7 @@ export async function addRoutesToJourney(
 
     // Batch insert routes
     if (trackIds.length > 0) {
-      const values: any[] = [];
+      const values: (number | boolean)[] = [];
       const valuePlaceholders: string[] = [];
 
       trackIds.forEach((trackId, index) => {

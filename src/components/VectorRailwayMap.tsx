@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@/lib/authActions";
 import { createDataAccess } from "@/lib/dataAccess";
-import { LocalStorageManager } from "@/lib/localStorage";
+import * as localStore from "@/lib/localStorage";
 import {
   createRailwayRoutesClickLayer,
   createRailwayRoutesDiversionLayer,
@@ -185,7 +185,7 @@ export default function VectorRailwayMap({
   const updateLocalStorageFeatureStates = useCallback(async () => {
     if (!map.current || user) return;
 
-    const allParts = LocalStorageManager.getLoggedParts();
+    const allParts = localStore.getLoggedParts();
     const routeStatus = new Map<string, { hasComplete: boolean; hasPartial: boolean }>();
 
     for (const part of allParts) {
@@ -492,8 +492,7 @@ export default function VectorRailwayMap({
         <>
           {sidebarContent}
           {/* Resizer: mouse-only drag handle (keyboard resize intentionally unsupported) */}
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only resize affordance, see below */}
-          {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: mouse-only resize affordance with no keyboard equivalent; the sidebar remains fully usable without resizing. */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only resize affordance with no keyboard equivalent; the sidebar remains fully usable without resizing. */}
           <div
             onMouseDown={onSidebarResize}
             className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? "bg-blue-400" : ""}`}

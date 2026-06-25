@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { login } from "@/lib/authActions";
-import { LocalStorageManager } from "@/lib/localStorage";
+import * as localStore from "@/lib/localStorage";
 import { migrateLocalJourneys } from "@/lib/migrationActions";
 import { useToast } from "@/lib/toast";
 
@@ -25,7 +25,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       await login(formData);
 
       // Check if there are localStorage journeys
-      const journeyCount = LocalStorageManager.getJourneyCount();
+      const journeyCount = localStore.getJourneyCount();
 
       if (journeyCount > 0) {
         // Show confirmation dialog for merging journeys
@@ -38,11 +38,11 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           variant: "info",
           onConfirm: async () => {
             try {
-              const { journeys, parts } = LocalStorageManager.exportJourneysData();
+              const { journeys, parts } = localStore.exportJourneysData();
               const result = await migrateLocalJourneys(journeys, parts);
 
               // Clear localStorage after successful migration
-              LocalStorageManager.clearAll();
+              localStore.clearAll();
 
               if (result.journeysMigrated > 0) {
                 showSuccess(
@@ -68,7 +68,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           },
           onThird: () => {
             // User chose to delete local journeys
-            LocalStorageManager.clearAll();
+            localStore.clearAll();
             showSuccess("Login successful! Local journeys have been deleted.");
             router.refresh();
           },

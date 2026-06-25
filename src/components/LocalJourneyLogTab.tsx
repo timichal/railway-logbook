@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getUntimezonedDateStr } from "@/lib/getUntimezonedDateStr";
-import { LocalStorageManager } from "@/lib/localStorage";
+import * as localStore from "@/lib/localStorage";
 import { useToast } from "@/lib/toast";
 import type { LocalJourney, LocalLoggedPart, RailwayRoute, SelectedRoute } from "@/lib/types";
 import { getRoutesByIds } from "@/lib/userActions";
@@ -62,7 +62,7 @@ export default function LocalJourneyLogTab({
     loadJourneys();
 
     // Listen for storage changes from other tabs
-    const cleanup = LocalStorageManager.onStorageChange(() => {
+    const cleanup = localStore.onStorageChange(() => {
       loadJourneys();
     });
 
@@ -79,8 +79,8 @@ export default function LocalJourneyLogTab({
   }, [onHighlightRoutes]);
 
   const loadJourneys = () => {
-    const allJourneys = LocalStorageManager.getJourneys();
-    const allParts = LocalStorageManager.getLoggedParts();
+    const allJourneys = localStore.getJourneys();
+    const allParts = localStore.getLoggedParts();
 
     const journeysWithRoutes: JourneyWithRoutes[] = allJourneys.map((journey) => ({
       journey,
@@ -125,13 +125,13 @@ export default function LocalJourneyLogTab({
     const trackId = Number(route.track_id);
 
     try {
-      const existing = LocalStorageManager.getLoggedPartsByJourneyId(viewedJourneyId).find(
-        (p) => p.track_id === trackId,
-      );
+      const existing = localStore
+        .getLoggedPartsByJourneyId(viewedJourneyId)
+        .find((p) => p.track_id === trackId);
       if (existing) {
-        LocalStorageManager.deleteLoggedPart(existing.id);
+        localStore.deleteLoggedPart(existing.id);
       } else {
-        LocalStorageManager.addLoggedPart({
+        localStore.addLoggedPart({
           journey_id: viewedJourneyId,
           track_id: trackId,
           partial: false,
@@ -141,7 +141,7 @@ export default function LocalJourneyLogTab({
       }
 
       loadJourneys();
-      const remaining = LocalStorageManager.getLoggedPartsByJourneyId(viewedJourneyId);
+      const remaining = localStore.getLoggedPartsByJourneyId(viewedJourneyId);
       onHighlightRoutes?.(remaining.map((p) => p.track_id));
       onJourneyChanged?.();
     } catch (error) {
@@ -206,7 +206,7 @@ export default function LocalJourneyLogTab({
     }
 
     try {
-      LocalStorageManager.updateJourney(editingJourneyId, {
+      localStore.updateJourney(editingJourneyId, {
         name: editName.trim(),
         description: editDescription.trim() || null,
         date: editDate,
@@ -238,7 +238,7 @@ export default function LocalJourneyLogTab({
 
   const handleDelete = (journeyId: string) => {
     try {
-      LocalStorageManager.deleteJourney(journeyId);
+      localStore.deleteJourney(journeyId);
       showSuccess("Journey deleted successfully");
 
       // If we were viewing this journey, clear the view
@@ -265,13 +265,13 @@ export default function LocalJourneyLogTab({
 
   const handleDeletePart = (partId: string) => {
     try {
-      LocalStorageManager.deleteLoggedPart(partId);
+      localStore.deleteLoggedPart(partId);
       showSuccess("Route removed from journey");
       loadJourneys();
 
       // Re-highlight the remaining routes of the journey being viewed
       if (viewedJourneyId && onHighlightRoutes) {
-        const remaining = LocalStorageManager.getLoggedPartsByJourneyId(viewedJourneyId);
+        const remaining = localStore.getLoggedPartsByJourneyId(viewedJourneyId);
         onHighlightRoutes(remaining.map((p) => p.track_id));
       }
 
@@ -287,7 +287,7 @@ export default function LocalJourneyLogTab({
 
   const handleTogglePartial = (partId: string, currentPartial: boolean) => {
     try {
-      LocalStorageManager.updateLoggedPart(partId, !currentPartial);
+      localStore.updateLoggedPart(partId, !currentPartial);
       loadJourneys();
 
       // Trigger map refresh

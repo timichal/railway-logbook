@@ -59,7 +59,7 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **Country detection.** `@rapideditor/country-coder` on first/last coordinate fills `start_country`/`end_country`.
 - **Vector tiles** via Martin (port 3001): `railway_routes_tile` (accepts `selected_countries` filter), `railway_parts_tile` (zoom-filtered), `stations_tile` (zoom 10+), `admin_notes_tile`.
 - **Progress.** A route counts as completed if logged with `partial=false` in any journey; partial if only `partial=true`. Country filter requires BOTH start and end country in selected list.
-- **Auth.** Email/password + bcrypt + session. Unauthenticated users get localStorage (`LocalStorageManager`) via `dataAccess.ts` abstraction; `migrationActions.ts` migrates on login.
+- **Auth.** Email/password + bcrypt + session. Unauthenticated users get localStorage (`localStorage.ts` module functions, imported as `localStore`) via `dataAccess.ts` abstraction; `migrationActions.ts` migrates on login.
 - **Admin = user_id=1.** Every admin server action enforces this check.
 
 ### Map styling

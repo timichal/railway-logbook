@@ -8,7 +8,7 @@
 
 import type { User } from "./authActions";
 import { isSpecialUsage, SUPPORTED_COUNTRIES } from "./constants";
-import { LocalStorageManager } from "./localStorage";
+import * as localStore from "./localStorage";
 import type { RailwayRoute } from "./types";
 import {
   getProgressByCountry as dbGetProgressByCountry,
@@ -101,7 +101,7 @@ function createLocalStorageDataAccess(): DataAccess {
         }
 
         const allRoutes = routesCache || [];
-        const localParts = LocalStorageManager.getLoggedParts();
+        const localParts = localStore.getLoggedParts();
 
         // Apply country filter if provided
         let filteredRoutes = allRoutes;
@@ -177,7 +177,7 @@ function createLocalStorageDataAccess(): DataAccess {
         }
 
         const allRoutes = routesCache || [];
-        const localParts = LocalStorageManager.getLoggedParts();
+        const localParts = localStore.getLoggedParts();
 
         // Find completed routes
         const completedRouteIds = new Set<string>();
@@ -260,19 +260,19 @@ function createLocalStorageDataAccess(): DataAccess {
     },
 
     async getUserPreferences(): Promise<string[]> {
-      return LocalStorageManager.getPreferences();
+      return localStore.getPreferences();
     },
 
     async updateUserPreferences(selectedCountries: string[]): Promise<void> {
-      LocalStorageManager.setPreferences(selectedCountries);
+      localStore.setPreferences(selectedCountries);
     },
 
     async getJourneyCount(): Promise<number> {
-      return LocalStorageManager.getJourneyCount();
+      return localStore.getJourneyCount();
     },
 
     async canAddMoreJourneys(): Promise<boolean> {
-      return LocalStorageManager.canAddMoreJourneys();
+      return localStore.canAddMoreJourneys();
     },
   };
 }

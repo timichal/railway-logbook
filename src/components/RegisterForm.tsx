@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { register } from "@/lib/authActions";
-import { LocalStorageManager } from "@/lib/localStorage";
+import * as localStore from "@/lib/localStorage";
 import { migrateLocalJourneys } from "@/lib/migrationActions";
 import { useToast } from "@/lib/toast";
 
@@ -23,8 +23,8 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
 
     try {
       // Export localStorage data before registration
-      const { journeys, parts } = LocalStorageManager.exportJourneysData();
-      const localPreferences = LocalStorageManager.exportPreferences();
+      const { journeys, parts } = localStore.exportJourneysData();
+      const localPreferences = localStore.exportPreferences();
 
       // Register with auto-migration
       await register(formData, [], localPreferences);
@@ -35,7 +35,7 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
           const migrationResult = await migrateLocalJourneys(journeys, parts);
 
           // Clear localStorage after successful migration
-          LocalStorageManager.clearAll();
+          localStore.clearAll();
 
           if (migrationResult.journeysMigrated > 0) {
             showSuccess(

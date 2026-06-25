@@ -331,7 +331,7 @@ export async function getJourneysAndTrips(
     `;
 
     // Total count for pagination UI
-    const countParams: any[] = [user.id];
+    const countParams: (string | number)[] = [user.id];
     if (searchPattern) countParams.push(searchPattern);
     const countResult = await pool.query<{ total: string }>(
       `${baseCte} SELECT COUNT(*)::text AS total FROM ordered`,
@@ -340,7 +340,7 @@ export async function getJourneysAndTrips(
     const total = parseInt(countResult.rows[0]?.total ?? "0", 10);
 
     // Page of (type, id) ordered by effective_date desc, then created_at desc as tiebreaker
-    const pageParams: any[] = [user.id];
+    const pageParams: (string | number)[] = [user.id];
     if (searchPattern) pageParams.push(searchPattern);
     const limitIdx = pageParams.length + 1;
     const offsetIdx = pageParams.length + 2;

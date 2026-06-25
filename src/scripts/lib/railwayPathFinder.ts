@@ -1082,7 +1082,8 @@ export class RailwayPathFinder {
       param = dot / lenSq;
     }
 
-    let xx, yy;
+    let xx: number;
+    let yy: number;
 
     if (param < 0) {
       xx = x1;
@@ -1220,7 +1221,7 @@ export class RailwayPathFinder {
   /**
    * Parse database rows and store parts in memory
    */
-  private parseAndStoreParts(rows: any[]): void {
+  private parseAndStoreParts(rows: { id: string | number; geometry_json: string }[]): void {
     for (const row of rows) {
       const id = String(row.id);
       const geom = JSON.parse(row.geometry_json);
