@@ -170,6 +170,8 @@ export default function UserSidebar({
           <LocalJourneyLogTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
+            onJourneyEditStart={onJourneyEditStart}
+            onJourneyEditEnd={onJourneyEditEnd}
           />
         )}
 

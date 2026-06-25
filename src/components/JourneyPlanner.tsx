@@ -322,7 +322,7 @@ export default function JourneyPlanner({
     setDraggedIndex(index);
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
   };
 
@@ -438,7 +438,7 @@ export default function JourneyPlanner({
           <div
             draggable
             onDragStart={() => handleDragStart(viaIndex)}
-            onDragOver={(e) => handleDragOver(e, viaIndex)}
+            onDragOver={(e) => handleDragOver(e)}
             onDrop={(e) => handleDrop(e, viaIndex)}
             onDragEnd={handleDragEnd}
             className="cursor-move text-gray-400 text-lg"

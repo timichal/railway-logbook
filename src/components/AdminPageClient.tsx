@@ -152,7 +152,6 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
         },
         previewRoute.startCoordinate,
         previewRoute.endCoordinate,
-        previewRoute.railwayParts,
       );
       console.log(
         "AdminPageClient: Route saved successfully with auto-generated track_id:",
@@ -245,7 +244,6 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
       onNoteChanged={handleNoteChanged}
       notesRefreshSignal={notesRefreshTrigger}
       showError={showError}
-      showSuccess={showSuccess}
     />
   );
 

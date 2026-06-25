@@ -48,7 +48,6 @@ interface VectorRailwayMapProps {
   isResizing: boolean;
   isMobile: boolean;
   sidebarOpen: boolean;
-  onToggleSidebar: () => void;
   onLogout: () => void;
   onAuthSuccess: () => void;
 }
@@ -64,7 +63,6 @@ export default function VectorRailwayMap({
   isResizing,
   isMobile,
   sidebarOpen,
-  onToggleSidebar,
   onLogout,
   onAuthSuccess,
 }: VectorRailwayMapProps) {

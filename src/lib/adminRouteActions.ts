@@ -5,7 +5,7 @@ import type { LineClass, UsageType } from "./constants";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool, { query } from "./db";
-import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult, RailwayPart } from "./types";
+import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./types";
 
 /**
  * Interface for route metadata used during creation
@@ -161,7 +161,6 @@ export async function saveRailwayRoute(
   pathResult: PathResult,
   startCoordinate: [number, number],
   endCoordinate: [number, number],
-  railwayParts?: RailwayPart[],
   trackId?: string,
 ): Promise<string> {
   await requireAdmin();

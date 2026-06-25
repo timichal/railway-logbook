@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getUntimezonedDateStr } from "@/lib/getUntimezonedDateStr";
 import { LocalStorageManager } from "@/lib/localStorage";
 import { useToast } from "@/lib/toast";
-import type { LocalJourney, LocalLoggedPart } from "@/lib/types";
+import type { LocalJourney, LocalLoggedPart, RailwayRoute, SelectedRoute } from "@/lib/types";
+import { getRoutesByIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
   journey: LocalJourney;
@@ -14,17 +15,40 @@ interface JourneyWithRoutes {
 interface LocalJourneyLogTabProps {
   onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onJourneyChanged?: () => void;
+  onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
+  onJourneyEditEnd?: () => void;
+}
+
+// Build a minimal RailwayRoute for display from a route clicked on the map.
+function buildRouteMetaFromSelected(route: SelectedRoute): RailwayRoute {
+  return {
+    track_id: route.track_id,
+    from_station: route.from_station,
+    to_station: route.to_station,
+    track_number: route.track_number,
+    description: route.description,
+    usage_type: 0 as RailwayRoute["usage_type"],
+    frequency: [],
+    link: route.link,
+    geometry: "",
+    length_km: route.length_km,
+  };
 }
 
 export default function LocalJourneyLogTab({
   onHighlightRoutes,
   onJourneyChanged,
+  onJourneyEditStart,
+  onJourneyEditEnd,
 }: LocalJourneyLogTabProps) {
   const { showSuccess, showError } = useToast();
   const [journeys, setJourneys] = useState<JourneyWithRoutes[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [viewedJourneyId, setViewedJourneyId] = useState<string | null>(null);
+  // Route metadata (station names, length, …) keyed by track_id. The localStorage
+  // parts only store track_id, so we fetch the rest on demand for display.
+  const [routeMeta, setRouteMeta] = useState<Record<number, RailwayRoute>>({});
 
   // Edit state
   const [editingJourneyId, setEditingJourneyId] = useState<string | null>(null);
@@ -71,6 +95,75 @@ export default function LocalJourneyLogTab({
     setJourneys(journeysWithRoutes);
   };
 
+  // Fetch metadata for any track_ids we don't already have cached.
+  const loadRouteMeta = useCallback(
+    async (trackIds: number[]) => {
+      const missing = trackIds.filter((id) => !(id in routeMeta));
+      if (missing.length === 0) return;
+      try {
+        const routes = await getRoutesByIds(missing);
+        setRouteMeta((prev) => {
+          const next = { ...prev };
+          for (const route of routes) {
+            next[Number(route.track_id)] = route;
+          }
+          return next;
+        });
+      } catch (error) {
+        console.error("Error loading route metadata:", error);
+      }
+    },
+    [routeMeta],
+  );
+
+  // Map route clicks (while a journey is open) toggle that route in/out of the
+  // journey. Kept in a ref so the stable callback registered with the map always
+  // sees fresh state, mirroring MergedJourneyCard's approach.
+  const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | null>(null);
+  handleMapRouteClickRef.current = (route: SelectedRoute) => {
+    if (!viewedJourneyId) return;
+    const trackId = Number(route.track_id);
+
+    try {
+      const existing = LocalStorageManager.getLoggedPartsByJourneyId(viewedJourneyId).find(
+        (p) => p.track_id === trackId,
+      );
+      if (existing) {
+        LocalStorageManager.deleteLoggedPart(existing.id);
+      } else {
+        LocalStorageManager.addLoggedPart({
+          journey_id: viewedJourneyId,
+          track_id: trackId,
+          partial: false,
+        });
+        // Cache metadata from the clicked route for instant display.
+        setRouteMeta((prev) => ({ ...prev, [trackId]: buildRouteMetaFromSelected(route) }));
+      }
+
+      loadJourneys();
+      const remaining = LocalStorageManager.getLoggedPartsByJourneyId(viewedJourneyId);
+      onHighlightRoutes?.(remaining.map((p) => p.track_id));
+      onJourneyChanged?.();
+    } catch (error) {
+      console.error("Error toggling route in journey:", error);
+      showError(error instanceof Error ? error.message : "Failed to update journey");
+    }
+  };
+
+  const stableHandleMapRouteClick = useCallback((route: SelectedRoute) => {
+    handleMapRouteClickRef.current?.(route);
+  }, []);
+
+  // Register the map click handler while a journey is open; tear it down when it
+  // closes or the tab unmounts.
+  useEffect(() => {
+    if (!viewedJourneyId) return;
+    onJourneyEditStart?.(stableHandleMapRouteClick);
+    return () => {
+      onJourneyEditEnd?.();
+    };
+  }, [viewedJourneyId, stableHandleMapRouteClick, onJourneyEditStart, onJourneyEditEnd]);
+
   const handleViewJourney = (journeyId: string) => {
     // Toggle view - if already viewing this journey, collapse it
     if (viewedJourneyId === journeyId) {
@@ -95,10 +188,13 @@ export default function LocalJourneyLogTab({
     setEditDescription(journeyData.journey.description || "");
 
     // Highlight routes on map
+    const routeIds = journeyData.parts.map((p) => p.track_id);
     if (onHighlightRoutes) {
-      const routeIds = journeyData.parts.map((p) => p.track_id);
       onHighlightRoutes(routeIds);
     }
+
+    // Fetch route metadata for richer display
+    loadRouteMeta(routeIds);
   };
 
   const handleSaveEdit = () => {
@@ -172,6 +268,12 @@ export default function LocalJourneyLogTab({
       LocalStorageManager.deleteLoggedPart(partId);
       showSuccess("Route removed from journey");
       loadJourneys();
+
+      // Re-highlight the remaining routes of the journey being viewed
+      if (viewedJourneyId && onHighlightRoutes) {
+        const remaining = LocalStorageManager.getLoggedPartsByJourneyId(viewedJourneyId);
+        onHighlightRoutes(remaining.map((p) => p.track_id));
+      }
 
       // Trigger map refresh
       if (onJourneyChanged) {
@@ -304,6 +406,10 @@ export default function LocalJourneyLogTab({
               {/* Edit Form and Journey Details - shown when viewing */}
               {viewedJourneyId === journey.id && (
                 <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+                  <div className="px-2 py-1.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                    Click routes on the map to add or remove them from this journey
+                  </div>
+
                   {/* Edit Form */}
                   {editingJourneyId === journey.id && (
                     <div className="space-y-2">
@@ -384,21 +490,69 @@ export default function LocalJourneyLogTab({
                         Routes in this journey:
                       </h5>
                       <div className="space-y-1 max-h-64 overflow-y-auto">
-                        {parts.map((part) => (
-                          <div
-                            key={part.id}
-                            className="p-2 bg-gray-50 border border-gray-200 rounded text-xs flex items-start justify-between gap-2"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium">Route #{part.track_id}</div>
-                              <div className="flex items-center gap-3 mt-1 text-gray-600">
-                                {part.partial && (
-                                  <span className="text-orange-600 font-medium">Partial</span>
-                                )}
+                        {parts.map((part) => {
+                          const meta = routeMeta[part.track_id];
+                          return (
+                            <div
+                              key={part.id}
+                              className="p-2 bg-gray-50 border border-gray-200 rounded text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium truncate">
+                                  {meta ? (
+                                    <>
+                                      {meta.track_number && `${meta.track_number} `}
+                                      {meta.from_station} ⟷ {meta.to_station}
+                                    </>
+                                  ) : (
+                                    `Route #${part.track_id}`
+                                  )}
+                                </span>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <label className="flex items-center gap-1 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={part.partial}
+                                      onChange={() => handleTogglePartial(part.id, part.partial)}
+                                      className="w-3 h-3 cursor-pointer"
+                                    />
+                                    <span className="text-gray-500">partial</span>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeletePart(part.id)}
+                                    title="Remove route from journey"
+                                    className="w-6 h-6 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                  >
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden="true"
+                                    >
+                                      <polyline points="3 6 5 6 21 6" />
+                                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                      <path d="M10 11v6" />
+                                      <path d="M14 11v6" />
+                                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                                    </svg>
+                                  </button>
+                                </div>
                               </div>
+                              {meta?.length_km != null && (
+                                <div className="text-gray-500 mt-0.5">
+                                  {Number(meta.length_km).toFixed(1)} km
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

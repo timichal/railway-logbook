@@ -66,6 +66,45 @@ export async function getAllRoutes(): Promise<RailwayRoute[]> {
   }));
 }
 
+/**
+ * Get metadata (no geometry) for a specific set of routes by track_id.
+ * Used by unauthenticated users to label logged parts stored in localStorage,
+ * which only retain track_id. No authentication required — route data is public.
+ */
+export async function getRoutesByIds(trackIds: number[]): Promise<RailwayRoute[]> {
+  if (trackIds.length === 0) return [];
+
+  const result = await query(
+    `
+    SELECT
+      track_id,
+      from_station,
+      to_station,
+      track_number,
+      description,
+      usage_type,
+      frequency,
+      link,
+      scenic,
+      line_class,
+      length_km,
+      start_country,
+      end_country,
+      is_valid,
+      error_message
+    FROM railway_routes
+    WHERE track_id = ANY($1::int[])
+  `,
+    [trackIds],
+  );
+
+  return result.rows.map((row) => ({
+    ...row,
+    track_id: row.track_id.toString(),
+    geometry: "",
+  }));
+}
+
 export interface UserProgress {
   totalKm: number;
   completedKm: number;

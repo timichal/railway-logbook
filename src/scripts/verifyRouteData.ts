@@ -22,7 +22,6 @@ export interface RecalculationResult {
  */
 export async function recalculateRoute(
   client: Client,
-  trackId: number,
   startingCoordinate: [number, number],
   endingCoordinate: [number, number],
 ): Promise<{ success: boolean; coordinates?: Coord[]; error?: string; hasBacktracking?: boolean }> {
@@ -117,12 +116,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
     const endingCoordinate: [number, number] = [parseFloat(end_lng), parseFloat(end_lat)];
 
     // Recalculate route from coordinates
-    const recalcResult = await recalculateRoute(
-      client,
-      track_id,
-      startingCoordinate,
-      endingCoordinate,
-    );
+    const recalcResult = await recalculateRoute(client, startingCoordinate, endingCoordinate);
 
     if (recalcResult.success && recalcResult.coordinates) {
       // Convert coordinates to LineString WKT format

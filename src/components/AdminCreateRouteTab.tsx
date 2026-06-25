@@ -213,7 +213,6 @@ export default function AdminCreateRouteTab({
         },
         currentPathResult.startCoordinate,
         currentPathResult.endCoordinate,
-        currentPathResult.railwayParts,
         editingGeometryForTrackId, // Pass track ID to trigger UPDATE query
       );
 

@@ -49,7 +49,6 @@ interface AdminSidebarProps {
   onNoteChanged?: () => void;
   notesRefreshSignal?: number;
   showError?: (message: string) => void;
-  showSuccess?: (message: string) => void;
 }
 
 export default function AdminSidebar({
@@ -73,7 +72,6 @@ export default function AdminSidebar({
   onNoteChanged,
   notesRefreshSignal,
   showError: showErrorProp,
-  showSuccess: showSuccessProp,
 }: AdminSidebarProps) {
   const { showError: showErrorToast } = useToast();
   const showError = showErrorProp || showErrorToast;

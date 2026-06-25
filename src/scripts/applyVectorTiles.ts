@@ -1,6 +1,6 @@
-import dotenv from "dotenv";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import dotenv from "dotenv";
 import { Client } from "pg";
 import { getDbConfig } from "../lib/dbConfig";
 
