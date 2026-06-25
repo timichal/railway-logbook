@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
 import { logout } from "@/lib/authActions";
+import type { UsageType } from "@/lib/constants";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
 
@@ -127,7 +128,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     to_station: string;
     track_number: string;
     description: string;
-    usage_type: 0 | 1;
+    usage_type: UsageType;
     frequency: string[];
     link: string;
     scenic: boolean;

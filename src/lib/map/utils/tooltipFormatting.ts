@@ -1,4 +1,10 @@
-import { getLineClassLabel, getUsageLabel, type LineClass, type UsageType } from "@/lib/constants";
+import {
+  getLineClassLabel,
+  getUsageBadgeColors,
+  getUsageLabel,
+  type LineClass,
+  type UsageType,
+} from "@/lib/constants";
 
 /**
  * Format route metadata as color-coded badges for tooltips
@@ -11,10 +17,9 @@ export function formatRouteMetadataBadges(properties: {
 }): string {
   let badges = "";
 
-  // Usage type badge
+  // Usage type badge (Regular=blue, Heritage=purple, Diversion=teal)
   const usageLabel = getUsageLabel(properties.usage_type);
-  const usageColor = properties.usage_type === 1 ? "#9333ea" : "#2563eb"; // Purple for Special, Blue for Regular
-  const usageBgColor = properties.usage_type === 1 ? "#f3e8ff" : "#dbeafe";
+  const { color: usageColor, bgColor: usageBgColor } = getUsageBadgeColors(properties.usage_type);
   badges += `<span style="background-color: ${usageBgColor}; color: ${usageColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${usageLabel}</span>`;
 
   // Line class badge

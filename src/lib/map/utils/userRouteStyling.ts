@@ -33,13 +33,14 @@ export function getUserRouteColorExpression(): maplibregl.ExpressionSpecificatio
 type WidthStop = { branch: number; main: number; highspeed: number };
 
 /**
- * Per-route width chooser given a target stop. Special-usage routes are
- * rendered slightly thinner than branch via WIDTHS.specialUsageMultiplier.
+ * Per-route width chooser given a target stop. Special-usage routes (any
+ * non-regular usage_type: Heritage or Diversion) are rendered slightly thinner
+ * than branch via WIDTHS.specialUsageMultiplier.
  */
 function widthByClass(stop: WidthStop): maplibregl.ExpressionSpecification {
   return [
     "case",
-    ["==", ["get", "usage_type"], 1],
+    ["!=", ["get", "usage_type"], 0],
     stop.branch * WIDTHS.specialUsageMultiplier,
     ["==", ["get", "line_class"], "branch"],
     stop.branch,

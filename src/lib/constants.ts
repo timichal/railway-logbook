@@ -1,25 +1,54 @@
 /**
- * Railway usage types (simplified to 2 types)
+ * Railway usage types.
+ * 0 = Regular (timetabled service, counts toward stats and the journey planner).
+ * 1 = Heritage (railfan/preserved lines, steam, not cleared for regular traffic).
+ * 2 = Diversion (freight/idle track used by passenger trains only during works elsewhere).
+ * Heritage and Diversion are both "special": excluded from stats and the planner,
+ * hidden behind the single "Show special lines" toggle.
  */
 export const usageOptions = [
   {
     id: 0,
     key: "REGULAR",
     label: "Regular",
+    // Blue
+    color: "#2563eb",
+    bgColor: "#dbeafe",
   },
   {
     id: 1,
-    key: "SPECIAL",
-    label: "Special",
+    key: "HERITAGE",
+    label: "Heritage",
+    // Purple
+    color: "#9333ea",
+    bgColor: "#f3e8ff",
+  },
+  {
+    id: 2,
+    key: "DIVERSION",
+    label: "Diversion",
+    // Teal
+    color: "#0d9488",
+    bgColor: "#ccfbf1",
   },
 ] as const;
 
-// Extract the usage type ID as a union type (0 | 1)
+// Extract the usage type ID as a union type (0 | 1 | 2)
 export type UsageType = (typeof usageOptions)[number]["id"];
+
+/** A route is "special" (non-regular) when it is anything other than Regular. */
+export const isSpecialUsage = (usageType: UsageType): boolean => usageType !== 0;
 
 export const getUsageLabel = (usageType: UsageType): string => {
   const option = usageOptions.find((opt) => opt.id === usageType);
   return option ? option.label : "Unknown";
+};
+
+export const getUsageBadgeColors = (usageType: UsageType): { color: string; bgColor: string } => {
+  const option = usageOptions.find((opt) => opt.id === usageType);
+  return option
+    ? { color: option.color, bgColor: option.bgColor }
+    : { color: "#374151", bgColor: "#e5e7eb" };
 };
 
 /**

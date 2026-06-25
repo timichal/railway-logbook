@@ -185,7 +185,7 @@ export default function RouteEditForm({
           {/* Usage Type */}
           <div>
             <span className="block text-sm font-medium text-gray-700 mb-2">Usage Type *</span>
-            <div className="flex gap-4">
+            <div className="space-y-2">
               {usageOptions.map((option) => (
                 <label key={option.key} className="flex items-center gap-2 cursor-pointer">
                   <input

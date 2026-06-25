@@ -31,10 +31,12 @@ export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
           at least the European countries where Interrail is valid.
         </p>
         <p className="mb-4">
-          Only lines that are in regular use and available in timetables are displayed. Some
-          heritage or otherwise non-regular lines are marked as <i>special lines</i>, available by
-          ticking the <b>Show special lines</b> box - however, some of them may be missing and some
-          may be without any traffic at the moment.
+          Only lines that are in regular use and available in timetables are displayed. Non-regular
+          lines are marked as <i>special lines</i> in two flavours: <i>Heritage</i> lines (preserved
+          or museum lines, mostly not cleared for regular service) and <i>Diversion</i> lines
+          (freight or normally idle track used by passenger trains only when works divert them).
+          Both are available by ticking the <b>Show special lines</b> box - however, some of them
+          may be missing and some may be without any traffic at the moment.
         </p>
         <p className="mb-4">
           While in the <b>Route Logger</b> mode, you can either click on individual line parts or

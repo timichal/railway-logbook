@@ -6,15 +6,11 @@ poznámky
 - junctions mají v OSM dané názvy (aspoň Německo) - projít opravit?
 
 STAV
-hotovo: Česko, Švýcarsko, Lucembursko (chybí scénické značení); Litva, Lotyšsko, Estonsko, Finsko, Polsko; Slovensko a Rakousko (chybí přeshraniční do Maďarska + scénické značení)
-rozdělané: Německo, Itálie, Slovinsko, Francie, Španělsko, Belgie, Nizozemsko
-
-osm úpravy
-- piacenza hsl nájezd (19. 1.)
+hotovo: Česko, Švýcarsko, Lucembursko, Dánsko, Norsko (chybí scénické značení); Litva, Lotyšsko, Estonsko, Finsko, Polsko; Slovensko a Rakousko (chybí přeshraniční do Maďarska + scénické značení)
+rozdělané: Německo, Itálie, Slovinsko, Francie, Španělsko, Belgie, Nizozemsko, Švédsko
 
 nedodělané tratě
 - uhřice čejc: asi jen část, shady
-- polsko 310 z Pilawa Gorna (jih od wroclawi) - zprovozňují na přelomu 25/26
 - jokeri v helsinkách asi nepočítat
 
 dodělat s aičkem:

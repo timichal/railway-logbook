@@ -7,7 +7,7 @@
  */
 
 import type { User } from "./authActions";
-import { SUPPORTED_COUNTRIES } from "./constants";
+import { isSpecialUsage, SUPPORTED_COUNTRIES } from "./constants";
 import { LocalStorageManager } from "./localStorage";
 import type { RailwayRoute } from "./types";
 import {
@@ -115,8 +115,8 @@ function createLocalStorageDataAccess(): DataAccess {
           );
         }
 
-        // Filter out Special routes (usage_type = 1)
-        filteredRoutes = filteredRoutes.filter((route) => route.usage_type !== 1);
+        // Filter out special routes (Heritage + Diversion); only Regular counts.
+        filteredRoutes = filteredRoutes.filter((route) => !isSpecialUsage(route.usage_type));
 
         // Calculate totals
         const totalRoutes = filteredRoutes.length;
@@ -189,10 +189,10 @@ function createLocalStorageDataAccess(): DataAccess {
 
         // Calculate stats for each country
         const byCountry = SUPPORTED_COUNTRIES.map((country) => {
-          // Filter routes where BOTH start AND end are in this country (excluding Special)
+          // Filter routes where BOTH start AND end are in this country (excluding special)
           const countryRoutes = allRoutes.filter(
             (route) =>
-              route.usage_type !== 1 &&
+              !isSpecialUsage(route.usage_type) &&
               route.start_country === country.code &&
               route.end_country === country.code,
           );
@@ -219,8 +219,8 @@ function createLocalStorageDataAccess(): DataAccess {
           };
         });
 
-        // Calculate overall total (excluding Special)
-        const allNonSpecialRoutes = allRoutes.filter((route) => route.usage_type !== 1);
+        // Calculate overall total (excluding special)
+        const allNonSpecialRoutes = allRoutes.filter((route) => !isSpecialUsage(route.usage_type));
         const overallTotalKm = allNonSpecialRoutes.reduce(
           (sum, route) => sum + (Number(route.length_km) || 0),
           0,

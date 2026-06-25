@@ -6,6 +6,7 @@ import { createDataAccess } from "@/lib/dataAccess";
 import { LocalStorageManager } from "@/lib/localStorage";
 import {
   createRailwayRoutesClickLayer,
+  createRailwayRoutesDiversionLayer,
   createRailwayRoutesLayer,
   createRailwayRoutesSource,
   createScenicRoutesOutlineLayer,
@@ -112,14 +113,26 @@ export default function VectorRailwayMap({
 
   const stationSearch = useStationSearch();
 
-  // Shared layer configs
-  const defaultFilter: ["!=", ["get", string], number] = ["!=", ["get", "usage_type"], 1];
+  // Shared layer configs. Default to Regular-only (usage_type=0); the
+  // "Show special lines" toggle (useLayerFilters) reveals Heritage + Diversion.
+  const defaultFilter: ["==", ["get", string], number] = ["==", ["get", "usage_type"], 0];
 
   const routeLayerConfig = useMemo(
     () => ({
       colorExpression: getUserRouteColorExpression(),
       widthExpression: getUserRouteWidthExpression(),
       filter: defaultFilter,
+    }),
+    [],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Dashed Diversion layer: same visit-status colors/width as the solid line,
+  // but rendered dashed. Its usage_type=2 filter and hidden-by-default
+  // visibility are baked into the factory; useLayerFilters toggles visibility.
+  const diversionLayerConfig = useMemo(
+    () => ({
+      colorExpression: getUserRouteColorExpression(),
+      widthExpression: getUserRouteWidthExpression(),
     }),
     [],
   ); // eslint-disable-line react-hooks/exhaustive-deps
@@ -154,6 +167,7 @@ export default function VectorRailwayMap({
       layers: [
         createScenicRoutesOutlineLayer(scenicLayerConfig),
         createRailwayRoutesLayer(routeLayerConfig),
+        createRailwayRoutesDiversionLayer(diversionLayerConfig),
         createRailwayRoutesClickLayer(clickBufferLayerConfig),
         createStationsLayer(),
       ],
@@ -220,13 +234,14 @@ export default function VectorRailwayMap({
     routeLayerConfig,
     scenicLayerConfig,
     clickBufferLayerConfig,
+    diversionLayerConfig,
   });
 
   // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)
   useRouteHighlighting(map, highlightedRoutes, highlightKind, selectedRoutes, cacheBuster);
 
-  // Layer filter hooks
-  useLayerFilters(map, routeEditor.showSpecialLines, showScenicOutline);
+  // Layer filter hooks (cacheBuster re-applies filters after a tile refresh re-adds layers)
+  useLayerFilters(map, routeEditor.showSpecialLines, showScenicOutline, cacheBuster);
 
   // Route click handler
   const handleRouteClick = useCallback(

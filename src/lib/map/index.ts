@@ -1,8 +1,8 @@
 import type maplibregl from "maplibre-gl";
-import { CIRCLES, COLORS, OPACITIES } from "./style";
+import { CIRCLES, COLORS, DASHES, OPACITIES } from "./style";
 
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
-export { CIRCLES, COLORS, OPACITIES, WIDTHS } from "./style";
+export { CIRCLES, COLORS, DASHES, OPACITIES, WIDTHS } from "./style";
 
 // ============================================================================
 // CONSTANTS
@@ -195,6 +195,44 @@ export function createRailwayRoutesClickLayer(
   }
 
   return layer;
+}
+
+/**
+ * Dashed line layer for Diversion routes (usage_type=2). Drawn as its own layer
+ * because line-dasharray can't be data-driven, and because the solid base
+ * railway_routes layer must NOT also draw these (a solid line under the dashes
+ * would fill the gaps). Hidden by default; revealed by the "Show special lines"
+ * toggle (useLayerFilters). Shares the route source so feature-state visit
+ * colors apply identically.
+ */
+export function createRailwayRoutesDiversionLayer(
+  config: RailwayRoutesPaintConfig = {},
+): maplibregl.LineLayerSpecification {
+  const {
+    colorExpression,
+    widthExpression,
+    opacityExpression,
+    defaultWidth = 3,
+    defaultOpacity = OPACITIES.defaultRoute,
+  } = config;
+
+  return {
+    id: "railway_routes_diversion",
+    type: "line",
+    source: "railway_routes",
+    "source-layer": "railway_routes",
+    minzoom: ZOOM_RANGES.railwayRoutes.min,
+    layout: {
+      visibility: "none", // controlled by "Show special lines" checkbox
+    },
+    paint: {
+      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
+      "line-width": widthExpression || defaultWidth,
+      "line-opacity": opacityExpression || defaultOpacity,
+      "line-dasharray": [...DASHES.diversion],
+    },
+    filter: ["==", ["get", "usage_type"], 2] as maplibregl.FilterSpecification,
+  };
 }
 
 const SCENIC_OUTLINE_DEFAULT_OFFSET = 6; // px added to the visible width when no widthExpression is supplied

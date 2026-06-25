@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import type { UsageType } from "@/lib/constants";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
 import AdminCreateRouteTab from "./AdminCreateRouteTab";
@@ -30,7 +31,7 @@ interface AdminSidebarProps {
     from_station: string;
     to_station: string;
     description: string;
-    usage_type: 0 | 1;
+    usage_type: UsageType;
     track_number: string;
     frequency: string[];
     link: string;

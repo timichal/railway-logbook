@@ -45,7 +45,7 @@ CREATE TABLE railway_routes (
     to_station TEXT NOT NULL, -- Ending station/location
     track_number VARCHAR(100), -- Local track number(s) - optional
     description TEXT, -- Route description
-    usage_type INTEGER NOT NULL, -- Usage type (0=Regular, 1=Special)
+    usage_type INTEGER NOT NULL, -- Usage type (0=Regular, 1=Heritage, 2=Diversion; 1 & 2 are "special")
     frequency TEXT[] DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
     link TEXT, -- External URL/link for the route
     scenic BOOLEAN DEFAULT FALSE, -- Flag to mark route as scenic
