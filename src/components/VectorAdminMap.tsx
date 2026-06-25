@@ -132,6 +132,7 @@ export default function VectorAdminMap({
   });
 
   // Fetch route endpoints
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch endpoints on demand.
   useEffect(() => {
     if (!mapLoaded) return;
     getAllRouteEndpoints()

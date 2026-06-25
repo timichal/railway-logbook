@@ -39,6 +39,7 @@ export default function AdminNotesTab({
     }
   }, [showError]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshSignal is a trigger prop; bumping it must re-run the effect to reload notes even though it isn't read in the body.
   useEffect(() => {
     loadNotes();
   }, [loadNotes, refreshSignal]);

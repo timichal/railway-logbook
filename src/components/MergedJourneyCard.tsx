@@ -109,6 +109,7 @@ export default function MergedJourneyCard({
   }, []);
 
   // Load journey details when this card opens
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes is intentionally omitted; the effect should fire only when the card opens or the journey changes, not when the callback identity changes.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -150,10 +151,10 @@ export default function MergedJourneyCard({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, journey.id]);
 
   // When this card closes (or unmounts), tear down the edit session
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onJourneyEditEnd is intentionally omitted; the teardown should fire only on the open→closed transition, not when the callback identity changes.
   useEffect(() => {
     if (isOpen) return;
     setViewedRoutes([]);
@@ -161,7 +162,6 @@ export default function MergedJourneyCard({
     setDeleteConfirm(false);
     onJourneyEditEnd?.();
     // Don't clear highlights here — parent owns coordination across cards
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const handleTogglePartial = (trackId: string, nextPartial: boolean) => {

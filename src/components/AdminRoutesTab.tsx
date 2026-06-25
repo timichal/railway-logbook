@@ -71,6 +71,7 @@ export default function AdminRoutesTab({
     }
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadRoutes only needs to run once on mount.
   useEffect(() => {
     loadRoutes();
   }, []);
@@ -113,6 +114,7 @@ export default function AdminRoutesTab({
     (route) => route.has_backtracking === true && route.intended_backtracking !== true,
   ).length;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the filter states are intentional triggers to reset pagination to page 1 when filtering changes.
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, showInvalidOnly, showUnintendedBacktrackingOnly]);

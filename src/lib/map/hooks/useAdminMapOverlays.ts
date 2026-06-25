@@ -39,6 +39,7 @@ export function useAdminMapOverlays(
   const { previewRoute, selectedCoordinates, routeEndpoints, isEditingGeometry } = data;
 
   // Preview route overlay
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isEditingGeometry is an intentional trigger to redraw the preview overlay when edit-geometry mode toggles.
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 

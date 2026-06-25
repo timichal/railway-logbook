@@ -37,6 +37,7 @@ export function useAdminLayerVisibility({
   const previousShowRoutesLayerRef = useRef(true);
 
   // Sync Railway Routes checkbox with edit geometry mode
+  // biome-ignore lint/correctness/useExhaustiveDependencies: showRoutesLayer is intentionally omitted — we snapshot its current value only at the moment edit-geometry mode toggles; adding it as a trigger would re-run on every checkbox change.
   useEffect(() => {
     if (isEditingGeometry) {
       previousShowRoutesLayerRef.current = showRoutesLayer;
@@ -44,7 +45,7 @@ export function useAdminLayerVisibility({
     } else {
       setShowRoutesLayer(previousShowRoutesLayerRef.current);
     }
-  }, [isEditingGeometry]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isEditingGeometry]);
 
   // Apply visibility to all layers
   useEffect(() => {

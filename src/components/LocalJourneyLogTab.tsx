@@ -33,6 +33,7 @@ export default function LocalJourneyLogTab({
   const [editDescription, setEditDescription] = useState("");
 
   // Load journeys on mount and when storage changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadJourneys only needs to run on mount; the storage listener handles subsequent reloads.
   useEffect(() => {
     loadJourneys();
 

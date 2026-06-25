@@ -86,6 +86,7 @@ export default function AdminSidebar({
   } | null>(null);
 
   // Switch to create tab when a coordinate is clicked
+  // biome-ignore lint/correctness/useExhaustiveDependencies: coordinateClickTrigger is a trigger that must re-run the effect even when the same coordinate is clicked again.
   React.useEffect(() => {
     if (selectedCoordinate) {
       setActiveTab("create");
@@ -111,6 +112,7 @@ export default function AdminSidebar({
   });
 
   // Handle selectedCoordinate to auto-fill form inputs
+  // biome-ignore lint/correctness/useExhaustiveDependencies: coordinateClickTrigger is a trigger that must re-run the effect even when the same coordinate is clicked again.
   React.useEffect(() => {
     if (selectedCoordinate) {
       setCreateFormCoordinates((prev) => {
@@ -205,13 +207,7 @@ export default function AdminSidebar({
         setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
       }
     },
-    [
-      onRouteSelect,
-      onEditingGeometryChange,
-      onCreateFormCoordinatesChange,
-      onRouteFocus,
-      showError,
-    ],
+    [onEditingGeometryChange, onCreateFormCoordinatesChange, showError],
   );
 
   // Handle cancel geometry edit

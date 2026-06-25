@@ -21,6 +21,7 @@ export default function CountriesStatsTab({
   const [isLoading, setIsLoading] = useState(true);
 
   // Load stats on mount and when selection changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedCountries is an intentional trigger to reload stats when the country selection changes.
   useEffect(() => {
     async function loadStats() {
       setIsLoading(true);

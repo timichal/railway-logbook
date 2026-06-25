@@ -32,6 +32,11 @@ import type { SelectedRoute, Station } from "@/lib/types";
 import MobileMenuPanel from "./MobileMenuPanel";
 import UserSidebar, { type ActiveTab } from "./UserSidebar";
 
+// Default to Regular-only (usage_type=0); the "Show special lines" toggle
+// (useLayerFilters) reveals Heritage + Diversion. Module-scoped so it is a
+// stable reference and layer-config memos can keep empty dependency arrays.
+const defaultFilter: ["==", ["get", string], number] = ["==", ["get", "usage_type"], 0];
+
 interface VectorRailwayMapProps {
   className?: string;
   user: User | null;
@@ -116,10 +121,7 @@ export default function VectorRailwayMap({
 
   const stationSearch = useStationSearch();
 
-  // Shared layer configs. Default to Regular-only (usage_type=0); the
-  // "Show special lines" toggle (useLayerFilters) reveals Heritage + Diversion.
-  const defaultFilter: ["==", ["get", string], number] = ["==", ["get", "usage_type"], 0];
-
+  // Shared layer configs.
   const routeLayerConfig = useMemo(
     () => ({
       colorExpression: getUserRouteColorExpression(),
@@ -127,7 +129,7 @@ export default function VectorRailwayMap({
       filter: defaultFilter,
     }),
     [],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Dashed Diversion layer: same visit-status colors/width as the solid line,
   // but rendered dashed. Its usage_type=2 filter and hidden-by-default
@@ -138,7 +140,7 @@ export default function VectorRailwayMap({
       widthExpression: getUserRouteWidthExpression(),
     }),
     [],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const scenicLayerConfig = useMemo(
     () => ({
@@ -146,7 +148,7 @@ export default function VectorRailwayMap({
       filter: defaultFilter,
     }),
     [],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const clickBufferLayerConfig = useMemo(
     () => ({
@@ -154,7 +156,7 @@ export default function VectorRailwayMap({
       filter: defaultFilter,
     }),
     [],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Initialize map
   const { map, mapLoaded } = useMapLibre(
@@ -360,10 +362,11 @@ export default function VectorRailwayMap({
   }, [map, mapLoaded, user, updateLocalStorageFeatureStates]);
 
   // Force map refresh when user changes (login/logout)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: user is the intentional trigger (login/logout); refreshTiles is a stable callback we don't want to re-trigger on.
   useEffect(() => {
     if (!map.current) return;
     refreshTiles();
-  }, [user, map]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, map]);
 
   // Setup map interactions
   useEffect(() => {
@@ -451,6 +454,7 @@ export default function VectorRailwayMap({
   };
 
   // Resize map when sidebar opens/closes on mobile
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sidebarOpen and isMobile are intentional triggers — the effect resizes the map when either changes, even though neither is read in the body.
   useEffect(() => {
     if (!map.current) return;
     // Small delay to let CSS transitions finish

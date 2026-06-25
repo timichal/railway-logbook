@@ -43,6 +43,7 @@ export function useMapTileRefresh({
   const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
 
   // Reload railway_routes tiles when cacheBuster changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cacheBuster is the sole intentional trigger — this rebuilds the source/layers only on an explicit refresh. The other values are read at rebuild time but must not trigger their own rebuild.
   useEffect(() => {
     if (!map.current || !mapLoaded || !userId) return;
 
@@ -72,7 +73,7 @@ export function useMapTileRefresh({
     m.addLayer(createRailwayRoutesLayer(routeLayerConfig), "stations");
     m.addLayer(createRailwayRoutesDiversionLayer(diversionLayerConfig), "stations");
     m.addLayer(createRailwayRoutesClickLayer(clickBufferLayerConfig), "stations");
-  }, [cacheBuster]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cacheBuster]);
 
   const refreshTiles = () => setCacheBuster(Date.now());
 

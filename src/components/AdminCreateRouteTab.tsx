@@ -257,11 +257,11 @@ export default function AdminCreateRouteTab({
   };
 
   // Automatically preview route when both coordinates are filled
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handlePreviewRoute is intentionally omitted; including it would re-run on every render and loop. The effect should fire only when the coordinates or preview mode change.
   useEffect(() => {
     if (startingCoordinate && endingCoordinate && !isPreviewMode) {
       handlePreviewRoute();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startingCoordinate, endingCoordinate, isPreviewMode]);
 
   const isEditMode = !!editingGeometryForTrackId;

@@ -132,7 +132,7 @@ export function useMapLibre(
         setMapLoaded(false);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: deps is a caller-supplied dependency list (not a literal) used to control when the map is recreated; this is the hook's intended API.
   }, deps);
 
   return { map, mapLoaded };

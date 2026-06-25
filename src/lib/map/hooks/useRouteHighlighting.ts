@@ -29,6 +29,7 @@ export function useRouteHighlighting(
   const highlightColor =
     highlightKind === "planner" ? COLORS.highlight.planner : COLORS.highlight.view;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tileRefreshKey is an intentional trigger — bumping it re-applies highlights after the railway_routes source/layer is recreated.
   useEffect(() => {
     if (!map.current?.getLayer("railway_routes")) return;
 
@@ -59,6 +60,7 @@ export function useRouteHighlighting(
 
   // Route Logger selection highlights — match the admin map's selected-route style
   // (orange #ff6b35, constant 5px, full opacity).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tileRefreshKey is an intentional trigger — bumping it re-applies the selection highlight after the railway_routes source/layer is recreated.
   useEffect(() => {
     if (!map.current?.getLayer("railway_routes")) return;
 
