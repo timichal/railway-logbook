@@ -39,6 +39,12 @@ export function setupAdminMapInteractions(
       return;
     }
 
+    // Don't capture a coordinate when clicking a note (it has its own interactions)
+    if (mapInstance.getLayer("admin_notes")) {
+      const noteFeatures = mapInstance.queryRenderedFeatures(e.point, { layers: ["admin_notes"] });
+      if (noteFeatures && noteFeatures.length > 0) return;
+    }
+
     if (!onCoordinateClickRef.current) return;
 
     // Extract exact click coordinate
@@ -391,7 +397,7 @@ export function setupAdminMapInteractions(
             <div style="color: black;">
               <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note</h3>
               <div style="font-size: 0.85rem; color: #374151;">${properties.text || ""}</div>
-              ${properties.source ? `<div style="font-size: 0.8rem; margin-top: 4px;"><a href="${properties.source}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">Source ↗</a></div>` : ""}
+              ${properties.source ? `<div style="font-size: 0.8rem; margin-top: 4px;"><a href="${properties.source}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">Source ↗</a> <span style="color: #6b7280;">(double-click to open)</span></div>` : ""}
               ${updatedAtStr ? `<div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
               <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Right-click to edit</div>
             </div>
@@ -416,6 +422,18 @@ export function setupAdminMapInteractions(
     if (noteHoverPopup) {
       noteHoverPopup.remove();
       noteHoverPopup = null;
+    }
+  });
+
+  // Double-click / double-tap a note opens its source link in a new tab
+  // (works on touch where the hover popup link can't be tapped).
+  mapInstance.on("dblclick", (e) => {
+    if (!mapInstance.getLayer("admin_notes")) return;
+    const noteFeatures = mapInstance.queryRenderedFeatures(e.point, { layers: ["admin_notes"] });
+    if (noteFeatures && noteFeatures.length > 0) {
+      e.preventDefault();
+      const source = noteFeatures[0].properties?.source;
+      if (source) window.open(source, "_blank", "noopener,noreferrer");
     }
   });
 }

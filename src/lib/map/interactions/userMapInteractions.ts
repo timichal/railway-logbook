@@ -83,7 +83,7 @@ export function setupUserMapInteractions(
       formattedDescription += `<br /><b>Note:</b> ${properties.description}`;
     }
     if (properties.link) {
-      formattedDescription += `<br /><a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a>`;
+      formattedDescription += `<br /><a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span>`;
     }
 
     // `date` and `journey_name` are populated together from the most-recent
@@ -167,7 +167,7 @@ export function setupUserMapInteractions(
       popupContent += `<div style="white-space: pre-wrap;">${properties.text}</div>`;
     }
     if (properties.source) {
-      popupContent += `<div style="margin-top: 6px;"><a href="${properties.source}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Source</a></div>`;
+      popupContent += `<div style="margin-top: 6px;"><a href="${properties.source}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Source</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span></div>`;
     }
     popupContent += `</div>`;
 
@@ -229,8 +229,21 @@ export function setupUserMapInteractions(
     onStationClick(station);
   };
 
-  // Prevent double-click zoom on routes (fast select/unselect triggers dblclick)
+  // Double-click / double-tap opens a feature's link in a new tab (works on
+  // touch where hover popups can't be tapped). Also prevents the default
+  // double-click zoom on routes (a fast select/unselect also fires dblclick).
   const handleDblClick = (e: maplibreglType.MapMouseEvent) => {
+    // Public notes render on top — check them first
+    if (mapInstance.getLayer("public_notes")) {
+      const notes = mapInstance.queryRenderedFeatures(e.point, { layers: ["public_notes"] });
+      if (notes.length > 0) {
+        e.preventDefault();
+        const source = notes[0].properties?.source;
+        if (source) window.open(source, "_blank", "noopener,noreferrer");
+        return;
+      }
+    }
+
     const routeLayers = [
       "railway_routes_click",
       "railway_routes",
@@ -241,6 +254,8 @@ export function setupUserMapInteractions(
     const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
     if (features.length > 0) {
       e.preventDefault();
+      const link = features[0].properties?.link;
+      if (link) window.open(link, "_blank", "noopener,noreferrer");
     }
   };
   mapInstance.on("dblclick", handleDblClick);
