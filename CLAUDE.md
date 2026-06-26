@@ -17,6 +17,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 - `npm run verifyRouteData` — recalculate all routes, mark invalid ones.
 - `npm run applyVectorTiles` — re-apply `database/init/02-vector-tiles.sql`.
 - `npm run markAllRoutesInvalid` — flag all routes for recheck (use `verifyRouteData` after). **Reference example for migration scripts.**
+- `npm run migrateNotesSourceAndInternal` — adds `admin_notes.source`, widens the `note_type` CHECK to include `UsageInternal`, and reclassifies existing `Usage` notes → `UsageInternal` (hides them from the public map pending manual review). Idempotent. Re-run `applyVectorTiles` + restart Martin to pick up `public_notes_tile`.
 - `npm run fixSequences` — resync all SERIAL id sequences with table data. Fixes "duplicate key violates …_pkey" on inserts after rows were loaded with explicit ids (old dumps) without bumping the sequence. `importRouteData` now does this automatically; run manually if needed.
 - `npm run listStations` — list unique station names (debug).
 - `npm run exportRouteData` / `npm run importRouteData <file>` — pg_dump/psql via `docker exec`; covers `railway_routes`, `user_trips`, `user_journeys`, `user_logged_parts` (user_id=1), `admin_notes`. Output to `data/railway_data_YYYY-MM-DD.sql`.
@@ -49,7 +50,7 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **user_journeys** — id, user_id, name (req), description, date (req), `trip_id` FK ON DELETE SET NULL, timestamps.
 - **user_logged_parts** — id, user_id, journey_id, `track_id` FK ON DELETE CASCADE, `partial` BOOL, created_at. UNIQUE per (journey_id, track_id).
 - **user_preferences** — `selected_countries` TEXT[] (defaults: CZ, SK, AT, PL, DE, LT, LV, EE).
-- **admin_notes** — id, coordinate POINT, text, timestamps.
+- **admin_notes** — id, coordinate POINT, text, `note_type` ('Usage'|'UsageInternal'|'Works'|'Todo', nullable for legacy), `source` (optional external link), timestamps. Only `note_type='Usage'` notes are public (shown on the user map); `UsageInternal` is an admin-only draft promoted to `Usage` to publish. `noteTypeOptions`/`isPublicNoteType` in `constants.ts`.
 
 ### Key architectural decisions
 
@@ -57,7 +58,7 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **Route invalidation.** Routes that can't recalculate (no path, off-network, or >0.1km AND >1% length mismatch) get `is_valid=false` and an `error_message`. Shown in grey on admin map; admin "Edit Geometry" re-picks coordinates.
 - **Auto line classification.** On route create/edit, length-weighted majority of intersecting railway_parts: >50% highspeed→'highspeed', >50% main→'main', else 'branch'. Admin can override.
 - **Country detection.** `@rapideditor/country-coder` on first/last coordinate fills `start_country`/`end_country`.
-- **Vector tiles** via Martin (port 3001): `railway_routes_tile` (accepts `selected_countries` filter), `railway_parts_tile` (zoom-filtered), `stations_tile` (zoom 10+), `admin_notes_tile`.
+- **Vector tiles** via Martin (port 3001): `railway_routes_tile` (accepts `selected_countries` filter), `railway_parts_tile` (zoom-filtered), `stations_tile` (zoom 10+), `admin_notes_tile` (all notes, admin map), `public_notes_tile` (`note_type='Usage'` only, exposes just text+source — user map).
 - **Progress.** A route counts as completed if logged with `partial=false` in any journey; partial if only `partial=true`. Country filter requires BOTH start and end country in selected list.
 - **Auth.** Email/password + bcrypt + session. Unauthenticated users get localStorage (`localStorage.ts` module functions, imported as `localStore`) via `dataAccess.ts` abstraction; `migrationActions.ts` migrates on login.
 - **Admin = user_id=1.** Every admin server action enforces this check.
@@ -98,7 +99,7 @@ Selection/highlight layers:
 - **Utils**: `userRouteStyling.ts` (`getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression`, `getUserRouteScenicOutlineWidthExpression`, `getAdminRouteWidthExpression`), `tooltipFormatting.ts`, `distance.ts`.
 
 ### Scripts (`src/scripts/`)
-- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `exportRoutes.ts`, `importRoutes.ts`.
+- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `migrateNotesSourceAndInternal.ts` (admin_notes source + UsageInternal migration), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `exportRoutes.ts`, `importRoutes.ts`.
 - **Shared**: `lib/loadRailwayData.ts`, `lib/railwayPathFinder.ts` (admin route creation + recalc).
 
 ### Database (`database/init/`)
@@ -123,7 +124,7 @@ Click routes on map to add to selection; click stations to fill Journey Planner 
 8 countries (CZ/SK/AT/PL/DE/LT/LV/EE) with flag emojis (Unicode regional indicators). Select All / None. Per-country stats via `getProgressByCountry()` (matches when both endpoints in country). Persisted in `user_preferences`. Filter applies to map + stats; **admin map ignores it**.
 
 ### Admin
-Click railway part → capture exact coordinate for start/end. Right-click anywhere → create note; right-click existing note → edit/delete. Note popup: text field, save (Ctrl+Enter), delete, close (Esc). Invalid routes in grey with banner; "Edit Route Geometry" re-picks coordinates with same pathfinding.
+Click railway part → capture exact coordinate for start/end. Right-click anywhere → create note; right-click existing note → edit/delete. Note popup: type (req), text, optional source link, save (Ctrl+Enter), delete, close (Esc). Notes are colored by type on the admin map (`Usage`=blue, `UsageInternal`=light blue, `Works`=orange, `Todo`=purple); `AdminNotesTab` filters by type and lets you switch a note's type (= publish/unpublish). Only `Usage` notes appear on the user map (hover popup shows text + source link). Invalid routes in grey with banner; "Edit Route Geometry" re-picks coordinates with same pathfinding.
 
 ## Development workflow
 

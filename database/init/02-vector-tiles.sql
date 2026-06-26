@@ -294,8 +294,16 @@ BEGIN
         ON admin_notes USING GIST (coordinate_3857);
 
         -- Ensure note_type column exists for tile function reference
-        ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS note_type VARCHAR(20)
-        CHECK (note_type IN ('Usage', 'Works', 'Todo'));
+        ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS note_type VARCHAR(20);
+
+        -- Ensure source column exists (optional external link shown in note popup)
+        ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS source TEXT;
+
+        -- Keep the note_type CHECK in sync with the supported values
+        -- (drop the auto-named constraint from 01-schema if present, then re-add)
+        ALTER TABLE admin_notes DROP CONSTRAINT IF EXISTS admin_notes_note_type_check;
+        ALTER TABLE admin_notes ADD CONSTRAINT admin_notes_note_type_check
+        CHECK (note_type IN ('Usage', 'UsageInternal', 'Works', 'Todo'));
     END IF;
 END $$;
 
@@ -318,6 +326,7 @@ BEGIN
             id,
             text,
             note_type,
+            source,
             updated_at,
             -- Point geometry doesn't need much simplification
             ST_AsMVTGeom(
@@ -332,6 +341,47 @@ BEGIN
             -- Spatial filter using index
             coordinate_3857 && tile_envelope
             -- Show all notes at all zoom levels
+        ORDER BY updated_at DESC
+    ) AS mvtgeom
+    WHERE geom IS NOT NULL;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+PARALLEL SAFE;
+
+-- Function: public_notes_tile
+-- Serves PUBLIC notes (note_type='Usage' only) as vector tiles for the user map.
+-- Unlike admin_notes_tile this exposes only published Usage notes, and only the
+-- fields the public popup needs (text + source) — Works/Todo/internal notes and
+-- their text are never shipped to the public.
+CREATE OR REPLACE FUNCTION public_notes_tile(z integer, x integer, y integer)
+RETURNS bytea AS $$
+DECLARE
+    result bytea;
+    tile_envelope geometry;
+BEGIN
+    tile_envelope := ST_TileEnvelope(z, x, y);
+
+    SELECT INTO result ST_AsMVT(mvtgeom.*, 'public_notes')
+    FROM (
+        SELECT
+            id,
+            text,
+            source,
+            ST_AsMVTGeom(
+                coordinate_3857,
+                tile_envelope,
+                4096,
+                0,  -- No buffer needed for points
+                true
+            ) AS geom
+        FROM admin_notes
+        WHERE
+            coordinate_3857 && tile_envelope
+            AND note_type = 'Usage'
         ORDER BY updated_at DESC
     ) AS mvtgeom
     WHERE geom IS NOT NULL;

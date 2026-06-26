@@ -1,4 +1,4 @@
-import type { LineClass, UsageType } from "./constants";
+import type { LineClass, NoteType, UsageType } from "./constants";
 
 // Types for pruneData.ts script
 export type Feature = {
@@ -171,7 +171,8 @@ export type AdminNote = {
   id: number;
   coordinate: [number, number]; // [longitude, latitude]
   text: string;
-  note_type: "Usage" | "Works" | "Todo";
+  note_type: NoteType;
+  source: string | null; // Optional external link, shown in the note popup
   created_at: string;
   updated_at: string;
 };

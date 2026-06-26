@@ -38,6 +38,7 @@ export const ZOOM_RANGES = {
   railwayParts: { min: 4, max: 18 }, // Matches Martin configuration
   stations: { min: 9, max: 18 }, // Matches Martin configuration
   adminNotes: { min: 4, max: 18 }, // Admin notes visible at all zooms
+  publicNotes: { min: 7, max: 18 }, // Public Usage notes on the user map (from moderate zoom)
 } as const;
 
 // ============================================================================
@@ -351,12 +352,15 @@ export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorS
 }
 
 export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
-  // Color by note_type; untyped (legacy) notes keep the amber default
+  // Color by note_type; untyped (legacy) notes keep the amber default.
+  // Keep in sync with noteTypeOptions colors in constants.ts.
   const colorByType: maplibregl.ExpressionSpecification = [
     "match",
     ["get", "note_type"],
     "Usage",
-    "#2563eb", // blue
+    "#2563eb", // blue (public)
+    "UsageInternal",
+    "#60a5fa", // light blue (admin-only draft)
     "Works",
     "#ea580c", // orange
     "Todo",
@@ -384,6 +388,42 @@ export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
         colorByType,
       ],
       "circle-stroke-color": COLORS.adminNotes.stroke,
+      "circle-stroke-width": CIRCLES.adminNote.strokeWidth,
+      "circle-opacity": OPACITIES.adminNotes,
+    },
+  };
+}
+
+/**
+ * Public notes source (note_type='Usage' only) for the user map.
+ * Served by the `public_notes_tile` function, which exposes only published
+ * Usage notes and only the popup fields (text + source).
+ */
+export function createPublicNotesSource(
+  cacheBuster?: number,
+): maplibregl.VectorSourceSpecification {
+  const baseUrl = `${TILE_BASE_URL}/public_notes_tile/{z}/{x}/{y}`;
+  const tilesUrl = cacheBuster ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
+
+  return {
+    type: "vector",
+    tiles: [tilesUrl],
+    minzoom: ZOOM_RANGES.publicNotes.min,
+    maxzoom: ZOOM_RANGES.publicNotes.max,
+  };
+}
+
+export function createPublicNotesLayer(): maplibregl.CircleLayerSpecification {
+  return {
+    id: "public_notes",
+    type: "circle",
+    source: "public_notes",
+    "source-layer": "public_notes",
+    minzoom: ZOOM_RANGES.publicNotes.min,
+    paint: {
+      "circle-radius": CIRCLES.adminNote.radius,
+      "circle-color": "#2563eb", // blue, matching the public "Usage" color
+      "circle-stroke-color": COLORS.adminNotes.stroke, // same dark stroke as the admin map
       "circle-stroke-width": CIRCLES.adminNote.strokeWidth,
       "circle-opacity": OPACITIES.adminNotes,
     },

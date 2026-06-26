@@ -63,7 +63,7 @@ export default function AdminNotesTab({
   const handleTypeChange = async (note: AdminNote, newType: NoteType) => {
     setSavingId(note.id);
     try {
-      const updated = await updateAdminNote(note.id, note.text, newType);
+      const updated = await updateAdminNote(note.id, note.text, newType, note.source);
       setNotes((prev) => prev.map((n) => (n.id === note.id ? updated : n)));
       showSuccess("Note type updated");
       onNoteChanged?.();

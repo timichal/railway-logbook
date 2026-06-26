@@ -10,6 +10,7 @@ type AdminNoteRow = {
   coordinate: { coordinates: [number, number] };
   text: string;
   note_type: NoteType;
+  source: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -20,6 +21,7 @@ function rowToNote(row: AdminNoteRow): AdminNote {
     coordinate: row.coordinate.coordinates,
     text: row.text,
     note_type: row.note_type,
+    source: row.source,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
@@ -38,6 +40,7 @@ export async function getAllAdminNotes(): Promise<AdminNote[]> {
       ST_AsGeoJSON(coordinate)::json as coordinate,
       text,
       note_type,
+      source,
       created_at,
       updated_at
     FROM admin_notes
@@ -61,6 +64,7 @@ export async function getAdminNote(id: number): Promise<AdminNote | null> {
       ST_AsGeoJSON(coordinate)::json as coordinate,
       text,
       note_type,
+      source,
       created_at,
       updated_at
     FROM admin_notes
@@ -84,6 +88,7 @@ export async function createAdminNote(
   coordinate: [number, number],
   text: string,
   noteType: NoteType,
+  source: string | null = null,
 ): Promise<AdminNote> {
   await requireAdmin();
 
@@ -91,17 +96,18 @@ export async function createAdminNote(
 
   const result = await pool.query<AdminNoteRow>(
     `
-    INSERT INTO admin_notes (coordinate, text, note_type)
-    VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, $4)
+    INSERT INTO admin_notes (coordinate, text, note_type, source)
+    VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, $4, $5)
     RETURNING
       id,
       ST_AsGeoJSON(coordinate)::json as coordinate,
       text,
       note_type,
+      source,
       created_at,
       updated_at
   `,
-    [lng, lat, text, noteType],
+    [lng, lat, text, noteType, source],
   );
 
   return rowToNote(result.rows[0]);
@@ -116,23 +122,25 @@ export async function updateAdminNote(
   id: number,
   text: string,
   noteType: NoteType | null,
+  source: string | null = null,
 ): Promise<AdminNote> {
   await requireAdmin();
 
   const result = await pool.query<AdminNoteRow>(
     `
     UPDATE admin_notes
-    SET text = $1, note_type = $2
-    WHERE id = $3
+    SET text = $1, note_type = $2, source = $3
+    WHERE id = $4
     RETURNING
       id,
       ST_AsGeoJSON(coordinate)::json as coordinate,
       text,
       note_type,
+      source,
       created_at,
       updated_at
   `,
-    [text, noteType, id],
+    [text, noteType, source, id],
   );
 
   if (result.rows.length === 0) {

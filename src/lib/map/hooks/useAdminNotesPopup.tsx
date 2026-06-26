@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import NotesPopup from "@/components/NotesPopup";
 import { getAdminNote } from "@/lib/adminNotesActions";
+import type { NoteType } from "@/lib/constants";
 import { createAdminNotesLayer, createAdminNotesSource } from "../index";
 
 interface UseAdminNotesPopupOptions {
@@ -56,7 +57,8 @@ export function useAdminNotesPopup({
       let noteId: number | null = null;
       let noteText = "";
       let noteUpdatedAt: string | undefined;
-      let noteTypeValue: "Usage" | "Works" | "Todo" | null = null;
+      let noteTypeValue: NoteType | null = null;
+      let noteSource: string | null = null;
 
       if (noteFeatures && noteFeatures.length > 0) {
         noteId = noteFeatures[0].properties?.id;
@@ -67,6 +69,7 @@ export function useAdminNotesPopup({
               noteText = note.text;
               noteUpdatedAt = note.updated_at;
               noteTypeValue = note.note_type;
+              noteSource = note.source;
             }
           } catch (error) {
             console.error("Failed to load note:", error);
@@ -118,6 +121,7 @@ export function useAdminNotesPopup({
           noteId={noteId}
           initialText={noteText}
           initialNoteType={noteTypeValue}
+          initialSource={noteSource}
           updatedAt={noteUpdatedAt}
           coordinate={coordinate}
           onClose={handleClose}

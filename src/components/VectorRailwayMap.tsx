@@ -5,6 +5,8 @@ import type { User } from "@/lib/authActions";
 import { createDataAccess } from "@/lib/dataAccess";
 import * as localStore from "@/lib/localStorage";
 import {
+  createPublicNotesLayer,
+  createPublicNotesSource,
   createRailwayRoutesClickLayer,
   createRailwayRoutesDiversionLayer,
   createRailwayRoutesLayer,
@@ -166,6 +168,7 @@ export default function VectorRailwayMap({
           selectedCountries,
         }),
         stations: createStationsSource(),
+        public_notes: createPublicNotesSource(),
       },
       layers: [
         createScenicRoutesOutlineLayer(scenicLayerConfig),
@@ -173,6 +176,9 @@ export default function VectorRailwayMap({
         createRailwayRoutesDiversionLayer(diversionLayerConfig),
         createRailwayRoutesClickLayer(clickBufferLayerConfig),
         createStationsLayer(),
+        // Public Usage notes render on top (route tile refresh re-inserts route
+        // layers before "stations", so this stays above them).
+        createPublicNotesLayer(),
       ],
     },
     [userId, selectedCountries],

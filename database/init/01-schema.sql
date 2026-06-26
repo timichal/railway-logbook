@@ -111,7 +111,8 @@ CREATE TABLE admin_notes (
     id SERIAL PRIMARY KEY,
     coordinate GEOMETRY(POINT, 4326) NOT NULL, -- PostGIS point (lon, lat)
     text TEXT NOT NULL, -- Note content
-    note_type VARCHAR(20) CHECK (note_type IN ('Usage', 'Works', 'Todo')), -- Optional categorization (nullable for legacy)
+    note_type VARCHAR(20) CHECK (note_type IN ('Usage', 'UsageInternal', 'Works', 'Todo')), -- Optional categorization (nullable for legacy). Only 'Usage' is public; 'UsageInternal' is an admin-only draft.
+    source TEXT, -- Optional external link, shown in the note popup
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

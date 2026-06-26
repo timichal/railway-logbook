@@ -96,11 +96,16 @@ export const getLineClassLabel = (lineClass: LineClass): string => {
 /**
  * Admin note types (optional categorization).
  * Legacy notes stored before this feature have NULL `note_type`.
+ *
+ * Only `public: true` types are shown on the public user map. "Usage" is the
+ * published, public-facing type; "UsageInternal" ("Usage (internal)") is an
+ * admin-only draft that the admin manually promotes to "Usage" once reviewed.
  */
 export const noteTypeOptions = [
-  { id: "Usage", label: "Usage", color: "#2563eb" }, // blue
-  { id: "Works", label: "Works", color: "#ea580c" }, // orange
-  { id: "Todo", label: "Todo", color: "#9333ea" }, // purple
+  { id: "Usage", label: "Usage", color: "#2563eb", public: true }, // blue
+  { id: "UsageInternal", label: "Usage (internal)", color: "#60a5fa", public: false }, // light blue (draft)
+  { id: "Works", label: "Works", color: "#ea580c", public: false }, // orange
+  { id: "Todo", label: "Todo", color: "#9333ea", public: false }, // purple
 ] as const;
 
 export type NoteType = (typeof noteTypeOptions)[number]["id"];
@@ -112,6 +117,10 @@ export const getNoteTypeColor = (noteType: NoteType | null | undefined): string 
   const option = noteTypeOptions.find((opt) => opt.id === noteType);
   return option ? option.color : NO_TYPE_COLOR;
 };
+
+/** Whether a note type is shown on the public user map (only published "Usage"). */
+export const isPublicNoteType = (noteType: NoteType | null | undefined): boolean =>
+  noteTypeOptions.some((opt) => opt.id === noteType && opt.public);
 
 /**
  * Supported countries for filtering

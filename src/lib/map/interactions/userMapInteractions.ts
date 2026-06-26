@@ -155,6 +155,44 @@ export function setupUserMapInteractions(
     }
   };
 
+  // Hover handler for public note popups (read-only: text + optional source link)
+  const handleNoteMouseMove = (e: maplibreglType.MapLayerMouseEvent) => {
+    if (!e.features || e.features.length === 0) return;
+
+    const properties = e.features[0].properties;
+    if (!properties) return;
+
+    let popupContent = `<div class="railway-popup" style="color: black; max-width: 260px;">`;
+    if (properties.text) {
+      popupContent += `<div style="white-space: pre-wrap;">${properties.text}</div>`;
+    }
+    if (properties.source) {
+      popupContent += `<div style="margin-top: 6px;"><a href="${properties.source}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Source</a></div>`;
+    }
+    popupContent += `</div>`;
+
+    if (currentPopup) {
+      currentPopup.remove();
+    }
+
+    currentPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
+      .setLngLat(e.lngLat)
+      .setHTML(popupContent)
+      .addTo(mapInstance);
+  };
+
+  const handleNoteMouseEnter = () => {
+    mapInstance.getCanvas().style.cursor = "pointer";
+  };
+
+  const handleNoteMouseLeave = () => {
+    mapInstance.getCanvas().style.cursor = "";
+    if (currentPopup) {
+      currentPopup.remove();
+      currentPopup = null;
+    }
+  };
+
   // Cursor handlers for stations
   const handleStationMouseEnter = () => {
     mapInstance.getCanvas().style.cursor = "pointer";
@@ -221,6 +259,11 @@ export function setupUserMapInteractions(
   mapInstance.on("mouseenter", "stations", handleStationMouseEnter);
   mapInstance.on("mouseleave", "stations", handleStationMouseLeave);
 
+  // Attach public note handlers (notes render on top, so these take precedence)
+  mapInstance.on("mousemove", "public_notes", handleNoteMouseMove);
+  mapInstance.on("mouseenter", "public_notes", handleNoteMouseEnter);
+  mapInstance.on("mouseleave", "public_notes", handleNoteMouseLeave);
+
   // Cleanup function
   return () => {
     if (currentPopup) {
@@ -237,5 +280,9 @@ export function setupUserMapInteractions(
     mapInstance.off("mousemove", "stations", handleStationMouseMove);
     mapInstance.off("mouseenter", "stations", handleStationMouseEnter);
     mapInstance.off("mouseleave", "stations", handleStationMouseLeave);
+    // Remove public note handlers
+    mapInstance.off("mousemove", "public_notes", handleNoteMouseMove);
+    mapInstance.off("mouseenter", "public_notes", handleNoteMouseEnter);
+    mapInstance.off("mouseleave", "public_notes", handleNoteMouseLeave);
   };
 }

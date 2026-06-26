@@ -9,6 +9,7 @@ interface NotesPopupProps {
   noteId?: number | null; // If set, editing existing note; if null, creating new note
   initialText?: string;
   initialNoteType?: NoteType | null;
+  initialSource?: string | null; // Optional external link
   updatedAt?: string; // ISO timestamp of last update (existing notes only)
   coordinate: [number, number]; // [lng, lat]
   onClose: () => void;
@@ -25,6 +26,7 @@ export default function NotesPopup({
   noteId,
   initialText = "",
   initialNoteType = null,
+  initialSource = null,
   updatedAt,
   coordinate,
   onClose,
@@ -34,6 +36,7 @@ export default function NotesPopup({
 }: NotesPopupProps) {
   const [text, setText] = useState(initialText);
   const [noteType, setNoteType] = useState<NoteType | "">(initialNoteType ?? "");
+  const [source, setSource] = useState(initialSource ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -58,11 +61,12 @@ export default function NotesPopup({
 
     setIsSaving(true);
     try {
+      const trimmedSource = source.trim() || null;
       if (noteId) {
-        await updateAdminNote(noteId, text.trim(), noteType);
+        await updateAdminNote(noteId, text.trim(), noteType, trimmedSource);
         showSuccess("Note updated successfully");
       } else {
-        await createAdminNote(coordinate, text.trim(), noteType);
+        await createAdminNote(coordinate, text.trim(), noteType, trimmedSource);
         showSuccess("Note created successfully");
       }
       onSaved();
@@ -148,6 +152,19 @@ export default function NotesPopup({
         onKeyDown={handleKeyDown}
         placeholder="Enter note text..."
         className="w-full h-24 px-2 py-1 text-sm border border-gray-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+      />
+
+      <label htmlFor="note-source" className="block text-xs font-medium text-gray-700 mt-2 mb-1">
+        Source link <span className="text-gray-400">(optional)</span>
+      </label>
+      <input
+        id="note-source"
+        type="url"
+        value={source}
+        onChange={(e) => setSource(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="https://..."
+        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
       />
 
       <div className="flex gap-2 mt-2">
