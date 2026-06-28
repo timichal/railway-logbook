@@ -123,7 +123,6 @@ BEGIN
             rr.track_id,
             rr.from_station,
             rr.to_station,
-            rr.track_number,
             rr.description,
             rr.usage_type,
             rr.frequency,

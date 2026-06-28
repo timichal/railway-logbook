@@ -75,7 +75,6 @@ export type RailwayRoute = {
   track_id: string;
   from_station: string;
   to_station: string;
-  track_number?: string | null;
   description: string | null;
   usage_type: UsageType; // 0=Regular, 1=Special
   frequency: string[]; // Array of frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
@@ -189,7 +188,6 @@ export interface SelectedRoute {
   track_id: string;
   from_station: string;
   to_station: string;
-  track_number: string | null;
   description: string;
   usage_types: string;
   link: string | null;

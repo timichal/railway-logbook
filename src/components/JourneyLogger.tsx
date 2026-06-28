@@ -216,7 +216,6 @@ export default function JourneyLogger({
                 >
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">
-                      {route.track_number && `${route.track_number} `}
                       {route.from_station} ⟷ {route.to_station}
                     </div>
                     <div className="flex items-center gap-4 mt-1">

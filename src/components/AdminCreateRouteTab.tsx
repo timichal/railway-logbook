@@ -25,7 +25,6 @@ interface AdminCreateRouteTabProps {
   onSaveRoute?: (routeData: {
     from_station: string;
     to_station: string;
-    track_number: string;
     description: string;
     usage_type: UsageType;
     frequency: string[];
@@ -35,7 +34,7 @@ interface AdminCreateRouteTabProps {
   }) => void;
   onFormReset?: () => void;
   editingGeometryForTrackId?: string | null;
-  editingRouteInfo?: { from_station: string; to_station: string; track_number: string } | null;
+  editingRouteInfo?: { from_station: string; to_station: string } | null;
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
   onRefreshMap?: () => void;
@@ -62,7 +61,6 @@ export default function AdminCreateRouteTab({
   const [createForm, setCreateForm] = useState({
     from_station: "",
     to_station: "",
-    track_number: "",
     description: "",
     usage_type: undefined as UsageType | undefined,
     frequency: [] as string[],
@@ -86,7 +84,6 @@ export default function AdminCreateRouteTab({
     setCreateForm({
       from_station: "",
       to_station: "",
-      track_number: "",
       description: "",
       usage_type: undefined,
       frequency: [],
@@ -171,7 +168,6 @@ export default function AdminCreateRouteTab({
     await onSaveRoute({
       from_station: createForm.from_station.trim(),
       to_station: createForm.to_station.trim(),
-      track_number: createForm.track_number,
       description: createForm.description,
       usage_type: createForm.usage_type,
       frequency: createForm.frequency,
@@ -193,14 +189,13 @@ export default function AdminCreateRouteTab({
 
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
-      // Metadata (name, description, usage_type, track_number, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
+      // Metadata (name, description, usage_type, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
       await saveRailwayRoute(
         {
           from_station: "",
           to_station: "",
           description: "",
           usage_type: 0,
-          track_number: "",
           frequency: [],
           link: "",
           scenic: false,
@@ -277,8 +272,7 @@ export default function AdminCreateRouteTab({
       return "Create New Route";
     }
 
-    const trackNum = editingRouteInfo.track_number ? `${editingRouteInfo.track_number} ` : "";
-    return `Edit Route Geometry (${trackNum}${editingRouteInfo.from_station} ⟷ ${editingRouteInfo.to_station})`;
+    return `Edit Route Geometry (${editingRouteInfo.from_station} ⟷ ${editingRouteInfo.to_station})`;
   };
 
   return (
@@ -356,24 +350,6 @@ export default function AdminCreateRouteTab({
         {/* Only show metadata fields in create mode */}
         {!isEditMode && (
           <>
-            {/* Track Number */}
-            <div>
-              <label
-                htmlFor="route-track-number"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Local route number(s)
-              </label>
-              <input
-                id="route-track-number"
-                type="text"
-                value={createForm.track_number}
-                onChange={(e) => setCreateForm({ ...createForm, track_number: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="e.g., 310, 102"
-              />
-            </div>
-
             {/* From Station */}
             <div>
               <label htmlFor="route-from" className="block text-sm font-medium text-gray-700 mb-1">

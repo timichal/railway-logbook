@@ -43,7 +43,6 @@ CREATE TABLE railway_routes (
     track_id SERIAL PRIMARY KEY, -- Auto-generated unique track identifier
     from_station TEXT NOT NULL, -- Starting station/location
     to_station TEXT NOT NULL, -- Ending station/location
-    track_number VARCHAR(100), -- Local track number(s) - optional
     description TEXT, -- Route description
     usage_type INTEGER NOT NULL, -- Usage type (0=Regular, 1=Heritage, 2=Diversion; 1 & 2 are "special")
     frequency TEXT[] DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)

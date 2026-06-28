@@ -320,7 +320,6 @@ export default function VectorRailwayMap({
         track_id: route.track_id.toString(),
         from_station: route.from_station,
         to_station: route.to_station,
-        track_number: null,
         description: route.description || "",
         usage_types: "",
         link: null,

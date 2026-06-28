@@ -25,7 +25,6 @@ function buildRouteMetaFromSelected(route: SelectedRoute): RailwayRoute {
     track_id: route.track_id,
     from_station: route.from_station,
     to_station: route.to_station,
-    track_number: route.track_number,
     description: route.description,
     usage_type: 0 as RailwayRoute["usage_type"],
     frequency: [],
@@ -501,7 +500,6 @@ export default function LocalJourneyLogTab({
                                 <span className="font-medium truncate">
                                   {meta ? (
                                     <>
-                                      {meta.track_number && `${meta.track_number} `}
                                       {meta.from_station} ⟷ {meta.to_station}
                                     </>
                                   ) : (

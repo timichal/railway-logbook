@@ -20,7 +20,6 @@ function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
     track_id: route.track_id,
     from_station: route.from_station,
     to_station: route.to_station,
-    track_number: route.track_number ?? null,
     description: route.description,
     usage_type: 0 as RailwayRoute["usage_type"],
     frequency: [],
@@ -467,7 +466,6 @@ export default function MergedJourneyCard({
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium truncate">
-                            {route.track_number && `${route.track_number} `}
                             {route.from_station} ⟷ {route.to_station}
                           </span>
                           <div className="flex items-center gap-2 flex-shrink-0">

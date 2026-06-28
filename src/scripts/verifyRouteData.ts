@@ -13,8 +13,8 @@ export interface RecalculationResult {
   totalRoutes: number;
   successfulRoutes: number;
   invalidRoutes: number;
-  backtrackingRoutes: Array<{ track_number: string; from_station: string; to_station: string }>;
-  errors: Array<{ track_number: string; from_station: string; to_station: string; error: string }>;
+  backtrackingRoutes: Array<{ track_id: number; from_station: string; to_station: string }>;
+  errors: Array<{ track_id: number; from_station: string; to_station: string; error: string }>;
 }
 
 /**
@@ -76,7 +76,6 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
   const routes = await client.query(`
     SELECT
       track_id,
-      track_number,
       from_station,
       to_station,
       starting_part_id,
@@ -100,7 +99,6 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
   for (const route of routes.rows) {
     const {
       track_id,
-      track_number,
       from_station,
       to_station,
       start_lng,
@@ -154,7 +152,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
 
         result.invalidRoutes++;
         result.errors.push({
-          track_number,
+          track_id,
           from_station,
           to_station,
           error: errorMsg,
@@ -181,7 +179,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
         // Track routes with unintended backtracking (hasBacktracking=true AND intended_backtracking=false)
         if (recalcResult.hasBacktracking && !intended_backtracking) {
           result.backtrackingRoutes.push({
-            track_number,
+            track_id,
             from_station,
             to_station,
           });
@@ -203,7 +201,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
 
       result.invalidRoutes++;
       result.errors.push({
-        track_number,
+        track_id,
         from_station,
         to_station,
         error: recalcResult.error || "Unknown error",
@@ -256,7 +254,7 @@ export async function verifyAndRecalculateRoutes(client: Client): Promise<void> 
     console.log("=== Routes with Unintended Backtracking ===");
     console.log("(Routes with hasBacktracking=true but intended_backtracking=false)");
     for (const route of recalcResult.backtrackingRoutes) {
-      console.log(`  [${route.track_number}] ${route.from_station} → ${route.to_station}`);
+      console.log(`  [${route.track_id}] ${route.from_station} → ${route.to_station}`);
     }
   }
 
@@ -265,7 +263,7 @@ export async function verifyAndRecalculateRoutes(client: Client): Promise<void> 
     console.log("=== Invalid Routes ===");
     for (const error of recalcResult.errors) {
       console.log(
-        `  [${error.track_number}] ${error.from_station} → ${error.to_station}: ${error.error}`,
+        `  [${error.track_id}] ${error.from_station} → ${error.to_station}: ${error.error}`,
       );
     }
   }

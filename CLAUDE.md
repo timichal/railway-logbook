@@ -18,6 +18,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 - `npm run applyVectorTiles` — re-apply `database/init/02-vector-tiles.sql`.
 - `npm run markAllRoutesInvalid` — flag all routes for recheck (use `verifyRouteData` after). **Reference example for migration scripts.**
 - `npm run migrateNotesSourceAndInternal` — adds `admin_notes.source`, widens the `note_type` CHECK to include `UsageInternal`, and reclassifies existing `Usage` notes → `UsageInternal` (hides them from the public map pending manual review). Idempotent. Re-run `applyVectorTiles` + restart Martin to pick up `public_notes_tile`.
+- `npm run dropTrackNumber` — drops the `railway_routes.track_number` column (the old "Local route number(s)" field, removed as useless — line numbering is inconsistent across countries). Idempotent (`IF EXISTS`). Re-run `applyVectorTiles` + restart Martin afterward.
 - `npm run fixSequences` — resync all SERIAL id sequences with table data. Fixes "duplicate key violates …_pkey" on inserts after rows were loaded with explicit ids (old dumps) without bumping the sequence. `importRouteData` now does this automatically; run manually if needed.
 - `npm run listStations` — list unique station names (debug).
 - `npm run exportRouteData` / `npm run importRouteData <file>` — pg_dump/psql via `docker exec`; covers `railway_routes`, `user_trips`, `user_journeys`, `user_logged_parts` (user_id=1), `admin_notes`. Output to `data/railway_data_YYYY-MM-DD.sql`.
@@ -44,7 +45,7 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 
 - **users** — auth (email username, bcrypt password).
 - **stations** — Point features from OSM.
-- **railway_routes** — SERIAL `track_id`, `from_station`, `to_station`, `track_number`, `description`, `usage_type` (0=Regular, 1=Special), `frequency` TEXT[] (Daily/Weekdays/Weekends/Once a week/Seasonal), `link`, `scenic` BOOL, `line_class` ('highspeed'|'main'|'branch', auto-classified on create/edit, manually overridable), PostGIS `geom`, `length_km`, `start_country`/`end_country` (ISO 3166-1 alpha-2), `starting_coordinate`/`ending_coordinate` (POINT — exact click points for recalculation), `is_valid`, `error_message`, `intended_backtracking`, `has_backtracking`.
+- **railway_routes** — SERIAL `track_id`, `from_station`, `to_station`, `description`, `usage_type` (0=Regular, 1=Special), `frequency` TEXT[] (Daily/Weekdays/Weekends/Once a week/Seasonal), `link`, `scenic` BOOL, `line_class` ('highspeed'|'main'|'branch', auto-classified on create/edit, manually overridable), PostGIS `geom`, `length_km`, `start_country`/`end_country` (ISO 3166-1 alpha-2), `starting_coordinate`/`ending_coordinate` (POINT — exact click points for recalculation), `is_valid`, `error_message`, `intended_backtracking`, `has_backtracking`.
 - **railway_parts** — raw OSM segments; includes `usage` (main/branch/industrial/tourism) and `highspeed` BOOL.
 - **user_trips** — id, user_id, name (req), description, timestamps. Groups journeys.
 - **user_journeys** — id, user_id, name (req), description, date (req), `trip_id` FK ON DELETE SET NULL, timestamps.
@@ -99,7 +100,7 @@ Selection/highlight layers:
 - **Utils**: `userRouteStyling.ts` (`getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression`, `getUserRouteScenicOutlineWidthExpression`, `getAdminRouteWidthExpression`), `tooltipFormatting.ts`, `distance.ts`.
 
 ### Scripts (`src/scripts/`)
-- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `migrateNotesSourceAndInternal.ts` (admin_notes source + UsageInternal migration), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `exportRoutes.ts`, `importRoutes.ts`.
+- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `migrateNotesSourceAndInternal.ts` (admin_notes source + UsageInternal migration), `dropTrackNumber.ts` (drops `railway_routes.track_number`), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `exportRoutes.ts`, `importRoutes.ts`.
 - **Shared**: `lib/loadRailwayData.ts`, `lib/railwayPathFinder.ts` (admin route creation + recalc).
 
 ### Database (`database/init/`)

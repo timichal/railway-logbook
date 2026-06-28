@@ -13,7 +13,6 @@ import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./typ
 export interface SaveRouteData {
   from_station: string;
   to_station: string;
-  track_number: string;
   description: string;
   usage_type: UsageType;
   frequency: string[];
@@ -29,7 +28,7 @@ export async function getAllRailwayRoutes() {
   await requireAdmin();
 
   const result = await query(`
-    SELECT track_id, from_station, to_station, track_number, description, usage_type, scenic, line_class,
+    SELECT track_id, from_station, to_station, description, usage_type, scenic, line_class,
            starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking, has_backtracking
     FROM railway_routes
     ORDER BY from_station, to_station
@@ -46,7 +45,7 @@ export async function getRailwayRoute(trackId: string) {
 
   const result = await query(
     `
-    SELECT track_id, from_station, to_station, track_number, description, usage_type, frequency, link, scenic, line_class,
+    SELECT track_id, from_station, to_station, description, usage_type, frequency, link, scenic, line_class,
            ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
            ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json,
@@ -235,7 +234,6 @@ export async function saveRailwayRoute(
         INSERT INTO railway_routes (
           from_station,
           to_station,
-          track_number,
           description,
           usage_type,
           frequency,
@@ -260,18 +258,17 @@ export async function saveRailwayRoute(
           $5,
           $6,
           $7,
-          $8,
-          ST_GeomFromText($9, 4326),
-          ST_Length(ST_GeomFromText($9, 4326)::geography) / 1000,
+          ST_GeomFromText($8, 4326),
+          ST_Length(ST_GeomFromText($8, 4326)::geography) / 1000,
+          $9,
           $10,
-          $11,
+          ST_GeomFromText($11, 4326),
           ST_GeomFromText($12, 4326),
-          ST_GeomFromText($13, 4326),
           NULL,
           NULL,
           TRUE,
-          $14,
-          $15
+          $13,
+          $14
         )
         RETURNING track_id, length_km
       `;
@@ -279,7 +276,6 @@ export async function saveRailwayRoute(
       values = [
         routeData.from_station,
         routeData.to_station,
-        routeData.track_number || null,
         routeData.description || null,
         routeData.usage_type,
         routeData.frequency || [],
@@ -358,7 +354,6 @@ export async function updateRailwayRoute(
   trackId: string,
   fromStation: string,
   toStation: string,
-  trackNumber: string | null,
   description: string | null,
   usageType: UsageType,
   frequency: string[],
@@ -372,15 +367,14 @@ export async function updateRailwayRoute(
   await query(
     `
     UPDATE railway_routes
-    SET from_station = $2, to_station = $3, track_number = $4, description = $5, usage_type = $6, frequency = $7, link = $8,
-        scenic = $9, line_class = $10, intended_backtracking = $11, is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+    SET from_station = $2, to_station = $3, description = $4, usage_type = $5, frequency = $6, link = $7,
+        scenic = $8, line_class = $9, intended_backtracking = $10, is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
   `,
     [
       trackId,
       fromStation,
       toStation,
-      trackNumber,
       description,
       usageType,
       frequency || [],

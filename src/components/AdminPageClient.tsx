@@ -126,7 +126,6 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const handleSaveRoute = async (routeData: {
     from_station: string;
     to_station: string;
-    track_number: string;
     description: string;
     usage_type: UsageType;
     frequency: string[];

@@ -32,7 +32,6 @@ interface AdminSidebarProps {
     to_station: string;
     description: string;
     usage_type: UsageType;
-    track_number: string;
     frequency: string[];
     link: string;
     scenic: boolean;
@@ -80,7 +79,6 @@ export default function AdminSidebar({
   const [editingRouteInfo, setEditingRouteInfo] = useState<{
     from_station: string;
     to_station: string;
-    track_number: string;
   } | null>(null);
 
   // Switch to create tab when a coordinate is clicked
@@ -176,7 +174,6 @@ export default function AdminSidebar({
         setEditingRouteInfo({
           from_station: routeDetail.from_station,
           to_station: routeDetail.to_station,
-          track_number: routeDetail.track_number || "",
         });
 
         // Prefill the starting/ending coordinates if they exist

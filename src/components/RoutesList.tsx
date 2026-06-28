@@ -79,7 +79,7 @@ export default function RoutesList({
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search by route #, from, or to..."
+          placeholder="Search by from or to..."
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
         />
         {searchQuery && (
@@ -105,7 +105,7 @@ export default function RoutesList({
                 }`}
               >
                 <div className="font-medium text-sm text-gray-900 truncate">
-                  {route.from_station} ⟷ {route.to_station} [{route.track_number}]
+                  {route.from_station} ⟷ {route.to_station}
                 </div>
               </button>
             ))}

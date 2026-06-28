@@ -31,7 +31,7 @@ export async function getJourney(journeyId: number): Promise<{
     // Fetch all routes in this journey (exclude heavy geometry column)
     const routesResult = await pool.query<RailwayRoute & LoggedPart>(
       `SELECT
-        rr.track_id, rr.from_station, rr.to_station, rr.track_number,
+        rr.track_id, rr.from_station, rr.to_station,
         rr.description, rr.usage_type, rr.frequency, rr.link, rr.scenic, rr.line_class,
         rr.length_km, rr.start_country, rr.end_country,
         rr.is_valid, rr.error_message,

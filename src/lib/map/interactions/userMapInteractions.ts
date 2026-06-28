@@ -42,7 +42,6 @@ export function setupUserMapInteractions(
       track_id: String(trackId),
       from_station: properties.from_station,
       to_station: properties.to_station,
-      track_number: properties.track_number || null,
       description: properties.description,
       usage_types: properties.usage_types,
       link: properties.link || null,
@@ -68,7 +67,7 @@ export function setupUserMapInteractions(
 
     if (!properties) return;
 
-    let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.track_number ? `${properties.track_number} ` : ""}${properties.from_station} ⟷ ${properties.to_station}</h3>`;
+    let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.from_station} ⟷ ${properties.to_station}</h3>`;
 
     let formattedDescription = "";
 

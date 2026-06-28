@@ -45,7 +45,6 @@ export default function AdminRoutesTab({
   const [editForm, setEditForm] = useState<{
     from_station: string;
     to_station: string;
-    track_number: string;
     description: string;
     usage_type: UsageType;
     frequency: string[];
@@ -93,10 +92,9 @@ export default function AdminRoutesTab({
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((route) => {
-        const trackIdMatch = route.track_number?.toLowerCase().includes(query);
         const fromMatch = route.from_station.toLowerCase().includes(query);
         const toMatch = route.to_station.toLowerCase().includes(query);
-        return trackIdMatch || fromMatch || toMatch;
+        return fromMatch || toMatch;
       });
     }
 
@@ -129,7 +127,6 @@ export default function AdminRoutesTab({
         setEditForm({
           from_station: routeDetail.from_station,
           to_station: routeDetail.to_station,
-          track_number: routeDetail.track_number || "",
           description: routeDetail.description || "",
           usage_type: routeDetail.usage_type,
           frequency: routeDetail.frequency || [],
@@ -177,7 +174,6 @@ export default function AdminRoutesTab({
         selectedRoute.track_id,
         editForm.from_station.trim(),
         editForm.to_station.trim(),
-        editForm.track_number || null,
         editForm.description || null,
         editForm.usage_type,
         editForm.frequency,
@@ -199,7 +195,6 @@ export default function AdminRoutesTab({
       setSelectedRoute({
         ...selectedRoute,
         ...trimmedForm,
-        track_number: editForm.track_number || null,
         description: editForm.description || null,
       });
 

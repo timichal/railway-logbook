@@ -12,7 +12,6 @@ import type { RailwayRoute } from "@/lib/types";
 interface EditFormData {
   from_station: string;
   to_station: string;
-  track_number: string;
   description: string;
   usage_type: UsageType;
   frequency: string[];
@@ -103,24 +102,6 @@ export default function RouteEditForm({
               </div>
             </div>
           )}
-
-          {/* Track Number */}
-          <div>
-            <label
-              htmlFor="edit-track-number"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Local route number(s)
-            </label>
-            <input
-              id="edit-track-number"
-              type="text"
-              value={editForm.track_number}
-              onChange={(e) => onEditFormChange({ ...editForm, track_number: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-              placeholder="e.g., 310, 102"
-            />
-          </div>
 
           {/* From Station */}
           <div>
