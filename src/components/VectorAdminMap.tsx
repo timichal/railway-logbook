@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { getAllRouteEndpoints } from "@/lib/adminRouteActions";
+import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
 import {
   COLORS,
   createAdminNotesLayer,
@@ -71,6 +71,7 @@ export default function VectorAdminMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
+  const [validRoutesTotalKm, setValidRoutesTotalKm] = useState<number | null>(null);
   const isMobile = useIsMobile();
 
   const { previewLength, selectedRouteLength } = useRouteLength(previewRoute, selectedRouteId);
@@ -139,6 +140,14 @@ export default function VectorAdminMap({
       .then(setRouteEndpoints)
       .catch((error) => console.error("Error fetching route endpoints:", error));
   }, [mapLoaded, refreshTrigger]);
+
+  // Fetch total km of valid routes (refreshes when routes are saved/deleted)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch the total on demand.
+  useEffect(() => {
+    getValidRoutesTotalKm()
+      .then(setValidRoutesTotalKm)
+      .catch((error) => console.error("Error fetching valid routes total km:", error));
+  }, [refreshTrigger]);
 
   // Selected route highlighting
   useEffect(() => {
@@ -272,6 +281,19 @@ export default function VectorAdminMap({
       <div ref={mapContainer} className="w-full h-full" />
 
       <AdminLayerControls {...layerVisibility} isMobile={isMobile} />
+
+      {validRoutesTotalKm !== null && (
+        <div
+          className={`absolute bg-white p-3 rounded shadow-lg text-black z-10 ${
+            isMobile ? "bottom-10 left-3 text-xs" : "bottom-10 right-4"
+          }`}
+        >
+          <h3 className={`font-bold mb-1 ${isMobile ? "text-xs" : "text-sm"}`}>Valid routes</h3>
+          <div className={`font-semibold ${isMobile ? "text-sm" : "text-lg"}`}>
+            {validRoutesTotalKm.toFixed(1)} km
+          </div>
+        </div>
+      )}
 
       {(previewLength !== null || selectedRouteLength !== null) && (
         <div className="absolute top-4 right-4 bg-white p-3 rounded shadow-lg text-black z-10">

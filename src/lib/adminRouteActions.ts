@@ -38,6 +38,21 @@ export async function getAllRailwayRoutes() {
 }
 
 /**
+ * Get the total length (km) of all valid routes. Powers the admin map km counter.
+ */
+export async function getValidRoutesTotalKm(): Promise<number> {
+  await requireAdmin();
+
+  const result = await query(`
+    SELECT COALESCE(SUM(length_km), 0) AS total_km
+    FROM railway_routes
+    WHERE is_valid = true
+  `);
+
+  return Math.round((parseFloat(result.rows[0].total_km) || 0) * 10) / 10;
+}
+
+/**
  * Get the distinct set of frequency tags currently in use across all routes.
  * Tags have no separate table: a tag exists exactly as long as some route
  * references it, so dropping the last usage of a tag removes it implicitly.
