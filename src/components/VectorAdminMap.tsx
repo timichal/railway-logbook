@@ -1,5 +1,6 @@
 "use client";
 
+import type maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
@@ -10,8 +11,10 @@ import {
   createRailwayPartsLayer,
   createRailwayPartsSource,
   createRailwayRoutesClickLayer,
+  createRailwayRoutesHeritageLayer,
   createRailwayRoutesLayer,
   createRailwayRoutesSource,
+  createRailwayRoutesSpecialLayer,
   createScenicRoutesOutlineLayer,
   createStationsLayer,
   createStationsSource,
@@ -24,9 +27,72 @@ import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useRouteLength } from "@/lib/map/hooks/useRouteLength";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
-import { getAdminRouteWidthExpression } from "@/lib/map/utils/userRouteStyling";
+import {
+  getAdminRouteHeritageWidthExpression,
+  getAdminRouteWidthExpression,
+} from "@/lib/map/utils/userRouteStyling";
 import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/types";
 import AdminLayerControls from "./AdminLayerControls";
+
+// The base layer draws Regular routes solid; Heritage (dotted) and Special
+// (dashed) get their own layers so the dash/dot gaps aren't filled by a solid
+// line underneath. All three are always shown on the admin map.
+const REGULAR_ONLY_FILTER = ["==", ["get", "usage_type"], 0] as maplibregl.FilterSpecification;
+
+// The three colored route line layers. They share identical visit/selection
+// paint; only their dash style (baked into each factory) differs.
+const ROUTE_LINE_LAYERS = [
+  "railway_routes",
+  "railway_routes_heritage",
+  "railway_routes_special",
+] as const;
+
+/**
+ * Apply the admin route paint (selected-route highlight + invalid-route grey) to
+ * all three route line layers at once. `line-dasharray` is left untouched, so
+ * the dotted/dashed styles baked into the heritage/special factories survive.
+ */
+function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: string | null) {
+  const trackIdNum =
+    selectedRouteId && selectedRouteId !== "" ? parseInt(selectedRouteId, 10) : null;
+
+  const colorExpression: maplibregl.ExpressionSpecification =
+    trackIdNum !== null
+      ? [
+          "case",
+          ["==", ["id"], trackIdNum],
+          COLORS.railwayRoutes.selected,
+          ["==", ["get", "is_valid"], false],
+          COLORS.railwayRoutes.invalid,
+          lineClassColorExpression(COLORS.railwayRoutes.default),
+        ]
+      : [
+          "case",
+          ["==", ["get", "is_valid"], false],
+          COLORS.railwayRoutes.invalid,
+          lineClassColorExpression(COLORS.railwayRoutes.default),
+        ];
+
+  const widthExpression = getAdminRouteWidthExpression(trackIdNum);
+  // Heritage dots' diameter equals the line width, so they use their own width.
+  const heritageWidthExpression = getAdminRouteHeritageWidthExpression(trackIdNum);
+
+  const opacityExpression: maplibregl.ExpressionSpecification | number =
+    trackIdNum !== null
+      ? ["case", ["==", ["id"], trackIdNum], OPACITIES.selectedRoute, OPACITIES.defaultRoute]
+      : OPACITIES.defaultRoute;
+
+  for (const layerId of ROUTE_LINE_LAYERS) {
+    if (!m.getLayer(layerId)) continue;
+    m.setPaintProperty(layerId, "line-color", colorExpression);
+    m.setPaintProperty(
+      layerId,
+      "line-width",
+      layerId === "railway_routes_heritage" ? heritageWidthExpression : widthExpression,
+    );
+    m.setPaintProperty(layerId, "line-opacity", opacityExpression);
+  }
+}
 
 interface VectorAdminMapProps {
   className?: string;
@@ -95,7 +161,9 @@ export default function VectorAdminMap({
       layers: [
         createRailwayPartsLayer(),
         createScenicRoutesOutlineLayer(),
-        createRailwayRoutesLayer(),
+        createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }),
+        createRailwayRoutesHeritageLayer(),
+        createRailwayRoutesSpecialLayer(),
         createRailwayRoutesClickLayer(),
         createStationsLayer(),
         createAdminNotesLayer(),
@@ -152,43 +220,7 @@ export default function VectorAdminMap({
   // Selected route highlighting
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
-
-    if (selectedRouteId) {
-      const trackIdNum = parseInt(selectedRouteId, 10);
-
-      map.current.setPaintProperty("railway_routes", "line-color", [
-        "case",
-        ["==", ["id"], trackIdNum],
-        COLORS.railwayRoutes.selected,
-        ["==", ["get", "is_valid"], false],
-        COLORS.railwayRoutes.invalid,
-        lineClassColorExpression(COLORS.railwayRoutes.default),
-      ]);
-      map.current.setPaintProperty(
-        "railway_routes",
-        "line-width",
-        getAdminRouteWidthExpression(trackIdNum),
-      );
-      map.current.setPaintProperty("railway_routes", "line-opacity", [
-        "case",
-        ["==", ["id"], trackIdNum],
-        OPACITIES.selectedRoute,
-        OPACITIES.defaultRoute,
-      ]);
-    } else {
-      map.current.setPaintProperty("railway_routes", "line-color", [
-        "case",
-        ["==", ["get", "is_valid"], false],
-        COLORS.railwayRoutes.invalid,
-        lineClassColorExpression(COLORS.railwayRoutes.default),
-      ]);
-      map.current.setPaintProperty(
-        "railway_routes",
-        "line-width",
-        getAdminRouteWidthExpression(null),
-      );
-      map.current.setPaintProperty("railway_routes", "line-opacity", OPACITIES.defaultRoute);
-    }
+    applyAdminRouteLinePaint(map.current, selectedRouteId ?? null);
   }, [selectedRouteId, mapLoaded, map]);
 
   // Refresh routes tiles when routes are saved/deleted
@@ -200,49 +232,33 @@ export default function VectorAdminMap({
 
     // Remove layers → source → re-add
     const m = map.current;
-    if (m.getLayer("railway_routes_click")) m.removeLayer("railway_routes_click");
-    if (m.getLayer("railway_routes")) m.removeLayer("railway_routes");
-    if (m.getLayer("railway_routes_scenic_outline")) m.removeLayer("railway_routes_scenic_outline");
+    const routeLayers = [
+      "railway_routes_click",
+      "railway_routes_special",
+      "railway_routes_heritage",
+      "railway_routes",
+      "railway_routes_scenic_outline",
+    ];
+    for (const id of routeLayers) {
+      if (m.getLayer(id)) m.removeLayer(id);
+    }
     if (m.getSource("railway_routes")) m.removeSource("railway_routes");
 
     m.addSource("railway_routes", createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
     m.addLayer(createScenicRoutesOutlineLayer());
-    m.addLayer(createRailwayRoutesLayer());
+    m.addLayer(createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }));
+    m.addLayer(createRailwayRoutesHeritageLayer());
+    m.addLayer(createRailwayRoutesSpecialLayer());
     m.addLayer(createRailwayRoutesClickLayer());
 
-    // Re-apply visibility
+    // Re-apply visibility (heritage/special factories default to hidden)
     const visibility = layerVisibility.showRoutesLayer ? "visible" : "none";
-    m.setLayoutProperty("railway_routes", "visibility", visibility);
-    m.setLayoutProperty("railway_routes_scenic_outline", "visibility", visibility);
-    m.setLayoutProperty("railway_routes_click", "visibility", visibility);
-
-    // Re-apply selected route highlighting
-    if (selectedRouteId) {
-      const trackIdNum = parseInt(selectedRouteId, 10);
-      m.setPaintProperty("railway_routes", "line-color", [
-        "case",
-        ["==", ["id"], trackIdNum],
-        COLORS.railwayRoutes.selected,
-        ["==", ["get", "is_valid"], false],
-        COLORS.railwayRoutes.invalid,
-        lineClassColorExpression(COLORS.railwayRoutes.default),
-      ]);
-      m.setPaintProperty("railway_routes", "line-width", getAdminRouteWidthExpression(trackIdNum));
-      m.setPaintProperty("railway_routes", "line-opacity", [
-        "case",
-        ["==", ["id"], trackIdNum],
-        OPACITIES.selectedRoute,
-        OPACITIES.defaultRoute,
-      ]);
-    } else {
-      m.setPaintProperty("railway_routes", "line-color", [
-        "case",
-        ["==", ["get", "is_valid"], false],
-        COLORS.railwayRoutes.invalid,
-        lineClassColorExpression(COLORS.railwayRoutes.default),
-      ]);
-      m.setPaintProperty("railway_routes", "line-width", getAdminRouteWidthExpression(null));
+    for (const id of routeLayers) {
+      m.setLayoutProperty(id, "visibility", visibility);
     }
+
+    // Re-apply selected route highlighting / invalid coloring to all route layers
+    applyAdminRouteLinePaint(m, selectedRouteId ?? null);
 
     m.triggerRepaint();
   }, [refreshTrigger, mapLoaded, layerVisibility.showRoutesLayer, selectedRouteId, map]);

@@ -79,6 +79,10 @@ export const WIDTHS = {
   // Special-usage routes are slightly thinner than branch (multiplier on
   // the branch width at each stop).
   specialUsageMultiplier: 0.85,
+  // Heritage routes are drawn as a dotted line whose dot diameter equals the
+  // line width, so they're noticeably fatter than branch to read as clear round
+  // dots rather than tiny dashes (multiplier on the branch width at each stop).
+  heritageDotMultiplier: 1.8,
   // Constant pixel width used for: admin map's selected route, user map's
   // Route Logger selection (selected_routes_highlight), and user map's
   // Journey Planner / My Trips highlight (highlighted_routes).
@@ -92,12 +96,20 @@ export const WIDTHS = {
 // ============================================================================
 
 /**
- * Dash patterns (in line-width multiples). Special routes (usage_type=2) are
- * drawn dashed in their own layer because MapLibre's line-dasharray is not
- * data-driven — it can't switch on a feature property like usage_type.
+ * Dash patterns (in line-width multiples). Non-regular routes are each drawn in
+ * their own layer because MapLibre's line-dasharray is not data-driven — it
+ * can't switch on a feature property like usage_type.
+ * - `special` (usage_type=2): dashed.
+ * - `heritage` (usage_type=1): dotted. A zero-length dash rendered with a round
+ *   line-cap shows up as a dot; the gap is in line-width multiples. The layer
+ *   MUST set `line-cap: "round"` or the zero-length dashes render as nothing.
  */
 export const DASHES = {
   special: [2.5, 2] as [number, number],
+  // Round dots, well separated so they read as dots (not short dashes). Gap is
+  // in line-width multiples, so the bigger heritageDotMultiplier already widens
+  // it; keep this large enough that dots stay distinct from `special` dashes.
+  heritage: [0, 3] as [number, number],
 } as const;
 
 // ============================================================================

@@ -69,6 +69,27 @@ export function getUserRouteWidthExpression(): maplibregl.ExpressionSpecificatio
 }
 
 /**
+ * Width expression for the dotted Heritage layer. Heritage dots are rendered via
+ * a round line-cap, so their diameter equals the line width — they're scaled by
+ * WIDTHS.heritageDotMultiplier off the branch width. The heritage layer only
+ * contains heritage routes, so a single branch-based width per zoom is enough
+ * (no line_class branching).
+ */
+export function getUserRouteHeritageWidthExpression(): maplibregl.ExpressionSpecification {
+  const s = WIDTHS.userRoute;
+  const dotWidth = (stop: WidthStop) => stop.branch * WIDTHS.heritageDotMultiplier;
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    4,
+    dotWidth(s.z4),
+    7,
+    dotWidth(s.z7),
+  ] as maplibregl.ExpressionSpecification;
+}
+
+/**
  * Wide transparent line used purely as a click/hover hit area so the visible
  * railway line can stay thin without becoming hard to tap on touch devices.
  */
@@ -97,6 +118,38 @@ export function getAdminRouteWidthExpression(
   selectedTrackId: number | null,
 ): maplibregl.ExpressionSpecification {
   const normal = widthByClass(WIDTHS.adminRoute);
+  const stop =
+    selectedTrackId === null
+      ? normal
+      : ([
+          "case",
+          ["==", ["id"], selectedTrackId],
+          WIDTHS.selectedRoute,
+          normal,
+        ] as maplibregl.ExpressionSpecification);
+
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    4,
+    stop,
+    6.5,
+    stop,
+    7,
+    stop,
+  ] as maplibregl.ExpressionSpecification;
+}
+
+/**
+ * Admin-map width for the dotted Heritage layer. Like getAdminRouteWidthExpression
+ * (constant across zoom, selected track rendered at WIDTHS.selectedRoute) but the
+ * non-selected width is the heritage-dot width.
+ */
+export function getAdminRouteHeritageWidthExpression(
+  selectedTrackId: number | null,
+): maplibregl.ExpressionSpecification {
+  const normal = WIDTHS.adminRoute.branch * WIDTHS.heritageDotMultiplier;
   const stop =
     selectedTrackId === null
       ? normal

@@ -2,6 +2,7 @@ import type maplibregl from "maplibre-gl";
 import { useEffect, useState } from "react";
 import {
   createRailwayRoutesClickLayer,
+  createRailwayRoutesHeritageLayer,
   createRailwayRoutesLayer,
   createRailwayRoutesSource,
   createRailwayRoutesSpecialLayer,
@@ -9,6 +10,7 @@ import {
   type RailwayRoutesPaintConfig,
   type RailwayRoutesSourceOptions,
 } from "../index";
+import { HIGHLIGHT_LAYER_IDS } from "./useRouteHighlighting";
 
 interface UseMapTileRefreshOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
@@ -24,6 +26,8 @@ interface UseMapTileRefreshOptions {
   clickBufferLayerConfig: RailwayRoutesPaintConfig;
   /** Paint config for the dashed Special layer */
   specialLayerConfig: RailwayRoutesPaintConfig;
+  /** Paint config for the dotted Heritage layer */
+  heritageLayerConfig: RailwayRoutesPaintConfig;
 }
 
 /**
@@ -39,6 +43,7 @@ export function useMapTileRefresh({
   scenicLayerConfig,
   clickBufferLayerConfig,
   specialLayerConfig,
+  heritageLayerConfig,
 }: UseMapTileRefreshOptions) {
   const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
 
@@ -49,10 +54,10 @@ export function useMapTileRefresh({
 
     const m = map.current;
     const layersToRemove = [
-      "selected_routes_highlight",
-      "highlighted_routes",
+      ...HIGHLIGHT_LAYER_IDS,
       "railway_routes_click",
       "railway_routes_special",
+      "railway_routes_heritage",
       "railway_routes",
       "railway_routes_scenic_outline",
     ];
@@ -71,6 +76,7 @@ export function useMapTileRefresh({
     m.addSource("railway_routes", createRailwayRoutesSource(sourceOptions));
     m.addLayer(createScenicRoutesOutlineLayer(scenicLayerConfig), "stations");
     m.addLayer(createRailwayRoutesLayer(routeLayerConfig), "stations");
+    m.addLayer(createRailwayRoutesHeritageLayer(heritageLayerConfig), "stations");
     m.addLayer(createRailwayRoutesSpecialLayer(specialLayerConfig), "stations");
     m.addLayer(createRailwayRoutesClickLayer(clickBufferLayerConfig), "stations");
   }, [cacheBuster]);

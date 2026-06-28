@@ -1,5 +1,6 @@
 import type maplibreglType from "maplibre-gl";
 import maplibregl from "maplibre-gl";
+import { HIGHLIGHT_LAYER_IDS } from "@/lib/map/hooks/useRouteHighlighting";
 import { formatRouteMetadataBadges } from "@/lib/map/utils/tooltipFormatting";
 import type { SelectedRoute, Station } from "@/lib/types";
 
@@ -20,12 +21,9 @@ export function setupUserMapInteractions(
 
   // Click handler for routes — queries all route-related layers (base + click buffer + highlights)
   const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
-    const routeLayers = [
-      "railway_routes_click",
-      "railway_routes",
-      "selected_routes_highlight",
-      "highlighted_routes",
-    ].filter((id) => mapInstance.getLayer(id));
+    const routeLayers = ["railway_routes_click", "railway_routes", ...HIGHLIGHT_LAYER_IDS].filter(
+      (id) => mapInstance.getLayer(id),
+    );
     if (routeLayers.length === 0) return;
 
     const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
@@ -243,12 +241,9 @@ export function setupUserMapInteractions(
       }
     }
 
-    const routeLayers = [
-      "railway_routes_click",
-      "railway_routes",
-      "selected_routes_highlight",
-      "highlighted_routes",
-    ].filter((id) => mapInstance.getLayer(id));
+    const routeLayers = ["railway_routes_click", "railway_routes", ...HIGHLIGHT_LAYER_IDS].filter(
+      (id) => mapInstance.getLayer(id),
+    );
     if (routeLayers.length === 0) return;
     const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
     if (features.length > 0) {

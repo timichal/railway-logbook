@@ -4,15 +4,17 @@ import { useEffect } from "react";
 
 /**
  * Manages filter and visibility toggles for user map layers:
- * - Heritage filter (usage_type=1, solid) — "Show heritage lines" toggle.
- * - Special-services filter (usage_type=2, dashed) — "Show special services"
- *   toggle. The two are independent.
+ * - Heritage (usage_type=1, dotted) — "Show heritage lines" toggle.
+ * - Special services (usage_type=2, dashed) — "Show special services" toggle.
+ *   The two are independent.
  * - Scenic outline visibility
  *
  * Layer responsibilities:
- * - `railway_routes` (visible solid line): Regular always, plus Heritage when
- *   its toggle is on. Never draws Special routes — those are dashed by their own
- *   layer, and a solid line underneath would fill the dash gaps.
+ * - `railway_routes` (visible solid line): Regular only. Heritage and Special
+ *   each have their own non-solid layer; a solid line under them would fill the
+ *   dash/dot gaps.
+ * - `railway_routes_heritage` (visible dotted line): only Heritage routes,
+ *   toggled visible/hidden with the heritage checkbox.
  * - `railway_routes_special` (visible dashed line): only Special routes, toggled
  *   visible/hidden with the special-services checkbox.
  * - `railway_routes_click` (invisible hit area): everything currently visible,
@@ -34,12 +36,18 @@ export function useLayerFilters(
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
 
-    // Visible solid line: Regular always, plus Heritage when toggled on. Never
-    // Special (usage_type=2) — those are drawn dashed by their own layer.
-    const solidFilter: FilterSpecification = showHeritage
-      ? ["!=", ["get", "usage_type"], 2]
-      : ["==", ["get", "usage_type"], 0];
-    m.setFilter("railway_routes", solidFilter);
+    // Visible solid line: Regular only. Heritage (dotted) and Special (dashed)
+    // are drawn by their own layers.
+    m.setFilter("railway_routes", ["==", ["get", "usage_type"], 0]);
+
+    // Dotted Heritage layer: visible only when heritage lines are shown.
+    if (m.getLayer("railway_routes_heritage")) {
+      m.setLayoutProperty(
+        "railway_routes_heritage",
+        "visibility",
+        showHeritage ? "visible" : "none",
+      );
+    }
 
     // Dashed Special layer: visible only when special services are shown.
     if (m.getLayer("railway_routes_special")) {

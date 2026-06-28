@@ -34,11 +34,12 @@ export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
           Only lines that are in regular use and available in official timetables are displayed.
           Non-regular lines come in two flavours, each with its own toggle. <i>Heritage</i> lines
           (museum or preserved lines run by enthusiasts, outside regular timetables and found only
-          via the operator's own channels) are revealed by ticking <b>Show heritage lines</b>.{" "}
-          <i>Special</i> services (regular national tracks used only irregularly by passenger trains
-          - diversions during engineering works, festival or anniversary runs, occasional tourist
-          trains) are revealed by ticking <b>Show special services</b>. Some of these may be missing
-          and some may be without any traffic at the moment.
+          via the operator's own channels) are revealed by ticking <b>Show heritage lines</b> and
+          drawn as dotted lines. <i>Special</i> services (regular national tracks used only
+          irregularly by passenger trains - diversions during engineering works, festival or
+          anniversary runs, occasional tourist trains) are revealed by ticking{" "}
+          <b>Show special services</b> and drawn as dashed lines. Some of these may be missing and
+          some may be without any traffic at the moment.
         </p>
         <p className="mb-4">
           While in the <b>Route Logger</b> mode, you can either click on individual line parts or

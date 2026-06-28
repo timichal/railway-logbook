@@ -8,6 +8,7 @@ import {
   createPublicNotesLayer,
   createPublicNotesSource,
   createRailwayRoutesClickLayer,
+  createRailwayRoutesHeritageLayer,
   createRailwayRoutesLayer,
   createRailwayRoutesSource,
   createRailwayRoutesSpecialLayer,
@@ -26,6 +27,7 @@ import { loadLayerPrefs, saveLayerPref } from "@/lib/map/layerPrefs";
 import {
   getUserRouteClickBufferWidthExpression,
   getUserRouteColorExpression,
+  getUserRouteHeritageWidthExpression,
   getUserRouteScenicOutlineWidthExpression,
   getUserRouteWidthExpression,
 } from "@/lib/map/utils/userRouteStyling";
@@ -132,13 +134,22 @@ export default function VectorRailwayMap({
     [],
   );
 
-  // Dashed Special layer: same visit-status colors/width as the solid line,
-  // but rendered dashed. Its usage_type=2 filter and hidden-by-default
-  // visibility are baked into the factory; useLayerFilters toggles visibility.
+  // Dashed Special / dotted Heritage layers: same visit-status colors as the
+  // solid line, but rendered dashed / dotted. Their usage_type filter and
+  // hidden-by-default visibility are baked into the factories; useLayerFilters
+  // toggles visibility.
   const specialLayerConfig = useMemo(
     () => ({
       colorExpression: getUserRouteColorExpression(),
       widthExpression: getUserRouteWidthExpression(),
+    }),
+    [],
+  );
+
+  const heritageLayerConfig = useMemo(
+    () => ({
+      colorExpression: getUserRouteColorExpression(),
+      widthExpression: getUserRouteHeritageWidthExpression(),
     }),
     [],
   );
@@ -174,6 +185,7 @@ export default function VectorRailwayMap({
       layers: [
         createScenicRoutesOutlineLayer(scenicLayerConfig),
         createRailwayRoutesLayer(routeLayerConfig),
+        createRailwayRoutesHeritageLayer(heritageLayerConfig),
         createRailwayRoutesSpecialLayer(specialLayerConfig),
         createRailwayRoutesClickLayer(clickBufferLayerConfig),
         createStationsLayer(),
@@ -245,6 +257,7 @@ export default function VectorRailwayMap({
     scenicLayerConfig,
     clickBufferLayerConfig,
     specialLayerConfig,
+    heritageLayerConfig,
   });
 
   // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)
