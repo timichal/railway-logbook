@@ -137,19 +137,19 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
     };
   }
 
-  // Get total distance and count of all routes (excluding Special usage_type=1, optionally filtered by countries)
+  // Get total distance and count of all routes (only Regular usage_type=0 counts; Heritage & Special excluded, optionally filtered by countries)
   const totalResult = await query(
     `SELECT
       COALESCE(SUM(length_km), 0) as total_km,
       COUNT(*) as total_routes
     FROM railway_routes
     WHERE length_km IS NOT NULL
-      AND usage_type != 1
+      AND usage_type = 0
       ${hasCountries ? "AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])" : ""}`,
     hasCountries ? [selectedCountries] : [],
   );
 
-  // Get completed distance and count (routes with at least one complete journey, excluding Special usage_type=1)
+  // Get completed distance and count (routes with at least one complete journey, only Regular usage_type=0)
   // "Most permissive wins": Route is complete if it's complete in ANY journey
   // Use EXISTS to ensure each route is only counted once regardless of number of journeys
   const completedResult = await query(
@@ -157,7 +157,7 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
       COALESCE(SUM(rr.length_km), 0) as completed_km,
       COUNT(*) as completed_routes
     FROM railway_routes rr
-    WHERE rr.usage_type != 1
+    WHERE rr.usage_type = 0
       AND rr.length_km IS NOT NULL
       ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}
       AND EXISTS (
@@ -221,12 +221,12 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
   const countryStats: CountryProgress[] = [];
 
   for (const country of SUPPORTED_COUNTRIES) {
-    // Get total km for routes starting AND ending in this country (excluding Special)
+    // Get total km for routes starting AND ending in this country (only Regular usage_type=0)
     const totalResult = await query(
       `SELECT COALESCE(SUM(length_km), 0) as total_km
        FROM railway_routes
        WHERE length_km IS NOT NULL
-         AND usage_type != 1
+         AND usage_type = 0
          AND start_country = $1
          AND end_country = $1`,
       [country.code],
@@ -236,7 +236,7 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
     const completedResult = await query(
       `SELECT COALESCE(SUM(rr.length_km), 0) as completed_km
        FROM railway_routes rr
-       WHERE rr.usage_type != 1
+       WHERE rr.usage_type = 0
          AND rr.length_km IS NOT NULL
          AND rr.start_country = $1
          AND rr.end_country = $1
@@ -267,13 +267,13 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
     `SELECT COALESCE(SUM(length_km), 0) as total_km
      FROM railway_routes
      WHERE length_km IS NOT NULL
-       AND usage_type != 1`,
+       AND usage_type = 0`,
   );
 
   const overallCompletedResult = await query(
     `SELECT COALESCE(SUM(rr.length_km), 0) as completed_km
      FROM railway_routes rr
-     WHERE rr.usage_type != 1
+     WHERE rr.usage_type = 0
        AND rr.length_km IS NOT NULL
        AND EXISTS (
          SELECT 1

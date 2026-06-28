@@ -115,7 +115,7 @@ function createLocalStorageDataAccess(): DataAccess {
           );
         }
 
-        // Filter out special routes (Heritage + Diversion); only Regular counts.
+        // Filter out non-regular routes (Heritage + Special); only Regular counts.
         filteredRoutes = filteredRoutes.filter((route) => !isSpecialUsage(route.usage_type));
 
         // Calculate totals

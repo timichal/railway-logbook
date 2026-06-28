@@ -7,8 +7,10 @@
  */
 
 export interface LayerPrefs {
-  /** "Show special lines" — reveals Heritage (solid) + Diversion (dashed). */
-  showSpecialLines: boolean;
+  /** "Show heritage lines" — reveals Heritage routes (usage_type=1, solid). */
+  showHeritage: boolean;
+  /** "Show special services" — reveals Special routes (usage_type=2, dashed). */
+  showSpecial: boolean;
   /** "Highlight scenic lines" — amber outline under scenic routes. */
   showScenicOutline: boolean;
 }
@@ -16,7 +18,8 @@ export interface LayerPrefs {
 const LAYER_PREFS_KEY = "railway-map-layer-prefs";
 
 const DEFAULTS: LayerPrefs = {
-  showSpecialLines: false,
+  showHeritage: false,
+  showSpecial: false,
   showScenicOutline: false,
 };
 
@@ -26,12 +29,20 @@ export function loadLayerPrefs(): LayerPrefs {
     const stored = localStorage.getItem(LAYER_PREFS_KEY);
     if (!stored) return { ...DEFAULTS };
 
-    const parsed = JSON.parse(stored) as Partial<LayerPrefs>;
+    // `showSpecialLines` is the legacy single toggle (Heritage + Diversion
+    // together). When present and the new keys aren't, seed both from it.
+    const parsed = JSON.parse(stored) as Partial<LayerPrefs> & { showSpecialLines?: boolean };
+    const legacy =
+      typeof parsed.showSpecialLines === "boolean" ? parsed.showSpecialLines : undefined;
     return {
-      showSpecialLines:
-        typeof parsed.showSpecialLines === "boolean"
-          ? parsed.showSpecialLines
-          : DEFAULTS.showSpecialLines,
+      showHeritage:
+        typeof parsed.showHeritage === "boolean"
+          ? parsed.showHeritage
+          : (legacy ?? DEFAULTS.showHeritage),
+      showSpecial:
+        typeof parsed.showSpecial === "boolean"
+          ? parsed.showSpecial
+          : (legacy ?? DEFAULTS.showSpecial),
       showScenicOutline:
         typeof parsed.showScenicOutline === "boolean"
           ? parsed.showScenicOutline

@@ -199,14 +199,14 @@ export function createRailwayRoutesClickLayer(
 }
 
 /**
- * Dashed line layer for Diversion routes (usage_type=2). Drawn as its own layer
+ * Dashed line layer for Special routes (usage_type=2). Drawn as its own layer
  * because line-dasharray can't be data-driven, and because the solid base
  * railway_routes layer must NOT also draw these (a solid line under the dashes
- * would fill the gaps). Hidden by default; revealed by the "Show special lines"
+ * would fill the gaps). Hidden by default; revealed by the "Show special services"
  * toggle (useLayerFilters). Shares the route source so feature-state visit
  * colors apply identically.
  */
-export function createRailwayRoutesDiversionLayer(
+export function createRailwayRoutesSpecialLayer(
   config: RailwayRoutesPaintConfig = {},
 ): maplibregl.LineLayerSpecification {
   const {
@@ -218,19 +218,19 @@ export function createRailwayRoutesDiversionLayer(
   } = config;
 
   return {
-    id: "railway_routes_diversion",
+    id: "railway_routes_special",
     type: "line",
     source: "railway_routes",
     "source-layer": "railway_routes",
     minzoom: ZOOM_RANGES.railwayRoutes.min,
     layout: {
-      visibility: "none", // controlled by "Show special lines" checkbox
+      visibility: "none", // controlled by "Show special services" checkbox
     },
     paint: {
       "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
       "line-width": widthExpression || defaultWidth,
       "line-opacity": opacityExpression || defaultOpacity,
-      "line-dasharray": [...DASHES.diversion],
+      "line-dasharray": [...DASHES.special],
     },
     filter: ["==", ["get", "usage_type"], 2] as maplibregl.FilterSpecification,
   };

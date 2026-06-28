@@ -34,7 +34,7 @@ type WidthStop = { branch: number; main: number; highspeed: number };
 
 /**
  * Per-route width chooser given a target stop. Special-usage routes (any
- * non-regular usage_type: Heritage or Diversion) are rendered slightly thinner
+ * non-regular usage_type: Heritage or Special) are rendered slightly thinner
  * than branch via WIDTHS.specialUsageMultiplier.
  */
 function widthByClass(stop: WidthStop): maplibregl.ExpressionSpecification {

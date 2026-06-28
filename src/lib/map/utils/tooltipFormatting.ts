@@ -17,7 +17,7 @@ export function formatRouteMetadataBadges(properties: {
 }): string {
   let badges = "";
 
-  // Usage type badge (Regular=blue, Heritage=purple, Diversion=teal)
+  // Usage type badge (Regular=blue, Heritage=purple, Special=teal)
   const usageLabel = getUsageLabel(properties.usage_type);
   const { color: usageColor, bgColor: usageBgColor } = getUsageBadgeColors(properties.usage_type);
   badges += `<span style="background-color: ${usageBgColor}; color: ${usageColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${usageLabel}</span>`;

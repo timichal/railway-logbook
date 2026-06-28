@@ -4,66 +4,68 @@ import { useEffect } from "react";
 
 /**
  * Manages filter and visibility toggles for user map layers:
- * - Special lines filter (show/hide non-regular routes). The single toggle
- *   reveals both Heritage (usage_type=1, solid) and Diversion (usage_type=2,
- *   dashed) lines together.
+ * - Heritage filter (usage_type=1, solid) — "Show heritage lines" toggle.
+ * - Special-services filter (usage_type=2, dashed) — "Show special services"
+ *   toggle. The two are independent.
  * - Scenic outline visibility
  *
  * Layer responsibilities:
- * - `railway_routes` (visible solid line): Regular only, or Regular + Heritage
- *   when special shown. Never draws Diversions — those are dashed by their own
+ * - `railway_routes` (visible solid line): Regular always, plus Heritage when
+ *   its toggle is on. Never draws Special routes — those are dashed by their own
  *   layer, and a solid line underneath would fill the dash gaps.
- * - `railway_routes_diversion` (visible dashed line): only Diversions, toggled
- *   visible/hidden with the special-lines checkbox.
+ * - `railway_routes_special` (visible dashed line): only Special routes, toggled
+ *   visible/hidden with the special-services checkbox.
  * - `railway_routes_click` (invisible hit area): everything currently visible,
- *   including Diversions, so they stay tappable.
+ *   so each shown route stays tappable.
  */
 export function useLayerFilters(
   map: React.MutableRefObject<maplibregl.Map | null>,
-  showSpecialLines: boolean,
+  showHeritage: boolean,
+  showSpecial: boolean,
   showScenicOutline: boolean,
   /** Apply persisted preferences once the map's layers exist. */
   mapLoaded: boolean,
   /** Re-apply filters/visibility after a tile refresh re-adds the route layers. */
   cacheBuster?: number,
 ) {
-  // Special lines filter
+  // Usage-type filters
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded and cacheBuster are intentional re-run triggers (apply prefs once layers exist / re-apply after a tile refresh re-adds layers), not values read inside the effect.
   useEffect(() => {
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
 
-    // Visible solid line: exclude Diversions always (they're drawn dashed).
-    const solidFilter: FilterSpecification = showSpecialLines
+    // Visible solid line: Regular always, plus Heritage when toggled on. Never
+    // Special (usage_type=2) — those are drawn dashed by their own layer.
+    const solidFilter: FilterSpecification = showHeritage
       ? ["!=", ["get", "usage_type"], 2]
       : ["==", ["get", "usage_type"], 0];
     m.setFilter("railway_routes", solidFilter);
 
-    // Dashed Diversion layer: visible only when special lines are shown.
-    if (m.getLayer("railway_routes_diversion")) {
-      m.setLayoutProperty(
-        "railway_routes_diversion",
-        "visibility",
-        showSpecialLines ? "visible" : "none",
-      );
+    // Dashed Special layer: visible only when special services are shown.
+    if (m.getLayer("railway_routes_special")) {
+      m.setLayoutProperty("railway_routes_special", "visibility", showSpecial ? "visible" : "none");
     }
 
-    // Click/hit buffer: everything visible should be clickable, Diversions too.
+    // Click/hit buffer: every currently-visible usage type should be clickable.
     if (m.getLayer("railway_routes_click")) {
-      const clickFilter: FilterSpecification | null = showSpecialLines
-        ? null
-        : ["==", ["get", "usage_type"], 0];
+      const clickable = [0]; // Regular always
+      if (showHeritage) clickable.push(1);
+      if (showSpecial) clickable.push(2);
+      const clickFilter: FilterSpecification | null =
+        clickable.length === 3
+          ? null
+          : (["match", ["get", "usage_type"], clickable, true, false] as FilterSpecification);
       m.setFilter("railway_routes_click", clickFilter);
     }
 
-    // Scenic outline: mirror the visible solid line (exclude Diversions).
+    // Scenic outline: mirror the visible solid line (never Special routes).
     if (m.getLayer("railway_routes_scenic_outline")) {
-      const scenicFilter: FilterSpecification = showSpecialLines
+      const scenicFilter: FilterSpecification = showHeritage
         ? ["all", ["==", ["get", "scenic"], true], ["!=", ["get", "usage_type"], 2]]
         : ["all", ["==", ["get", "scenic"], true], ["==", ["get", "usage_type"], 0]];
       m.setFilter("railway_routes_scenic_outline", scenicFilter);
     }
-  }, [map, showSpecialLines, mapLoaded, cacheBuster]);
+  }, [map, showHeritage, showSpecial, mapLoaded, cacheBuster]);
 
   // Scenic outline visibility
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded and cacheBuster are intentional re-run triggers (apply prefs once layers exist / re-apply after a tile refresh re-adds layers), not values read inside the effect.

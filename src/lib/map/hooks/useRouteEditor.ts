@@ -9,7 +9,8 @@ import { loadLayerPrefs, saveLayerPref } from "../layerPrefs";
  */
 export function useRouteEditor(dataAccess: DataAccess, selectedCountries?: string[]) {
   const [progress, setProgress] = useState<UserProgress | null>(null);
-  const [showSpecialLines, setShowSpecialLines] = useState(() => loadLayerPrefs().showSpecialLines);
+  const [showHeritage, setShowHeritage] = useState(() => loadLayerPrefs().showHeritage);
+  const [showSpecial, setShowSpecial] = useState(() => loadLayerPrefs().showSpecial);
 
   // Refresh progress stats
   const refreshProgress = useCallback(async () => {
@@ -21,12 +22,20 @@ export function useRouteEditor(dataAccess: DataAccess, selectedCountries?: strin
     }
   }, [dataAccess, selectedCountries]);
 
-  // Just flips state and persists it; the actual layer filters/visibility are
+  // Just flip state and persist it; the actual layer filters/visibility are
   // applied by useLayerFilters (single source of truth) reacting to the change.
-  const toggleShowSpecialLines = useCallback(() => {
-    setShowSpecialLines((prev) => {
+  const toggleShowHeritage = useCallback(() => {
+    setShowHeritage((prev) => {
       const next = !prev;
-      saveLayerPref("showSpecialLines", next);
+      saveLayerPref("showHeritage", next);
+      return next;
+    });
+  }, []);
+
+  const toggleShowSpecial = useCallback(() => {
+    setShowSpecial((prev) => {
+      const next = !prev;
+      saveLayerPref("showSpecial", next);
       return next;
     });
   }, []);
@@ -34,7 +43,9 @@ export function useRouteEditor(dataAccess: DataAccess, selectedCountries?: strin
   return {
     refreshProgress,
     progress,
-    showSpecialLines,
-    toggleShowSpecialLines,
+    showHeritage,
+    showSpecial,
+    toggleShowHeritage,
+    toggleShowSpecial,
   };
 }

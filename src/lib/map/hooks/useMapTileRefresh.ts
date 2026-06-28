@@ -2,9 +2,9 @@ import type maplibregl from "maplibre-gl";
 import { useEffect, useState } from "react";
 import {
   createRailwayRoutesClickLayer,
-  createRailwayRoutesDiversionLayer,
   createRailwayRoutesLayer,
   createRailwayRoutesSource,
+  createRailwayRoutesSpecialLayer,
   createScenicRoutesOutlineLayer,
   type RailwayRoutesPaintConfig,
   type RailwayRoutesSourceOptions,
@@ -22,8 +22,8 @@ interface UseMapTileRefreshOptions {
   scenicLayerConfig: RailwayRoutesPaintConfig;
   /** Paint/filter config for invisible click-buffer layer */
   clickBufferLayerConfig: RailwayRoutesPaintConfig;
-  /** Paint config for the dashed Diversion layer */
-  diversionLayerConfig: RailwayRoutesPaintConfig;
+  /** Paint config for the dashed Special layer */
+  specialLayerConfig: RailwayRoutesPaintConfig;
 }
 
 /**
@@ -38,7 +38,7 @@ export function useMapTileRefresh({
   routeLayerConfig,
   scenicLayerConfig,
   clickBufferLayerConfig,
-  diversionLayerConfig,
+  specialLayerConfig,
 }: UseMapTileRefreshOptions) {
   const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
 
@@ -52,7 +52,7 @@ export function useMapTileRefresh({
       "selected_routes_highlight",
       "highlighted_routes",
       "railway_routes_click",
-      "railway_routes_diversion",
+      "railway_routes_special",
       "railway_routes",
       "railway_routes_scenic_outline",
     ];
@@ -71,7 +71,7 @@ export function useMapTileRefresh({
     m.addSource("railway_routes", createRailwayRoutesSource(sourceOptions));
     m.addLayer(createScenicRoutesOutlineLayer(scenicLayerConfig), "stations");
     m.addLayer(createRailwayRoutesLayer(routeLayerConfig), "stations");
-    m.addLayer(createRailwayRoutesDiversionLayer(diversionLayerConfig), "stations");
+    m.addLayer(createRailwayRoutesSpecialLayer(specialLayerConfig), "stations");
     m.addLayer(createRailwayRoutesClickLayer(clickBufferLayerConfig), "stations");
   }, [cacheBuster]);
 

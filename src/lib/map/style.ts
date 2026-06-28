@@ -92,12 +92,12 @@ export const WIDTHS = {
 // ============================================================================
 
 /**
- * Dash patterns (in line-width multiples). Diversion routes are drawn dashed
- * in their own layer because MapLibre's line-dasharray is not data-driven —
- * it can't switch on a feature property like usage_type.
+ * Dash patterns (in line-width multiples). Special routes (usage_type=2) are
+ * drawn dashed in their own layer because MapLibre's line-dasharray is not
+ * data-driven — it can't switch on a feature property like usage_type.
  */
 export const DASHES = {
-  diversion: [2.5, 2] as [number, number],
+  special: [2.5, 2] as [number, number],
 } as const;
 
 // ============================================================================

@@ -8,9 +8,9 @@ import {
   createPublicNotesLayer,
   createPublicNotesSource,
   createRailwayRoutesClickLayer,
-  createRailwayRoutesDiversionLayer,
   createRailwayRoutesLayer,
   createRailwayRoutesSource,
+  createRailwayRoutesSpecialLayer,
   createScenicRoutesOutlineLayer,
   createStationsLayer,
   createStationsSource,
@@ -34,9 +34,10 @@ import type { SelectedRoute, Station } from "@/lib/types";
 import MobileMenuPanel from "./MobileMenuPanel";
 import UserSidebar, { type ActiveTab } from "./UserSidebar";
 
-// Default to Regular-only (usage_type=0); the "Show special lines" toggle
-// (useLayerFilters) reveals Heritage + Diversion. Module-scoped so it is a
-// stable reference and layer-config memos can keep empty dependency arrays.
+// Default to Regular-only (usage_type=0); the "Show heritage lines" and "Show
+// special services" toggles (useLayerFilters) reveal Heritage / Special.
+// Module-scoped so it is a stable reference and layer-config memos can keep
+// empty dependency arrays.
 const defaultFilter: ["==", ["get", string], number] = ["==", ["get", "usage_type"], 0];
 
 interface VectorRailwayMapProps {
@@ -131,10 +132,10 @@ export default function VectorRailwayMap({
     [],
   );
 
-  // Dashed Diversion layer: same visit-status colors/width as the solid line,
+  // Dashed Special layer: same visit-status colors/width as the solid line,
   // but rendered dashed. Its usage_type=2 filter and hidden-by-default
   // visibility are baked into the factory; useLayerFilters toggles visibility.
-  const diversionLayerConfig = useMemo(
+  const specialLayerConfig = useMemo(
     () => ({
       colorExpression: getUserRouteColorExpression(),
       widthExpression: getUserRouteWidthExpression(),
@@ -173,7 +174,7 @@ export default function VectorRailwayMap({
       layers: [
         createScenicRoutesOutlineLayer(scenicLayerConfig),
         createRailwayRoutesLayer(routeLayerConfig),
-        createRailwayRoutesDiversionLayer(diversionLayerConfig),
+        createRailwayRoutesSpecialLayer(specialLayerConfig),
         createRailwayRoutesClickLayer(clickBufferLayerConfig),
         createStationsLayer(),
         // Public Usage notes render on top (route tile refresh re-inserts route
@@ -243,7 +244,7 @@ export default function VectorRailwayMap({
     routeLayerConfig,
     scenicLayerConfig,
     clickBufferLayerConfig,
-    diversionLayerConfig,
+    specialLayerConfig,
   });
 
   // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)
@@ -251,7 +252,14 @@ export default function VectorRailwayMap({
 
   // Layer filter hooks. mapLoaded applies persisted prefs once layers exist;
   // cacheBuster re-applies filters after a tile refresh re-adds layers.
-  useLayerFilters(map, routeEditor.showSpecialLines, showScenicOutline, mapLoaded, cacheBuster);
+  useLayerFilters(
+    map,
+    routeEditor.showHeritage,
+    routeEditor.showSpecial,
+    showScenicOutline,
+    mapLoaded,
+    cacheBuster,
+  );
 
   // Route click handler
   const handleRouteClick = useCallback(
@@ -550,11 +558,20 @@ export default function VectorRailwayMap({
               <label className="flex items-center gap-2 cursor-pointer text-xs mb-2">
                 <input
                   type="checkbox"
-                  checked={routeEditor.showSpecialLines}
-                  onChange={() => routeEditor.toggleShowSpecialLines()}
+                  checked={routeEditor.showHeritage}
+                  onChange={() => routeEditor.toggleShowHeritage()}
                   className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 />
-                <span>Show special lines</span>
+                <span>Show heritage lines</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-xs mb-2">
+                <input
+                  type="checkbox"
+                  checked={routeEditor.showSpecial}
+                  onChange={() => routeEditor.toggleShowSpecial()}
+                  className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                />
+                <span>Show special services</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer text-xs">
                 <input

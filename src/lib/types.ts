@@ -76,7 +76,7 @@ export type RailwayRoute = {
   from_station: string;
   to_station: string;
   description: string | null;
-  usage_type: UsageType; // 0=Regular, 1=Special
+  usage_type: UsageType; // 0=Regular, 1=Heritage, 2=Special
   frequency: string[]; // Array of frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
   link?: string | null; // External URL/link for the route
   scenic?: boolean | null; // Flag to mark route as scenic

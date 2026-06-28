@@ -1,10 +1,18 @@
 /**
- * Railway usage types.
- * 0 = Regular (timetabled service, counts toward stats and the journey planner).
- * 1 = Heritage (railfan/preserved lines, steam, not cleared for regular traffic).
- * 2 = Diversion (freight/idle track used by passenger trains only during works elsewhere).
- * Heritage and Diversion are both "special": excluded from stats and the planner,
- * hidden behind the single "Show special lines" toggle.
+ * Railway usage types. The axis is "what system is it, and how is it published?":
+ * 0 = Regular — in the official national timetable / route planner, published in
+ *     advance. Any frequency counts (even a once-a-day summer-Saturday-only train);
+ *     rarity is captured by frequency tags, not by this field. Counts toward stats
+ *     and the journey planner.
+ * 1 = Heritage — museum/preserved/enthusiast operation outside regular timetables,
+ *     found only via the operator's own channels (informal, changeable schedule).
+ *     Drawn solid; revealed by the "Show heritage lines" toggle.
+ * 2 = Special — national infrastructure, but irregular ad-hoc passenger use:
+ *     diversions during engineering works, festival/anniversary runs, marketed
+ *     tourist specials. "You never know until they announce it." Drawn dashed;
+ *     revealed by the "Show special services" toggle.
+ * Heritage and Special are both "special" (non-regular): excluded from stats and
+ * the planner. Each has its own independent toggle.
  */
 export const usageOptions = [
   {
@@ -25,8 +33,8 @@ export const usageOptions = [
   },
   {
     id: 2,
-    key: "DIVERSION",
-    label: "Diversion",
+    key: "SPECIAL",
+    label: "Special",
     // Teal
     color: "#0d9488",
     bgColor: "#ccfbf1",
