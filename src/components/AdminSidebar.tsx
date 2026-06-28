@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { getFrequencyTags } from "@/lib/adminRouteActions";
 import type { UsageType } from "@/lib/constants";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
@@ -75,11 +76,25 @@ export default function AdminSidebar({
   const { showError: showErrorToast } = useToast();
   const showError = showErrorProp || showErrorToast;
   const [activeTab, setActiveTab] = useState<"routes" | "create" | "notes">("routes");
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
   const [editingRouteInfo, setEditingRouteInfo] = useState<{
     from_station: string;
     to_station: string;
   } | null>(null);
+
+  // Load the in-use frequency tags for autocomplete, and keep them fresh after edits.
+  const loadTags = useCallback(async () => {
+    try {
+      setAvailableTags(await getFrequencyTags());
+    } catch (error) {
+      console.error("Error loading frequency tags:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTags();
+  }, [loadTags]);
 
   // Switch to create tab when a coordinate is clicked
   // biome-ignore lint/correctness/useExhaustiveDependencies: coordinateClickTrigger is a trigger that must re-run the effect even when the same coordinate is clicked again.
@@ -290,6 +305,8 @@ export default function AdminSidebar({
             onRouteUpdated={onRouteUpdated}
             onEditGeometry={handleEditGeometry}
             onRouteFocus={onRouteFocus}
+            availableTags={availableTags}
+            onTagsChanged={loadTags}
           />
         )}
 
@@ -325,6 +342,8 @@ export default function AdminSidebar({
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
             onRefreshMap={onRefreshMap}
+            availableTags={availableTags}
+            onTagsChanged={loadTags}
           />
         )}
 

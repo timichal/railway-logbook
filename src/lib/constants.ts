@@ -52,32 +52,6 @@ export const getUsageBadgeColors = (usageType: UsageType): { color: string; bgCo
 };
 
 /**
- * Frequency tags for routes
- */
-export const frequencyOptions = [
-  {
-    key: "Daily",
-    label: "Daily",
-  },
-  {
-    key: "Weekdays",
-    label: "Weekdays",
-  },
-  {
-    key: "Weekends",
-    label: "Weekends",
-  },
-  {
-    key: "Once a week",
-    label: "Once a week",
-  },
-  {
-    key: "Seasonal",
-    label: "Seasonal",
-  },
-] as const;
-
-/**
  * Line class options (derived from OSM data)
  */
 export const lineClassOptions = [

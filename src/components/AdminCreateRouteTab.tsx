@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
-import { frequencyOptions, type UsageType, usageOptions } from "@/lib/constants";
+import { type UsageType, usageOptions } from "@/lib/constants";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
+import TagInput from "./TagInput";
 
 interface AdminCreateRouteTabProps {
   startingCoordinate: [number, number] | null;
@@ -38,6 +39,8 @@ interface AdminCreateRouteTabProps {
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
   onRefreshMap?: () => void;
+  availableTags?: string[];
+  onTagsChanged?: () => void;
 }
 
 export default function AdminCreateRouteTab({
@@ -54,6 +57,8 @@ export default function AdminCreateRouteTab({
   editingRouteInfo,
   onGeometryEditComplete,
   onCancelGeometryEdit,
+  availableTags = [],
+  onTagsChanged,
 }: AdminCreateRouteTabProps) {
   const { showError, showSuccess } = useToast();
 
@@ -178,6 +183,9 @@ export default function AdminCreateRouteTab({
 
     // Reset form after successful save
     resetForm();
+
+    // A newly created route may introduce new tags; refresh the suggestion set.
+    onTagsChanged?.();
   };
 
   // Handle save geometry for existing route
@@ -441,34 +449,11 @@ export default function AdminCreateRouteTab({
             {/* Frequency Tags */}
             <div>
               <span className="block text-sm font-medium text-gray-700 mb-2">Frequency Tags</span>
-              <div className="flex flex-wrap gap-4">
-                {frequencyOptions.map((option) => (
-                  <label
-                    key={option.key}
-                    className="flex flex-[0_1_30%] items-center gap-2 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={createForm.frequency.includes(option.key)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setCreateForm({
-                            ...createForm,
-                            frequency: [...createForm.frequency, option.key],
-                          });
-                        } else {
-                          setCreateForm({
-                            ...createForm,
-                            frequency: createForm.frequency.filter((f) => f !== option.key),
-                          });
-                        }
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="text-sm text-gray-700">{option.label}</span>
-                  </label>
-                ))}
-              </div>
+              <TagInput
+                value={createForm.frequency}
+                availableTags={availableTags}
+                onChange={(frequency) => setCreateForm({ ...createForm, frequency })}
+              />
             </div>
 
             <span className="block text-sm font-medium text-gray-700 mb-2">Other</span>

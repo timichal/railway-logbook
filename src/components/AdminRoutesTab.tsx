@@ -20,6 +20,8 @@ interface AdminRoutesTabProps {
   onRouteUpdated?: () => void;
   onEditGeometry?: (trackId: string) => void;
   onRouteFocus?: (geometry: string) => void;
+  availableTags?: string[];
+  onTagsChanged?: () => void;
 }
 
 export default function AdminRoutesTab({
@@ -29,6 +31,8 @@ export default function AdminRoutesTab({
   onRouteUpdated,
   onEditGeometry,
   onRouteFocus,
+  availableTags = [],
+  onTagsChanged,
 }: AdminRoutesTabProps) {
   const { showError, showSuccess } = useToast();
 
@@ -204,6 +208,9 @@ export default function AdminRoutesTab({
         onRouteUpdated();
       }
 
+      // Editing a route may add new tags or drop the last use of an existing one.
+      onTagsChanged?.();
+
       showSuccess("Route updated successfully!");
     } catch (error) {
       console.error("Error updating route:", error);
@@ -240,6 +247,9 @@ export default function AdminRoutesTab({
       if (onRouteDeleted) {
         onRouteDeleted();
       }
+
+      // Deleting a route may have removed the last use of a tag.
+      onTagsChanged?.();
 
       showSuccess(
         `Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" has been deleted successfully.`,
@@ -305,6 +315,7 @@ export default function AdminRoutesTab({
           selectedRoute={selectedRoute}
           editForm={editForm}
           isLoading={isLoading}
+          availableTags={availableTags}
           onEditFormChange={setEditForm}
           onSave={handleSaveRoute}
           onDelete={handleDeleteRoute}

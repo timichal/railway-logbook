@@ -38,6 +38,25 @@ export async function getAllRailwayRoutes() {
 }
 
 /**
+ * Get the distinct set of frequency tags currently in use across all routes.
+ * Tags have no separate table: a tag exists exactly as long as some route
+ * references it, so dropping the last usage of a tag removes it implicitly.
+ * Used to power the tag-label autocomplete in the route editor.
+ */
+export async function getFrequencyTags(): Promise<string[]> {
+  await requireAdmin();
+
+  const result = await query(`
+    SELECT DISTINCT tag
+    FROM railway_routes, unnest(frequency) AS tag
+    WHERE tag IS NOT NULL AND tag <> ''
+    ORDER BY tag
+  `);
+
+  return result.rows.map((row) => row.tag as string);
+}
+
+/**
  * Get a single railway route by track_id
  */
 export async function getRailwayRoute(trackId: string) {
