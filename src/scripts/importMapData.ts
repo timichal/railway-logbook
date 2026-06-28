@@ -13,12 +13,14 @@ async function loadGeoJSONData(): Promise<void> {
   const client = new Client(dbConfig);
 
   try {
-    // Get data file path from command line argument (required)
-    const dataPath = process.argv[2];
+    // Parse CLI args: first non-flag positional is the data file path.
+    const args = process.argv.slice(2);
+    const validOnly = args.includes("--valid-only");
+    const dataPath = args.find((arg) => !arg.startsWith("--"));
 
     if (!dataPath) {
       console.error("Error: Data file path is required");
-      console.error("Usage: npm run importMapData <filepath>");
+      console.error("Usage: npm run importMapData <filepath> [--valid-only]");
       console.error("Example: npm run importMapData ./data/europe-pruned-251027.geojson");
       process.exit(1);
     }
@@ -27,7 +29,7 @@ async function loadGeoJSONData(): Promise<void> {
     if (!dataPath.toLowerCase().endsWith(".geojson")) {
       console.error("Error: File must be a .geojson file");
       console.error(`Provided file: ${dataPath}`);
-      console.error("Usage: npm run importMapData <filepath>");
+      console.error("Usage: npm run importMapData <filepath> [--valid-only]");
       console.error("Example: npm run importMapData ./data/europe-pruned-251027.geojson");
       process.exit(1);
     }
@@ -44,8 +46,12 @@ async function loadGeoJSONData(): Promise<void> {
 
     // Step 2: Verify and recalculate routes if they exist
     console.log("");
-    console.log("=== Step 2: Verifying routes ===");
-    await verifyAndRecalculateRoutes(client);
+    console.log(
+      validOnly
+        ? "=== Step 2: Verifying routes (valid only — skipping already-invalid) ==="
+        : "=== Step 2: Verifying routes ===",
+    );
+    await verifyAndRecalculateRoutes(client, { validOnly });
 
     console.log("");
     console.log("Database update completed!");

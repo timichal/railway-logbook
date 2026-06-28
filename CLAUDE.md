@@ -10,7 +10,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 
 ### Data pipeline
 - `npm run prepareMapData -- <YYMMDD>` — download OSM, filter rail, convert to GeoJSON, prune. Output: `./data/europe-pruned-<version>.geojson`.
-- `npm run importMapData <filepath>` — load GeoJSON into Postgres (stations + railway_parts). Auto-recalculates existing routes; skips recalculation on initial load.
+- `npm run importMapData <filepath>` — load GeoJSON into Postgres (stations + railway_parts). Auto-recalculates existing routes; skips recalculation on initial load. Add `--valid-only` to recalculate only routes not already marked invalid.
 
 ### Database ops
 - `docker-compose up -d db` — start Postgres+PostGIS.
@@ -25,6 +25,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 
 ### Data transfer (pscp)
 - `npm run deployMapData` / `npm run downloadMapData` / `npm run downloadRouteData`.
+  - `deployMapData` accepts an optional date (YYMMDD) and an optional `--valid-only` flag (any order, e.g. `npm run deployMapData -- 260523 --valid-only`). `--valid-only` forwards to the remote `importMapData`, which only recalculates routes that aren't already invalid (`is_valid IS NOT FALSE`) — useful to skip routes that will fail recalc anyway. `importMapData` and `verifyRouteData` also accept `--valid-only` directly.
 
 ### Frontend
 - `npm run dev` (Turbopack), `npm run build`, `npm run start`.

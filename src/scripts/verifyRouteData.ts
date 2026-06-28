@@ -58,11 +58,23 @@ export async function recalculateRoute(
   }
 }
 
+export interface RecalculationOptions {
+  /** Skip routes already marked invalid (is_valid = FALSE); only recalculate valid ones. */
+  validOnly?: boolean;
+}
+
 /**
  * Recalculate all railway routes based on stored coordinates
  */
-export async function recalculateAllRoutes(client: Client): Promise<RecalculationResult> {
-  console.log("Recalculating all railway routes...");
+export async function recalculateAllRoutes(
+  client: Client,
+  options: RecalculationOptions = {},
+): Promise<RecalculationResult> {
+  console.log(
+    options.validOnly
+      ? "Recalculating valid railway routes (skipping already-invalid)..."
+      : "Recalculating all railway routes...",
+  );
 
   const result: RecalculationResult = {
     totalRoutes: 0,
@@ -90,6 +102,7 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
     FROM railway_routes
     WHERE starting_coordinate IS NOT NULL
       AND ending_coordinate IS NOT NULL
+      ${options.validOnly ? "AND is_valid IS NOT FALSE" : ""}
     ORDER BY track_id
   `);
 
@@ -221,13 +234,17 @@ export async function recalculateAllRoutes(client: Client): Promise<Recalculatio
  * Verify and recalculate routes if they exist in the database
  * Prints summary information to console
  */
-export async function verifyAndRecalculateRoutes(client: Client): Promise<void> {
+export async function verifyAndRecalculateRoutes(
+  client: Client,
+  options: RecalculationOptions = {},
+): Promise<void> {
   // Check if there are routes to recalculate
   const routeCount = await client.query(`
     SELECT COUNT(*) as count
     FROM railway_routes
     WHERE starting_coordinate IS NOT NULL
       AND ending_coordinate IS NOT NULL
+      ${options.validOnly ? "AND is_valid IS NOT FALSE" : ""}
   `);
 
   const hasRoutes = parseInt(routeCount.rows[0].count, 10) > 0;
@@ -240,7 +257,7 @@ export async function verifyAndRecalculateRoutes(client: Client): Promise<void> 
 
   console.log("");
   // Recalculate all railway routes
-  const recalcResult = await recalculateAllRoutes(client);
+  const recalcResult = await recalculateAllRoutes(client, options);
 
   console.log("\n");
   console.log("=== Route Recalculation Summary ===");
@@ -276,7 +293,8 @@ async function verifyRoutes(): Promise<void> {
     await client.connect();
     console.log("Connected to database");
 
-    await verifyAndRecalculateRoutes(client);
+    const validOnly = process.argv.includes("--valid-only");
+    await verifyAndRecalculateRoutes(client, { validOnly });
 
     console.log("");
     console.log("Route verification completed!");
