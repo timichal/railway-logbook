@@ -77,7 +77,7 @@ export function setupUserMapInteractions(
       frequency: properties.frequency,
     });
     if (properties.description) {
-      formattedDescription += `<br /><b>Note:</b> ${properties.description}`;
+      formattedDescription += `<b>Note:</b> ${properties.description}`;
     }
     if (properties.link) {
       formattedDescription += `<br /><a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span>`;

@@ -209,7 +209,7 @@ export function setupAdminMapInteractions(
           frequency: properties.frequency,
         });
         if (properties.description) {
-          formattedDescription += `<br /><b>Note:</b> ${properties.description}`;
+          formattedDescription += `<b>Note:</b> ${properties.description}`;
         }
         if (properties.link) {
           formattedDescription += `<br /><a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a>`;

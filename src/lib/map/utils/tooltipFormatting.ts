@@ -17,11 +17,6 @@ export function formatRouteMetadataBadges(properties: {
 }): string {
   let badges = "";
 
-  // Usage type badge (Regular=blue, Heritage=purple, Special=teal)
-  const usageLabel = getUsageLabel(properties.usage_type);
-  const { color: usageColor, bgColor: usageBgColor } = getUsageBadgeColors(properties.usage_type);
-  badges += `<span style="background-color: ${usageBgColor}; color: ${usageColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${usageLabel}</span>`;
-
   // Line class badge
   if (properties.line_class && properties.line_class !== "branch") {
     const lineClassLabel = getLineClassLabel(properties.line_class);
@@ -30,6 +25,11 @@ export function formatRouteMetadataBadges(properties: {
     const lcBgColor = isHighspeed ? "#ef4444" : "#bfdbfe";
     badges += ` <span style="background-color: ${lcBgColor}; color: ${lcColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${lineClassLabel}</span>`;
   }
+
+  // Usage type badge (Regular=blue, Heritage=purple, Special=teal)
+  const usageLabel = getUsageLabel(properties.usage_type);
+  const { color: usageColor, bgColor: usageBgColor } = getUsageBadgeColors(properties.usage_type);
+  badges += `<span style="background-color: ${usageBgColor}; color: ${usageColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${usageLabel}</span>`;
 
   // Scenic badge
   if (properties.scenic) {
