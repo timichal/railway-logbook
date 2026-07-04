@@ -91,16 +91,14 @@ export default function MergedJourneyCard({
     const { isOpen, viewedRoutes } = editStateRef.current;
     if (!isOpen) return;
 
-    const routeId = String(route.track_id);
-    const isInJourney = viewedRoutes.some((r) => String(r.track_id) === routeId);
+    const routeId = route.track_id;
+    const isInJourney = viewedRoutes.some((r) => r.track_id === routeId);
     const newRoutes = isInJourney
-      ? viewedRoutes.filter((r) => String(r.track_id) !== routeId)
+      ? viewedRoutes.filter((r) => r.track_id !== routeId)
       : [...viewedRoutes, buildRouteFromSelected(route)];
 
     setViewedRoutes(newRoutes);
-    onHighlightRoutes?.(
-      newRoutes.map((r) => parseInt(r.track_id, 10)).filter((id) => !Number.isNaN(id)),
-    );
+    onHighlightRoutes?.(newRoutes.map((r) => r.track_id));
   };
 
   const stableHandleMapRouteClick = useCallback((route: SelectedRoute) => {
@@ -139,11 +137,7 @@ export default function MergedJourneyCard({
         });
       }
       setIsLoadingDetails(false);
-      onHighlightRoutes?.(
-        routes
-          .map((r) => (r.track_id ? parseInt(r.track_id, 10) : null))
-          .filter((id): id is number => id !== null),
-      );
+      onHighlightRoutes?.(routes.map((r) => r.track_id));
       onJourneyEditStart?.(stableHandleMapRouteClick);
     })();
 
@@ -163,20 +157,16 @@ export default function MergedJourneyCard({
     // Don't clear highlights here — parent owns coordination across cards
   }, [isOpen]);
 
-  const handleTogglePartial = (trackId: string, nextPartial: boolean) => {
+  const handleTogglePartial = (trackId: number, nextPartial: boolean) => {
     setViewedRoutes((prev) =>
-      prev.map((r) =>
-        String(r.track_id) === String(trackId) ? { ...r, partial: nextPartial } : r,
-      ),
+      prev.map((r) => (r.track_id === trackId ? { ...r, partial: nextPartial } : r)),
     );
   };
 
-  const handleRemoveRoute = (trackId: string) => {
-    const newRoutes = viewedRoutes.filter((r) => String(r.track_id) !== String(trackId));
+  const handleRemoveRoute = (trackId: number) => {
+    const newRoutes = viewedRoutes.filter((r) => r.track_id !== trackId);
     setViewedRoutes(newRoutes);
-    onHighlightRoutes?.(
-      newRoutes.map((r) => parseInt(r.track_id, 10)).filter((id) => !Number.isNaN(id)),
-    );
+    onHighlightRoutes?.(newRoutes.map((r) => r.track_id));
   };
 
   const handleSave = async () => {
@@ -218,8 +208,8 @@ export default function MergedJourneyCard({
         }
       }
 
-      const origMap = new Map(originalSnapshot.routes.map((r) => [String(r.track_id), r]));
-      const editedMap = new Map(viewedRoutes.map((r) => [String(r.track_id), r]));
+      const origMap = new Map(originalSnapshot.routes.map((r) => [r.track_id, r]));
+      const editedMap = new Map(viewedRoutes.map((r) => [r.track_id, r]));
 
       const toAdd: { trackId: number; partial: boolean }[] = [];
       const toUpdatePartial: { trackId: number; partial: boolean }[] = [];
@@ -227,14 +217,14 @@ export default function MergedJourneyCard({
         const orig = origMap.get(id);
         const partial = edited.partial ?? false;
         if (!orig) {
-          toAdd.push({ trackId: parseInt(edited.track_id, 10), partial });
+          toAdd.push({ trackId: edited.track_id, partial });
         } else if ((orig.partial ?? false) !== partial) {
-          toUpdatePartial.push({ trackId: parseInt(edited.track_id, 10), partial });
+          toUpdatePartial.push({ trackId: edited.track_id, partial });
         }
       });
       const toRemove: number[] = [];
       origMap.forEach((orig, id) => {
-        if (!editedMap.has(id)) toRemove.push(parseInt(orig.track_id, 10));
+        if (!editedMap.has(id)) toRemove.push(orig.track_id);
       });
 
       if (toAdd.length > 0) {

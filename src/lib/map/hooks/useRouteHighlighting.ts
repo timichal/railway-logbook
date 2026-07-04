@@ -140,7 +140,7 @@ export function useRouteHighlighting(
   useEffect(() => {
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
-    const selectedTrackIds = selectedRoutes.map((r) => parseInt(r.track_id, 10));
+    const selectedTrackIds = selectedRoutes.map((r) => r.track_id);
     syncHighlightOverlay(m, "selected_routes_highlight", selectedTrackIds, COLORS.highlight.view);
   }, [map, selectedRoutes, tileRefreshKey]);
 }

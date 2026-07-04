@@ -59,10 +59,7 @@ export async function getAllRoutes(): Promise<RailwayRoute[]> {
     ORDER BY track_id
   `);
 
-  return result.rows.map((row) => ({
-    ...row,
-    track_id: row.track_id.toString(),
-  }));
+  return result.rows as RailwayRoute[];
 }
 
 /**
@@ -98,7 +95,6 @@ export async function getRoutesByIds(trackIds: number[]): Promise<RailwayRoute[]
 
   return result.rows.map((row) => ({
     ...row,
-    track_id: row.track_id.toString(),
     geometry: "",
   }));
 }

@@ -14,11 +14,11 @@ import RouteEditForm from "./RouteEditForm";
 import RoutesList from "./RoutesList";
 
 interface AdminRoutesTabProps {
-  selectedRouteId?: string | null;
-  onRouteSelect?: (routeId: string) => void;
+  selectedRouteId?: number | null;
+  onRouteSelect?: (routeId: number | null) => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
-  onEditGeometry?: (trackId: string) => void;
+  onEditGeometry?: (trackId: number) => void;
   onRouteFocus?: (geometry: string) => void;
   availableTags?: string[];
   onTagsChanged?: () => void;
@@ -123,7 +123,7 @@ export default function AdminRoutesTab({
 
   // Route selection
   const handleRouteClick = useCallback(
-    async (trackId: string, { skipFocus = false } = {}) => {
+    async (trackId: number, { skipFocus = false } = {}) => {
       try {
         setIsLoading(true);
         const routeDetail = await getRailwayRoute(trackId);
@@ -160,6 +160,9 @@ export default function AdminRoutesTab({
   );
 
   useEffect(() => {
+    // Only (re)load when the externally-selected id differs from the loaded route.
+    // Both are numbers (the DB track_id and String→Number(feature.id) from the map),
+    // so a plain compare is reliable and won't re-fetch and clobber in-progress edits.
     if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
       handleRouteClick(selectedRouteId, { skipFocus: true });
     } else if (!selectedRouteId) {
@@ -241,7 +244,7 @@ export default function AdminRoutesTab({
       setEditForm(null);
 
       if (onRouteSelect) {
-        onRouteSelect("");
+        onRouteSelect(null);
       }
 
       if (onRouteDeleted) {
@@ -268,7 +271,7 @@ export default function AdminRoutesTab({
     setSelectedRoute(null);
     setEditForm(null);
     if (onRouteSelect) {
-      onRouteSelect("");
+      onRouteSelect(null);
     }
   };
 

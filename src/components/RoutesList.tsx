@@ -9,7 +9,7 @@ interface RoutesListProps {
   invalidRouteCount: number;
   unintendedBacktrackingCount: number;
   isLoading: boolean;
-  selectedRouteId?: string | null;
+  selectedRouteId?: number | null;
   searchQuery: string;
   showInvalidOnly: boolean;
   showUnintendedBacktrackingOnly: boolean;
@@ -19,7 +19,7 @@ interface RoutesListProps {
   onSearchChange: (query: string) => void;
   onInvalidOnlyChange: (checked: boolean) => void;
   onUnintendedBacktrackingOnlyChange: (checked: boolean) => void;
-  onRouteClick: (trackId: string) => void;
+  onRouteClick: (trackId: number) => void;
   onPageChange: (page: number) => void;
 }
 

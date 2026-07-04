@@ -89,11 +89,7 @@ export async function login(formData: FormData) {
   return { success: true, user: { id: user.id, email: user.email, name: user.name } };
 }
 
-export async function register(
-  formData: FormData,
-  localTrips?: { track_id: string; date: string; note: string | null; partial: boolean }[],
-  localPreferences?: string[],
-) {
+export async function register(formData: FormData, localPreferences?: string[]) {
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -129,41 +125,6 @@ export async function register(
 
   const user = result.rows[0];
 
-  let migratedCount = 0;
-  let skippedCount = 0;
-
-  // Migrate localStorage trips if provided
-  if (localTrips && localTrips.length > 0) {
-    for (const trip of localTrips) {
-      try {
-        // Check for exact duplicate (same track_id, date, note, partial)
-        const duplicateCheck = await query(
-          `SELECT id FROM user_trips
-           WHERE user_id = $1
-           AND track_id = $2
-           AND date = $3
-           AND (note = $4 OR (note IS NULL AND $4 IS NULL))
-           AND partial = $5`,
-          [user.id, parseInt(trip.track_id, 10), trip.date, trip.note, trip.partial],
-        );
-
-        if (duplicateCheck.rows.length === 0) {
-          // Not a duplicate, insert it
-          await query(
-            "INSERT INTO user_trips (user_id, track_id, date, note, partial) VALUES ($1, $2, $3, $4, $5)",
-            [user.id, parseInt(trip.track_id, 10), trip.date, trip.note, trip.partial],
-          );
-          migratedCount++;
-        } else {
-          skippedCount++;
-        }
-      } catch (error) {
-        console.error("Error migrating trip:", error);
-        // Continue with other trips even if one fails
-      }
-    }
-  }
-
   // Migrate localStorage preferences if provided
   if (localPreferences && localPreferences.length > 0) {
     try {
@@ -192,8 +153,6 @@ export async function register(
   return {
     success: true,
     user: { id: user.id, email: user.email, name: user.name },
-    migrated: migratedCount,
-    skipped: skippedCount,
   };
 }
 

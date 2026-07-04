@@ -10,8 +10,8 @@ import AdminNotesTab from "./AdminNotesTab";
 import AdminRoutesTab from "./AdminRoutesTab";
 
 interface AdminSidebarProps {
-  selectedRouteId?: string | null;
-  onRouteSelect?: (routeId: string) => void;
+  selectedRouteId?: number | null;
+  onRouteSelect?: (routeId: number | null) => void;
   selectedCoordinate?: [number, number] | null;
   coordinateClickTrigger?: number;
   onPreviewRoute?: (
@@ -41,7 +41,7 @@ interface AdminSidebarProps {
   onFormReset?: () => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
-  onEditingGeometryChange?: (trackId: string | null) => void;
+  onEditingGeometryChange?: (trackId: number | null) => void;
   onRouteFocus?: (geometry: string) => void;
   sidebarWidth?: number | null;
   onRefreshMap?: () => void;
@@ -77,7 +77,7 @@ export default function AdminSidebar({
   const showError = showErrorProp || showErrorToast;
   const [activeTab, setActiveTab] = useState<"routes" | "create" | "notes">("routes");
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
+  const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<number | null>(null);
   const [editingRouteInfo, setEditingRouteInfo] = useState<{
     from_station: string;
     to_station: string;
@@ -166,7 +166,7 @@ export default function AdminSidebar({
 
   // Handle edit geometry button click
   const handleEditGeometry = React.useCallback(
-    async (trackId: string) => {
+    async (trackId: number) => {
       console.log("Edit geometry for track:", trackId);
       setEditingGeometryForTrackId(trackId);
       setActiveTab("create");
@@ -235,7 +235,7 @@ export default function AdminSidebar({
 
     // Unselect the route
     if (onRouteSelect) {
-      onRouteSelect("");
+      onRouteSelect(null);
     }
   }, [onEditingGeometryChange, onRouteSelect]);
 
@@ -267,7 +267,7 @@ export default function AdminSidebar({
             setActiveTab("create");
             // Unselect any selected route when switching to Create New
             if (onRouteSelect) {
-              onRouteSelect("");
+              onRouteSelect(null);
             }
           }}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
@@ -282,7 +282,7 @@ export default function AdminSidebar({
           type="button"
           onClick={() => {
             setActiveTab("notes");
-            if (onRouteSelect) onRouteSelect("");
+            if (onRouteSelect) onRouteSelect(null);
             setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
           }}
           className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${

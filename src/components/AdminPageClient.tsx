@@ -34,7 +34,7 @@ interface AdminPageClientProps {
 export default function AdminPageClient({ user }: AdminPageClientProps) {
   const { showError, showSuccess } = useToast();
   const isMobile = useIsMobile();
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const [selectedCoordinate, setSelectedCoordinate] = useState<[number, number] | null>(null);
   const [coordinateClickTrigger, setCoordinateClickTrigger] = useState<number>(0); // Trigger to force effect to run
   const [previewRoute, setPreviewRoute] = useState<{
@@ -51,7 +51,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   }>({ startingCoordinate: null, endingCoordinate: null });
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
-  const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<string | null>(null);
+  const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<number | null>(null);
   const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
   const [focusCoordinate, setFocusCoordinate] = useState<{
     coordinate: [number, number];
@@ -63,9 +63,9 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
   const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } =
     useResizableSidebar({ isMobile });
 
-  const handleRouteSelect = useCallback((routeId: string) => {
-    // If empty string, unselect the route
-    if (routeId === "") {
+  const handleRouteSelect = useCallback((routeId: number | null) => {
+    // null unselects the route
+    if (routeId === null) {
       setSelectedRouteId(null);
       return;
     }
@@ -74,7 +74,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
       // Only clear coordinates/preview if the route ID actually changed
       // This prevents clearing coordinates when re-selecting the same route
       // (which happens during "Edit Route Geometry")
-      if (String(prevId) !== String(routeId)) {
+      if (prevId !== routeId) {
         setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
         setPreviewRoute(null);
         setIsPreviewMode(false);
@@ -198,7 +198,7 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     setCreateFormCoordinates(coordinates);
   };
 
-  const handleEditingGeometryChange = (trackId: string | null) => {
+  const handleEditingGeometryChange = (trackId: number | null) => {
     setEditingGeometryForTrackId(trackId);
     // Clear focus geometry when entering/exiting edit mode to prevent unwanted panning
     if (trackId) {

@@ -5,7 +5,7 @@ import { formatRouteMetadataBadges } from "@/lib/map/utils/tooltipFormatting";
 
 interface AdminMapCallbacks {
   onCoordinateClickRef: MutableRefObject<((coordinate: [number, number]) => void) | undefined>;
-  onRouteSelectRef: MutableRefObject<((routeId: string) => void) | undefined>;
+  onRouteSelectRef: MutableRefObject<((routeId: number | null) => void) | undefined>;
 }
 
 /**
@@ -96,8 +96,8 @@ export function setupAdminMapInteractions(
 
     if (!onRouteSelectRef.current) return;
 
-    // track_id is the feature ID (not in properties), convert to string
-    const trackId = String(feature.id);
+    // track_id is the feature ID (not in properties)
+    const trackId = Number(feature.id);
     onRouteSelectRef.current(trackId);
 
     // Stop event propagation to prevent map click handler from firing
@@ -129,7 +129,7 @@ export function setupAdminMapInteractions(
       (!endpointFeatures || endpointFeatures.length === 0)
     ) {
       if (onRouteSelectRef.current) {
-        onRouteSelectRef.current(""); // Empty string to unselect
+        onRouteSelectRef.current(null); // null to unselect
       }
     }
   });

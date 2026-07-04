@@ -52,9 +52,8 @@ const ROUTE_LINE_LAYERS = [
  * all three route line layers at once. `line-dasharray` is left untouched, so
  * the dotted/dashed styles baked into the heritage/special factories survive.
  */
-function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: string | null) {
-  const trackIdNum =
-    selectedRouteId && selectedRouteId !== "" ? parseInt(selectedRouteId, 10) : null;
+function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | null) {
+  const trackIdNum = selectedRouteId ?? null;
 
   const colorExpression: maplibregl.ExpressionSpecification =
     trackIdNum !== null
@@ -97,8 +96,8 @@ function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: string | n
 interface VectorAdminMapProps {
   className?: string;
   onCoordinateClick?: (coordinate: [number, number]) => void;
-  onRouteSelect?: (routeId: string) => void;
-  selectedRouteId?: string | null;
+  onRouteSelect?: (routeId: number | null) => void;
+  selectedRouteId?: number | null;
   previewRoute?: {
     partIds: string[];
     coordinates: [number, number][];

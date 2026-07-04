@@ -16,9 +16,9 @@ interface RouteNode {
 
 interface LocalTripLoggerProps {
   selectedRoutes: SelectedRoute[];
-  onRemoveRoute: (trackId: string) => void;
+  onRemoveRoute: (trackId: number) => void;
   onClearSelection: () => void;
-  onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
+  onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
   onRoutesLogged: () => void;
   onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
@@ -66,7 +66,7 @@ export default function LocalTripLogger({
       // Add logged parts
       const parts = selectedRoutes.map((r) => ({
         journey_id: newJourney.id,
-        track_id: parseInt(r.track_id, 10),
+        track_id: r.track_id,
         partial: r.partial ?? false,
       }));
 

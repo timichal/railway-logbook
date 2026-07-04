@@ -104,7 +104,7 @@ export default function LocalJourneyLogTab({
         setRouteMeta((prev) => {
           const next = { ...prev };
           for (const route of routes) {
-            next[Number(route.track_id)] = route;
+            next[route.track_id] = route;
           }
           return next;
         });
@@ -121,7 +121,7 @@ export default function LocalJourneyLogTab({
   const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | null>(null);
   handleMapRouteClickRef.current = (route: SelectedRoute) => {
     if (!viewedJourneyId) return;
-    const trackId = Number(route.track_id);
+    const trackId = route.track_id;
 
     try {
       const existing = localStore

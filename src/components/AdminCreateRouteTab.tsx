@@ -34,7 +34,7 @@ interface AdminCreateRouteTabProps {
     intended_backtracking: boolean;
   }) => void;
   onFormReset?: () => void;
-  editingGeometryForTrackId?: string | null;
+  editingGeometryForTrackId?: number | null;
   editingRouteInfo?: { from_station: string; to_station: string } | null;
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;

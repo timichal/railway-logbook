@@ -24,7 +24,7 @@ interface RouteEditFormProps {
   onEditFormChange: (form: EditFormData) => void;
   onSave: () => void;
   onDelete: () => void;
-  onEditGeometry: (trackId: string) => void;
+  onEditGeometry: (trackId: number) => void;
   onUnselect: () => void;
 }
 

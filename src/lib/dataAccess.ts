@@ -126,11 +126,11 @@ function createLocalStorageDataAccess(): DataAccess {
         );
 
         // Find completed routes (routes with at least one complete logged part)
-        const completedRouteIds = new Set<string>();
+        const completedRouteIds = new Set<number>();
         for (const part of localParts) {
           // Only count parts that are not partial
           if (!part.partial) {
-            completedRouteIds.add(String(part.track_id));
+            completedRouteIds.add(part.track_id);
           }
         }
 
@@ -180,10 +180,10 @@ function createLocalStorageDataAccess(): DataAccess {
         const localParts = localStore.getLoggedParts();
 
         // Find completed routes
-        const completedRouteIds = new Set<string>();
+        const completedRouteIds = new Set<number>();
         for (const part of localParts) {
           if (!part.partial) {
-            completedRouteIds.add(String(part.track_id));
+            completedRouteIds.add(part.track_id);
           }
         }
 

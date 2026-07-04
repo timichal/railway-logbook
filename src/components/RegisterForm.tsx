@@ -27,7 +27,7 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
       const localPreferences = localStore.exportPreferences();
 
       // Register with auto-migration
-      await register(formData, [], localPreferences);
+      await register(formData, localPreferences);
 
       // Migrate journeys if there are any
       if (journeys.length > 0) {

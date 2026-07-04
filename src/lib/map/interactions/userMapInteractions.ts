@@ -37,7 +37,7 @@ export function setupUserMapInteractions(
     if (!trackId) return;
 
     onRouteClick({
-      track_id: String(trackId),
+      track_id: Number(trackId),
       from_station: properties.from_station,
       to_station: properties.to_station,
       description: properties.description,

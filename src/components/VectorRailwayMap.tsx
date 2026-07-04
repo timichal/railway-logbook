@@ -205,10 +205,10 @@ export default function VectorRailwayMap({
     if (!map.current || user) return;
 
     const allParts = localStore.getLoggedParts();
-    const routeStatus = new Map<string, { hasComplete: boolean; hasPartial: boolean }>();
+    const routeStatus = new Map<number, { hasComplete: boolean; hasPartial: boolean }>();
 
     for (const part of allParts) {
-      const trackId = String(part.track_id);
+      const trackId = part.track_id;
       const existing = routeStatus.get(trackId) || { hasComplete: false, hasPartial: false };
       if (!part.partial) {
         existing.hasComplete = true;
@@ -222,7 +222,7 @@ export default function VectorRailwayMap({
 
     routeStatus.forEach((status, trackId) => {
       if (!map.current) return;
-      const featureId = parseInt(trackId, 10);
+      const featureId = trackId;
       newTrackIds.add(featureId);
       const isPartial = status.hasPartial && !status.hasComplete;
       map.current.setFeatureState(
@@ -305,7 +305,7 @@ export default function VectorRailwayMap({
     [activeTab, journeyEditActive, user, dataAccess, showError],
   );
 
-  const handleRemoveRoute = useCallback((trackId: string) => {
+  const handleRemoveRoute = useCallback((trackId: number) => {
     setSelectedRoutes((prev) => prev.filter((r) => r.track_id !== trackId));
   }, []);
 
@@ -313,7 +313,7 @@ export default function VectorRailwayMap({
     setSelectedRoutes([]);
   }, []);
 
-  const handleUpdateRoutePartial = useCallback((trackId: string, partial: boolean) => {
+  const handleUpdateRoutePartial = useCallback((trackId: number, partial: boolean) => {
     setSelectedRoutes((routes) =>
       routes.map((r) => (r.track_id === trackId ? { ...r, partial } : r)),
     );
@@ -338,7 +338,7 @@ export default function VectorRailwayMap({
       }
 
       const newRoutes = routes.map((route) => ({
-        track_id: route.track_id.toString(),
+        track_id: route.track_id,
         from_station: route.from_station,
         to_station: route.to_station,
         description: route.description || "",

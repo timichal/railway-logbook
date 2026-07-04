@@ -14,7 +14,7 @@ interface PreviewRoute {
  */
 export function useRouteLength(
   previewRoute: PreviewRoute | null | undefined,
-  selectedRouteId: string | null | undefined,
+  selectedRouteId: number | null | undefined,
 ) {
   const [previewLength, setPreviewLength] = useState<number | null>(null);
   const [selectedRouteLength, setSelectedRouteLength] = useState<number | null>(null);

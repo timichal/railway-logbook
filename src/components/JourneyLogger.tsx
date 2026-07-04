@@ -18,9 +18,9 @@ interface RouteNode {
 
 interface JourneyLoggerProps {
   selectedRoutes: SelectedRoute[];
-  onRemoveRoute: (trackId: string) => void;
+  onRemoveRoute: (trackId: number) => void;
   onClearSelection: () => void;
-  onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
+  onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
   onRoutesLogged: () => void;
   onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
@@ -66,7 +66,7 @@ export default function JourneyLogger({
 
     setIsSaving(true);
     try {
-      const trackIds = selectedRoutes.map((r) => parseInt(r.track_id, 10));
+      const trackIds = selectedRoutes.map((r) => r.track_id);
       const partialFlags = selectedRoutes.map((r) => r.partial ?? false);
 
       const result = await createJourney(

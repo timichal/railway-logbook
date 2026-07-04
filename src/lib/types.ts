@@ -32,7 +32,7 @@ export type GeoJSONFeature = {
   properties: {
     "@id"?: number | string;
     name?: string;
-    track_id?: string;
+    track_id?: number;
     description?: string;
     usage?: number;
     zoom_level?: number;
@@ -72,7 +72,7 @@ export type Station = {
 
 // Railway route from database (with geometry as JSON string)
 export type RailwayRoute = {
-  track_id: string;
+  track_id: number;
   from_station: string;
   to_station: string;
   description: string | null;
@@ -128,16 +128,6 @@ export type LoggedPart = {
   created_at: string;
 };
 
-// Local trip stored in localStorage (for unauthenticated users) - DEPRECATED
-export type LocalTrip = {
-  id: string; // UUID
-  track_id: string;
-  date: string; // YYYY-MM-DD
-  note: string | null;
-  partial: boolean;
-  created_at: string; // ISO timestamp
-};
-
 // Local journey stored in localStorage (for unauthenticated users)
 export type LocalJourney = {
   id: string; // UUID
@@ -185,7 +175,7 @@ export interface PathResult {
 
 // Selected route for user map (used in JourneyLogger and map interactions)
 export interface SelectedRoute {
-  track_id: string;
+  track_id: number;
   from_station: string;
   to_station: string;
   description: string;

@@ -26,9 +26,9 @@ interface UserSidebarProps {
   user: User | null;
   dataAccess: DataAccess;
   selectedRoutes: SelectedRoute[];
-  onRemoveRoute: (trackId: string) => void;
+  onRemoveRoute: (trackId: number) => void;
   onClearAll: () => void;
-  onUpdateRoutePartial: (trackId: string, partial: boolean) => void;
+  onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
   onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
   onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
   onRoutesLogged?: () => void;

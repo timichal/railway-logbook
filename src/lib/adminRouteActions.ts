@@ -74,7 +74,7 @@ export async function getFrequencyTags(): Promise<string[]> {
 /**
  * Get a single railway route by track_id
  */
-export async function getRailwayRoute(trackId: string) {
+export async function getRailwayRoute(trackId: number) {
   await requireAdmin();
 
   const result = await query(
@@ -194,8 +194,8 @@ export async function saveRailwayRoute(
   pathResult: PathResult,
   startCoordinate: [number, number],
   endCoordinate: [number, number],
-  trackId?: string,
-): Promise<string> {
+  trackId?: number,
+): Promise<number> {
   await requireAdmin();
 
   const client = await pool.connect();
@@ -369,7 +369,7 @@ export async function saveRailwayRoute(
       lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : "N/A",
     );
     console.log("Stored coordinates:", startCoordinate, "to", endCoordinate);
-    return String(savedTrackId);
+    return savedTrackId as number;
   } catch (error) {
     console.error("Error saving railway route:", error);
     throw new Error(
@@ -385,7 +385,7 @@ export async function saveRailwayRoute(
  * Also marks route as valid since admin is manually validating
  */
 export async function updateRailwayRoute(
-  trackId: string,
+  trackId: number,
   fromStation: string,
   toStation: string,
   description: string | null,
@@ -423,7 +423,7 @@ export async function updateRailwayRoute(
 /**
  * Delete a railway route
  */
-export async function deleteRailwayRoute(trackId: string): Promise<void> {
+export async function deleteRailwayRoute(trackId: number): Promise<void> {
   await requireAdmin();
 
   const client = await pool.connect();
