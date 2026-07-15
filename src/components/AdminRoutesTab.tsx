@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteRailwayRoute,
+  duplicateRailwayRoute,
   getAllRailwayRoutes,
   getRailwayRoute,
   updateRailwayRoute,
@@ -267,6 +268,35 @@ export default function AdminRoutesTab({
     }
   };
 
+  const handleDuplicateRoute = async () => {
+    if (!selectedRoute) return;
+
+    try {
+      setIsLoading(true);
+      const newTrackId = await duplicateRailwayRoute(selectedRoute.track_id);
+
+      await loadRoutes();
+
+      // Select the new copy so the admin can immediately edit it.
+      await handleRouteClick(newTrackId, { skipFocus: true });
+
+      if (onRouteUpdated) {
+        onRouteUpdated();
+      }
+
+      showSuccess(
+        `Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" duplicated successfully.`,
+      );
+    } catch (error) {
+      console.error("Error duplicating route:", error);
+      showError(
+        `Error duplicating route: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleUnselect = () => {
     setSelectedRoute(null);
     setEditForm(null);
@@ -322,6 +352,7 @@ export default function AdminRoutesTab({
           onEditFormChange={setEditForm}
           onSave={handleSaveRoute}
           onDelete={handleDeleteRoute}
+          onDuplicate={handleDuplicateRoute}
           onEditGeometry={onEditGeometry || (() => {})}
           onUnselect={handleUnselect}
         />

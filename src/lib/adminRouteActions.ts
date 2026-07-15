@@ -421,6 +421,78 @@ export async function updateRailwayRoute(
 }
 
 /**
+ * Duplicate a railway route, including its user logs.
+ *
+ * The copy is an exact clone of the original geometry/metadata, except that
+ * "[duplicate]" is appended to the from/to station names so the copy is easy to
+ * spot (e.g. "Brno" → "Brno [duplicate]"). All user_logged_parts referencing the
+ * original route are cloned to point at the new track_id, preserving each
+ * journey's partial flag. Runs in a transaction. Returns the new track_id.
+ */
+export async function duplicateRailwayRoute(trackId: number): Promise<number> {
+  await requireAdmin();
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // Clone the route row (track_id is SERIAL; created_at/updated_at default;
+    // the Web Mercator geom columns are repopulated by the INSERT triggers).
+    const insertRoute = await client.query(
+      `
+      INSERT INTO railway_routes (
+        from_station, to_station, description, usage_type, frequency, link, scenic,
+        line_class, geometry, length_km, start_country, end_country,
+        starting_coordinate, ending_coordinate, starting_part_id, ending_part_id,
+        is_valid, error_message, intended_backtracking, has_backtracking
+      )
+      SELECT
+        from_station || ' [duplicate]', to_station || ' [duplicate]', description,
+        usage_type, frequency, link, scenic, line_class, geometry, length_km,
+        start_country, end_country, starting_coordinate, ending_coordinate,
+        starting_part_id, ending_part_id, is_valid, error_message,
+        intended_backtracking, has_backtracking
+      FROM railway_routes
+      WHERE track_id = $1
+      RETURNING track_id
+      `,
+      [trackId],
+    );
+
+    if (insertRoute.rows.length === 0) {
+      throw new Error(`Route with track_id ${trackId} not found`);
+    }
+
+    const newTrackId = insertRoute.rows[0].track_id as number;
+
+    // Clone the user logs, remapping track_id to the new route.
+    await client.query(
+      `
+      INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, created_at)
+      SELECT user_id, journey_id, $2, partial, created_at
+      FROM user_logged_parts
+      WHERE track_id = $1
+      `,
+      [trackId, newTrackId],
+    );
+
+    await client.query("COMMIT");
+
+    console.log("Duplicated railway route", trackId, "→", newTrackId);
+    return newTrackId;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error duplicating railway route:", error);
+    throw new Error(
+      `Failed to duplicate route: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Delete a railway route
  */
 export async function deleteRailwayRoute(trackId: number): Promise<void> {

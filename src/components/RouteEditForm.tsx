@@ -24,6 +24,7 @@ interface RouteEditFormProps {
   onEditFormChange: (form: EditFormData) => void;
   onSave: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onEditGeometry: (trackId: number) => void;
   onUnselect: () => void;
 }
@@ -36,6 +37,7 @@ export default function RouteEditForm({
   onEditFormChange,
   onSave,
   onDelete,
+  onDuplicate,
   onEditGeometry,
   onUnselect,
 }: RouteEditFormProps) {
@@ -277,9 +279,14 @@ export default function RouteEditForm({
               {isLoading ? "Deleting..." : "Delete Route"}
             </button>
 
-            <p className="text-xs text-gray-500 text-center">
-              Deletion is permanent and cannot be undone
-            </p>
+            <button
+              type="button"
+              onClick={onDuplicate}
+              disabled={isLoading}
+              className="w-full bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+            >
+              Duplicate Route
+            </button>
           </div>
         </div>
       </div>
