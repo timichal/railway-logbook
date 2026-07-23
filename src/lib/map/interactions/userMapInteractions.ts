@@ -1,5 +1,5 @@
-import type maplibreglType from "maplibre-gl";
-import maplibregl from "maplibre-gl";
+import type * as maplibreglType from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { HIGHLIGHT_LAYER_IDS } from "@/lib/map/hooks/useRouteHighlighting";
 import { formatRouteMetadataBadges } from "@/lib/map/utils/tooltipFormatting";
 import type { SelectedRoute, Station } from "@/lib/types";

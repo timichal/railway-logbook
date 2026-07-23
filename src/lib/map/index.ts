@@ -1,4 +1,4 @@
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { CIRCLES, COLORS, DASHES, OPACITIES } from "./style";
 
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.

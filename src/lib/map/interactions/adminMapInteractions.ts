@@ -1,5 +1,5 @@
-import type maplibreglType from "maplibre-gl";
-import maplibregl from "maplibre-gl";
+import type * as maplibreglType from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import type { MutableRefObject } from "react";
 import { formatRouteMetadataBadges } from "@/lib/map/utils/tooltipFormatting";
 

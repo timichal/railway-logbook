@@ -1,4 +1,4 @@
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import type { FilterSpecification } from "maplibre-gl";
 import { useEffect } from "react";
 

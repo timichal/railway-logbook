@@ -1,4 +1,4 @@
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import NotesPopup from "@/components/NotesPopup";

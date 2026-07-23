@@ -1,4 +1,4 @@
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
 import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/types";
 import { CIRCLES, COLORS, OPACITIES, WIDTHS } from "../index";

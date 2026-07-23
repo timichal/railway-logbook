@@ -1,4 +1,4 @@
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -9,6 +9,12 @@ import {
   MAP_ZOOM,
 } from "../index";
 import { loadMapState, saveMapState } from "../mapState";
+
+// v6 ships ESM-only. Its worker does a relative import of maplibre-gl-shared.mjs
+// at runtime; Next.js emits a `new URL(...)` worker as a bare asset without that
+// sibling, so it 404s. Instead we serve both files from public/maplibre/ (copied
+// by the copyMaplibreWorker script) where the relative import resolves.
+maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 export interface UseMapLibreOptions {
   center?: [number, number];

@@ -1,6 +1,6 @@
 "use client";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
