@@ -1,7 +1,7 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import { HIGHLIGHT_LAYER_IDS } from "@/lib/map/hooks/useRouteHighlighting";
-import { formatRouteMetadataBadges } from "@/lib/map/utils/tooltipFormatting";
+import { escapeHtml, formatRouteMetadataBadges, safeHref } from "@/lib/map/utils/tooltipFormatting";
 import type { SelectedRoute, Station } from "@/lib/types";
 
 interface UserMapInteractionCallbacks {
@@ -65,7 +65,7 @@ export function setupUserMapInteractions(
 
     if (!properties) return;
 
-    let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${properties.from_station} ⟷ ${properties.to_station}</h3>`;
+    let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${escapeHtml(properties.from_station)} ⟷ ${escapeHtml(properties.to_station)}</h3>`;
 
     let formattedDescription = "";
 
@@ -77,10 +77,11 @@ export function setupUserMapInteractions(
       frequency: properties.frequency,
     });
     if (properties.description) {
-      formattedDescription += `<b>Note:</b> ${properties.description}`;
+      formattedDescription += `<b>Note:</b> ${escapeHtml(properties.description)}`;
     }
-    if (properties.link) {
-      formattedDescription += `<br /><a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span>`;
+    const routeHref = safeHref(properties.link);
+    if (routeHref) {
+      formattedDescription += `<br /><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span>`;
     }
 
     // `date` and `journey_name` are populated together from the most-recent
@@ -89,7 +90,7 @@ export function setupUserMapInteractions(
     if (properties.date) {
       const dateStr = new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date));
       formattedDescription += `<hr class="my-2" />`;
-      formattedDescription += `<span style="color: black;">Most recent: ${dateStr} (${properties.journey_name})</span>`;
+      formattedDescription += `<span style="color: black;">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</span>`;
     }
 
     popupContent += `<div class="mb-2">${formattedDescription}</div>`;
@@ -121,7 +122,7 @@ export function setupUserMapInteractions(
     let popupContent = `<div class="station-popup" style="color: black;">`;
 
     if (properties.name) {
-      popupContent += `<h3 class="font-bold text-base mb-1" style="color: black;">${properties.name}</h3>`;
+      popupContent += `<h3 class="font-bold text-base mb-1" style="color: black;">${escapeHtml(properties.name)}</h3>`;
       popupContent += `<div class="text-xs text-gray-600">Station</div>`;
     }
 
@@ -161,10 +162,11 @@ export function setupUserMapInteractions(
 
     let popupContent = `<div class="railway-popup" style="color: black; max-width: 260px;">`;
     if (properties.text) {
-      popupContent += `<div style="white-space: pre-wrap;">${properties.text}</div>`;
+      popupContent += `<div style="white-space: pre-wrap;">${escapeHtml(properties.text)}</div>`;
     }
-    if (properties.source) {
-      popupContent += `<div style="margin-top: 6px;"><a href="${properties.source}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Source</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span></div>`;
+    const sourceHref = safeHref(properties.source);
+    if (sourceHref) {
+      popupContent += `<div style="margin-top: 6px;"><a href="${sourceHref}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Source</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span></div>`;
     }
     popupContent += `</div>`;
 
@@ -236,7 +238,7 @@ export function setupUserMapInteractions(
       if (notes.length > 0) {
         e.preventDefault();
         const source = notes[0].properties?.source;
-        if (source) window.open(source, "_blank", "noopener,noreferrer");
+        if (safeHref(source)) window.open(source, "_blank", "noopener,noreferrer");
         return;
       }
     }
@@ -249,7 +251,7 @@ export function setupUserMapInteractions(
     if (features.length > 0) {
       e.preventDefault();
       const link = features[0].properties?.link;
-      if (link) window.open(link, "_blank", "noopener,noreferrer");
+      if (safeHref(link)) window.open(link, "_blank", "noopener,noreferrer");
     }
   };
   mapInstance.on("dblclick", handleDblClick);

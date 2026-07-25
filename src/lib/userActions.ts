@@ -211,85 +211,69 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
     throw new Error("User not authenticated");
   }
 
-  const userId = user.id;
-
-  // Get stats for each country (routes where BOTH start AND end are in that country)
-  const countryStats: CountryProgress[] = [];
-
-  for (const country of SUPPORTED_COUNTRIES) {
-    // Get total km for routes starting AND ending in this country (only Regular usage_type=0)
-    const totalResult = await query(
-      `SELECT COALESCE(SUM(length_km), 0) as total_km
-       FROM railway_routes
-       WHERE length_km IS NOT NULL
-         AND usage_type = 0
-         AND start_country = $1
-         AND end_country = $1`,
-      [country.code],
-    );
-
-    // Get completed km for routes in this country
-    const completedResult = await query(
-      `SELECT COALESCE(SUM(rr.length_km), 0) as completed_km
+  // One pass over the Regular routes, aggregated twice via GROUPING SETS:
+  // - per `country` (non-NULL only for routes that both start and end in the
+  //   same country — cross-border routes land in the NULL bucket and are ignored)
+  // - the grand total over every Regular route, cross-border included
+  // `is_total` (GROUPING) tells the two NULL-country rows apart.
+  const result = await query(
+    `WITH regular AS (
+       SELECT
+         rr.length_km,
+         CASE WHEN rr.start_country = rr.end_country THEN rr.start_country END AS country,
+         (done.track_id IS NOT NULL) AS completed
        FROM railway_routes rr
+       LEFT JOIN (
+         SELECT DISTINCT track_id
+         FROM user_logged_parts
+         WHERE user_id = $1 AND partial = FALSE AND track_id IS NOT NULL
+       ) done ON done.track_id = rr.track_id
        WHERE rr.usage_type = 0
          AND rr.length_km IS NOT NULL
-         AND rr.start_country = $1
-         AND rr.end_country = $1
-         AND EXISTS (
-           SELECT 1
-           FROM user_logged_parts
-           WHERE track_id = rr.track_id
-             AND user_id = $2
-             AND partial = FALSE
-             AND track_id IS NOT NULL
-         )`,
-      [country.code, userId],
-    );
+     )
+     SELECT
+       GROUPING(country) AS is_total,
+       country,
+       COALESCE(SUM(length_km), 0) AS total_km,
+       COALESCE(SUM(length_km) FILTER (WHERE completed), 0) AS completed_km
+     FROM regular
+     GROUP BY GROUPING SETS ((country), ())`,
+    [user.id],
+  );
 
-    const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
-    const completedKm = parseFloat(completedResult.rows[0].completed_km) || 0;
+  const round1 = (value: number) => Math.round(value * 10) / 10;
 
-    countryStats.push({
-      countryCode: country.code,
-      countryName: country.name,
-      totalKm: Math.round(totalKm * 10) / 10,
-      completedKm: Math.round(completedKm * 10) / 10,
-    });
+  const byCode = new Map<string, { totalKm: number; completedKm: number }>();
+  let overallTotalKm = 0;
+  let overallCompletedKm = 0;
+
+  for (const row of result.rows) {
+    const totalKm = parseFloat(row.total_km) || 0;
+    const completedKm = parseFloat(row.completed_km) || 0;
+
+    if (row.is_total === 1) {
+      overallTotalKm = totalKm;
+      overallCompletedKm = completedKm;
+    } else if (row.country) {
+      byCode.set(row.country, { totalKm, completedKm });
+    }
   }
 
-  // Get overall total (all routes regardless of country)
-  const overallTotalResult = await query(
-    `SELECT COALESCE(SUM(length_km), 0) as total_km
-     FROM railway_routes
-     WHERE length_km IS NOT NULL
-       AND usage_type = 0`,
-  );
-
-  const overallCompletedResult = await query(
-    `SELECT COALESCE(SUM(rr.length_km), 0) as completed_km
-     FROM railway_routes rr
-     WHERE rr.usage_type = 0
-       AND rr.length_km IS NOT NULL
-       AND EXISTS (
-         SELECT 1
-         FROM user_logged_parts
-         WHERE track_id = rr.track_id
-           AND user_id = $1
-           AND partial = FALSE
-           AND track_id IS NOT NULL
-       )`,
-    [userId],
-  );
-
-  const overallTotalKm = parseFloat(overallTotalResult.rows[0].total_km) || 0;
-  const overallCompletedKm = parseFloat(overallCompletedResult.rows[0].completed_km) || 0;
+  const countryStats: CountryProgress[] = SUPPORTED_COUNTRIES.map((country) => {
+    const stats = byCode.get(country.code);
+    return {
+      countryCode: country.code,
+      countryName: country.name,
+      totalKm: round1(stats?.totalKm ?? 0),
+      completedKm: round1(stats?.completedKm ?? 0),
+    };
+  });
 
   return {
     byCountry: countryStats,
     total: {
-      totalKm: Math.round(overallTotalKm * 10) / 10,
-      completedKm: Math.round(overallCompletedKm * 10) / 10,
+      totalKm: round1(overallTotalKm),
+      completedKm: round1(overallCompletedKm),
     },
   };
 }

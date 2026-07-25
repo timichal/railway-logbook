@@ -1,4 +1,5 @@
 import type * as maplibregl from "maplibre-gl";
+import { getNoteTypeColor, noteTypeOptions } from "../constants";
 import { CIRCLES, COLORS, DASHES, OPACITIES } from "./style";
 
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
@@ -381,7 +382,7 @@ export function createRailwayPartsLayer(): maplibregl.LineLayerSpecification {
 
 export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorSourceSpecification {
   const baseUrl = `${TILE_BASE_URL}/admin_notes_tile/{z}/{x}/{y}`;
-  const tilesUrl = cacheBuster ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
+  const tilesUrl = cacheBuster !== undefined ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
 
   return {
     type: "vector",
@@ -392,19 +393,22 @@ export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorS
 }
 
 export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
-  // Color by note_type; untyped (legacy) notes keep the amber default.
-  // Keep in sync with noteTypeOptions colors in constants.ts.
+  // Color by note_type, derived straight from noteTypeOptions so the map can
+  // never drift from the badge colors used in the sidebar. Untyped (legacy)
+  // notes fall through to the amber default.
+  // The tuple assertion is what lets this spread into a `match` expression:
+  // noteTypeOptions is a non-empty const tuple, so there is always at least one
+  // label/color pair, but TS can't infer that through flatMap.
+  const labelColorPairs = noteTypeOptions.flatMap((opt) => [opt.id, opt.color]) as [
+    string,
+    string,
+    ...string[],
+  ];
+
   const colorByType: maplibregl.ExpressionSpecification = [
     "match",
     ["get", "note_type"],
-    "Usage",
-    "#2563eb", // blue (public)
-    "UsageInternal",
-    "#60a5fa", // light blue (admin-only draft)
-    "Works",
-    "#ea580c", // orange
-    "Todo",
-    "#9333ea", // purple
+    ...labelColorPairs,
     COLORS.adminNotes.fill, // fallback for NULL / unknown
   ];
 
@@ -443,7 +447,7 @@ export function createPublicNotesSource(
   cacheBuster?: number,
 ): maplibregl.VectorSourceSpecification {
   const baseUrl = `${TILE_BASE_URL}/public_notes_tile/{z}/{x}/{y}`;
-  const tilesUrl = cacheBuster ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
+  const tilesUrl = cacheBuster !== undefined ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
 
   return {
     type: "vector",
@@ -462,7 +466,8 @@ export function createPublicNotesLayer(): maplibregl.CircleLayerSpecification {
     minzoom: ZOOM_RANGES.publicNotes.min,
     paint: {
       "circle-radius": CIRCLES.adminNote.radius,
-      "circle-color": "#2563eb", // blue, matching the public "Usage" color
+      // These are all note_type='Usage' by definition, so paint them the Usage color.
+      "circle-color": getNoteTypeColor("Usage"),
       "circle-stroke-color": COLORS.adminNotes.stroke, // same dark stroke as the admin map
       "circle-stroke-width": CIRCLES.adminNote.strokeWidth,
       "circle-opacity": OPACITIES.adminNotes,

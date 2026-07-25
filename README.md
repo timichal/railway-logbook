@@ -62,7 +62,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 
 **For Users:**
 - Interactive map with badge-style hover popups (color-coded: usage type, frequency, scenic flag)
-- **Country filtering** - Filter routes by country (CZ, SK, AT, PL, DE, LT, LV, EE) with Select All/None options
+- **Country filtering** - Filter routes across 20 European countries (AT, BE, CZ, DK, EE, ES, FI, FR, DE, IT, LV, LT, LU, NL, NO, PL, SE, SK, SI, CH) with Select All/None options
 - Three-way color coding:
   - Dark green = fully completed routes
   - Dark orange = partially completed routes

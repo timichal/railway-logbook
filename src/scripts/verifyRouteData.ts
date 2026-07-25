@@ -145,9 +145,14 @@ export async function recalculateAllRoutes(
       const lengthDiff = Math.abs(newLength - originalLength);
       const lengthDiffPercent = (lengthDiff / originalLength) * 100;
 
+      // A route with no usable stored length (NULL or 0) has nothing to compare
+      // against — the percentage would be NaN/Infinity — so accept the
+      // recalculated geometry, which also backfills the missing length.
+      const comparable = Number.isFinite(originalLength) && originalLength > 0;
+
       // Check if the new length differs significantly from the original
-      // Consider invalid if difference is more than 0.1 km OR more than 1%
-      if (lengthDiff > 0.1 && lengthDiffPercent > 1) {
+      // Consider invalid if difference is more than 0.1 km AND more than 1%
+      if (comparable && lengthDiff > 0.1 && lengthDiffPercent > 1) {
         const errorMsg = `Distance mismatch: original ${originalLength.toFixed(2)} km, recalculated ${newLength.toFixed(2)} km (diff: ${lengthDiff.toFixed(2)} km, ${lengthDiffPercent.toFixed(1)}%)`;
 
         // Mark route as invalid due to distance mismatch

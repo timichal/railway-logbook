@@ -1,7 +1,7 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import type { MutableRefObject } from "react";
-import { formatRouteMetadataBadges } from "@/lib/map/utils/tooltipFormatting";
+import { escapeHtml, formatRouteMetadataBadges, safeHref } from "@/lib/map/utils/tooltipFormatting";
 
 interface AdminMapCallbacks {
   onCoordinateClickRef: MutableRefObject<((coordinate: [number, number]) => void) | undefined>;
@@ -209,10 +209,11 @@ export function setupAdminMapInteractions(
           frequency: properties.frequency,
         });
         if (properties.description) {
-          formattedDescription += `<b>Note:</b> ${properties.description}`;
+          formattedDescription += `<b>Note:</b> ${escapeHtml(properties.description)}`;
         }
-        if (properties.link) {
-          formattedDescription += `<br /><a href="${properties.link}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a>`;
+        const routeHref = safeHref(properties.link);
+        if (routeHref) {
+          formattedDescription += `<br /><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a>`;
         }
 
         if (routeHoverPopup) {
@@ -228,7 +229,7 @@ export function setupAdminMapInteractions(
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="color: black;">
-              <h3 style="font-weight: bold; margin-bottom: 4px;">${properties.from_station} ⟷ ${properties.to_station}</h3>
+              <h3 style="font-weight: bold; margin-bottom: 4px;">${escapeHtml(properties.from_station)} ⟷ ${escapeHtml(properties.to_station)}</h3>
               ${formattedDescription}</p>
             </div>
           `)
@@ -270,7 +271,7 @@ export function setupAdminMapInteractions(
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="color: black;">
-              <h3 style="font-weight: bold; margin-bottom: 2px;">${properties.name || "Unknown Station"}</h3>
+              <h3 style="font-weight: bold; margin-bottom: 2px;">${escapeHtml(properties.name) || "Unknown Station"}</h3>
               <div style="font-size: 0.75rem; color: #6b7280;">Station</div>
             </div>
           `)
@@ -331,7 +332,7 @@ export function setupAdminMapInteractions(
           .setHTML(`
             <div style="color: black;">
               <h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
-              <div style="font-size: 0.85rem; color: #374151;">${properties.route_name}</div>
+              <div style="font-size: 0.85rem; color: #374151;">${escapeHtml(properties.route_name)}</div>
               <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Click to use this coordinate</div>
             </div>
           `)
@@ -396,8 +397,8 @@ export function setupAdminMapInteractions(
           .setHTML(`
             <div style="color: black;">
               <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note</h3>
-              <div style="font-size: 0.85rem; color: #374151;">${properties.text || ""}</div>
-              ${properties.source ? `<div style="font-size: 0.8rem; margin-top: 4px;"><a href="${properties.source}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">Source ↗</a> <span style="color: #6b7280;">(double-click to open)</span></div>` : ""}
+              <div style="font-size: 0.85rem; color: #374151;">${escapeHtml(properties.text)}</div>
+              ${safeHref(properties.source) ? `<div style="font-size: 0.8rem; margin-top: 4px;"><a href="${safeHref(properties.source)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">Source ↗</a> <span style="color: #6b7280;">(double-click to open)</span></div>` : ""}
               ${updatedAtStr ? `<div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
               <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Right-click to edit</div>
             </div>
@@ -433,7 +434,7 @@ export function setupAdminMapInteractions(
     if (noteFeatures && noteFeatures.length > 0) {
       e.preventDefault();
       const source = noteFeatures[0].properties?.source;
-      if (source) window.open(source, "_blank", "noopener,noreferrer");
+      if (safeHref(source)) window.open(source, "_blank", "noopener,noreferrer");
     }
   });
 }

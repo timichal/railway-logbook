@@ -42,7 +42,6 @@ export async function loadStationsAndParts(
   let stationsCount = 0;
   let partsCount = 0;
 
-  // Process file in streaming fashion to avoid memory issues
   console.log("Reading GeoJSON file...");
   const fileContent = fs.readFileSync(geojsonPath, "utf8");
   console.log("Parsing JSON...");

@@ -107,38 +107,32 @@ export function getUserRouteClickBufferWidthExpression(): maplibregl.ExpressionS
 }
 
 /**
+ * Wraps a width in the admin map's selected-route override: the selected
+ * track_id renders at WIDTHS.selectedRoute, everything else at `normal`.
+ */
+function withAdminSelection(
+  normal: maplibregl.ExpressionSpecification | number,
+  selectedTrackId: number | null,
+): maplibregl.ExpressionSpecification | number {
+  if (selectedTrackId === null) return normal;
+  return [
+    "case",
+    ["==", ["id"], selectedTrackId],
+    WIDTHS.selectedRoute,
+    normal,
+  ] as maplibregl.ExpressionSpecification;
+}
+
+/**
  * Admin map width expression with selected-route override. Equivalent to
- * getUserRouteWidthExpression() but constant across zoom (admin map shows all
- * line classes at every zoom) and with the selected track_id rendered at
- * WIDTHS.selectedRoute. The selection case lives inside each interpolate stop
- * because MapLibre forbids wrapping a zoom-interpolate inside another
- * expression like ['case', ...].
+ * getUserRouteWidthExpression() but constant across zoom — the admin map shows
+ * all line classes at the same width at every zoom, so no zoom interpolate is
+ * needed at all.
  */
 export function getAdminRouteWidthExpression(
   selectedTrackId: number | null,
-): maplibregl.ExpressionSpecification {
-  const normal = widthByClass(WIDTHS.adminRoute);
-  const stop =
-    selectedTrackId === null
-      ? normal
-      : ([
-          "case",
-          ["==", ["id"], selectedTrackId],
-          WIDTHS.selectedRoute,
-          normal,
-        ] as maplibregl.ExpressionSpecification);
-
-  return [
-    "interpolate",
-    ["linear"],
-    ["zoom"],
-    4,
-    stop,
-    6.5,
-    stop,
-    7,
-    stop,
-  ] as maplibregl.ExpressionSpecification;
+): maplibregl.ExpressionSpecification | number {
+  return withAdminSelection(widthByClass(WIDTHS.adminRoute), selectedTrackId);
 }
 
 /**
@@ -148,29 +142,11 @@ export function getAdminRouteWidthExpression(
  */
 export function getAdminRouteHeritageWidthExpression(
   selectedTrackId: number | null,
-): maplibregl.ExpressionSpecification {
-  const normal = WIDTHS.adminRoute.branch * WIDTHS.heritageDotMultiplier;
-  const stop =
-    selectedTrackId === null
-      ? normal
-      : ([
-          "case",
-          ["==", ["id"], selectedTrackId],
-          WIDTHS.selectedRoute,
-          normal,
-        ] as maplibregl.ExpressionSpecification);
-
-  return [
-    "interpolate",
-    ["linear"],
-    ["zoom"],
-    4,
-    stop,
-    6.5,
-    stop,
-    7,
-    stop,
-  ] as maplibregl.ExpressionSpecification;
+): maplibregl.ExpressionSpecification | number {
+  return withAdminSelection(
+    WIDTHS.adminRoute.branch * WIDTHS.heritageDotMultiplier,
+    selectedTrackId,
+  );
 }
 
 /**

@@ -100,7 +100,13 @@ CREATE TABLE user_logged_parts (
 -- User preferences (for country filtering and other settings)
 CREATE TABLE user_preferences (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    selected_countries TEXT[] NOT NULL DEFAULT ARRAY['CZ', 'SK', 'AT', 'PL', 'DE', 'LT', 'LV', 'EE'], -- ISO 3166-1 alpha-2 country codes
+    -- ISO 3166-1 alpha-2 codes. Mirrors SUPPORTED_COUNTRIES in src/lib/constants.ts
+    -- (same order); getUserPreferences() always supplies the list explicitly, so
+    -- this default only applies to rows inserted directly via SQL.
+    selected_countries TEXT[] NOT NULL DEFAULT ARRAY[
+        'AT', 'BE', 'CZ', 'DK', 'EE', 'ES', 'FI', 'FR', 'DE', 'IT',
+        'LV', 'LT', 'LU', 'NL', 'NO', 'PL', 'SE', 'SK', 'SI', 'CH'
+    ],
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

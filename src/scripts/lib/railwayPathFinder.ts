@@ -1110,6 +1110,12 @@ export class RailwayPathFinder {
   private parseAndStoreParts(rows: { id: string | number; geometry_json: string }[]): void {
     for (const row of rows) {
       const id = String(row.id);
+
+      // findPathFromCoordinates loads around the start and the end coordinate
+      // separately, so overlapping buffers hand us the same part twice. Skipping
+      // it here keeps coordToPartIds free of duplicate ids.
+      if (this.parts.has(id)) continue;
+
       const geom = JSON.parse(row.geometry_json);
 
       if (geom.type === "LineString" && geom.coordinates.length >= 2) {

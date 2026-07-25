@@ -1,5 +1,5 @@
 import type * as maplibregl from "maplibre-gl";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   createRailwayRoutesClickLayer,
   createRailwayRoutesHeritageLayer,
@@ -81,7 +81,8 @@ export function useMapTileRefresh({
     m.addLayer(createRailwayRoutesClickLayer(clickBufferLayerConfig), "stations");
   }, [cacheBuster]);
 
-  const refreshTiles = () => setCacheBuster(Date.now());
+  // Stable identity: consumers list it in effect/callback dependency arrays.
+  const refreshTiles = useCallback(() => setCacheBuster(Date.now()), []);
 
   return { cacheBuster, refreshTiles };
 }

@@ -13,6 +13,51 @@ export type TripWithStats = Trip & {
   end_date: string | null;
 };
 
+/**
+ * Trip stats SELECT, shared by getAllTrips and getJourneysAndTrips.
+ *
+ * Journey and route stats are aggregated in separate subqueries rather than by
+ * joining user_journeys × user_logged_parts directly: that join fans out (one
+ * row per logged part per journey), which double-counts a route logged in two
+ * journeys of the same trip. Both counts and the distance are therefore taken
+ * over DISTINCT (trip_id, track_id) — a route ridden on several days of the
+ * same trip counts once.
+ *
+ * `$1` must be the user id; callers may append further predicates on `ut`.
+ */
+const TRIP_STATS_SELECT = `
+  SELECT
+    ut.*,
+    COALESCE(j.journey_count, 0) AS journey_count,
+    COALESCE(r.route_count, 0) AS route_count,
+    COALESCE(r.total_distance, 0) AS total_distance,
+    j.start_date,
+    j.end_date
+  FROM user_trips ut
+  LEFT JOIN (
+    SELECT uj.trip_id,
+           COUNT(*)::int AS journey_count,
+           MIN(uj.date)::text AS start_date,
+           MAX(uj.date)::text AS end_date
+    FROM user_journeys uj
+    WHERE uj.user_id = $1 AND uj.trip_id IS NOT NULL
+    GROUP BY uj.trip_id
+  ) j ON j.trip_id = ut.id
+  LEFT JOIN (
+    SELECT tr.trip_id,
+           COUNT(*)::int AS route_count,
+           SUM(rr.length_km) AS total_distance
+    FROM (
+      SELECT DISTINCT uj.trip_id, ulp.track_id
+      FROM user_journeys uj
+      JOIN user_logged_parts ulp ON ulp.journey_id = uj.id
+      WHERE uj.user_id = $1 AND uj.trip_id IS NOT NULL AND ulp.track_id IS NOT NULL
+    ) tr
+    JOIN railway_routes rr ON rr.track_id = tr.track_id
+    GROUP BY tr.trip_id
+  ) r ON r.trip_id = ut.id
+`;
+
 // Journey with route stats (used in trip detail view)
 export type JourneyInTrip = Journey & {
   route_count: number;
@@ -33,20 +78,9 @@ export async function getAllTrips(): Promise<{
     }
 
     const result = await pool.query<TripWithStats>(
-      `SELECT
-        ut.*,
-        COUNT(DISTINCT uj.id)::int as journey_count,
-        COUNT(DISTINCT ulp.id)::int as route_count,
-        COALESCE(SUM(DISTINCT CASE WHEN rr.track_id IS NOT NULL THEN rr.length_km ELSE 0 END), 0) as total_distance,
-        MIN(uj.date)::text as start_date,
-        MAX(uj.date)::text as end_date
-      FROM user_trips ut
-      LEFT JOIN user_journeys uj ON ut.id = uj.trip_id AND uj.user_id = $1
-      LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
-      LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
-      WHERE ut.user_id = $1
-      GROUP BY ut.id
-      ORDER BY MAX(uj.date) DESC NULLS LAST, ut.created_at DESC`,
+      `${TRIP_STATS_SELECT}
+       WHERE ut.user_id = $1
+       ORDER BY j.end_date DESC NULLS LAST, ut.created_at DESC`,
       [user.id],
     );
 
@@ -361,19 +395,8 @@ export async function getJourneysAndTrips(
     const tripsById = new Map<number, TripWithStats>();
     if (tripIds.length > 0) {
       const tripsResult = await pool.query<TripWithStats>(
-        `SELECT
-          ut.*,
-          COUNT(DISTINCT uj.id)::int as journey_count,
-          COUNT(DISTINCT ulp.id)::int as route_count,
-          COALESCE(SUM(DISTINCT CASE WHEN rr.track_id IS NOT NULL THEN rr.length_km ELSE 0 END), 0) as total_distance,
-          MIN(uj.date)::text as start_date,
-          MAX(uj.date)::text as end_date
-        FROM user_trips ut
-        LEFT JOIN user_journeys uj ON ut.id = uj.trip_id AND uj.user_id = $1
-        LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
-        LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
-        WHERE ut.user_id = $1 AND ut.id = ANY($2::int[])
-        GROUP BY ut.id`,
+        `${TRIP_STATS_SELECT}
+         WHERE ut.user_id = $1 AND ut.id = ANY($2::int[])`,
         [user.id, tripIds],
       );
       tripsResult.rows.forEach((t) => {

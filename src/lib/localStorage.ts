@@ -28,7 +28,10 @@ const JOURNEYS_KEY = "railway_journeys";
 const LOGGED_PARTS_KEY = "railway_logged_parts";
 const PREFS_KEY = "railway_preferences";
 const MAX_JOURNEYS = 5;
-const DEFAULT_COUNTRIES = SUPPORTED_COUNTRIES.map((country) => country.code);
+// Returns a fresh array each call: getPreferences hands its result to callers
+// that put it in React state, and a shared mutable module-level array would let
+// one of them corrupt the defaults for everyone else.
+const defaultCountries = (): string[] => SUPPORTED_COUNTRIES.map((country) => country.code);
 
 // ===== Journey Operations =====
 
@@ -371,17 +374,17 @@ export function clearLoggedParts(): void {
  * Get country preferences from localStorage
  */
 export function getPreferences(): string[] {
-  if (typeof window === "undefined") return DEFAULT_COUNTRIES;
+  if (typeof window === "undefined") return defaultCountries();
 
   try {
     const data = localStorage.getItem(PREFS_KEY);
-    if (!data) return DEFAULT_COUNTRIES;
+    if (!data) return defaultCountries();
 
     const parsed: LocalPreferencesData = JSON.parse(data);
-    return parsed.selected_countries || DEFAULT_COUNTRIES;
+    return parsed.selected_countries || defaultCountries();
   } catch (error) {
     console.error("Error reading preferences from localStorage:", error);
-    return DEFAULT_COUNTRIES;
+    return defaultCountries();
   }
 }
 

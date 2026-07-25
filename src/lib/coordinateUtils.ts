@@ -81,21 +81,26 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
     const lastCoordInChain = mergedChain[mergedChain.length - 1];
     const lastCoordKey = coordinateToKey(lastCoordInChain);
 
-    // Find the next sublist that connects to the current chain
-    const nextIndex = remainingSublists.findIndex((sublist) =>
-      sublist.some((coord) => coordinateToKey(coord) === lastCoordKey),
+    // Find the next sublist that connects to the current chain. Only the
+    // sublists' own endpoints count as connections — that is how the pathfinder
+    // graph is built (parts are adjacent when they share a first/last
+    // coordinate). Matching a coordinate in the *middle* of a sublist would
+    // pass the check but then splice in a segment that doesn't start at the
+    // chain's tail, silently producing a geometry with a jump in it.
+    const nextIndex = remainingSublists.findIndex(
+      (sublist) =>
+        coordinateToKey(sublist[0]) === lastCoordKey ||
+        coordinateToKey(sublist[sublist.length - 1]) === lastCoordKey,
     );
 
     if (nextIndex === -1) {
       throw new Error("Chain is broken; no connecting sublist found.");
     }
 
-    // Extract the next sublist and reverse it if necessary
+    // Orient the next sublist so its connecting endpoint comes first
     const nextSublist = [...remainingSublists[nextIndex]];
-    const overlapIndex = nextSublist.findIndex((coord) => coordinateToKey(coord) === lastCoordKey);
-
-    if (overlapIndex !== 0) {
-      nextSublist.reverse(); // Reverse if the overlap is not at the start
+    if (coordinateToKey(nextSublist[0]) !== lastCoordKey) {
+      nextSublist.reverse();
     }
 
     // Add the non-overlapping part of the sublist to the chain

@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repo.
 
 ## Overview
 
-Unified Next.js app for OSM railway data: fetches, processes, and visualizes railway data (Czechia, Slovakia, Austria, Poland, Germany, Baltics). Single `package.json`, single `.env`, one container. Data processing scripts live alongside the web app under `src/`.
+Unified Next.js app for OSM railway data: fetches, processes, and visualizes railway data for 20 European countries (see `SUPPORTED_COUNTRIES` in `src/lib/constants.ts`). Single `package.json`, single `.env`, one container. Data processing scripts live alongside the web app under `src/`.
 
 ## Core Commands
 
@@ -17,8 +17,6 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 - `npm run verifyRouteData` — recalculate all routes, mark invalid ones.
 - `npm run applyVectorTiles` — re-apply `database/init/02-vector-tiles.sql`.
 - `npm run markAllRoutesInvalid` — flag all routes for recheck (use `verifyRouteData` after). **Reference example for migration scripts.**
-- `npm run migrateNotesSourceAndInternal` — adds `admin_notes.source`, widens the `note_type` CHECK to include `UsageInternal`, and reclassifies existing `Usage` notes → `UsageInternal` (hides them from the public map pending manual review). Idempotent. Re-run `applyVectorTiles` + restart Martin to pick up `public_notes_tile`.
-- `npm run dropTrackNumber` — drops the `railway_routes.track_number` column (the old "Local route number(s)" field, removed as useless — line numbering is inconsistent across countries). Idempotent (`IF EXISTS`). Re-run `applyVectorTiles` + restart Martin afterward.
 - `npm run fixSequences` — resync all SERIAL id sequences with table data. Fixes "duplicate key violates …_pkey" on inserts after rows were loaded with explicit ids (old dumps) without bumping the sequence. `importRouteData` now does this automatically; run manually if needed.
 - `npm run listStations` — list unique station names (debug).
 - `npm run exportRouteData` / `npm run importRouteData <file>` — pg_dump/psql via `docker exec`; covers `railway_routes`, `user_trips`, `user_journeys`, `user_logged_parts` (user_id=1), `admin_notes`. Output to `data/railway_data_YYYY-MM-DD.sql`.
@@ -51,12 +49,14 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **user_trips** — id, user_id, name (req), description, timestamps. Groups journeys.
 - **user_journeys** — id, user_id, name (req), description, date (req), `trip_id` FK ON DELETE SET NULL, timestamps.
 - **user_logged_parts** — id, user_id, journey_id, `track_id` FK ON DELETE CASCADE, `partial` BOOL, created_at. UNIQUE per (journey_id, track_id).
-- **user_preferences** — `selected_countries` TEXT[] (defaults: CZ, SK, AT, PL, DE, LT, LV, EE).
+- **user_preferences** — `selected_countries` TEXT[]. Defaults to all of `SUPPORTED_COUNTRIES` (20 codes); `getUserPreferences()` always writes the list explicitly, so the SQL column DEFAULT only matters for rows inserted directly via SQL.
 - **admin_notes** — id, coordinate POINT, text, `note_type` ('Usage'|'UsageInternal'|'Works'|'Todo', nullable for legacy), `source` (optional external link), timestamps. Only `note_type='Usage'` notes are public (shown on the user map); `UsageInternal` is an admin-only draft promoted to `Usage` to publish. `noteTypeOptions`/`isPublicNoteType` in `constants.ts`.
 
 ### Key architectural decisions
 
-- **Coordinate-based routing.** Routes are defined by exact start/end POINTs (click positions on railway parts). Pathfinding (`RailwayPathFinder`, weighted Dijkstra) finds which part contains each coordinate (50m tolerance), truncates edge parts to the click point, and stitches via `mergeLinearChain`. Recalculation after OSM updates uses the stored coordinates. Cost multipliers: highspeed=0.5x, main=1.0x, branch=2.0x.
+- **Coordinate-based routing.** Routes are defined by exact start/end POINTs (click positions on railway parts). Pathfinding (`RailwayPathFinder`) finds which parts contain each coordinate (1m tolerance — parts are matched against the exact stored click point), truncates edge parts to the click point, and stitches via `mergeLinearChain`. The primary search is BFS by hop count; a distance-weighted search is used only when the shortest path backtracks and a non-backtracking alternative is sought. Recalculation after OSM updates uses the stored coordinates.
+
+  `mergeLinearChain` joins sublists **only at their first/last coordinates**, matching how `coordToPartIds` builds adjacency. Two OSM ways can share a node mid-way, and accepting such a match would splice in a segment that doesn't start at the chain's tail — silently producing a geometry with a jump. Callers catch the resulting "Chain is broken" and skip that part combination.
 - **Route invalidation.** Routes that can't recalculate (no path, off-network, or >0.1km AND >1% length mismatch) get `is_valid=false` and an `error_message`. Shown in grey on admin map; admin "Edit Geometry" re-picks coordinates.
 - **Auto line classification.** On route create/edit, length-weighted majority of intersecting railway_parts: >50% highspeed→'highspeed', >50% main→'main', else 'branch'. Admin can override.
 - **Country detection.** `@rapideditor/country-coder` on first/last coordinate fills `start_country`/`end_country`.
@@ -68,6 +68,8 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 ### Map styling
 
 `src/lib/map/style.ts` is the **single source of truth** for colors/widths/opacities (`COLORS`, `WIDTHS`, `CIRCLES`, `OPACITIES`). Route colors come from visit status × line_class (green/orange/red, darker for highspeed). Width is a single z4→z7 zoom interpolate; all line classes visible at all zooms, just thinner when zoomed out. Scenic routes get an amber outline (its own layer because MapLibre forbids wrapping a zoom-interpolate). An invisible wide `railway_routes_click` layer sits over the visible line for touch hit areas. Hover popups use badge formatting from `utils/tooltipFormatting.ts`.
+
+**Popups are raw HTML strings passed to MapLibre's `setHTML`, so nothing is escaped for you.** Every interpolated value must go through `escapeHtml()`, and every URL through `safeHref()` (both in `utils/tooltipFormatting.ts`); `safeHref` returns `""` for anything that isn't `http(s)`, which also guards the `window.open` double-click handlers. This is not just about admin-authored text — **station names come straight from OSM**, i.e. from a third party who can edit them.
 
 Selection/highlight layers:
 - Route Logger selection: orange `#ff6b35` overlay (same as admin selected-route style).
@@ -98,10 +100,10 @@ Selection/highlight layers:
 - `mapState.ts` — save/load map position.
 - **Hooks**: `useMapLibre`, `useRouteEditor`, `useStationSearch`, `useRouteLength`, `useAdminLayerVisibility`, `useAdminMapOverlays`, `useAdminNotesPopup`, `useMapTileRefresh`, `useRouteHighlighting` (takes `kind: 'planner' | 'view'`), `useLayerFilters`.
 - **Interactions**: `userMapInteractions.ts`, `adminMapInteractions.ts`.
-- **Utils**: `userRouteStyling.ts` (`getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression`, `getUserRouteScenicOutlineWidthExpression`, `getAdminRouteWidthExpression`), `tooltipFormatting.ts`, `distance.ts`.
+- **Utils**: `userRouteStyling.ts` (`getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression`, `getUserRouteScenicOutlineWidthExpression`, `getAdminRouteWidthExpression`), `tooltipFormatting.ts` (badges + `escapeHtml`/`safeHref`), `distance.ts`.
 
 ### Scripts (`src/scripts/`)
-- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `migrateNotesSourceAndInternal.ts` (admin_notes source + UsageInternal migration), `dropTrackNumber.ts` (drops `railway_routes.track_number`), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `exportRoutes.ts`, `importRoutes.ts`.
+- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `exportRoutes.ts`, `importRoutes.ts`.
 - **Shared**: `lib/loadRailwayData.ts`, `lib/railwayPathFinder.ts` (admin route creation + recalc).
 
 ### Database (`database/init/`)
@@ -122,8 +124,10 @@ Click routes on map to add to selection; click stations to fill Journey Planner 
 ### My Trips / My Journeys (auth)
 `JourneysAndTripsTab` — paginated (10/page, server-side via `getJourneysAndTrips(page, pageSize, search)`), debounced search (300ms). Top-level rows are either a trip (with nested journeys) or a standalone journey. Sorted by effective date desc (trip = MAX(journey.date)). Single-open coordination: one top-level card at a time, plus one nested journey edit. Map highlights: open trip shows all its journeys' routes; open journey shows only its routes.
 
+Trip stats (`route_count`, `total_distance`) come from the shared `TRIP_STATS_SELECT` in `tripActions.ts`, used by both `getAllTrips` and `getJourneysAndTrips`. Journey and route stats are aggregated in **separate subqueries**: joining `user_journeys × user_logged_parts` directly fans out, so a route ridden on two days of one trip would be double-counted. Both the count and the distance are taken over `DISTINCT (trip_id, track_id)` — a route counts once per trip, so "N routes · X km" always refer to the same set.
+
 ### Country Settings & Stats
-8 countries (CZ/SK/AT/PL/DE/LT/LV/EE) with flag emojis (Unicode regional indicators). Select All / None. Per-country stats via `getProgressByCountry()` (matches when both endpoints in country). Persisted in `user_preferences`. Filter applies to map + stats; **admin map ignores it**.
+All 20 `SUPPORTED_COUNTRIES` with flag emojis (Unicode regional indicators). Select All / None. Per-country stats via `getProgressByCountry()` (matches when both endpoints in country) — one `GROUPING SETS` query covering every country plus the grand total, not a query per country. Persisted in `user_preferences`. Filter applies to map + stats; **admin map ignores it**.
 
 ### Admin
 Click railway part → capture exact coordinate for start/end. Right-click anywhere → create note; right-click existing note → edit/delete. Note popup: type (req), text, optional source link, save (Ctrl+Enter), delete, close (Esc). Notes are colored by type on the admin map (`Usage`=blue, `UsageInternal`=light blue, `Works`=orange, `Todo`=purple); `AdminNotesTab` filters by type and lets you switch a note's type (= publish/unpublish). Only `Usage` notes appear on the user map (hover popup shows text + source link). Invalid routes in grey with banner; "Edit Route Geometry" re-picks coordinates with same pathfinding.
