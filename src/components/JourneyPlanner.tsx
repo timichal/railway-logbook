@@ -5,6 +5,7 @@ import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
 import { useToast } from "@/lib/toast";
 import type { Station } from "@/lib/types";
 import { searchStations } from "@/lib/userActions";
+import StationSearchInput from "./StationSearchInput";
 
 interface RouteNode {
   track_id: number;
@@ -367,64 +368,37 @@ export default function JourneyPlanner({
       </div>
 
       {/* From Station */}
-      <div>
-        <label htmlFor="planner-from-station" className="block text-xs font-medium mb-1">
-          From Station
-        </label>
-        <div className="relative">
-          <input
-            id="planner-from-station"
-            type="text"
-            value={fromSearchQuery}
-            onChange={(e) => handleSearchChange("from", e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              setActiveSearch("from");
-              if (fromSearchQuery.length >= 2) performSearch(fromSearchQuery);
-            }}
-            onBlur={() =>
-              setTimeout(() => {
-                setActiveSearch(null);
-                setSearchResults([]);
-                setSelectedIndex(-1);
-              }, 200)
-            }
-            placeholder="Search from station..."
-            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              fromStation ? "border-blue-300 bg-blue-50" : "border-gray-300"
-            }`}
-          />
-          {fromStation && (
-            <button
-              type="button"
-              onClick={() => {
-                setFromStation(null);
-                setFromSearchQuery("");
-              }}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-            >
-              ×
-            </button>
-          )}
-          {activeSearch === "from" && searchResults.length > 0 && (
-            <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
-              {searchResults.map((station, index) => (
-                <button
-                  type="button"
-                  key={station.id}
-                  onClick={() => handleStationSelect(station)}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                    selectedIndex === index ? "bg-blue-50" : ""
-                  }`}
-                >
-                  {station.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <StationSearchInput
+        id="planner-from-station"
+        label="From Station"
+        value={fromSearchQuery}
+        placeholder="Search from station..."
+        isSelected={!!fromStation}
+        selectedClassName="border-blue-300 bg-blue-50"
+        showClear={!!fromStation}
+        showResults={activeSearch === "from"}
+        searchResults={searchResults}
+        selectedIndex={selectedIndex}
+        onChange={(value) => handleSearchChange("from", value)}
+        onKeyDown={handleKeyDown}
+        onFocus={() => {
+          setActiveSearch("from");
+          if (fromSearchQuery.length >= 2) performSearch(fromSearchQuery);
+        }}
+        onBlur={() =>
+          setTimeout(() => {
+            setActiveSearch(null);
+            setSearchResults([]);
+            setSelectedIndex(-1);
+          }, 200)
+        }
+        onSelectResult={handleStationSelect}
+        onHoverResult={setSelectedIndex}
+        onClear={() => {
+          setFromStation(null);
+          setFromSearchQuery("");
+        }}
+      />
 
       {/* Via Stations */}
       {viaStations.map((station, viaIndex) => (
@@ -444,54 +418,34 @@ export default function JourneyPlanner({
           >
             ☰
           </div>
-          <div className="relative flex-1">
-            <input
-              type="text"
-              value={viaSearchQueries[viaIndex] || ""}
-              onChange={(e) => handleSearchChange(viaIndex, e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={() => {
-                setActiveSearch(viaIndex);
-                if ((viaSearchQueries[viaIndex] || "").length >= 2)
-                  performSearch(viaSearchQueries[viaIndex] || "");
-              }}
-              onBlur={() =>
-                setTimeout(() => {
-                  setActiveSearch(null);
-                  setSearchResults([]);
-                  setSelectedIndex(-1);
-                }, 200)
-              }
-              placeholder={`Search via station ${viaIndex + 1}...`}
-              className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                station ? "border-green-300 bg-green-50" : "border-gray-300"
-              }`}
-            />
-            <button
-              type="button"
-              onClick={() => removeViaStation(viaIndex)}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-            >
-              ×
-            </button>
-            {activeSearch === viaIndex && searchResults.length > 0 && (
-              <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
-                {searchResults.map((searchStation, index) => (
-                  <button
-                    type="button"
-                    key={searchStation.id}
-                    onClick={() => handleStationSelect(searchStation)}
-                    onMouseEnter={() => setSelectedIndex(index)}
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                      selectedIndex === index ? "bg-blue-50" : ""
-                    }`}
-                  >
-                    {searchStation.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <StationSearchInput
+            containerClassName="flex-1"
+            value={viaSearchQueries[viaIndex] || ""}
+            placeholder={`Search via station ${viaIndex + 1}...`}
+            isSelected={!!station}
+            selectedClassName="border-green-300 bg-green-50"
+            showClear={true}
+            showResults={activeSearch === viaIndex}
+            searchResults={searchResults}
+            selectedIndex={selectedIndex}
+            onChange={(value) => handleSearchChange(viaIndex, value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => {
+              setActiveSearch(viaIndex);
+              if ((viaSearchQueries[viaIndex] || "").length >= 2)
+                performSearch(viaSearchQueries[viaIndex] || "");
+            }}
+            onBlur={() =>
+              setTimeout(() => {
+                setActiveSearch(null);
+                setSearchResults([]);
+                setSelectedIndex(-1);
+              }, 200)
+            }
+            onSelectResult={handleStationSelect}
+            onHoverResult={setSelectedIndex}
+            onClear={() => removeViaStation(viaIndex)}
+          />
         </div>
       ))}
 
@@ -505,64 +459,37 @@ export default function JourneyPlanner({
       </button>
 
       {/* To Station */}
-      <div>
-        <label htmlFor="planner-to-station" className="block text-xs font-medium mb-1">
-          To Station
-        </label>
-        <div className="relative">
-          <input
-            id="planner-to-station"
-            type="text"
-            value={toSearchQuery}
-            onChange={(e) => handleSearchChange("to", e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              setActiveSearch("to");
-              if (toSearchQuery.length >= 2) performSearch(toSearchQuery);
-            }}
-            onBlur={() =>
-              setTimeout(() => {
-                setActiveSearch(null);
-                setSearchResults([]);
-                setSelectedIndex(-1);
-              }, 200)
-            }
-            placeholder="Search to station..."
-            className={`w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              toStation ? "border-blue-300 bg-blue-50" : "border-gray-300"
-            }`}
-          />
-          {toStation && (
-            <button
-              type="button"
-              onClick={() => {
-                setToStation(null);
-                setToSearchQuery("");
-              }}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-            >
-              ×
-            </button>
-          )}
-          {activeSearch === "to" && searchResults.length > 0 && (
-            <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20">
-              {searchResults.map((station, index) => (
-                <button
-                  type="button"
-                  key={station.id}
-                  onClick={() => handleStationSelect(station)}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                    selectedIndex === index ? "bg-blue-50" : ""
-                  }`}
-                >
-                  {station.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <StationSearchInput
+        id="planner-to-station"
+        label="To Station"
+        value={toSearchQuery}
+        placeholder="Search to station..."
+        isSelected={!!toStation}
+        selectedClassName="border-blue-300 bg-blue-50"
+        showClear={!!toStation}
+        showResults={activeSearch === "to"}
+        searchResults={searchResults}
+        selectedIndex={selectedIndex}
+        onChange={(value) => handleSearchChange("to", value)}
+        onKeyDown={handleKeyDown}
+        onFocus={() => {
+          setActiveSearch("to");
+          if (toSearchQuery.length >= 2) performSearch(toSearchQuery);
+        }}
+        onBlur={() =>
+          setTimeout(() => {
+            setActiveSearch(null);
+            setSearchResults([]);
+            setSelectedIndex(-1);
+          }, 200)
+        }
+        onSelectResult={handleStationSelect}
+        onHoverResult={setSelectedIndex}
+        onClear={() => {
+          setToStation(null);
+          setToSearchQuery("");
+        }}
+      />
 
       {/* Find Path Button */}
       <button

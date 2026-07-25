@@ -1,7 +1,12 @@
 "use server";
 
 import pool from "./db";
-import { calculateBearing } from "./geoUtils";
+import {
+  BACKTRACKING_THRESHOLD_DEGREES,
+  calculateBearing,
+  haversineDistance,
+  normalizeBearingDifference,
+} from "./geoUtils";
 
 interface RouteNode {
   track_id: number;
@@ -57,16 +62,7 @@ function coordsNear(a: [number, number], b: [number, number], toleranceMeters: n
   // Quick reject (~5km at mid-latitudes)
   if (Math.abs(a[1] - b[1]) > 0.05 || Math.abs(a[0] - b[0]) > 0.05) return false;
 
-  const R = 6371000;
-  const dLat = ((b[1] - a[1]) * Math.PI) / 180;
-  const dLon = ((b[0] - a[0]) * Math.PI) / 180;
-  const lat1 = (a[1] * Math.PI) / 180;
-  const lat2 = (b[1] * Math.PI) / 180;
-  const sinDLat = Math.sin(dLat / 2);
-  const sinDLon = Math.sin(dLon / 2);
-  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
-  const d = 2 * R * Math.asin(Math.sqrt(h));
-  return d <= toleranceMeters;
+  return haversineDistance(a, b) <= toleranceMeters;
 }
 
 function getEndpointCoord(info: RouteBearingInfo, side: EndpointSide): [number, number] {
@@ -329,10 +325,7 @@ function isBacktrackingTransition(infoA: RouteBearingInfo, infoB: RouteBearingIn
   const exitBear = getExitBearing(infoA, connection.sideA);
   const entryBear = getEntryBearing(infoB, connection.sideB);
 
-  const diff = Math.abs(entryBear - exitBear);
-  const normalizedDiff = diff > 180 ? 360 - diff : diff;
-
-  return normalizedDiff > 140;
+  return normalizeBearingDifference(entryBear, exitBear) > BACKTRACKING_THRESHOLD_DEGREES;
 }
 
 /**

@@ -5,6 +5,15 @@
 export type Coord = [number, number];
 
 /**
+ * Convert a coordinate to a string key rounded to 7 decimal places (~1cm),
+ * so that endpoints originating from the same OSM node match despite tiny
+ * floating-point differences.
+ */
+export function coordinateToKey(coord: Coord): string {
+  return `${coord[0].toFixed(7)},${coord[1].toFixed(7)}`;
+}
+
+/**
  * Merges a list of coordinate sublists into a single linear chain.
  * This algorithm properly orders and connects coordinate arrays from multiple railway parts
  * by finding the starting point and building the chain incrementally.
@@ -13,6 +22,9 @@ export type Coord = [number, number];
  * 1. Find coordinate frequencies to identify potential endpoints (frequency = 1)
  * 2. If no clear endpoint, use the first sublist as starting point
  * 3. Build the chain by finding connecting sublists and adding them in order
+ *
+ * All coordinate comparisons go through {@link coordinateToKey}, so endpoint
+ * detection and chain building agree on what counts as "the same point".
  *
  * @param sublists - Array of coordinate arrays to merge
  * @returns A single merged coordinate array in the correct order
@@ -28,16 +40,16 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
   // Step 1: Create a map of coordinate frequencies
   const coordCount = new Map<string, number>();
   remainingSublists.forEach((sublist) => {
-    const firstKey = `${sublist[0][0]},${sublist[0][1]}`;
-    const lastKey = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
+    const firstKey = coordinateToKey(sublist[0]);
+    const lastKey = coordinateToKey(sublist[sublist.length - 1]);
     coordCount.set(firstKey, (coordCount.get(firstKey) || 0) + 1);
     coordCount.set(lastKey, (coordCount.get(lastKey) || 0) + 1);
   });
 
   // Step 2: Find the starting sublist (prefer one with an endpoint that appears only once)
   let startingSublistIndex = remainingSublists.findIndex((sublist) => {
-    const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
-    const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
+    const firstCoord = coordinateToKey(sublist[0]);
+    const lastCoord = coordinateToKey(sublist[sublist.length - 1]);
     return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
   });
 
@@ -54,8 +66,8 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
   remainingSublists.splice(startingSublistIndex, 1);
 
   // Step 2.1: Orient the starting sublist correctly if we have a clear endpoint
-  const firstCoord = `${mergedChain[0][0]},${mergedChain[0][1]}`;
-  const lastCoord = `${mergedChain[mergedChain.length - 1][0]},${mergedChain[mergedChain.length - 1][1]}`;
+  const firstCoord = coordinateToKey(mergedChain[0]);
+  const lastCoord = coordinateToKey(mergedChain[mergedChain.length - 1]);
 
   // If the last coordinate appears only once, it should be at the end
   // If the first coordinate appears only once, it should be at the start (don't reverse)
@@ -67,10 +79,11 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
   // Step 3: Build the chain incrementally
   while (remainingSublists.length > 0) {
     const lastCoordInChain = mergedChain[mergedChain.length - 1];
+    const lastCoordKey = coordinateToKey(lastCoordInChain);
 
     // Find the next sublist that connects to the current chain
     const nextIndex = remainingSublists.findIndex((sublist) =>
-      sublist.some(([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1]),
+      sublist.some((coord) => coordinateToKey(coord) === lastCoordKey),
     );
 
     if (nextIndex === -1) {
@@ -79,9 +92,7 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
 
     // Extract the next sublist and reverse it if necessary
     const nextSublist = [...remainingSublists[nextIndex]];
-    const overlapIndex = nextSublist.findIndex(
-      ([x, y]) => x === lastCoordInChain[0] && y === lastCoordInChain[1],
-    );
+    const overlapIndex = nextSublist.findIndex((coord) => coordinateToKey(coord) === lastCoordKey);
 
     if (overlapIndex !== 0) {
       nextSublist.reverse(); // Reverse if the overlap is not at the start

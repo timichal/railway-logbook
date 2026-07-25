@@ -1,5 +1,11 @@
 import type { Client, Pool, PoolClient } from "pg";
-import { calculateBearing } from "../../lib/geoUtils";
+import { coordinateToKey, mergeLinearChain } from "../../lib/coordinateUtils";
+import {
+  BACKTRACKING_THRESHOLD_DEGREES,
+  calculateBearing,
+  haversineDistance,
+  normalizeBearingDifference,
+} from "../../lib/geoUtils";
 import type { PathResult } from "../../lib/types";
 
 export type { PathResult };
@@ -399,7 +405,7 @@ export class RailwayPathFinder {
 
         let segmentDist = 0;
         for (let i = 0; i < connectedPart.coordinates.length - 1; i++) {
-          segmentDist += this.haversineDistance(
+          segmentDist += haversineDistance(
             connectedPart.coordinates[i],
             connectedPart.coordinates[i + 1],
           );
@@ -481,13 +487,12 @@ export class RailwayPathFinder {
 
     if (!exitSegment || !entrySegment) return false;
 
-    const exitBearing = calculateBearing(exitSegment[0], exitSegment[1]);
-    const entryBearing = calculateBearing(entrySegment[0], entrySegment[1]);
+    const normalizedDiff = normalizeBearingDifference(
+      calculateBearing(exitSegment[0], exitSegment[1]),
+      calculateBearing(entrySegment[0], entrySegment[1]),
+    );
 
-    const diff = Math.abs(entryBearing - exitBearing);
-    const normalizedDiff = diff > 180 ? 360 - diff : diff;
-
-    return normalizedDiff > 140;
+    return normalizedDiff > BACKTRACKING_THRESHOLD_DEGREES;
   }
 
   /**
@@ -516,15 +521,14 @@ export class RailwayPathFinder {
 
       if (!exitSegment || !entrySegment) continue;
 
-      const exitBearing = calculateBearing(exitSegment[0], exitSegment[1]);
-      const entryBearing = calculateBearing(entrySegment[0], entrySegment[1]);
+      const normalizedDiff = normalizeBearingDifference(
+        calculateBearing(exitSegment[0], exitSegment[1]),
+        calculateBearing(entrySegment[0], entrySegment[1]),
+      );
 
-      const diff = Math.abs(entryBearing - exitBearing);
-      const normalizedDiff = diff > 180 ? 360 - diff : diff;
-
-      if (normalizedDiff > 140) {
+      if (normalizedDiff > BACKTRACKING_THRESHOLD_DEGREES) {
         console.log(
-          `    ⚠️  BACKTRACKING DETECTED at ${currentPartId}→${nextPartId}: ${normalizedDiff.toFixed(1)}° > 140°`,
+          `    ⚠️  BACKTRACKING DETECTED at ${currentPartId}→${nextPartId}: ${normalizedDiff.toFixed(1)}° > ${BACKTRACKING_THRESHOLD_DEGREES}°`,
         );
         return true;
       }
@@ -578,15 +582,15 @@ export class RailwayPathFinder {
     const part = this.parts.get(partId);
     if (!part) return true;
 
-    const startKey = this.coordinateToKey(part.startPoint);
-    const endKey = this.coordinateToKey(part.endPoint);
+    const startKey = coordinateToKey(part.startPoint);
+    const endKey = coordinateToKey(part.endPoint);
 
     // Determine orientation based on next part
     if (nextPartId) {
       const nextPart = this.parts.get(nextPartId);
       if (nextPart) {
-        const nextStartKey = this.coordinateToKey(nextPart.startPoint);
-        const nextEndKey = this.coordinateToKey(nextPart.endPoint);
+        const nextStartKey = coordinateToKey(nextPart.startPoint);
+        const nextEndKey = coordinateToKey(nextPart.endPoint);
 
         // If end connects to next, we're going forward
         if (endKey === nextStartKey || endKey === nextEndKey) {
@@ -601,8 +605,8 @@ export class RailwayPathFinder {
     if (prevPartId) {
       const prevPart = this.parts.get(prevPartId);
       if (prevPart) {
-        const prevStartKey = this.coordinateToKey(prevPart.startPoint);
-        const prevEndKey = this.coordinateToKey(prevPart.endPoint);
+        const prevStartKey = coordinateToKey(prevPart.startPoint);
+        const prevEndKey = coordinateToKey(prevPart.endPoint);
 
         // If start connects to prev, we're going forward
         if (startKey === prevStartKey || startKey === prevEndKey) {
@@ -798,7 +802,7 @@ export class RailwayPathFinder {
       }
     }
 
-    return this.mergeLinearChain(coordinateSublists);
+    return mergeLinearChain(coordinateSublists);
   }
 
   /**
@@ -855,9 +859,9 @@ export class RailwayPathFinder {
     if (!part || !nextPart) return part ? part.coordinates : [];
 
     // Determine which endpoint connects to next part
-    const endKey = this.coordinateToKey(part.endPoint);
-    const nextStartKey = this.coordinateToKey(nextPart.startPoint);
-    const nextEndKey = this.coordinateToKey(nextPart.endPoint);
+    const endKey = coordinateToKey(part.endPoint);
+    const nextStartKey = coordinateToKey(nextPart.startPoint);
+    const nextEndKey = coordinateToKey(nextPart.endPoint);
     const endsConnect = endKey === nextStartKey || endKey === nextEndKey;
 
     const startPoint = this.findNearestPointOnPart(partId, startCoordinate);
@@ -898,9 +902,9 @@ export class RailwayPathFinder {
     if (!part || !prevPart) return part ? part.coordinates : [];
 
     // Determine which endpoint connects to previous part
-    const startKey = this.coordinateToKey(part.startPoint);
-    const prevStartKey = this.coordinateToKey(prevPart.startPoint);
-    const prevEndKey = this.coordinateToKey(prevPart.endPoint);
+    const startKey = coordinateToKey(part.startPoint);
+    const prevStartKey = coordinateToKey(prevPart.startPoint);
+    const prevEndKey = coordinateToKey(prevPart.endPoint);
     const startsConnect = startKey === prevStartKey || startKey === prevEndKey;
 
     const endPoint = this.findNearestPointOnPart(partId, endCoordinate);
@@ -945,109 +949,9 @@ export class RailwayPathFinder {
       }
     }
 
-    const coordinates = this.mergeLinearChain(coordinateSublists);
+    const coordinates = mergeLinearChain(coordinateSublists);
 
     return { partIds, coordinates };
-  }
-
-  /**
-   * Merge coordinate sublists into a single linear chain
-   * Ensures proper orientation and removes duplicate connection points
-   */
-  private mergeLinearChain(sublists: [number, number][][]): [number, number][] {
-    if (sublists.length === 0) return [];
-    if (sublists.length === 1) return sublists[0];
-
-    const remainingSublists = sublists.map((s) => [...s]);
-
-    // Find starting sublist (prefer one with endpoint appearing only once)
-    const coordCount = this.countEndpointFrequencies(remainingSublists);
-    let startingIndex = this.findStartingSublistIndex(remainingSublists, coordCount);
-
-    if (startingIndex === -1) {
-      console.log("[RailwayPathFinder] No clear endpoint found, using first sublist");
-      startingIndex = 0;
-    }
-
-    // Extract and orient starting sublist
-    const mergedChain = [...remainingSublists[startingIndex]];
-    remainingSublists.splice(startingIndex, 1);
-
-    this.orientStartingSublist(mergedChain, coordCount);
-
-    // Build chain incrementally
-    while (remainingSublists.length > 0) {
-      const lastCoord = mergedChain[mergedChain.length - 1];
-
-      const lastCoordKey = this.coordinateToKey(lastCoord);
-      const nextIndex = remainingSublists.findIndex((sublist) =>
-        sublist.some((coord) => this.coordinateToKey(coord) === lastCoordKey),
-      );
-
-      if (nextIndex === -1) {
-        throw new Error("Chain is broken; no connecting sublist found.");
-      }
-
-      const nextSublist = [...remainingSublists[nextIndex]];
-      const overlapIndex = nextSublist.findIndex(
-        (coord) => this.coordinateToKey(coord) === lastCoordKey,
-      );
-
-      if (overlapIndex !== 0) {
-        nextSublist.reverse();
-      }
-
-      mergedChain.push(...nextSublist.slice(1));
-      remainingSublists.splice(nextIndex, 1);
-    }
-
-    return mergedChain;
-  }
-
-  /**
-   * Count how many times each endpoint coordinate appears
-   */
-  private countEndpointFrequencies(sublists: [number, number][][]): Map<string, number> {
-    const coordCount = new Map<string, number>();
-
-    sublists.forEach((sublist) => {
-      const firstKey = `${sublist[0][0]},${sublist[0][1]}`;
-      const lastKey = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
-      coordCount.set(firstKey, (coordCount.get(firstKey) || 0) + 1);
-      coordCount.set(lastKey, (coordCount.get(lastKey) || 0) + 1);
-    });
-
-    return coordCount;
-  }
-
-  /**
-   * Find index of sublist that should start the chain
-   */
-  private findStartingSublistIndex(
-    sublists: [number, number][][],
-    coordCount: Map<string, number>,
-  ): number {
-    return sublists.findIndex((sublist) => {
-      const firstCoord = `${sublist[0][0]},${sublist[0][1]}`;
-      const lastCoord = `${sublist[sublist.length - 1][0]},${sublist[sublist.length - 1][1]}`;
-      return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
-    });
-  }
-
-  /**
-   * Orient starting sublist so endpoint (count=1) is at the end
-   */
-  private orientStartingSublist(
-    mergedChain: [number, number][],
-    coordCount: Map<string, number>,
-  ): void {
-    const firstCoord = `${mergedChain[0][0]},${mergedChain[0][1]}`;
-    const lastCoord = `${mergedChain[mergedChain.length - 1][0]},${mergedChain[mergedChain.length - 1][1]}`;
-
-    // If last coord appears only once and first doesn't, reverse
-    if (coordCount.get(lastCoord) === 1 && coordCount.get(firstCoord) !== 1) {
-      mergedChain.reverse();
-    }
   }
 
   // ============================================================================
@@ -1098,7 +1002,7 @@ export class RailwayPathFinder {
 
     return {
       projectedPoint: [xx, yy],
-      distance: this.haversineDistance(point, [xx, yy]),
+      distance: haversineDistance(point, [xx, yy]),
     };
   }
 
@@ -1114,24 +1018,6 @@ export class RailwayPathFinder {
   }
 
   /**
-   * Calculate geographic distance using Haversine formula
-   */
-  private haversineDistance(coord1: [number, number], coord2: [number, number]): number {
-    const R = 6371000; // Earth's radius in meters
-    const lat1 = (coord1[1] * Math.PI) / 180;
-    const lat2 = (coord2[1] * Math.PI) / 180;
-    const deltaLat = ((coord2[1] - coord1[1]) * Math.PI) / 180;
-    const deltaLon = ((coord2[0] - coord1[0]) * Math.PI) / 180;
-
-    const a =
-      Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c;
-  }
-
-  /**
    * Calculate total distance for a path (by part IDs)
    */
   private calculatePathDistance(partIds: string[]): number {
@@ -1142,7 +1028,7 @@ export class RailwayPathFinder {
       if (!part) continue;
 
       for (let i = 0; i < part.coordinates.length - 1; i++) {
-        totalDistance += this.haversineDistance(part.coordinates[i], part.coordinates[i + 1]);
+        totalDistance += haversineDistance(part.coordinates[i], part.coordinates[i + 1]);
       }
     }
 
@@ -1155,7 +1041,7 @@ export class RailwayPathFinder {
   private calculateCoordinateDistance(coordinates: [number, number][]): number {
     let distance = 0;
     for (let i = 0; i < coordinates.length - 1; i++) {
-      distance += this.haversineDistance(coordinates[i], coordinates[i + 1]);
+      distance += haversineDistance(coordinates[i], coordinates[i + 1]);
     }
     return distance;
   }
@@ -1174,14 +1060,14 @@ export class RailwayPathFinder {
     const connected = new Set<string>();
 
     // Check connections at start coordinate
-    const startKey = this.coordinateToKey(part.startPoint);
+    const startKey = coordinateToKey(part.startPoint);
     const startConnected = this.coordToPartIds.get(startKey) || [];
     startConnected.forEach((id) => {
       if (id !== partId) connected.add(id);
     });
 
     // Check connections at end coordinate
-    const endKey = this.coordinateToKey(part.endPoint);
+    const endKey = coordinateToKey(part.endPoint);
     const endConnected = this.coordToPartIds.get(endKey) || [];
     endConnected.forEach((id) => {
       if (id !== partId) connected.add(id);
@@ -1241,8 +1127,8 @@ export class RailwayPathFinder {
         this.parts.set(id, part);
 
         // Add to coordinate mapping for connection lookups
-        const startKey = this.coordinateToKey(startPoint);
-        const endKey = this.coordinateToKey(endPoint);
+        const startKey = coordinateToKey(startPoint);
+        const endKey = coordinateToKey(endPoint);
 
         if (!this.coordToPartIds.has(startKey)) {
           this.coordToPartIds.set(startKey, []);
@@ -1257,12 +1143,5 @@ export class RailwayPathFinder {
         }
       }
     }
-  }
-
-  /**
-   * Convert coordinate to string key (rounded to 7 decimal places)
-   */
-  private coordinateToKey(coord: [number, number]): string {
-    return `${coord[0].toFixed(7)},${coord[1].toFixed(7)}`;
   }
 }
