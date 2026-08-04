@@ -19,6 +19,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 - `npm run markAllRoutesInvalid` — flag all routes for recheck (use `verifyRouteData` after). **Reference example for migration scripts.**
 - `npm run fixSequences` — resync all SERIAL id sequences with table data. Fixes "duplicate key violates …_pkey" on inserts after rows were loaded with explicit ids (old dumps) without bumping the sequence. `importRouteData` now does this automatically; run manually if needed.
 - `npm run listStations` — list unique station names (debug).
+- `npm run inspectPath -- "<from>" "<to>" ["<via>"...]` — run the Journey Planner pathfinder from the CLI (station names or ids) and print the chain, search time, and the gap left between each consecutive pair of routes (debug).
 - `npm run exportRouteData` / `npm run importRouteData <file>` — pg_dump/psql via `docker exec`; covers `railway_routes`, `user_trips`, `user_journeys`, `user_logged_parts` (user_id=1), `admin_notes`. Output to `data/railway_data_YYYY-MM-DD.sql`.
 
 ### Data transfer (pscp)
@@ -65,6 +66,17 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **Auth.** Email/password + bcrypt + session. Unauthenticated users get localStorage (`localStorage.ts` module functions, imported as `localStore`) via `dataAccess.ts` abstraction; `migrationActions.ts` migrates on login.
 - **Admin = user_id=1.** Every admin server action enforces this check.
 
+### Journey planner pathfinding
+
+`routePathFinder.ts` searches over **whole routes**, not OSM parts: nodes are `(track_id, exit endpoint)` pairs and edges join routes whose endpoints are within `ENDPOINT_TOLERANCE_METERS` (500m). Dijkstra with a binary heap; cost is `length_km × line_class multiplier` (highspeed 0.5, main 1.0, branch 2.0) plus a gap penalty, and the first end route popped wins.
+
+- **State includes the exit endpoint**, so a route is entered at one end and left at the other. Without that, paths teleport from one end of a route to the other.
+- **Entry side = the nearer endpoint.** Taking the first endpoint within tolerance instead makes any route shorter than the tolerance one-way only, which made the sub-kilometre connectors inside junction complexes unusable.
+- **`GAP_PENALTY_PER_KM` (25) charges for the gap left at each connection.** Endpoints are hand-picked click points, so routes that really meet still land some metres apart — but a junction complex packs several distinct endpoints a few hundred metres apart, all inside the tolerance. Untaxed, the search jumps between them and skips the short route that actually covers the gap. Genuine data offsets of a few tens of metres are cheap; a 500m jump costs 12.5 km-equivalent, so it only happens when nothing covers it. `npm run inspectPath` prints these gaps — tens of metres is normal, hundreds means something was skipped.
+- **The whole network is loaded at once** (endpoints only, ~4.7k regular routes) and endpoints are bucketed into a spatial grid for pairing. There is no buffering around the stations; the search used to retry with 50km→1000km buffers, rebuilding the graph each time a segment failed.
+- **The built graph is cached in memory** (`getRouteGraph`), keyed on a `count(*)`/`max(updated_at)` fingerprint of `railway_routes`. Extracting endpoints costs ~450ms because every `ST_PointN` walks the full linestring, so a cache miss is the dominant cost of a search; every route write path bumps `updated_at`, so edits invalidate it.
+- **Station → routes** is one indexed query for all of from/via/to, then progressive tolerance (100m→5km, extended one level up) applied in memory. Never use `ST_DWithin` on a `::geography` cast here — it can't use the geometry index and costs ~860ms per call; go through `geometry_3857` with 1/cos(lat) radius scaling.
+
 ### Map styling
 
 `src/lib/map/style.ts` is the **single source of truth** for colors/widths/opacities (`COLORS`, `WIDTHS`, `CIRCLES`, `OPACITIES`). Route colors come from visit status × line_class (green/orange/red, darker for highspeed). Width is a single z4→z7 zoom interpolate; all line classes visible at all zooms, just thinner when zoomed out. Scenic routes get an amber outline (its own layer because MapLibre forbids wrapping a zoom-interpolate). An invisible wide `railway_routes_click` layer sits over the visible line for touch hit areas. Hover popups use badge formatting from `utils/tooltipFormatting.ts`.
@@ -90,7 +102,7 @@ Selection/highlight layers:
 ### Library (`src/lib/`)
 - **DB/actions**: `db.ts`, `dbConfig.ts`, `userActions.ts`, `userPreferencesActions.ts`, `journeyActions.ts`, `tripActions.ts`, `adminRouteActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts`, `authActions.ts`, `migrationActions.ts`.
 - **Data access**: `dataAccess.ts` (DB vs localStorage abstraction), `localStorage.ts`.
-- **Pathfinding**: `routePathFinder.ts` (user-facing journey planner, station-name-based, progressive 50km→1000km buffer, excludes special routes).
+- **Pathfinding**: `routePathFinder.ts` (user-facing journey planner, excludes non-regular routes). See "Journey planner pathfinding" below.
 - **Utils**: `types.ts`, `constants.ts`, `coordinateUtils.ts` (`mergeLinearChain`, `coordinatesToWKT`), `countryUtils.ts`, `getUntimezonedDateStr.ts`.
 - **Toast**: `toast/` (`useToast`, `ToastContainer`, `ConfirmDialog`).
 
@@ -103,7 +115,7 @@ Selection/highlight layers:
 - **Utils**: `userRouteStyling.ts` (`getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression`, `getUserRouteScenicOutlineWidthExpression`, `getAdminRouteWidthExpression`), `tooltipFormatting.ts` (badges + `escapeHtml`/`safeHref`), `distance.ts`.
 
 ### Scripts (`src/scripts/`)
-- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `exportRoutes.ts`, `importRoutes.ts`.
+- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `inspectPath.ts` (journey-planner debug), `exportRoutes.ts`, `importRoutes.ts`.
 - **Shared**: `lib/loadRailwayData.ts`, `lib/railwayPathFinder.ts` (admin route creation + recalc).
 
 ### Database (`database/init/`)

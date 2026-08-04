@@ -22,6 +22,7 @@
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
     "fixSequences": "tsx src/scripts/fixSequences.ts",
     "listStations": "tsx src/scripts/listStations.ts",
+    "inspectPath": "tsx src/scripts/inspectPath.ts",
     "downloadMapData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.geojson ./data/",
     "downloadRouteData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.sql ./data/",
     "deployMapData": "sh ./osmium-scripts/deploy.sh"
