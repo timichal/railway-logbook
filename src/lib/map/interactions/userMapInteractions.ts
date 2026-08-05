@@ -21,6 +21,16 @@ export function setupUserMapInteractions(
 
   // Click handler for routes — queries all route-related layers (base + click buffer + highlights)
   const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
+    // A station circle sits on top of the very route it belongs to, and this is a
+    // map-wide click while the station handler is layer-scoped, so both fire. When
+    // something is listening for station clicks (the Journey Planner filling a
+    // from/to field), the station wins: picking a station shouldn't also drop its
+    // route into the selection.
+    if (onStationClick && mapInstance.getLayer("stations")) {
+      const stationHit = mapInstance.queryRenderedFeatures(e.point, { layers: ["stations"] });
+      if (stationHit.length > 0) return;
+    }
+
     const routeLayers = ["railway_routes_click", "railway_routes", ...HIGHLIGHT_LAYER_IDS].filter(
       (id) => mapInstance.getLayer(id),
     );
