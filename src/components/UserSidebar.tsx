@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import type { User } from "@/lib/authActions";
 import type { DataAccess } from "@/lib/dataAccess";
-import type { SelectedRoute, Station } from "@/lib/types";
+import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
 import CountriesStatsTab from "./CountriesStatsTab";
 import HowToUseArticle from "./HowToUseArticle";
 import JourneyLogger from "./JourneyLogger";
@@ -11,14 +11,6 @@ import JourneysAndTripsTab from "./JourneysAndTripsTab";
 import LocalJourneyLogTab from "./LocalJourneyLogTab";
 import LocalTripLogger from "./LocalTripLogger";
 import RailwayNotesArticle from "./RailwayNotesArticle";
-
-interface RouteNode {
-  track_id: number;
-  from_station: string;
-  to_station: string;
-  description: string;
-  length_km: number;
-}
 
 export type ActiveTab = "routes" | "journeylog" | "filter" | "howto" | "notes";
 
@@ -29,8 +21,8 @@ interface UserSidebarProps {
   onRemoveRoute: (trackId: number) => void;
   onClearAll: () => void;
   onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
-  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
-  onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
+  onHighlightRoutes?: HighlightRoutesFn;
+  onAddRoutesFromPlanner?: (routes: PlannerRoute[]) => void;
   onRoutesLogged?: () => void;
   selectedCountries: string[];
   onCountryChange: (countries: string[]) => void;

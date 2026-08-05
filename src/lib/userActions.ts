@@ -3,7 +3,7 @@
 import { getUser } from "./authActions";
 import { SUPPORTED_COUNTRIES } from "./constants";
 import { query } from "./db";
-import type { RailwayRoute, Station } from "./types";
+import type { CoveredRange, CoveredStretch, RailwayRoute, Station } from "./types";
 
 export async function searchStations(searchQuery: string): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
@@ -276,4 +276,131 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
       completedKm: round1(overallCompletedKm),
     },
   };
+}
+
+/** Cap on ranges accepted from the client, so a crafted call can't ask for the world. */
+const MAX_COVERED_RANGES = 2000;
+
+/**
+ * Resolve covered fraction ranges into drawable geometry.
+ *
+ * The stored form is fractions along the route (see CoveredRange), so the
+ * geometry is cut on read — which means it follows the route through an OSM
+ * update instead of going stale.
+ */
+async function buildCoveredStretches(ranges: CoveredRange[]): Promise<CoveredStretch[]> {
+  if (ranges.length === 0) return [];
+
+  const result = await query(
+    `
+    SELECT
+      t.track_id,
+      t.covered_start,
+      t.covered_end,
+      rr.line_class,
+      rr.usage_type,
+      rr.start_country,
+      rr.end_country,
+      -- Not simplified: this is drawn directly over the route's own line, and any
+      -- dropped vertex shows up as the overlay visibly cutting corners at zoom.
+      ST_AsGeoJSON(ST_LineSubstring(rr.geometry, t.covered_start, t.covered_end)) AS geojson
+    FROM unnest($1::int[], $2::float8[], $3::float8[]) AS t(track_id, covered_start, covered_end)
+    JOIN railway_routes rr ON rr.track_id = t.track_id
+    WHERE rr.geometry IS NOT NULL
+    `,
+    [
+      ranges.map((r) => r.track_id),
+      ranges.map((r) => r.covered_start),
+      ranges.map((r) => r.covered_end),
+    ],
+  );
+
+  const stretches: CoveredStretch[] = [];
+  for (const row of result.rows) {
+    const parsed = JSON.parse(row.geojson) as { coordinates: [number, number][] };
+    if (!parsed.coordinates || parsed.coordinates.length < 2) continue;
+    stretches.push({
+      track_id: row.track_id,
+      covered_start: Number(row.covered_start),
+      covered_end: Number(row.covered_end),
+      line_class: row.line_class,
+      usage_type: row.usage_type,
+      start_country: row.start_country,
+      end_country: row.end_country,
+      coordinates: parsed.coordinates,
+    });
+  }
+  return stretches;
+}
+
+/** Keep only well-formed, non-degenerate ranges, deduplicated. */
+function normalizeCoveredRanges(ranges: CoveredRange[]): CoveredRange[] {
+  const seen = new Set<string>();
+  const valid: CoveredRange[] = [];
+
+  for (const range of ranges) {
+    const trackId = Number(range?.track_id);
+    const start = Number(range?.covered_start);
+    const end = Number(range?.covered_end);
+    if (!Number.isInteger(trackId)) continue;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    if (start < 0 || end > 1 || start >= end) continue;
+
+    const key = `${trackId}:${start}:${end}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    valid.push({ track_id: trackId, covered_start: start, covered_end: end });
+    if (valid.length >= MAX_COVERED_RANGES) break;
+  }
+
+  return valid;
+}
+
+/**
+ * The stretches the logged-in user has ridden on routes they haven't completed.
+ *
+ * Routes completed in some journey are left out: their line is already drawn in
+ * the visited colour, so an overlay would add nothing. Stretches from different
+ * journeys are returned separately and simply painted over each other — the
+ * union comes out right without computing it.
+ */
+export async function getCoveredStretches(): Promise<CoveredStretch[]> {
+  const user = await getUser();
+  if (!user) return [];
+
+  const result = await query(
+    `
+    SELECT DISTINCT ulp.track_id, ulp.covered_start, ulp.covered_end
+    FROM user_logged_parts ulp
+    WHERE ulp.user_id = $1
+      AND ulp.partial = TRUE
+      AND ulp.covered_start IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM user_logged_parts done
+        WHERE done.user_id = ulp.user_id
+          AND done.track_id = ulp.track_id
+          AND done.partial = FALSE
+      )
+    `,
+    [user.id],
+  );
+
+  return buildCoveredStretches(
+    result.rows.map((row) => ({
+      track_id: row.track_id,
+      covered_start: Number(row.covered_start),
+      covered_end: Number(row.covered_end),
+    })),
+  );
+}
+
+/**
+ * Same as getCoveredStretches, for ranges the caller holds itself — the
+ * localStorage journeys of a user who isn't logged in. Route geometry is public
+ * (it is served as tiles to everyone), so this needs no authentication; the
+ * ranges are validated and capped instead.
+ */
+export async function getCoveredStretchesFor(ranges: CoveredRange[]): Promise<CoveredStretch[]> {
+  return buildCoveredStretches(normalizeCoveredRanges(ranges));
 }

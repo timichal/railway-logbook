@@ -10,7 +10,7 @@ import {
   getUnassignedJourneys,
   updateTrip,
 } from "@/lib/tripActions";
-import type { SelectedRoute } from "@/lib/types";
+import type { HighlightRoutesFn, SelectedRoute } from "@/lib/types";
 import MergedJourneyCard from "./MergedJourneyCard";
 
 interface MergedTripCardProps {
@@ -22,7 +22,7 @@ interface MergedTripCardProps {
   onRequestOpen: () => void;
   onRequestClose: () => void;
   onChanged: () => void;
-  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
+  onHighlightRoutes?: HighlightRoutesFn;
   // Forwarded to nested journey cards
   openNestedJourneyId: number | null;
   onNestedJourneyOpenChange: (journeyId: number | null) => void;

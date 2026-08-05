@@ -16,6 +16,7 @@ import {
   createStationsLayer,
   createStationsSource,
 } from "@/lib/map";
+import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useMapTileRefresh } from "@/lib/map/hooks/useMapTileRefresh";
@@ -32,7 +33,14 @@ import {
   getUserRouteWidthExpression,
 } from "@/lib/map/utils/userRouteStyling";
 import { useToast } from "@/lib/toast";
-import type { SelectedRoute, Station } from "@/lib/types";
+import type {
+  HighlightKind,
+  HighlightRoutesFn,
+  PartialRouteGeometry,
+  PlannerRoute,
+  SelectedRoute,
+  Station,
+} from "@/lib/types";
 import MobileMenuPanel from "./MobileMenuPanel";
 import UserSidebar, { type ActiveTab } from "./UserSidebar";
 
@@ -110,12 +118,21 @@ export default function VectorRailwayMap({
 
   // Highlighted routes state. `kind` controls the highlight color: 'planner'
   // (gold) for pathfinder results, 'view' (orange) for My Trips browsing.
+  // `partialHighlights` carries the covered stretch of any route the highlight
+  // should only cover part of (Journey Planner joining a route mid-way).
   const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
-  const [highlightKind, setHighlightKind] = useState<"planner" | "view">("view");
-  const handleHighlightRoutes = useCallback((ids: number[], kind: "planner" | "view" = "view") => {
-    setHighlightedRoutes(ids);
-    setHighlightKind(kind);
-  }, []);
+  const [highlightKind, setHighlightKind] = useState<HighlightKind>("view");
+  const [partialHighlights, setPartialHighlights] = useState<PartialRouteGeometry[]>([]);
+  // Bumped whenever journeys change, to refetch the ridden-stretch overlay
+  const [coverageVersion, setCoverageVersion] = useState(0);
+  const handleHighlightRoutes = useCallback<HighlightRoutesFn>(
+    (ids, kind = "view", partials = []) => {
+      setHighlightedRoutes(ids);
+      setHighlightKind(kind);
+      setPartialHighlights(partials);
+    },
+    [],
+  );
 
   // Selected routes state
   const [selectedRoutes, setSelectedRoutes] = useState<SelectedRoute[]>([]);
@@ -261,7 +278,17 @@ export default function VectorRailwayMap({
   });
 
   // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)
-  useRouteHighlighting(map, highlightedRoutes, highlightKind, selectedRoutes, cacheBuster);
+  useRouteHighlighting(
+    map,
+    highlightedRoutes,
+    highlightKind,
+    selectedRoutes,
+    cacheBuster,
+    partialHighlights,
+  );
+
+  // Ridden stretches of routes not yet finished, drawn over the route line
+  useCoverageOverlay(map, mapLoaded, dataAccess, selectedCountries, coverageVersion, cacheBuster);
 
   // Layer filter hooks. mapLoaded applies persisted prefs once layers exist;
   // cacheBuster re-applies filters after a tile refresh re-adds layers.
@@ -320,15 +347,7 @@ export default function VectorRailwayMap({
   }, []);
 
   const handleAddRoutesFromLogger = useCallback(
-    async (
-      routes: Array<{
-        track_id: number;
-        from_station: string;
-        to_station: string;
-        description: string;
-        length_km: number;
-      }>,
-    ) => {
+    async (routes: PlannerRoute[]) => {
       if (!user) {
         const canAdd = await dataAccess.canAddMoreJourneys();
         if (!canAdd) {
@@ -346,7 +365,11 @@ export default function VectorRailwayMap({
         link: null,
         date: null,
         journey_name: null,
-        partial: null,
+        // A plan that joins this route mid-way only covers part of it, so the
+        // route arrives in the selection with "partial" already ticked and the
+        // ridden stretch attached, ready to be stored with the journey
+        partial: route.partial ? true : null,
+        covered: route.partial ?? null,
         length_km: route.length_km,
       }));
 
@@ -368,6 +391,8 @@ export default function VectorRailwayMap({
       updateLocalStorageFeatureStates();
       routeEditor.refreshProgress();
     }
+    // Journeys changed, so the ridden stretches of unfinished routes may have too
+    setCoverageVersion((v) => v + 1);
   }, [user, refreshTiles, updateLocalStorageFeatureStates, routeEditor.refreshProgress]);
 
   // Set up localStorage feature states when map loads (for unlogged users)

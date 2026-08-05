@@ -4,7 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getUntimezonedDateStr } from "@/lib/getUntimezonedDateStr";
 import * as localStore from "@/lib/localStorage";
 import { useToast } from "@/lib/toast";
-import type { LocalJourney, LocalLoggedPart, RailwayRoute, SelectedRoute } from "@/lib/types";
+import type {
+  HighlightRoutesFn,
+  LocalJourney,
+  LocalLoggedPart,
+  RailwayRoute,
+  SelectedRoute,
+} from "@/lib/types";
 import { getRoutesByIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
@@ -13,7 +19,7 @@ interface JourneyWithRoutes {
 }
 
 interface LocalJourneyLogTabProps {
-  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
+  onHighlightRoutes?: HighlightRoutesFn;
   onJourneyChanged?: () => void;
   onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
   onJourneyEditEnd?: () => void;

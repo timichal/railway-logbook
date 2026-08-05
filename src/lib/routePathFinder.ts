@@ -7,17 +7,10 @@ import {
   haversineDistance,
   normalizeBearingDifference,
 } from "./geoUtils";
-
-interface RouteNode {
-  track_id: number;
-  from_station: string;
-  to_station: string;
-  description: string;
-  length_km: number;
-}
+import type { PartialRouteGeometry, PlannerRoute } from "./types";
 
 interface PathResult {
-  routes: RouteNode[];
+  routes: PlannerRoute[];
   totalDistance: number;
   error?: string;
 }
@@ -685,7 +678,7 @@ function findShortestPath(
 /**
  * Get route details for a list of route IDs
  */
-async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
+async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
   if (routeIds.length === 0) return [];
 
   const client = await pool.connect();
@@ -706,16 +699,203 @@ async function getRouteDetails(routeIds: number[]): Promise<RouteNode[]> {
       [routeIds],
     );
     // Convert length_km to number (PostgreSQL returns it as string)
-    return result.rows.map((row) => ({
-      track_id: row.track_id,
-      from_station: row.from_station,
-      to_station: row.to_station,
-      description: row.description,
-      length_km: typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km,
-    }));
+    return result.rows.map((row) => {
+      const lengthKm =
+        typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km;
+      return {
+        track_id: row.track_id,
+        from_station: row.from_station,
+        to_station: row.to_station,
+        description: row.description,
+        length_km: lengthKm,
+        travelled_length_km: lengthKm,
+      };
+    });
   } finally {
     client.release();
   }
+}
+
+// ============================================================================
+// PARTIAL TERMINAL ROUTES
+// ============================================================================
+
+/**
+ * How much untravelled track a terminal route must be left with before the plan
+ * calls it partial.
+ *
+ * A station projects a few metres inside the route that starts there — its
+ * endpoint is a hand-picked click point, not the platform centre — so tiny
+ * remainders are noise rather than track the journey misses.
+ */
+const MIN_UNTRAVELLED_KM = 0.3;
+
+/** The fraction range of a route's geometry that the journey actually covers. */
+interface TrimSpec {
+  trackId: number;
+  lo: number;
+  hi: number;
+}
+
+function pairKey(trackId: number, stationId: number): string {
+  return `${trackId}:${stationId}`;
+}
+
+/**
+ * Where each station falls along its route, as a 0..1 fraction of the route
+ * geometry (0 = the geometry's first point).
+ */
+async function locateStationsOnRoutes(
+  pairs: Array<[trackId: number, stationId: number]>,
+): Promise<Map<string, number>> {
+  const fractions = new Map<string, number>();
+  if (pairs.length === 0) return fractions;
+
+  const result = await pool.query<{ track_id: number; station_id: string | number; frac: number }>(
+    `
+    SELECT t.track_id, t.station_id, ST_LineLocatePoint(r.geometry, s.coordinates) AS frac
+    FROM unnest($1::int[], $2::bigint[]) AS t(track_id, station_id)
+    JOIN railway_routes r ON r.track_id = t.track_id
+    JOIN stations s ON s.id = t.station_id
+    `,
+    [pairs.map((p) => p[0]), pairs.map((p) => p[1])],
+  );
+
+  for (const row of result.rows) {
+    fractions.set(pairKey(row.track_id, Number(row.station_id)), row.frac);
+  }
+  return fractions;
+}
+
+/** Which endpoint of `trackId` faces the route it connects to. */
+function connectingSide(
+  routeInfo: Map<number, RouteBearingInfo>,
+  trackId: number,
+  neighborId: number,
+): EndpointSide | null {
+  const info = routeInfo.get(trackId);
+  const neighbor = routeInfo.get(neighborId);
+  if (!info || !neighbor) return null;
+  return findConnectionEndpoint(info, neighbor)?.sideA ?? null;
+}
+
+/**
+ * Cut the terminal routes of a path down to the stretch the journey covers.
+ *
+ * Intermediate routes are always covered end to end — the search enters a route
+ * at one endpoint and leaves at the other — but the first and last route are
+ * joined mid-way whenever the from/to station sits between their endpoints
+ * (e.g. Nový Bor, halfway along Jedlová ⟷ Česká Lípa).
+ *
+ * The covered side is decided by where the path continues: the first route runs
+ * from the station to the endpoint it exits through, the last from the endpoint
+ * it is entered at to the station.
+ */
+async function computeTravelledTrims(
+  path: number[],
+  routeInfo: Map<number, RouteBearingInfo>,
+  fromStationId: number,
+  toStationId: number,
+): Promise<Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>> {
+  const trimmed = new Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>();
+  if (path.length === 0) return trimmed;
+
+  const firstId = path[0];
+  const lastId = path[path.length - 1];
+  // A route reached twice (possible across via segments) has no single covered
+  // stretch, so leave it whole rather than guess.
+  const occursOnce = (id: number) => path.filter((x) => x === id).length === 1;
+
+  const pairs: Array<[number, number]> = [];
+  if (path.length === 1) {
+    pairs.push([firstId, fromStationId], [firstId, toStationId]);
+  } else {
+    if (occursOnce(firstId)) pairs.push([firstId, fromStationId]);
+    if (occursOnce(lastId)) pairs.push([lastId, toStationId]);
+  }
+  if (pairs.length === 0) return trimmed;
+
+  const fractions = await locateStationsOnRoutes(pairs);
+  const specs: TrimSpec[] = [];
+
+  if (path.length === 1) {
+    // Both ends on one route: the covered stretch is the piece between them
+    const fromFrac = fractions.get(pairKey(firstId, fromStationId));
+    const toFrac = fractions.get(pairKey(firstId, toStationId));
+    if (fromFrac !== undefined && toFrac !== undefined) {
+      specs.push({
+        trackId: firstId,
+        lo: Math.min(fromFrac, toFrac),
+        hi: Math.max(fromFrac, toFrac),
+      });
+    }
+  } else {
+    const fromFrac = fractions.get(pairKey(firstId, fromStationId));
+    const exitSide = connectingSide(routeInfo, firstId, path[1]);
+    if (fromFrac !== undefined && exitSide) {
+      specs.push(
+        exitSide === "end"
+          ? { trackId: firstId, lo: fromFrac, hi: 1 }
+          : { trackId: firstId, lo: 0, hi: fromFrac },
+      );
+    }
+
+    const toFrac = fractions.get(pairKey(lastId, toStationId));
+    const entrySide = connectingSide(routeInfo, lastId, path[path.length - 2]);
+    if (toFrac !== undefined && entrySide) {
+      specs.push(
+        entrySide === "start"
+          ? { trackId: lastId, lo: 0, hi: toFrac }
+          : { trackId: lastId, lo: toFrac, hi: 1 },
+      );
+    }
+  }
+
+  // Drop trims that leave nothing out, and degenerate ones
+  const meaningful = specs.filter((spec) => {
+    if (spec.hi - spec.lo <= 0) return false;
+    const fullKm = routeInfo.get(spec.trackId)?.length_km ?? 0;
+    return fullKm * (1 - (spec.hi - spec.lo)) >= MIN_UNTRAVELLED_KM;
+  });
+  if (meaningful.length === 0) return trimmed;
+
+  const result = await pool.query<{
+    track_id: number;
+    lo: number;
+    hi: number;
+    geojson: string;
+    length_km: number;
+  }>(
+    `
+    SELECT
+      t.track_id,
+      t.lo,
+      t.hi,
+      ST_AsGeoJSON(ST_LineSubstring(r.geometry, t.lo, t.hi)) AS geojson,
+      ST_Length(ST_LineSubstring(r.geometry, t.lo, t.hi)::geography) / 1000 AS length_km
+    FROM unnest($1::int[], $2::float8[], $3::float8[]) AS t(track_id, lo, hi)
+    JOIN railway_routes r ON r.track_id = t.track_id
+    `,
+    [meaningful.map((s) => s.trackId), meaningful.map((s) => s.lo), meaningful.map((s) => s.hi)],
+  );
+
+  for (const row of result.rows) {
+    const parsed = JSON.parse(row.geojson) as { coordinates: [number, number][] };
+    if (!parsed.coordinates || parsed.coordinates.length < 2) continue;
+    trimmed.set(row.track_id, {
+      geometry: {
+        track_id: row.track_id,
+        // The fractions travel with the geometry: they are what gets stored when
+        // the route is logged, so the stretch survives an OSM recalculation
+        covered_start: Number(row.lo),
+        covered_end: Number(row.hi),
+        coordinates: parsed.coordinates,
+      },
+      lengthKm: Number(row.length_km),
+    });
+  }
+
+  return trimmed;
 }
 
 /**
@@ -805,9 +985,25 @@ export async function findRoutePathBetweenStations(
       }
     }
 
-    // Get route details
-    const routes = await getRouteDetails(path);
-    const totalDistance = routes.reduce((sum, r) => sum + r.length_km, 0);
+    // Get route details, then cut the terminal routes down to the stretch travelled
+    const [routes, trims] = await Promise.all([
+      getRouteDetails(path),
+      computeTravelledTrims(
+        path,
+        routeInfo,
+        stationSequence[0],
+        stationSequence[stationSequence.length - 1],
+      ),
+    ]);
+
+    for (const route of routes) {
+      const trim = trims.get(route.track_id);
+      if (!trim) continue;
+      route.partial = trim.geometry;
+      route.travelled_length_km = trim.lengthKm;
+    }
+
+    const totalDistance = routes.reduce((sum, r) => sum + r.travelled_length_km, 0);
 
     return { routes, totalDistance };
   } catch (error) {

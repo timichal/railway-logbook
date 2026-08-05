@@ -130,6 +130,8 @@ async function exportRoutes() {
         journey_id,
         track_id,
         partial,
+        covered_start,
+        covered_end,
         created_at
       FROM user_logged_parts
       WHERE user_id = 1
@@ -144,8 +146,10 @@ async function exportRoutes() {
         const trackIdValue = row.track_id !== null ? row.track_id : "NULL";
         const partialValue = row.partial ? "true" : "false";
         const createdValue = `'${row.created_at.toISOString()}'`;
+        const coveredStart = row.covered_start !== null ? row.covered_start : "NULL";
+        const coveredEnd = row.covered_end !== null ? row.covered_end : "NULL";
 
-        loggedPartsSQL += `INSERT INTO public.user_logged_parts (id, user_id, journey_id, track_id, partial, created_at) VALUES (${row.id}, ${row.user_id}, ${row.journey_id}, ${trackIdValue}, ${partialValue}, ${createdValue});\n`;
+        loggedPartsSQL += `INSERT INTO public.user_logged_parts (id, user_id, journey_id, track_id, partial, covered_start, covered_end, created_at) VALUES (${row.id}, ${row.user_id}, ${row.journey_id}, ${trackIdValue}, ${partialValue}, ${coveredStart}, ${coveredEnd}, ${createdValue});\n`;
       }
       loggedPartsSQL +=
         "\nSELECT setval('user_logged_parts_id_seq', (SELECT MAX(id) FROM user_logged_parts));\n";

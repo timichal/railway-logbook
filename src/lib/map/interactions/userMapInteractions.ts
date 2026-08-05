@@ -45,7 +45,11 @@ export function setupUserMapInteractions(
       link: properties.link || null,
       date: properties.date,
       journey_name: properties.journey_name,
-      partial: properties.partial,
+      // Deliberately NOT properties.partial: the tile carries the partial flag of
+      // the most recent journey on this route, and inheriting it would pre-tick
+      // "partial" on a fresh selection just because the route was ridden in part
+      // once before. A click is a new ride, whole until said otherwise.
+      partial: null,
       length_km: Number(properties.length_km) || 0,
     });
   };

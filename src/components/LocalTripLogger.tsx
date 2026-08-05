@@ -3,16 +3,8 @@
 import { useState } from "react";
 import * as localStore from "@/lib/localStorage";
 import { useToast } from "@/lib/toast";
-import type { SelectedRoute, Station } from "@/lib/types";
+import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
 import JourneyPlanner from "./JourneyPlanner";
-
-interface RouteNode {
-  track_id: number;
-  from_station: string;
-  to_station: string;
-  description: string;
-  length_km: number;
-}
 
 interface LocalTripLoggerProps {
   selectedRoutes: SelectedRoute[];
@@ -20,8 +12,8 @@ interface LocalTripLoggerProps {
   onClearSelection: () => void;
   onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
   onRoutesLogged: () => void;
-  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
-  onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
+  onHighlightRoutes?: HighlightRoutesFn;
+  onAddRoutesFromPlanner?: (routes: PlannerRoute[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
 
@@ -64,11 +56,18 @@ export default function LocalTripLogger({
       });
 
       // Add logged parts
-      const parts = selectedRoutes.map((r) => ({
-        journey_id: newJourney.id,
-        track_id: r.track_id,
-        partial: r.partial ?? false,
-      }));
+      const parts = selectedRoutes.map((r) => {
+        const partial = r.partial ?? false;
+        return {
+          journey_id: newJourney.id,
+          track_id: r.track_id,
+          partial,
+          // Only a partial ride has a meaningful stretch, and only the Journey
+          // Planner knows one
+          covered_start: partial && r.covered ? r.covered.covered_start : null,
+          covered_end: partial && r.covered ? r.covered.covered_end : null,
+        };
+      });
 
       localStore.addLoggedParts(parts);
 

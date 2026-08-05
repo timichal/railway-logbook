@@ -94,7 +94,18 @@ CREATE TABLE user_logged_parts (
     journey_id INTEGER NOT NULL REFERENCES user_journeys(id) ON DELETE CASCADE,
     track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE CASCADE, -- Deleted when the route is deleted
     partial BOOLEAN DEFAULT FALSE, -- Per-journey partial flag
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    -- Which stretch of the route was ridden, as fractions along railway_routes.geometry
+    -- (ST_LineLocatePoint space, 0 = the geometry's first point). Both NULL means the
+    -- extent is unknown: either the whole route (partial = FALSE) or a partial ride
+    -- whose extent was never captured (partial ticked by hand). Only the Journey
+    -- Planner knows an exact stretch, from the station it joins the route at.
+    covered_start DOUBLE PRECISION,
+    covered_end DOUBLE PRECISION,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT logged_parts_covered_range CHECK (
+        (covered_start IS NULL) = (covered_end IS NULL)
+        AND (covered_start IS NULL OR (covered_start >= 0 AND covered_end <= 1 AND covered_start < covered_end))
+    )
 );
 
 -- User preferences (for country filtering and other settings)

@@ -3,17 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
 import { useToast } from "@/lib/toast";
-import type { Station } from "@/lib/types";
+import type { HighlightRoutesFn, PlannerRoute, Station } from "@/lib/types";
 import { searchStations } from "@/lib/userActions";
 import StationSearchInput from "./StationSearchInput";
-
-interface RouteNode {
-  track_id: number;
-  from_station: string;
-  to_station: string;
-  description: string;
-  length_km: number;
-}
 
 interface SelectedStation {
   id: string | number;
@@ -23,8 +15,8 @@ interface SelectedStation {
 type MaybeStation = SelectedStation | null;
 
 interface JourneyPlannerProps {
-  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
-  onAddRoutesToSelection?: (routes: RouteNode[]) => void;
+  onHighlightRoutes?: HighlightRoutesFn;
+  onAddRoutesToSelection?: (routes: PlannerRoute[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
 
@@ -38,7 +30,7 @@ export default function JourneyPlanner({
   const [viaStations, setViaStations] = useState<MaybeStation[]>([]);
   const [toStation, setToStation] = useState<SelectedStation | null>(null);
 
-  const [foundPath, setFoundPath] = useState<RouteNode[]>([]);
+  const [foundPath, setFoundPath] = useState<PlannerRoute[]>([]);
   const [totalDistance, setTotalDistance] = useState(0);
   const [pathError, setPathError] = useState<string | null>(null);
   const [isSearchingPath, setIsSearchingPath] = useState(false);
@@ -265,6 +257,9 @@ export default function JourneyPlanner({
           onHighlightRoutes(
             result.routes.map((r) => r.track_id),
             "planner",
+            // Terminal routes joined mid-way are highlighted along the travelled
+            // stretch only, so the gold line stops at the station
+            result.routes.flatMap((r) => (r.partial ? [r.partial] : [])),
           );
         }
       }
@@ -527,7 +522,12 @@ export default function JourneyPlanner({
               <div key={route.track_id} className="p-2 text-xs">
                 <div className="font-medium">
                   {index + 1}. {route.from_station} ⟷ {route.to_station}
-                  <span className="text-gray-600"> {route.length_km.toFixed(1)} km</span>
+                  <span className="text-gray-600"> {route.travelled_length_km.toFixed(1)} km</span>
+                  {route.partial && (
+                    <span className="ml-1 text-amber-700">
+                      (partial, of {route.length_km.toFixed(1)} km)
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

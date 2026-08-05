@@ -17,6 +17,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 - `npm run verifyRouteData` — recalculate all routes, mark invalid ones.
 - `npm run applyVectorTiles` — re-apply `database/init/02-vector-tiles.sql`.
 - `npm run markAllRoutesInvalid` — flag all routes for recheck (use `verifyRouteData` after). **Reference example for migration scripts.**
+- `npm run addCoveredRanges` — migration: add `covered_start`/`covered_end` to `user_logged_parts`. Idempotent.
 - `npm run fixSequences` — resync all SERIAL id sequences with table data. Fixes "duplicate key violates …_pkey" on inserts after rows were loaded with explicit ids (old dumps) without bumping the sequence. `importRouteData` now does this automatically; run manually if needed.
 - `npm run listStations` — list unique station names (debug).
 - `npm run inspectPath -- "<from>" "<to>" ["<via>"...]` — run the Journey Planner pathfinder from the CLI (station names or ids) and print the chain, search time, and the gap left between each consecutive pair of routes (debug).
@@ -49,7 +50,7 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **railway_parts** — raw OSM segments; includes `usage` (main/branch/industrial/tourism) and `highspeed` BOOL.
 - **user_trips** — id, user_id, name (req), description, timestamps. Groups journeys.
 - **user_journeys** — id, user_id, name (req), description, date (req), `trip_id` FK ON DELETE SET NULL, timestamps.
-- **user_logged_parts** — id, user_id, journey_id, `track_id` FK ON DELETE CASCADE, `partial` BOOL, created_at. UNIQUE per (journey_id, track_id).
+- **user_logged_parts** — id, user_id, journey_id, `track_id` FK ON DELETE CASCADE, `partial` BOOL, `covered_start`/`covered_end` (fraction range along the route geometry, both NULL when the extent is unknown — see "Partial rides"), created_at. UNIQUE per (journey_id, track_id).
 - **user_preferences** — `selected_countries` TEXT[]. Defaults to all of `SUPPORTED_COUNTRIES` (20 codes); `getUserPreferences()` always writes the list explicitly, so the SQL column DEFAULT only matters for rows inserted directly via SQL.
 - **admin_notes** — id, coordinate POINT, text, `note_type` ('Usage'|'UsageInternal'|'Works'|'Todo', nullable for legacy), `source` (optional external link), timestamps. Only `note_type='Usage'` notes are public (shown on the user map); `UsageInternal` is an admin-only draft promoted to `Usage` to publish. `noteTypeOptions`/`isPublicNoteType` in `constants.ts`.
 
@@ -62,7 +63,9 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **Auto line classification.** On route create/edit, length-weighted majority of intersecting railway_parts: >50% highspeed→'highspeed', >50% main→'main', else 'branch'. Admin can override.
 - **Country detection.** `@rapideditor/country-coder` on first/last coordinate fills `start_country`/`end_country`.
 - **Vector tiles** via Martin (port 3001): `railway_routes_tile` (accepts `selected_countries` filter), `railway_parts_tile` (zoom-filtered), `stations_tile` (zoom 10+), `admin_notes_tile` (all notes, admin map), `public_notes_tile` (`note_type='Usage'` only, exposes just text+source — user map).
-- **Progress.** A route counts as completed if logged with `partial=false` in any journey; partial if only `partial=true`. Country filter requires BOTH start and end country in selected list.
+- **A map click never inherits `partial`.** The route tile carries the partial flag of the most recent journey on that route; `userMapInteractions` deliberately drops it and selects with `partial: null`, since a click is a new ride, whole until said otherwise.
+- **Progress.** A route counts as completed if logged with `partial=false` in any journey; partial if only `partial=true`. Country filter requires BOTH start and end country in selected list. **A covered stretch never completes a route** — even if several journeys' stretches add up to the whole line, stats still need a `partial=false` log.
+- **Partial rides are stored as a fraction range**, `covered_start`/`covered_end` on `user_logged_parts`, in `ST_LineLocatePoint` space along `railway_routes.geometry`. Fractions rather than coordinates, so a stretch follows its route through an OSM recalculation; geometry is cut on read with `ST_LineSubstring` (`getCoveredStretches`) and **never simplified** — every overlay here is drawn directly over the route's own line, and a dropped vertex shows up as the overlay cutting corners at zoom. Both NULL means the extent is unknown — a route logged whole, or one ticked partial by hand. Only the Journey Planner produces a range, from the station it joins the route at, and it is dropped on write unless `partial` is set (`sanitizeRange`). Several journeys covering different stretches of one route each keep their own row; the union is never computed — the overlay simply paints them all, which comes out the same.
 - **Auth.** Email/password + bcrypt + session. Unauthenticated users get localStorage (`localStorage.ts` module functions, imported as `localStore`) via `dataAccess.ts` abstraction; `migrationActions.ts` migrates on login.
 - **Admin = user_id=1.** Every admin server action enforces this check.
 
@@ -76,6 +79,7 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **The whole network is loaded at once** (endpoints only, ~4.7k regular routes) and endpoints are bucketed into a spatial grid for pairing. There is no buffering around the stations; the search used to retry with 50km→1000km buffers, rebuilding the graph each time a segment failed.
 - **The built graph is cached in memory** (`getRouteGraph`), keyed on a `count(*)`/`max(updated_at)` fingerprint of `railway_routes`. Extracting endpoints costs ~450ms because every `ST_PointN` walks the full linestring, so a cache miss is the dominant cost of a search; every route write path bumps `updated_at`, so edits invalidate it.
 - **Station → routes** is one indexed query for all of from/via/to, then progressive tolerance (100m→5km, extended one level up) applied in memory. Never use `ST_DWithin` on a `::geography` cast here — it can't use the geometry index and costs ~860ms per call; go through `geometry_3857` with 1/cos(lat) radius scaling.
+- **The terminal routes are trimmed to the stretch actually travelled** (`computeTravelledTrims`). A from/to station often sits mid-route (Nový Bor, halfway along Jedlová ⟷ Česká Lípa), so the first and last route of a plan get `partial` — a `ST_LineSubstring` of the covered stretch — plus `travelled_length_km`, and the total counts only that. Which side is covered follows from where the path continues: the first route runs from the station to the endpoint it exits through (`findConnectionEndpoint` against the next route), the last from the endpoint it is entered at to the station. Intermediate routes are always whole, since the search enters a route at one endpoint and leaves at the other. A route reached twice, or one left with under `MIN_UNTRAVELLED_KM` (0.3km) of untravelled track, stays whole. `npm run inspectPath` prints the partial legs.
 
 ### Map styling
 
@@ -87,6 +91,10 @@ Selection/highlight layers:
 - Route Logger selection: orange `#ff6b35` overlay (same as admin selected-route style).
 - Journey Planner result: gold `#FFD700`.
 - My Trips browsing: orange.
+
+**Ridden stretches** (`useCoverageOverlay`) are drawn over the route line in the visited green, from a `logged_coverage` GeoJSON source: a route ridden halfway shows a green half over its partial-orange line, instead of reading all-orange. This can't come from the route tiles — a tile carries one feature per route, and this needs a piece of one — so the stretches are cut from the stored fraction ranges on read and served as GeoJSON, one code path for both logged-in users and localStorage journeys. The layer is `moveLayer`'d before `stations` on every run: it has to sit above the route lines (which a tile refresh re-inserts) and below the highlights. It carries `usage_type` + `start_country`/`end_country` and repeats the route layer's Regular-only and country filters, or it would keep painting stretches of routes the map is filtering out.
+
+Highlights are tile-filter overlays (`in ["id"], [literal ids]`), so they can only light up a **whole** route. Routes covered only in part therefore come with their own geometry (`PartialRouteGeometry`): `useRouteHighlighting` drops them from the tile-filter overlay and draws the stretch from a per-set `<baseId>_partial` GeoJSON source instead, same color and width. Two sets use it — the gold planner result (third argument of `HighlightRoutesFn`) and the orange Route Logger selection (`SelectedRoute.covered`, only while `partial` is still ticked: unticking claims the whole route, and the highlight follows). Those layers are deliberately **not** in `HIGHLIGHT_LAYER_IDS` — they carry no tile properties, and clicks fall through to `railway_routes_click` underneath.
 
 ## Code structure
 
@@ -110,12 +118,12 @@ Selection/highlight layers:
 - `index.ts` — constants, layer/source factories, `lineClassColorExpression`. Re-exports from `style.ts`.
 - `style.ts` — styling source of truth (see above).
 - `mapState.ts` — save/load map position.
-- **Hooks**: `useMapLibre`, `useRouteEditor`, `useStationSearch`, `useRouteLength`, `useAdminLayerVisibility`, `useAdminMapOverlays`, `useAdminNotesPopup`, `useMapTileRefresh`, `useRouteHighlighting` (takes `kind: 'planner' | 'view'`), `useLayerFilters`.
+- **Hooks**: `useMapLibre`, `useRouteEditor`, `useStationSearch`, `useRouteLength`, `useAdminLayerVisibility`, `useAdminMapOverlays`, `useAdminNotesPopup`, `useMapTileRefresh`, `useRouteHighlighting` (takes `kind: 'planner' | 'view'`), `useCoverageOverlay`, `useLayerFilters`.
 - **Interactions**: `userMapInteractions.ts`, `adminMapInteractions.ts`.
 - **Utils**: `userRouteStyling.ts` (`getUserRouteWidthExpression`, `getUserRouteClickBufferWidthExpression`, `getUserRouteScenicOutlineWidthExpression`, `getAdminRouteWidthExpression`), `tooltipFormatting.ts` (badges + `escapeHtml`/`safeHref`), `distance.ts`.
 
 ### Scripts (`src/scripts/`)
-- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `inspectPath.ts` (journey-planner debug), `exportRoutes.ts`, `importRoutes.ts`.
+- **Data**: `pruneData.ts`, `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `addCoveredRanges.ts` (covered-range migration), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `inspectPath.ts` (journey-planner debug), `exportRoutes.ts`, `importRoutes.ts`.
 - **Shared**: `lib/loadRailwayData.ts`, `lib/railwayPathFinder.ts` (admin route creation + recalc).
 
 ### Database (`database/init/`)
@@ -131,7 +139,7 @@ Selection/highlight layers:
 Desktop: resizable left sidebar (400–1200px, default 600px). Mobile: top-half drawer (`h-1/2`) toggled by navbar hamburger; map fills bottom half. Tabs: **Route Logger**, **My Trips** (auth) / **My Journeys** (unauth), **Country Settings & Stats**. Article views: **How To Use**, **Railway Notes** (full-screen with close button). `activeTab` lives in `MainLayout`, flows down via props (no useEffect sync). Map route/station clicks only active in Route Logger tab.
 
 ### Route Logger
-Click routes on map to add to selection; click stations to fill Journey Planner (focused field, else from→to). Per-route partial toggle + remove. "Log Journey" creates a new journey with name (req), description, date (defaults today). Embedded Journey Planner: from/via*/to with drag-and-drop reordering, diacritic-insensitive autocomplete (requires PG `unaccent`), gold highlight of found routes, "Add Routes to Selection".
+Click routes on map to add to selection; click stations to fill Journey Planner (focused field, else from→to). Per-route partial toggle + remove. "Log Journey" creates a new journey with name (req), description, date (defaults today). Embedded Journey Planner: from/via*/to with drag-and-drop reordering, diacritic-insensitive autocomplete (requires PG `unaccent`), gold highlight of found routes, "Add Routes to Selection". A route the plan only partly covers is highlighted along the covered stretch only, listed with its travelled km ("partial, of N km"), and arrives in the selection with `partial` already ticked and its stretch attached — so the selection highlights that stretch alone, and logging stores it.
 
 ### My Trips / My Journeys (auth)
 `JourneysAndTripsTab` — paginated (10/page, server-side via `getJourneysAndTrips(page, pageSize, search)`), debounced search (300ms). Top-level rows are either a trip (with nested journeys) or a standalone journey. Sorted by effective date desc (trip = MAX(journey.date)). Single-open coordination: one top-level card at a time, plus one nested journey edit. Map highlights: open trip shows all its journeys' routes; open journey shows only its routes.

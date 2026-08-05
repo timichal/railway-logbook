@@ -427,7 +427,9 @@ export async function updateRailwayRoute(
  * "[duplicate]" is appended to the from/to station names so the copy is easy to
  * spot (e.g. "Brno" → "Brno [duplicate]"). All user_logged_parts referencing the
  * original route are cloned to point at the new track_id, preserving each
- * journey's partial flag. Runs in a transaction. Returns the new track_id.
+ * journey's partial flag and ridden stretch — the geometry is identical, so the
+ * covered fractions still mean the same thing. Runs in a transaction. Returns the
+ * new track_id.
  */
 export async function duplicateRailwayRoute(trackId: number): Promise<number> {
   await requireAdmin();
@@ -469,8 +471,8 @@ export async function duplicateRailwayRoute(trackId: number): Promise<number> {
     // Clone the user logs, remapping track_id to the new route.
     await client.query(
       `
-      INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, created_at)
-      SELECT user_id, journey_id, $2, partial, created_at
+      INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end, created_at)
+      SELECT user_id, journey_id, $2, partial, covered_start, covered_end, created_at
       FROM user_logged_parts
       WHERE track_id = $1
       `,

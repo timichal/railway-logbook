@@ -5,16 +5,8 @@ import { createJourney } from "@/lib/journeyActions";
 import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { getAllTrips } from "@/lib/tripActions";
-import type { SelectedRoute, Station } from "@/lib/types";
+import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
 import JourneyPlanner from "./JourneyPlanner";
-
-interface RouteNode {
-  track_id: number;
-  from_station: string;
-  to_station: string;
-  description: string;
-  length_km: number;
-}
 
 interface JourneyLoggerProps {
   selectedRoutes: SelectedRoute[];
@@ -22,8 +14,8 @@ interface JourneyLoggerProps {
   onClearSelection: () => void;
   onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
   onRoutesLogged: () => void;
-  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
-  onAddRoutesFromPlanner?: (routes: RouteNode[]) => void;
+  onHighlightRoutes?: HighlightRoutesFn;
+  onAddRoutesFromPlanner?: (routes: PlannerRoute[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
 
@@ -68,6 +60,12 @@ export default function JourneyLogger({
     try {
       const trackIds = selectedRoutes.map((r) => r.track_id);
       const partialFlags = selectedRoutes.map((r) => r.partial ?? false);
+      // Ridden stretch, known only for routes the Journey Planner joined mid-way
+      const coveredRanges = selectedRoutes.map((r) =>
+        r.covered
+          ? { covered_start: r.covered.covered_start, covered_end: r.covered.covered_end }
+          : null,
+      );
 
       const result = await createJourney(
         journeyName.trim(),
@@ -76,6 +74,7 @@ export default function JourneyLogger({
         trackIds,
         partialFlags,
         journeyTripId,
+        coveredRanges,
       );
 
       if (result.error) {

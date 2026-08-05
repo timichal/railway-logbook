@@ -1,19 +1,11 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
 import { COLORS, DASHES, OPACITIES, WIDTHS } from "@/lib/map";
-import type { SelectedRoute } from "@/lib/types";
+import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/types";
 import {
   getUserRouteHeritageWidthExpression,
   getUserRouteWidthExpression,
 } from "../utils/userRouteStyling";
-
-/**
- * 'planner'  — pathfinder result between two stations (gold)
- * 'view'     — viewing journeys/trips in My Trips (orange, matches admin selection)
- */
-export type HighlightKind = "planner" | "view";
-
-export type HighlightRoutesFn = (routeIds: number[], kind?: HighlightKind) => void;
 
 /**
  * Each highlight set is drawn as three overlay sublayers — one per usage type —
@@ -110,6 +102,77 @@ function syncHighlightOverlay(
 }
 
 /**
+ * Draw the covered stretch of partially-travelled routes from its own geometry.
+ *
+ * The tile-filter overlays above can only light up whole routes, so a route
+ * covered only in part — a journey plan joining it at a station between its
+ * endpoints, or that same route sitting in the Route Logger selection — is
+ * excluded from them and drawn here instead, in the same colour and width.
+ *
+ * Each highlight set gets its own source/layer pair off `baseId`, so the gold
+ * planner stretch and the orange selection stretch don't overwrite each other.
+ * The coordinates are the route's own vertices, unsimplified: anything less and
+ * the overlay visibly cuts corners off the line underneath.
+ */
+function syncPartialOverlay(
+  m: maplibregl.Map,
+  baseId: string,
+  partials: PartialRouteGeometry[],
+  color: string,
+): void {
+  const sourceId = `${baseId}_partial`;
+  const layerId = `${baseId}_partial_line`;
+
+  if (partials.length === 0) {
+    if (m.getLayer(layerId)) m.removeLayer(layerId);
+    if (m.getSource(sourceId)) m.removeSource(sourceId);
+    return;
+  }
+
+  const data: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: partials.map((p) => ({
+      type: "Feature",
+      id: p.track_id,
+      properties: { track_id: p.track_id },
+      geometry: { type: "LineString", coordinates: p.coordinates },
+    })),
+  };
+
+  const source = m.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+  if (source) {
+    source.setData(data);
+  } else {
+    m.addSource(sourceId, { type: "geojson", data });
+  }
+
+  if (m.getLayer(layerId)) {
+    m.setPaintProperty(layerId, "line-color", color);
+    // A tile refresh re-adds the route layers on top; keep the overlay above them
+    m.moveLayer(layerId);
+    return;
+  }
+
+  m.addLayer({
+    id: layerId,
+    type: "line",
+    source: sourceId,
+    layout: { "line-cap": "butt" },
+    paint: {
+      "line-color": color,
+      "line-width": WIDTHS.selectedRoute,
+      "line-opacity": OPACITIES.highlight,
+    },
+  });
+}
+
+/** The ids of a highlight set that are covered whole, i.e. not drawn as a stretch. */
+function wholeRouteIds(ids: number[], partials: PartialRouteGeometry[]): number[] {
+  const partialIds = new Set(partials.map((p) => p.track_id));
+  return ids.filter((id) => !partialIds.has(id));
+}
+
+/**
  * Manages highlight overlay layers on the user map:
  * - Gold highlights from Journey Planner pathfinding
  * - Orange highlights from Route Logger selection and My Trips views
@@ -121,6 +184,8 @@ export function useRouteHighlighting(
   selectedRoutes: SelectedRoute[],
   /** Bumped when the railway_routes source/layer is recreated so highlights re-apply. */
   tileRefreshKey?: number,
+  /** Routes to highlight only along part of their length (see HighlightRoutesFn). */
+  partialHighlights: PartialRouteGeometry[] = [],
 ) {
   // Journey planner uses gold; My Trips view uses the same orange as
   // the admin-map selected-route style.
@@ -131,16 +196,33 @@ export function useRouteHighlighting(
   useEffect(() => {
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
-    syncHighlightOverlay(m, "highlighted_routes", highlightedRoutes, highlightColor);
-  }, [map, highlightedRoutes, highlightColor, tileRefreshKey]);
+    // Partially-travelled routes are drawn from their own geometry, so keep them
+    // out of the whole-route overlay
+    const wholeIds = wholeRouteIds(highlightedRoutes, partialHighlights);
+    syncHighlightOverlay(m, "highlighted_routes", wholeIds, highlightColor);
+    syncPartialOverlay(m, "highlighted_routes", partialHighlights, highlightColor);
+  }, [map, highlightedRoutes, highlightColor, partialHighlights, tileRefreshKey]);
 
   // Route Logger selection highlights — match the admin map's selected-route style
   // (orange #ff6b35, full opacity), but per usage type so dotted/dashed routes stay so.
+  //
+  // A route the Journey Planner only partly covers is highlighted along that
+  // stretch alone: it is the stretch that will be logged, so lighting up the
+  // whole route would claim more than the selection holds.
   // biome-ignore lint/correctness/useExhaustiveDependencies: tileRefreshKey is an intentional trigger — bumping it re-applies the selection highlight after the railway_routes source/layer is recreated.
   useEffect(() => {
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
+
     const selectedTrackIds = selectedRoutes.map((r) => r.track_id);
-    syncHighlightOverlay(m, "selected_routes_highlight", selectedTrackIds, COLORS.highlight.view);
+    const selectedPartials = selectedRoutes.flatMap((r) =>
+      // Only while the route is still marked partial — unticking it claims the
+      // whole route, and the highlight should say so
+      r.partial && r.covered ? [r.covered] : [],
+    );
+
+    const wholeIds = wholeRouteIds(selectedTrackIds, selectedPartials);
+    syncHighlightOverlay(m, "selected_routes_highlight", wholeIds, COLORS.highlight.view);
+    syncPartialOverlay(m, "selected_routes_highlight", selectedPartials, COLORS.highlight.view);
   }, [map, selectedRoutes, tileRefreshKey]);
 }

@@ -77,8 +77,11 @@ async function main() {
   let worstGap = 0;
   for (let i = 0; i < res.routes.length; i++) {
     const route = res.routes[i];
+    const partial = route.partial
+      ? `  [partial: ${route.travelled_length_km.toFixed(2)} km of ${route.length_km.toFixed(2)}]`
+      : "";
     console.log(
-      `  ${String(route.track_id).padStart(5)}  ${route.length_km.toFixed(2).padStart(7)} km  ${route.from_station} <-> ${route.to_station}`,
+      `  ${String(route.track_id).padStart(5)}  ${route.travelled_length_km.toFixed(2).padStart(7)} km  ${route.from_station} <-> ${route.to_station}${partial}`,
     );
 
     const a = ends.get(route.track_id);

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/lib/toast";
 import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
 import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
-import type { SelectedRoute } from "@/lib/types";
+import type { HighlightRoutesFn, SelectedRoute } from "@/lib/types";
 import MergedJourneyCard from "./MergedJourneyCard";
 import MergedTripCard from "./MergedTripCard";
 
@@ -12,7 +12,7 @@ const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
 interface JourneysAndTripsTabProps {
-  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
+  onHighlightRoutes?: HighlightRoutesFn;
   onJourneyChanged?: () => void;
   onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
   onJourneyEditEnd?: () => void;

@@ -4,6 +4,29 @@ import { getUser } from "./authActions";
 import pool from "./db";
 import type { Journey, LoggedPart, RailwayRoute } from "./types";
 
+/** Fraction range along a route's geometry — see user_logged_parts.covered_start. */
+interface LoggedRange {
+  covered_start: number;
+  covered_end: number;
+}
+
+/**
+ * A ridden stretch is only stored when it is a genuine, non-degenerate part of
+ * the route, and only for a partial ride: a route logged whole covers all of it,
+ * so a range would be redundant (and would draw a stray overlay).
+ */
+function sanitizeRange(
+  range: LoggedRange | null | undefined,
+  partial: boolean,
+): LoggedRange | null {
+  if (!partial || !range) return null;
+  const start = Number(range.covered_start);
+  const end = Number(range.covered_end);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (start < 0 || end > 1 || start >= end) return null;
+  return { covered_start: start, covered_end: end };
+}
+
 /**
  * Get a single journey with all its logged routes
  */
@@ -35,7 +58,7 @@ export async function getJourney(journeyId: number): Promise<{
         rr.description, rr.usage_type, rr.frequency, rr.link, rr.scenic, rr.line_class,
         rr.length_km, rr.start_country, rr.end_country,
         rr.is_valid, rr.error_message,
-        ulp.partial
+        ulp.partial, ulp.covered_start, ulp.covered_end
       FROM user_logged_parts ulp
       LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
       WHERE ulp.journey_id = $1 AND ulp.user_id = $2
@@ -63,6 +86,11 @@ export async function createJourney(
   trackIds: number[],
   partialFlags: boolean[],
   tripId?: number | null,
+  /**
+   * Stretch ridden per route, positionally aligned with trackIds; null where the
+   * extent isn't known (see user_logged_parts.covered_start).
+   */
+  coveredRanges?: (LoggedRange | null)[],
 ): Promise<{ journey: Journey | null; error?: string }> {
   const client = await pool.connect();
 
@@ -100,17 +128,27 @@ export async function createJourney(
     // Log routes to journey (batch insert)
     if (trackIds.length > 0) {
       // Build VALUES clause for batch insert
-      const values: (number | boolean)[] = [];
+      const values: (number | boolean | null)[] = [];
       const valuePlaceholders: string[] = [];
 
       trackIds.forEach((trackId, index) => {
-        const offset = index * 4;
-        valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`);
-        values.push(user.id, journey.id, trackId, partialFlags[index]);
+        const offset = index * 6;
+        const range = sanitizeRange(coveredRanges?.[index], partialFlags[index]);
+        valuePlaceholders.push(
+          `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`,
+        );
+        values.push(
+          user.id,
+          journey.id,
+          trackId,
+          partialFlags[index],
+          range?.covered_start ?? null,
+          range?.covered_end ?? null,
+        );
       });
 
       await client.query(
-        `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial)
+        `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
          VALUES ${valuePlaceholders.join(", ")}
          ON CONFLICT (journey_id, track_id) DO NOTHING`,
         values,
@@ -207,6 +245,8 @@ export async function addRoutesToJourney(
   journeyId: number,
   trackIds: number[],
   partialFlags: boolean[],
+  /** Stretch ridden per route, positionally aligned with trackIds (see createJourney). */
+  coveredRanges?: (LoggedRange | null)[],
 ): Promise<{ success: boolean; error?: string }> {
   const client = await pool.connect();
 
@@ -234,19 +274,32 @@ export async function addRoutesToJourney(
 
     // Batch insert routes
     if (trackIds.length > 0) {
-      const values: (number | boolean)[] = [];
+      const values: (number | boolean | null)[] = [];
       const valuePlaceholders: string[] = [];
 
       trackIds.forEach((trackId, index) => {
-        const offset = index * 4;
-        valuePlaceholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`);
-        values.push(user.id, journeyId, trackId, partialFlags[index]);
+        const offset = index * 6;
+        const range = sanitizeRange(coveredRanges?.[index], partialFlags[index]);
+        valuePlaceholders.push(
+          `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`,
+        );
+        values.push(
+          user.id,
+          journeyId,
+          trackId,
+          partialFlags[index],
+          range?.covered_start ?? null,
+          range?.covered_end ?? null,
+        );
       });
 
       await client.query(
-        `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial)
+        `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
          VALUES ${valuePlaceholders.join(", ")}
-         ON CONFLICT (journey_id, track_id) DO UPDATE SET partial = EXCLUDED.partial`,
+         ON CONFLICT (journey_id, track_id) DO UPDATE SET
+           partial = EXCLUDED.partial,
+           covered_start = EXCLUDED.covered_start,
+           covered_end = EXCLUDED.covered_end`,
         values,
       );
     }

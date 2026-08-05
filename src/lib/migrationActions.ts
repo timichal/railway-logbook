@@ -21,7 +21,14 @@ export interface JourneyMigrationResult {
  */
 export async function migrateLocalJourneys(
   localJourneys: { id: string; name: string; description: string | null; date: string }[],
-  localParts: { journey_id: string; track_id: number; partial: boolean }[],
+  localParts: {
+    journey_id: string;
+    track_id: number;
+    partial: boolean;
+    // Ridden stretch, when the local journey captured one (see CoveredRange)
+    covered_start?: number | null;
+    covered_end?: number | null;
+  }[],
 ): Promise<JourneyMigrationResult> {
   const user = await getUser();
 
@@ -99,9 +106,17 @@ export async function migrateLocalJourneys(
       if (duplicateCheck.rows.length === 0) {
         // Not a duplicate, insert it
         await query(
-          `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial)
-           VALUES ($1, $2, $3, $4)`,
-          [user.id, dbJourneyId, localPart.track_id, localPart.partial],
+          `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            user.id,
+            dbJourneyId,
+            localPart.track_id,
+            localPart.partial,
+            // Only a partial ride has a meaningful stretch (see sanitizeRange)
+            localPart.partial ? (localPart.covered_start ?? null) : null,
+            localPart.partial ? (localPart.covered_end ?? null) : null,
+          ],
         );
         partsMigrated++;
       } else {

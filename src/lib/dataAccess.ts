@@ -9,11 +9,13 @@
 import type { User } from "./authActions";
 import { isSpecialUsage, SUPPORTED_COUNTRIES } from "./constants";
 import * as localStore from "./localStorage";
-import type { RailwayRoute } from "./types";
+import type { CoveredRange, CoveredStretch, RailwayRoute } from "./types";
 import {
+  getCoveredStretches as dbGetCoveredStretches,
   getProgressByCountry as dbGetProgressByCountry,
   getUserProgress as dbGetUserProgress,
   getAllRoutes,
+  getCoveredStretchesFor,
   type ProgressByCountry,
   type UserProgress,
 } from "./userActions";
@@ -26,6 +28,9 @@ export interface DataAccess {
   // Progress operations
   getUserProgress(selectedCountries?: string[]): Promise<UserProgress>;
   getProgressByCountry(): Promise<ProgressByCountry>;
+
+  // Ridden stretches of routes that aren't finished yet (drawn as a map overlay)
+  getCoveredStretches(): Promise<CoveredStretch[]>;
 
   // Preferences operations
   getUserPreferences(): Promise<string[]>;
@@ -62,6 +67,10 @@ function createDatabaseDataAccess(): DataAccess {
 
     async getProgressByCountry(): Promise<ProgressByCountry> {
       return await dbGetProgressByCountry();
+    },
+
+    async getCoveredStretches(): Promise<CoveredStretch[]> {
+      return await dbGetCoveredStretches();
     },
 
     async getUserPreferences(): Promise<string[]> {
@@ -257,6 +266,28 @@ function createLocalStorageDataAccess(): DataAccess {
           },
         };
       }
+    },
+
+    async getCoveredStretches(): Promise<CoveredStretch[]> {
+      // Same shape as the database query in getCoveredStretches: partial rides
+      // with a known stretch, on routes not completed in some other journey
+      const parts = localStore.getLoggedParts();
+      const completed = new Set(parts.filter((p) => !p.partial).map((p) => p.track_id));
+
+      const ranges: CoveredRange[] = [];
+      for (const part of parts) {
+        if (!part.partial) continue;
+        if (part.covered_start == null || part.covered_end == null) continue;
+        if (completed.has(part.track_id)) continue;
+        ranges.push({
+          track_id: part.track_id,
+          covered_start: part.covered_start,
+          covered_end: part.covered_end,
+        });
+      }
+
+      if (ranges.length === 0) return [];
+      return await getCoveredStretchesFor(ranges);
     },
 
     async getUserPreferences(): Promise<string[]> {

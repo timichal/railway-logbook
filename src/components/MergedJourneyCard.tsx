@@ -13,7 +13,7 @@ import {
 import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { assignJourneyToTrip, unassignJourneyFromTrip } from "@/lib/tripActions";
-import type { Journey, RailwayRoute, SelectedRoute } from "@/lib/types";
+import type { HighlightRoutesFn, Journey, RailwayRoute, SelectedRoute } from "@/lib/types";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
   return {
@@ -45,7 +45,7 @@ interface MergedJourneyCardProps {
   // Mutation lifecycle
   onChanged: () => void; // After save/delete/route changes — refresh the list and map
   // Map interaction
-  onHighlightRoutes?: (routeIds: number[], kind?: "planner" | "view") => void;
+  onHighlightRoutes?: HighlightRoutesFn;
   onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
   onJourneyEditEnd?: () => void;
   // Visual nesting (when rendered inside a trip card)
