@@ -33,6 +33,20 @@ body,
   height: 100%;
 }
 
+/* iOS Safari zooms the whole page in when a form control is focused and its
+   text is under 16px — every `text-sm`/`text-xs` input on the site triggers it.
+   `-webkit-touch-callout` is iOS-only, so this leaves desktop sizing alone.
+   Unlayered, so it wins over Tailwind's `@layer utilities` regardless of
+   specificity; blocking pinch-zoom via the viewport meta is not an option,
+   since Safari has ignored `user-scalable=no` since iOS 10 anyway. */
+@supports (-webkit-touch-callout: none) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* Leaflet popup styling */
 .railway-popup h3,
 .railway-click-menu h3 {
