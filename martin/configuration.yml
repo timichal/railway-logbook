@@ -41,7 +41,7 @@ postgres:
       maxzoom: 18
       # This function accepts z, x, y parameters
 
-    # Stations within 250m of a railway part (near_railway) — user map
+    # Stations within 250m of an admin-defined route (near_route) — user map
     public_stations_tile:
       schema: public
       function: public_stations_tile

@@ -1,6 +1,10 @@
 import dotenv from "dotenv";
 import { Client } from "pg";
 import { getDbConfig } from "../lib/dbConfig";
+import {
+  refreshAllStationProximity,
+  STATION_ROUTE_PROXIMITY_METERS,
+} from "../lib/stationProximity";
 import { loadStationsAndParts } from "./lib/loadRailwayData";
 import { verifyAndRecalculateRoutes } from "./verifyRouteData";
 
@@ -52,6 +56,15 @@ async function loadGeoJSONData(): Promise<void> {
         : "=== Step 2: Verifying routes ===",
     );
     await verifyAndRecalculateRoutes(client, { validOnly });
+
+    // Step 3: Route geometries have just settled, so the station flags derived
+    // from them are refreshed last
+    console.log("");
+    console.log("=== Step 3: Flagging stations near routes ===");
+    const proximity = await refreshAllStationProximity(client);
+    console.log(
+      `Stations within ${STATION_ROUTE_PROXIMITY_METERS}m of a route: ${proximity.near} of ${proximity.total}`,
+    );
 
     console.log("");
     console.log("Database update completed!");

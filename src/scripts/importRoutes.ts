@@ -1,7 +1,8 @@
 import "dotenv/config";
 import { execSync } from "node:child_process";
 import * as fs from "node:fs";
-import { query } from "../lib/db";
+import pool, { query } from "../lib/db";
+import { refreshAllStationProximity } from "../lib/stationProximity";
 
 /**
  * Import railway_routes, user_journeys, user_logged_parts, and admin_notes from SQL dump
@@ -156,6 +157,19 @@ async function importRoutes() {
         console.log(`✓ Admin notes: ${notesCount.rows[0].count}`);
       } catch {
         console.warn("Warning: Could not verify imported data counts");
+      }
+
+      // The dump replaced every route, and which stations the user map shows is
+      // derived from them
+      console.log("\nRefreshing station proximity flags...");
+      const client = await pool.connect();
+      try {
+        const { near, total } = await refreshAllStationProximity(client);
+        console.log(`✓ Stations near a route: ${near} of ${total}`);
+      } catch {
+        console.warn("Warning: Could not refresh flags (run `npm run updateStationProximity`)");
+      } finally {
+        client.release();
       }
 
       console.log(`\n✓ Import completed successfully`);

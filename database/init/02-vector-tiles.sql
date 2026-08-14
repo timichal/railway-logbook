@@ -15,8 +15,9 @@ ADD COLUMN IF NOT EXISTS coordinates_3857 GEOMETRY(POINT, 3857);
 
 -- Proximity flag used by public_stations_tile. Declared in 01-schema.sql too;
 -- repeated here so applyVectorTiles can bring an older database up to date.
+-- Populate it with `npm run updateStationProximity`.
 ALTER TABLE stations
-ADD COLUMN IF NOT EXISTS near_railway BOOLEAN NOT NULL DEFAULT FALSE;
+ADD COLUMN IF NOT EXISTS near_route BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Populate the Web Mercator geometries from existing WGS84 data
 UPDATE railway_parts
@@ -41,9 +42,9 @@ ON railway_routes USING GIST (geometry_3857);
 CREATE INDEX IF NOT EXISTS idx_stations_coordinates_3857
 ON stations USING GIST (coordinates_3857);
 
--- Partial index for the user map, which only ever asks for near_railway stations
-CREATE INDEX IF NOT EXISTS idx_stations_coordinates_3857_near_railway
-ON stations USING GIST (coordinates_3857) WHERE near_railway;
+-- Partial index for the user map, which only ever asks for near_route stations
+CREATE INDEX IF NOT EXISTS idx_stations_coordinates_3857_near_route
+ON stations USING GIST (coordinates_3857) WHERE near_route;
 
 -- Function: railway_parts_tile
 -- Serves railway parts (raw OSM segments) as vector tiles
@@ -252,11 +253,12 @@ STRICT
 PARALLEL SAFE;
 
 -- Function: public_stations_tile
--- Same as stations_tile, but only stations with a railway part running within
--- 250m (near_railway, set on import). OSM carries plenty of station points that
--- sit nowhere near any track we hold — disused, planned, bus/tram stops caught by
--- the filter — and they are noise on the user map. The admin map uses
--- stations_tile and keeps seeing all of them.
+-- Same as stations_tile, but only stations with an admin-defined route running
+-- within 250m (near_route — see src/lib/stationProximity.ts). OSM carries far
+-- more station points than the network we map, and one with no route beside it
+-- is noise on the user map: nothing to click, nothing for the planner to reach.
+-- The admin map uses stations_tile and keeps seeing all of them, which is what
+-- route creation needs.
 CREATE OR REPLACE FUNCTION public_stations_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
 DECLARE
@@ -283,7 +285,7 @@ BEGIN
             ) AS geom
         FROM stations
         WHERE
-            near_railway
+            near_route
             -- Spatial filter using index
             AND coordinates_3857 && tile_envelope
             -- Only show stations at zoom 9+

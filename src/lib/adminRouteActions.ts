@@ -5,6 +5,7 @@ import type { LineClass, UsageType } from "./constants";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool, { query } from "./db";
+import { getStationsNearRoute, refreshStationProximityFor } from "./stationProximity";
 import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./types";
 
 /**
@@ -325,6 +326,10 @@ export async function saveRailwayRoute(
       ];
     }
 
+    // For an edit, the stations along the route's *current* geometry are collected
+    // first: the new geometry may run elsewhere, leaving them without a route
+    const stationsOnOldGeometry = trackId ? await getStationsNearRoute(client, trackId) : [];
+
     const result = await client.query(queryStr, values);
     const savedTrackId = result.rows[0].track_id;
     const lengthKm = result.rows[0].length_km;
@@ -363,6 +368,13 @@ export async function saveRailwayRoute(
       await client.query(classifyLineClassSQL, [savedTrackId]);
       console.log("Auto-classified line_class for route:", savedTrackId);
     }
+    // Stations the user map draws follow the routes, so a new or moved route
+    // reveals (or hides) the stations along it right away
+    await refreshStationProximityFor(client, {
+      trackId: savedTrackId,
+      stationIds: stationsOnOldGeometry,
+    });
+
     console.log("Final geometry has", sortedCoordinates.length, "coordinate points");
     console.log(
       "Calculated route length:",
@@ -505,6 +517,10 @@ export async function deleteRailwayRoute(trackId: number): Promise<void> {
   try {
     console.log("Deleting railway route with track_id:", trackId);
 
+    // Collected before the delete — afterwards the geometry is gone and there is
+    // no way to find the stations that may have just lost their last route
+    const affectedStations = await getStationsNearRoute(client, trackId);
+
     // Delete from railway_routes table (CASCADE will handle user_trips)
     const deleteQuery = "DELETE FROM railway_routes WHERE track_id = $1";
     const result = await client.query(deleteQuery, [trackId]);
@@ -512,6 +528,8 @@ export async function deleteRailwayRoute(trackId: number): Promise<void> {
     if (result.rowCount === 0) {
       throw new Error(`Route with track_id ${trackId} not found`);
     }
+
+    await refreshStationProximityFor(client, { stationIds: affectedStations });
 
     console.log("Successfully deleted railway route:", trackId);
   } catch (error) {

@@ -24,10 +24,11 @@ CREATE TABLE stations (
     id BIGINT PRIMARY KEY, -- OSM @id
     name VARCHAR(255) NOT NULL,
     coordinates GEOMETRY(POINT, 4326) NOT NULL, -- PostGIS point (lon, lat)
-    -- TRUE when a railway_part runs within STATION_RAIL_PROXIMITY_METERS (250m).
-    -- Recomputed on every map data import; only these stations are served to the
-    -- user map (public_stations_tile), the admin map shows all of them.
-    near_railway BOOLEAN NOT NULL DEFAULT FALSE,
+    -- TRUE when an admin-defined railway_route runs within
+    -- STATION_ROUTE_PROXIMITY_METERS (250m). Derived: refreshed whenever route
+    -- geometry moves. Only these stations are served to the user map
+    -- (public_stations_tile), the admin map shows all of them.
+    near_route BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

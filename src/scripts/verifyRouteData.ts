@@ -2,6 +2,10 @@ import dotenv from "dotenv";
 import { Client } from "pg";
 import { type Coord, coordinatesToWKT } from "../lib/coordinateUtils";
 import { getDbConfig } from "../lib/dbConfig";
+import {
+  refreshAllStationProximity,
+  STATION_ROUTE_PROXIMITY_METERS,
+} from "../lib/stationProximity";
 import { RailwayPathFinder } from "./lib/railwayPathFinder";
 
 dotenv.config();
@@ -300,6 +304,13 @@ async function verifyRoutes(): Promise<void> {
 
     const validOnly = process.argv.includes("--valid-only");
     await verifyAndRecalculateRoutes(client, { validOnly });
+
+    // Which stations the user map shows follows the route geometries this just moved
+    console.log("");
+    const proximity = await refreshAllStationProximity(client);
+    console.log(
+      `Stations within ${STATION_ROUTE_PROXIMITY_METERS}m of a route: ${proximity.near} of ${proximity.total}`,
+    );
 
     console.log("");
     console.log("Route verification completed!");

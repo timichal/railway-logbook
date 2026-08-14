@@ -41,7 +41,7 @@ stations_tile:
   maxzoom: 18
 
 public_stations_tile:
-  minzoom: 9  # Same, user map (near_railway stations only)
+  minzoom: 9  # Same, user map (near_route stations only)
   maxzoom: 18
 ```
 
@@ -69,7 +69,7 @@ Should **match** Martin's configuration to avoid unnecessary tile requests.
 -- railway_routes_tile: NO zoom filter (show all data at all zooms)
 -- railway_parts_tile: Dynamic filtering based on segment length
 -- stations_tile: Filter z >= 9
--- public_stations_tile: Filter z >= 9, plus near_railway
+-- public_stations_tile: Filter z >= 9, plus near_route
 ```
 
 SQL filters can add **additional** restrictions beyond Martin's zoom ranges.
