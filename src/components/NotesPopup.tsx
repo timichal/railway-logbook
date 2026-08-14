@@ -8,7 +8,7 @@ import { type NoteType, noteTypeOptions } from "@/lib/constants";
 interface NotesPopupProps {
   noteId?: number | null; // If set, editing existing note; if null, creating new note
   initialText?: string;
-  initialNoteType?: NoteType | null;
+  initialNoteType?: NoteType | null; // null only while creating a note (nothing picked yet)
   initialSource?: string | null; // Optional external link
   updatedAt?: string; // ISO timestamp of last update (existing notes only)
   coordinate: [number, number]; // [lng, lat]
@@ -45,8 +45,7 @@ export default function NotesPopup({
     textareaRef.current?.focus();
   }, []);
 
-  // Type is required for new notes; for existing notes, allow clearing is not exposed in UI
-  // but we still require selecting a type before saving edits (once one is set, picker can't go back to empty).
+  // A type is required to save; the empty state only exists for a note being created.
   const canSave = !!text.trim() && !!noteType;
 
   const handleSave = async () => {

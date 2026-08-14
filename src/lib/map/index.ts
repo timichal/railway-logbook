@@ -394,8 +394,7 @@ export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorS
 
 export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
   // Color by note_type, derived straight from noteTypeOptions so the map can
-  // never drift from the badge colors used in the sidebar. Untyped (legacy)
-  // notes fall through to the amber default.
+  // never drift from the badge colors used in the sidebar.
   // The tuple assertion is what lets this spread into a `match` expression:
   // noteTypeOptions is a non-empty const tuple, so there is always at least one
   // label/color pair, but TS can't infer that through flatMap.
@@ -409,7 +408,7 @@ export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
     "match",
     ["get", "note_type"],
     ...labelColorPairs,
-    COLORS.adminNotes.fill, // fallback for NULL / unknown
+    COLORS.adminNotes.fill, // `match` requires a fallback; no note should reach it
   ];
 
   return {

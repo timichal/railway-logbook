@@ -114,14 +114,13 @@ export async function createAdminNote(
 }
 
 /**
- * Update an existing admin note. `noteType` may be null to clear the type
- * (e.g. during admin backfill), or a specific type.
+ * Update an existing admin note. `noteType` is required — every note has one.
  * Admin-only (user_id=1)
  */
 export async function updateAdminNote(
   id: number,
   text: string,
-  noteType: NoteType | null,
+  noteType: NoteType,
   source: string | null = null,
 ): Promise<AdminNote> {
   await requireAdmin();

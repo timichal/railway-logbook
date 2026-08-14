@@ -6,7 +6,7 @@ import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/constant
 import { useToast } from "@/lib/toast";
 import type { AdminNote } from "@/lib/types";
 
-type TypeFilter = NoteType | "none" | "all";
+type TypeFilter = NoteType | "all";
 
 interface AdminNotesTabProps {
   onFocusNote?: (coordinate: [number, number]) => void;
@@ -45,18 +45,14 @@ export default function AdminNotesTab({
   }, [loadNotes, refreshSignal]);
 
   const counts = useMemo(() => {
-    const c = { all: notes.length, none: 0 } as Record<TypeFilter, number>;
+    const c = { all: notes.length } as Record<TypeFilter, number>;
     for (const opt of noteTypeOptions) c[opt.id] = 0;
-    for (const n of notes) {
-      if (!n.note_type) c.none++;
-      else c[n.note_type]++;
-    }
+    for (const n of notes) c[n.note_type]++;
     return c;
   }, [notes]);
 
   const filteredNotes = useMemo(() => {
     if (filter === "all") return notes;
-    if (filter === "none") return notes.filter((n) => !n.note_type);
     return notes.filter((n) => n.note_type === filter);
   }, [notes, filter]);
 
@@ -140,15 +136,11 @@ export default function AdminNotesTab({
                   </label>
                   <select
                     id={`note-${note.id}-type`}
-                    value={note.note_type ?? ""}
+                    value={note.note_type}
                     disabled={savingId === note.id}
-                    onChange={(e) => {
-                      const v = e.target.value as NoteType | "";
-                      if (v) handleTypeChange(note, v);
-                    }}
+                    onChange={(e) => handleTypeChange(note, e.target.value as NoteType)}
                     className="text-xs px-1.5 py-0.5 border border-gray-300 rounded bg-white text-gray-800"
                   >
-                    {!note.note_type && <option value="">-- none --</option>}
                     {noteTypeOptions.map((opt) => (
                       <option key={opt.id} value={opt.id}>
                         {opt.label}

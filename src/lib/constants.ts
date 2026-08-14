@@ -76,8 +76,7 @@ export const getLineClassLabel = (lineClass: LineClass): string => {
 };
 
 /**
- * Admin note types (optional categorization).
- * Legacy notes stored before this feature have NULL `note_type`.
+ * Admin note types. Every note has one — the column is NOT NULL.
  *
  * Only `public: true` types are shown on the public user map. "Usage" is the
  * published, public-facing type; "UsageInternal" ("Usage (internal)") is an
@@ -92,17 +91,18 @@ export const noteTypeOptions = [
 
 export type NoteType = (typeof noteTypeOptions)[number]["id"];
 
-export const NO_TYPE_COLOR = "#fbbf24"; // amber (legacy / untyped notes)
+const noteTypeById = Object.fromEntries(noteTypeOptions.map((opt) => [opt.id, opt])) as Record<
+  NoteType,
+  (typeof noteTypeOptions)[number]
+>;
 
-export const getNoteTypeColor = (noteType: NoteType | null | undefined): string => {
-  if (!noteType) return NO_TYPE_COLOR;
-  const option = noteTypeOptions.find((opt) => opt.id === noteType);
-  return option ? option.color : NO_TYPE_COLOR;
-};
+export const getNoteTypeColor = (noteType: NoteType): string => noteTypeById[noteType].color;
+
+/** Display label for a note type. */
+export const getNoteTypeLabel = (noteType: NoteType): string => noteTypeById[noteType].label;
 
 /** Whether a note type is shown on the public user map (only published "Usage"). */
-export const isPublicNoteType = (noteType: NoteType | null | undefined): boolean =>
-  noteTypeOptions.some((opt) => opt.id === noteType && opt.public);
+export const isPublicNoteType = (noteType: NoteType): boolean => noteTypeById[noteType].public;
 
 /**
  * Supported countries for filtering

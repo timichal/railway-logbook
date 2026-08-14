@@ -1,6 +1,7 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import type { MutableRefObject } from "react";
+import { getNoteTypeLabel } from "@/lib/constants";
 import { escapeHtml, formatRouteMetadataBadges, safeHref } from "@/lib/map/utils/tooltipFormatting";
 
 interface AdminMapCallbacks {
@@ -387,6 +388,8 @@ export function setupAdminMapInteractions(
           ? new Date(properties.updated_at).toISOString().replace("T", " ").slice(0, 19)
           : "";
 
+        const noteTypeLabel = getNoteTypeLabel(properties.note_type);
+
         noteHoverPopup = new maplibregl.Popup({
           closeButton: false,
           closeOnClick: false,
@@ -396,7 +399,7 @@ export function setupAdminMapInteractions(
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="color: black;">
-              <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note</h3>
+              <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note: ${escapeHtml(noteTypeLabel)}</h3>
               <div style="font-size: 0.85rem; color: #374151;">${escapeHtml(properties.text)}</div>
               ${safeHref(properties.source) ? `<div style="font-size: 0.8rem; margin-top: 4px;"><a href="${safeHref(properties.source)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">Source ↗</a> <span style="color: #6b7280;">(double-click to open)</span></div>` : ""}
               ${updatedAtStr ? `<div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
