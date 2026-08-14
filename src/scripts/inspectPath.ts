@@ -27,10 +27,13 @@ async function main() {
   const { haversineDistance } = await import("../lib/geoUtils");
 
   const resolve = async (arg: string): Promise<number> => {
+    // A numeric argument is taken as a station id verbatim — the way to inspect a
+    // station the name search below won't return.
     if (/^\d+$/.test(arg)) return Number(arg);
 
+    // Only near_railway stations, matching what the planner's autocomplete offers
     const { rows } = await pool.query<{ id: string; name: string }>(
-      `SELECT id, name FROM stations WHERE name = $1 OR name ILIKE $1 || '%' ORDER BY length(name), id LIMIT 5`,
+      `SELECT id, name FROM stations WHERE near_railway AND (name = $1 OR name ILIKE $1 || '%') ORDER BY length(name), id LIMIT 5`,
       [arg],
     );
     if (rows.length === 0) throw new Error(`No station matching "${arg}"`);

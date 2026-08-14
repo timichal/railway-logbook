@@ -33,10 +33,18 @@ postgres:
       query_params:
         - user_id
 
-    # Stations (point features)
+    # Stations (point features) — all of them, admin map
     stations_tile:
       schema: public
       function: stations_tile
+      minzoom: 9
+      maxzoom: 18
+      # This function accepts z, x, y parameters
+
+    # Stations within 250m of a railway part (near_railway) — user map
+    public_stations_tile:
+      schema: public
+      function: public_stations_tile
       minzoom: 9
       maxzoom: 18
       # This function accepts z, x, y parameters

@@ -13,6 +13,11 @@ ADD COLUMN IF NOT EXISTS geometry_3857 GEOMETRY(LINESTRING, 3857);
 ALTER TABLE stations
 ADD COLUMN IF NOT EXISTS coordinates_3857 GEOMETRY(POINT, 3857);
 
+-- Proximity flag used by public_stations_tile. Declared in 01-schema.sql too;
+-- repeated here so applyVectorTiles can bring an older database up to date.
+ALTER TABLE stations
+ADD COLUMN IF NOT EXISTS near_railway BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Populate the Web Mercator geometries from existing WGS84 data
 UPDATE railway_parts
 SET geometry_3857 = ST_Transform(geometry, 3857)
@@ -35,6 +40,10 @@ ON railway_routes USING GIST (geometry_3857);
 
 CREATE INDEX IF NOT EXISTS idx_stations_coordinates_3857
 ON stations USING GIST (coordinates_3857);
+
+-- Partial index for the user map, which only ever asks for near_railway stations
+CREATE INDEX IF NOT EXISTS idx_stations_coordinates_3857_near_railway
+ON stations USING GIST (coordinates_3857) WHERE near_railway;
 
 -- Function: railway_parts_tile
 -- Serves railway parts (raw OSM segments) as vector tiles
@@ -230,6 +239,54 @@ BEGIN
             -- Spatial filter using index
             coordinates_3857 && tile_envelope
             -- Only show stations at zoom 8+
+            AND z >= 9
+        ORDER BY name
+    ) AS mvtgeom
+    WHERE geom IS NOT NULL;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+PARALLEL SAFE;
+
+-- Function: public_stations_tile
+-- Same as stations_tile, but only stations with a railway part running within
+-- 250m (near_railway, set on import). OSM carries plenty of station points that
+-- sit nowhere near any track we hold — disused, planned, bus/tram stops caught by
+-- the filter — and they are noise on the user map. The admin map uses
+-- stations_tile and keeps seeing all of them.
+CREATE OR REPLACE FUNCTION public_stations_tile(z integer, x integer, y integer)
+RETURNS bytea AS $$
+DECLARE
+    result bytea;
+    tile_envelope geometry;
+BEGIN
+    -- Get the tile envelope in Web Mercator
+    tile_envelope := ST_TileEnvelope(z, x, y);
+
+    -- Generate MVT tile (layer name matches stations_tile, so the map layer
+    -- definition is shared between the two)
+    SELECT INTO result ST_AsMVT(mvtgeom.*, 'stations')
+    FROM (
+        SELECT
+            id,
+            name,
+            -- Point geometry doesn't need much simplification
+            ST_AsMVTGeom(
+                coordinates_3857,
+                tile_envelope,
+                4096,
+                0,  -- No buffer needed for points
+                true
+            ) AS geom
+        FROM stations
+        WHERE
+            near_railway
+            -- Spatial filter using index
+            AND coordinates_3857 && tile_envelope
+            -- Only show stations at zoom 9+
             AND z >= 9
         ORDER BY name
     ) AS mvtgeom

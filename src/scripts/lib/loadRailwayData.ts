@@ -25,6 +25,45 @@ export interface LoadResult {
 }
 
 /**
+ * How close a railway part has to run for a station to show on the user map.
+ */
+export const STATION_RAIL_PROXIMITY_METERS = 250;
+
+/**
+ * Recompute stations.near_railway — TRUE when a railway part runs within
+ * STATION_RAIL_PROXIMITY_METERS of the station. Only these are served to the
+ * user map (public_stations_tile); the admin map keeps seeing every station.
+ *
+ * Distances are measured in EPSG:3857 so the GIST index on geometry_3857 is
+ * usable (a ::geography cast can't use it). Web Mercator inflates distance by
+ * 1/cos(lat), so the threshold is scaled by the same factor per station.
+ */
+export async function updateStationRailProximity(client: Client): Promise<number> {
+  const result = await client.query(`
+    UPDATE stations s
+    SET near_railway = EXISTS (
+      SELECT 1
+      FROM railway_parts p
+      WHERE ST_DWithin(
+        p.geometry_3857,
+        s.coordinates_3857,
+        ${STATION_RAIL_PROXIMITY_METERS} / GREATEST(cos(radians(ST_Y(s.coordinates))), 0.01)
+      )
+    )
+  `);
+
+  const { rows } = await client.query<{ near: string }>(
+    `SELECT count(*) AS near FROM stations WHERE near_railway`,
+  );
+
+  console.log(
+    `- Stations within ${STATION_RAIL_PROXIMITY_METERS}m of a railway part: ${rows[0].near} of ${result.rowCount}`,
+  );
+
+  return Number(rows[0].near);
+}
+
+/**
  * Load stations and railway parts from a GeoJSON file into the database
  * Clears existing data before loading
  */
@@ -178,6 +217,10 @@ export async function loadStationsAndParts(
       ON CONFLICT (id) DO UPDATE SET usage = EXCLUDED.usage, highspeed = EXCLUDED.highspeed, updated_at = CURRENT_TIMESTAMP
     `);
   }
+
+  // Both tables are fully loaded only now, so the proximity flag is computed last
+  console.log("Flagging stations near a railway part...");
+  await updateStationRailProximity(client);
 
   console.log(`Data loading completed successfully!`);
   console.log(`- Stations loaded: ${stationsCount}`);

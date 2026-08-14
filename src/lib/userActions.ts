@@ -5,6 +5,14 @@ import { SUPPORTED_COUNTRIES } from "./constants";
 import { query } from "./db";
 import type { CoveredRange, CoveredStretch, RailwayRoute, Station } from "./types";
 
+/**
+ * Station name search for the user map search box and the Journey Planner.
+ *
+ * Restricted to `near_railway` stations — the same set the user map draws
+ * (public_stations_tile), so the autocomplete can't offer a station that isn't
+ * on the map and has no route within reach of the planner. The admin map is
+ * unaffected; it has its own search and sees every station.
+ */
 export async function searchStations(searchQuery: string): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
     return [];
@@ -16,7 +24,8 @@ export async function searchStations(searchQuery: string): Promise<Station[]> {
            ST_X(coordinates) as lon,
            ST_Y(coordinates) as lat
     FROM stations
-    WHERE unaccent(name) ILIKE unaccent($1)
+    WHERE near_railway
+      AND unaccent(name) ILIKE unaccent($1)
     ORDER BY
       CASE
         WHEN unaccent(name) ILIKE unaccent($2) THEN 0  -- Exact start match first

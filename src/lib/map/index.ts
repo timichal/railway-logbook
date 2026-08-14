@@ -323,6 +323,20 @@ export function createStationsSource(): maplibregl.VectorSourceSpecification {
   };
 }
 
+/**
+ * Stations for the user map: only those within 250m of a railway part.
+ * Serves the same "stations" MVT layer name as createStationsSource, so
+ * createStationsLayer works with either source.
+ */
+export function createPublicStationsSource(): maplibregl.VectorSourceSpecification {
+  return {
+    type: "vector",
+    tiles: [`${TILE_BASE_URL}/public_stations_tile/{z}/{x}/{y}`],
+    minzoom: ZOOM_RANGES.stations.min,
+    maxzoom: ZOOM_RANGES.stations.max,
+  };
+}
+
 export function createStationsLayer(): maplibregl.CircleLayerSpecification {
   return {
     id: "stations",

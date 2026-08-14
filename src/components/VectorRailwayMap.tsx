@@ -7,6 +7,7 @@ import * as localStore from "@/lib/localStorage";
 import {
   createPublicNotesLayer,
   createPublicNotesSource,
+  createPublicStationsSource,
   createRailwayRoutesClickLayer,
   createRailwayRoutesHeritageLayer,
   createRailwayRoutesLayer,
@@ -14,7 +15,6 @@ import {
   createRailwayRoutesSpecialLayer,
   createScenicRoutesOutlineLayer,
   createStationsLayer,
-  createStationsSource,
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
@@ -196,7 +196,7 @@ export default function VectorRailwayMap({
           userId: userId || undefined,
           selectedCountries,
         }),
-        stations: createStationsSource(),
+        stations: createPublicStationsSource(),
         public_notes: createPublicNotesSource(),
       },
       layers: [
