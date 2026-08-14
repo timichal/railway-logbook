@@ -167,7 +167,7 @@ async function importRoutes() {
         const { near, total } = await refreshAllStationProximity(client);
         console.log(`✓ Stations near a route: ${near} of ${total}`);
       } catch {
-        console.warn("Warning: Could not refresh flags (run `npm run updateStationProximity`)");
+        console.warn("Warning: Could not refresh flags (run `npm run verifyRouteData`)");
       } finally {
         client.release();
       }

@@ -13,12 +13,6 @@ ADD COLUMN IF NOT EXISTS geometry_3857 GEOMETRY(LINESTRING, 3857);
 ALTER TABLE stations
 ADD COLUMN IF NOT EXISTS coordinates_3857 GEOMETRY(POINT, 3857);
 
--- Proximity flag used by public_stations_tile. Declared in 01-schema.sql too;
--- repeated here so applyVectorTiles can bring an older database up to date.
--- Populate it with `npm run updateStationProximity`.
-ALTER TABLE stations
-ADD COLUMN IF NOT EXISTS near_route BOOLEAN NOT NULL DEFAULT FALSE;
-
 -- Populate the Web Mercator geometries from existing WGS84 data
 UPDATE railway_parts
 SET geometry_3857 = ST_Transform(geometry, 3857)
