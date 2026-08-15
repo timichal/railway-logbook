@@ -36,6 +36,13 @@ export function safeHref(value: unknown): string {
 }
 
 /**
+ * Shared badge chrome. `white-space: nowrap` keeps a multi-word tag ("Winter
+ * break") on one line — a badge broken across lines reads as two badges.
+ */
+const BADGE_STYLE =
+  "display: inline-block; white-space: nowrap; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;";
+
+/**
  * Format route metadata as color-coded badges for tooltips
  */
 export function formatRouteMetadataBadges(properties: {
@@ -52,17 +59,17 @@ export function formatRouteMetadataBadges(properties: {
     const isHighspeed = properties.line_class === "highspeed";
     const lcColor = isHighspeed ? "#ffffff" : "#1e40af";
     const lcBgColor = isHighspeed ? "#ef4444" : "#bfdbfe";
-    badges += ` <span style="background-color: ${lcBgColor}; color: ${lcColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${lineClassLabel}</span>`;
+    badges += ` <span style="${BADGE_STYLE} background-color: ${lcBgColor}; color: ${lcColor};">${lineClassLabel}</span>`;
   }
 
   // Usage type badge (Regular=blue, Heritage=purple, Special=teal)
   const usageLabel = getUsageLabel(properties.usage_type);
   const { color: usageColor, bgColor: usageBgColor } = getUsageBadgeColors(properties.usage_type);
-  badges += `<span style="background-color: ${usageBgColor}; color: ${usageColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${usageLabel}</span>`;
+  badges += `<span style="${BADGE_STYLE} background-color: ${usageBgColor}; color: ${usageColor};">${usageLabel}</span>`;
 
   // Scenic badge
   if (properties.scenic) {
-    badges += ` <span style="background-color: #fbbf24; color: #78350f; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Scenic</span>`;
+    badges += ` <span style="${BADGE_STYLE} background-color: #fbbf24; color: #78350f;">Scenic</span>`;
   }
 
   // Frequency badges
@@ -74,7 +81,7 @@ export function formatRouteMetadataBadges(properties: {
     badges += frequencies
       .map(
         (freq: string) =>
-          ` <span style="background-color: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-right: 4px;">${escapeHtml(freq)}</span>`,
+          ` <span style="${BADGE_STYLE} background-color: #dcfce7; color: #166534; margin-right: 4px;">${escapeHtml(freq)}</span>`,
       )
       .join("");
     badges += `<br />`;
