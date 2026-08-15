@@ -4,14 +4,21 @@
  *     advance. Any frequency counts (even a once-a-day summer-Saturday-only train);
  *     rarity is captured by frequency tags, not by this field. Counts toward stats
  *     and the journey planner.
- * 1 = Heritage — museum/preserved/enthusiast operation outside regular timetables,
- *     found only via the operator's own channels (informal, changeable schedule).
- *     Drawn solid; revealed by the "Show heritage lines" toggle.
+ * 1 = Heritage & tourist — its own line, outside the national timetable, published
+ *     through the operator's own channels. Museum and preserved railways, but also
+ *     commercially-run tourist lines (rack railways, funiculars, resort lines) that
+ *     may run daily to a dependable published schedule — the discriminator is the
+ *     separate system and the separate timetable, not the age of the stock or how
+ *     reliable the service is. Service character (daily, seasonal, weekends-only,
+ *     winter break) belongs in the frequency tags. Drawn dotted; revealed by the
+ *     "Show heritage & tourist lines" toggle.
  * 2 = Special — national infrastructure, but irregular ad-hoc passenger use:
  *     diversions during engineering works, festival/anniversary runs, marketed
  *     tourist specials. "You never know until they announce it." Drawn dashed;
  *     revealed by the "Show special services" toggle.
- * Heritage and Special are both "special" (non-regular): excluded from stats and
+ * So types 1 and 2 split on whose track and whose timetable, not on what kind of
+ * train: a tourist railway on its own line is 1, a tourist special routed over the
+ * national network is 2. Both are "special" (non-regular): excluded from stats and
  * the planner. Each has its own independent toggle.
  */
 export const usageOptions = [
@@ -26,7 +33,7 @@ export const usageOptions = [
   {
     id: 1,
     key: "HERITAGE",
-    label: "Heritage",
+    label: "Heritage & tourist",
     // Purple
     color: "#9333ea",
     bgColor: "#f3e8ff",

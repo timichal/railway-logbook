@@ -600,7 +600,7 @@ export default function VectorRailwayMap({
                   onChange={() => routeEditor.toggleShowHeritage()}
                   className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 />
-                <span>Show heritage lines</span>
+                <span>Show heritage &amp; tourist lines</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer text-xs mb-2">
                 <input

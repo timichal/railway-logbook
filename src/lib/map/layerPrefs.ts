@@ -7,7 +7,7 @@
  */
 
 export interface LayerPrefs {
-  /** "Show heritage lines" — reveals Heritage routes (usage_type=1, solid). */
+  /** "Show heritage & tourist lines" — reveals Heritage routes (usage_type=1, dotted). */
   showHeritage: boolean;
   /** "Show special services" — reveals Special routes (usage_type=2, dashed). */
   showSpecial: boolean;

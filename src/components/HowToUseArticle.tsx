@@ -32,14 +32,15 @@ export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
         </p>
         <p className="mb-4">
           Only lines that are in regular use and available in official timetables are displayed.
-          Non-regular lines come in two flavours, each with its own toggle. <i>Heritage</i> lines
-          (museum or preserved lines run by enthusiasts, outside regular timetables and found only
-          via the operator's own channels) are revealed by ticking <b>Show heritage lines</b> and
-          drawn as dotted lines. <i>Special</i> services (regular national tracks used only
-          irregularly by passenger trains - diversions during engineering works, festival or
-          anniversary runs, occasional tourist trains) are revealed by ticking{" "}
-          <b>Show special services</b> and drawn as dashed lines. Some of these may be missing and
-          some may be without any traffic at the moment.
+          Non-regular lines come in two flavours, each with its own toggle.{" "}
+          <i>Heritage &amp; tourist</i> lines (lines of their own, outside the national timetable
+          and published through the operator's own channels - museum and preserved railways, but
+          also tourist lines such as rack railways and funiculars, some of which run daily) are
+          revealed by ticking <b>Show heritage &amp; tourist lines</b> and drawn as dotted lines.{" "}
+          <i>Special</i> services (regular national tracks used only irregularly by passenger trains
+          - diversions during engineering works, festival or anniversary runs, occasional tourist
+          trains) are revealed by ticking <b>Show special services</b> and drawn as dashed lines.
+          Some of these may be missing and some may be without any traffic at the moment.
         </p>
         <p className="mb-4">
           While in the <b>Route Logger</b> mode, you can either click on individual line parts or
@@ -63,8 +64,8 @@ export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
         <p className="mb-4">
           In the <b>Countries</b> tab, you can choose to display or hide railways by each country.
           Croos-border lines are shown only when both countries are enabled. The stats section shows
-          your progress per country and for the whole network. Heritage and special lines are not
-          counted in the stats.
+          your progress per country and for the whole network. Heritage &amp; tourist lines and
+          special services are not counted in the stats.
         </p>
         <p className="mb-4">
           Made by Michal Zlatkovský with a lot of help from the Claude Code AI tool. The code is{" "}

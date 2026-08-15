@@ -242,7 +242,7 @@ export function createRailwayRoutesSpecialLayer(
  * it must be its own layer because line-dasharray can't be data-driven, and a
  * solid base railway_routes line underneath would fill the dot gaps. Drawn with
  * round line-caps so the zero-length dashes render as dots. Hidden by default on
- * the user map (revealed by the "Show heritage lines" toggle, useLayerFilters);
+ * the user map (revealed by the "Show heritage & tourist lines" toggle, useLayerFilters);
  * the admin map makes it visible. Shares the route source so feature-state visit
  * colors apply identically.
  */
@@ -264,7 +264,7 @@ export function createRailwayRoutesHeritageLayer(
     "source-layer": "railway_routes",
     minzoom: ZOOM_RANGES.railwayRoutes.min,
     layout: {
-      visibility: "none", // controlled by "Show heritage lines" checkbox (user map)
+      visibility: "none", // controlled by "Show heritage & tourist lines" checkbox (user map)
       "line-cap": "round", // makes the zero-length dashes render as dots
     },
     paint: {
