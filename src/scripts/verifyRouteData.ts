@@ -190,6 +190,10 @@ export async function recalculateAllRoutes(
             has_backtracking = $3,
             is_valid = TRUE,
             error_message = NULL,
+            -- The route routes again, so whatever works had broken it are over.
+            -- The failure branches leave the flag alone: a route still under
+            -- repair keeps it across OSM updates until it recalculates.
+            under_repair = FALSE,
             updated_at = CURRENT_TIMESTAMP
           WHERE track_id = $4
         `,

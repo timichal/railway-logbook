@@ -6,6 +6,7 @@ import {
   duplicateRailwayRoute,
   getAllRailwayRoutes,
   getRailwayRoute,
+  setRouteUnderRepair,
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
 import type { LineClass, UsageType } from "@/lib/constants";
@@ -44,6 +45,7 @@ export default function AdminRoutesTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [showInvalidOnly, setShowInvalidOnly] = useState(false);
+  const [showUnderRepairOnly, setShowUnderRepairOnly] = useState(false);
   const [showUnintendedBacktrackingOnly, setShowUnintendedBacktrackingOnly] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const itemsPerPage = 100;
@@ -84,8 +86,14 @@ export default function AdminRoutesTab({
   const filteredRoutes = useMemo(() => {
     let filtered = routes;
 
-    if (showInvalidOnly) {
-      filtered = filtered.filter((route) => route.is_valid === false);
+    // The two invalid filters split the failing routes between them: "invalid"
+    // is the plain worklist, "under repair" the ones parked pending OSM works.
+    // Ticking both is how you see every invalid route.
+    if (showInvalidOnly || showUnderRepairOnly) {
+      filtered = filtered.filter((route) => {
+        if (route.is_valid !== false) return false;
+        return route.under_repair === true ? showUnderRepairOnly : showInvalidOnly;
+      });
     }
 
     if (showUnintendedBacktrackingOnly) {
@@ -104,7 +112,7 @@ export default function AdminRoutesTab({
     }
 
     return filtered;
-  }, [routes, searchQuery, showInvalidOnly, showUnintendedBacktrackingOnly]);
+  }, [routes, searchQuery, showInvalidOnly, showUnderRepairOnly, showUnintendedBacktrackingOnly]);
 
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   const paginatedRoutes = useMemo(() => {
@@ -112,7 +120,12 @@ export default function AdminRoutesTab({
     return filteredRoutes.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredRoutes, currentPage]);
 
-  const invalidRouteCount = routes.filter((route) => route.is_valid === false).length;
+  const invalidRouteCount = routes.filter(
+    (route) => route.is_valid === false && route.under_repair !== true,
+  ).length;
+  const underRepairCount = routes.filter(
+    (route) => route.is_valid === false && route.under_repair === true,
+  ).length;
   const unintendedBacktrackingCount = routes.filter(
     (route) => route.has_backtracking === true && route.intended_backtracking !== true,
   ).length;
@@ -120,7 +133,7 @@ export default function AdminRoutesTab({
   // biome-ignore lint/correctness/useExhaustiveDependencies: the filter states are intentional triggers to reset pagination to page 1 when filtering changes.
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, showInvalidOnly, showUnintendedBacktrackingOnly]);
+  }, [searchQuery, showInvalidOnly, showUnderRepairOnly, showUnintendedBacktrackingOnly]);
 
   // Route selection
   const handleRouteClick = useCallback(
@@ -220,6 +233,34 @@ export default function AdminRoutesTab({
       console.error("Error updating route:", error);
       showError(
         `Failed to update route: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggleUnderRepair = async (underRepair: boolean) => {
+    if (!selectedRoute) return;
+
+    try {
+      setIsLoading(true);
+      await setRouteUnderRepair(selectedRoute.track_id, underRepair);
+
+      setSelectedRoute({ ...selectedRoute, under_repair: underRepair });
+      await loadRoutes();
+
+      // Repaints the admin map: the flag decides violet vs grey.
+      if (onRouteUpdated) {
+        onRouteUpdated();
+      }
+
+      showSuccess(
+        underRepair ? "Route marked as under repair." : "Route no longer marked as under repair.",
+      );
+    } catch (error) {
+      console.error("Error updating under repair flag:", error);
+      showError(
+        `Failed to update under repair flag: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     } finally {
       setIsLoading(false);
@@ -328,17 +369,20 @@ export default function AdminRoutesTab({
           paginatedRoutes={paginatedRoutes}
           totalRoutes={routes.length}
           invalidRouteCount={invalidRouteCount}
+          underRepairCount={underRepairCount}
           unintendedBacktrackingCount={unintendedBacktrackingCount}
           isLoading={isLoading && !selectedRoute}
           selectedRouteId={selectedRouteId}
           searchQuery={searchQuery}
           showInvalidOnly={showInvalidOnly}
+          showUnderRepairOnly={showUnderRepairOnly}
           showUnintendedBacktrackingOnly={showUnintendedBacktrackingOnly}
           currentPage={currentPage}
           totalPages={totalPages}
           filteredCount={filteredRoutes.length}
           onSearchChange={setSearchQuery}
           onInvalidOnlyChange={setShowInvalidOnly}
+          onUnderRepairOnlyChange={setShowUnderRepairOnly}
           onUnintendedBacktrackingOnlyChange={setShowUnintendedBacktrackingOnly}
           onRouteClick={handleRouteClick}
           onPageChange={setCurrentPage}
@@ -354,6 +398,7 @@ export default function AdminRoutesTab({
           onDelete={handleDeleteRoute}
           onDuplicate={handleDuplicateRoute}
           onEditGeometry={onEditGeometry || (() => {})}
+          onToggleUnderRepair={handleToggleUnderRepair}
           onUnselect={handleUnselect}
         />
       </div>

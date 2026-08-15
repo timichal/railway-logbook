@@ -64,6 +64,7 @@ CREATE TABLE railway_routes (
     ending_part_id TEXT, -- DEPRECATED: Reference to ending railway_part (kept for migration, will be removed)
     is_valid BOOLEAN DEFAULT TRUE, -- Route validity flag (for recalculation errors)
     error_message TEXT, -- Error details if route recalculation fails
+    under_repair BOOLEAN DEFAULT FALSE, -- Admin-set: this route is invalid only because the OSM layout is temporarily broken (bridge works etc.), not because the line really changed
     intended_backtracking BOOLEAN DEFAULT FALSE, -- Flag to indicate backtracking is intentional
     has_backtracking BOOLEAN DEFAULT FALSE, -- Flag set by verification script indicating route uses backtracking path
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -30,7 +30,8 @@ export async function getAllRailwayRoutes() {
 
   const result = await query(`
     SELECT track_id, from_station, to_station, description, usage_type, scenic, line_class,
-           starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking, has_backtracking
+           starting_part_id, ending_part_id, is_valid, error_message, under_repair,
+           intended_backtracking, has_backtracking
     FROM railway_routes
     ORDER BY from_station, to_station
   `);
@@ -84,7 +85,7 @@ export async function getRailwayRoute(trackId: number) {
            ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
            ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json,
-           starting_part_id, ending_part_id, is_valid, error_message, intended_backtracking
+           starting_part_id, ending_part_id, is_valid, error_message, under_repair, intended_backtracking
     FROM railway_routes
     WHERE track_id = $1
   `,
@@ -248,6 +249,7 @@ export async function saveRailwayRoute(
           has_backtracking = $6,
           is_valid = TRUE,
           error_message = NULL,
+          under_repair = FALSE,
           updated_at = CURRENT_TIMESTAMP
         WHERE track_id = $7
         RETURNING track_id, length_km
@@ -394,7 +396,8 @@ export async function saveRailwayRoute(
 
 /**
  * Update route metadata (name, description, usage_type, etc.)
- * Also marks route as valid since admin is manually validating
+ * Also marks route as valid since admin is manually validating — which clears
+ * `under_repair` too: the flag only ever qualifies an invalid route.
  */
 export async function updateRailwayRoute(
   trackId: number,
@@ -414,7 +417,8 @@ export async function updateRailwayRoute(
     `
     UPDATE railway_routes
     SET from_station = $2, to_station = $3, description = $4, usage_type = $5, frequency = $6, link = $7,
-        scenic = $8, line_class = $9, intended_backtracking = $10, is_valid = TRUE, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+        scenic = $8, line_class = $9, intended_backtracking = $10, is_valid = TRUE, error_message = NULL,
+        under_repair = FALSE, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
   `,
     [
@@ -430,6 +434,36 @@ export async function updateRailwayRoute(
       intendedBacktracking,
     ],
   );
+}
+
+/**
+ * Flag (or unflag) an invalid route as being under repair.
+ *
+ * An invalid route is either genuinely gone (line dismantled, layout rebuilt) or
+ * only temporarily unroutable because the OSM data is mid-works — a bridge being
+ * rebuilt, a way split while the survey catches up. This flag separates the
+ * second kind so it drops out of the plain "Invalid" worklist and paints violet
+ * on the admin map, while still counting as invalid everywhere else.
+ *
+ * It qualifies invalidity, so it is never set on a valid route and is cleared
+ * the moment a route becomes valid again — on geometry re-pick, metadata save
+ * and successful recalculation alike.
+ */
+export async function setRouteUnderRepair(trackId: number, underRepair: boolean): Promise<void> {
+  await requireAdmin();
+
+  const result = await query(
+    `
+    UPDATE railway_routes
+    SET under_repair = $2, updated_at = CURRENT_TIMESTAMP
+    WHERE track_id = $1 AND ($2 = FALSE OR is_valid = FALSE)
+  `,
+    [trackId, underRepair],
+  );
+
+  if (result.rowCount === 0) {
+    throw new Error("Route not found, or it is valid and cannot be marked under repair");
+  }
 }
 
 /**
@@ -459,13 +493,13 @@ export async function duplicateRailwayRoute(trackId: number): Promise<number> {
         from_station, to_station, description, usage_type, frequency, link, scenic,
         line_class, geometry, length_km, start_country, end_country,
         starting_coordinate, ending_coordinate, starting_part_id, ending_part_id,
-        is_valid, error_message, intended_backtracking, has_backtracking
+        is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       )
       SELECT
         from_station || ' [duplicate]', to_station || ' [duplicate]', description,
         usage_type, frequency, link, scenic, line_class, geometry, length_km,
         start_country, end_country, starting_coordinate, ending_coordinate,
-        starting_part_id, ending_part_id, is_valid, error_message,
+        starting_part_id, ending_part_id, is_valid, error_message, under_repair,
         intended_backtracking, has_backtracking
       FROM railway_routes
       WHERE track_id = $1

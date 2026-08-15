@@ -26,6 +26,7 @@ interface RouteEditFormProps {
   onDelete: () => void;
   onDuplicate: () => void;
   onEditGeometry: (trackId: number) => void;
+  onToggleUnderRepair: (underRepair: boolean) => void;
   onUnselect: () => void;
 }
 
@@ -39,8 +40,11 @@ export default function RouteEditForm({
   onDelete,
   onDuplicate,
   onEditGeometry,
+  onToggleUnderRepair,
   onUnselect,
 }: RouteEditFormProps) {
+  const underRepair = selectedRoute?.under_repair === true;
+
   if (!selectedRoute) {
     return (
       <div
@@ -72,13 +76,17 @@ export default function RouteEditForm({
         </div>
 
         <div className="space-y-4">
-          {/* Invalid Route Alert */}
+          {/* Invalid Route Alert — violet variant for routes flagged under repair */}
           {selectedRoute.is_valid === false && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-3">
+            <div
+              className={`border rounded-md p-3 ${
+                underRepair ? "bg-violet-50 border-violet-200" : "bg-red-50 border-red-200"
+              }`}
+            >
               <div className="flex items-start">
                 <div className="flex-shrink-0">
                   <svg
-                    className="h-5 w-5 text-red-400"
+                    className={`h-5 w-5 ${underRepair ? "text-violet-400" : "text-red-400"}`}
                     viewBox="0 0 20 20"
                     fill="currentColor"
                     aria-hidden="true"
@@ -91,14 +99,30 @@ export default function RouteEditForm({
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">Invalid Route</h3>
+                  <h3
+                    className={`text-sm font-medium ${
+                      underRepair ? "text-violet-800" : "text-red-800"
+                    }`}
+                  >
+                    {underRepair ? "Under Repair" : "Invalid Route"}
+                  </h3>
                   {selectedRoute.error_message && (
-                    <div className="mt-2 text-sm text-red-700">
+                    <div
+                      className={`mt-2 text-sm ${underRepair ? "text-violet-700" : "text-red-700"}`}
+                    >
                       <p className="mt-1 font-mono text-xs">{selectedRoute.error_message}</p>
                     </div>
                   )}
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => onToggleUnderRepair(!underRepair)}
+                disabled={isLoading}
+                className="mt-3 w-full bg-violet-600 hover:bg-violet-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+              >
+                {underRepair ? "Unmark as under repair" : "Mark as under repair"}
+              </button>
             </div>
           )}
 

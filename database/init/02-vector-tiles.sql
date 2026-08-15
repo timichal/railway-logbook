@@ -138,6 +138,7 @@ BEGIN
             rr.end_country,
             rr.is_valid,
             rr.error_message,
+            rr.under_repair,
             rr.starting_part_id,
             rr.ending_part_id,
             -- Include most recent journey data for client-side styling

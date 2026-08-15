@@ -26,6 +26,9 @@ export const COLORS = {
     unvisited: { branch: "#b8554f", main: "#b8554f", highspeed: "#7a3633" },
     partial: { branch: "#d97706", main: "#d97706", highspeed: "#92400e" },
     invalid: "#9ca3af", // Grey for invalid routes
+    // Violet for invalid routes the admin flagged as under repair — the OSM
+    // layout is only temporarily broken, so they are parked, not a worklist item.
+    underRepair: "#8b5cf6",
   },
   // Highlight overlays drawn on top of railway_routes.
   // 'planner' — Journey Planner pathfinder result (gold).

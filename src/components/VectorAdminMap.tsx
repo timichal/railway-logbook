@@ -48,25 +48,32 @@ const ROUTE_LINE_LAYERS = [
 ] as const;
 
 /**
- * Apply the admin route paint (selected-route highlight + invalid-route grey) to
- * all three route line layers at once. `line-dasharray` is left untouched, so
- * the dotted/dashed styles baked into the heritage/special factories survive.
+ * Apply the admin route paint (selected-route highlight + invalid-route grey,
+ * violet for the ones flagged under repair) to all three route line layers at
+ * once. `line-dasharray` is left untouched, so the dotted/dashed styles baked
+ * into the heritage/special factories survive.
  */
 function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | null) {
   const trackIdNum = selectedRouteId ?? null;
 
+  // `under_repair` is only ever set on invalid routes, but it is checked first
+  // anyway so a stale flag can never outrank the grey.
   const colorExpression: maplibregl.ExpressionSpecification =
     trackIdNum !== null
       ? [
           "case",
           ["==", ["id"], trackIdNum],
           COLORS.railwayRoutes.selected,
+          ["all", ["==", ["get", "is_valid"], false], ["==", ["get", "under_repair"], true]],
+          COLORS.railwayRoutes.underRepair,
           ["==", ["get", "is_valid"], false],
           COLORS.railwayRoutes.invalid,
           lineClassColorExpression(COLORS.railwayRoutes.default),
         ]
       : [
           "case",
+          ["all", ["==", ["get", "is_valid"], false], ["==", ["get", "under_repair"], true]],
+          COLORS.railwayRoutes.underRepair,
           ["==", ["get", "is_valid"], false],
           COLORS.railwayRoutes.invalid,
           lineClassColorExpression(COLORS.railwayRoutes.default),

@@ -7,17 +7,20 @@ interface RoutesListProps {
   paginatedRoutes: RailwayRoute[];
   totalRoutes: number;
   invalidRouteCount: number;
+  underRepairCount: number;
   unintendedBacktrackingCount: number;
   isLoading: boolean;
   selectedRouteId?: number | null;
   searchQuery: string;
   showInvalidOnly: boolean;
+  showUnderRepairOnly: boolean;
   showUnintendedBacktrackingOnly: boolean;
   currentPage: number;
   totalPages: number;
   filteredCount: number;
   onSearchChange: (query: string) => void;
   onInvalidOnlyChange: (checked: boolean) => void;
+  onUnderRepairOnlyChange: (checked: boolean) => void;
   onUnintendedBacktrackingOnlyChange: (checked: boolean) => void;
   onRouteClick: (trackId: number) => void;
   onPageChange: (page: number) => void;
@@ -27,17 +30,20 @@ export default function RoutesList({
   paginatedRoutes,
   totalRoutes,
   invalidRouteCount,
+  underRepairCount,
   unintendedBacktrackingCount,
   isLoading,
   selectedRouteId,
   searchQuery,
   showInvalidOnly,
+  showUnderRepairOnly,
   showUnintendedBacktrackingOnly,
   currentPage,
   totalPages,
   filteredCount,
   onSearchChange,
   onInvalidOnlyChange,
+  onUnderRepairOnlyChange,
   onUnintendedBacktrackingOnlyChange,
   onRouteClick,
   onPageChange,
@@ -58,7 +64,18 @@ export default function RoutesList({
                 onChange={(e) => onInvalidOnlyChange(e.target.checked)}
                 className="mr-2"
               />
-              <span className="text-gray-700">Invalid only ({invalidRouteCount})</span>
+              <span className="text-gray-700">Invalid ({invalidRouteCount})</span>
+            </label>
+            {/* Under Repair Filter — invalid routes parked pending OSM works.
+                Disjoint from "Invalid": tick both to see every invalid route. */}
+            <label className="flex justify-center items-center cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={showUnderRepairOnly}
+                onChange={(e) => onUnderRepairOnlyChange(e.target.checked)}
+                className="mr-2"
+              />
+              <span className="text-gray-700">Under repair ({underRepairCount})</span>
             </label>
             {/* Unintended Backtracking Filter */}
             <label className="flex justify-center items-center cursor-pointer text-sm">

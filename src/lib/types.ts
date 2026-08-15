@@ -89,6 +89,7 @@ export type RailwayRoute = {
   ending_part_id?: string | null;
   is_valid?: boolean;
   error_message?: string | null;
+  under_repair?: boolean; // Invalid only because the OSM layout is temporarily broken (admin-set)
   intended_backtracking?: boolean; // Flag to indicate backtracking is intentional
   has_backtracking?: boolean; // Flag set by verification script indicating route uses backtracking path
   date?: string | null; // From most recent journey
