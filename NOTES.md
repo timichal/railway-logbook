@@ -8,10 +8,10 @@ hotovo: Česko, Švýcarsko, Lucembursko, Dánsko, Norsko (chybí scénické zna
 rozdělané: Německo, Itálie, Slovinsko, Francie, Španělsko, Belgie, Nizozemsko, Švédsko
 
 dodělat s aičkem:
+- v user části dva módy - nový klik na stanice vyplní from/to/via (asi default), současný klik na parts, nějak vymyslet ux a tak
 - atlas část: europe by rail trasy
 - about/faq
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
-- preferred routing: save route presets (brno-praha) / šlo by vyřešit atlasem
 - correct utf8 sorting in admin routes
 
 ČESKO
