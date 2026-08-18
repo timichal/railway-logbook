@@ -1,6 +1,7 @@
 "use client";
 
 import { type LineClass, lineClassOptions, type UsageType, usageOptions } from "@/lib/constants";
+import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 import type { RailwayRoute } from "@/lib/types";
 import TagInput from "./TagInput";
 
@@ -136,6 +137,11 @@ export default function RouteEditForm({
               type="text"
               value={editForm.from_station}
               onChange={(e) => onEditFormChange({ ...editForm, from_station: e.target.value })}
+              onKeyDown={(e) =>
+                handleJunctionShortcut(e, (value) =>
+                  onEditFormChange({ ...editForm, from_station: value }),
+                )
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             />
           </div>
@@ -150,6 +156,11 @@ export default function RouteEditForm({
               type="text"
               value={editForm.to_station}
               onChange={(e) => onEditFormChange({ ...editForm, to_station: e.target.value })}
+              onKeyDown={(e) =>
+                handleJunctionShortcut(e, (value) =>
+                  onEditFormChange({ ...editForm, to_station: value }),
+                )
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             />
           </div>

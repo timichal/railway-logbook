@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
 import { type UsageType, usageOptions } from "@/lib/constants";
+import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
 import TagInput from "./TagInput";
@@ -368,6 +369,11 @@ export default function AdminCreateRouteTab({
                 type="text"
                 value={createForm.from_station}
                 onChange={(e) => setCreateForm({ ...createForm, from_station: e.target.value })}
+                onKeyDown={(e) =>
+                  handleJunctionShortcut(e, (value) =>
+                    setCreateForm({ ...createForm, from_station: value }),
+                  )
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
                 placeholder="Starting station"
               />
@@ -383,6 +389,11 @@ export default function AdminCreateRouteTab({
                 type="text"
                 value={createForm.to_station}
                 onChange={(e) => setCreateForm({ ...createForm, to_station: e.target.value })}
+                onKeyDown={(e) =>
+                  handleJunctionShortcut(e, (value) =>
+                    setCreateForm({ ...createForm, to_station: value }),
+                  )
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
                 placeholder="Ending station"
               />
