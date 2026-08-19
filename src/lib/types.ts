@@ -1,11 +1,18 @@
 import type { LineClass, NoteType, UsageType } from "./constants";
 
 // Types for pruneData.ts script
+// Raw feature as produced by `osmium export` and consumed by pruneData.ts.
+// Areas show up too: a closed way tagged railway=station is exported as a
+// MultiPolygon (and, unless it carries area=yes, a second time as a LineString).
 export type Feature = {
   type: "Feature";
   geometry: {
-    type: "Point" | "LineString";
-    coordinates: [number, number] | [number, number][];
+    type: "Point" | "LineString" | "Polygon" | "MultiPolygon";
+    coordinates:
+      | [number, number]
+      | [number, number][]
+      | [number, number][][]
+      | [number, number][][][];
   };
   properties: {
     "@id"?: number;

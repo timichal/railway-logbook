@@ -28,8 +28,9 @@ async function main() {
 
   const resolve = async (arg: string): Promise<number> => {
     // A numeric argument is taken as a station id verbatim — the way to inspect a
-    // station the name search below won't return.
-    if (/^\d+$/.test(arg)) return Number(arg);
+    // station the name search below won't return. Negative ids are area-mapped
+    // stations (see pruneData.ts).
+    if (/^-?\d+$/.test(arg)) return Number(arg);
 
     // Only near_route stations, matching what the planner's autocomplete offers
     const { rows } = await pool.query<{ id: string; name: string }>(

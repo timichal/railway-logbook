@@ -40,12 +40,16 @@ if [ -f "${FILTERED_FILE}" ]; then
     echo "[2/4] Skipping filtering - ${FILTERED_FILE} already exists"
 else
     echo "[2/4] Filtering rail features..."
+    # Stations are matched on nodes AND ways (nw/): plenty of them - most of
+    # France, from the SNCF/cadastre import - carry railway=station on the
+    # station building instead of a node. osmium export turns those closed ways
+    # into (Multi)Polygons, which pruneData.ts reduces back to a Point.
     osmium tags-filter \
         --overwrite \
         -o "${FILTERED_FILE}" \
         "${DOWNLOAD_FILE}" \
         w/railway=rail,narrow_gauge,light_rail \
-        n/railway=station,halt || {
+        nw/railway=station,halt || {
             echo "ERROR: Failed to filter rail features"
             exit 1
         }
