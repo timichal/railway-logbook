@@ -43,7 +43,7 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "jose": "^6.2.9",
-    "maplibre-gl": "^6.4.0",
+    "maplibre-gl": "^6.4.1",
     "next": "^16.3.1",
     "pg": "^8.23.0",
     "postcss": "^8.5.26",
@@ -54,11 +54,11 @@
     "typescript": "^7.0.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.8",
+    "@biomejs/biome": "^2.5.9",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^26.2.0",
-    "@types/pg": "^8.21.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/transliteration": "^1.6.1",
