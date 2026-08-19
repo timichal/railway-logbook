@@ -136,6 +136,8 @@ export const CIRCLES = {
 // ============================================================================
 
 export const OPACITIES = {
+  // The whole basemap, washed out under the railway data (see createBasemapFadeLayer).
+  basemapFade: 0.25,
   defaultRoute: 0.8,
   selectedRoute: 1.0,
   highlight: 1.0,

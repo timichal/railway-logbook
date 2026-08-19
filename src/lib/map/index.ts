@@ -2,6 +2,15 @@ import type * as maplibregl from "maplibre-gl";
 import { getNoteTypeColor, noteTypeOptions } from "../constants";
 import { CIRCLES, COLORS, DASHES, OPACITIES } from "./style";
 
+// The basemap (vector, latin labels) and its raster fallback live in basemap.ts.
+export {
+  BASEMAP_STYLE_URL,
+  createBasemapFadeLayer,
+  createOSMBackgroundLayer,
+  createOSMBackgroundSource,
+  loadBasemapStyle,
+  OSM_TILES_URL,
+} from "./basemap";
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
 export { CIRCLES, COLORS, DASHES, OPACITIES, WIDTHS } from "./style";
 
@@ -11,7 +20,6 @@ export { CIRCLES, COLORS, DASHES, OPACITIES, WIDTHS } from "./style";
 
 // The initial view and the panning limits are per-region; see src/lib/regions.ts.
 export const TILE_SERVER_PORT = 3001;
-export const OSM_TILES_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 // Use /tiles/ path in production (proxied through nginx), direct port in development
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
@@ -75,31 +83,6 @@ export function lineClassColorExpression(colors: {
 // ============================================================================
 // LAYER CONFIGURATION FACTORIES
 // ============================================================================
-
-export function createOSMBackgroundLayer(): maplibregl.RasterLayerSpecification {
-  return {
-    id: "background",
-    type: "raster",
-    source: "osm",
-    minzoom: 4,
-    maxzoom: 19, // has to be higher than the map max zoom
-    paint: {
-      "raster-fade-duration": 0,
-      "raster-saturation": 0,
-      "raster-opacity": 0.6,
-    },
-  };
-}
-
-export function createOSMBackgroundSource(): maplibregl.RasterSourceSpecification {
-  return {
-    type: "raster",
-    tiles: [OSM_TILES_URL],
-    tileSize: 256,
-    attribution:
-      '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  };
-}
 
 export function createRailwayRoutesSource(
   options: RailwayRoutesSourceOptions = {},

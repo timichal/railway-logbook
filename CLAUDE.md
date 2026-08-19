@@ -90,6 +90,14 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 
 `src/lib/map/style.ts` is the **single source of truth** for colors/widths/opacities (`COLORS`, `WIDTHS`, `CIRCLES`, `OPACITIES`). Route colors come from visit status × line_class (green/orange/red, darker for highspeed). Width is a single z4→z7 zoom interpolate; all line classes visible at all zooms, just thinner when zoomed out. Scenic routes get an amber outline (its own layer because MapLibre forbids wrapping a zoom-interpolate). An invisible wide `railway_routes_click` layer sits over the visible line for touch hit areas. Hover popups use badge formatting from `utils/tooltipFormatting.ts`.
 
+**Basemap** (`basemap.ts`). The background is OpenFreeMap's `liberty` vector style (OpenMapTiles schema, no API key, attribution declared by the source TileJSON so MapLibre picks it up unaided). It is **vector rather than raster for one reason: label language.** A raster basemap bakes its labels into the image from OSM's local `name`, so the Japan region came out in kanji with nothing to configure; in a vector style the label is a property we own, and `latinizeLabels` rewrites every name-bearing symbol layer's `text-field` to `coalesce(name:latin, name_en, name)` — Latin script, falling back to the local name so a place with no Latin name is labelled rather than blank. The test is what a layer *reads*, not what it is called: `highway-shield-non-us` and the one-way arrows read `ref`, not a name, and are left alone (`highway-name-major` does read a name).
+
+Two consequences of the basemap being ~110 layers instead of one raster layer:
+- **The fade is its own layer.** `raster-opacity: 0.6` has no vector equivalent, so `createBasemapFadeLayer` puts a `background`-type layer (needs no source, paints the whole viewport) above the basemap and below our layers, at `OPACITIES.basemapFade`. Our layers still sit on top of everything, as they did over the raster tiles.
+- **The style is fetched before the map is created**, not swapped in later: MapLibre takes one style object, and a later `setStyle` would discard the layers the other hooks add on top (coverage overlay, highlights). `loadBasemapStyle` memoises the fetch per page load (both maps mount it; a region switch rebuilds the map) and resolves **null** instead of rejecting on failure or a 6s timeout — the caller then builds the old OSM raster basemap, because a railway map on a plain OSM background is usable and one with no background is not. A failure clears the memo so the next map retries.
+
+**The POI layers are dropped** (`dropPoiLayers`, the four over the `poi` source-layer). Cafés, ATMs and bollards carry nothing to click on a railway map, and their circles compete with the station circles, which do. It also removes a whole class of upstream breakage: those layers take `icon-image` from the tile data (`["get", "class"]`), asking for one icon per OSM POI class while the sprite carries 264 names, so `bollard`, `atm`, `athletics` and many more warned to the console at the zoom POIs appear. `resolveMissingBasemapIcons` stays as the backstop for what remains — the route shields build their icon name from tag values too (`concat(network, "_", ref_length)`) — registering a 1x1 transparent pixel per missing name, which is what MapLibre already drew (label kept, icon skipped).
+
 **Popups are raw HTML strings passed to MapLibre's `setHTML`, so nothing is escaped for you.** Every interpolated value must go through `escapeHtml()`, and every URL through `safeHref()` (both in `utils/tooltipFormatting.ts`); `safeHref` returns `""` for anything that isn't `http(s)`, which also guards the `window.open` double-click handlers. This is not just about admin-authored text — **station names come straight from OSM**, i.e. from a third party who can edit them.
 
 Selection/highlight layers:
@@ -121,8 +129,9 @@ Highlights are tile-filter overlays (`in ["id"], [literal ids]`), so they can on
 - **Toast**: `toast/` (`useToast`, `ToastContainer`, `ConfirmDialog`).
 
 ### Map library (`src/lib/map/`)
-- `index.ts` — constants, layer/source factories, `lineClassColorExpression`. Re-exports from `style.ts`.
+- `index.ts` — constants, layer/source factories, `lineClassColorExpression`. Re-exports from `style.ts` and `basemap.ts`.
 - `style.ts` — styling source of truth (see above).
+- `basemap.ts` — the basemap under the data: vector style fetch, Latin-label rewrite, fade layer, raster fallback (see "Basemap" above).
 - `mapState.ts` — save/load map position.
 - **Hooks**: `useMapLibre`, `useRouteEditor`, `useStationSearch`, `useRouteLength`, `useAdminLayerVisibility`, `useAdminMapOverlays`, `useAdminNotesPopup`, `useMapTileRefresh`, `useRouteHighlighting` (takes `kind: 'planner' | 'view'`), `useCoverageOverlay`, `useLayerFilters`.
 - **Interactions**: `userMapInteractions.ts`, `adminMapInteractions.ts`.
