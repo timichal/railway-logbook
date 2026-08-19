@@ -18,6 +18,22 @@ export const BASEMAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 /** Raster fallback, used when the vector style cannot be fetched. */
 export const OSM_TILES_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
+/**
+ * Font glyphs for our own text layers (station names).
+ *
+ * The vector style declares this same endpoint, so on the normal path it comes
+ * along with the style; the constant is what the raster fallback declares, since
+ * a style with no `glyphs` renders no text at all.
+ *
+ * Any fontstack named in a `text-font` has to exist here, and the endpoint serves
+ * exactly three - Noto Sans in Regular, Bold and Italic. There is no sleeker face
+ * to pick from without hosting our own glyph PBFs. Both weights cover Latin
+ * Extended-A, so the Czech and Polish names render.
+ */
+export const GLYPHS_URL = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
+export const BASEMAP_FONT = "Noto Sans Regular";
+export const BASEMAP_FONT_BOLD = "Noto Sans Bold";
+
 /** How long to wait for the style before falling back to the raster basemap. */
 const STYLE_FETCH_TIMEOUT_MS = 6000;
 

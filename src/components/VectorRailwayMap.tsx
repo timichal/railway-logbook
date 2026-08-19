@@ -14,6 +14,7 @@ import {
   createRailwayRoutesSource,
   createRailwayRoutesSpecialLayer,
   createScenicRoutesOutlineLayer,
+  createStationLabelsLayer,
   createStationsLayer,
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
@@ -220,6 +221,7 @@ export default function VectorRailwayMap({
         createRailwayRoutesSpecialLayer(specialLayerConfig),
         createRailwayRoutesClickLayer(clickBufferLayerConfig),
         createStationsLayer(),
+        createStationLabelsLayer(),
         // Public Usage notes render on top (route tile refresh re-inserts route
         // layers before "stations", so this stays above them).
         createPublicNotesLayer(),

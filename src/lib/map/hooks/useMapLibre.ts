@@ -6,6 +6,7 @@ import {
   createBasemapFadeLayer,
   createOSMBackgroundLayer,
   createOSMBackgroundSource,
+  GLYPHS_URL,
   loadBasemapStyle,
   resolveMissingBasemapIcons,
 } from "../basemap";
@@ -99,8 +100,10 @@ export function useMapLibre(
         container: containerRef.current,
         style: {
           version: 8,
-          // Both only exist for the vector basemap's own label and icon layers.
-          glyphs: basemap?.glyphs,
+          // Our station labels need glyphs whichever basemap we ended up with,
+          // so the fallback declares the endpoint the vector style would have.
+          glyphs: basemap?.glyphs ?? GLYPHS_URL,
+          // Only the vector basemap's own icon layers use the sprite.
           sprite: basemap?.sprite,
           sources: allSources,
           layers: allLayers,

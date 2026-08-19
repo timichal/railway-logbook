@@ -44,6 +44,10 @@ export const COLORS = {
   stations: {
     fill: "#ff7800",
     stroke: "#000",
+    // Station names: near-black on a white halo, so they read over both the
+    // faded basemap and our own route lines.
+    label: "#111827",
+    labelHalo: "#ffffff",
   },
   adminNotes: {
     fill: "#fbbf24", // Yellow/amber for notes
@@ -129,6 +133,45 @@ export const CIRCLES = {
   pickedPoint: { radius: 8, strokeWidth: 2 },
   // Blue dots marking every existing route endpoint on the admin map.
   routeEndpoint: { radius: 5, strokeWidth: 1.5 },
+} as const;
+
+// ============================================================================
+// OPACITIES
+// ============================================================================
+
+// ============================================================================
+// LABELS
+// ============================================================================
+
+/**
+ * Station name labels.
+ *
+ * These are ours rather than the basemap's. The old raster basemap drew station
+ * names itself, baked into the tile in the local script - which is how Japan came
+ * out in kanji, and why the vector switch left the dots unlabelled. Drawing them
+ * from our own `stations` tile means they match the dots exactly (same
+ * `near_route` filter on the user map), sit above the basemap fade at full
+ * contrast, and carry the Latin-preferring name `pruneData` already resolved.
+ */
+export const LABELS = {
+  station: {
+    // Below this the dots are packed close enough that names would be unreadable
+    // soup; MapLibre's collision detection thins out what is left.
+    minZoom: 12,
+    size: { min: 10, max: 14 },
+    sizeZoom: { min: 12, max: 16 },
+    // Bold, on a crisp white halo: the labels sit over route lines and a busy
+    // basemap, and weight separates them from the basemap's own place names
+    // better than size does. A touch of tracking keeps the bold from looking
+    // cramped, and a hint of halo blur takes the hard edge off the outline.
+    haloWidth: 1.5,
+    haloBlur: 0.3,
+    letterSpacing: 0.02,
+    // Clears the dot (radius 3 + 1px stroke), measured in ems of the text size.
+    offsetEm: 0.5,
+    // Keeps long names ("Praha-Vysočany") from stretching across the map.
+    maxWidthEm: 9,
+  },
 } as const;
 
 // ============================================================================

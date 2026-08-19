@@ -1,18 +1,24 @@
 import type * as maplibregl from "maplibre-gl";
 import { getNoteTypeColor, noteTypeOptions } from "../constants";
-import { CIRCLES, COLORS, DASHES, OPACITIES } from "./style";
+import { BASEMAP_FONT, BASEMAP_FONT_BOLD } from "./basemap";
+import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES } from "./style";
 
 // The basemap (vector, latin labels) and its raster fallback live in basemap.ts.
 export {
+  BASEMAP_FONT,
+  BASEMAP_FONT_BOLD,
   BASEMAP_STYLE_URL,
   createBasemapFadeLayer,
   createOSMBackgroundLayer,
   createOSMBackgroundSource,
+  dropPoiLayers,
+  GLYPHS_URL,
   loadBasemapStyle,
   OSM_TILES_URL,
+  resolveMissingBasemapIcons,
 } from "./basemap";
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
-export { CIRCLES, COLORS, DASHES, OPACITIES, WIDTHS } from "./style";
+export { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
 
 // ============================================================================
 // CONSTANTS
@@ -326,6 +332,51 @@ export function createStationsLayer(): maplibregl.CircleLayerSpecification {
       "circle-stroke-color": COLORS.stations.stroke,
       "circle-stroke-width": CIRCLES.station.strokeWidth,
       "circle-opacity": OPACITIES.stations,
+    },
+  };
+}
+
+/**
+ * Station names, drawn from the same tile as the dots (see LABELS in style.ts).
+ *
+ * `text-font` has to name a fontstack the style's `glyphs` endpoint serves, and
+ * it serves only Noto Sans. Regular is listed behind Bold as the fallback: a
+ * missing glyph in one weight falls through to the next font in the stack rather
+ * than dropping the label.
+ */
+export function createStationLabelsLayer(): maplibregl.SymbolLayerSpecification {
+  return {
+    id: "station_labels",
+    type: "symbol",
+    source: "stations",
+    "source-layer": "stations",
+    minzoom: LABELS.station.minZoom,
+    layout: {
+      "text-field": ["get", "name"],
+      "text-font": [BASEMAP_FONT_BOLD, BASEMAP_FONT],
+      "text-size": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        LABELS.station.sizeZoom.min,
+        LABELS.station.size.min,
+        LABELS.station.sizeZoom.max,
+        LABELS.station.size.max,
+      ],
+      "text-anchor": "top",
+      "text-offset": [0, LABELS.station.offsetEm],
+      "text-letter-spacing": LABELS.station.letterSpacing,
+      "text-max-width": LABELS.station.maxWidthEm,
+      // Drop labels that would collide rather than stacking them - a junction
+      // complex has more station points than there is room for names.
+      "text-allow-overlap": false,
+      "text-padding": 2,
+    },
+    paint: {
+      "text-color": COLORS.stations.label,
+      "text-halo-color": COLORS.stations.labelHalo,
+      "text-halo-width": LABELS.station.haloWidth,
+      "text-halo-blur": LABELS.station.haloBlur,
     },
   };
 }

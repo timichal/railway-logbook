@@ -16,6 +16,7 @@ import {
   createRailwayRoutesSource,
   createRailwayRoutesSpecialLayer,
   createScenicRoutesOutlineLayer,
+  createStationLabelsLayer,
   createStationsLayer,
   createStationsSource,
   lineClassColorExpression,
@@ -175,6 +176,7 @@ export default function VectorAdminMap({
         createRailwayRoutesSpecialLayer(),
         createRailwayRoutesClickLayer(),
         createStationsLayer(),
+        createStationLabelsLayer(),
         createAdminNotesLayer(),
       ],
       onLoad: (mapInstance) => {
@@ -254,11 +256,13 @@ export default function VectorAdminMap({
     if (m.getSource("railway_routes")) m.removeSource("railway_routes");
 
     m.addSource("railway_routes", createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
-    m.addLayer(createScenicRoutesOutlineLayer());
-    m.addLayer(createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }));
-    m.addLayer(createRailwayRoutesHeritageLayer());
-    m.addLayer(createRailwayRoutesSpecialLayer());
-    m.addLayer(createRailwayRoutesClickLayer());
+    // Re-inserted below the station names, which would otherwise end up buried
+    // under the route lines every time the routes are refreshed.
+    m.addLayer(createScenicRoutesOutlineLayer(), "station_labels");
+    m.addLayer(createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }), "station_labels");
+    m.addLayer(createRailwayRoutesHeritageLayer(), "station_labels");
+    m.addLayer(createRailwayRoutesSpecialLayer(), "station_labels");
+    m.addLayer(createRailwayRoutesClickLayer(), "station_labels");
 
     // Re-apply visibility (heritage/special factories default to hidden)
     const visibility = layerVisibility.showRoutesLayer ? "visible" : "none";
