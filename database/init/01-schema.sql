@@ -122,7 +122,7 @@ CREATE TABLE user_preferences (
     -- this default only applies to rows inserted directly via SQL.
     selected_countries TEXT[] NOT NULL DEFAULT ARRAY[
         'AT', 'BE', 'CZ', 'DK', 'EE', 'ES', 'FI', 'FR', 'DE', 'IT',
-        'LV', 'LT', 'LU', 'NL', 'NO', 'PL', 'SE', 'SK', 'SI', 'CH'
+        'LV', 'LT', 'LU', 'NL', 'NO', 'PL', 'SE', 'SK', 'SI', 'CH', 'GB'
     ],
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
