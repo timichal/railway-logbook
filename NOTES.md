@@ -13,6 +13,7 @@ dodělat s aičkem:
 - about/faq
 - náhled cizích map (zakliknout jestli chci public, pak sdílet linkem)
 - correct utf8 sorting in admin routes
+- zrychlit prepocet tras pri importu (paralelizace + mensi dotazy) - rozepsano v RECALC_PERFORMANCE.md
 
 ČESKO
 traťové jř https://www.cd.cz/jizdni-rad/tratove-jizdni-rady

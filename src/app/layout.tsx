@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "The Railway Logbook",
-  description: "Log your rail journeys around Europe",
+  description: "Log your rail journeys around Europe and Japan",
 };
 
 export const viewport: Viewport = {

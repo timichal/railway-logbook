@@ -2,7 +2,37 @@
 
 import { getUser } from "./authActions";
 import pool from "./db";
+import { type RegionId, regionEnvelopeSql } from "./regions";
 import type { Journey, Trip } from "./types";
+
+/**
+ * Region predicates for the browsing list.
+ *
+ * A journey belongs to a region when it logged at least one route there; a trip,
+ * when any of its journeys did. Something with no logged routes yet belongs to
+ * every region — `bool_or` over no rows is NULL, and the COALESCE turns that
+ * into "show it", so a journey created empty never disappears from the list that
+ * created it. A journey spanning both regions (which nothing realistic does)
+ * shows up in both, which is the honest answer.
+ */
+function journeyInRegionSql(region: RegionId, journeyIdExpr: string): string {
+  return `COALESCE((
+    SELECT bool_or(rr.geometry && ${regionEnvelopeSql(region)})
+    FROM user_logged_parts ulp_r
+    JOIN railway_routes rr ON rr.track_id = ulp_r.track_id
+    WHERE ulp_r.journey_id = ${journeyIdExpr}
+  ), TRUE)`;
+}
+
+function tripInRegionSql(region: RegionId, tripIdExpr: string): string {
+  return `COALESCE((
+    SELECT bool_or(rr.geometry && ${regionEnvelopeSql(region)})
+    FROM user_journeys uj_r
+    JOIN user_logged_parts ulp_r ON ulp_r.journey_id = uj_r.id
+    JOIN railway_routes rr ON rr.track_id = ulp_r.track_id
+    WHERE uj_r.trip_id = ${tripIdExpr}
+  ), TRUE)`;
+}
 
 // Trip with computed stats from joined journey data
 export type TripWithStats = Trip & {
@@ -323,11 +353,17 @@ export type TripsAndJourneysItem =
 /**
  * Get a paginated, search-filtered list of top-level items (trips and standalone journeys),
  * sorted by date desc. Trip date = max date of its assigned journeys; standalone journey date = its own date.
+ *
+ * Scoped to `region` (see journeyInRegionSql): browsing the list highlights the
+ * item's routes on the map, and the map is locked to one region. The trip and
+ * journey *pickers* (getAllTrips, getUnassignedJourneys) stay unscoped on
+ * purpose — you must be able to file a journey under any trip you have.
  */
 export async function getJourneysAndTrips(
   page: number,
   pageSize: number,
-  search: string = "",
+  search: string,
+  region: RegionId,
 ): Promise<{ items: TripsAndJourneysItem[]; total: number; error?: string }> {
   try {
     const user = await getUser();
@@ -350,6 +386,7 @@ export async function getJourneysAndTrips(
         FROM user_trips ut
         LEFT JOIN user_journeys uj ON ut.id = uj.trip_id AND uj.user_id = $1
         WHERE ut.user_id = $1
+          AND ${tripInRegionSql(region, "ut.id")}
           ${searchPattern ? `AND (LOWER(ut.name) LIKE $2 OR LOWER(COALESCE(ut.description, '')) LIKE $2)` : ""}
         GROUP BY ut.id
 
@@ -360,6 +397,7 @@ export async function getJourneysAndTrips(
                uj.created_at AS sort_created_at
         FROM user_journeys uj
         WHERE uj.user_id = $1 AND uj.trip_id IS NULL
+          AND ${journeyInRegionSql(region, "uj.id")}
           ${searchPattern ? `AND (LOWER(uj.name) LIKE $2 OR LOWER(COALESCE(uj.description, '')) LIKE $2 OR uj.date::text LIKE $2)` : ""}
       )
     `;

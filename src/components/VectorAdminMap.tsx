@@ -31,6 +31,7 @@ import {
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
 } from "@/lib/map/utils/userRouteStyling";
+import { useRegionId } from "@/lib/regionContext";
 import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/types";
 import AdminLayerControls from "./AdminLayerControls";
 
@@ -145,6 +146,7 @@ export default function VectorAdminMap({
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
   const [validRoutesTotalKm, setValidRoutesTotalKm] = useState<number | null>(null);
   const isMobile = useIsMobile();
+  const regionId = useRegionId();
 
   const { previewLength, selectedRouteLength } = useRouteLength(previewRoute, selectedRouteId);
 
@@ -158,6 +160,7 @@ export default function VectorAdminMap({
   const { map, mapLoaded } = useMapLibre(
     mapContainer,
     {
+      region: regionId,
       sources: {
         railway_parts: createRailwayPartsSource(),
         railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBuster }),
@@ -181,7 +184,7 @@ export default function VectorAdminMap({
         });
       },
     },
-    [],
+    [regionId],
   );
 
   // Layer visibility management
@@ -210,18 +213,18 @@ export default function VectorAdminMap({
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch endpoints on demand.
   useEffect(() => {
     if (!mapLoaded) return;
-    getAllRouteEndpoints()
+    getAllRouteEndpoints(regionId)
       .then(setRouteEndpoints)
       .catch((error) => console.error("Error fetching route endpoints:", error));
-  }, [mapLoaded, refreshTrigger]);
+  }, [mapLoaded, refreshTrigger, regionId]);
 
   // Fetch total km of valid routes (refreshes when routes are saved/deleted)
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch the total on demand.
   useEffect(() => {
-    getValidRoutesTotalKm()
+    getValidRoutesTotalKm(regionId)
       .then(setValidRoutesTotalKm)
       .catch((error) => console.error("Error fetching valid routes total km:", error));
-  }, [refreshTrigger]);
+  }, [refreshTrigger, regionId]);
 
   // Selected route highlighting
   useEffect(() => {

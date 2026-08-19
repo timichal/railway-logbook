@@ -9,8 +9,7 @@ export { CIRCLES, COLORS, DASHES, OPACITIES, WIDTHS } from "./style";
 // CONSTANTS
 // ============================================================================
 
-export const MAP_CENTER: [number, number] = [14.5, 49.2]; // Czech Republic/Austria border region
-export const MAP_ZOOM = 7;
+// The initial view and the panning limits are per-region; see src/lib/regions.ts.
 export const TILE_SERVER_PORT = 3001;
 export const OSM_TILES_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
@@ -27,12 +26,6 @@ const getTileBaseUrl = () => {
     : `${window.location.protocol}//${window.location.hostname}:${TILE_SERVER_PORT}`;
 };
 const TILE_BASE_URL = getTileBaseUrl();
-
-// Europe bounds: [west, south, east, north]
-export const EUROPE_BOUNDS: [[number, number], [number, number]] = [
-  [-12, 35], // Southwest corner (Portugal/Spain)
-  [40, 71], // Northeast corner (Western Russia/Scandinavia)
-];
 
 export const ZOOM_RANGES = {
   railwayRoutes: { min: 4, max: 18 }, // Matches Martin configuration

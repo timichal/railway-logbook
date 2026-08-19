@@ -25,10 +25,16 @@ export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
           your own risk.
         </p>
         <p className="mb-4">
-          You can use this app to log your trips on the European railway network. In the app, the
-          railway network is made of line parts, all of which have been defined by hand, based on
-          data from OpenStreetMaps. So far, only a part of Europe is mapped out, with plans to cover
-          at least the European countries where Interrail is valid.
+          You can use this app to log your trips on the European and Japanese railway networks. In
+          the app, the railway network is made of line parts, all of which have been defined by
+          hand, based on data from OpenStreetMaps. So far, only a part of Europe is mapped out, with
+          plans to cover at least the European countries where Interrail is valid.
+        </p>
+        <p className="mb-4">
+          The two networks are separate views, switched with the <b>🇪🇺 / 🇯🇵</b> buttons at the top
+          of the page. The map is locked to whichever one you pick, and everything beside it - the
+          station search, the journey planner, your journey list and the statistics - covers that
+          region alone. Your log is one log: journeys appear under the region they were ridden in.
         </p>
         <p className="mb-4">
           Only lines that are in regular use and available in official timetables are displayed.

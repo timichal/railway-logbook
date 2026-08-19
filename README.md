@@ -6,9 +6,9 @@ Currently live at https://railmap.zlatkovsky.cz/
 
 ## Tech Stack
 
-- **Frontend**: Next.js 15 + React 19 + MapLibre GL JS
+- **Frontend**: Next.js 16 + React 19 + MapLibre GL JS
 - **Backend**: PostgreSQL 18 + PostGIS + Martin tile server
-- **Data**: OpenStreetMap (stable dumps from 2025-01-01)
+- **Data**: OpenStreetMap (rolling dumps updated manually)
 
 ## Prerequisites
 
@@ -62,7 +62,8 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 
 **For Users:**
 - Interactive map with badge-style hover popups (color-coded: usage type, frequency, scenic flag)
-- **Country filtering** - Filter routes across 20 European countries (AT, BE, CZ, DK, EE, ES, FI, FR, DE, IT, LV, LT, LU, NL, NO, PL, SE, SK, SI, CH) with Select All/None options
+- **Region switch** - Europe and Japan are two coordinate-locked views of one shared backend; the map, station search, journey planner, journey list and statistics all follow the region you pick
+- **Country filtering** - Filter routes across 21 European countries (AT, BE, CZ, DK, EE, ES, FI, FR, DE, IT, LV, LT, LU, NL, NO, PL, SE, SK, SI, CH) with Select All/None options
 - Three-way color coding:
   - Dark green = fully completed routes
   - Dark orange = partially completed routes
@@ -85,7 +86,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 
 ## Data Sources
 
-- Using rolling OpenStreetMap dumps: https://download.geofabrik.de/europe.html
+- Using rolling OpenStreetMap dumps, one extract per region: https://download.geofabrik.de/europe.html and https://download.geofabrik.de/asia/japan.html
 - Filter: [OpenRailwayMap standard](https://github.com/OpenRailwayMap/OpenRailwayMap-CartoCSS/blob/master/SETUP.md)
 
 ## Development

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@/lib/authActions";
+import { useRegion } from "@/lib/regionContext";
 import LoginForm from "./LoginForm";
+import RegionSwitch from "./RegionSwitch";
 import RegisterForm from "./RegisterForm";
 
 interface NavbarProps {
@@ -27,6 +29,7 @@ export default function Navbar({
   isMobile = false,
   onToggleSidebar,
 }: NavbarProps) {
+  const region = useRegion();
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
   const [showRegisterDropdown, setShowRegisterDropdown] = useState(false);
   const loginRef = useRef<HTMLDivElement>(null);
@@ -64,10 +67,12 @@ export default function Navbar({
   if (isMobile) {
     return (
       <header className="bg-white border-b border-gray-200 px-3 py-2 flex-shrink-0">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900 truncate">
             {isAdminPage ? "Admin" : "Railway Logbook"}
           </h1>
+
+          <RegionSwitch compact />
 
           {onToggleSidebar && (
             <button
@@ -110,12 +115,13 @@ export default function Navbar({
               {isAdminPage
                 ? `Welcome, ${user?.name || user?.email} - Manage railway routes and view raw data`
                 : user
-                  ? `Welcome, ${user.name || user.email}! Log your rail journeys around Europe.`
-                  : "Log your rail journeys around Europe"}
+                  ? `Welcome, ${user.name || user.email}! Log your rail journeys around ${region.label}.`
+                  : `Log your rail journeys around ${region.label}`}
             </p>
           </div>
 
-          <div className="flex gap-2 ml-4">
+          <div className="flex items-center gap-2 ml-4">
+            <RegionSwitch />
             <button
               type="button"
               onClick={onOpenHowTo}

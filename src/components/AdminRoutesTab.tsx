@@ -10,6 +10,7 @@ import {
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
 import type { LineClass, UsageType } from "@/lib/constants";
+import { useRegionId } from "@/lib/regionContext";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import type { RailwayRoute } from "@/lib/types";
 import RouteEditForm from "./RouteEditForm";
@@ -36,6 +37,7 @@ export default function AdminRoutesTab({
   availableTags = [],
   onTagsChanged,
 }: AdminRoutesTabProps) {
+  const regionId = useRegionId();
   const { showError, showSuccess } = useToast();
 
   // State
@@ -65,7 +67,7 @@ export default function AdminRoutesTab({
   const loadRoutes = async () => {
     try {
       setIsLoading(true);
-      const routesData = await getAllRailwayRoutes();
+      const routesData = await getAllRailwayRoutes(regionId);
       setRoutes(routesData);
     } catch (error) {
       console.error("Error loading routes:", error);
@@ -77,10 +79,10 @@ export default function AdminRoutesTab({
     }
   };
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadRoutes only needs to run once on mount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadRoutes is redefined every render; regionId is the only thing that should reload the list (plus the initial mount).
   useEffect(() => {
     loadRoutes();
-  }, []);
+  }, [regionId]);
 
   // Filtering and pagination
   const filteredRoutes = useMemo(() => {

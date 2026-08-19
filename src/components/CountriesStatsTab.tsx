@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SUPPORTED_COUNTRIES } from "@/lib/constants";
 import { getCountryFlag } from "@/lib/countryUtils";
 import type { DataAccess } from "@/lib/dataAccess";
+import { useRegion } from "@/lib/regionContext";
 import type { ProgressByCountry } from "@/lib/userActions";
 
 interface CountriesStatsTabProps {
@@ -17,6 +17,9 @@ export default function CountriesStatsTab({
   selectedCountries,
   onCountryChange,
 }: CountriesStatsTabProps) {
+  // The tab only exists for a region with more than one country, and lists that
+  // region's countries alone - the other region is a separate view entirely.
+  const countries = useRegion().countries;
   const [stats, setStats] = useState<ProgressByCountry | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -46,7 +49,7 @@ export default function CountriesStatsTab({
   };
 
   const handleSelectAll = () => {
-    onCountryChange(SUPPORTED_COUNTRIES.map((c) => c.code));
+    onCountryChange(countries.map((c) => c.code));
   };
 
   const handleSelectNone = () => {
@@ -86,7 +89,7 @@ export default function CountriesStatsTab({
         )}
         {selectedCountries.length > 0 && (
           <div>
-            {selectedCountries.length} of {SUPPORTED_COUNTRIES.length} countries selected
+            {selectedCountries.length} of {countries.length} countries selected
           </div>
         )}
       </div>
@@ -96,7 +99,7 @@ export default function CountriesStatsTab({
         {isLoading ? (
           <div className="text-sm text-gray-500 py-4 text-center">Loading statistics...</div>
         ) : (
-          SUPPORTED_COUNTRIES.map((country) => {
+          countries.map((country) => {
             const countryStat = stats?.byCountry.find((s) => s.countryCode === country.code);
             const isSelected = selectedCountries.includes(country.code);
 

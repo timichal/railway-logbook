@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRegionId } from "@/lib/regionContext";
 import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
 import { useToast } from "@/lib/toast";
 import type { HighlightRoutesFn, PlannerRoute, Station } from "@/lib/types";
@@ -25,6 +26,7 @@ export default function JourneyPlanner({
   onAddRoutesToSelection,
   onStationClickHandler,
 }: JourneyPlannerProps) {
+  const regionId = useRegionId();
   const { showSuccess } = useToast();
   const [fromStation, setFromStation] = useState<SelectedStation | null>(null);
   const [viaStations, setViaStations] = useState<MaybeStation[]>([]);
@@ -57,21 +59,24 @@ export default function JourneyPlanner({
   viaStationsRef.current = viaStations;
   viaSearchQueriesRef.current = viaSearchQueries;
 
-  // Debounced station search
-  const performSearch = useCallback(async (query: string) => {
-    if (query.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
+  // Debounced station search, limited to the region on screen
+  const performSearch = useCallback(
+    async (query: string) => {
+      if (query.trim().length < 2) {
+        setSearchResults([]);
+        return;
+      }
 
-    try {
-      const results = await searchStations(query);
-      setSearchResults(results);
-    } catch (error) {
-      console.error("Error searching stations:", error);
-      setSearchResults([]);
-    }
-  }, []);
+      try {
+        const results = await searchStations(query, regionId);
+        setSearchResults(results);
+      } catch (error) {
+        console.error("Error searching stations:", error);
+        setSearchResults([]);
+      }
+    },
+    [regionId],
+  );
 
   // Handle search input change
   const handleSearchChange = (field: "from" | "to" | number, value: string) => {
@@ -300,6 +305,14 @@ export default function JourneyPlanner({
     setViaSearchQueries([]);
     if (onHighlightRoutes) onHighlightRoutes([], "planner");
   };
+
+  // Switching regions empties the form: the stations in it belong to the region
+  // that just went off screen, and searching from them would plot a path the map
+  // cannot show.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: regionId is the trigger; resetForm is redefined every render and must not re-run this.
+  useEffect(() => {
+    resetForm();
+  }, [regionId]);
 
   // Add new via station
   const addViaStation = () => {

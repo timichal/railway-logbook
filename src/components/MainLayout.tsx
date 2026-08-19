@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import type { User } from "@/lib/authActions";
+import { RegionProvider } from "@/lib/regionContext";
+import type { RegionId } from "@/lib/regions";
 import Navbar from "./Navbar";
 import type { ActiveTab } from "./UserSidebar";
 
@@ -22,9 +24,15 @@ interface MainLayoutProps {
   user: User | null;
   onLogout: () => void;
   initialSelectedCountries: string[];
+  initialRegion: RegionId;
 }
 
-export default function MainLayout({ user, onLogout, initialSelectedCountries }: MainLayoutProps) {
+export default function MainLayout({
+  user,
+  onLogout,
+  initialSelectedCountries,
+  initialRegion,
+}: MainLayoutProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("routes");
   const isMobile = useIsMobile();
   const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } =
@@ -42,7 +50,7 @@ export default function MainLayout({ user, onLogout, initialSelectedCountries }:
   };
 
   return (
-    <>
+    <RegionProvider initialRegion={initialRegion}>
       <Navbar
         user={user}
         onLogout={handleLogout}
@@ -69,6 +77,6 @@ export default function MainLayout({ user, onLogout, initialSelectedCountries }:
           onAuthSuccess={handleAuthSuccess}
         />
       </main>
-    </>
+    </RegionProvider>
   );
 }

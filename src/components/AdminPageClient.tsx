@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminSidebar from "@/components/AdminSidebar";
 import Navbar from "@/components/Navbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -10,6 +10,8 @@ import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
 import { logout } from "@/lib/authActions";
 import type { UsageType } from "@/lib/constants";
+import { RegionProvider, useRegionId } from "@/lib/regionContext";
+import type { RegionId } from "@/lib/regions";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
 
@@ -29,9 +31,18 @@ interface AdminPageClientProps {
     name?: string;
     email: string;
   };
+  initialRegion: RegionId;
 }
 
-export default function AdminPageClient({ user }: AdminPageClientProps) {
+export default function AdminPageClient({ user, initialRegion }: AdminPageClientProps) {
+  return (
+    <RegionProvider initialRegion={initialRegion}>
+      <AdminPage user={user} />
+    </RegionProvider>
+  );
+}
+
+function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   const { showError, showSuccess } = useToast();
   const isMobile = useIsMobile();
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
@@ -58,6 +69,20 @@ export default function AdminPageClient({ user }: AdminPageClientProps) {
     nonce: number;
   } | null>(null);
   const [notesRefreshTrigger, setNotesRefreshTrigger] = useState<number>(0);
+  const regionId = useRegionId();
+
+  // Switching regions drops everything picked out of the old one: the selected
+  // route, a half-finished coordinate pick and its preview all point at track
+  // the map has just stopped showing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: regionId is the trigger; the setters are stable and intentionally not read here.
+  useEffect(() => {
+    setSelectedRouteId(null);
+    setPreviewRoute(null);
+    setIsPreviewMode(false);
+    setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+    setEditingGeometryForTrackId(null);
+    setFocusGeometry(null);
+  }, [regionId]);
 
   // Resizable sidebar hook
   const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } =

@@ -1,13 +1,8 @@
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import {
-  createOSMBackgroundLayer,
-  createOSMBackgroundSource,
-  EUROPE_BOUNDS,
-  MAP_CENTER,
-  MAP_ZOOM,
-} from "../index";
+import { DEFAULT_REGION, REGIONS, type RegionId } from "@/lib/regions";
+import { createOSMBackgroundLayer, createOSMBackgroundSource } from "../index";
 import { loadMapState, saveMapState } from "../mapState";
 
 // v6 ships ESM-only. Its worker does a relative import of maplibre-gl-shared.mjs
@@ -17,6 +12,12 @@ import { loadMapState, saveMapState } from "../mapState";
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 export interface UseMapLibreOptions {
+  /**
+   * Region the map is locked to: supplies the initial view, the panning bounds
+   * and the key the saved position is stored under. Pass it in `deps` too, so
+   * switching regions rebuilds the map.
+   */
+  region?: RegionId;
   center?: [number, number];
   zoom?: number;
   sources?: Record<string, maplibregl.SourceSpecification>;
@@ -42,7 +43,14 @@ export function useMapLibre(
   options: UseMapLibreOptions = {},
   deps: React.DependencyList = [],
 ): UseMapLibreReturn {
-  const { center = MAP_CENTER, zoom = MAP_ZOOM, sources = {}, layers = [], onLoad } = options;
+  const {
+    region = DEFAULT_REGION,
+    center = REGIONS[region].center,
+    zoom = REGIONS[region].zoom,
+    sources = {},
+    layers = [],
+    onLoad,
+  } = options;
 
   const map = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -51,7 +59,7 @@ export function useMapLibre(
     if (!containerRef.current || map.current) return;
 
     // Load saved map state or use defaults
-    const savedState = loadMapState();
+    const savedState = loadMapState(region);
     const initialCenter = savedState?.center || center;
     const initialZoom = savedState?.zoom || zoom;
 
@@ -76,7 +84,7 @@ export function useMapLibre(
       zoom: initialZoom,
       minZoom: 4, // Limit minimum zoom
       maxZoom: 18, // Limit maximum zoom
-      maxBounds: EUROPE_BOUNDS, // Restrict panning to Europe
+      maxBounds: REGIONS[region].bounds, // Restrict panning to the current region
       pitchWithRotate: false, // Disable rotation on right-click drag
       dragRotate: false, // Disable rotation with Ctrl+drag
     });
@@ -109,10 +117,13 @@ export function useMapLibre(
       if (map.current) {
         const center = map.current.getCenter();
         const zoom = map.current.getZoom();
-        saveMapState({
-          center: [center.lng, center.lat],
-          zoom,
-        });
+        saveMapState(
+          {
+            center: [center.lng, center.lat],
+            zoom,
+          },
+          region,
+        );
       }
     };
 

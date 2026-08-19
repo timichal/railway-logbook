@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
 import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
@@ -26,6 +27,7 @@ export default function JourneysAndTripsTab({
   onJourneyEditStart,
   onJourneyEditEnd,
 }: JourneysAndTripsTabProps) {
+  const regionId = useRegionId();
   const { showSuccess, showError } = useToast();
 
   const [items, setItems] = useState<TripsAndJourneysItem[]>([]);
@@ -53,7 +55,7 @@ export default function JourneysAndTripsTab({
     async (showSpinner = false) => {
       if (showSpinner) setIsLoading(true);
       try {
-        const result = await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch);
+        const result = await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch, regionId);
         if (result.error) {
           showError(result.error);
           setItems([]);
@@ -71,7 +73,7 @@ export default function JourneysAndTripsTab({
         setIsLoading(false);
       }
     },
-    [page, debouncedSearch, showError],
+    [page, debouncedSearch, regionId, showError],
   );
 
   const loadAvailableTrips = useCallback(async () => {

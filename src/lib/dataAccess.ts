@@ -7,8 +7,9 @@
  */
 
 import type { User } from "./authActions";
-import { isSpecialUsage, SUPPORTED_COUNTRIES } from "./constants";
+import { isSpecialUsage } from "./constants";
 import * as localStore from "./localStorage";
+import { REGIONS, type RegionId } from "./regions";
 import type { CoveredRange, CoveredStretch, RailwayRoute } from "./types";
 import {
   getCoveredStretches as dbGetCoveredStretches,
@@ -43,30 +44,37 @@ export interface DataAccess {
 
 /**
  * Create data access layer based on authentication state
+ *
+ * Every progress figure is scoped to one region: the map shows one at a time,
+ * so the numbers beside it must count that region alone. The region is bound
+ * here rather than threaded through each call, which also means switching
+ * regions produces a fresh instance and drops the cached route list below.
+ *
  * @param user - Current user object (null if not logged in)
+ * @param region - The region currently being viewed
  * @returns DataAccess implementation
  */
-export function createDataAccess(user: User | null): DataAccess {
+export function createDataAccess(user: User | null, region: RegionId): DataAccess {
   if (user) {
     // User is logged in - use database operations
-    return createDatabaseDataAccess();
+    return createDatabaseDataAccess(region);
   } else {
     // User is not logged in - use localStorage operations
-    return createLocalStorageDataAccess();
+    return createLocalStorageDataAccess(region);
   }
 }
 
 /**
  * Database-backed data access (for logged-in users)
  */
-function createDatabaseDataAccess(): DataAccess {
+function createDatabaseDataAccess(region: RegionId): DataAccess {
   return {
     async getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
-      return await dbGetUserProgress(selectedCountries);
+      return await dbGetUserProgress(region, selectedCountries);
     },
 
     async getProgressByCountry(): Promise<ProgressByCountry> {
-      return await dbGetProgressByCountry();
+      return await dbGetProgressByCountry(region);
     },
 
     async getCoveredStretches(): Promise<CoveredStretch[]> {
@@ -97,8 +105,8 @@ function createDatabaseDataAccess(): DataAccess {
  * LocalStorage-backed data access (for unlogged users)
  * Note: Unlogged users still use the old localStorage trip system
  */
-function createLocalStorageDataAccess(): DataAccess {
-  // Cache for routes data (used for progress calculation)
+function createLocalStorageDataAccess(region: RegionId): DataAccess {
+  // Cache of this region's routes (used for progress calculation)
   let routesCache: RailwayRoute[] | null = null;
 
   return {
@@ -106,7 +114,7 @@ function createLocalStorageDataAccess(): DataAccess {
       try {
         // Fetch all routes if not cached
         if (!routesCache) {
-          routesCache = await getAllRoutes();
+          routesCache = await getAllRoutes(region);
         }
 
         const allRoutes = routesCache || [];
@@ -182,7 +190,7 @@ function createLocalStorageDataAccess(): DataAccess {
       try {
         // Fetch all routes if not cached
         if (!routesCache) {
-          routesCache = await getAllRoutes();
+          routesCache = await getAllRoutes(region);
         }
 
         const allRoutes = routesCache || [];
@@ -197,7 +205,7 @@ function createLocalStorageDataAccess(): DataAccess {
         }
 
         // Calculate stats for each country
-        const byCountry = SUPPORTED_COUNTRIES.map((country) => {
+        const byCountry = REGIONS[region].countries.map((country) => {
           // Filter routes where BOTH start AND end are in this country (excluding special)
           const countryRoutes = allRoutes.filter(
             (route) =>
@@ -254,7 +262,7 @@ function createLocalStorageDataAccess(): DataAccess {
         console.error("Error calculating progress by country for localStorage user:", error);
         // Return default values on error
         return {
-          byCountry: SUPPORTED_COUNTRIES.map((country) => ({
+          byCountry: REGIONS[region].countries.map((country) => ({
             countryCode: country.code,
             countryName: country.name,
             totalKm: 0,

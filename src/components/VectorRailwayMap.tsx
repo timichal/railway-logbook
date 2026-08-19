@@ -32,6 +32,8 @@ import {
   getUserRouteScenicOutlineWidthExpression,
   getUserRouteWidthExpression,
 } from "@/lib/map/utils/userRouteStyling";
+import { useRegion } from "@/lib/regionContext";
+import { regionCountryCodes } from "@/lib/regions";
 import { useToast } from "@/lib/toast";
 import type {
   HighlightKind,
@@ -83,10 +85,21 @@ export default function VectorRailwayMap({
   const { showError } = useToast();
 
   const userId = user?.id || null;
-  const dataAccess = useMemo(() => createDataAccess(user), [user]);
+  const region = useRegion();
+  const dataAccess = useMemo(() => createDataAccess(user, region.id), [user, region.id]);
 
   // Country filter state
   const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
+
+  // The country list everything on the map actually filters by. A region the
+  // user can't filter by country (Japan, one country) pins it to its own list,
+  // which is what keeps the other region's routes, stats and ridden stretches
+  // out of this view - the country filter was already doing that job for the
+  // European countries, and the regions just happen to be disjoint sets of it.
+  const effectiveCountries = useMemo(
+    () => (region.hasCountryFilter ? selectedCountries : regionCountryCodes(region.id)),
+    [region, selectedCountries],
+  );
 
   // Scenic routes outline toggle
   const [showScenicOutline, setShowScenicOutline] = useState<boolean>(
@@ -139,7 +152,7 @@ export default function VectorRailwayMap({
   const selectedRoutesRef = useRef<SelectedRoute[]>([]);
   selectedRoutesRef.current = selectedRoutes;
 
-  const stationSearch = useStationSearch();
+  const stationSearch = useStationSearch(region.id);
 
   // Shared layer configs.
   const routeLayerConfig = useMemo(
@@ -191,10 +204,11 @@ export default function VectorRailwayMap({
   const { map, mapLoaded } = useMapLibre(
     mapContainer,
     {
+      region: region.id,
       sources: {
         railway_routes: createRailwayRoutesSource({
           userId: userId || undefined,
-          selectedCountries,
+          selectedCountries: effectiveCountries,
         }),
         stations: createPublicStationsSource(),
         public_notes: createPublicNotesSource(),
@@ -211,7 +225,7 @@ export default function VectorRailwayMap({
         createPublicNotesLayer(),
       ],
     },
-    [userId, selectedCountries],
+    [userId, effectiveCountries, region.id],
   );
 
   // Track which routes have feature states applied (for cleanup)
@@ -262,14 +276,14 @@ export default function VectorRailwayMap({
   }, [map, user]);
 
   // Route editor hook
-  const routeEditor = useRouteEditor(dataAccess, selectedCountries);
+  const routeEditor = useRouteEditor(dataAccess, effectiveCountries);
 
   // Tile refresh hook (for logged-in user route logging)
   const { refreshTiles, cacheBuster } = useMapTileRefresh({
     map,
     mapLoaded,
     userId,
-    selectedCountries,
+    selectedCountries: effectiveCountries,
     routeLayerConfig,
     scenicLayerConfig,
     clickBufferLayerConfig,
@@ -288,7 +302,7 @@ export default function VectorRailwayMap({
   );
 
   // Ridden stretches of routes not yet finished, drawn over the route line
-  useCoverageOverlay(map, mapLoaded, dataAccess, selectedCountries, coverageVersion, cacheBuster);
+  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, coverageVersion, cacheBuster);
 
   // Layer filter hooks. mapLoaded applies persisted prefs once layers exist;
   // cacheBuster re-applies filters after a tile refresh re-adds layers.
@@ -331,6 +345,16 @@ export default function VectorRailwayMap({
     },
     [activeTab, journeyEditActive, user, dataAccess, showError],
   );
+
+  // Switching regions drops everything picked out of the old one: a selection
+  // logged after the switch would file the other continent's routes under this
+  // journey, and a highlight would point at track the map can no longer show.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: region.id is the trigger; the setters are stable and intentionally not read here.
+  useEffect(() => {
+    setSelectedRoutes([]);
+    setHighlightedRoutes([]);
+    setPartialHighlights([]);
+  }, [region.id]);
 
   const handleRemoveRoute = useCallback((trackId: number) => {
     setSelectedRoutes((prev) => prev.filter((r) => r.track_id !== trackId));

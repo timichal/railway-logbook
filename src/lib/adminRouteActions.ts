@@ -5,6 +5,7 @@ import type { LineClass, UsageType } from "./constants";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool, { query } from "./db";
+import { type RegionId, regionEnvelopeSql } from "./regions";
 import { getStationsNearRoute, refreshStationProximityFor } from "./stationProximity";
 import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./types";
 
@@ -23,9 +24,14 @@ export interface SaveRouteData {
 }
 
 /**
- * Get all railway routes (list view, no geometry)
+ * Get all railway routes of one region (list view, no geometry).
+ *
+ * Region-filtered by bounding box rather than by country code: the admin can
+ * create a route anywhere OSM has track, including countries outside
+ * SUPPORTED_COUNTRIES, and those must still show up in the list of the region
+ * they were drawn in.
  */
-export async function getAllRailwayRoutes() {
+export async function getAllRailwayRoutes(region: RegionId) {
   await requireAdmin();
 
   const result = await query(`
@@ -33,6 +39,7 @@ export async function getAllRailwayRoutes() {
            starting_part_id, ending_part_id, is_valid, error_message, under_repair,
            intended_backtracking, has_backtracking
     FROM railway_routes
+    WHERE geometry && ${regionEnvelopeSql(region)}
     ORDER BY from_station, to_station
   `);
 
@@ -40,15 +47,17 @@ export async function getAllRailwayRoutes() {
 }
 
 /**
- * Get the total length (km) of all valid routes. Powers the admin map km counter.
+ * Get the total length (km) of the region's valid routes. Powers the admin map
+ * km counter, which sits beside a map showing that region alone.
  */
-export async function getValidRoutesTotalKm(): Promise<number> {
+export async function getValidRoutesTotalKm(region: RegionId): Promise<number> {
   await requireAdmin();
 
   const result = await query(`
     SELECT COALESCE(SUM(length_km), 0) AS total_km
     FROM railway_routes
     WHERE is_valid = true
+      AND geometry && ${regionEnvelopeSql(region)}
   `);
 
   return Math.round((parseFloat(result.rows[0].total_km) || 0) * 10) / 10;
@@ -124,10 +133,10 @@ export async function getRailwayRoute(trackId: number) {
 }
 
 /**
- * Get all route endpoints (starting and ending coordinates) for map display
- * Returns GeoJSON FeatureCollection of Point features
+ * Get the region's route endpoints (starting and ending coordinates) for map
+ * display. Returns GeoJSON FeatureCollection of Point features.
  */
-export async function getAllRouteEndpoints(): Promise<GeoJSONFeatureCollection> {
+export async function getAllRouteEndpoints(region: RegionId): Promise<GeoJSONFeatureCollection> {
   await requireAdmin();
 
   const result = await query(`
@@ -139,6 +148,7 @@ export async function getAllRouteEndpoints(): Promise<GeoJSONFeatureCollection> 
       ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json
     FROM railway_routes
     WHERE starting_coordinate IS NOT NULL AND ending_coordinate IS NOT NULL
+      AND geometry && ${regionEnvelopeSql(region)}
   `);
 
   const features: GeoJSONFeature[] = [];

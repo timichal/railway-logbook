@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAllAdminNotes, updateAdminNote } from "@/lib/adminNotesActions";
 import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/constants";
+import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type { AdminNote } from "@/lib/types";
 
@@ -19,6 +20,7 @@ export default function AdminNotesTab({
   onNoteChanged,
   refreshSignal,
 }: AdminNotesTabProps) {
+  const regionId = useRegionId();
   const { showError, showSuccess } = useToast();
   const [notes, setNotes] = useState<AdminNote[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +30,7 @@ export default function AdminNotesTab({
   const loadNotes = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await getAllAdminNotes();
+      const data = await getAllAdminNotes(regionId);
       setNotes(data);
     } catch (error) {
       showError(
@@ -37,7 +39,7 @@ export default function AdminNotesTab({
     } finally {
       setIsLoading(false);
     }
-  }, [showError]);
+  }, [showError, regionId]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshSignal is a trigger prop; bumping it must re-run the effect to reload notes even though it isn't read in the body.
   useEffect(() => {

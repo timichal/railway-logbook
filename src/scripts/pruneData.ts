@@ -1,21 +1,27 @@
-import { createWriteStream } from "node:fs";
+import { once } from "node:events";
+import { createWriteStream, renameSync, rmSync } from "node:fs";
 import { transliterate } from "transliteration";
 import type { Feature } from "../lib/types";
+import {
+  createFeatureStreamStats,
+  describeFeatureStream,
+  streamFeatures,
+} from "./lib/geojsonFeatureStream";
 
 const args = process.argv.slice(2);
 
 if (args.length < 1 || args.length > 2) {
-  console.error("Usage: tsx pruneData.ts country_code [version]");
-  console.error("  country_code: Single country code (e.g., croatia)");
+  console.error("Usage: tsx pruneData.ts region [version]");
+  console.error("  region: Region name, used as the output file prefix (e.g., europe, japan)");
   console.error("  version: Optional version suffix (e.g., 250101)");
   console.error("");
   console.error(
-    "Reads GeoJSON from stdin and writes pruned output to data/{country_code}-pruned[-{version}].geojson",
+    "Reads GeoJSON from stdin and writes pruned output to data/{region}-pruned[-{version}].geojson",
   );
   process.exit(1);
 }
 
-const countryCode = args[0];
+const region = args[0];
 const version = args[1] || "";
 
 /**
@@ -38,6 +44,44 @@ function transliterateName(name: string | undefined): string | undefined {
   }
 
   return name;
+}
+
+/** Han (kanji), hiragana, katakana - the scripts Japanese station names use. */
+const CJK_PATTERN = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/;
+
+/** Han alone. Kana romanizes correctly; kanji does not - see resolveStationName. */
+const HAN_PATTERN = /[㐀-䶿一-鿿豈-﫿]/;
+
+/**
+ * The single display name a station is stored under.
+ *
+ * Japanese stations are tagged in kanji, which the `transliteration` package
+ * romanizes through Chinese readings (Tokyo's 東京 comes out "Dong Jing"), so a
+ * CJK name is taken from `name:en` when OSM carries one - as it does for
+ * essentially every station in Japan. Only when that is missing do we fall back
+ * to transliterating, which romanizes a kana-only name properly and otherwise
+ * leaves the original in place: a wrong-language romanization is harder to
+ * recognize than the kanji itself.
+ *
+ * Everything else keeps the previous behaviour - Cyrillic and Greek are
+ * transliterated, Latin (diacritics and all) passes through untouched.
+ */
+function resolveStationName(properties: Feature["properties"]): string | undefined {
+  const name = properties.name;
+  const nameEn = properties["name:en"] as string | undefined;
+
+  if (name && CJK_PATTERN.test(name)) {
+    if (nameEn) return nameEn;
+    // No English name to fall back on. Kana romanizes correctly (なんば ->
+    // "nanba"), so transliterate it; kanji does not (新宿 -> "Xin Su", the
+    // Chinese reading), so the original is kept - wrong-language romanization
+    // is worse than a name the reader can at least match against a sign.
+    return HAN_PATTERN.test(name) ? name : transliterate(name);
+  }
+
+  if (!name && nameEn) return nameEn;
+
+  return transliterateName(name);
 }
 
 /**
@@ -180,7 +224,9 @@ function collectAreaStation(feat: Feature, collected: Map<number, AreaStation>):
   const [lon, lat] = ringCentroid(ring);
   collected.set(id, {
     id,
-    name: feat.properties.name,
+    // Resolved up front, so the name-based dedup below compares the same form
+    // of the name that node stations were written out under.
+    name: resolveStationName(feat.properties),
     railway: feat.properties.railway as string,
     lon,
     lat,
@@ -206,25 +252,27 @@ function areaStationToFeature(station: AreaStation): Feature {
 }
 
 function pruneFeatureProperties(feat: Feature): Feature {
+  // Stations keep a single resolved `name` (see resolveStationName); `name:en`
+  // is an input to that choice, never written out.
+  if (feat.geometry.type === "Point") {
+    return {
+      ...feat,
+      properties: {
+        "@id": feat.properties["@id"],
+        name: resolveStationName(feat.properties),
+        railway: feat.properties.railway,
+      },
+    };
+  }
+
   const filteredProperties = Object.fromEntries(
-    Object.entries(feat.properties)
-      .filter(([key]) => {
-        if (key === "@id") return true;
-        if (feat.geometry.type === "Point") {
-          if (["name", "railway"].includes(key)) return true;
-        }
-        if (feat.geometry.type === "LineString") {
-          if (["name", "railway", "usage", "highspeed"].includes(key)) return true;
-        }
-        return false;
-      })
-      .map(([key, value]) => {
-        // Transliterate station names (Point features only)
-        if (key === "name" && feat.geometry.type === "Point") {
-          return [key, transliterateName(value as string)];
-        }
-        return [key, value];
-      }),
+    Object.entries(feat.properties).filter(([key]) => {
+      if (key === "@id") return true;
+      if (feat.geometry.type === "LineString") {
+        if (["name", "railway", "usage", "highspeed"].includes(key)) return true;
+      }
+      return false;
+    }),
   );
 
   return {
@@ -235,11 +283,21 @@ function pruneFeatureProperties(feat: Feature): Feature {
 
 async function processStdin(outputFilePath: string) {
   const writeStream = createWriteStream(outputFilePath, "utf8");
+  try {
+    return await writeFeatures(writeStream);
+  } catch (error) {
+    // Close the handle before main() deletes the partial file - on Windows an
+    // open stream would make the unlink fail.
+    writeStream.destroy();
+    await once(writeStream, "close").catch(() => {});
+    throw error;
+  }
+}
+
+async function writeFeatures(writeStream: ReturnType<typeof createWriteStream>) {
   writeStream.write('{"type":"FeatureCollection","features":[');
 
   let isFirstFeature = true;
-  let buffer = "";
-  let featureCount = 0;
   let processedCount = 0;
 
   // Stations mapped as areas are held back until the whole stream has been
@@ -251,68 +309,31 @@ async function processStdin(outputFilePath: string) {
   // Read from stdin
   process.stdin.setEncoding("utf8");
 
-  for await (const chunk of process.stdin) {
-    buffer += chunk;
+  const stats = createFeatureStreamStats();
 
-    // Process complete features in buffer
-    let startIndex = 0;
-    while (true) {
-      const featureStart = buffer.indexOf('{"type":"Feature"', startIndex);
-      if (featureStart === -1) break;
+  for await (const feature of streamFeatures<Feature>(process.stdin, stats)) {
+    if (filterFeature(feature)) {
+      const prunedFeature = pruneFeatureProperties(feature);
+      if (!isFirstFeature) writeStream.write(",");
+      writeStream.write(JSON.stringify(prunedFeature));
+      isFirstFeature = false;
+      processedCount++;
 
-      // Find the end of this feature
-      let braceCount = 0;
-      let featureEnd = -1;
-
-      for (let i = featureStart; i < buffer.length; i++) {
-        if (buffer[i] === "{") braceCount++;
-        else if (buffer[i] === "}") {
-          braceCount--;
-          if (braceCount === 0) {
-            featureEnd = i;
-            break;
-          }
+      if (feature.geometry.type === "Point") {
+        const key = stationNameKey(prunedFeature.properties.name as string | undefined);
+        if (key) {
+          const coords = nodeStationsByName.get(key) ?? [];
+          coords.push(feature.geometry.coordinates as [number, number]);
+          nodeStationsByName.set(key, coords);
         }
       }
-
-      if (featureEnd === -1) break; // Incomplete feature, wait for more data
-
-      const featureJson = buffer.substring(featureStart, featureEnd + 1);
-      try {
-        const feature: Feature = JSON.parse(featureJson);
-        featureCount++;
-
-        if (filterFeature(feature)) {
-          const prunedFeature = pruneFeatureProperties(feature);
-          if (!isFirstFeature) writeStream.write(",");
-          writeStream.write(JSON.stringify(prunedFeature));
-          isFirstFeature = false;
-          processedCount++;
-
-          if (feature.geometry.type === "Point") {
-            const key = stationNameKey(prunedFeature.properties.name as string | undefined);
-            if (key) {
-              const coords = nodeStationsByName.get(key) ?? [];
-              coords.push(feature.geometry.coordinates as [number, number]);
-              nodeStationsByName.set(key, coords);
-            }
-          }
-        } else if (isStationTagged(feature)) {
-          collectAreaStation(feature, areaStations);
-        }
-
-        if (featureCount % 10000 === 0) {
-          process.stdout.write(`\r  Processed ${featureCount} features, kept ${processedCount}...`);
-        }
-      } catch (_e) {
-        // Skip malformed features
-      }
-
-      startIndex = featureEnd + 1;
+    } else if (isStationTagged(feature)) {
+      collectAreaStation(feature, areaStations);
     }
 
-    // Keep unprocessed part of buffer
-    buffer = buffer.substring(startIndex);
+    if (stats.total % 10000 === 0) {
+      process.stdout.write(`\r  Processed ${stats.total} features, kept ${processedCount}...`);
+    }
   }
 
   // Flush the area stations that no station node already stands in for.
@@ -341,9 +362,22 @@ async function processStdin(outputFilePath: string) {
   writeStream.write("]}");
   writeStream.end();
 
-  return new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     writeStream.on("finish", () => {
-      console.log(`\n  Final: processed ${featureCount} features, kept ${processedCount}`);
+      console.log(`\n  Final: ${describeFeatureStream(stats)}, kept ${processedCount}`);
+      if (stats.malformed > 0 || stats.truncated) {
+        // Never finish quietly on damaged input: a truncated osmium export, or a
+        // feature the scanner could not parse, means this pruned file is missing
+        // data that the import step would load without noticing.
+        reject(
+          new Error(
+            stats.truncated
+              ? "Input ended mid-feature - the osmium export is incomplete"
+              : `${stats.malformed} feature(s) failed to parse`,
+          ),
+        );
+        return;
+      }
       resolve();
     });
     writeStream.on("error", reject);
@@ -353,11 +387,27 @@ async function processStdin(outputFilePath: string) {
 // Main execution
 async function main() {
   const versionSuffix = version ? `-${version}` : "";
-  const outputFilePath = `data/${countryCode}-pruned${versionSuffix}.geojson`;
+  const outputFilePath = `data/${region}-pruned${versionSuffix}.geojson`;
+  const partFilePath = `${outputFilePath}.part`;
 
-  console.log(`Processing ${countryCode} from stdin...`);
-  await processStdin(outputFilePath);
+  console.log(`Processing ${region} from stdin...`);
+
+  // Written under .part and renamed only on success. A short file left at the
+  // real name would be taken for finished work: prepare.sh skips a stage whose
+  // output exists, and deploy.sh skips preparing a region whose pruned file is
+  // already there - so a failure here would quietly ship truncated data.
+  try {
+    await processStdin(partFilePath);
+  } catch (error) {
+    rmSync(partFilePath, { force: true });
+    throw error;
+  }
+  renameSync(partFilePath, outputFilePath);
+
   console.log(`Pruned data written to ${outputFilePath}`);
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

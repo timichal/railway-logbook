@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getUntimezonedDateStr } from "@/lib/getUntimezonedDateStr";
 import * as localStore from "@/lib/localStorage";
+import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type {
   HighlightRoutesFn,
@@ -11,7 +12,7 @@ import type {
   RailwayRoute,
   SelectedRoute,
 } from "@/lib/types";
-import { getRoutesByIds } from "@/lib/userActions";
+import { getRegionTrackIds, getRoutesByIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
   journey: LocalJourney;
@@ -47,7 +48,12 @@ export default function LocalJourneyLogTab({
   onJourneyEditEnd,
 }: LocalJourneyLogTabProps) {
   const { showSuccess, showError } = useToast();
+  const regionId = useRegionId();
   const [journeys, setJourneys] = useState<JourneyWithRoutes[]>([]);
+  // Track ids of the region on screen. A localStorage journey knows only track
+  // ids, so this is what tells the list which journeys belong here; null while
+  // it loads, and then everything is shown rather than nothing.
+  const [regionTrackIds, setRegionTrackIds] = useState<Set<number> | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [viewedJourneyId, setViewedJourneyId] = useState<string | null>(null);
@@ -60,6 +66,23 @@ export default function LocalJourneyLogTab({
   const [editName, setEditName] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editDescription, setEditDescription] = useState("");
+
+  // The region's track ids, refetched when the region changes. Any journey open
+  // at the time is collapsed: it may not be in this region at all, and its
+  // highlight is dropped by the map anyway.
+  useEffect(() => {
+    let cancelled = false;
+    setRegionTrackIds(null);
+    setViewedJourneyId(null);
+    getRegionTrackIds(regionId)
+      .then((ids) => {
+        if (!cancelled) setRegionTrackIds(new Set(ids));
+      })
+      .catch((error) => console.error("Error loading region route ids:", error));
+    return () => {
+      cancelled = true;
+    };
+  }, [regionId]);
 
   // Load journeys on mount and when storage changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadJourneys only needs to run on mount; the storage listener handles subsequent reloads.
@@ -305,8 +328,17 @@ export default function LocalJourneyLogTab({
     }
   };
 
+  // Journeys of the region on screen. One with no routes logged yet belongs to
+  // every region, mirroring how the database journey list treats an empty one.
+  const regionJourneys = useMemo(() => {
+    if (!regionTrackIds) return journeys;
+    return journeys.filter(
+      ({ parts }) => parts.length === 0 || parts.some((part) => regionTrackIds.has(part.track_id)),
+    );
+  }, [journeys, regionTrackIds]);
+
   // Filter journeys by search query
-  const filteredJourneys = journeys.filter(({ journey }) => {
+  const filteredJourneys = regionJourneys.filter(({ journey }) => {
     const query = searchQuery.toLowerCase();
     const matchesName = journey.name.toLowerCase().includes(query);
     const matchesDate = String(journey.date).includes(query);
@@ -570,7 +602,7 @@ export default function LocalJourneyLogTab({
       {/* Status Info */}
       {filteredJourneys.length > 0 && (
         <div className="text-xs text-gray-600 text-center pt-2 border-t">
-          Showing {filteredJourneys.length} of {journeys.length} journeys
+          Showing {filteredJourneys.length} of {regionJourneys.length} journeys
         </div>
       )}
     </div>

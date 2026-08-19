@@ -1,8 +1,8 @@
 "use server";
 
 import { getUser } from "./authActions";
-import { SUPPORTED_COUNTRIES } from "./constants";
 import { query } from "./db";
+import { REGIONS, type RegionId, regionEnvelopeSql } from "./regions";
 import type { CoveredRange, CoveredStretch, RailwayRoute, Station } from "./types";
 
 /**
@@ -12,8 +12,11 @@ import type { CoveredRange, CoveredStretch, RailwayRoute, Station } from "./type
  * (public_stations_tile), so the autocomplete can't offer a station that isn't
  * on the map and has no route within reach of the planner. The admin map is
  * unaffected; it has its own search and sees every station.
+ *
+ * Also restricted to the current region: the map is locked to it, so a hit in
+ * the other one could neither be flown to nor routed from.
  */
-export async function searchStations(searchQuery: string): Promise<Station[]> {
+export async function searchStations(searchQuery: string, region: RegionId): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
     return [];
   }
@@ -25,6 +28,7 @@ export async function searchStations(searchQuery: string): Promise<Station[]> {
            ST_Y(coordinates) as lat
     FROM stations
     WHERE near_route
+      AND coordinates && ${regionEnvelopeSql(region)}
       AND unaccent(name) ILIKE unaccent($1)
     ORDER BY
       CASE
@@ -45,11 +49,29 @@ export async function searchStations(searchQuery: string): Promise<Station[]> {
 }
 
 /**
+ * The track ids of every route in a region.
+ *
+ * A few thousand integers, cheap to ship whole, and the only thing the
+ * localStorage journey list can use to tell which of its journeys belong to the
+ * region on screen: it stores track ids and nothing else, so unlike the
+ * database journey list it cannot ask the question in SQL.
+ */
+export async function getRegionTrackIds(region: RegionId): Promise<number[]> {
+  const result = await query(`
+    SELECT track_id
+    FROM railway_routes
+    WHERE geometry && ${regionEnvelopeSql(region)}
+  `);
+
+  return result.rows.map((row) => row.track_id as number);
+}
+
+/**
  * Get all railway routes without user-specific data
  * Used for unlogged users to calculate progress stats client-side
  * No authentication required
  */
-export async function getAllRoutes(): Promise<RailwayRoute[]> {
+export async function getAllRoutes(region: RegionId): Promise<RailwayRoute[]> {
   const result = await query(`
     SELECT
       track_id,
@@ -65,6 +87,7 @@ export async function getAllRoutes(): Promise<RailwayRoute[]> {
       start_country,
       end_country
     FROM railway_routes
+    WHERE geometry && ${regionEnvelopeSql(region)}
     ORDER BY track_id
   `);
 
@@ -117,7 +140,10 @@ export interface UserProgress {
   completedRoutes: number;
 }
 
-export async function getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
+export async function getUserProgress(
+  region: RegionId,
+  selectedCountries?: string[],
+): Promise<UserProgress> {
   const user = await getUser();
   if (!user) {
     throw new Error("User not authenticated");
@@ -150,6 +176,7 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
     FROM railway_routes
     WHERE length_km IS NOT NULL
       AND usage_type = 0
+      AND geometry && ${regionEnvelopeSql(region)}
       ${hasCountries ? "AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])" : ""}`,
     hasCountries ? [selectedCountries] : [],
   );
@@ -164,6 +191,7 @@ export async function getUserProgress(selectedCountries?: string[]): Promise<Use
     FROM railway_routes rr
     WHERE rr.usage_type = 0
       AND rr.length_km IS NOT NULL
+      AND rr.geometry && ${regionEnvelopeSql(region)}
       ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}
       AND EXISTS (
         SELECT 1
@@ -214,7 +242,7 @@ export interface ProgressByCountry {
  * Returns stats for each country (routes starting AND ending in that country)
  * Plus overall total across all countries
  */
-export async function getProgressByCountry(): Promise<ProgressByCountry> {
+export async function getProgressByCountry(region: RegionId): Promise<ProgressByCountry> {
   const user = await getUser();
   if (!user) {
     throw new Error("User not authenticated");
@@ -239,6 +267,7 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
        ) done ON done.track_id = rr.track_id
        WHERE rr.usage_type = 0
          AND rr.length_km IS NOT NULL
+         AND rr.geometry && ${regionEnvelopeSql(region)}
      )
      SELECT
        GROUPING(country) AS is_total,
@@ -268,7 +297,7 @@ export async function getProgressByCountry(): Promise<ProgressByCountry> {
     }
   }
 
-  const countryStats: CountryProgress[] = SUPPORTED_COUNTRIES.map((country) => {
+  const countryStats: CountryProgress[] = REGIONS[region].countries.map((country) => {
     const stats = byCode.get(country.code);
     return {
       countryCode: country.code,

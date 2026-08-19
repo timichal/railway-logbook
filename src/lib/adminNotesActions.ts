@@ -3,6 +3,7 @@
 import { requireAdmin } from "./authHelpers";
 import type { NoteType } from "./constants";
 import pool from "./db";
+import { type RegionId, regionEnvelopeSql } from "./regions";
 import type { AdminNote } from "./types";
 
 type AdminNoteRow = {
@@ -28,10 +29,10 @@ function rowToNote(row: AdminNoteRow): AdminNote {
 }
 
 /**
- * Get all admin notes
+ * Get the region's admin notes
  * Admin-only (user_id=1)
  */
-export async function getAllAdminNotes(): Promise<AdminNote[]> {
+export async function getAllAdminNotes(region: RegionId): Promise<AdminNote[]> {
   await requireAdmin();
 
   const result = await pool.query<AdminNoteRow>(`
@@ -44,6 +45,7 @@ export async function getAllAdminNotes(): Promise<AdminNote[]> {
       created_at,
       updated_at
     FROM admin_notes
+    WHERE coordinate && ${regionEnvelopeSql(region)}
     ORDER BY updated_at DESC
   `);
 
