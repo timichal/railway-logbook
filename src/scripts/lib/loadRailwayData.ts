@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import type { Client } from "pg";
+import type { ClientBase } from "pg";
 import {
   createFeatureStreamStats,
   describeFeatureStream,
@@ -89,7 +89,7 @@ export function validateGeoJSONFiles(paths: string[]): void {
 }
 
 /** Insert a batch of stations. Parameterised: names come from OSM, i.e. third parties. */
-async function insertStations(client: Client, rows: StationRow[]): Promise<void> {
+async function insertStations(client: ClientBase, rows: StationRow[]): Promise<void> {
   if (rows.length === 0) return;
 
   const values: unknown[] = [];
@@ -110,7 +110,7 @@ async function insertStations(client: Client, rows: StationRow[]): Promise<void>
 }
 
 /** Insert a batch of railway parts, refreshing usage/highspeed on ones already seen. */
-async function insertParts(client: Client, rows: PartRow[]): Promise<void> {
+async function insertParts(client: ClientBase, rows: PartRow[]): Promise<void> {
   if (rows.length === 0) return;
 
   const values: unknown[] = [];
@@ -142,7 +142,7 @@ async function insertParts(client: Client, rows: PartRow[]): Promise<void> {
  * until commit, which would block every tile query for the length of the import.
  */
 export async function loadStationsAndParts(
-  client: Client,
+  client: ClientBase,
   geojsonPaths: string | string[],
 ): Promise<LoadResult> {
   const paths = Array.isArray(geojsonPaths) ? geojsonPaths : [geojsonPaths];
@@ -191,7 +191,7 @@ export async function loadStationsAndParts(
  * and holding one as a single string was what forced importMapData's raised heap
  * limit.
  */
-async function loadOneFile(client: Client, geojsonPath: string): Promise<LoadResult> {
+async function loadOneFile(client: ClientBase, geojsonPath: string): Promise<LoadResult> {
   console.log(`Loading data from ${geojsonPath}...`);
 
   let stationsCount = 0;

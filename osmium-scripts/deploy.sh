@@ -3,7 +3,9 @@
 # Deploy map data to remote server
 # Uses the date argument if supplied (YYMMDD), otherwise previous day's date
 # Pass --valid-only to skip recalculating already-invalid routes on remote import.
-# Example: ./deploy.sh 260523, ./deploy.sh --valid-only, ./deploy.sh 260523 --valid-only
+# Pass --concurrency=N to set how many routes the remote import recalculates at
+# once (see RECALC_PERFORMANCE.md); the remote default is used when omitted.
+# Example: ./deploy.sh 260523, ./deploy.sh --valid-only, ./deploy.sh 260523 --concurrency=8
 #
 # Both regions (see src/lib/regions.ts) travel together: they share the stations
 # and railway_parts tables, and the remote import clears those before loading, so
@@ -16,12 +18,16 @@
 
 set -e  # Exit on error
 
-# Parse args: --valid-only flag (any position) + optional positional date (YYMMDD).
+# Parse args: flags (any position) + optional positional date (YYMMDD). Flags are
+# matched explicitly rather than by a leading "--", so a new import flag that
+# isn't listed here is caught as a bogus date instead of being silently dropped.
 DATE=""
 VALID_ONLY=""
+CONCURRENCY=""
 for arg in "$@"; do
   case "$arg" in
     --valid-only) VALID_ONLY="--valid-only" ;;
+    --concurrency=*) CONCURRENCY="$arg" ;;
     *) DATE="$arg" ;;
   esac
 done
@@ -82,7 +88,7 @@ plink -batch "${REMOTE_HOST}" "rm -f ${REMOTE_DIR}/data/*.geojson && gunzip -f $
 echo ""
 echo "=== Step 6: Importing map data on remote server ==="
 # One import for every region: the tables are cleared once, before the first file.
-plink -batch "${REMOTE_HOST}" "source ~/.nvm/nvm.sh && cd ${REMOTE_DIR} && npm run importMapData -- ${REMOTE_FILES}${VALID_ONLY}"
+plink -batch "${REMOTE_HOST}" "source ~/.nvm/nvm.sh && cd ${REMOTE_DIR} && npm run importMapData -- ${REMOTE_FILES}${VALID_ONLY} ${CONCURRENCY}"
 
 echo ""
 echo "=== Deployment complete! ==="

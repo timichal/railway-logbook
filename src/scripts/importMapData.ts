@@ -1,20 +1,21 @@
 import dotenv from "dotenv";
-import { Client } from "pg";
-import { getDbConfig } from "../lib/dbConfig";
 import {
   refreshAllStationProximity,
   STATION_ROUTE_PROXIMITY_METERS,
 } from "../lib/stationProximity";
 import { loadStationsAndParts } from "./lib/loadRailwayData";
-import { verifyAndRecalculateRoutes } from "./verifyRouteData";
+import {
+  createRecalcPool,
+  parseConcurrencyArg,
+  verifyAndRecalculateRoutes,
+} from "./verifyRouteData";
 
 dotenv.config();
 
-// Get database config after dotenv loads environment variables
-const dbConfig = getDbConfig();
-
 async function loadGeoJSONData(): Promise<void> {
-  const client = new Client(dbConfig);
+  // A pool rather than a single client: step 2 recalculates several routes at
+  // once, and node-pg serialises concurrent queries on one connection.
+  let pool: ReturnType<typeof createRecalcPool> | undefined;
 
   try {
     // Parse CLI args: every non-flag positional is a data file path. One file
@@ -23,10 +24,13 @@ async function loadGeoJSONData(): Promise<void> {
     // passed to a single run.
     const args = process.argv.slice(2);
     const validOnly = args.includes("--valid-only");
+    const concurrency = parseConcurrencyArg(args);
     const dataPaths = args.filter((arg) => !arg.startsWith("--"));
 
     const usage = () => {
-      console.error("Usage: npm run importMapData <filepath> [<filepath> ...] [--valid-only]");
+      console.error(
+        "Usage: npm run importMapData <filepath> [<filepath> ...] [--valid-only] [--concurrency=N]",
+      );
       console.error(
         "Example: npm run importMapData ./data/europe-pruned-251027.geojson ./data/japan-pruned-251027.geojson",
       );
@@ -49,13 +53,19 @@ async function loadGeoJSONData(): Promise<void> {
 
     console.log(`Using data files: ${dataPaths.join(", ")}`);
 
-    await client.connect();
+    pool = createRecalcPool(concurrency);
     console.log("Connected to database");
 
-    // Step 1: Load stations and railway parts from pruned GeoJSON
+    // Step 1: Load stations and railway parts from pruned GeoJSON.
+    // One dedicated session, because the load runs as a single transaction.
     console.log("");
     console.log("=== Step 1: Loading map data ===");
-    await loadStationsAndParts(client, dataPaths);
+    const loader = await pool.connect();
+    try {
+      await loadStationsAndParts(loader, dataPaths);
+    } finally {
+      loader.release();
+    }
 
     // Step 2: Verify and recalculate routes if they exist
     console.log("");
@@ -64,16 +74,21 @@ async function loadGeoJSONData(): Promise<void> {
         ? "=== Step 2: Verifying routes (valid only — skipping already-invalid) ==="
         : "=== Step 2: Verifying routes ===",
     );
-    await verifyAndRecalculateRoutes(client, { validOnly });
+    await verifyAndRecalculateRoutes(pool, { validOnly, concurrency });
 
     // Step 3: Route geometries have just settled, so the station flags derived
     // from them are refreshed last
     console.log("");
     console.log("=== Step 3: Flagging stations near routes ===");
-    const proximity = await refreshAllStationProximity(client);
-    console.log(
-      `Stations within ${STATION_ROUTE_PROXIMITY_METERS}m of a route: ${proximity.near} of ${proximity.total}`,
-    );
+    const client = await pool.connect();
+    try {
+      const proximity = await refreshAllStationProximity(client);
+      console.log(
+        `Stations within ${STATION_ROUTE_PROXIMITY_METERS}m of a route: ${proximity.near} of ${proximity.total}`,
+      );
+    } finally {
+      client.release();
+    }
 
     console.log("");
     console.log("Database update completed!");
@@ -81,7 +96,7 @@ async function loadGeoJSONData(): Promise<void> {
     console.error("Error loading data:", error);
     process.exit(1);
   } finally {
-    await client.end();
+    await pool?.end();
   }
 }
 

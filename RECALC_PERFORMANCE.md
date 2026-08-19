@@ -1,8 +1,11 @@
-# Speeding up route recalculation
+# Route recalculation performance
 
-Planned work, not yet done. Written up so it can be picked up cold.
+Read this before changing `verifyRouteData.ts` or `scripts/lib/railwayPathFinder.ts`
+for performance reasons. The work described here is **done**; what remains is the
+reasoning behind the current shape, the constraints that must not be broken, and
+the two things still on the table.
 
-## The problem
+## Why this step matters
 
 `npm run importMapData` has three steps. Step 1 (loading stations and parts) is
 I/O over a few gigabytes and finishes in minutes. Step 3 (station proximity) is a
@@ -13,118 +16,81 @@ takes as long as it does.
 It is also, structurally, the easiest part of the pipeline to make fast: every
 route is recalculated independently of every other one.
 
-## Where the time goes
+## What it does now
 
-`src/scripts/verifyRouteData.ts:116` walks the routes one at a time:
+`recalculateAllRoutes` runs a fixed set of workers over the route list, each
+pulling the next route off a shared index and writing its own `UPDATE`:
 
-```ts
-for (const route of routes.rows) {
-  const recalcResult = await recalculateRoute(client, startingCoordinate, endingCoordinate);
-  ...
-}
-```
+- **`DEFAULT_RECALC_CONCURRENCY` = 4 routes at a time.** This needs a `Pool`, not
+  a `Client`: node-pg serialises concurrent queries on a single connection, so
+  workers sharing one would just queue behind each other. Both scripts build the
+  pool with `createRecalcPool(concurrency)`, and `--concurrency=N` overrides the
+  default (`importMapData`, `verifyRouteData`, and `deploy.sh`, which forwards it
+  to the remote import).
+- **The `UPDATE`s stay autocommitted, one per route.** Do not wrap the run in a
+  transaction: it would hold row locks on `railway_routes` for the length of the
+  import.
+- **Outcomes are collected by index**, then aggregated in a second pass, so the
+  summary lists routes in `track_id` order however the workers interleave.
+- **A thrown error stops the run.** Pathfinding failure is already an outcome
+  (`recalculateRoute` catches it and returns `{success: false}`), so an exception
+  escaping `recalculateAndStoreRoute` means the database is unhappy — the worker
+  sets `aborted`, the others stop taking new routes, and it propagates. Marking a
+  route invalid over a transient fault would be worse than failing loudly.
+- **`RailwayPathFinder` takes `{quiet: true}`** instead of having its output
+  silenced from outside. The old code swapped out the global `console.log` around
+  each search and restored it in a `finally`; that is safe only while calls are
+  strictly serial. With two in flight the first to finish un-silences the rest,
+  and a call that starts while the patch is in place captures the no-op as its
+  "original" and silences logging permanently. `mergeLinearChain` takes the same
+  logger for the same reason — it was previously silenced by that global patch as
+  a side effect, and would otherwise bury the progress line.
+- **The route list query selects only what recalculation reads.** It used to
+  fetch `starting_part_id`, `ending_part_id` and `ST_AsGeoJSON(geometry)`, none
+  of which anything read — the geometry is replaced wholesale. That was ~16 MB of
+  GeoJSON text for 1744 routes (~50 MB for a full run) serialised, shipped and
+  held in Node for nothing.
+- **One query loads both endpoints' surroundings**
+  (`loadRailwayPartsAroundCoordinates`), against the GIST-indexed
+  `railway_parts.geometry_3857` with `ST_DWithin`. It used to be two queries, one
+  per endpoint, each materialising an `ST_Buffer` 32-gon and testing
+  `ST_Intersects` against the WGS84 column. For any route shorter than the buffer
+  — most of them — the two disks overlap almost entirely, so every part in the
+  overlap was selected, encoded as GeoJSON, shipped and `JSON.parse`d twice, only
+  for `parseAndStoreParts` to drop the second copy.
+- **`loadRailwayParts`, the part-id-based loader, is gone.** Nothing called it,
+  and it was the last carrier of the superseded `ST_Buffer` pattern. If part-id
+  loading is ever wanted again, build it on `ST_DWithin` against `geometry_3857`
+  like its coordinate-based sibling.
 
-That is ~4.7k regular routes today, plus whatever Japan adds. For each one,
-`recalculateRoute` builds a fresh `RailwayPathFinder` and calls
-`findPathFromCoordinates` (`src/scripts/lib/railwayPathFinder.ts:240`), which:
+Measured on a 16-core dev box against a Dockerised Postgres holding 1.44M
+railway parts, over a sample of 200 valid routes spread across the whole set
+(the first N by `track_id` all sit in one country, and cost varies hugely with
+network density):
 
-1. Loads every railway part within **50 km of the start coordinate**
-   (`railwayPathFinder.ts:254`).
-2. Loads every railway part within **50 km of the end coordinate**
-   (`railwayPathFinder.ts:255`).
-3. Builds an in-memory graph from them and runs BFS.
+| | ms/route |
+|---|---|
+| two buffered queries, serial (before) | 326 |
+| one indexed query, serial | 242 |
+| one indexed query, 2 workers | 170 |
+| one indexed query, 4 workers | 157 |
+| one indexed query, 8 workers | 155 |
 
-So for a 5 km branch line, two ~7,800 km² disks are fetched — overlapping almost
-completely — and every part in them is `ST_AsGeoJSON`'d, shipped over the wire and
-`JSON.parse`d. Twice. In the Ruhr or the Randstad that is a great deal of
-geometry for one short route.
+**~2.1× overall at the default of 4.** Scaling flattens hard after 2 — the work
+is a mix of Postgres-side spatial filtering and Node-side JSON parsing, and this
+box saturates one of them early. Measure on the deploy host before raising the
+default there; the ceiling is memory as much as CPU, since each worker holds its
+own bufferful of parsed geometry (which is why `importMapData` runs with
+`--max-old-space-size=8192`).
 
-The loading query itself (`railwayPathFinder.ts:108-128`) materialises a buffer
-polygon and intersects against the WGS84 column:
-
-```sql
-WITH search_area AS (
-  SELECT ST_Transform(ST_Buffer(ST_Transform(ST_SetSRID(ST_MakePoint($1,$2),4326),3857),
-                                $3 / GREATEST(cos(radians($2)), 0.01)), 4326) as buffer_geom
-)
-SELECT id::TEXT as id, ST_AsGeoJSON(geometry) as geometry_json
-FROM railway_parts rp, search_area
-WHERE ST_Intersects(rp.geometry, search_area.buffer_geom) AND rp.geometry IS NOT NULL
-```
-
-## Fix it in this order
-
-### 0. Remove the blocker first: `console.log` monkey-patching
-
-`verifyRouteData.ts:35-36` silences the pathfinder by swapping out the global
-`console.log`, restoring it in a `finally` at line 61:
-
-```ts
-const originalLog = console.log;
-console.log = () => {}; // Suppress all output
-```
-
-This is safe only because calls are strictly serial. Run two at once and the
-first to finish un-silences the rest; worse, an overlapping call captures the
-already-replaced no-op as its `originalLog` and logging is silenced permanently.
-
-**Do this before touching anything else**: give `RailwayPathFinder` a `quiet`
-option (or an injected logger) and delete the global patch. It is a mechanical
-change and it is a hard prerequisite for step 1.
-
-### 1. Parallelise the loop
-
-Each route is independent, so run several at a time. Notes:
-
-- `recalculateAllRoutes` currently receives a single `pg.Client`. node-pg
-  serialises concurrent queries on one connection, so real parallelism needs a
-  `Pool`. `importMapData.ts` passes its own client through — it will need to hand
-  in a pool, or the recalc step will need to open one itself.
-- The load step now runs in a transaction (`loadStationsAndParts`), but it
-  commits before recalculation begins, so a separate pool here is fine.
-- Start at 4 concurrent workers and measure before going higher. Each worker
-  holds its own 50 km of parsed geometry, so memory is the limit, not Postgres —
-  this is why `importMapData` runs with `--max-old-space-size=8192`.
-- Keep the per-route `UPDATE`s as they are (autocommitted, one per route). Do not
-  wrap the whole recalculation in one transaction: it would hold row locks on
-  `railway_routes` for the length of the import.
-- The result aggregation (`result.errors`, `result.backtrackingRoutes`) is
-  order-dependent only in presentation; sort at the end if the output order
-  matters.
-
-Expected payoff: close to linear in worker count, since the work is a mix of
-Postgres-side spatial filtering and Node-side parsing.
-
-### 2. One query per route instead of two
-
-Replace the two `loadRailwayPartsAroundCoordinate` calls with a single query
-covering both endpoints:
-
-```sql
-WHERE ST_DWithin(rp.geometry_3857, $start, $radius)
-   OR ST_DWithin(rp.geometry_3857, $end,   $radius)
-```
-
-For any route shorter than the buffer — most of them — the two disks overlap
-heavily, and today every part in the overlap is fetched, transferred and parsed
-twice. `parseAndStoreParts` dedupes by id, so the second copy is pure waste.
-
-### 3. Use the index that already exists
-
-`ST_Buffer` builds a 32-gon per call and then `ST_Intersects` tests against it.
-`ST_DWithin` against `railway_parts.geometry_3857` — GIST-indexed as
-`idx_railway_parts_geometry_3857` (see `database/init/02-vector-tiles.sql`) —
-gives the same set with no polygon materialisation.
-
-The existing query already does its distance maths in 3857 with `1/cos(lat)`
-scaling, so the semantics are unchanged; it just stops round-tripping through
-WGS84. `src/lib/stationProximity.ts:26` and `src/lib/routePathFinder.ts:147` are
-the in-repo precedents for the scaling expression — copy the pattern from there.
+A full `verifyRouteData --valid-only` over 1744 valid routes takes about 5 min at
+the default concurrency. Treat single-run timings as rough: repeated runs on the
+same box varied by well over a minute.
 
 ## Do not shrink the buffer
 
-Tempting, and wrong. The `[50000, 100000, 222000]` ladder at
-`railwayPathFinder.ts:245` only escalates when **no path is found**. A tighter
+Tempting, and wrong. The `[50000, 100000, 222000]` ladder in
+`findPathFromCoordinates` only escalates when **no path is found**. A tighter
 first pass that happens to find a *longer* path — because the true shortest one
 left the loaded area — returns that longer path instead, which then trips the
 "more than 0.1 km and more than 1%" length check in `verifyRouteData` and marks a
@@ -134,15 +100,29 @@ slow import.
 If the buffer is ever revisited, escalation would have to trigger on a length
 mismatch too, not just on failure.
 
+## Still on the table
+
+- **Fold the length query into the `UPDATE`.** Each route costs an extra round
+  trip for `ST_Length(...)::geography` before the write, because the result
+  decides whether to invalidate. A single statement with a CTE could do both. At
+  ~4.7k routes this is worth seconds, not minutes — the pathfinding dominates.
+- **Cut the per-route part loading further.** Routes are processed in `track_id`
+  order, which is roughly geographic, so consecutive routes reload much of the
+  same neighbourhood. A shared LRU of parsed parts across workers would cut both
+  the transfer and the parse, at the cost of holding geometry longer.
+
 ## Measuring
 
 `npm run verifyRouteData` runs step 2 on its own against the current data, so it
-can be timed without a full import. Take a baseline before starting; the route
-count is printed as `Found N routes to recalculate`.
+can be timed without a full import; it prints its own elapsed time and the route
+count as `Found N routes to recalculate`. `--valid-only` restricts it to routes
+not already invalid, which is much faster — an invalid route escalates through
+all three buffers, including the 222 km one, before giving up.
 
-`npm run inspectPath -- "<from>" "<to>"` prints a single search's timing and the
-gaps between consecutive routes — useful for checking that a change to the
-loading query has not altered which path is found.
+`npm run inspectPath -- "<from>" "<to>"` prints a single *journey planner* search
+and the gaps between consecutive routes. Note that it exercises
+`lib/routePathFinder.ts`, not the recalculation pathfinder, so it does not cover
+changes made here.
 
 ## Regression check
 
@@ -155,4 +135,7 @@ SELECT track_id, is_valid, ROUND(length_km::numeric, 3) FROM railway_routes ORDE
 
 Run it again afterwards and diff. Length may shift in the last decimal from
 floating-point ordering, but `is_valid` must not change for any route, and no
-route should gain or lose an `error_message`.
+route should gain or lose an `error_message`. The changes recorded above were
+verified this way: over all 5531 routes, `is_valid`, `error_message` presence and
+`length_km` to three decimals came out byte-identical, at every concurrency
+tried.

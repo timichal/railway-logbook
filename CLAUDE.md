@@ -10,11 +10,11 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 
 ### Data pipeline
 - `npm run prepareMapData -- <YYMMDD> [region ...]` — download OSM, filter rail, convert to GeoJSON, prune. One Geofabrik extract per region (europe, japan), all of them unless named. Output: `./data/<region>-pruned-<version>.geojson`.
-- `npm run importMapData <filepath> [<filepath> ...]` — load GeoJSON into Postgres (stations + railway_parts). **Pass every region's file to one run**: the tables are cleared once before the first file, so importing them separately drops whichever region went in first. Auto-recalculates existing routes; skips recalculation on initial load. Add `--valid-only` to recalculate only routes not already marked invalid.
+- `npm run importMapData <filepath> [<filepath> ...]` — load GeoJSON into Postgres (stations + railway_parts). **Pass every region's file to one run**: the tables are cleared once before the first file, so importing them separately drops whichever region went in first. Auto-recalculates existing routes; skips recalculation on initial load. Add `--valid-only` to recalculate only routes not already marked invalid, `--concurrency=N` to change how many routes are recalculated at once (default 4 — see `RECALC_PERFORMANCE.md`).
 
 ### Database ops
 - `docker-compose up -d db` — start Postgres+PostGIS.
-- `npm run verifyRouteData` — recalculate all routes, mark invalid ones.
+- `npm run verifyRouteData` — recalculate all routes, mark invalid ones. Accepts `--valid-only` and `--concurrency=N`; prints its own elapsed time.
 - `npm run applyVectorTiles` — re-apply `database/init/02-vector-tiles.sql`.
 - `npm run markAllRoutesInvalid` — flag all routes for recheck (use `verifyRouteData` after). **Reference example for migration scripts.**- `npm run fixSequences` — resync all SERIAL id sequences with table data. Fixes "duplicate key violates …_pkey" on inserts after rows were loaded with explicit ids (old dumps) without bumping the sequence. `importRouteData` now does this automatically; run manually if needed.
 - `npm run fixStationSrid` — set SRID 4326 on any geometry row still stored as SRID 0, and report whether each geometry column declares the SRID in its type. Only needed for a database not reimported since the loader started setting the SRID explicitly; a full `importMapData` rewrites every station anyway. Safe to re-run.
@@ -24,7 +24,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 
 ### Data transfer (pscp)
 - `npm run deployMapData` / `npm run downloadMapData` / `npm run downloadRouteData`.
-  - `deployMapData` prepares, uploads and imports every region in one pass (see importMapData above). Accepts an optional date (YYMMDD) and an optional `--valid-only` flag (any order, e.g. `npm run deployMapData -- 260523 --valid-only`). `--valid-only` forwards to the remote `importMapData`, which only recalculates routes that aren't already invalid (`is_valid IS NOT FALSE`) — useful to skip routes that will fail recalc anyway. `importMapData` and `verifyRouteData` also accept `--valid-only` directly.
+  - `deployMapData` prepares, uploads and imports every region in one pass (see importMapData above). Accepts an optional date (YYMMDD) and an optional `--valid-only` flag (any order, e.g. `npm run deployMapData -- 260523 --valid-only`). `--valid-only` forwards to the remote `importMapData`, which only recalculates routes that aren't already invalid (`is_valid IS NOT FALSE`) — useful to skip routes that will fail recalc anyway. `importMapData` and `verifyRouteData` also accept `--valid-only` directly. `--concurrency=N` forwards the same way. Flags are matched by name in `deploy.sh`, so a new import flag has to be added there too or it will be read as the date.
 
 ### Frontend
 - `npm run dev` (Turbopack), `npm run build`, `npm run start`.
@@ -177,8 +177,8 @@ Click railway part → capture exact coordinate for start/end. Right-click anywh
 ### Database migrations
 When changing schema or transforming existing data, create a TS script in `src/scripts/`. Pattern: import `pool` from `@/lib/db`, run SQL, log progress, exit. Use `markAllRoutesInvalid.ts` as the reference. Register in `package.json` and document in this file's Database Operations + Scripts sections.
 
-### Planned work
-`RECALC_PERFORMANCE.md` — why route recalculation dominates the import, and the ordered plan for speeding it up (drop the `console.log` monkey-patching, then parallelise, then cut the per-route queries down). Read it before touching `verifyRouteData.ts` or `scripts/lib/railwayPathFinder.ts` for performance reasons.
+### Route recalculation performance
+`RECALC_PERFORMANCE.md` — why route recalculation dominates the import, how it is kept fast (a worker pool over the route list; one `ST_DWithin` query per route covering both endpoints), the constraints that must not be broken (don't shrink the pathfinder's buffer; don't wrap the run in a transaction; don't silence the pathfinder from outside), and the measurements behind the current default. Read it before touching `verifyRouteData.ts` or `scripts/lib/railwayPathFinder.ts` for performance reasons.
 
 ### Type checking
 Run `npx tsc --noEmit` after each batch of related changes. Don't run full builds unless asked.

@@ -27,10 +27,17 @@ export function coordinateToKey(coord: Coord): string {
  * detection and chain building agree on what counts as "the same point".
  *
  * @param sublists - Array of coordinate arrays to merge
+ * @param log - Where to report an ambiguous chain. A bulk recalculation runs
+ *   thousands of merges and passes a no-op, so the note does not bury the
+ *   progress line; it used to be swallowed by the global `console.log` the
+ *   recalculation patched out around each search.
  * @returns A single merged coordinate array in the correct order
  * @throws Error if the chain is broken
  */
-export function mergeLinearChain(sublists: Coord[][]): Coord[] {
+export function mergeLinearChain(
+  sublists: Coord[][],
+  log: (message: string) => void = console.log,
+): Coord[] {
   if (sublists.length === 0) return [];
   if (sublists.length === 1) return sublists[0];
 
@@ -55,9 +62,7 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
 
   // If no clear endpoint found (e.g., circular routes or complex junctions), use first sublist
   if (startingSublistIndex === -1) {
-    console.log(
-      "[mergeLinearChain] No clear endpoint found, using first sublist as starting point",
-    );
+    log("[mergeLinearChain] No clear endpoint found, using first sublist as starting point");
     startingSublistIndex = 0;
   }
 
