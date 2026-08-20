@@ -1,6 +1,6 @@
 import type * as maplibregl from "maplibre-gl";
 import { getNoteTypeColor, noteTypeOptions } from "../constants";
-import { BASEMAP_FONT, BASEMAP_FONT_BOLD } from "./basemap";
+import { BASEMAP_FONT_BOLD } from "./basemap";
 import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES } from "./style";
 
 // The basemap (vector, latin labels) and its raster fallback live in basemap.ts.
@@ -339,10 +339,8 @@ export function createStationsLayer(): maplibregl.CircleLayerSpecification {
 /**
  * Station names, drawn from the same tile as the dots (see LABELS in style.ts).
  *
- * `text-font` has to name a fontstack the style's `glyphs` endpoint serves, and
- * it serves only Noto Sans. Regular is listed behind Bold as the fallback: a
- * missing glyph in one weight falls through to the next font in the stack rather
- * than dropping the label.
+ * Styled after openstreetmap-carto's station labels - see LABELS.station in
+ * style.ts for the carto rule each value comes from.
  */
 export function createStationLabelsLayer(): maplibregl.SymbolLayerSpecification {
   return {
@@ -353,20 +351,25 @@ export function createStationLabelsLayer(): maplibregl.SymbolLayerSpecification 
     minzoom: LABELS.station.minZoom,
     layout: {
       "text-field": ["get", "name"],
-      "text-font": [BASEMAP_FONT_BOLD, BASEMAP_FONT],
+      // Carto's `@bold-fonts`, whose first entry is this. It must be the *only*
+      // entry: MapLibre joins a text-font array with commas into one
+      // `{fontstack}` path segment, so naming a fallback asks the glyph server
+      // for "Noto Sans Bold,Noto Sans Regular" - a composite range OpenFreeMap
+      // 404s, and a failed range means MapLibre draws the text with a local
+      // system font instead. Which is exactly what a two-font stack here looked
+      // like: not bold Noto at all.
+      "text-font": [BASEMAP_FONT_BOLD],
       "text-size": [
-        "interpolate",
-        ["linear"],
+        "step",
         ["zoom"],
-        LABELS.station.sizeZoom.min,
-        LABELS.station.size.min,
-        LABELS.station.sizeZoom.max,
-        LABELS.station.size.max,
+        LABELS.station.size.base,
+        LABELS.station.largeZoom,
+        LABELS.station.size.large,
       ],
       "text-anchor": "top",
       "text-offset": [0, LABELS.station.offsetEm],
-      "text-letter-spacing": LABELS.station.letterSpacing,
       "text-max-width": LABELS.station.maxWidthEm,
+      "text-line-height": LABELS.station.lineHeight,
       // Drop labels that would collide rather than stacking them - a junction
       // complex has more station points than there is room for names.
       "text-allow-overlap": false,
@@ -376,7 +379,6 @@ export function createStationLabelsLayer(): maplibregl.SymbolLayerSpecification 
       "text-color": COLORS.stations.label,
       "text-halo-color": COLORS.stations.labelHalo,
       "text-halo-width": LABELS.station.haloWidth,
-      "text-halo-blur": LABELS.station.haloBlur,
     },
   };
 }

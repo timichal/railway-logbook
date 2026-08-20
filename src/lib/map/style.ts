@@ -44,10 +44,14 @@ export const COLORS = {
   stations: {
     fill: "#ff7800",
     stroke: "#000",
-    // Station names: near-black on a white halo, so they read over both the
-    // faded basemap and our own route lines.
-    label: "#111827",
-    labelHalo: "#ffffff",
+    // Station names, lifted from openstreetmap-carto's own station styling
+    // (style/stations.mss): `@station-color: #7981b0` with
+    // `@station-text: darken(saturate(@station-color, 15%), 10%)`, which
+    // evaluates to #4957ad. The halo is carto's `@standard-halo-fill`,
+    // rgba(255,255,255,0.6) - a *translucent* white, which is what gives the
+    // labels their faded look instead of the hard cutout a solid halo produces.
+    label: "#4957ad",
+    labelHalo: "rgba(255, 255, 255, 0.6)",
   },
   adminNotes: {
     fill: "#fbbf24", // Yellow/amber for notes
@@ -152,25 +156,21 @@ export const CIRCLES = {
  * from our own `stations` tile means they match the dots exactly (same
  * `near_route` filter on the user map), sit above the basemap fade at full
  * contrast, and carry the Latin-preferring name `pruneData` already resolved.
+ *
+ * The styling reproduces openstreetmap-carto's, which is what the raster basemap
+ * used to draw: bold, a muted blue, and softened by a translucent halo. Each
+ * value below cites the carto rule it came from.
  */
 export const LABELS = {
+  // modified from carto defaults
   station: {
-    // Below this the dots are packed close enough that names would be unreadable
-    // soup; MapLibre's collision detection thins out what is left.
-    minZoom: 12,
-    size: { min: 10, max: 14 },
-    sizeZoom: { min: 12, max: 16 },
-    // Bold, on a crisp white halo: the labels sit over route lines and a busy
-    // basemap, and weight separates them from the basemap's own place names
-    // better than size does. A touch of tracking keeps the bold from looking
-    // cramped, and a hint of halo blur takes the hard edge off the outline.
+    minZoom: 11,
+    size: { base: 10, large: 11 },
+    largeZoom: 16,
     haloWidth: 1.5,
-    haloBlur: 0.3,
-    letterSpacing: 0.02,
-    // Clears the dot (radius 3 + 1px stroke), measured in ems of the text size.
-    offsetEm: 0.5,
-    // Keeps long names ("Praha-Vysočany") from stretching across the map.
-    maxWidthEm: 9,
+    offsetEm: 0.9,
+    maxWidthEm: 8,
+    lineHeight: 1.05,
   },
 } as const;
 
