@@ -12,6 +12,7 @@ export {
   createOSMBackgroundLayer,
   createOSMBackgroundSource,
   dropPoiLayers,
+  flattenBuildings,
   GLYPHS_URL,
   loadBasemapStyle,
   OSM_TILES_URL,

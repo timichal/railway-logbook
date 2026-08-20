@@ -72,10 +72,54 @@ const LATIN_LABEL_EXPRESSION = [
  */
 const POI_LAYER_IDS = new Set(["poi_r1", "poi_r7", "poi_r20", "poi_transit"]);
 
+/** Liberty's own building colours, kept for the flattened extrusion layer. */
+const BUILDING_FILL_COLOR = "hsl(35,8%,85%)";
+const BUILDING_OUTLINE_COLOR = "hsl(35,6%,79%)";
+
 export function dropPoiLayers(
   layers: maplibregl.LayerSpecification[],
 ): maplibregl.LayerSpecification[] {
   return layers.filter((layer) => !POI_LAYER_IDS.has(layer.id));
+}
+
+/**
+ * Flattens the basemap's extruded buildings back into footprints.
+ *
+ * Liberty draws buildings twice: a plain fill over z13-14, and `building-3d`,
+ * a `fill-extrusion` from z14 up. The extrusion is the pseudo-3D block effect
+ * that appears once you zoom into a town, and on a flat-drawn railway map it
+ * reads as an artefact - the blocks lean with the viewport, throw the station
+ * dots and route lines out of register with the ground they sit on, and paint
+ * over them near the horizon.
+ *
+ * Rewritten rather than dropped: dropping it would leave nothing over z14, and
+ * building footprints are the context that says which side of town a line runs
+ * through. The extrusion colour carries over, plus the outline colour the z13-14
+ * fill interpolates to at z14, so the two layers meet without a visible seam.
+ *
+ * Keyed on the layer *type*, not on `building-3d` by name - any extrusion in the
+ * style is the same effect and gets the same treatment.
+ */
+export function flattenBuildings(
+  layers: maplibregl.LayerSpecification[],
+): maplibregl.LayerSpecification[] {
+  return layers.map((layer) => {
+    if (layer.type !== "fill-extrusion") return layer;
+    const flattened: maplibregl.FillLayerSpecification = {
+      id: layer.id,
+      type: "fill",
+      source: layer.source,
+      paint: {
+        "fill-color": layer.paint?.["fill-extrusion-color"] ?? BUILDING_FILL_COLOR,
+        "fill-outline-color": BUILDING_OUTLINE_COLOR,
+      },
+    };
+    if (layer["source-layer"] !== undefined) flattened["source-layer"] = layer["source-layer"];
+    if (layer.minzoom !== undefined) flattened.minzoom = layer.minzoom;
+    if (layer.maxzoom !== undefined) flattened.maxzoom = layer.maxzoom;
+    if (layer.filter !== undefined) flattened.filter = layer.filter;
+    return flattened;
+  });
 }
 
 /**
@@ -155,7 +199,7 @@ async function fetchBasemapStyle(): Promise<BasemapStyle> {
   }
   return {
     sources: style.sources,
-    layers: latinizeLabels(dropPoiLayers(style.layers)),
+    layers: latinizeLabels(flattenBuildings(dropPoiLayers(style.layers))),
     glyphs: style.glyphs,
     sprite: style.sprite,
   };

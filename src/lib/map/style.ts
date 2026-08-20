@@ -165,7 +165,7 @@ export const LABELS = {
   // modified from carto defaults
   station: {
     minZoom: 11,
-    size: { base: 10, large: 11 },
+    size: { base: 13, large: 14 },
     largeZoom: 16,
     haloWidth: 1.5,
     offsetEm: 0.9,
