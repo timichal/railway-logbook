@@ -122,20 +122,25 @@ export default function Navbar({
 
           <div className="flex items-center gap-2 ml-4">
             <RegionSwitch />
-            <button
-              type="button"
-              onClick={onOpenHowTo}
-              className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-md text-sm border border-blue-300 cursor-pointer"
-            >
-              How To Use
-            </button>
-            <button
-              type="button"
-              onClick={onOpenNotes}
-              className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded-md text-sm border border-green-300 cursor-pointer"
-            >
-              Railway Notes
-            </button>
+            {/* Article views live in the user sidebar only — the admin page has no place to open them. */}
+            {!isAdminPage && (
+              <>
+                <button
+                  type="button"
+                  onClick={onOpenHowTo}
+                  className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-md text-sm border border-blue-300 cursor-pointer"
+                >
+                  How To Use
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenNotes}
+                  className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded-md text-sm border border-green-300 cursor-pointer"
+                >
+                  Railway Notes
+                </button>
+              </>
+            )}
           </div>
         </div>
 
