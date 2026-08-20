@@ -53,33 +53,53 @@ const CJK_PATTERN = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/;
 const HAN_PATTERN = /[㐀-䶿一-鿿豈-﫿]/;
 
 /**
+ * Romanized-name tags, in the order they are preferred over `name`.
+ *
+ * `name:ja_rm` is OSM's romaji tag and `name:ja-Latn` the BCP-47 spelling of
+ * the same thing; both carry the transcription with its macrons (Tōkyō, Kyōto,
+ * Ōsaka). `name:en` comes last because it is an English *name* rather than a
+ * transcription, and is routinely written without the diacritics (Tokyo) or
+ * with the station suffix in English - so it is the fallback, not the choice.
+ */
+const ROMANIZED_NAME_TAGS = ["name:ja_rm", "name:ja-Latn", "name:en"] as const;
+
+/** First non-empty romanized tag on the feature, if any. */
+function romanizedName(properties: Feature["properties"]): string | undefined {
+  for (const tag of ROMANIZED_NAME_TAGS) {
+    const value = properties[tag] as string | undefined;
+    if (value) return value;
+  }
+  return undefined;
+}
+
+/**
  * The single display name a station is stored under.
  *
  * Japanese stations are tagged in kanji, which the `transliteration` package
  * romanizes through Chinese readings (Tokyo's 東京 comes out "Dong Jing"), so a
- * CJK name is taken from `name:en` when OSM carries one - as it does for
- * essentially every station in Japan. Only when that is missing do we fall back
- * to transliterating, which romanizes a kana-only name properly and otherwise
- * leaves the original in place: a wrong-language romanization is harder to
- * recognize than the kanji itself.
+ * CJK name is taken from the romanized tags above when OSM carries one - as it
+ * does for essentially every station in Japan. Only when all of them are
+ * missing do we fall back to transliterating, which romanizes a kana-only name
+ * properly and otherwise leaves the original in place: a wrong-language
+ * romanization is harder to recognize than the kanji itself.
  *
  * Everything else keeps the previous behaviour - Cyrillic and Greek are
  * transliterated, Latin (diacritics and all) passes through untouched.
  */
 function resolveStationName(properties: Feature["properties"]): string | undefined {
   const name = properties.name;
-  const nameEn = properties["name:en"] as string | undefined;
+  const romanized = romanizedName(properties);
 
   if (name && CJK_PATTERN.test(name)) {
-    if (nameEn) return nameEn;
-    // No English name to fall back on. Kana romanizes correctly (なんば ->
+    if (romanized) return romanized;
+    // Nothing romanized to fall back on. Kana romanizes correctly (なんば ->
     // "nanba"), so transliterate it; kanji does not (新宿 -> "Xin Su", the
     // Chinese reading), so the original is kept - wrong-language romanization
     // is worse than a name the reader can at least match against a sign.
     return HAN_PATTERN.test(name) ? name : transliterate(name);
   }
 
-  if (!name && nameEn) return nameEn;
+  if (!name && romanized) return romanized;
 
   return transliterateName(name);
 }
@@ -252,8 +272,8 @@ function areaStationToFeature(station: AreaStation): Feature {
 }
 
 function pruneFeatureProperties(feat: Feature): Feature {
-  // Stations keep a single resolved `name` (see resolveStationName); `name:en`
-  // is an input to that choice, never written out.
+  // Stations keep a single resolved `name` (see resolveStationName); the
+  // romanized name tags are inputs to that choice, never written out.
   if (feat.geometry.type === "Point") {
     return {
       ...feat,
