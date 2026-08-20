@@ -68,7 +68,8 @@ export default function AdminCreateRouteTab({
     from_station: "",
     to_station: "",
     description: "",
-    usage_type: undefined as UsageType | undefined,
+    // Default to Regular — the overwhelming majority of routes, saves a click
+    usage_type: 0 as UsageType | undefined,
     frequency: [] as string[],
     link: "",
     scenic: false,
@@ -91,7 +92,7 @@ export default function AdminCreateRouteTab({
       from_station: "",
       to_station: "",
       description: "",
-      usage_type: undefined,
+      usage_type: 0,
       frequency: [],
       link: "",
       scenic: false,
