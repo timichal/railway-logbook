@@ -18,6 +18,50 @@ import { loadMapState, saveMapState } from "../mapState";
 // by the copyMaplibreWorker script) where the relative import resolves.
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
+/**
+ * Release the GeolocateControl's location lock when the user zooms.
+ *
+ * MapLibre drops the lock as soon as the map is panned, but deliberately keeps
+ * it through a zoom (its `movestart` handler bails while `map.isZooming()`).
+ * With `trackUserLocation` the lock re-centers the map on every position fix —
+ * a `fitBounds` over the accuracy circle, which sets the zoom too — so a zoom
+ * is undone by the next fix a second later. Zooming means "I want to look at
+ * this differently" just as panning does, so it releases the lock here as well:
+ * the location dot stays, the map stops being dragged back to it.
+ *
+ * The release runs the control's *own* `movestart` handler with `isZooming()`
+ * forced false for the call, rather than reimplementing the transition — going
+ * to BACKGROUND is a private state machine plus button classes plus two fired
+ * events, and a hand-written copy would drift out of step. If a later version
+ * renames those internals, the guarded lookups simply do nothing and we are
+ * back to the current upstream behaviour instead of a half-applied state.
+ *
+ * Returns the listener so the caller can detach it.
+ */
+function watchGeolocateZoom(map: maplibregl.Map, geolocate: maplibregl.GeolocateControl) {
+  const handler = (event: maplibregl.MapMovementEvent) => {
+    // The control's own re-centering passes `geolocateSource` through fitBounds,
+    // and event data is copied onto the event object.
+    if ((event as { geolocateSource?: boolean }).geolocateSource) return;
+    const internals = geolocate as unknown as {
+      _watchState?: string;
+      _onMoveStart?: (event: unknown) => void;
+    };
+    if (internals._watchState !== "ACTIVE_LOCK" || typeof internals._onMoveStart !== "function") {
+      return;
+    }
+    const isZooming = map.isZooming;
+    map.isZooming = () => false;
+    try {
+      internals._onMoveStart({});
+    } finally {
+      map.isZooming = isZooming;
+    }
+  };
+  map.on("zoomstart", handler);
+  return handler;
+}
+
 export interface UseMapLibreOptions {
   /**
    * Region the map is locked to: supplies the initial view, the panning bounds
@@ -124,15 +168,14 @@ export function useMapLibre(
       map.current.addControl(new maplibregl.NavigationControl(), "top-right");
 
       // Add geolocation control (show current location)
-      map.current.addControl(
-        new maplibregl.GeolocateControl({
-          positionOptions: {
-            enableHighAccuracy: true,
-          },
-          trackUserLocation: true,
-        }),
-        "top-right",
-      );
+      const geolocate = new maplibregl.GeolocateControl({
+        positionOptions: {
+          enableHighAccuracy: true,
+        },
+        trackUserLocation: true,
+      });
+      map.current.addControl(geolocate, "top-right");
+      const releaseLockOnZoom = watchGeolocateZoom(map.current, geolocate);
 
       // Add scale control
       map.current.addControl(
@@ -174,6 +217,7 @@ export function useMapLibre(
         if (map.current) {
           map.current.off("moveend", saveState);
           map.current.off("zoomend", saveState);
+          map.current.off("zoomstart", releaseLockOnZoom);
           map.current.remove();
           map.current = null;
           setMapLoaded(false);
