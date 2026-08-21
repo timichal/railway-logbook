@@ -90,7 +90,7 @@ for REGION in ${REGIONS}; do
             -f pbf \
             -o "${FILTERED_FILE}.part" \
             "${DOWNLOAD_FILE}" \
-            w/railway=rail,narrow_gauge,light_rail \
+            w/railway=rail,narrow_gauge,light_rail,monorail \
             nw/railway=station,halt || {
                 echo "ERROR: Failed to filter rail features"
                 rm -f "${FILTERED_FILE}.part"

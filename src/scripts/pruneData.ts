@@ -127,7 +127,7 @@ function filterFeature(feat: Feature): boolean {
   if (feat.geometry.type === "LineString") {
     if (
       feat.properties.railway &&
-      ["rail", "narrow_gauge", "light_rail"].includes(feat.properties.railway)
+      ["rail", "narrow_gauge", "light_rail", "monorail"].includes(feat.properties.railway)
     )
       return true;
     return false;
