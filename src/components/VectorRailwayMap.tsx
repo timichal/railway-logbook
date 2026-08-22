@@ -635,7 +635,7 @@ export default function VectorRailwayMap({
                   onChange={() => routeEditor.toggleShowSpecial()}
                   className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 />
-                <span>Show special services</span>
+                <span>{region.id === "japan" ? "Show non-JR lines" : "Show special services"}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer text-xs">
                 <input
