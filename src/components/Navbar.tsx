@@ -7,6 +7,7 @@ import { useRegion } from "@/lib/regionContext";
 import LoginForm from "./LoginForm";
 import RegionSwitch from "./RegionSwitch";
 import RegisterForm from "./RegisterForm";
+import ShareMapDialog from "./ShareMapDialog";
 
 interface NavbarProps {
   user: User | null;
@@ -32,6 +33,7 @@ export default function Navbar({
   const region = useRegion();
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
   const [showRegisterDropdown, setShowRegisterDropdown] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const loginRef = useRef<HTMLDivElement>(null);
   const registerRef = useRef<HTMLDivElement>(null);
 
@@ -145,6 +147,18 @@ export default function Navbar({
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Share map — a logged-in user's own map is the only one there is to
+              publish, so this is hidden for anonymous visitors and on the admin page. */}
+          {user && !isAdminPage && (
+            <button
+              type="button"
+              onClick={() => setShowShareDialog(true)}
+              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium py-2 px-4 rounded-md text-sm border border-indigo-300 cursor-pointer"
+            >
+              Share Map
+            </button>
+          )}
+
           {/* Admin link or Back to Main Map */}
           {user?.id === 1 && !isAdminPage && (
             <Link
@@ -229,6 +243,8 @@ export default function Navbar({
           )}
         </div>
       </div>
+
+      <ShareMapDialog isOpen={showShareDialog} onClose={() => setShowShareDialog(false)} />
     </header>
   );
 }

@@ -5,7 +5,12 @@ import { escapeHtml, formatRouteMetadataBadges, safeHref } from "@/lib/map/utils
 import type { SelectedRoute, Station } from "@/lib/types";
 
 interface UserMapInteractionCallbacks {
-  onRouteClick: (feature: SelectedRoute) => void;
+  /**
+   * Omitted on the read-only shared map (`/shared/<token>`): the click handler
+   * is simply not attached, so routes still show their hover popup and open
+   * their link on double-click, but nothing can be selected.
+   */
+  onRouteClick?: (feature: SelectedRoute) => void;
   onStationClick?: (station: Station | null) => void;
 }
 
@@ -21,6 +26,8 @@ export function setupUserMapInteractions(
 
   // Click handler for routes — queries all route-related layers (base + click buffer + highlights)
   const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
+    if (!onRouteClick) return;
+
     // A station circle sits on top of the very route it belongs to, and this is a
     // map-wide click while the station handler is layer-scoped, so both fire. When
     // something is listening for station clicks (the Journey Planner filling a
@@ -273,7 +280,7 @@ export function setupUserMapInteractions(
   // Attach route click as general map handler (works through highlight layers on top).
   // Hover/cursor handlers fire from the wide click-buffer layer so thin visible
   // lines don't make hover/cursor feedback finicky.
-  mapInstance.on("click", handleRouteClick);
+  if (onRouteClick) mapInstance.on("click", handleRouteClick);
   mapInstance.on("mousemove", "railway_routes_click", handleRouteMouseMove);
   mapInstance.on("mouseenter", "railway_routes_click", handleRouteMouseEnter);
   mapInstance.on("mouseleave", "railway_routes_click", handleRouteMouseLeave);
@@ -296,7 +303,7 @@ export function setupUserMapInteractions(
     }
     // Remove route handlers
     mapInstance.off("dblclick", handleDblClick);
-    mapInstance.off("click", handleRouteClick);
+    if (onRouteClick) mapInstance.off("click", handleRouteClick);
     mapInstance.off("mousemove", "railway_routes_click", handleRouteMouseMove);
     mapInstance.off("mouseenter", "railway_routes_click", handleRouteMouseEnter);
     mapInstance.off("mouseleave", "railway_routes_click", handleRouteMouseLeave);

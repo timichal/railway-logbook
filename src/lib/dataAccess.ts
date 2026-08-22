@@ -9,6 +9,12 @@
 import type { User } from "./authActions";
 import { isSpecialUsage } from "./constants";
 import * as localStore from "./localStorage";
+import type { ProgressByCountry, UserProgress } from "./progressQueries";
+import {
+  getPublicCoveredStretches,
+  getPublicProgress,
+  getPublicProgressByCountry,
+} from "./publicMapActions";
 import { REGIONS, type RegionId } from "./regions";
 import type { CoveredRange, CoveredStretch, RailwayRoute } from "./types";
 import {
@@ -17,8 +23,6 @@ import {
   getUserProgress as dbGetUserProgress,
   getAllRoutes,
   getCoveredStretchesFor,
-  type ProgressByCountry,
-  type UserProgress,
 } from "./userActions";
 import {
   getUserPreferences as dbGetUserPreferences,
@@ -312,6 +316,49 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 
     async canAddMoreJourneys(): Promise<boolean> {
       return localStore.canAddMoreJourneys();
+    },
+  };
+}
+
+/**
+ * Read-only data access for a shared public map (`/shared/<token>`).
+ *
+ * Same interface as the other two, so `useRouteEditor` and `useCoverageOverlay`
+ * work unchanged; the token stands in for a session, and every call re-checks it
+ * server-side (a link switched off mid-visit simply stops answering). Nothing
+ * here writes: an anonymous visitor has no journeys to log and no preferences of
+ * their own, and the country filter is the owner's, shown as they set it.
+ */
+export function createPublicDataAccess(token: string, region: RegionId): DataAccess {
+  return {
+    async getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
+      return await getPublicProgress(token, region, selectedCountries);
+    },
+
+    async getProgressByCountry(): Promise<ProgressByCountry> {
+      return await getPublicProgressByCountry(token, region);
+    },
+
+    async getCoveredStretches(): Promise<CoveredStretch[]> {
+      return await getPublicCoveredStretches(token);
+    },
+
+    async getUserPreferences(): Promise<string[]> {
+      // The shared view is handed the owner's list by the server component; it
+      // never asks for it again, and it has nowhere to change it.
+      throw new Error("A shared map has no editable preferences");
+    },
+
+    async updateUserPreferences(): Promise<void> {
+      throw new Error("A shared map is read-only");
+    },
+
+    async getJourneyCount(): Promise<number> {
+      return 0;
+    },
+
+    async canAddMoreJourneys(): Promise<boolean> {
+      return false;
     },
   };
 }

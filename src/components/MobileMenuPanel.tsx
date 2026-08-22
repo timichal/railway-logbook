@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { User } from "@/lib/authActions";
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
+import ShareMapDialog from "./ShareMapDialog";
 
 interface MobileMenuPanelProps {
   user: User | null;
@@ -23,6 +24,7 @@ export default function MobileMenuPanel({
 }: MobileMenuPanelProps) {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   const handleLoginSuccess = () => {
     setShowLogin(false);
@@ -51,6 +53,15 @@ export default function MobileMenuPanel({
         >
           Railway Notes
         </button>
+        {user && (
+          <button
+            type="button"
+            onClick={() => setShowShareDialog(true)}
+            className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium py-1.5 px-3 rounded-md text-xs border border-indigo-300 cursor-pointer"
+          >
+            Share Map
+          </button>
+        )}
         {user?.id === 1 && (
           <Link
             href="/admin"
@@ -106,6 +117,8 @@ export default function MobileMenuPanel({
           <RegisterForm onSuccess={handleRegisterSuccess} />
         </div>
       )}
+
+      <ShareMapDialog isOpen={showShareDialog} onClose={() => setShowShareDialog(false)} />
     </div>
   );
 }

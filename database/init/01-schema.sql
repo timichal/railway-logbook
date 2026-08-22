@@ -124,6 +124,13 @@ CREATE TABLE user_preferences (
         'AT', 'BE', 'CZ', 'DK', 'EE', 'ES', 'FI', 'FR', 'DE', 'IT',
         'LV', 'LT', 'LU', 'NL', 'NO', 'PL', 'SE', 'SK', 'SI', 'CH', 'GB'
     ],
+    -- Public map sharing. Off by default: a map is private until its owner says
+    -- otherwise, and the token alone grants nothing while this is FALSE.
+    public_map_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Random URL slug for /shared/<token>. Minted on the first read of the
+    -- sharing settings and then kept, so the link a user has copied keeps
+    -- working across enable/disable cycles.
+    public_map_token TEXT UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

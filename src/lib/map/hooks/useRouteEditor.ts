@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { DataAccess } from "@/lib/dataAccess";
-import type { UserProgress } from "@/lib/userActions";
+import type { UserProgress } from "@/lib/progressQueries";
 import { loadLayerPrefs, saveLayerPref } from "../layerPrefs";
 
 /**

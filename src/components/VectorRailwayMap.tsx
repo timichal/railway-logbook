@@ -5,17 +5,9 @@ import type { User } from "@/lib/authActions";
 import { createDataAccess } from "@/lib/dataAccess";
 import * as localStore from "@/lib/localStorage";
 import {
-  createPublicNotesLayer,
   createPublicNotesSource,
   createPublicStationsSource,
-  createRailwayRoutesClickLayer,
-  createRailwayRoutesHeritageLayer,
-  createRailwayRoutesLayer,
   createRailwayRoutesSource,
-  createRailwayRoutesSpecialLayer,
-  createScenicRoutesOutlineLayer,
-  createStationLabelsLayer,
-  createStationsLayer,
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
@@ -27,12 +19,13 @@ import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
 import { setupUserMapInteractions } from "@/lib/map/interactions/userMapInteractions";
 import { loadLayerPrefs, saveLayerPref } from "@/lib/map/layerPrefs";
 import {
-  getUserRouteClickBufferWidthExpression,
-  getUserRouteColorExpression,
-  getUserRouteHeritageWidthExpression,
-  getUserRouteScenicOutlineWidthExpression,
-  getUserRouteWidthExpression,
-} from "@/lib/map/utils/userRouteStyling";
+  createUserMapLayers,
+  userClickBufferLayerConfig,
+  userHeritageLayerConfig,
+  userRouteLayerConfig,
+  userScenicLayerConfig,
+  userSpecialLayerConfig,
+} from "@/lib/map/userMapLayers";
 import { useRegion } from "@/lib/regionContext";
 import { regionCountryCodes } from "@/lib/regions";
 import { useToast } from "@/lib/toast";
@@ -46,12 +39,6 @@ import type {
 } from "@/lib/types";
 import MobileMenuPanel from "./MobileMenuPanel";
 import UserSidebar, { type ActiveTab } from "./UserSidebar";
-
-// Default to Regular-only (usage_type=0); the "Show heritage lines" and "Show
-// special services" toggles (useLayerFilters) reveal Heritage / Special.
-// Module-scoped so it is a stable reference and layer-config memos can keep
-// empty dependency arrays.
-const defaultFilter: ["==", ["get", string], number] = ["==", ["get", "usage_type"], 0];
 
 interface VectorRailwayMapProps {
   className?: string;
@@ -155,52 +142,6 @@ export default function VectorRailwayMap({
 
   const stationSearch = useStationSearch(region.id);
 
-  // Shared layer configs.
-  const routeLayerConfig = useMemo(
-    () => ({
-      colorExpression: getUserRouteColorExpression(),
-      widthExpression: getUserRouteWidthExpression(),
-      filter: defaultFilter,
-    }),
-    [],
-  );
-
-  // Dashed Special / dotted Heritage layers: same visit-status colors as the
-  // solid line, but rendered dashed / dotted. Their usage_type filter and
-  // hidden-by-default visibility are baked into the factories; useLayerFilters
-  // toggles visibility.
-  const specialLayerConfig = useMemo(
-    () => ({
-      colorExpression: getUserRouteColorExpression(),
-      widthExpression: getUserRouteWidthExpression(),
-    }),
-    [],
-  );
-
-  const heritageLayerConfig = useMemo(
-    () => ({
-      colorExpression: getUserRouteColorExpression(),
-      widthExpression: getUserRouteHeritageWidthExpression(),
-    }),
-    [],
-  );
-
-  const scenicLayerConfig = useMemo(
-    () => ({
-      widthExpression: getUserRouteScenicOutlineWidthExpression(),
-      filter: defaultFilter,
-    }),
-    [],
-  );
-
-  const clickBufferLayerConfig = useMemo(
-    () => ({
-      widthExpression: getUserRouteClickBufferWidthExpression(),
-      filter: defaultFilter,
-    }),
-    [],
-  );
-
   // Initialize map
   const { map, mapLoaded } = useMapLibre(
     mapContainer,
@@ -214,18 +155,7 @@ export default function VectorRailwayMap({
         stations: createPublicStationsSource(),
         public_notes: createPublicNotesSource(),
       },
-      layers: [
-        createScenicRoutesOutlineLayer(scenicLayerConfig),
-        createRailwayRoutesLayer(routeLayerConfig),
-        createRailwayRoutesHeritageLayer(heritageLayerConfig),
-        createRailwayRoutesSpecialLayer(specialLayerConfig),
-        createRailwayRoutesClickLayer(clickBufferLayerConfig),
-        createStationsLayer(),
-        createStationLabelsLayer(),
-        // Public Usage notes render on top (route tile refresh re-inserts route
-        // layers before "stations", so this stays above them).
-        createPublicNotesLayer(),
-      ],
+      layers: createUserMapLayers(),
     },
     [userId, effectiveCountries, region.id],
   );
@@ -286,11 +216,11 @@ export default function VectorRailwayMap({
     mapLoaded,
     userId,
     selectedCountries: effectiveCountries,
-    routeLayerConfig,
-    scenicLayerConfig,
-    clickBufferLayerConfig,
-    specialLayerConfig,
-    heritageLayerConfig,
+    routeLayerConfig: userRouteLayerConfig,
+    scenicLayerConfig: userScenicLayerConfig,
+    clickBufferLayerConfig: userClickBufferLayerConfig,
+    specialLayerConfig: userSpecialLayerConfig,
+    heritageLayerConfig: userHeritageLayerConfig,
   });
 
   // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)

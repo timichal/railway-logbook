@@ -17,6 +17,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 - `npm run verifyRouteData` — recalculate all routes, mark invalid ones. Accepts `--valid-only` and `--concurrency=N`; prints its own elapsed time.
 - `npm run applyVectorTiles` — re-apply `database/init/02-vector-tiles.sql`.
 - `npm run markAllRoutesInvalid` — flag all routes for recheck (use `verifyRouteData` after). **Reference example for migration scripts.**- `npm run fixSequences` — resync all SERIAL id sequences with table data. Fixes "duplicate key violates …_pkey" on inserts after rows were loaded with explicit ids (old dumps) without bumping the sequence. `importRouteData` now does this automatically; run manually if needed.
+- `npm run addPublicMapSharing` — add `public_map_enabled`/`public_map_token` to `user_preferences` (see "Public map sharing"). Idempotent.
 - `npm run fixStationSrid` — set SRID 4326 on any geometry row still stored as SRID 0, and report whether each geometry column declares the SRID in its type. Only needed for a database not reimported since the loader started setting the SRID explicitly; a full `importMapData` rewrites every station anyway. Safe to re-run.
 - `npm run listStations` — list unique station names (debug).
 - `npm run inspectPath -- "<from>" "<to>" ["<via>"...]` — run the Journey Planner pathfinder from the CLI (station names or ids) and print the chain, search time, and the gap left between each consecutive pair of routes (debug).
@@ -50,7 +51,7 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **user_trips** — id, user_id, name (req), description, timestamps. Groups journeys.
 - **user_journeys** — id, user_id, name (req), description, date (req), `trip_id` FK ON DELETE SET NULL, timestamps.
 - **user_logged_parts** — id, user_id, journey_id, `track_id` FK ON DELETE CASCADE, `partial` BOOL, `covered_start`/`covered_end` (fraction range along the route geometry, both NULL when the extent is unknown — see "Partial rides"), created_at. UNIQUE per (journey_id, track_id).
-- **user_preferences** — `selected_countries` TEXT[]. Defaults to all of `SUPPORTED_COUNTRIES` (20 codes); `getUserPreferences()` always writes the list explicitly, so the SQL column DEFAULT only matters for rows inserted directly via SQL.
+- **user_preferences** — `selected_countries` TEXT[]. Defaults to all of `SUPPORTED_COUNTRIES` (20 codes); `getUserPreferences()` always writes the list explicitly, so the SQL column DEFAULT only matters for rows inserted directly via SQL. Also `public_map_enabled` BOOL (default FALSE) and `public_map_token` TEXT UNIQUE — see "Public map sharing".
 - **admin_notes** — id, coordinate POINT, text, `note_type` ('Usage'|'UsageInternal'|'Works'|'Todo', NOT NULL — every note is typed), `source` (optional external link), timestamps. Only `note_type='Usage'` notes are public (shown on the user map); `UsageInternal` is an admin-only draft promoted to `Usage` to publish. `noteTypeOptions`/`isPublicNoteType` in `constants.ts`.
 
 ### Key architectural decisions
@@ -67,6 +68,15 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 - **Auto line classification.** On route create/edit, length-weighted majority of intersecting railway_parts: >50% highspeed→'highspeed', >50% main→'main', else 'branch'. Admin can override.
 - **Country detection.** `@rapideditor/country-coder` on first/last coordinate fills `start_country`/`end_country`.
 - **Station proximity.** The user map only shows stations with a route within 250m — `stations.near_route`, computed in `stationProximity.ts`. OSM carries far more station points than the network we map, and one with no route beside it is noise: nothing to click, nothing for the planner to reach. It gates `public_stations_tile` (user map), `searchStations` (map search box + planner autocomplete), and `inspectPath`'s name lookup — nothing searchable that isn't drawn; `inspectPath` still takes a numeric station id verbatim as the escape hatch. The admin map is untouched (`stations_tile`, all stations) — route creation needs to click stations that have no route yet, which is exactly what the flag excludes. **The flag is derived from route geometry, so every write path that moves geometry has to refresh it**: `refreshAllStationProximity` after a bulk pass (`importMapData` step 3, `verifyRouteData`, `importRouteData`), and `refreshStationProximityFor` per route in `saveRailwayRoute`/`deleteRailwayRoute`, so an admin's new route reveals its stations at once. An edit or delete needs `getStationsNearRoute` **before** the write as well: once the old geometry is gone, the stations that just lost their last route can't be found. Duplicating a route needs no refresh — the copy has identical geometry.
+- **Public map sharing.** A user can publish their map read-only at `/shared/<token>`: `public_map_enabled` + `public_map_token` on `user_preferences`, the dialog in `ShareMapDialog`, the actions in `publicMapActions.ts`.
+
+  **The token and the switch are separate on purpose.** The token is minted on the first read of the sharing settings (`getPublicMapSettings`, which is why opening the dialog is what creates it) and then never changes, so a link already pasted into a chat keeps working; `public_map_enabled` is the only thing that grants access, and every public read joins on it. Turning sharing off therefore kills the link immediately without invalidating it, and turning it back on revives the same one.
+
+  Every public action re-resolves the token through `getPublicMapOwner` rather than trusting a token checked once at page load — a link switched off mid-visit stops answering instead of quietly serving stale numbers. The **owner id** is what colours the routes: it is passed to the route tile as `user_id`, the same parameter the owner's own map sends.
+
+  The **queries are shared, the auth is not.** `progressQueries.ts` holds the user-scoped progress/coverage SQL taking a `userId`, and is a plain module rather than a `"use server"` one *because* of that argument: every export of a `"use server"` file is a client-callable endpoint, so exposing these would let anyone ask for anyone's numbers. `userActions.ts` resolves the session, `publicMapActions.ts` resolves the token, and both then call in.
+
+  On the client the shared view is a third `DataAccess` implementation (`createPublicDataAccess`), so `useRouteEditor` and `useCoverageOverlay` work unchanged; its preference methods throw, since an anonymous visitor has nothing of their own to save.
 - **Vector tiles** via Martin (port 3001): `railway_routes_tile` (accepts `selected_countries` filter), `railway_parts_tile` (zoom-filtered), `stations_tile` (zoom 9+, all stations — admin map), `public_stations_tile` (same, `near_route` only — user map; both emit the MVT layer name `stations`, so one MapLibre layer definition serves either), `admin_notes_tile` (all notes, admin map), `public_notes_tile` (`note_type='Usage'` only, exposes just text+source — user map).
 - **A map click never inherits `partial`.** The route tile carries the partial flag of the most recent journey on that route; `userMapInteractions` deliberately drops it and selects with `partial: null`, since a click is a new ride, whole until said otherwise.
 - **Progress.** A route counts as completed if logged with `partial=false` in any journey; partial if only `partial=true`. Country filter requires BOTH start and end country in selected list. **A covered stretch never completes a route** — even if several journeys' stretches add up to the whole line, stats still need a `partial=false` log.
@@ -124,14 +134,16 @@ Highlights are tile-filter overlays (`in ["id"], [literal ids]`), so they can on
 ### Routes (`src/app/`)
 - `page.tsx` — main map (server component → MainLayout).
 - `admin/page.tsx` — admin route mgmt (user_id=1 only).
+- `shared/[token]/page.tsx` — a user's map, shared read-only (server component → PublicMapLayout). Resolves the token server-side, so an unshared link renders "not available" instead of an empty map and the owner's country filter is right on the first paint.
 
 ### Components (`src/components/`)
 - **User map**: `MainLayout`, `VectorRailwayMap`, `UserSidebar` (tabs + article views), `JourneyLogger` (auth), `LocalTripLogger` (unauth), `JourneyPlanner`, `JourneysAndTripsTab`, `MergedTripCard`, `MergedJourneyCard`, `LocalJourneyLogTab`, `CountriesStatsTab`, `HowToUseArticle`, `RailwayNotesArticle`.
+- **Shared public map**: `PublicMapLayout` (slim bar: whose map, region switch, "Go to my own map"), `PublicRailwayMap` (same sources/layers/styling as the user map via `map/userMapLayers.ts`, coloured by the owner; no sidebar, no route selection — `setupUserMapInteractions` is called without `onRouteClick`, which is the whole of what makes it read-only), `ShareMapDialog` (the toggle + copyable link, opened from `Navbar` and `MobileMenuPanel`).
 - **Admin**: `AdminPageClient`, `VectorAdminMap`, `AdminLayerControls`, `AdminSidebar`, `AdminCreateRouteTab`, `AdminRoutesTab`, `RoutesList`, `RouteEditForm`, `NotesPopup`.
 - **Shared**: `Navbar`, `MobileMenuPanel`, `RegionSwitch` (region segmented control, rendered by `Navbar` so both pages get it), `LoginForm`, `RegisterForm`.
 
 ### Library (`src/lib/`)
-- **DB/actions**: `db.ts`, `dbConfig.ts`, `userActions.ts`, `userPreferencesActions.ts`, `journeyActions.ts`, `tripActions.ts`, `adminRouteActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts`, `authActions.ts`, `migrationActions.ts`.
+- **DB/actions**: `db.ts`, `dbConfig.ts`, `userActions.ts`, `progressQueries.ts` (user-scoped progress/coverage SQL, shared by the authenticated and token-checked wrappers), `publicMapActions.ts`, `userPreferencesActions.ts`, `journeyActions.ts`, `tripActions.ts`, `adminRouteActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts`, `authActions.ts`, `migrationActions.ts`.
 - **Data access**: `dataAccess.ts` (DB vs localStorage abstraction), `localStorage.ts`.
 - **Pathfinding**: `routePathFinder.ts` (user-facing journey planner, excludes non-regular routes). See "Journey planner pathfinding" below.
 - **Regions**: `regions.ts` (region definitions + `regionEnvelopeSql`), `regionContext.tsx` (`RegionProvider`, `useRegion`, `useRegionId`).
@@ -140,6 +152,7 @@ Highlights are tile-filter overlays (`in ["id"], [literal ids]`), so they can on
 
 ### Map library (`src/lib/map/`)
 - `index.ts` — constants, layer/source factories, `lineClassColorExpression`. Re-exports from `style.ts` and `basemap.ts`.
+- `userMapLayers.ts` — the user map's route layer stack and paint configs, shared by `VectorRailwayMap` and `PublicRailwayMap`. Module-level constants: nothing they depend on varies, `useMapTileRefresh` wants stable references, and the two maps must draw identical lines — a shared map styled differently from its owner's would be a bug nobody sees until someone opens the link.
 - `style.ts` — styling source of truth (see above).
 - `basemap.ts` — the basemap under the data: vector style fetch, Latin-label rewrite, fade layer, raster fallback (see "Basemap" above).
 - `mapState.ts` — save/load map position.
@@ -150,7 +163,7 @@ Highlights are tile-filter overlays (`in ["id"], [literal ids]`), so they can on
 ### Scripts (`src/scripts/`)
 - **Data**: `pruneData.ts` (also resolves the single station `name`: a CJK name prefers OSM's romanized tags — `name:ja_rm`, then `name:ja-Latn`, then `name:en` — since the `transliteration` package romanizes kanji through Chinese readings — 東京 → "Dong Jing". The romaji tags come first because they are transcriptions and keep their macrons (Tōkyō), while `name:en` is an English name and routinely drops them; Cyrillic/Greek are transliterated as before), `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `inspectPath.ts` (journey-planner debug), `exportRoutes.ts`, `importRoutes.ts`.
 - **Shared**: `lib/geojsonFeatureStream.ts` (string-aware incremental FeatureCollection reader — see below), `lib/loadRailwayData.ts`, `lib/railwayPathFinder.ts` (admin route creation + recalc).
-- **Migrations**: `fixStationSrid.ts` (SRID 4326 backfill).
+- **Migrations**: `fixStationSrid.ts` (SRID 4326 backfill), `addPublicMapSharing.ts` (public map sharing columns).
 
 **Reading GeoJSON.** Both `pruneData` and `loadRailwayData` stream multi-gigabyte FeatureCollections through `streamFeatures` in `lib/geojsonFeatureStream.ts`, which cuts out one feature at a time. It tracks string and escape state while counting braces: `osmium export` writes every OSM tag as a property, and a tag value containing an unmatched brace otherwise ends a feature early or runs past its end and swallows the ones that follow. Features that still fail to parse, and input that ends mid-feature, are **counted and raised** rather than skipped silently.
 
@@ -179,6 +192,9 @@ Trip stats (`route_count`, `total_distance`) come from the shared `TRIP_STATS_SE
 ### Country Settings & Stats
 The current region's countries with flag emojis (Unicode regional indicators). Select All / None. Per-country stats via `getProgressByCountry()` (matches when both endpoints in country) — one `GROUPING SETS` query covering every country plus the grand total, not a query per country. Persisted in `user_preferences`. Filter applies to map + stats; **admin map ignores it**.
 
+### Shared map (`/shared/<token>`)
+Top bar: "<owner>'s Railway Logbook", the region switch, and "Go to my own map" (a link to `/`). The map keeps hover popups, the station search, the heritage/special/scenic toggles and the progress box — everything that only changes what the visitor looks at — and drops the sidebar and route selection. "Share Map" in the navbar (and the mobile menu) opens `ShareMapDialog`: one switch ("Enable public map display"), and the link only while that is on — a dead link on screen just invites someone to send it. It is the same link each time it comes back, the token outliving the switch.
+
 ### Admin
 Click railway part → capture exact coordinate for start/end. Right-click anywhere → create note; right-click existing note → edit/delete. Note popup: type (req), text, optional source link, save (Ctrl+Enter), delete, close (Esc). Notes are colored by type on the admin map (`Usage`=blue, `UsageInternal`=light blue, `Works`=orange, `Todo`=purple); `AdminNotesTab` filters by type and lets you switch a note's type (= publish/unpublish). Only `Usage` notes appear on the user map (hover popup shows text + source link). Invalid routes in grey with banner; "Edit Route Geometry" re-picks coordinates with same pathfinding. The banner carries a "Mark as under repair" toggle (see "Under repair"), which turns it violet to match the map and moves the route into the routes list's separate "Under repair" filter.
 
@@ -198,3 +214,13 @@ Biome is the single linter + formatter (`biome.json`). All code must conform —
 
 ### TypeScript
 ESNext modules, strict mode, run scripts via `tsx`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
