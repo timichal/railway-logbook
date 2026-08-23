@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type { JourneyInTrip, TripWithStats } from "@/lib/tripActions";
 import {
@@ -44,6 +45,7 @@ export default function MergedTripCard({
   onJourneyEditStart,
   onJourneyEditEnd,
 }: MergedTripCardProps) {
+  const regionId = useRegionId();
   const { showSuccess, showError } = useToast();
 
   const [journeys, setJourneys] = useState<JourneyInTrip[]>(initialJourneys);
@@ -140,7 +142,7 @@ export default function MergedTripCard({
     setShowPicker(true);
     setIsLoadingUnassigned(true);
     try {
-      const result = await getUnassignedJourneys();
+      const result = await getUnassignedJourneys(regionId);
       if (result.error) {
         showError(result.error);
         setUnassignedJourneys([]);
