@@ -92,10 +92,84 @@ IMMUTABLE
 STRICT
 PARALLEL SAFE;
 
+-- Index: the stretch rows behind user_fully_ridden_routes' second branch.
+-- Partial because a stretch is rare (almost every logged part is a whole route),
+-- so this keeps that branch off the table entirely.
+CREATE INDEX IF NOT EXISTS idx_logged_parts_stretches
+ON user_logged_parts (user_id, track_id) WHERE covered_start IS NOT NULL;
+
+-- Superseded by user_fully_ridden_routes below; dropped so re-applying this file
+-- cleans up a database that got the earlier per-route version.
+DROP FUNCTION IF EXISTS route_is_fully_ridden(integer, integer, numeric);
+
+-- Function: user_fully_ridden_routes
+-- The routes a user has ridden the whole of, one row per track_id.
+--
+-- Two ways that happens, one branch each:
+--   1. some journey logged the route with partial = FALSE -- an index-only scan
+--      of (user_id, track_id, partial);
+--   2. the partial stretches add up to the whole line: two rides over one route,
+--      A->B and B->C, complete it even though neither ride did. Nothing merges
+--      the stored rows -- each journey keeps its own stretch -- so the union is
+--      computed here, on read. Only rows carrying a stretch can contribute, and
+--      idx_logged_parts_stretches indexes exactly those.
+--
+-- Each stretch is widened by 0.3km worth of the route's length (capped at 0.25 of
+-- it, which only bites on routes under ~1.2km) before the union. A route's
+-- endpoint is a hand-picked click point rather than the platform centre, so a
+-- ride from a terminus is recorded as starting a little past 0; the same widening
+-- closes the small gap left when an OSM recalculation moves two rides' shared
+-- station fraction apart between them. Rows of unknown extent (both fractions
+-- NULL: a route ticked partial by hand) are excluded by branch 2's WHERE -- they
+-- say a piece was ridden without saying which, and GREATEST/LEAST ignore NULLs,
+-- so a row let through would widen into the whole route and complete it alone.
+--
+-- **Set-returning rather than a per-route boolean on purpose.** As a scalar
+-- function the tile called it once per route, and the per-call overhead cost 50%
+-- on a z4 tile of 5000 routes (593ms against 398ms for the plain "has a complete
+-- journey" LATERAL it replaced). Joined as a set it is evaluated once per tile,
+-- which measured at or below that LATERAL from z4 to z12 -- the fixed cost is one
+-- index-only scan of the user's own logged rows.
+--
+-- The same rule is implemented in TypeScript for the unauthenticated map's
+-- localStorage log (isRouteFullyRidden in src/lib/routeCoverage.ts, which owns
+-- the two tolerances above). Keep the two in step.
+CREATE OR REPLACE FUNCTION user_fully_ridden_routes(p_user_id integer)
+RETURNS TABLE (track_id integer) AS $$
+    SELECT ulp.track_id
+    FROM user_logged_parts ulp
+    WHERE ulp.user_id = p_user_id
+      AND ulp.partial = FALSE
+      AND ulp.track_id IS NOT NULL
+    UNION
+    SELECT stretch.track_id
+    FROM (
+        SELECT
+            ulp.track_id,
+            ulp.covered_start,
+            ulp.covered_end,
+            LEAST(COALESCE(0.3 / NULLIF(rr.length_km, 0), 0), 0.25) AS tolerance
+        FROM user_logged_parts ulp
+        JOIN railway_routes rr ON rr.track_id = ulp.track_id
+        WHERE ulp.user_id = p_user_id
+          AND ulp.covered_start IS NOT NULL
+    ) stretch
+    GROUP BY stretch.track_id
+    HAVING range_agg(numrange(
+               GREATEST(stretch.covered_start::numeric - stretch.tolerance, 0),
+               LEAST(stretch.covered_end::numeric + stretch.tolerance, 1),
+               '[]'
+           )) @> numrange(0, 1, '[]');
+$$ LANGUAGE sql
+STABLE
+PARALLEL SAFE;
+
 -- Function: railway_routes_tile
 -- Serves railway routes (combined lines with metadata) as vector tiles
 -- Includes user-specific journey data for styling (most recent journey's date/name/partial)
--- Uses "most permissive wins" logic: route is complete if it's complete in ANY journey
+-- Uses "most permissive wins" logic: route is complete if it's complete in ANY
+-- journey, or if its partial stretches union to the whole route (see
+-- user_fully_ridden_routes above)
 -- Supports country filtering via query params
 CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
 RETURNS bytea AS $$
@@ -146,8 +220,9 @@ BEGIN
             recent_trip.date,
             recent_trip.journey_name,
             recent_trip.partial,
-            -- Check if there's at least one complete journey for "most permissive wins" logic
-            (complete_check.is_complete IS NOT NULL) AS has_complete_trip,
+            -- Whether the route reads as ridden: a complete journey, or partial
+            -- stretches that add up to the whole line (user_fully_ridden_routes)
+            (ridden.track_id IS NOT NULL) AS has_complete_trip,
             -- Simplify geometry for tile display
             ST_AsMVTGeom(
                 rr.geometry_3857,
@@ -157,7 +232,8 @@ BEGIN
                 true
             ) AS geom
         FROM railway_routes rr
-        -- 1. Get most recent journey for this route
+        -- Most recent journey for this route (drives the hover popup and the
+        -- partial styling of a route that isn't fully ridden yet)
         LEFT JOIN LATERAL (
             SELECT uj.date, uj.name as journey_name, ulp.partial
             FROM user_logged_parts ulp
@@ -170,16 +246,10 @@ BEGIN
                 uj.created_at DESC
             LIMIT 1
         ) recent_trip ON true
-        -- 2. Check if route is complete in ANY journey (for "most permissive wins" coloring)
-        LEFT JOIN LATERAL (
-            SELECT 1 as is_complete
-            FROM user_logged_parts
-            WHERE track_id = rr.track_id
-                AND user_id_param IS NOT NULL
-                AND user_id = user_id_param
-                AND partial = FALSE
-            LIMIT 1
-        ) complete_check ON true
+        -- Evaluated once per tile, not once per route (see the function's comment).
+        -- With no user_id it yields nothing, so every route reads as unvisited.
+        LEFT JOIN user_fully_ridden_routes(user_id_param) ridden
+            ON ridden.track_id = rr.track_id
         WHERE
             -- Spatial filter using index
             rr.geometry_3857 && tile_envelope

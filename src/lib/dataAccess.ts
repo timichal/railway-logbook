@@ -16,7 +16,8 @@ import {
   getPublicProgressByCountry,
 } from "./publicMapActions";
 import { REGIONS, type RegionId } from "./regions";
-import type { CoveredRange, CoveredStretch, RailwayRoute } from "./types";
+import { isRouteFullyRidden } from "./routeCoverage";
+import type { CoveredRange, CoveredStretch, LocalLoggedPart, RailwayRoute } from "./types";
 import {
   getCoveredStretches as dbGetCoveredStretches,
   getProgressByCountry as dbGetProgressByCountry,
@@ -29,6 +30,13 @@ import {
   updateUserPreferences as dbUpdateUserPreferences,
 } from "./userPreferencesActions";
 
+/** How one route reads on the map for a localStorage user (see getLocalRouteStatuses). */
+export interface LocalRouteStatus {
+  track_id: number;
+  /** Ridden whole — logged complete, or partial stretches covering all of it. */
+  complete: boolean;
+}
+
 export interface DataAccess {
   // Progress operations
   getUserProgress(selectedCountries?: string[]): Promise<UserProgress>;
@@ -36,6 +44,14 @@ export interface DataAccess {
 
   // Ridden stretches of routes that aren't finished yet (drawn as a map overlay)
   getCoveredStretches(): Promise<CoveredStretch[]>;
+
+  /**
+   * Visit status of every logged route, for the unauthenticated map to colour
+   * routes with feature-state. Only the localStorage implementation has anything
+   * to say here: the other two read it off the route tile, which the database
+   * fills in per user (`has_complete_trip`).
+   */
+  getLocalRouteStatuses(): Promise<LocalRouteStatus[]>;
 
   // Preferences operations
   getUserPreferences(): Promise<string[]>;
@@ -85,6 +101,11 @@ function createDatabaseDataAccess(region: RegionId): DataAccess {
       return await dbGetCoveredStretches();
     },
 
+    async getLocalRouteStatuses(): Promise<LocalRouteStatus[]> {
+      // The route tile already carries this user's visit status
+      return [];
+    },
+
     async getUserPreferences(): Promise<string[]> {
       return await dbGetUserPreferences();
     },
@@ -113,16 +134,42 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
   // Cache of this region's routes (used for progress calculation)
   let routesCache: RailwayRoute[] | null = null;
 
+  const ensureRoutes = async (): Promise<RailwayRoute[]> => {
+    if (!routesCache) {
+      routesCache = await getAllRoutes(region);
+    }
+    return routesCache || [];
+  };
+
+  /**
+   * The routes the local log covers in full — logged whole, or with partial
+   * stretches that add up to all of it (isRouteFullyRidden; the database side
+   * of the same rule is the SQL function `user_fully_ridden_routes`). Route lengths
+   * come from the route list, since the tolerance is in kilometres.
+   */
+  const fullyRiddenTrackIds = (routes: RailwayRoute[]): Set<number> => {
+    const partsByTrack = new Map<number, LocalLoggedPart[]>();
+    for (const part of localStore.getLoggedParts()) {
+      const parts = partsByTrack.get(part.track_id);
+      if (parts) {
+        parts.push(part);
+      } else {
+        partsByTrack.set(part.track_id, [part]);
+      }
+    }
+
+    const lengths = new Map(routes.map((route) => [route.track_id, Number(route.length_km)]));
+    const ridden = new Set<number>();
+    for (const [trackId, parts] of partsByTrack) {
+      if (isRouteFullyRidden(parts, lengths.get(trackId))) ridden.add(trackId);
+    }
+    return ridden;
+  };
+
   return {
     async getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
       try {
-        // Fetch all routes if not cached
-        if (!routesCache) {
-          routesCache = await getAllRoutes(region);
-        }
-
-        const allRoutes = routesCache || [];
-        const localParts = localStore.getLoggedParts();
+        const allRoutes = await ensureRoutes();
 
         // Apply country filter if provided
         let filteredRoutes = allRoutes;
@@ -146,14 +193,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
           0,
         );
 
-        // Find completed routes (routes with at least one complete logged part)
-        const completedRouteIds = new Set<number>();
-        for (const part of localParts) {
-          // Only count parts that are not partial
-          if (!part.partial) {
-            completedRouteIds.add(part.track_id);
-          }
-        }
+        const completedRouteIds = fullyRiddenTrackIds(allRoutes);
 
         const completedRoutes = filteredRoutes.filter((route) =>
           completedRouteIds.has(route.track_id),
@@ -192,21 +232,8 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 
     async getProgressByCountry(): Promise<ProgressByCountry> {
       try {
-        // Fetch all routes if not cached
-        if (!routesCache) {
-          routesCache = await getAllRoutes(region);
-        }
-
-        const allRoutes = routesCache || [];
-        const localParts = localStore.getLoggedParts();
-
-        // Find completed routes
-        const completedRouteIds = new Set<number>();
-        for (const part of localParts) {
-          if (!part.partial) {
-            completedRouteIds.add(part.track_id);
-          }
-        }
+        const allRoutes = await ensureRoutes();
+        const completedRouteIds = fullyRiddenTrackIds(allRoutes);
 
         // Calculate stats for each country
         const byCountry = REGIONS[region].countries.map((country) => {
@@ -282,9 +309,10 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 
     async getCoveredStretches(): Promise<CoveredStretch[]> {
       // Same shape as the database query in getCoveredStretches: partial rides
-      // with a known stretch, on routes not completed in some other journey
+      // with a known stretch, on routes that aren't ridden whole (a route whose
+      // stretches add up to all of it draws in the visited colour already)
       const parts = localStore.getLoggedParts();
-      const completed = new Set(parts.filter((p) => !p.partial).map((p) => p.track_id));
+      const completed = fullyRiddenTrackIds(await ensureRoutes());
 
       const ranges: CoveredRange[] = [];
       for (const part of parts) {
@@ -300,6 +328,15 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 
       if (ranges.length === 0) return [];
       return await getCoveredStretchesFor(ranges);
+    },
+
+    async getLocalRouteStatuses(): Promise<LocalRouteStatus[]> {
+      const complete = fullyRiddenTrackIds(await ensureRoutes());
+      const logged = new Set(localStore.getLoggedParts().map((part) => part.track_id));
+      return Array.from(logged, (trackId) => ({
+        track_id: trackId,
+        complete: complete.has(trackId),
+      }));
     },
 
     async getUserPreferences(): Promise<string[]> {
@@ -341,6 +378,12 @@ export function createPublicDataAccess(token: string, region: RegionId): DataAcc
 
     async getCoveredStretches(): Promise<CoveredStretch[]> {
       return await getPublicCoveredStretches(token);
+    },
+
+    async getLocalRouteStatuses(): Promise<LocalRouteStatus[]> {
+      // The route tile is asked for the owner's status, and a visitor has no
+      // local log of their own to overlay on it
+      return [];
     },
 
     async getUserPreferences(): Promise<string[]> {
