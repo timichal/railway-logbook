@@ -67,7 +67,14 @@ for REGION in ${REGIONS}; do
     # one keeps its real name rather than a .part)
     DOWNLOAD_FILE="${DATA_DIR}/${REGION}-${VERSION}.osm.pbf"
     echo "[1/4] Downloading ${REGION}-${VERSION}.osm.pbf (curl will resume if incomplete)..."
-    curl -C - -o "${DOWNLOAD_FILE}" "https://download.geofabrik.de/${REMOTE_PATH}-${VERSION}.osm.pbf" || {
+    # --fail matters: a dated extract Geofabrik has not published yet answers
+    # 404, and without it curl writes the HTML error page out as a .osm.pbf.
+    # The run then gets to step 2 before failing, with osmium reporting an
+    # "invalid BlobHeader size" that says nothing about the download. --fail
+    # also keeps the error body out of the file, so a later resume starts at 0
+    # instead of appending to it; a genuinely interrupted transfer is still left
+    # in place for curl -C - to continue.
+    curl --fail -C - -o "${DOWNLOAD_FILE}" "https://download.geofabrik.de/${REMOTE_PATH}-${VERSION}.osm.pbf" || {
         echo "ERROR: Failed to download ${REMOTE_PATH}-${VERSION}.osm.pbf"
         exit 1
     }

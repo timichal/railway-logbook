@@ -53,6 +53,13 @@ export interface Region {
    * filter is pinned to the region's own list.
    */
   hasCountryFilter: boolean;
+  /**
+   * Frequency tag prefilled when a route in this region is marked Special.
+   * We're using this tag for non-JR operators in Japan, so it's a default
+   * rather than something to retype; it is a plain autofill, and the
+   * admin can delete it in the tag input like any other.
+   */
+  specialUsageTag?: string;
 }
 
 export const REGIONS: Record<RegionId, Region> = {
@@ -81,6 +88,7 @@ export const REGIONS: Record<RegionId, Region> = {
     ],
     countries: [{ code: "JP", name: "Japan" }],
     hasCountryFilter: false,
+    specialUsageTag: "Non-JR line",
   },
 };
 

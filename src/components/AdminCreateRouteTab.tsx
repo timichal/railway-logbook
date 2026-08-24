@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
-import { type UsageType, usageOptions } from "@/lib/constants";
+import { USAGE_TYPE_SPECIAL, type UsageType, usageOptions } from "@/lib/constants";
 import { handleJunctionShortcut } from "@/lib/junctionShortcut";
+import { useRegionId } from "@/lib/regionContext";
+import { REGIONS } from "@/lib/regions";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
 import TagInput from "./TagInput";
@@ -62,6 +64,9 @@ export default function AdminCreateRouteTab({
   onTagsChanged,
 }: AdminCreateRouteTabProps) {
   const { showError, showSuccess } = useToast();
+  const regionId = useRegionId();
+  // Some regions prefill a frequency tag for Special routes (Japan: "Non-JR line").
+  const specialUsageTag = REGIONS[regionId].specialUsageTag;
 
   // Create route form state (without the coordinates that are managed by parent)
   const [createForm, setCreateForm] = useState({
@@ -444,12 +449,20 @@ export default function AdminCreateRouteTab({
                       name="usage_type"
                       value={option.id}
                       checked={createForm.usage_type === option.id}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const usage_type = Number(e.target.value) as UsageType;
+                        const autofillTag =
+                          usage_type === USAGE_TYPE_SPECIAL &&
+                          specialUsageTag &&
+                          !createForm.frequency.includes(specialUsageTag);
                         setCreateForm({
                           ...createForm,
-                          usage_type: Number(e.target.value) as UsageType,
-                        })
-                      }
+                          usage_type,
+                          frequency: autofillTag
+                            ? [...createForm.frequency, specialUsageTag]
+                            : createForm.frequency,
+                        });
+                      }}
                       className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500 cursor-pointer"
                     />
                     <span className="text-sm text-gray-700">{option.label}</span>
