@@ -95,9 +95,15 @@ export type JourneyInTrip = Journey & {
 };
 
 /**
- * Get all trips for the current user with computed stats
+ * Get all trips for the current user with computed stats, scoped to `region`.
+ *
+ * This is the trip picker used when filing a journey under a trip, and a journey
+ * is logged on the map of one region — so offering trips from the other side of
+ * the planet only invites a misfile. A trip with no logged routes yet belongs to
+ * every region (see tripInRegionSql), so a trip created empty can still be
+ * picked in the region that created it.
  */
-export async function getAllTrips(): Promise<{
+export async function getAllTrips(region: RegionId): Promise<{
   trips: TripWithStats[];
   error?: string;
 }> {
@@ -110,6 +116,7 @@ export async function getAllTrips(): Promise<{
     const result = await pool.query<TripWithStats>(
       `${TRIP_STATS_SELECT}
        WHERE ut.user_id = $1
+         AND ${tripInRegionSql(region, "ut.id")}
        ORDER BY j.end_date DESC NULLS LAST, ut.created_at DESC`,
       [user.id],
     );
@@ -355,9 +362,9 @@ export type TripsAndJourneysItem =
  * sorted by date desc. Trip date = max date of its assigned journeys; standalone journey date = its own date.
  *
  * Scoped to `region` (see journeyInRegionSql): browsing the list highlights the
- * item's routes on the map, and the map is locked to one region. The trip and
- * journey *pickers* (getAllTrips, getUnassignedJourneys) stay unscoped on
- * purpose — you must be able to file a journey under any trip you have.
+ * item's routes on the map, and the map is locked to one region. The trip picker
+ * (getAllTrips) and the journey picker (getUnassignedJourneys) are scoped the
+ * same way.
  */
 export async function getJourneysAndTrips(
   page: number,
@@ -509,9 +516,14 @@ export async function getJourneysAndTrips(
 }
 
 /**
- * Get journeys not assigned to any trip (for the assignment picker)
+ * Get journeys not assigned to any trip (for the assignment picker), scoped to
+ * `region` — the same reason as getAllTrips: the picker offers journeys to file
+ * under a trip being browsed on one region's map, and a journey from the other
+ * region has no business in that list. A journey with no logged routes yet
+ * belongs to every region (see journeyInRegionSql), so an empty one stays
+ * fileable.
  */
-export async function getUnassignedJourneys(): Promise<{
+export async function getUnassignedJourneys(region: RegionId): Promise<{
   journeys: JourneyInTrip[];
   error?: string;
 }> {
@@ -530,6 +542,7 @@ export async function getUnassignedJourneys(): Promise<{
       LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
       LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
       WHERE uj.user_id = $1 AND uj.trip_id IS NULL
+        AND ${journeyInRegionSql(region, "uj.id")}
       GROUP BY uj.id
       ORDER BY uj.date DESC`,
       [user.id],

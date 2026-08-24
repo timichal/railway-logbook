@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@/lib/authActions";
 import { createDataAccess } from "@/lib/dataAccess";
-import * as localStore from "@/lib/localStorage";
 import {
   createPublicNotesSource,
   createPublicStationsSource,
@@ -163,40 +162,34 @@ export default function VectorRailwayMap({
   // Track which routes have feature states applied (for cleanup)
   const featureStateTrackIdsRef = useRef<Set<number>>(new Set());
 
-  // Update map feature states for localStorage trips (unlogged users only)
+  // Update map feature states for localStorage trips (unlogged users only).
+  // The tiles carry no visit status for an unauthenticated visitor, so which
+  // routes read as ridden whole is worked out from the local log (see
+  // getLocalRouteStatuses) and applied per feature.
   const updateLocalStorageFeatureStates = useCallback(async () => {
     if (!map.current || user) return;
 
-    const allParts = localStore.getLoggedParts();
-    const routeStatus = new Map<number, { hasComplete: boolean; hasPartial: boolean }>();
-
-    for (const part of allParts) {
-      const trackId = part.track_id;
-      const existing = routeStatus.get(trackId) || { hasComplete: false, hasPartial: false };
-      if (!part.partial) {
-        existing.hasComplete = true;
-      } else {
-        existing.hasPartial = true;
-      }
-      routeStatus.set(trackId, existing);
-    }
+    const statuses = await dataAccess.getLocalRouteStatuses();
+    // Re-read after the await: the map may have gone away while it ran
+    const target = map.current;
+    if (!target) return;
 
     const newTrackIds = new Set<number>();
-
-    routeStatus.forEach((status, trackId) => {
-      if (!map.current) return;
-      const featureId = trackId;
-      newTrackIds.add(featureId);
-      const isPartial = status.hasPartial && !status.hasComplete;
-      map.current.setFeatureState(
-        { source: "railway_routes", sourceLayer: "railway_routes", id: featureId },
-        { hasTrip: true, date: new Date().toISOString().split("T")[0], partial: isPartial },
+    for (const status of statuses) {
+      newTrackIds.add(status.track_id);
+      target.setFeatureState(
+        { source: "railway_routes", sourceLayer: "railway_routes", id: status.track_id },
+        {
+          hasTrip: true,
+          date: new Date().toISOString().split("T")[0],
+          partial: !status.complete,
+        },
       );
-    });
+    }
 
     featureStateTrackIdsRef.current.forEach((trackId) => {
-      if (!newTrackIds.has(trackId) && map.current) {
-        map.current.removeFeatureState({
+      if (!newTrackIds.has(trackId)) {
+        target.removeFeatureState({
           source: "railway_routes",
           sourceLayer: "railway_routes",
           id: trackId,
@@ -205,7 +198,7 @@ export default function VectorRailwayMap({
     });
 
     featureStateTrackIdsRef.current = newTrackIds;
-  }, [map, user]);
+  }, [map, user, dataAccess]);
 
   // Route editor hook
   const routeEditor = useRouteEditor(dataAccess, effectiveCountries);

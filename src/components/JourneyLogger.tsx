@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createJourney } from "@/lib/journeyActions";
+import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { getAllTrips } from "@/lib/tripActions";
@@ -29,6 +30,7 @@ export default function JourneyLogger({
   onAddRoutesFromPlanner,
   onStationClickHandler,
 }: JourneyLoggerProps) {
+  const regionId = useRegionId();
   const { showSuccess, showError } = useToast();
   const today = new Date().toISOString().split("T")[0];
 
@@ -42,13 +44,15 @@ export default function JourneyLogger({
   // Available trips for dropdown
   const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
 
+  // Trips are region-scoped, so a switch also drops a pick that is no longer offered
   useEffect(() => {
-    getAllTrips().then((result) => {
+    setJourneyTripId(null);
+    getAllTrips(regionId).then((result) => {
       if (!result.error) {
         setAvailableTrips(result.trips || []);
       }
     });
-  }, []);
+  }, [regionId]);
 
   const handleCreateJourney = async () => {
     if (!journeyName.trim() || !journeyDate || selectedRoutes.length === 0) {

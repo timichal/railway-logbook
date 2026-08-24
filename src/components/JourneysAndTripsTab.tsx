@@ -77,11 +77,11 @@ export default function JourneysAndTripsTab({
   );
 
   const loadAvailableTrips = useCallback(async () => {
-    const result = await getAllTrips();
+    const result = await getAllTrips(regionId);
     if (!result.error) {
       setAvailableTrips(result.trips || []);
     }
-  }, []);
+  }, [regionId]);
 
   // Initial + when page/search changes
   useEffect(() => {

@@ -7,6 +7,7 @@ import {
   haversineDistance,
   normalizeBearingDifference,
 } from "./geoUtils";
+import { UNTRAVELLED_NOISE_KM } from "./routeCoverage";
 import type { PartialRouteGeometry, PlannerRoute } from "./types";
 
 interface PathResult {
@@ -726,9 +727,11 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
  *
  * A station projects a few metres inside the route that starts there — its
  * endpoint is a hand-picked click point, not the platform centre — so tiny
- * remainders are noise rather than track the journey misses.
+ * remainders are noise rather than track the journey misses. The same number,
+ * from the same reasoning, is the tolerance that lets several partial rides add
+ * up to a complete route (`routeCoverage.ts`).
  */
-const MIN_UNTRAVELLED_KM = 0.3;
+const MIN_UNTRAVELLED_KM = UNTRAVELLED_NOISE_KM;
 
 /** The fraction range of a route's geometry that the journey actually covers. */
 interface TrimSpec {

@@ -13,6 +13,16 @@ import { query } from "./db";
 import { REGIONS, type RegionId, regionEnvelopeSql } from "./regions";
 import type { CoveredRange, CoveredStretch } from "./types";
 
+/**
+ * The user's routes that count as ridden whole, as a subquery on `$1` = user id.
+ *
+ * The rule lives in the SQL function `user_fully_ridden_routes`
+ * (`database/init/02-vector-tiles.sql`) rather than here, so these numbers and
+ * the route tile that colours the map can't disagree: a route logged whole, or
+ * one whose partial stretches union to the whole line.
+ */
+const FULLY_RIDDEN_TRACK_IDS = "SELECT track_id FROM user_fully_ridden_routes($1)";
+
 export interface UserProgress {
   totalKm: number;
   completedKm: number;
@@ -57,9 +67,11 @@ export async function progressForUser(
     hasCountries ? [selectedCountries] : [],
   );
 
-  // Get completed distance and count (routes with at least one complete journey, only Regular usage_type=0)
-  // "Most permissive wins": Route is complete if it's complete in ANY journey
-  // Use EXISTS to ensure each route is only counted once regardless of number of journeys
+  // Get completed distance and count (routes ridden whole, only Regular usage_type=0)
+  // "Most permissive wins": a route is complete if any journey logged it whole,
+  // or if its partial stretches add up to all of it (FULLY_RIDDEN_TRACK_IDS).
+  // The subquery yields distinct ids, so a route counts once however many
+  // journeys rode it.
   const completedResult = await query(
     `SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
@@ -69,14 +81,7 @@ export async function progressForUser(
       AND rr.length_km IS NOT NULL
       AND rr.geometry && ${regionEnvelopeSql(region)}
       ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}
-      AND EXISTS (
-        SELECT 1
-        FROM user_logged_parts
-        WHERE track_id = rr.track_id
-          AND user_id = $1
-          AND partial = FALSE
-          AND track_id IS NOT NULL
-      )`,
+      AND rr.track_id IN (${FULLY_RIDDEN_TRACK_IDS})`,
     hasCountries ? [userId, selectedCountries] : [userId],
   );
 
@@ -134,11 +139,7 @@ export async function progressByCountryForUser(
          CASE WHEN rr.start_country = rr.end_country THEN rr.start_country END AS country,
          (done.track_id IS NOT NULL) AS completed
        FROM railway_routes rr
-       LEFT JOIN (
-         SELECT DISTINCT track_id
-         FROM user_logged_parts
-         WHERE user_id = $1 AND partial = FALSE AND track_id IS NOT NULL
-       ) done ON done.track_id = rr.track_id
+       LEFT JOIN (${FULLY_RIDDEN_TRACK_IDS}) done ON done.track_id = rr.track_id
        WHERE rr.usage_type = 0
          AND rr.length_km IS NOT NULL
          AND rr.geometry && ${regionEnvelopeSql(region)}
@@ -271,7 +272,8 @@ export function normalizeCoveredRanges(ranges: CoveredRange[]): CoveredRange[] {
 /**
  * The stretches a user has ridden on routes they haven't completed.
  *
- * Routes completed in some journey are left out: their line is already drawn in
+ * Routes ridden whole are left out — including those completed by their
+ * stretches adding up (FULLY_RIDDEN_TRACK_IDS): their line is already drawn in
  * the visited colour, so an overlay would add nothing. Stretches from different
  * journeys are returned separately and simply painted over each other — the
  * union comes out right without computing it.
@@ -284,13 +286,7 @@ export async function coveredStretchesForUser(userId: number): Promise<CoveredSt
     WHERE ulp.user_id = $1
       AND ulp.partial = TRUE
       AND ulp.covered_start IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1
-        FROM user_logged_parts done
-        WHERE done.user_id = ulp.user_id
-          AND done.track_id = ulp.track_id
-          AND done.partial = FALSE
-      )
+      AND ulp.track_id NOT IN (${FULLY_RIDDEN_TRACK_IDS})
     `,
     [userId],
   );
