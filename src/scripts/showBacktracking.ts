@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * List the routes that backtrack unintentionally, each with an OSM link to the
- * offending way. Same set as the admin routes list's "Unintended backtracking"
+ * List the routes that backtrack unintentionally, each with an OpenRailwayMap
+ * link to where they double back. Same set as the admin routes list's "Unintended backtracking"
  * filter: `has_backtracking` set, `intended_backtracking` not.
  *
  * The flag says a route turns back on itself somewhere along its length, but not
@@ -9,10 +9,13 @@
  * coordinate-based search `verifyRouteData` does, for the flagged routes only,
  * and reports the connection the pathfinder tripped on:
  *
- *   [42] Brno → Praha https://www.openstreetmap.org/way/68490904#map=18/49.194/16.612 (152°)
+ *   [42] Brno → Praha https://www.openrailwaymap.org/?style=standard&lat=49.194&lon=16.612&zoom=18 (way 68490904, 152°)
  *
- * The link selects the way the route turns back onto and centres the map on the
- * V's vertex, which is the pair of things an editor needs to see.
+ * The link centres OpenRailwayMap on the V's vertex, where the track layout that
+ * makes the route double back is what you actually need to look at. ORM's
+ * permalink carries position only — its `id`/`type` params are round-tripped,
+ * not honoured — so the way the route turns back onto is printed alongside it,
+ * for pasting into JOSM or openstreetmap.org/way/<id>.
  *
  * Nothing is written — the flags stay as `verifyRouteData` left them.
  *
@@ -39,13 +42,13 @@ interface RouteRow {
 
 /** What the search made of one flagged route. */
 type Outcome =
-  | { status: "backtracks"; url: string; angleDegrees: number }
+  | { status: "backtracks"; url: string; partId: string; angleDegrees: number }
   | { status: "clean" }
   | { status: "unresolved"; reason: string };
 
-/** OSM way, selected and centred on the offending vertex. */
-function osmWayUrl(partId: string, [lng, lat]: [number, number]): string {
-  return `https://www.openstreetmap.org/way/${partId}#map=18/${lat.toFixed(5)}/${lng.toFixed(5)}`;
+/** OpenRailwayMap, centred on the offending vertex. */
+function openRailwayMapUrl([lng, lat]: [number, number]): string {
+  return `https://www.openrailwaymap.org/?style=standard&lat=${lat.toFixed(5)}&lon=${lng.toFixed(5)}&zoom=18`;
 }
 
 async function locateBacktracking(db: Pool, route: RouteRow): Promise<Outcome> {
@@ -64,7 +67,12 @@ async function locateBacktracking(db: Pool, route: RouteRow): Promise<Outcome> {
     if (!result.backtrackingAt) return { status: "clean" };
 
     const { toPartId, coordinate, angleDegrees } = result.backtrackingAt;
-    return { status: "backtracks", url: osmWayUrl(toPartId, coordinate), angleDegrees };
+    return {
+      status: "backtracks",
+      url: openRailwayMapUrl(coordinate),
+      partId: toPartId,
+      angleDegrees,
+    };
   } catch (error) {
     return {
       status: "unresolved",
@@ -138,7 +146,9 @@ async function showBacktracking(): Promise<void> {
       const label = `[${route.track_id}] ${route.from_station} → ${route.to_station}`;
 
       if (outcome.status === "backtracks") {
-        console.log(`${label} ${outcome.url} (${outcome.angleDegrees.toFixed(0)}°)`);
+        console.log(
+          `${label} ${outcome.url} (way ${outcome.partId}, ${outcome.angleDegrees.toFixed(0)}°)`,
+        );
       } else if (outcome.status === "clean") {
         clean.push(route);
       } else {
