@@ -1,21 +1,22 @@
 #!/usr/bin/env tsx
 /**
  * List the routes that backtrack unintentionally, each with an OpenRailwayMap
- * link to where they double back. Same set as the admin routes list's "Unintended backtracking"
- * filter: `has_backtracking` set, `intended_backtracking` not.
+ * link to where they double back. Same set as the admin routes list's
+ * "Unintended backtracking" filter: `has_backtracking` set,
+ * `intended_backtracking` not.
  *
  * The flag says a route turns back on itself somewhere along its length, but not
  * where — that is all the recalculation stores. So this re-runs the same
  * coordinate-based search `verifyRouteData` does, for the flagged routes only,
  * and reports the connection the pathfinder tripped on:
  *
- *   [42] Brno → Praha https://www.openrailwaymap.org/?style=standard&lat=49.194&lon=16.612&zoom=18 (way 68490904, 152°)
+ *   [42] Brno → Praha https://openrailwaymap.app/#view=18/49.19412/16.61234 (way 68490904, 152°)
  *
  * The link centres OpenRailwayMap on the V's vertex, where the track layout that
- * makes the route double back is what you actually need to look at. ORM's
- * permalink carries position only — its `id`/`type` params are round-tripped,
- * not honoured — so the way the route turns back onto is printed alongside it,
- * for pasting into JOSM or openstreetmap.org/way/<id>.
+ * makes the route double back is what you need to look at. Its hash carries a
+ * position and nothing else — there is no way to select an OSM object from the
+ * URL — so the way the route turns back onto is printed alongside it, for
+ * pasting into JOSM or openstreetmap.org/way/<id>.
  *
  * Nothing is written — the flags stay as `verifyRouteData` left them.
  *
@@ -46,9 +47,15 @@ type Outcome =
   | { status: "clean" }
   | { status: "unresolved"; reason: string };
 
-/** OpenRailwayMap, centred on the offending vertex. */
+/**
+ * OpenRailwayMap (the vector app), centred on the offending vertex.
+ *
+ * `#view=<zoom>/<lat>/<lon>`, the app's own permalink shape. `style` and `date`
+ * are the hash's other parameters and are left off: the app omits them itself
+ * when they are at their defaults.
+ */
 function openRailwayMapUrl([lng, lat]: [number, number]): string {
-  return `https://www.openrailwaymap.org/?style=standard&lat=${lat.toFixed(5)}&lon=${lng.toFixed(5)}&zoom=18`;
+  return `https://openrailwaymap.app/#view=18/${lat.toFixed(5)}/${lng.toFixed(5)}`;
 }
 
 async function locateBacktracking(db: Pool, route: RouteRow): Promise<Outcome> {
