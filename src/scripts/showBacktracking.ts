@@ -1,11 +1,13 @@
 #!/usr/bin/env tsx
 /**
- * List the routes that backtrack, each with an OSM link to the offending way.
+ * List the routes that backtrack unintentionally, each with an OSM link to the
+ * offending way. Same set as the admin routes list's "Unintended backtracking"
+ * filter: `has_backtracking` set, `intended_backtracking` not.
  *
- * `has_backtracking` says a route turns back on itself somewhere along its
- * length, but not where — the flag is all the recalculation stores. So this
- * re-runs the same coordinate-based search `verifyRouteData` does, for the
- * flagged routes only, and reports the connection the pathfinder tripped on:
+ * The flag says a route turns back on itself somewhere along its length, but not
+ * where — that is all the recalculation stores. So this re-runs the same
+ * coordinate-based search `verifyRouteData` does, for the flagged routes only,
+ * and reports the connection the pathfinder tripped on:
  *
  *   [42] Brno → Praha https://www.openstreetmap.org/way/68490904#map=18/49.194/16.612 (152°)
  *
@@ -14,12 +16,7 @@
  *
  * Nothing is written — the flags stay as `verifyRouteData` left them.
  *
- * Usage: npm run showBacktracking [--unintended] [--concurrency=N]
- *        --unintended   list only the routes not flagged `intended_backtracking`,
- *                       matching the admin routes list's "Unintended
- *                       backtracking" filter. Intended ones are labelled as such
- *                       rather than hidden by default — a route that backtracks
- *                       on purpose can still do it over the wrong way.
+ * Usage: npm run showBacktracking [--concurrency=N]
  *        --concurrency  routes searched at once (default as for recalculation)
  */
 import dotenv from "dotenv";
@@ -33,7 +30,6 @@ interface RouteRow {
   track_id: number;
   from_station: string;
   to_station: string;
-  intended_backtracking: boolean;
   is_valid: boolean | null;
   start_lng: string;
   start_lat: string;
@@ -78,18 +74,17 @@ async function locateBacktracking(db: Pool, route: RouteRow): Promise<Outcome> {
 }
 
 async function showBacktracking(): Promise<void> {
-  const args = process.argv.slice(2);
-  const unintendedOnly = args.includes("--unintended");
-  const concurrency = parseConcurrencyArg(args);
+  const concurrency = parseConcurrencyArg(process.argv.slice(2));
   const pool = createRecalcPool(concurrency);
 
   try {
+    // Not scoped to a region: every route with the flag is worth seeing, and the
+    // list carries country-bearing station names anyway.
     const routes = await pool.query<RouteRow>(`
       SELECT
         track_id,
         from_station,
         to_station,
-        intended_backtracking,
         is_valid,
         ST_X(starting_coordinate) as start_lng,
         ST_Y(starting_coordinate) as start_lat,
@@ -97,18 +92,14 @@ async function showBacktracking(): Promise<void> {
         ST_Y(ending_coordinate) as end_lat
       FROM railway_routes
       WHERE has_backtracking = TRUE
+        AND intended_backtracking IS NOT TRUE
         AND starting_coordinate IS NOT NULL
         AND ending_coordinate IS NOT NULL
-        ${unintendedOnly ? "AND intended_backtracking IS NOT TRUE" : ""}
       ORDER BY from_station, to_station, track_id
     `);
 
     if (routes.rows.length === 0) {
-      console.log(
-        unintendedOnly
-          ? "No routes are flagged as backtracking unintentionally."
-          : "No routes are flagged as backtracking.",
-      );
+      console.log("No routes are flagged as backtracking unintentionally.");
       return;
     }
 
@@ -147,14 +138,16 @@ async function showBacktracking(): Promise<void> {
       const label = `[${route.track_id}] ${route.from_station} → ${route.to_station}`;
 
       if (outcome.status === "backtracks") {
-        const intended = route.intended_backtracking ? " (intended)" : "";
-        console.log(`${label}${intended} ${outcome.url} (${outcome.angleDegrees.toFixed(0)}°)`);
+        console.log(`${label} ${outcome.url} (${outcome.angleDegrees.toFixed(0)}°)`);
       } else if (outcome.status === "clean") {
         clean.push(route);
       } else {
         unresolved.push({ route, reason: outcome.reason });
       }
     }
+
+    // The two sections below account for the flagged routes that produced no
+    // link, so the list can be read as complete.
 
     // A flag set by the last recalculation, against OSM data that has since
     // moved on: worth reporting, since the next recalculation will clear it.
