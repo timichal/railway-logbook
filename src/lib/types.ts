@@ -182,11 +182,31 @@ export type AdminNote = {
   updated_at: string;
 };
 
+/**
+ * Where a path turns back on itself: the connection between two consecutive
+ * parts whose bearings differ by more than BACKTRACKING_THRESHOLD_DEGREES.
+ *
+ * The first such connection only — the detection stops at it — which is enough
+ * to point an editor at the offending OSM way (`npm run showBacktracking`).
+ */
+export interface BacktrackingPoint {
+  /** OSM way id of the part the path leaves. */
+  fromPartId: string;
+  /** OSM way id of the part it turns back onto. */
+  toPartId: string;
+  /** Bearing difference at the connection, 0-180 degrees. */
+  angleDegrees: number;
+  /** The connection point itself, [longitude, latitude]. */
+  coordinate: [number, number];
+}
+
 // Pathfinding result (from railway pathfinder)
 export interface PathResult {
   partIds: string[];
   coordinates: [number, number][];
   hasBacktracking?: boolean; // True if the final path contains backtracking
+  /** Where it backtracks, set whenever hasBacktracking is true. */
+  backtrackingAt?: BacktrackingPoint;
 }
 
 /**

@@ -6,9 +6,9 @@ import {
   haversineDistance,
   normalizeBearingDifference,
 } from "../../lib/geoUtils";
-import type { PathResult } from "../../lib/types";
+import type { BacktrackingPoint, PathResult } from "../../lib/types";
 
-export type { PathResult };
+export type { BacktrackingPoint, PathResult };
 
 interface RailwayPart {
   id: string;
@@ -165,7 +165,8 @@ export class RailwayPathFinder {
     }
 
     // Step 2: Check if it backtracks
-    if (!this.hasBacktracking(firstPath)) {
+    const firstBacktracking = this.findBacktracking(firstPath);
+    if (!firstBacktracking) {
       const result = this.buildPathResult(firstPath);
       result.hasBacktracking = false;
       return result;
@@ -185,6 +186,7 @@ export class RailwayPathFinder {
       this.log(`  No non-backtracking alternative found, using original`);
       const result = this.buildPathResult(firstPath);
       result.hasBacktracking = true;
+      result.backtrackingAt = firstBacktracking;
       return result;
     }
 
@@ -206,6 +208,7 @@ export class RailwayPathFinder {
         this.log(`  ⚠️  Alternative path has broken chain, using backtracking path instead`);
         const result = this.buildPathResult(firstPath);
         result.hasBacktracking = true;
+        result.backtrackingAt = firstBacktracking;
         return result;
       }
     }
@@ -215,6 +218,7 @@ export class RailwayPathFinder {
     );
     const result = this.buildPathResult(firstPath);
     result.hasBacktracking = true;
+    result.backtrackingAt = firstBacktracking;
     return result;
   }
 
@@ -375,7 +379,7 @@ export class RailwayPathFinder {
         if (connectedId === endId) {
           const completePath = [...current.path, connectedId];
 
-          if (this.hasBacktracking(completePath)) {
+          if (this.findBacktracking(completePath)) {
             continue;
           }
 
@@ -491,11 +495,16 @@ export class RailwayPathFinder {
   }
 
   /**
-   * Check if a path has backtracking (tight "V" shapes)
-   * Uses segments near connection points for accurate bearing calculations
+   * Find where a path backtracks (tight "V" shapes), or null if it doesn't.
+   * Uses segments near connection points for accurate bearing calculations.
+   *
+   * Returns the **first** such connection rather than a bare boolean: every
+   * caller here only asks whether there is one, but the located answer is what
+   * `npm run showBacktracking` needs to point an editor at the offending way,
+   * and it is free to carry along the path result.
    */
-  private hasBacktracking(partIds: string[]): boolean {
-    if (partIds.length < 2) return false;
+  private findBacktracking(partIds: string[]): BacktrackingPoint | null {
+    if (partIds.length < 2) return null;
 
     for (let i = 0; i < partIds.length - 1; i++) {
       const prevPartId = i > 0 ? partIds[i - 1] : null;
@@ -525,11 +534,17 @@ export class RailwayPathFinder {
         this.log(
           `    ⚠️  BACKTRACKING DETECTED at ${currentPartId}→${nextPartId}: ${normalizedDiff.toFixed(1)}° > ${BACKTRACKING_THRESHOLD_DEGREES}°`,
         );
-        return true;
+        return {
+          fromPartId: currentPartId,
+          toPartId: nextPartId,
+          angleDegrees: normalizedDiff,
+          // The exit segment ends at the connection, which is the V's vertex
+          coordinate: exitSegment[1],
+        };
       }
     }
 
-    return false;
+    return null;
   }
 
   /**
@@ -747,6 +762,7 @@ export class RailwayPathFinder {
             partIds: pathResult.partIds,
             coordinates,
             hasBacktracking: pathResult.hasBacktracking,
+            backtrackingAt: pathResult.backtrackingAt,
           };
         }
       }
