@@ -2,22 +2,26 @@
 
 interface HowToUseArticleProps {
   onClose: () => void;
+  /** The mobile menu renders its own back-arrow header, so it suppresses this one. */
+  showHeader?: boolean;
 }
 
-export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
+export default function HowToUseArticle({ onClose, showHeader = true }: HowToUseArticleProps) {
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
-        <h2 className="text-2xl font-bold text-gray-900">How To Use</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
-          title="Close"
-        >
-          ×
-        </button>
-      </div>
+      {showHeader && (
+        <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
+          <h2 className="text-2xl font-bold text-gray-900">How To Use</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="text-gray-700">
         <p className="mb-4">
@@ -32,9 +36,10 @@ export default function HowToUseArticle({ onClose }: HowToUseArticleProps) {
         </p>
         <p className="mb-4">
           The two networks are separate views, switched with the <b>🇪🇺 / 🇯🇵</b> buttons at the top
-          of the page. The map is locked to whichever one you pick, and everything beside it - the
-          station search, the journey planner, your journey list and the statistics - covers that
-          region alone. Your log is one log: journeys appear under the region they were ridden in.
+          of the page — or, on a phone, at the top of the menu. The map is locked to whichever one
+          you pick, and everything beside it - the station search, the journey planner, your journey
+          list and the statistics - covers that region alone. Your log is one log: journeys appear
+          under the region they were ridden in.
         </p>
         <p className="mb-4">
           Only lines that are in regular use and available in official timetables are displayed.

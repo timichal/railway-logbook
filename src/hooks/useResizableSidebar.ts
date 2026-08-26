@@ -17,10 +17,14 @@ export function useResizableSidebar({
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(!isMobile);
 
-  // Auto-close sidebar when entering mobile, auto-open on desktop
-  useEffect(() => {
+  // Auto-close sidebar when entering mobile, auto-open on desktop. Adjusted during
+  // render rather than in an effect: an effect runs after paint, so on a phone the
+  // open desktop sidebar would be painted once before closing again.
+  const [prevIsMobile, setPrevIsMobile] = useState<boolean>(isMobile);
+  if (prevIsMobile !== isMobile) {
+    setPrevIsMobile(isMobile);
     setSidebarOpen(!isMobile);
-  }, [isMobile]);
+  }
 
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((prev) => !prev);

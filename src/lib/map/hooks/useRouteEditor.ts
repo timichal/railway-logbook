@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import type { DataAccess } from "@/lib/dataAccess";
 import type { UserProgress } from "@/lib/progressQueries";
-import { loadLayerPrefs, saveLayerPref } from "../layerPrefs";
 
 /**
  * Simplified hook for progress tracking
@@ -9,8 +8,6 @@ import { loadLayerPrefs, saveLayerPref } from "../layerPrefs";
  */
 export function useRouteEditor(dataAccess: DataAccess, selectedCountries?: string[]) {
   const [progress, setProgress] = useState<UserProgress | null>(null);
-  const [showHeritage, setShowHeritage] = useState(() => loadLayerPrefs().showHeritage);
-  const [showSpecial, setShowSpecial] = useState(() => loadLayerPrefs().showSpecial);
 
   // Refresh progress stats
   const refreshProgress = useCallback(async () => {
@@ -22,30 +19,10 @@ export function useRouteEditor(dataAccess: DataAccess, selectedCountries?: strin
     }
   }, [dataAccess, selectedCountries]);
 
-  // Just flip state and persist it; the actual layer filters/visibility are
-  // applied by useLayerFilters (single source of truth) reacting to the change.
-  const toggleShowHeritage = useCallback(() => {
-    setShowHeritage((prev) => {
-      const next = !prev;
-      saveLayerPref("showHeritage", next);
-      return next;
-    });
-  }, []);
-
-  const toggleShowSpecial = useCallback(() => {
-    setShowSpecial((prev) => {
-      const next = !prev;
-      saveLayerPref("showSpecial", next);
-      return next;
-    });
-  }, []);
-
+  // The layer toggles live in LayerPrefsProvider — they are also driven from the
+  // mobile menu, which is a sibling of the map rather than a child of it.
   return {
     refreshProgress,
     progress,
-    showHeritage,
-    showSpecial,
-    toggleShowHeritage,
-    toggleShowSpecial,
   };
 }

@@ -4,20 +4,27 @@ import { useRegionContext } from "@/lib/regionContext";
 import { REGION_IDS, REGIONS } from "@/lib/regions";
 
 interface RegionSwitchProps {
-  /** Flag-only buttons, for the cramped mobile navbar. */
+  /** Flag-only buttons, for a cramped navbar. */
   compact?: boolean;
+  /** Fill the container and split it evenly — for the mobile menu's own row. */
+  stretch?: boolean;
 }
 
 /**
  * Segmented control switching the whole page between regions. The map is locked
  * to one region at a time, and every list, stat and search beside it follows.
  */
-export default function RegionSwitch({ compact = false }: RegionSwitchProps) {
+export default function RegionSwitch({ compact = false, stretch = false }: RegionSwitchProps) {
   const { regionId, setRegion } = useRegionContext();
 
   return (
     <fieldset
-      className="inline-flex rounded-md border border-gray-300 overflow-hidden"
+      // Explicit height rather than padding: the flag emoji's line box is not the
+      // same as the Latin one, so a py-2 switch came out a hair shorter than the
+      // py-2 buttons beside it in the navbar.
+      className={`rounded-md border border-gray-300 overflow-hidden ${
+        stretch ? "flex w-full" : "inline-flex"
+      } ${compact ? "h-11" : "h-10"}`}
       aria-label="Region"
     >
       {REGION_IDS.map((id) => {
@@ -30,7 +37,7 @@ export default function RegionSwitch({ compact = false }: RegionSwitchProps) {
             onClick={() => setRegion(id)}
             aria-pressed={isActive}
             title={region.label}
-            className={`${compact ? "px-2 py-1 text-base" : "px-3 py-2 text-sm"} font-medium cursor-pointer border-r border-gray-300 last:border-r-0 ${
+            className={`${compact ? "px-3 text-lg" : "px-3 text-sm"} ${stretch ? "flex-1" : ""} inline-flex items-center justify-center font-medium cursor-pointer border-r border-gray-300 last:border-r-0 ${
               isActive
                 ? "bg-blue-600 text-white"
                 : "bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900"

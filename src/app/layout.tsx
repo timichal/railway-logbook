@@ -1,16 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { ToastContainer, ToastProvider } from "@/lib/toast";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+// Inter rather than Geist: Geist is a display-leaning face and reads as a headline
+// font at 12–14px, which is where most of this app's text lives (form labels,
+// placeholders, badges, table rows). Inter was drawn for UI at small sizes — tall
+// x-height, open apertures — so labels and placeholders stay legible.
+// `latin-ext` covers the diacritics in the European station names.
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin", "latin-ext"],
 });
 
 export const metadata: Metadata = {
@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${inter.variable} antialiased`}>
         <ToastProvider>
           {children}
           <ToastContainer />

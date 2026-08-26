@@ -1,28 +1,27 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  /* Geist Mono was fetched on every load for a single line of admin error text;
+     the system mono stack is indistinguishable there and costs nothing. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* No dark mode. The `--background`/`--foreground` pair that used to live here (with
+   a `prefers-color-scheme: dark` override) was Next's boilerplate and never
+   finished: `body` hardcoded a white background while its *colour* followed the
+   scheme, and every component is `bg-white` / `text-black`. So on a machine set to
+   dark, anything that inherited its colour — the toggle switch labels, for one —
+   came out #ededed on white, i.e. invisible. Supporting dark mode properly means
+   auditing every component; until then this says plainly that it is light-only. */
 body {
   background: #ffffff;
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: #171717;
+  /* The webfont was previously loaded in layout.tsx and then overridden by a
+     hardcoded Arial here, so every load paid for a font it never rendered.
+     `system-ui` first in the fallback, so a failed font load lands on the
+     platform UI face rather than Helvetica. */
+  font-family: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
   margin: 0;
   padding: 0;
 }
@@ -97,16 +96,16 @@ body,
   animation: slide-in-left 0.25s ease-out;
 }
 
-/* Mobile top-half sidebar drop-down animation */
-@keyframes slide-in-top {
+/* Mobile bottom sheet slide-up animation */
+@keyframes slide-in-bottom {
   from {
-    transform: translateY(-100%);
+    transform: translateY(100%);
   }
   to {
     transform: translateY(0);
   }
 }
 
-.sidebar-drawer-top-open {
-  animation: slide-in-top 0.25s ease-out;
+.sheet-slide-up {
+  animation: slide-in-bottom 0.25s ease-out;
 }

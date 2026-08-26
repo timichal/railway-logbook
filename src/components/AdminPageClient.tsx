@@ -279,7 +279,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
         onLogout={handleLogout}
         isAdminPage={true}
         isMobile={isMobile}
-        onToggleSidebar={toggleSidebar}
+        onOpenMenu={toggleSidebar}
       />
 
       <main className="flex-1 overflow-hidden flex relative">

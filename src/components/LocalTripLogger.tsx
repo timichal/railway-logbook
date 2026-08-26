@@ -207,12 +207,12 @@ export default function LocalTripLogger({
                     </div>
                     <div className="flex items-center gap-4 mt-1">
                       <span className="text-gray-600">{route.length_km.toFixed(1)} km</span>
-                      <label className="flex items-center gap-1 cursor-pointer text-xs text-gray-700">
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700 min-h-11 md:min-h-0 pr-2 md:pr-0">
                         <input
                           type="checkbox"
                           checked={route.partial ?? false}
                           onChange={(e) => onUpdateRoutePartial(route.track_id, e.target.checked)}
-                          className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         />
                         <span>Partial</span>
                       </label>
@@ -222,7 +222,7 @@ export default function LocalTripLogger({
                     <button
                       type="button"
                       onClick={() => onRemoveRoute(route.track_id)}
-                      className="text-gray-500 hover:text-gray-700 text-lg leading-none"
+                      className="flex items-center justify-center w-11 h-11 -my-2 -mr-1 md:w-6 md:h-6 md:my-0 md:mr-0 text-gray-500 hover:text-gray-700 text-lg leading-none cursor-pointer"
                       title="Remove route"
                     >
                       ×

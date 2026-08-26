@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/regions";
 import RegionSwitch from "./RegionSwitch";
@@ -41,37 +42,39 @@ export default function PublicMapLayout({
 
   return (
     <RegionProvider initialRegion={initialRegion}>
-      <header className="bg-white border-b border-gray-200 px-3 py-2 md:px-4 md:py-3 flex-shrink-0">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="text-lg md:text-2xl font-bold text-gray-900 truncate">
-              {ownerName}&apos;s Railway Logbook
-            </h1>
-            <p className="hidden md:block text-gray-600 mt-1 text-sm">
-              A shared, read-only view of someone else&apos;s rail journeys.
-            </p>
-          </div>
+      <LayerPrefsProvider>
+        <header className="bg-white border-b border-gray-200 px-3 py-2 md:px-4 md:py-3 flex-shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-lg md:text-2xl font-bold text-gray-900 truncate">
+                {ownerName}&apos;s Railway Logbook
+              </h1>
+              <p className="hidden md:block text-gray-600 mt-1 text-sm">
+                A shared, read-only view of someone else&apos;s rail journeys.
+              </p>
+            </div>
 
-          <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-            <RegionSwitch compact={isMobile} />
-            <Link
-              href="/"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-3 md:py-2 md:px-4 rounded-md text-xs md:text-sm whitespace-nowrap"
-            >
-              Go to my own map
-            </Link>
+            <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+              <RegionSwitch compact={isMobile} />
+              <Link
+                href="/"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-3 md:py-2 md:px-4 rounded-md text-xs md:text-sm whitespace-nowrap"
+              >
+                Go to my own map
+              </Link>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="flex-1 overflow-hidden">
-        <PublicRailwayMap
-          token={token}
-          ownerId={ownerId}
-          selectedCountries={selectedCountries}
-          isMobile={isMobile}
-        />
-      </main>
+        <main className="flex-1 overflow-hidden">
+          <PublicRailwayMap
+            token={token}
+            ownerId={ownerId}
+            selectedCountries={selectedCountries}
+            isMobile={isMobile}
+          />
+        </main>
+      </LayerPrefsProvider>
     </RegionProvider>
   );
 }

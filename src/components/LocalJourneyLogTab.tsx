@@ -545,12 +545,12 @@ export default function LocalJourneyLogTab({
                                   )}
                                 </span>
                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                  <label className="flex items-center gap-1 cursor-pointer select-none">
+                                  <label className="flex items-center gap-1.5 cursor-pointer select-none min-h-11 md:min-h-0 px-1 md:px-0">
                                     <input
                                       type="checkbox"
                                       checked={part.partial}
                                       onChange={() => handleTogglePartial(part.id, part.partial)}
-                                      className="w-3 h-3 cursor-pointer"
+                                      className="w-4 h-4 cursor-pointer"
                                     />
                                     <span className="text-gray-500">partial</span>
                                   </label>
@@ -558,7 +558,7 @@ export default function LocalJourneyLogTab({
                                     type="button"
                                     onClick={() => handleDeletePart(part.id)}
                                     title="Remove route from journey"
-                                    className="w-6 h-6 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                    className="w-11 h-11 md:w-6 md:h-6 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200"
                                   >
                                     <svg
                                       xmlns="http://www.w3.org/2000/svg"

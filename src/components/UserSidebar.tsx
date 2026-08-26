@@ -84,7 +84,7 @@ export default function UserSidebar({
           <button
             type="button"
             onClick={() => setActiveTab("routes")}
-            className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
+            className={`flex-1 py-3 px-2 md:px-4 text-sm font-medium border-b-2 ${
               activeTab === "routes"
                 ? "border-blue-500 text-blue-600 bg-blue-50"
                 : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
@@ -96,7 +96,7 @@ export default function UserSidebar({
           <button
             type="button"
             onClick={() => setActiveTab("journeylog")}
-            className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
+            className={`flex-1 py-3 px-2 md:px-4 text-sm font-medium border-b-2 ${
               activeTab === "journeylog"
                 ? "border-blue-500 text-blue-600 bg-blue-50"
                 : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
@@ -109,7 +109,7 @@ export default function UserSidebar({
             <button
               type="button"
               onClick={() => setActiveTab("filter")}
-              className={`flex-1 py-2 px-2 md:py-3 md:px-4 text-xs md:text-sm font-medium border-b-2 ${
+              className={`flex-1 py-3 px-2 md:px-4 text-sm font-medium border-b-2 ${
                 activeTab === "filter"
                   ? "border-blue-500 text-blue-600 bg-blue-50"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"

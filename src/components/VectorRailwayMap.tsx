@@ -16,7 +16,7 @@ import { useRouteEditor } from "@/lib/map/hooks/useRouteEditor";
 import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
 import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
 import { setupUserMapInteractions } from "@/lib/map/interactions/userMapInteractions";
-import { loadLayerPrefs, saveLayerPref } from "@/lib/map/layerPrefs";
+import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import {
   createUserMapLayers,
   userClickBufferLayerConfig,
@@ -36,7 +36,8 @@ import type {
   SelectedRoute,
   Station,
 } from "@/lib/types";
-import MobileMenuPanel from "./MobileMenuPanel";
+import MapProgressBox from "./MapProgressBox";
+import MobileBottomSheet from "./MobileBottomSheet";
 import UserSidebar, { type ActiveTab } from "./UserSidebar";
 
 interface VectorRailwayMapProps {
@@ -49,9 +50,6 @@ interface VectorRailwayMapProps {
   onSidebarResize: () => void;
   isResizing: boolean;
   isMobile: boolean;
-  sidebarOpen: boolean;
-  onLogout: () => void;
-  onAuthSuccess: () => void;
 }
 
 export default function VectorRailwayMap({
@@ -64,15 +62,13 @@ export default function VectorRailwayMap({
   onSidebarResize,
   isResizing,
   isMobile,
-  sidebarOpen,
-  onLogout,
-  onAuthSuccess,
 }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const { showError } = useToast();
 
   const userId = user?.id || null;
   const region = useRegion();
+  const layerPrefs = useLayerPrefs();
   const dataAccess = useMemo(() => createDataAccess(user, region.id), [user, region.id]);
 
   // Country filter state
@@ -89,9 +85,6 @@ export default function VectorRailwayMap({
   );
 
   // Scenic routes outline toggle
-  const [showScenicOutline, setShowScenicOutline] = useState<boolean>(
-    () => loadLayerPrefs().showScenicOutline,
-  );
 
   // Station click handler from Journey Planner
   const [journeyStationClickHandler, setJourneyStationClickHandler] = useState<
@@ -233,11 +226,11 @@ export default function VectorRailwayMap({
   // cacheBuster re-applies filters after a tile refresh re-adds layers.
   useLayerFilters(
     map,
-    routeEditor.showHeritage,
-    routeEditor.showSpecial,
+    layerPrefs.showHeritage,
+    layerPrefs.showSpecial,
     // The stored preference is shared across regions; one that offers no scenic
     // outline keeps it off regardless of what the other region left switched on.
-    showScenicOutline && region.hasScenicHighlight,
+    layerPrefs.showScenicOutline && region.hasScenicHighlight,
     mapLoaded,
     cacheBuster,
   );
@@ -454,8 +447,14 @@ export default function VectorRailwayMap({
     }
   };
 
-  // Resize map when sidebar opens/closes on mobile
-  // biome-ignore lint/correctness/useExhaustiveDependencies: sidebarOpen and isMobile are intentional triggers — the effect resizes the map when either changes, even though neither is read in the body.
+  // The mobile sheet settles at a new height -> the map has more or less room.
+  const handleSheetHeightSettled = useCallback(() => {
+    map.current?.resize();
+  }, [map]);
+
+  // Resize map when the layout switches between the desktop sidebar and the mobile
+  // sheet. Height changes *within* the sheet come through handleSheetHeightSettled.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isMobile is an intentional trigger — the effect resizes the map when it changes, even though it is not read in the body.
   useEffect(() => {
     if (!map.current) return;
     // Small delay to let CSS transitions finish
@@ -463,7 +462,7 @@ export default function VectorRailwayMap({
       map.current?.resize();
     }, 300);
     return () => clearTimeout(timer);
-  }, [sidebarOpen, isMobile, map]);
+  }, [isMobile, map]);
 
   // Sidebar content (shared between mobile drawer and desktop inline)
   const sidebarContent = (
@@ -504,82 +503,25 @@ export default function VectorRailwayMap({
         </>
       )}
 
-      {/* Mobile top-half sidebar (map fills the bottom half) */}
-      {isMobile && sidebarOpen && (
-        <div className="h-1/2 flex-shrink-0 bg-white border-b border-gray-200 flex flex-col sidebar-drawer-top-open">
-          <MobileMenuPanel
-            user={user}
-            onLogout={onLogout}
-            onAuthSuccess={onAuthSuccess}
-            onOpenHowTo={() => setActiveTab("howto")}
-            onOpenNotes={() => setActiveTab("notes")}
-          />
-          <div className="flex-1 overflow-hidden flex flex-col">{sidebarContent}</div>
-        </div>
-      )}
-
       {/* Map Container */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="flex-1 min-h-0 overflow-hidden relative">
         <div
           ref={mapContainer}
           className={`w-full h-full ${className}`}
-          style={{ height: "100%", minHeight: "400px" }}
+          // No min-height on mobile: the sheet can take 90% of the column, and a
+          // floor taller than what is left would leave the canvas clipped and
+          // off-centre behind the sheet.
+          style={{ height: "100%", minHeight: isMobile ? undefined : "400px" }}
         />
 
         {/* Progress Stats Box */}
         {routeEditor.progress && (
-          <div
-            className={`absolute bg-white p-3 rounded shadow-lg text-black z-10 ${
-              isMobile ? "bottom-10 left-3 text-xs" : "bottom-10 right-4"
-            }`}
-          >
-            <h3 className={`font-bold mb-2 ${isMobile ? "text-xs" : "text-sm"}`}>Completed</h3>
-            <div className={`font-semibold ${isMobile ? "text-sm" : "text-lg"}`}>
-              {routeEditor.progress.completedKm}/{routeEditor.progress.totalKm} km
-            </div>
-            <div className={`font-bold text-green-600 ${isMobile ? "text-lg" : "text-2xl"}`}>
-              {routeEditor.progress.percentage}%
-            </div>
-            <div className="text-xs text-gray-600 mt-1">
-              {routeEditor.progress.completedRoutes}/{routeEditor.progress.totalRoutes} (
-              {routeEditor.progress.routePercentage}%) routes
-            </div>
-            <div className="mt-2 pt-2 border-t border-gray-200">
-              <label className="flex items-center gap-2 cursor-pointer text-xs mb-2">
-                <input
-                  type="checkbox"
-                  checked={routeEditor.showHeritage}
-                  onChange={() => routeEditor.toggleShowHeritage()}
-                  className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                />
-                <span>Show heritage &amp; tourist lines</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-xs mb-2">
-                <input
-                  type="checkbox"
-                  checked={routeEditor.showSpecial}
-                  onChange={() => routeEditor.toggleShowSpecial()}
-                  className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                />
-                <span>{region.id === "japan" ? "Show non-JR lines" : "Show special services"}</span>
-              </label>
-              {/* Not every region offers the scenic outline — see Region.hasScenicHighlight. */}
-              {region.hasScenicHighlight && (
-                <label className="flex items-center gap-2 cursor-pointer text-xs">
-                  <input
-                    type="checkbox"
-                    checked={showScenicOutline}
-                    onChange={(e) => {
-                      setShowScenicOutline(e.target.checked);
-                      saveLayerPref("showScenicOutline", e.target.checked);
-                    }}
-                    className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <span>Highlight scenic lines</span>
-                </label>
-              )}
-            </div>
-          </div>
+          <MapProgressBox
+            progress={routeEditor.progress}
+            isMobile={isMobile}
+            // Mobile keeps them in the menu instead — see MobileMenuSheet.
+            withLayerToggles={!isMobile}
+          />
         )}
 
         {/* Station Search Box */}
@@ -651,6 +593,13 @@ export default function VectorRailwayMap({
           </div>
         </div>
       </div>
+
+      {/* Mobile bottom sheet (the map keeps the space above it) */}
+      {isMobile && (
+        <MobileBottomSheet onHeightSettled={handleSheetHeightSettled}>
+          {sidebarContent}
+        </MobileBottomSheet>
+      )}
     </div>
   );
 }

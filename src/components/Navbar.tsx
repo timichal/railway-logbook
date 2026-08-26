@@ -17,8 +17,16 @@ interface NavbarProps {
   onOpenNotes?: () => void;
   isAdminPage?: boolean;
   isMobile?: boolean;
-  onToggleSidebar?: () => void;
+  /**
+   * Hamburger tap, and the mobile Sign in button. Each page decides what it opens
+   * (menu sheet / admin drawer); the argument names the sub-view to land on.
+   */
+  onOpenMenu?: (view?: "login") => void;
 }
+
+/** Mobile bar icon button: 44pt target, no label. */
+const BAR_BUTTON =
+  "w-11 h-11 flex items-center justify-center flex-shrink-0 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md cursor-pointer";
 
 export default function Navbar({
   user,
@@ -28,7 +36,7 @@ export default function Navbar({
   onOpenNotes,
   isAdminPage = false,
   isMobile = false,
-  onToggleSidebar,
+  onOpenMenu,
 }: NavbarProps) {
   const region = useRegion();
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
@@ -64,8 +72,9 @@ export default function Navbar({
     if (onAuthSuccess) onAuthSuccess();
   };
 
-  // Mobile navbar — sidebar toggle only. All menu actions (auth, articles,
-  // admin link, back-to-map, logout) live inside each page's sidebar drawer.
+  // Mobile navbar — title, then auth / share / hamburger as icon buttons. Everything
+  // else (region switch, layer toggles, articles, admin link, back-to-map) lives
+  // behind the hamburger.
   if (isMobile) {
     return (
       <header className="bg-white border-b border-gray-200 px-3 py-2 flex-shrink-0">
@@ -74,17 +83,91 @@ export default function Navbar({
             {isAdminPage ? "Admin" : "Railway Logbook"}
           </h1>
 
-          <RegionSwitch compact />
+          {/* Auth first: signing in or out is the most consequential thing in the
+              menu, so it gets a bar button of its own rather than two taps. */}
+          {user
+            ? onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className={BAR_BUTTON}
+                  aria-label="Log out"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M17 16l4-4m0 0l-4-4m4 4H9m5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h5a3 3 0 013 3v1"
+                    />
+                  </svg>
+                </button>
+              )
+            : onOpenMenu && (
+                <button
+                  type="button"
+                  onClick={() => onOpenMenu("login")}
+                  className={BAR_BUTTON}
+                  aria-label="Sign in"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M11 16l-4-4m0 0l4-4m-4 4h12m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h5a3 3 0 013 3v1"
+                    />
+                  </svg>
+                </button>
+              )}
 
-          {onToggleSidebar && (
+          {/* Share as the platform share glyph; the region switch moved down into the
+              menu, which is where a setting that changes the whole app belongs. */}
+          {user && !isAdminPage && (
             <button
               type="button"
-              onClick={onToggleSidebar}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md cursor-pointer"
-              aria-label="Toggle sidebar"
+              onClick={() => setShowShareDialog(true)}
+              className={BAR_BUTTON}
+              aria-label="Share map"
             >
               <svg
-                className="w-5 h-5"
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.8}
+                  d="M12 16V4m0 0L8.5 7.5M12 4l3.5 3.5M7 11H5.5A1.5 1.5 0 004 12.5v6A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5v-6A1.5 1.5 0 0018.5 11H17"
+                />
+              </svg>
+            </button>
+          )}
+
+          {onOpenMenu && (
+            <button
+              type="button"
+              onClick={() => onOpenMenu()}
+              className={BAR_BUTTON}
+              aria-label="Open menu"
+            >
+              <svg
+                className="w-6 h-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -100,6 +183,8 @@ export default function Navbar({
             </button>
           )}
         </div>
+
+        <ShareMapDialog isOpen={showShareDialog} onClose={() => setShowShareDialog(false)} />
       </header>
     );
   }
@@ -130,14 +215,14 @@ export default function Navbar({
                 <button
                   type="button"
                   onClick={onOpenHowTo}
-                  className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-md text-sm border border-blue-300 cursor-pointer"
+                  className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium inline-flex items-center h-10 px-4 rounded-md text-sm border border-blue-300 cursor-pointer"
                 >
                   How To Use
                 </button>
                 <button
                   type="button"
                   onClick={onOpenNotes}
-                  className="bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded-md text-sm border border-green-300 cursor-pointer"
+                  className="bg-green-100 hover:bg-green-200 text-green-700 font-medium inline-flex items-center h-10 px-4 rounded-md text-sm border border-green-300 cursor-pointer"
                 >
                   Railway Notes
                 </button>
@@ -153,7 +238,7 @@ export default function Navbar({
             <button
               type="button"
               onClick={() => setShowShareDialog(true)}
-              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium py-2 px-4 rounded-md text-sm border border-indigo-300 cursor-pointer"
+              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium inline-flex items-center h-10 px-4 rounded-md text-sm border border-indigo-300 cursor-pointer"
             >
               Share Map
             </button>
@@ -163,7 +248,7 @@ export default function Navbar({
           {user?.id === 1 && !isAdminPage && (
             <Link
               href="/admin"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm"
             >
               Admin
             </Link>
@@ -171,7 +256,7 @@ export default function Navbar({
           {isAdminPage && (
             <Link
               href="/"
-              className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md text-sm"
+              className="bg-gray-600 hover:bg-gray-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm"
             >
               Back to Main Map
             </Link>
@@ -183,7 +268,7 @@ export default function Navbar({
               <button
                 type="button"
                 onClick={onLogout}
-                className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+                className="bg-red-600 hover:bg-red-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm cursor-pointer"
               >
                 Logout
               </button>
@@ -198,7 +283,7 @@ export default function Navbar({
                     setShowLoginDropdown(!showLoginDropdown);
                     setShowRegisterDropdown(false);
                   }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm cursor-pointer"
                 >
                   Login
                 </button>
@@ -223,7 +308,7 @@ export default function Navbar({
                     setShowRegisterDropdown(!showRegisterDropdown);
                     setShowLoginDropdown(false);
                   }}
-                  className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+                  className="bg-green-600 hover:bg-green-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm cursor-pointer"
                 >
                   Register
                 </button>

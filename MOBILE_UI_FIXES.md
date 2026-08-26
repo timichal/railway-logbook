@@ -1,49 +1,63 @@
 # Mobile UI — fix list
 
 Findings from a read of the mobile paths (`MainLayout`, `VectorRailwayMap`,
-`UserSidebar`, `MobileMenuPanel`, `JourneyLogger`, `JourneyPlanner`,
-`useIsMobile`, `globals.css`), plus the installable-web-app work that belongs
-with them.
+`UserSidebar`, `JourneyLogger`, `JourneyPlanner`, `useIsMobile`, `globals.css`),
+plus the installable-web-app work that belongs with them.
 
-Suggested order: **1 → 2 → 5 → 3**, then the rest. The first two are what make
-the app *feel* wrong on a phone; 5 and 3 are what make it frustrating to actually
-use. Section 12 (installable app) is independent and can be done at any point —
-it is also the cheapest way to get the app onto a home screen, and worth having
-whether or not the native app in `MOBILE_APP_PLAN.md` happens.
+**Status: partially done.** Sections are deleted as they land and keep their
+original numbers, so the gaps in the numbering are the finished work. Landed so
+far:
+
+- **1 — layout flash.** `useIsMobile` moved to `useSyncExternalStore` and
+  `useResizableSidebar` adjusts `sidebarOpen` during render, so the corrected
+  mobile layout is in the first paint instead of a desktop-then-mobile flip.
+- **2 — bottom sheet, mechanics only.** `MobileBottomSheet` replaced the fixed
+  top `h-1/2` drawer. The styling is still open; see the section below, which is
+  what is left of item 2.
+- **5 — touch targets.** 44pt floors (`min-h-11`, `w-11 h-11`) across the mobile
+  paths, `md:`-reset so desktop keeps its density.
+- **6 — the menu is a menu.** `MobileMenuSheet` (full height, behind the
+  hamburger) replaced the `MobileMenuPanel` chip strip. Auth forms, both
+  articles, the region switch and the layer switches are all in it; the navbar
+  keeps title + auth / share / hamburger icon buttons.
+- **7 — progress box collapses** to a percentage pill on mobile
+  (`MapProgressBox`, now shared with the public map), and its layer checkboxes
+  became `ToggleSwitch`es that live in the menu.
+- **9 — fonts.** Inter (not Geist — too display-leaning at 12–14px, which is
+  where most of this app's text is), `body` no longer overrides it with Arial,
+  Geist Mono dropped.
+- **10 — dark mode.** The half-finished `prefers-color-scheme` variables are
+  gone; see item 13 for doing it properly.
+
+Suggested order for the rest: **3**, then the rest. Section 12 (installable app)
+is independent and can be done at any point — it is also the cheapest way to get
+the app onto a home screen, and worth having whether or not the native app in
+`MOBILE_APP_PLAN.md` happens.
 
 ---
 
-## 1. Layout flash on every mobile load
+## 2. Bottom sheet — mechanics done, **looks wrong**
 
-`src/hooks/useIsMobile.ts:4` starts at `false` and only corrects inside an
-effect. `useResizableSidebar` then seeds `sidebarOpen = !isMobile`, so it also
-starts `true`. The result on a phone: the **desktop** layout paints first — a
-600px sidebar beside the map — then flips to the drawer, closes it, and runs
-`map.resize()`. Two reflows and a map resize on every load.
+Done: `MobileBottomSheet.tsx` replaced the fixed top `h-1/2` drawer. Bottom
+anchored, drag handle, four snaps (collapsed / peek 120px / half / 90%), tap the
+handle to cycle, ArrowUp/ArrowDown to step. It is a flex sibling of the map
+rather than an overlay, so the map's bottom furniture stays visible above it.
+`map.resize()` fires once per settled height.
 
-Fix, either:
+**Still to do — the visual design.** The behaviour is right and the thing is
+still ugly. Open questions:
 
-- do the breakpoint in CSS (`md:` classes on the sidebar and drawer wrappers) so
-  the first paint is correct with no JS involved; or
-- read `matchMedia` through `useSyncExternalStore` with a server snapshot.
-
-The CSS route is preferable — it also removes `isMobile` from the props chain
-that currently runs `MainLayout` → `VectorRailwayMap` → `UserSidebar`.
-
-## 2. The drawer is on top and takes exactly half the screen
-
-`VectorRailwayMap.tsx:509` — `h-1/2`, fixed. After the navbar that leaves ~290px
-of map on an iPhone SE, and there is no way to change it: the resizer is
-mouse-only (`useResizableSidebar.handleMouseDown` returns early when `isMobile`).
-
-Replace with a **bottom** sheet with a drag handle and snap points (peek ~120px /
-half / ~90%). Bottom rather than top for two reasons: that is where the thumb is,
-and a sheet growing upward does not cover the part of the map that was just
-tapped.
-
-Most of the plumbing exists — the `slide-in-top` keyframes in `globals.css` just
-gain a sibling, and `map.resize()` already fires on the sidebar toggle
-(`VectorRailwayMap.tsx:458-466`).
+- The sheet is a plain white box with a square top edge and a grey bar; it does
+  not read as a sheet. Rounded top corners, a real shadow, and a top edge that
+  separates it from the map.
+- The handle is an empty band above the content — a lot of vertical
+  space in a pane that has none to spare, and it does not look draggable.
+- The collapsed snap leaves a bare handle bar sitting on the map with nothing to
+  say what it opens.
+- No visual feedback while dragging, and no dimming or backdrop at the 90% snap,
+  so a nearly-full sheet still reads as "map with a box on it".
+- The seam where the sheet meets the map at the peek snap is where the MapLibre
+  attribution and the collapsed progress pill now crowd together.
 
 ## 3. Hover-only popups on a touch device
 
@@ -68,41 +82,6 @@ Safari does not fire those from touch, so the `☰` handle is dead — silently.
 ▲▼ buttons (or move to pointer events). The handle is also only ~16px of tap
 target.
 
-## 5. Touch targets are well under 44pt throughout
-
-Apple's floor is 44×44pt; Android's is 48dp. Current state:
-
-| Element | Where | Size |
-| --- | --- | --- |
-| Partial checkbox | `JourneyLogger.tsx:231` | `w-3 h-3` = 12px |
-| Route-remove `×` | `JourneyLogger.tsx`, selected-routes list | bare glyph, no padding |
-| Progress-box checkboxes (×3) | `VectorRailwayMap.tsx:531-580` | `w-3 h-3` |
-| Tab bar | `UserSidebar.tsx` | `py-2 px-2 text-xs` |
-| Menu chips (×6) | `MobileMenuPanel.tsx` | `py-1.5 px-3 text-xs`, wrapping |
-
-Wrapping each checkbox in a `p-2` label and giving `×` a `p-2 -m-2` hit area
-costs nothing visually.
-
-## 6. `MobileMenuPanel` is inside the scroll area, not a menu
-
-It is a permanent two-row chip strip at the top of a half-screen sheet, and
-Login/Register expand **inline** below it (`MobileMenuPanel.tsx:104-117`) — so
-signing in on a phone means scrolling a form inside a ~300px pane.
-
-This should be what the hamburger actually opens: a full-height sheet or modal,
-separate from the tab content.
-
-## 7. The progress box never collapses
-
-On mobile it is pinned at `bottom-10 left-3` with three always-visible
-checkboxes, permanently eating a corner of an already-short map
-(`VectorRailwayMap.tsx:531-580`; the same block is in
-`PublicRailwayMap.tsx:170-220`).
-
-`AdminLayerControls` already solved this — `const [collapsed, setCollapsed] =
-useState(isMobile)` at `AdminLayerControls.tsx:32`. Reuse the pattern: collapse
-to a `42%` pill that expands on tap.
-
 ## 8. No safe-area handling
 
 `h-dvh` covers the dynamic toolbar, but `layout.tsx:21-24` has no
@@ -110,22 +89,6 @@ to a `42%` pill that expands on tap.
 opted into later. On a home-indicator iPhone the `bottom-10` overlays sit close
 to the indicator, as does the toast at `bottom-16`
 (`src/lib/toast/ToastContainer.tsx:50`).
-
-## 9. The Geist fonts are downloaded and never used
-
-`globals.css:25` sets `body { font-family: Arial, Helvetica, sans-serif }`, which
-beats the `--font-geist-sans` variable — and nothing in the app applies the
-`font-sans` utility that would pick it up. So two Google Fonts are fetched on
-every load and Helvetica renders on iOS.
-
-One-line fix: `font-family: var(--font-geist-sans), system-ui, sans-serif`.
-
-## 10. Dark mode is dead code
-
-`globals.css:17-21` defines dark `--background` / `--foreground`, then `body`
-hardcodes `#ffffff` and every component is `bg-white` / `text-black`. On a phone
-at night this is a floodlight. Either commit to dark mode or delete the variables
-so it stops reading as supported.
 
 ## 11. Suggestion lists use the blur/200ms race
 
@@ -163,3 +126,55 @@ those are what `MOBILE_APP_PLAN.md` is for.
 - [ ] **Verify standalone mode.** `h-dvh` behaves differently without browser
       chrome; check the sheet from item 2 and the bottom overlays in item 8 once
       installed, not just in Safari.
+
+---
+
+## 13. Dark mode, for real this time
+
+Item 10 deleted the boilerplate `--background`/`--foreground` pair and its
+`prefers-color-scheme` override, because it was never wired up: `body` hardcoded
+a white background while its *colour* followed the scheme, so on a machine set to
+dark anything that inherited its colour rendered #ededed on white. `globals.css`
+now says light-only outright.
+
+Doing it properly is a real project, not a variable:
+
+- **Every component is `bg-white` / `text-black` / `text-gray-*` / `border-gray-*`
+  literals.** There is no palette to swap. The first step is a token layer —
+  surface / surface-raised / text / text-muted / border / accent — and a pass
+  converting the literals to it. `MapProgressBox`, `MobileMenuSheet`,
+  `MobileBottomSheet` and `ToggleSwitch` are the newest and cleanest places to
+  start.
+- **The map is the hard part.** `src/lib/map/style.ts` is the single source of
+  truth for route colours, and they are chosen against a light basemap; the
+  visited green / partial orange / unvisited red have to be re-picked for a dark
+  ground, and the station labels' translucent white halo (`LABELS.station`)
+  inverts. The basemap itself needs a dark vector style — OpenFreeMap serves
+  `dark` alongside `liberty`, so `basemap.ts` would pick per scheme, and the
+  `createBasemapFadeLayer` opacity needs re-tuning against it.
+- **Decide whether it follows the OS or is a setting.** A setting means another
+  `user_preferences` column plus a localStorage fallback for anonymous visitors,
+  and the shared map has to follow the *visitor's* choice, not the owner's.
+- **Popups are raw HTML strings** built in `tooltipFormatting.ts`; their inline
+  classes need the same token treatment.
+
+## 14. Audit interactive states on every control
+
+The 44pt pass fixed sizes but not feedback. Buttons across the app are
+inconsistent about `hover:`, `active:`, `focus-visible:`, `disabled:` and
+`cursor-pointer` — some have all of them, some have only `hover:`, and a few
+(the article close `×`, the bare glyph buttons in the admin sidebar) have
+nothing.
+
+- Grep for `<button` and `<Link` and check each against a single agreed set:
+  hover, an `active:` state (the only one a touch device can show — hover is
+  meaningless there and a phone shows the hover style as a sticky highlight
+  after a tap), `focus-visible:` ring for keyboard, and `disabled:` styling
+  wherever a `disabled` prop exists.
+- **`cursor-pointer` is applied by hand throughout** and missed in places, since
+  Tailwind v4 dropped the preflight that used to set it on buttons. Either add it
+  back globally in `globals.css` (`button:not(:disabled), [role="button"] {
+  cursor: pointer }`) or make it part of the shared classes — not both.
+- The shared class constants that now exist (`BAR_BUTTON` in `Navbar`, `ROW` in
+  `MobileMenuSheet`) are the pattern to extend: a handful of named button
+  classes beats 200 hand-assembled ones.

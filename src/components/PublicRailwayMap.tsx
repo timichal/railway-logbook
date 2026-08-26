@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { createPublicDataAccess } from "@/lib/dataAccess";
 import {
   createPublicNotesSource,
@@ -13,11 +13,12 @@ import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useRouteEditor } from "@/lib/map/hooks/useRouteEditor";
 import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
 import { setupUserMapInteractions } from "@/lib/map/interactions/userMapInteractions";
-import { loadLayerPrefs, saveLayerPref } from "@/lib/map/layerPrefs";
+import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { createUserMapLayers } from "@/lib/map/userMapLayers";
 import { useRegion } from "@/lib/regionContext";
 import { regionCountryCodes } from "@/lib/regions";
 import type { Station } from "@/lib/types";
+import MapProgressBox from "./MapProgressBox";
 
 interface PublicRailwayMapProps {
   /** Sharing token from the URL — stands in for a session on every data call. */
@@ -46,6 +47,7 @@ export default function PublicRailwayMap({
 }: PublicRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const region = useRegion();
+  const layerPrefs = useLayerPrefs();
   const dataAccess = useMemo(() => createPublicDataAccess(token, region.id), [token, region.id]);
 
   // Same rule as the interactive map: a single-country region pins the filter to
@@ -53,10 +55,6 @@ export default function PublicRailwayMap({
   const effectiveCountries = useMemo(
     () => (region.hasCountryFilter ? selectedCountries : regionCountryCodes(region.id)),
     [region, selectedCountries],
-  );
-
-  const [showScenicOutline, setShowScenicOutline] = useState<boolean>(
-    () => loadLayerPrefs().showScenicOutline,
   );
 
   const stationSearch = useStationSearch(region.id);
@@ -85,11 +83,11 @@ export default function PublicRailwayMap({
   useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, 0, 0);
   useLayerFilters(
     map,
-    routeEditor.showHeritage,
-    routeEditor.showSpecial,
+    layerPrefs.showHeritage,
+    layerPrefs.showSpecial,
     // The stored preference is shared across regions; one that offers no scenic
     // outline keeps it off regardless of what the other region left switched on.
-    showScenicOutline && region.hasScenicHighlight,
+    layerPrefs.showScenicOutline && region.hasScenicHighlight,
     mapLoaded,
   );
 
@@ -165,58 +163,12 @@ export default function PublicRailwayMap({
 
       {/* Progress Stats Box */}
       {routeEditor.progress && (
-        <div
-          className={`absolute bg-white p-3 rounded shadow-lg text-black z-10 ${
-            isMobile ? "bottom-10 left-3 text-xs" : "bottom-10 right-4"
-          }`}
-        >
-          <h3 className={`font-bold mb-2 ${isMobile ? "text-xs" : "text-sm"}`}>Completed</h3>
-          <div className={`font-semibold ${isMobile ? "text-sm" : "text-lg"}`}>
-            {routeEditor.progress.completedKm}/{routeEditor.progress.totalKm} km
-          </div>
-          <div className={`font-bold text-green-600 ${isMobile ? "text-lg" : "text-2xl"}`}>
-            {routeEditor.progress.percentage}%
-          </div>
-          <div className="text-xs text-gray-600 mt-1">
-            {routeEditor.progress.completedRoutes}/{routeEditor.progress.totalRoutes} (
-            {routeEditor.progress.routePercentage}%) routes
-          </div>
-          <div className="mt-2 pt-2 border-t border-gray-200">
-            <label className="flex items-center gap-2 cursor-pointer text-xs mb-2">
-              <input
-                type="checkbox"
-                checked={routeEditor.showHeritage}
-                onChange={() => routeEditor.toggleShowHeritage()}
-                className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              />
-              <span>Show heritage &amp; tourist lines</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-xs mb-2">
-              <input
-                type="checkbox"
-                checked={routeEditor.showSpecial}
-                onChange={() => routeEditor.toggleShowSpecial()}
-                className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              />
-              <span>{region.id === "japan" ? "Show non-JR lines" : "Show special services"}</span>
-            </label>
-            {/* Not every region offers the scenic outline — see Region.hasScenicHighlight. */}
-            {region.hasScenicHighlight && (
-              <label className="flex items-center gap-2 cursor-pointer text-xs">
-                <input
-                  type="checkbox"
-                  checked={showScenicOutline}
-                  onChange={(e) => {
-                    setShowScenicOutline(e.target.checked);
-                    saveLayerPref("showScenicOutline", e.target.checked);
-                  }}
-                  className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                />
-                <span>Highlight scenic lines</span>
-              </label>
-            )}
-          </div>
-        </div>
+        <MapProgressBox
+          progress={routeEditor.progress}
+          isMobile={isMobile}
+          // A shared map has no menu to move them into.
+          withLayerToggles
+        />
       )}
 
       {/* Station Search Box */}
