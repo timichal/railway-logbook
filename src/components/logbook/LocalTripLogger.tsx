@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import JourneyPlanner from "@/components/logbook/JourneyPlanner";
 import * as localStore from "@/lib/localStorage";
 import { useToast } from "@/lib/toast";
 import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
-import JourneyPlanner from "./JourneyPlanner";
 
 interface LocalTripLoggerProps {
   selectedRoutes: SelectedRoute[];

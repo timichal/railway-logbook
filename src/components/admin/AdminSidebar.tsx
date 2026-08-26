@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import AdminCreateRouteTab from "@/components/admin/AdminCreateRouteTab";
+import AdminNotesTab from "@/components/admin/AdminNotesTab";
+import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
 import { getFrequencyTags } from "@/lib/adminRouteActions";
 import type { UsageType } from "@/lib/constants";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
 import { tabBtn } from "@/lib/ui/buttonStyles";
-import AdminCreateRouteTab from "./AdminCreateRouteTab";
-import AdminNotesTab from "./AdminNotesTab";
-import AdminRoutesTab from "./AdminRoutesTab";
 
 interface AdminSidebarProps {
   selectedRouteId?: number | null;

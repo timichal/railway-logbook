@@ -1,6 +1,6 @@
 # Mobile UI — fix list
 
-Findings from a read of the mobile paths (`MainLayout`, `VectorRailwayMap`,
+Findings from a read of the mobile paths (`MainLayout`, `RailwayMap`,
 `UserSidebar`, `JourneyLogger`, `JourneyPlanner`, `useIsMobile`, `globals.css`),
 plus the installable-web-app work that belongs with them.
 

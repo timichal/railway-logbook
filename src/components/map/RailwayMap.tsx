@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
+import MapProgressBox from "@/components/map/MapProgressBox";
+import MobileBottomSheet from "@/components/ui/MobileBottomSheet";
 import type { User } from "@/lib/authActions";
 import { createDataAccess } from "@/lib/dataAccess";
 import {
@@ -38,11 +41,8 @@ import type {
   Station,
 } from "@/lib/types";
 import { optionRow } from "@/lib/ui/buttonStyles";
-import MapProgressBox from "./MapProgressBox";
-import MobileBottomSheet from "./MobileBottomSheet";
-import UserSidebar, { type ActiveTab } from "./UserSidebar";
 
-interface VectorRailwayMapProps {
+interface RailwayMapProps {
   className?: string;
   user: User | null;
   initialSelectedCountries: string[];
@@ -65,7 +65,7 @@ interface VectorRailwayMapProps {
  */
 const MAP_FURNITURE_MIN_HEIGHT_PX = 180;
 
-export default function VectorRailwayMap({
+export default function RailwayMap({
   className = "",
   user,
   initialSelectedCountries,
@@ -75,7 +75,7 @@ export default function VectorRailwayMap({
   onSidebarResize,
   isResizing,
   isMobile,
-}: VectorRailwayMapProps) {
+}: RailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapPane = useRef<HTMLDivElement>(null);
   const [furnitureFits, setFurnitureFits] = useState(true);

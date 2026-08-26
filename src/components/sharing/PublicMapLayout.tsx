@@ -2,15 +2,15 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import RegionSwitch from "@/components/ui/RegionSwitch";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/regions";
 import { btn } from "@/lib/ui/buttonStyles";
-import RegionSwitch from "./RegionSwitch";
 
 // Same reason as the interactive map: MapLibre can't be server-rendered.
-const PublicRailwayMap = dynamic(() => import("./PublicRailwayMap"), {
+const PublicRailwayMap = dynamic(() => import("@/components/sharing/PublicRailwayMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full flex items-center justify-center bg-gray-100">

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import ShareMapDialog from "@/components/sharing/ShareMapDialog";
+import RegionSwitch from "@/components/ui/RegionSwitch";
 import type { User } from "@/lib/authActions";
 import { useRegion } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
-import RegionSwitch from "./RegionSwitch";
-import ShareMapDialog from "./ShareMapDialog";
 
 interface NavbarProps {
   user: User | null;

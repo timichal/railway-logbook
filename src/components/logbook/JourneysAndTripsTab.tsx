@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import JourneyCard from "@/components/logbook/JourneyCard";
+import TripCard from "@/components/logbook/TripCard";
 import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
 import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
-import MergedJourneyCard from "./MergedJourneyCard";
-import MergedTripCard from "./MergedTripCard";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -245,7 +245,7 @@ export default function JourneysAndTripsTab({
             if (item.type === "trip") {
               const isOpen = openItem?.type === "trip" && openItem.id === item.trip.id;
               return (
-                <MergedTripCard
+                <TripCard
                   key={`trip-${item.trip.id}`}
                   trip={item.trip}
                   initialJourneys={item.journeys}
@@ -265,7 +265,7 @@ export default function JourneysAndTripsTab({
 
             const isOpen = openItem?.type === "journey" && openItem.id === item.journey.id;
             return (
-              <MergedJourneyCard
+              <JourneyCard
                 key={`journey-${item.journey.id}`}
                 journey={item.journey}
                 availableTrips={availableTrips}

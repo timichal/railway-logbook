@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import MapProgressBox from "@/components/map/MapProgressBox";
 import { createPublicDataAccess } from "@/lib/dataAccess";
 import {
   createPublicNotesSource,
@@ -19,7 +20,6 @@ import { useRegion } from "@/lib/regionContext";
 import { regionCountryCodes } from "@/lib/regions";
 import type { Station } from "@/lib/types";
 import { optionRow } from "@/lib/ui/buttonStyles";
-import MapProgressBox from "./MapProgressBox";
 
 interface PublicRailwayMapProps {
   /** Sharing token from the URL — stands in for a session on every data call. */
@@ -102,7 +102,7 @@ export default function PublicRailwayMap({
     if (!map.current || !mapLoaded) return;
 
     let cleanup: (() => void) | undefined;
-    // See VectorRailwayMap: a setup deferred to "idle" outlives the effect run
+    // See RailwayMap: a setup deferred to "idle" outlives the effect run
     // that queued it, so it has to be cancellable or a re-run leaves two live sets
     // of handlers behind.
     let cancelled = false;

@@ -3,8 +3,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import AdminSidebar from "@/components/AdminSidebar";
-import Navbar from "@/components/Navbar";
+import AdminSidebar from "@/components/admin/AdminSidebar";
+import Navbar from "@/components/layout/Navbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
@@ -17,7 +17,7 @@ import type { RailwayPart } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
-const VectorAdminMap = dynamic(() => import("./VectorAdminMap"), {
+const AdminMap = dynamic(() => import("@/components/admin/AdminMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
@@ -320,7 +320,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
         )}
 
         <div className="flex-1 overflow-hidden">
-          <VectorAdminMap
+          <AdminMap
             className="w-full h-full"
             selectedRouteId={selectedRouteId}
             onRouteSelect={handleRouteSelect}

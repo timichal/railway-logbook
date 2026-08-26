@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import JourneyPlanner from "@/components/logbook/JourneyPlanner";
 import { createJourney } from "@/lib/journeyActions";
 import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
@@ -8,7 +9,6 @@ import type { TripWithStats } from "@/lib/tripActions";
 import { getAllTrips } from "@/lib/tripActions";
 import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
-import JourneyPlanner from "./JourneyPlanner";
 
 interface JourneyLoggerProps {
   selectedRoutes: SelectedRoute[];

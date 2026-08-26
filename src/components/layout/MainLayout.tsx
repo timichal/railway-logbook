@@ -2,18 +2,18 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import MenuSheet, { type MenuView } from "@/components/layout/MenuSheet";
+import Navbar from "@/components/layout/Navbar";
+import type { ActiveTab } from "@/components/logbook/UserSidebar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import type { User } from "@/lib/authActions";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/regions";
-import MenuSheet, { type MenuView } from "./MenuSheet";
-import Navbar from "./Navbar";
-import type { ActiveTab } from "./UserSidebar";
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
-const VectorRailwayMap = dynamic(() => import("./VectorRailwayMap"), {
+const RailwayMap = dynamic(() => import("@/components/map/RailwayMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
@@ -63,7 +63,7 @@ export default function MainLayout({
         />
 
         <main className="flex-1 overflow-hidden">
-          <VectorRailwayMap
+          <RailwayMap
             className="w-full h-full"
             user={user}
             initialSelectedCountries={initialSelectedCountries}

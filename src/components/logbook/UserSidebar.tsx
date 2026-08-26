@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
+import CountriesStatsTab from "@/components/logbook/CountriesStatsTab";
+import JourneyLogger from "@/components/logbook/JourneyLogger";
+import JourneysAndTripsTab from "@/components/logbook/JourneysAndTripsTab";
+import LocalJourneyLogTab from "@/components/logbook/LocalJourneyLogTab";
+import LocalTripLogger from "@/components/logbook/LocalTripLogger";
 import type { User } from "@/lib/authActions";
 import type { DataAccess } from "@/lib/dataAccess";
 import { useRegion } from "@/lib/regionContext";
@@ -12,11 +17,6 @@ import type {
   Station,
 } from "@/lib/types";
 import { tabBtn } from "@/lib/ui/buttonStyles";
-import CountriesStatsTab from "./CountriesStatsTab";
-import JourneyLogger from "./JourneyLogger";
-import JourneysAndTripsTab from "./JourneysAndTripsTab";
-import LocalJourneyLogTab from "./LocalJourneyLogTab";
-import LocalTripLogger from "./LocalTripLogger";
 
 /**
  * The sidebar is the three logging tabs and nothing else. "howto"/"notes" used to be

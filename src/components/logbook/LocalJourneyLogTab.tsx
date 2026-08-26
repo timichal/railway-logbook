@@ -148,7 +148,7 @@ export default function LocalJourneyLogTab({
 
   // Map route clicks (while a journey is open) toggle that route in/out of the
   // journey. Kept in a ref so the stable callback registered with the map always
-  // sees fresh state, mirroring MergedJourneyCard's approach.
+  // sees fresh state, mirroring JourneyCard's approach.
   const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | null>(null);
   handleMapRouteClickRef.current = (route: SelectedRoute) => {
     if (!viewedJourneyId) return;

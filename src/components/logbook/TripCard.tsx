@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import JourneyCard from "@/components/logbook/JourneyCard";
 import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type { JourneyInTrip, TripWithStats } from "@/lib/tripActions";
@@ -13,9 +14,8 @@ import {
 } from "@/lib/tripActions";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/types";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
-import MergedJourneyCard from "./MergedJourneyCard";
 
-interface MergedTripCardProps {
+interface TripCardProps {
   trip: TripWithStats;
   initialJourneys: JourneyInTrip[];
   availableTrips: TripWithStats[];
@@ -32,7 +32,7 @@ interface MergedTripCardProps {
   onJourneyEditEnd?: () => void;
 }
 
-export default function MergedTripCard({
+export default function TripCard({
   trip,
   initialJourneys,
   availableTrips,
@@ -45,7 +45,7 @@ export default function MergedTripCard({
   onNestedJourneyOpenChange,
   onJourneyEditStart,
   onJourneyEditEnd,
-}: MergedTripCardProps) {
+}: TripCardProps) {
   const regionId = useRegionId();
   const { showSuccess, showError } = useToast();
 
@@ -315,7 +315,7 @@ export default function MergedTripCard({
               <div className="space-y-2">
                 {journeys.map((journey) => (
                   <div key={journey.id} className="relative">
-                    <MergedJourneyCard
+                    <JourneyCard
                       journey={journey}
                       availableTrips={availableTrips}
                       isOpen={openNestedJourneyId === journey.id}

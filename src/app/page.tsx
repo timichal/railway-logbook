@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import MainLayout from "@/components/MainLayout";
+import MainLayout from "@/components/layout/MainLayout";
 import { getUser, logout } from "@/lib/authActions";
 import { SUPPORTED_COUNTRIES } from "@/lib/constants";
 import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/regions";

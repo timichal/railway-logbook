@@ -1,8 +1,8 @@
 "use client";
 
+import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import type { LayerPrefs } from "@/lib/map/layerPrefs";
 import type { Region } from "@/lib/regions";
-import ToggleSwitch from "./ToggleSwitch";
 
 /**
  * The user map's three layer switches, in whichever container asks for them: the

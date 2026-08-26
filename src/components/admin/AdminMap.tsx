@@ -2,6 +2,7 @@
 
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
+import AdminLayerControls from "@/components/admin/AdminLayerControls";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
 import {
@@ -34,7 +35,6 @@ import {
 } from "@/lib/map/utils/userRouteStyling";
 import { useRegionId } from "@/lib/regionContext";
 import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/types";
-import AdminLayerControls from "./AdminLayerControls";
 
 // The base layer draws Regular routes solid; Heritage (dotted) and Special
 // (dashed) get their own layers so the dash/dot gaps aren't filled by a solid
@@ -102,7 +102,7 @@ function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | n
   }
 }
 
-interface VectorAdminMapProps {
+interface AdminMapProps {
   className?: string;
   onCoordinateClick?: (coordinate: [number, number]) => void;
   onRouteSelect?: (routeId: number | null) => void;
@@ -126,7 +126,7 @@ interface VectorAdminMapProps {
   showError: (message: string) => void;
 }
 
-export default function VectorAdminMap({
+export default function AdminMap({
   className = "",
   onCoordinateClick,
   onRouteSelect,
@@ -141,7 +141,7 @@ export default function VectorAdminMap({
   onNotesChanged,
   showSuccess,
   showError,
-}: VectorAdminMapProps) {
+}: AdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);

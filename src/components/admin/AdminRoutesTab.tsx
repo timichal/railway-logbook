@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import RouteEditForm from "@/components/admin/RouteEditForm";
+import RoutesList from "@/components/admin/RoutesList";
 import {
   deleteRailwayRoute,
   duplicateRailwayRoute,
@@ -13,8 +15,6 @@ import type { LineClass, UsageType } from "@/lib/constants";
 import { useRegion } from "@/lib/regionContext";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import type { RailwayRoute } from "@/lib/types";
-import RouteEditForm from "./RouteEditForm";
-import RoutesList from "./RoutesList";
 
 interface AdminRoutesTabProps {
   selectedRouteId?: number | null;

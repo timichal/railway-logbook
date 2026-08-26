@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import LayerToggles from "@/components/map/LayerToggles";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import type { UserProgress } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
-import LayerToggles from "./LayerToggles";
 
 /**
  * The map's bottom-corner progress box and its layer switches.
  *
- * Shared by `VectorRailwayMap` and `PublicRailwayMap` rather than copied into both:
+ * Shared by `RailwayMap` and `PublicRailwayMap` rather than copied into both:
  * a shared map showing different numbers or different toggles from its owner's is a
  * bug nobody notices until someone opens the link.
  *

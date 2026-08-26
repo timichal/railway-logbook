@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
+import HowToUseArticle from "@/components/articles/HowToUseArticle";
+import RailwayNotesArticle from "@/components/articles/RailwayNotesArticle";
+import LoginForm from "@/components/auth/LoginForm";
+import RegisterForm from "@/components/auth/RegisterForm";
+import LayerToggles from "@/components/map/LayerToggles";
+import RegionSwitch from "@/components/ui/RegionSwitch";
 import type { User } from "@/lib/authActions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
-import HowToUseArticle from "./HowToUseArticle";
-import LayerToggles from "./LayerToggles";
-import LoginForm from "./LoginForm";
-import RailwayNotesArticle from "./RailwayNotesArticle";
-import RegionSwitch from "./RegionSwitch";
-import RegisterForm from "./RegisterForm";
 
 /**
  * What the hamburger opens: one menu, at every width — a full-screen sheet on a

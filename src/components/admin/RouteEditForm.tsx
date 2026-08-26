@@ -1,12 +1,12 @@
 "use client";
 
+import TagInput from "@/components/ui/TagInput";
 import { type LineClass, lineClassOptions, type UsageType } from "@/lib/constants";
 import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 import { useRegion } from "@/lib/regionContext";
 import { regionUsageOptions } from "@/lib/regions";
 import type { RailwayRoute } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
-import TagInput from "./TagInput";
 
 interface EditFormData {
   /** Line name, only edited (and required) where the region names its lines. */

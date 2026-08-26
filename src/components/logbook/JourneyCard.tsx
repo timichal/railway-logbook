@@ -42,7 +42,7 @@ interface JourneyDisplay extends Journey {
   total_distance: string;
 }
 
-interface MergedJourneyCardProps {
+interface JourneyCardProps {
   journey: JourneyDisplay;
   availableTrips: TripWithStats[];
   // Tells parent whether this card is the currently-open one. Parent enforces single-open.
@@ -59,7 +59,7 @@ interface MergedJourneyCardProps {
   nested?: boolean;
 }
 
-export default function MergedJourneyCard({
+export default function JourneyCard({
   journey,
   availableTrips,
   isOpen,
@@ -70,7 +70,7 @@ export default function MergedJourneyCard({
   onJourneyEditStart,
   onJourneyEditEnd,
   nested = false,
-}: MergedJourneyCardProps) {
+}: JourneyCardProps) {
   const { showSuccess, showError } = useToast();
 
   const [viewedRoutes, setViewedRoutes] = useState<RailwayRoute[]>([]);

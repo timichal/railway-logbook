@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import AdminPageClient from "@/components/AdminPageClient";
+import AdminPageClient from "@/components/admin/AdminPageClient";
 import { getUser } from "@/lib/authActions";
 import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/regions";
 

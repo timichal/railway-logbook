@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import TagInput from "@/components/ui/TagInput";
 import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
 import type { UsageType } from "@/lib/constants";
@@ -10,7 +11,6 @@ import { regionUsageOptions } from "@/lib/regions";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
-import TagInput from "./TagInput";
 
 interface AdminCreateRouteTabProps {
   startingCoordinate: [number, number] | null;
