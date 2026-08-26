@@ -40,7 +40,26 @@ export function safeHref(value: unknown): string {
  * break") on one line — a badge broken across lines reads as two badges.
  */
 const BADGE_STYLE =
-  "display: inline-block; white-space: nowrap; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;";
+  "white-space: nowrap; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; line-height: 1.35;";
+
+/**
+ * The badges live in a wrapping flex row, so the space between them is one `gap`
+ * declaration instead of a leading space (or a `margin-right`) hand-added per
+ * badge — which is how neighbouring badges ended up touching — and a badge that
+ * wraps to a second line is spaced like the first.
+ */
+const BADGE_ROW_STYLE = "display: flex; flex-wrap: wrap; gap: 4px; align-items: center;";
+
+/**
+ * One block of the popup body below the badges (note, link, last journey). The
+ * rows carry their spacing on top rather than on the bottom, so the popup has no
+ * trailing gap whichever row happens to be last.
+ */
+export const POPUP_ROW_STYLE = "margin-top: 6px; line-height: 1.4;";
+
+/** The rule above the "most recent journey" line. */
+export const POPUP_DIVIDER =
+  '<hr style="margin: 8px 0 0; border: none; border-top: 1px solid #e5e7eb;" />';
 
 /**
  * The heading of a route's hover popup, shared by the user and admin maps so the
@@ -60,18 +79,20 @@ export function formatRouteTitle(
   const endpoints = `${escapeHtml(properties.from_station)} ⟷ ${escapeHtml(properties.to_station)}`;
   const name = REGIONS[regionId].hasRouteNames ? properties.name : null;
 
+  // Margins are set inline on both branches: `.railway-popup h3` in globals.css
+  // would otherwise space the user map's heading differently from the admin's.
   if (typeof name !== "string" || !name.trim()) {
-    return `<h3 style="font-weight: 700; font-size: 1.05rem; margin-bottom: 6px; color: black;">${endpoints}</h3>`;
+    return `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0 0 6px; color: black;">${endpoints}</h3>`;
   }
 
   return (
-    `<h3 style="font-weight: 700; font-size: 1.05rem; color: black;">${escapeHtml(name)}</h3>` +
-    `<div style="margin-bottom: 6px; color: black;">${endpoints}</div>`
+    `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0; color: black;">${escapeHtml(name)}</h3>` +
+    `<div style="margin: 0 0 6px; color: black;">${endpoints}</div>`
   );
 }
 
 /**
- * Format route metadata as color-coded badges for tooltips
+ * Format route metadata as color-coded badges for tooltips, as one wrapping row.
  */
 export function formatRouteMetadataBadges(
   properties: {
@@ -83,7 +104,7 @@ export function formatRouteMetadataBadges(
   /** Usage types are labelled per region — Japan calls them JR / non-JR lines. */
   regionId: RegionId,
 ): string {
-  let badges = "";
+  const badges: string[] = [];
 
   // Line class badge
   if (properties.line_class && properties.line_class !== "branch") {
@@ -91,17 +112,23 @@ export function formatRouteMetadataBadges(
     const isHighspeed = properties.line_class === "highspeed";
     const lcColor = isHighspeed ? "#ffffff" : "#1e40af";
     const lcBgColor = isHighspeed ? "#ef4444" : "#bfdbfe";
-    badges += ` <span style="${BADGE_STYLE} background-color: ${lcBgColor}; color: ${lcColor};">${lineClassLabel}</span>`;
+    badges.push(
+      `<span style="${BADGE_STYLE} background-color: ${lcBgColor}; color: ${lcColor};">${lineClassLabel}</span>`,
+    );
   }
 
   // Usage type badge (Regular=blue, Heritage=purple, Special=teal)
   const usageLabel = regionUsageLabel(regionId, properties.usage_type);
   const { color: usageColor, bgColor: usageBgColor } = getUsageBadgeColors(properties.usage_type);
-  badges += `<span style="${BADGE_STYLE} background-color: ${usageBgColor}; color: ${usageColor};">${usageLabel}</span>`;
+  badges.push(
+    `<span style="${BADGE_STYLE} background-color: ${usageBgColor}; color: ${usageColor};">${usageLabel}</span>`,
+  );
 
   // Scenic badge
   if (properties.scenic) {
-    badges += ` <span style="${BADGE_STYLE} background-color: #fbbf24; color: #78350f;">Scenic</span>`;
+    badges.push(
+      `<span style="${BADGE_STYLE} background-color: #fbbf24; color: #78350f;">Scenic</span>`,
+    );
   }
 
   // Frequency badges
@@ -110,14 +137,12 @@ export function formatRouteMetadataBadges(
       .slice(1, -1)
       .split(",")
       .map((f: string) => f.trim().replaceAll('"', ""));
-    badges += frequencies
-      .map(
-        (freq: string) =>
-          ` <span style="${BADGE_STYLE} background-color: #dcfce7; color: #166534; margin-right: 4px;">${escapeHtml(freq)}</span>`,
-      )
-      .join("");
-    badges += `<br />`;
+    for (const freq of frequencies) {
+      badges.push(
+        `<span style="${BADGE_STYLE} background-color: #dcfce7; color: #166534;">${escapeHtml(freq)}</span>`,
+      );
+    }
   }
 
-  return badges;
+  return `<div style="${BADGE_ROW_STYLE}">${badges.join("")}</div>`;
 }

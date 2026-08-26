@@ -5,6 +5,8 @@ import {
   escapeHtml,
   formatRouteMetadataBadges,
   formatRouteTitle,
+  POPUP_DIVIDER,
+  POPUP_ROW_STYLE,
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
 import type { RegionId } from "@/lib/regions";
@@ -94,12 +96,12 @@ export function setupUserMapInteractions(
 
     if (!properties) return;
 
+    // Title, badge row, then one block per piece of body text — each its own
+    // element rather than `<br />`-separated runs, so the note never continues
+    // the badge line.
     let popupContent = `<div class="railway-popup" style="color: black;">${formatRouteTitle(properties, region)}`;
 
-    let formattedDescription = "";
-
-    // Route metadata badges (usage type, line class, scenic, frequency)
-    formattedDescription += formatRouteMetadataBadges(
+    popupContent += formatRouteMetadataBadges(
       {
         usage_type: properties.usage_type,
         scenic: properties.scenic,
@@ -108,12 +110,13 @@ export function setupUserMapInteractions(
       },
       region,
     );
+
     if (properties.description) {
-      formattedDescription += `<b>Note:</b> ${escapeHtml(properties.description)}`;
+      popupContent += `<div style="${POPUP_ROW_STYLE}"><b>Note:</b> ${escapeHtml(properties.description)}</div>`;
     }
     const routeHref = safeHref(properties.link);
     if (routeHref) {
-      formattedDescription += `<br /><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span>`;
+      popupContent += `<div style="${POPUP_ROW_STYLE}"><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: #1d4ed8; text-decoration: underline;">Website</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span></div>`;
     }
 
     // `date` and `journey_name` are populated together from the most-recent
@@ -121,11 +124,10 @@ export function setupUserMapInteractions(
     // present or neither is.
     if (properties.date) {
       const dateStr = new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date));
-      formattedDescription += `<hr class="my-2" />`;
-      formattedDescription += `<span style="color: black;">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</span>`;
+      popupContent += POPUP_DIVIDER;
+      popupContent += `<div style="${POPUP_ROW_STYLE} color: #374151;">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</div>`;
     }
 
-    popupContent += `<div class="mb-2">${formattedDescription}</div>`;
     popupContent += `</div>`;
 
     // Remove old popup if exists

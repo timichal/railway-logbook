@@ -6,6 +6,7 @@ import {
   escapeHtml,
   formatRouteMetadataBadges,
   formatRouteTitle,
+  POPUP_ROW_STYLE,
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
 import type { RegionId } from "@/lib/regions";
@@ -208,10 +209,9 @@ export function setupAdminMapInteractions(
       const properties = feature.properties;
 
       if (properties) {
-        let formattedDescription = "";
-
-        // Route metadata badges (usage type, line class, scenic, frequency)
-        formattedDescription += formatRouteMetadataBadges(
+        // Same shape as the user map's popup (see userMapInteractions): the badge
+        // row spaces itself, and each piece of body text is its own block.
+        let formattedDescription = formatRouteMetadataBadges(
           {
             usage_type: properties.usage_type,
             scenic: properties.scenic,
@@ -221,11 +221,11 @@ export function setupAdminMapInteractions(
           region,
         );
         if (properties.description) {
-          formattedDescription += `<b>Note:</b> ${escapeHtml(properties.description)}`;
+          formattedDescription += `<div style="${POPUP_ROW_STYLE}"><b>Note:</b> ${escapeHtml(properties.description)}</div>`;
         }
         const routeHref = safeHref(properties.link);
         if (routeHref) {
-          formattedDescription += `<br /><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Website</a>`;
+          formattedDescription += `<div style="${POPUP_ROW_STYLE}"><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: #1d4ed8; text-decoration: underline;">Website</a></div>`;
         }
 
         if (routeHoverPopup) {
@@ -239,12 +239,9 @@ export function setupAdminMapInteractions(
           className: "railway-route-hover-popup",
         })
           .setLngLat(e.lngLat)
-          .setHTML(`
-            <div style="color: black;">
-              ${formatRouteTitle(properties, region)}
-              ${formattedDescription}
-            </div>
-          `)
+          .setHTML(
+            `<div style="color: black;">${formatRouteTitle(properties, region)}${formattedDescription}</div>`,
+          )
           .addTo(mapInstance);
       }
     }
