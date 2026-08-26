@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/database/init/*.sql", "!**/osmium-scripts"]
+    "includes": ["**", "!**/database/init/*.sql", "!**/osmium-scripts", "!**/mobile-spike"]
   },
   "formatter": {
     "enabled": true,

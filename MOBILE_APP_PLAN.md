@@ -11,6 +11,91 @@ is a distinct app in the two stores.
 
 ---
 
+## STATUS — read this first
+
+**This file is the handoff document between sessions.** Keep it current: when a
+phase moves, edit the phase's own section rather than appending a note elsewhere,
+and add a line to the Session log at the bottom.
+
+| | |
+| --- | --- |
+| **Branch** | `mobile-app` — all of this work lives here, not on `main` |
+| **Current phase** | Phase 0 — spike **built, not yet run** |
+| **Blocked on** | Michal running the spike on a physical iPhone (Mac required for the build) |
+| **Next after that** | Record the findings in Phase 0 below, then decide go / no-go before starting Phase 1 |
+
+**On the Mac:** `git fetch && git checkout mobile-app`, then follow
+`mobile-spike/README.md` from the top — it assumes no mobile tooling is installed.
+
+### Done
+
+- **Phase 0 spike written** — `mobile-spike/`, with its own README covering setup
+  from scratch, how to read the HUD, and a findings template to fill in. It
+  typechecks clean (`cd mobile-spike && npx tsc --noEmit`) but has never been
+  built or run on a device.
+
+### Hardware reality (differs from what this plan originally assumed)
+
+Available: a **Mac**, an **iPhone**, and the Windows PC this repo lives on. **No
+Android device.** None of them set up for mobile development yet — no Xcode, no
+Android Studio, no Expo tooling.
+
+Two consequences, both good news against the original plan:
+
+- The long "You do not need a Mac" section below is no longer a constraint being
+  worked around. Build iOS locally on the Mac with Xcode; EAS becomes a
+  convenience rather than a necessity, and the $99/year Apple account is only
+  needed to *ship*, not to test on your own device.
+- **Android frame rate cannot be measured yet.** An emulator answers "do the
+  tiles load and the expressions parse on the Android renderer", which is worth
+  having, but any fps number it produces is meaningless. Report it as unanswered
+  rather than guessing.
+
+### Corrections to this plan, found while building the spike
+
+These were wrong in the original text and are fixed in place below. Listed here
+so a future session knows they were checked against the real library
+(`@maplibre/maplibre-react-native` **11.3.7**, Expo SDK **57**) rather than
+assumed.
+
+- **`localizeLabels` does not exist.** The plan claimed native "exposes label
+  localization on the MapView directly" — true of rnmapbox, not of this binding.
+  So `latinizeLabels` **does** port over, which matters for Japan. It works
+  because `mapStyle` takes `string | StyleSpecification`: fetch the style,
+  process it exactly as the web app does, hand over the object.
+- **Expo Go cannot run this app.** The binding ships native code, so every run
+  needs a development build (`expo run:ios`) plus its config plugin in
+  `app.json`. This is the single biggest practical difference from ordinary Expo
+  work.
+- **The v11 component names are different.** `<MapView>` is `<Map>`;
+  the pieces are `<Map mapStyle>`, `<Camera initialViewState>`,
+  `<VectorSource tiles>`, `<Layer type source-layer paint layout>`.
+- **`LngLatBounds` is flat `[west, south, east, north]`**, not the web app's
+  nested `[[w, s], [e, n]]`. A silent porting trap in `regions.ts`.
+- **The styling ports better than "nearly verbatim".** `<Layer>`'s props *are*
+  `LayerSpecification` (with `id`/`source` made optional, plus
+  `beforeId`/`afterId`/`layerIndex` — so the web app's `moveLayer` ordering has a
+  declarative equivalent). And the binding depends on
+  `@maplibre/maplibre-gl-style-spec`, the same package `maplibre-gl`'s types come
+  from, so the ported expressions typecheck against the **identical**
+  `ExpressionSpecification`. The port can be properly typed, not loosely.
+
+### Two repo-hygiene facts the spike introduced
+
+Both are needed and neither is optional:
+
+- `tsconfig.json` **excludes `mobile-spike`**. The root `include` is `**/*.ts`,
+  so without it React Native's global `setTimeout` declaration leaks into the web
+  app's program and breaks `JourneyPlanner.tsx` and `useStationSearch.ts` with
+  `Type 'number' is not assignable to type 'Timeout'`.
+- `biome.json` excludes it too — different toolchain and conventions, and the
+  `next` lint domain has nothing useful to say about RN code.
+- `mobile-spike/metro.config.js` pins `nodeModulesPaths` and sets
+  `disableHierarchicalLookup`, because the spike sits inside a repo whose parent
+  `node_modules` carries a different React. Without it Metro can load two copies.
+
+---
+
 ## Why native, and the one thing that justifies it
 
 Most of what a wrapper or an installable web app gives you, the web app already
@@ -39,10 +124,15 @@ These are plain data, style objects, or pure logic — no DOM, no browser:
 - `src/lib/map/style.ts` — `COLORS`, `WIDTHS`, `CIRCLES`, `LABELS`, `OPACITIES`.
   The single source of truth stays the single source of truth.
 - `src/lib/map/userMapLayers.ts` — the layer stack and paint configs. MapLibre
-  style expressions are the same JSON on native.
+  style expressions are the same JSON on native, and the same *types*: the
+  binding depends on `@maplibre/maplibre-gl-style-spec`, which is where
+  `maplibre-gl`'s `ExpressionSpecification` comes from too. The whole ported
+  stack in `mobile-spike/src/railwayStyle.ts` typechecks against it unchanged.
 - `src/lib/map/utils/userRouteStyling.ts`, `src/lib/map/utils/distance.ts`.
 - `src/lib/regions.ts`, `routeCoverage.ts`, `constants.ts`, `types.ts`,
-  `countryUtils.ts`, `coordinateUtils.ts`.
+  `countryUtils.ts`, `coordinateUtils.ts`. One trap in `regions.ts`: the
+  binding's `LngLatBounds` is flat `[west, south, east, north]`, so `bounds`
+  needs converting rather than passing through.
 - `src/lib/routePathFinder.ts` stays **server-side** and is reached over HTTP —
   it needs Postgres and the in-memory graph cache, neither of which belongs on a
   phone.
@@ -52,8 +142,10 @@ These are plain data, style objects, or pure logic — no DOM, no browser:
 - **Every hook in `src/lib/map/hooks/`** — `useMapLibre`, `useRouteEditor`,
   `useStationSearch`, `useRouteHighlighting`, `useCoverageOverlay`,
   `useLayerFilters`, `useMapTileRefresh`. The RN binding is declarative
-  (`<MapView>`, `<VectorSource>`, `<LineLayer>`) rather than the imperative
-  `map.addLayer` / `moveLayer` / `setFilter` these are built on.
+  (`<Map>`, `<Camera>`, `<VectorSource>`, `<Layer>`) rather than the imperative
+  `map.addLayer` / `moveLayer` / `setFilter` these are built on. Layer *ordering*
+  survives the move: `<Layer>` takes `beforeId` / `afterId` / `layerIndex`, which
+  is what the coverage overlay's repeated `moveLayer` becomes.
 - **`src/lib/map/interactions/userMapInteractions.ts`** — `map.on("click")` plus
   `queryRenderedFeatures` becomes `onPress` on the individual layers. This is
   mostly a simplification: the station-wins-over-route special case exists
@@ -63,10 +155,15 @@ These are plain data, style objects, or pure logic — no DOM, no browser:
   the HTML-string machinery goes away entirely and `escapeHtml` with it. Keep
   `safeHref`'s http(s) check, though: it still guards `Linking.openURL` against
   a route link edited by a third party.
-- **`basemap.ts`** — the OpenFreeMap liberty URL carries over, but the Latin-label
-  rewrite does not need to: MapLibre Native exposes label localization on the
-  MapView directly. The POI-layer drop, the buildings flattening and the fade
-  layer are all still wanted, applied against the native style object.
+- **`basemap.ts`** — ports almost entirely, and more of it than first thought.
+  ~~The Latin-label rewrite does not need to carry over: MapLibre Native exposes
+  label localization on the MapView directly.~~ **Wrong** — that is rnmapbox's
+  `localizeLabels`; this binding has no such prop, so `latinizeLabels` carries
+  over with everything else. All four transforms (POI drop, buildings flattening,
+  Latin labels, fade layer) apply to a fetched style object which is then handed
+  to `<Map mapStyle>`, since it accepts `string | StyleSpecification`. Confirmed
+  working shape in `mobile-spike/src/basemapStyle.ts`; whether the labels *render*
+  in Latin is a Phase 0 question below.
 - **The whole component tree.** No DOM, no CSS. **NativeWind** gives you Tailwind
   class names in RN, which makes this mostly transcription rather than redesign —
   and the web app's mobile decisions (bottom sheet, tap-to-inspect, 44pt targets;
@@ -126,16 +223,51 @@ there is no `window`; this becomes a build-time config constant per environment.
 Estimates assume **part-time work** (evenings and weekends) by someone strong in
 JS/React and new to RN, vibe-coding with an assistant. Full-time, halve them.
 
-### Phase 0 — Spike, before committing (2–3 days)
+### Phase 0 — Spike, before committing (2–3 days) — **BUILT, NOT RUN**
 
-Do not skip this. Build a throwaway Expo app that shows the liberty basemap plus
-**one** Martin vector layer of railway routes, on a real iPhone and a real
-Android device. It answers the two questions that decide the whole project: does
-the tile server behave against the native SDK, and does a 5000-route z4 tile
-render at an acceptable frame rate on a mid-range phone.
+Do not skip this. It answers the two questions that decide the whole project:
+does the tile server behave against the native SDK, and does a 5000-route z4 tile
+render at an acceptable frame rate on a phone. If either answer is bad, that is
+worth knowing for three days rather than three weeks.
 
-If either answer is bad, that is worth knowing for three days rather than three
-weeks.
+**The spike is written: `mobile-spike/`.** Its own `README.md` has the
+from-scratch setup for the Mac, how to read the on-screen meter, and the findings
+template. It went slightly beyond "one layer" because the extra layers cost
+almost nothing and each answers something: the real six-layer stack, both
+regions, station labels (the glyph path), and a toggle for `?user_id=1` — which
+is what turns on the tile's per-user `LATERAL` join and `user_fully_ridden_routes`,
+the most expensive part of the query.
+
+**Already answered, from the desk:**
+
+- Production tiles are live over HTTPS and Martin's catalog lists all six tile
+  functions — so the plan's "tiles are already fine" holds at the transport level.
+- **A z4 route tile is 789 KB** of protobuf
+  (`/tiles/railway_routes_tile/4/8/5`). That is the number question 2 is really
+  about.
+- The ported styling typechecks against the same style spec the web app uses (see
+  the corrections above).
+
+**To answer on the device — fill this in:**
+
+| Question | Answer |
+| --- | --- |
+| Route tiles load over HTTPS at all? Any `onDidFailLoadingMap`? | |
+| Does it look like the web app — same colours, same relative line weights? | |
+| Station labels in bold Noto, or a substituted system font? | |
+| Japan: place names in **Latin script** (the `latinizeLabels` port) or kanji? | |
+| Heritage layer renders as round dots? Special as dashes? | |
+| Europe z4, panning: fps with `routes` off / on | |
+| Europe z8, panning: fps with `routes` off / on | |
+| Japan z6, panning: fps with `routes` off / on | |
+| Pinch-zoom fps with `routes` on | |
+| Does `my rides` visibly slow the first paint? | |
+| Subjective with the meter off: smooth / acceptable / bad | |
+| Android (emulator only — tiles/expressions/glyphs, **not** fps) | |
+| Anything that surprised you | |
+
+**Then decide, and write the decision here:** go / no-go, and if go, whether
+anything about Phases 3 and 5 needs re-scoping in light of what the numbers say.
 
 ### Phase 1 — HTTP API layer (1–1.5 weeks)
 
@@ -187,25 +319,36 @@ See requirements below. Budget for one rejection round on the Apple side.
 
 ## Requirements and costs
 
-### You do not need a Mac
+### You have a Mac, so use it
 
-Worth stating plainly, since the dev machine here is Windows. **EAS Build**
-compiles iOS binaries in the cloud, and **EAS Submit** uploads them — so iOS
-shipping is possible from Windows. Two consequences to plan around:
+This section originally argued that iOS shipping is possible from Windows alone
+via **EAS Build** (cloud compilation) and **EAS Submit**. That remains true and is
+worth keeping as the fallback — but it is no longer the plan, because a Mac is
+available. Building locally with Xcode is faster than round-tripping to a cloud
+builder and costs nothing.
 
-- There is **no iOS Simulator on Windows** (it is macOS-only). iOS testing means
-  a physical iPhone, via the Expo dev client or TestFlight. The Android emulator
-  runs on Windows fine.
-- Cloud builds are minutes each and metered on the free tier. Budget for either
-  patience or a paid EAS tier during the heavy phases.
+- **Development builds are mandatory, not optional.** `@maplibre/maplibre-react-native`
+  ships native code and is not part of the Expo SDK, so **Expo Go cannot run this
+  app** at any point in the project. Every device run is `expo run:ios` /
+  `expo run:android` (or an EAS build). Plan the tooling setup accordingly — see
+  `mobile-spike/README.md`, which has the from-scratch Xcode/CocoaPods steps.
+- Testing on your own iPhone needs only a **free** Apple ID in Xcode; its
+  provisioning profiles expire after 7 days, which is fine for development. The
+  $99/year Apple Developer Program is for TestFlight and the store, i.e. Phase 6.
+- The **iOS Simulator** works and is fine for correctness, but it renders on the
+  Mac's GPU — **any frame-rate number from it is meaningless.** Same for the
+  Android emulator. Performance questions need real hardware, which for Android
+  means acquiring a device.
+- If you do fall back to EAS: cloud builds are minutes each and metered on the
+  free tier, so budget for either patience or a paid tier during Phases 3 and 5.
 
 ### Per platform
 
 | | iOS | Android |
 | --- | --- | --- |
-| Developer account | Apple Developer Program, **$99/year** | Google Play, **$25 one-time** |
-| Build from Windows | EAS Build (cloud) | EAS Build, or locally with Android Studio |
-| Testing | physical device (no simulator on Windows) | emulator or device |
+| Developer account | Apple Developer Program, **$99/year** (Phase 6 only) | Google Play, **$25 one-time** |
+| Build | locally on the Mac with Xcode; EAS Build as fallback | EAS Build, or locally with Android Studio |
+| Testing | iPhone available ✓ (Simulator for correctness only) | **no device yet** — emulator only, so fps unmeasurable |
 | Review | slower, stricter; expect a rejection round | faster, laxer |
 | Store paperwork | screenshots at several sizes, privacy manifest, privacy policy URL | data safety form, target-API-level requirements |
 
@@ -214,7 +357,7 @@ accounts — which this one does.
 
 ### Also needed
 
-- A physical iPhone and a physical Android device for real testing.
+- A physical **Android device** — the one hardware gap. The iPhone is covered.
 - Location-permission strings that explain *why*, for both stores.
 - The API from Phase 1 deployed and versioned — once an app binary is in the
   wild, its API cannot break. Version the routes from day one.
@@ -237,3 +380,20 @@ accounts — which this one does.
   move off server actions onto the same HTTP API. Tempting for consistency, but
   it is a large refactor of working code for no user-visible gain. Recommend not
   doing it — let the two clients share the query modules, not the transport.
+
+---
+
+## Session log
+
+Newest last. One line per session: what moved, and what the next session should
+pick up. Keep it short — the phase sections carry the detail.
+
+- **2026-08-27** — Started the project. Verified the library landscape against
+  the real packages (`@maplibre/maplibre-react-native` 11.3.7, Expo SDK 57) and
+  corrected five wrong assumptions in this plan, the `localizeLabels` one being
+  the consequential one. Built the Phase 0 spike in `mobile-spike/`; it
+  typechecks but has never been run. Added the `tsconfig`/`biome` exclusions it
+  requires. **Next:** run it on the iPhone from the Mac, fill in the Phase 0
+  findings table, decide go / no-go. Nothing has been built or run on a device
+  yet, so any Phase 0 answer below that is still blank is genuinely unknown —
+  don't infer one from the fact that the code typechecks.

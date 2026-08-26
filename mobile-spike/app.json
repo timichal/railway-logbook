@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Railway Spike",
+    "slug": "railway-logbook-spike",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "cz.zlatkovsky.railmap.spike",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "cz.zlatkovsky.railmap.spike",
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": ["@maplibre/maplibre-react-native"]
+  }
+}
