@@ -8,12 +8,14 @@ import {
 } from "../utils/userRouteStyling";
 
 /**
- * Each highlight set is drawn as three overlay sublayers — one per usage type —
- * so the highlight matches the route's own style instead of painting a solid bar
- * over it: Regular gets a fat solid line, Heritage a dotted line, Special a
- * dashed line. The dotted/dashed overlays reuse the exact width + dash of the
- * base route layers (dasharray is in line-width multiples, so matching the width
- * makes the highlight dots/dashes line up with the route's). The two base ids
+ * Each highlight set is drawn as one overlay sublayer per usage type, so the
+ * highlight matches the route's own style instead of painting a solid bar over
+ * it: Regular gets a fat solid line, Heritage a dotted line, Special a dashed
+ * line. The dotted/dashed overlays reuse the exact width + dash of the base
+ * route layers (dasharray is in line-width multiples, so matching the width
+ * makes the highlight dots/dashes line up with the route's) — and each carries a
+ * translucent solid casing underneath to make up for how little of the line a
+ * dashed highlight actually covers (see syncHighlightOverlay). The two base ids
  * are `highlighted_routes` (planner/view) and `selected_routes_highlight`
  * (Route Logger selection).
  */
@@ -25,6 +27,8 @@ type HighlightVariant = {
   width: maplibregl.ExpressionSpecification | number;
   dash?: number[];
   roundCap?: boolean;
+  /** Draw a translucent solid line of the highlight colour underneath (see below). */
+  casing?: boolean;
 };
 
 function highlightVariants(): HighlightVariant[] {
@@ -38,6 +42,7 @@ function highlightVariants(): HighlightVariant[] {
       width: getUserRouteHeritageWidthExpression(),
       dash: [...DASHES.heritage],
       roundCap: true,
+      casing: true,
     },
     // Special: dashed, matching the base special layer's width + dash.
     {
@@ -45,18 +50,31 @@ function highlightVariants(): HighlightVariant[] {
       usageType: 2,
       width: getUserRouteWidthExpression(),
       dash: [...DASHES.special],
+      casing: true,
     },
   ];
 }
 
 /** All overlay layer ids managed here — used elsewhere to remove them before a
- * source rebuild and to include them in route hit-testing. */
+ * source rebuild and to include them in route hit-testing. The casings are wide
+ * and solid, which also gives Heritage and Special routes the generous hit area
+ * that railway_routes_click provides for Regular ones. */
 export const HIGHLIGHT_LAYER_IDS = HIGHLIGHT_BASE_IDS.flatMap((base) =>
-  highlightVariants().map((v) => `${base}_${v.suffix}`),
+  highlightVariants().flatMap((v) =>
+    v.casing ? [`${base}_${v.suffix}_casing`, `${base}_${v.suffix}`] : [`${base}_${v.suffix}`],
+  ),
 );
 
 /**
  * Add/update/remove the three overlay sublayers for one highlight set.
+ *
+ * Heritage and Special get a fourth-and-fifth layer between them: a wide,
+ * translucent, *solid* casing under the dashed/dotted overlay. Matching the
+ * route's own dash and width is what keeps the type readable, but it also means
+ * the highlight covers as little of the map as the route does — a thin dashed
+ * orange line over a thin dashed red one, which is barely a difference at all.
+ * The casing restores the "this one is selected" reading along the whole length
+ * while the dashes on top, at full opacity, still say which type it is.
  */
 function syncHighlightOverlay(
   m: maplibregl.Map,
@@ -66,8 +84,11 @@ function syncHighlightOverlay(
 ): void {
   for (const v of highlightVariants()) {
     const layerId = `${baseId}_${v.suffix}`;
+    const casingId = `${layerId}_casing`;
 
     if (ids.length === 0) {
+      // Casing first: removing the dash layer first would leave it briefly alone
+      if (m.getLayer(casingId)) m.removeLayer(casingId);
       if (m.getLayer(layerId)) m.removeLayer(layerId);
       continue;
     }
@@ -79,9 +100,30 @@ function syncHighlightOverlay(
     ];
 
     if (m.getLayer(layerId)) {
+      if (m.getLayer(casingId)) {
+        m.setPaintProperty(casingId, "line-color", color);
+        m.setFilter(casingId, filter);
+      }
       m.setPaintProperty(layerId, "line-color", color);
       m.setFilter(layerId, filter);
       continue;
+    }
+
+    // Added before the dash layer so it ends up underneath it (addLayer appends).
+    if (v.casing) {
+      m.addLayer({
+        id: casingId,
+        type: "line",
+        source: "railway_routes",
+        "source-layer": "railway_routes",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": color,
+          "line-width": WIDTHS.highlightCasing,
+          "line-opacity": OPACITIES.highlightCasing,
+        },
+        filter,
+      });
     }
 
     m.addLayer({

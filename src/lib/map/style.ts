@@ -87,13 +87,21 @@ export const WIDTHS = {
     z4: { branch: 6.5, main: 6.6, highspeed: 6.8 },
     z7: { branch: 8, main: 8.5, highspeed: 9 },
   },
-  // Special-usage routes are slightly thinner than branch (multiplier on
-  // the branch width at each stop).
-  specialUsageMultiplier: 0.85,
+  // Special-usage routes are drawn a little fatter than branch (multiplier on
+  // the branch width at each stop). A dashed line lays down less ink than a
+  // solid one of the same width, so matching branch exactly reads as thinner
+  // than branch; the extra width buys the dashes back their visual weight.
+  specialUsageMultiplier: 1.2,
   // Heritage routes are drawn as a dotted line whose dot diameter equals the
   // line width, so they're noticeably fatter than branch to read as clear round
   // dots rather than tiny dashes (multiplier on the branch width at each stop).
   heritageDotMultiplier: 1.8,
+  // Solid casing drawn underneath a dashed/dotted highlight overlay (Heritage,
+  // Special). The overlay itself keeps the route's own dash pattern and width so
+  // the type stays readable, which leaves it too faint to tell from the route's
+  // own colour; a translucent solid line of the highlight colour underneath
+  // makes the whole length read as selected without filling in the gaps.
+  highlightCasing: 7,
   // Constant pixel width used for: admin map's selected route, user map's
   // Route Logger selection (selected_routes_highlight), and user map's
   // Journey Planner / My Trips highlight (highlighted_routes).
@@ -184,6 +192,9 @@ export const OPACITIES = {
   defaultRoute: 0.8,
   selectedRoute: 1.0,
   highlight: 1.0,
+  // Casing under a dashed/dotted highlight: enough colour to read as selected,
+  // light enough that the dashes on top still stand out against it.
+  highlightCasing: 0.45,
   preview: 1.0,
   scenicOutline: 0.6,
   railwayParts: 0.7,
