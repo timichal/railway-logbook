@@ -110,6 +110,27 @@ body,
   }
 }
 
+/* The mobile bottom sheet's rounded top edge overlaps the map by SHEET_OVERLAP_PX
+   (MobileBottomSheet.tsx) so that the radius has something behind it to show against.
+   MapLibre's own bottom furniture — the attribution it requires stay visible, and the
+   scale bar — would then sit under the seam, so it is lifted by the same amount.
+
+   Keyed on the sheet actually following the map pane rather than on a width query:
+   the admin and public maps have no sheet and keep their controls at the edge. */
+.map-pane:has(+ .mobile-sheet) :is(.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right) {
+  bottom: 12px;
+}
+
+/* The compact attribution (a narrow map; it starts collapsed behind its ⓘ — see
+   `addAttribution` in useMapLibre) lays itself out as one long line when opened and
+   runs off the side of the map, so it is capped and left to wrap. It is anchored to
+   the bottom-right corner, so the extra lines grow upward into the map rather than
+   off the edge: narrow and tall, all of it on screen. Matches only compact mode —
+   a wide map never carries this class and keeps its single line. */
+.maplibregl-ctrl-attrib.maplibregl-compact-show {
+  max-width: 10rem;
+}
+
 /* Leaflet popup styling */
 .railway-popup h3,
 .railway-click-menu h3 {

@@ -75,8 +75,10 @@ export default function UserSidebar({
   return (
     <div
       style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined}
-      className={`bg-white border-r border-gray-200 flex flex-col ${
-        sidebarWidth != null ? "flex-shrink-0" : "flex-1 min-h-0"
+      // The right border belongs to the desktop sidebar, which has a map beside it.
+      // In the mobile sheet it is a hairline down the inside of a rounded panel.
+      className={`bg-white flex flex-col ${
+        sidebarWidth != null ? "border-r border-gray-200 flex-shrink-0" : "flex-1 min-h-0"
       }`}
     >
       {/* Tab Headers - hide when in article mode */}

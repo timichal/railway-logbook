@@ -62,6 +62,53 @@ function watchGeolocateZoom(map: maplibregl.Map, geolocate: maplibregl.Geolocate
   return handler;
 }
 
+/**
+ * The attribution, in its usual bottom-right corner but **not unrolled on arrival**.
+ *
+ * MapLibre's compact mode (below 640px of map, its own threshold for "a line of
+ * attribution no longer fits") adds the ⓘ button and then opens it: `_updateCompact`
+ * sets `maplibregl-compact-show`, and the only thing that ever minimizes it again is
+ * a drag. So a phone loaded with the notice unrolled along the bottom edge and its
+ * far half clipped by the map. It should start behind the ⓘ, which is what OSMF's
+ * attribution guidelines allow where the display is too small to carry the notice —
+ * so long as it is one tap behind a visible icon, which `compact` guarantees.
+ * `globals.css` then caps the expanded width so it wraps upward off the bottom edge
+ * instead of running off the side.
+ *
+ * **It is `_updateCompact` that has to be tamed, not the state it leaves behind.**
+ * A one-off minimize after `addControl` does not hold: the attribution text arrives
+ * with the sources' TileJSON, and `_updateAttributions` re-runs `_updateCompact`
+ * when it changes, which re-opens the panel. Nor can we minimize on `sourcedata` —
+ * that fires per tile and would snap shut a panel the reader had opened. So the
+ * control's own recompute is wrapped, and only its opening is undone; every other
+ * path to the class, the reader's tap included, is untouched. `compact-show` is
+ * *removed* rather than never added because upstream's collapsed state is exactly
+ * that — `open` set, `compact-show` absent, the two inverted so the `details`
+ * element's native toggle still lands the right way up.
+ *
+ * Guarded like `watchGeolocateZoom`: if the internal is renamed, the attribution is
+ * merely left open, which is what it does today.
+ */
+function addAttribution(map: maplibregl.Map): void {
+  const control = new maplibregl.AttributionControl({
+    // Passing options at all replaces MapLibre's defaults wholesale, and the
+    // library's own credit is one of them. Restated rather than silently dropped.
+    customAttribution: '<a href="https://maplibre.org/" target="_blank">MapLibre</a>',
+  });
+  const internals = control as unknown as {
+    _updateCompact?: () => void;
+    _container?: HTMLElement;
+  };
+  const recompute = internals._updateCompact;
+  if (typeof recompute === "function") {
+    internals._updateCompact = () => {
+      recompute.call(control);
+      internals._container?.classList.remove("maplibregl-compact-show");
+    };
+  }
+  map.addControl(control, "bottom-right");
+}
+
 export interface UseMapLibreOptions {
   /**
    * Region the map is locked to: supplies the initial view, the panning bounds
@@ -159,6 +206,8 @@ export function useMapLibre(
         maxBounds: REGIONS[region].bounds, // Restrict panning to the current region
         pitchWithRotate: false, // Disable rotation on right-click drag
         dragRotate: false, // Disable rotation with Ctrl+drag
+        // Added by hand below, so it can pick its corner — see addAttribution.
+        attributionControl: false,
       });
 
       // The basemap asks for POI icons its own sprite does not carry.
@@ -185,6 +234,8 @@ export function useMapLibre(
         }),
         "bottom-left",
       );
+
+      addAttribution(map.current);
 
       // Save map state on move or zoom
       const saveState = () => {

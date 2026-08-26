@@ -18,9 +18,20 @@ far:
   `display: none` — the stylesheet is render-blocking, so the media query is
   resolved before the first pixel. `PublicMapLayout`'s region switch is
   server-rendered for the same reason and does the same.
-- **2 — bottom sheet, mechanics only.** `MobileBottomSheet` replaced the fixed
-  top `h-1/2` drawer. The styling is still open; see the section below, which is
-  what is left of item 2.
+- **2 — bottom sheet.** `MobileBottomSheet` replaced the fixed top `h-1/2`
+  drawer: bottom anchored, four snaps (collapsed / peek 120px / half / 90%),
+  drag or tap the handle, ArrowUp/ArrowDown, `map.resize()` once per settled
+  height. The visual half followed. Rounded top corners over a 12px overlap of
+  the map (a radius needs something behind it to show against) plus an upward
+  shadow; the map takes the overlap back as height, and `globals.css` lifts
+  MapLibre's bottom control stacks clear of the seam through
+  `.map-pane:has(+ .mobile-sheet)`, so the admin and public maps keep theirs at
+  the edge. A scrim fades the map in past the half snap and is tapped to drop
+  back to it. The grabber is thinner, widens and darkens while dragging, and the
+  collapsed band carries a caption ("Route Logger", plus the selected-route
+  count) and a chevron instead of being a bare grey bar. The progress pill moved
+  up to clear the raised scale bar, and the sidebar's right border is now
+  desktop-only — inside the sheet it was a hairline down a rounded panel.
 - **4 — via-station reordering.** The HTML5 drag handle (dead on iOS, which never
   fires `dragstart` from a touch) is gone; each via row carries ▲▼ buttons at
   `iconBtn("responsive")`, shown only once there are two vias to reorder. Also
@@ -65,29 +76,6 @@ the app onto a home screen, and worth having whether or not the native app in
 `MOBILE_APP_PLAN.md` happens.
 
 ---
-
-## 2. Bottom sheet — mechanics done, **looks wrong**
-
-Done: `MobileBottomSheet.tsx` replaced the fixed top `h-1/2` drawer. Bottom
-anchored, drag handle, four snaps (collapsed / peek 120px / half / 90%), tap the
-handle to cycle, ArrowUp/ArrowDown to step. It is a flex sibling of the map
-rather than an overlay, so the map's bottom furniture stays visible above it.
-`map.resize()` fires once per settled height.
-
-**Still to do — the visual design.** The behaviour is right and the thing is
-still ugly. Open questions:
-
-- The sheet is a plain white box with a square top edge and a grey bar; it does
-  not read as a sheet. Rounded top corners, a real shadow, and a top edge that
-  separates it from the map.
-- The handle is an empty band above the content — a lot of vertical
-  space in a pane that has none to spare, and it does not look draggable.
-- The collapsed snap leaves a bare handle bar sitting on the map with nothing to
-  say what it opens.
-- No visual feedback while dragging, and no dimming or backdrop at the 90% snap,
-  so a nearly-full sheet still reads as "map with a box on it".
-- The seam where the sheet meets the map at the peek snap is where the MapLibre
-  attribution and the collapsed progress pill now crowd together.
 
 ## 3. Hover-only popups on a touch device
 

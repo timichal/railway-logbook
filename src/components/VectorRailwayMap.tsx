@@ -468,6 +468,14 @@ export default function VectorRailwayMap({
     return () => clearTimeout(timer);
   }, [isMobile, map]);
 
+  // What the collapsed sheet calls itself. Not the active tab: all three of the
+  // sheet's tabs are the logger, and the two article views cannot be reached on
+  // mobile at all (the menu carries them). The count is the one thing worth
+  // surfacing from behind a closed sheet — routes are picked on the map, which is
+  // exactly when the sheet is down and the selection is out of sight.
+  const sheetLabel =
+    selectedRoutes.length > 0 ? `Route Logger · ${selectedRoutes.length} selected` : "Route Logger";
+
   // Sidebar content (shared between mobile drawer and desktop inline)
   const sidebarContent = (
     <UserSidebar
@@ -507,8 +515,9 @@ export default function VectorRailwayMap({
         </>
       )}
 
-      {/* Map Container */}
-      <div className="flex-1 min-h-0 overflow-hidden relative">
+      {/* Map Container. `map-pane` is what globals.css keys on to lift MapLibre's
+          bottom controls clear of the sheet's overlapping top edge. */}
+      <div className="map-pane flex-1 min-h-0 overflow-hidden relative">
         <div
           ref={mapContainer}
           className={`w-full h-full ${className}`}
@@ -604,7 +613,7 @@ export default function VectorRailwayMap({
 
       {/* Mobile bottom sheet (the map keeps the space above it) */}
       {isMobile && (
-        <MobileBottomSheet onHeightSettled={handleSheetHeightSettled}>
+        <MobileBottomSheet onHeightSettled={handleSheetHeightSettled} collapsedLabel={sheetLabel}>
           {sidebarContent}
         </MobileBottomSheet>
       )}

@@ -23,7 +23,26 @@ import {
  *
  * **The handle stays visible at the collapsed snap** — it is the sheet's only control
  * now that the navbar hamburger opens the menu instead of toggling the sidebar, so a
- * collapsed sheet must never be a state with no way back out of it.
+ * collapsed sheet must never be a state with no way back out of it. Collapsed, it also
+ * grows a caption (`collapsedLabel`) and a chevron: a bare grey bar lying on the map
+ * says that something is there but not what, and that is the one state where the sheet
+ * has to introduce itself. Expanded, the caption goes away again and the band shrinks
+ * back to the grabber — the content below it is then saying what the sheet is.
+ *
+ * **It overlaps the map by `SHEET_OVERLAP_PX`.** The rounded top corners are what make
+ * the thing read as a sheet rather than as the bottom half of the page, and a rounded
+ * corner only shows if there is something behind it — flush against the map, the
+ * corners revealed `body`'s white and the radius was invisible. The negative margin is
+ * given straight back to the map (it is the `flex-1` sibling), so the map loses no
+ * height for it; the cost is that MapLibre's own bottom controls have to clear the
+ * seam, which `globals.css` does by selecting the map pane that this sheet follows.
+ *
+ * **The scrim is the drag's other piece of feedback.** Past the half snap the map
+ * behind dims in proportion to how far the sheet has come, so a nearly-full sheet
+ * reads as covering the map instead of as a white box sitting on it — and tapping the
+ * dimmed part is the quickest way back down. It is `absolute`, drawn upward from the
+ * sheet's own top edge, so `main`'s `overflow-hidden` clips it to the map pane and the
+ * navbar above is never dimmed.
  */
 
 /** Peek shows the tab bar and the first line of content. */
@@ -35,6 +54,13 @@ const FULL_FRACTION = 0.9;
 const DRAG_THRESHOLD_PX = 6;
 /** Matches the `transition-[height]` duration below. */
 const SNAP_TRANSITION_MS = 250;
+/**
+ * How far the sheet's rounded top edge sits over the map. Mirrored in `globals.css`,
+ * which lifts MapLibre's bottom control stacks clear of the seam by the same amount.
+ */
+const SHEET_OVERLAP_PX = 12;
+/** How dark the map behind goes at the topmost snap. */
+const MAX_SCRIM_OPACITY = 0.4;
 
 interface MobileBottomSheetProps {
   /**
@@ -42,6 +68,8 @@ interface MobileBottomSheetProps {
    * `resize()` to the space it was left. Must be stable — it is an effect dependency.
    */
   onHeightSettled?: () => void;
+  /** Shown on the handle bar while collapsed, to say what tapping it opens. */
+  collapsedLabel?: ReactNode;
   children: ReactNode;
 }
 
@@ -58,7 +86,11 @@ function nearestSnap(height: number, snaps: number[]): number {
   return snaps.reduce((best, s) => (Math.abs(s - height) < Math.abs(best - height) ? s : best));
 }
 
-export default function MobileBottomSheet({ onHeightSettled, children }: MobileBottomSheetProps) {
+export default function MobileBottomSheet({
+  onHeightSettled,
+  collapsedLabel,
+  children,
+}: MobileBottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState(0);
   const [height, setHeight] = useState<number | null>(null);
@@ -139,22 +171,83 @@ export default function MobileBottomSheet({ onHeightSettled, children }: MobileB
     });
   };
 
+  const collapsed = height === 0;
+  // The scrim ramps across the last gap between snaps — it appears only once the sheet
+  // is past "half" and on its way to covering the map.
+  const topSnap = snaps[snaps.length - 1];
+  const dimFromSnap = snaps.length >= 2 ? snaps[snaps.length - 2] : topSnap;
+  const dimProgress =
+    height === null || topSnap <= dimFromSnap
+      ? 0
+      : Math.min(Math.max((height - dimFromSnap) / (topSnap - dimFromSnap), 0), 1);
+  const scrimOpacity = dimProgress * MAX_SCRIM_OPACITY;
+  const scrimVisible = scrimOpacity > 0.02;
+
   return (
     <div
       ref={sheetRef}
-      className="flex-shrink-0 bg-white border-t border-gray-200 flex flex-col sheet-slide-up"
+      className="mobile-sheet relative flex-shrink-0 bg-white rounded-t-2xl flex flex-col sheet-slide-up"
+      style={{
+        marginTop: -SHEET_OVERLAP_PX,
+        boxShadow: dragging
+          ? "0 -6px 28px rgba(15, 23, 42, 0.22)"
+          : "0 -2px 14px rgba(15, 23, 42, 0.14)",
+        transition: "box-shadow 200ms ease-out",
+      }}
     >
+      {/* Always mounted, so it fades both ways: conditioned on the opacity it would
+          pop out of existence the moment a collapsing sheet crossed the snap.
+          `disabled` rather than `aria-hidden`, which would leave a focusable
+          element hidden from a screen reader. */}
       <button
         type="button"
-        aria-label="Resize panel"
+        aria-label="Shrink panel"
+        disabled={!scrimVisible}
+        onClick={() => setHeight(dimFromSnap)}
+        className={`absolute inset-x-0 bottom-full h-dvh bg-slate-900 cursor-default ${
+          scrimVisible ? "" : "pointer-events-none"
+        }`}
+        style={{ opacity: scrimOpacity, transition: dragging ? "none" : "opacity 250ms ease-out" }}
+      />
+
+      <button
+        type="button"
+        aria-label={collapsed ? "Open panel" : "Resize panel"}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         onKeyDown={handleKeyDown}
-        className="group w-full py-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
+        className={`group w-full flex flex-col items-center justify-center gap-1.5 touch-none select-none cursor-grab active:cursor-grabbing flex-shrink-0 ${
+          collapsed ? "min-h-11 py-2" : "py-2"
+        }`}
       >
-        <span className="w-10 h-1.5 rounded-full bg-gray-400 transition-colors group-hover:bg-gray-500 group-active:bg-gray-600" />
+        <span
+          className={`rounded-full transition-all duration-150 ${
+            dragging
+              ? "w-14 h-1 bg-gray-500"
+              : "w-10 h-1 bg-gray-300 group-hover:bg-gray-400 group-active:bg-gray-500"
+          }`}
+        />
+        {collapsed && collapsedLabel && (
+          <span className="flex items-center gap-1 text-xs font-medium text-gray-600">
+            {collapsedLabel}
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 15l7-7 7 7"
+              />
+            </svg>
+          </span>
+        )}
       </button>
       <div
         className={`min-h-0 overflow-hidden flex flex-col ${
