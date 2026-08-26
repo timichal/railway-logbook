@@ -1,7 +1,5 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-
 /**
  * The colour scheme, as a preference and as a resolved answer.
  *
@@ -12,12 +10,21 @@ import { useSyncExternalStore } from "react";
  * journey log beside it.
  *
  * The class lives on `<html>` (see `THEME_INIT_SCRIPT`), which is what
- * `globals.css`'s `@custom-variant dark` and its `html.dark` palette key on.
+ * `globals.css`'s `@custom-variant dark` and its `html.dark` palette key on. The
+ * scheme also colours the browser's own chrome, through a `<meta name="theme-color">`
+ * this module owns — see `applyThemeColorMeta`.
  */
-export type ThemePreference = "system" | "light" | "dark";
-export type ResolvedTheme = "light" | "dark";
+
+import { useSyncExternalStore } from "react";
+import { THEME_COLORS } from "./colors";
+import type { ResolvedTheme, ThemePreference } from "./types";
+
+export { THEME_COLORS } from "./colors";
+export type { ResolvedTheme, ThemePreference } from "./types";
 
 export const THEME_STORAGE_KEY = "railway-logbook-theme";
+
+export const THEME_COLOR_META_NAME = "theme-color";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
@@ -26,12 +33,25 @@ const DARK_QUERY = "(prefers-color-scheme: dark)";
  * white flash — the stylesheet needs the class to be there already, and React only
  * arrives after hydration. Duplicated logic rather than an import because it runs as
  * a raw string with no module system around it; it is small enough to keep honest.
+ *
+ * It writes the `theme-color` meta rather than `layout.tsx` rendering one, because
+ * the tag has to say what the *setting* resolved to. Next's `viewport.themeColor`
+ * can only express `prefers-color-scheme`, which is the right answer for the default
+ * "system" preference and the wrong one for either explicit choice; and a tag
+ * rendered by React would still be there for this script to find and disagree with.
+ * One owner, one tag.
  */
 export const THEME_INIT_SCRIPT = `(function(){try{var p=localStorage.getItem(${JSON.stringify(
   THEME_STORAGE_KEY,
 )});var d=p==="dark"||((p===null||p==="system")&&window.matchMedia(${JSON.stringify(
   DARK_QUERY,
-)}).matches);var e=document.documentElement;e.classList.toggle("dark",d);e.style.colorScheme=d?"dark":"light";}catch(_){}})();`;
+)}).matches);var e=document.documentElement;e.classList.toggle("dark",d);e.style.colorScheme=d?"dark":"light";var m=document.querySelector(${JSON.stringify(
+  `meta[name="${THEME_COLOR_META_NAME}"]`,
+)});if(!m){m=document.createElement("meta");m.setAttribute("name",${JSON.stringify(
+  THEME_COLOR_META_NAME,
+)});document.head.appendChild(m);}m.setAttribute("content",d?${JSON.stringify(
+  THEME_COLORS.dark,
+)}:${JSON.stringify(THEME_COLORS.light)});}catch(_){}})();`;
 
 function isPreference(value: string | null): value is ThemePreference {
   return value === "system" || value === "light" || value === "dark";
@@ -58,6 +78,23 @@ function apply(resolved: ResolvedTheme): void {
   // Native form controls, scrollbars and the UA's own default backgrounds. Several
   // inputs in this app set no background of their own and rely on this.
   root.style.colorScheme = resolved;
+  applyThemeColorMeta(resolved);
+}
+
+/**
+ * Repoints the tag `THEME_INIT_SCRIPT` created, so switching scheme from the menu
+ * takes the browser chrome with it — which is what the installed app's status bar
+ * reads. Creates the tag if the init script never ran (storage throwing, say).
+ */
+function applyThemeColorMeta(resolved: ResolvedTheme): void {
+  const selector = `meta[name="${THEME_COLOR_META_NAME}"]`;
+  let meta = document.querySelector<HTMLMetaElement>(selector);
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = THEME_COLOR_META_NAME;
+    document.head.appendChild(meta);
+  }
+  meta.content = THEME_COLORS[resolved];
 }
 
 const listeners = new Set<() => void>();

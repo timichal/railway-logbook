@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import ServiceWorkerRegistrar from "@/components/layout/ServiceWorkerRegistrar";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ToastContainer, ToastProvider } from "@/lib/toast";
 
@@ -17,6 +18,17 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "The Railway Logbook",
   description: "Log your rail journeys around Europe and Japan",
+  // iOS reads `display: "standalone"` out of the manifest, but not the title under
+  // the home-screen icon or the status bar style — those are still Apple's own tags.
+  // `default` (rather than `black-translucent`) leaves the status bar as a bar Safari
+  // tints from `theme-color`, so it matches the navbar in either scheme;
+  // `black-translucent` would put the page under it with light text pinned on,
+  // unreadable over the light navbar.
+  appleWebApp: {
+    capable: true,
+    title: "Railway Log",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
@@ -49,6 +61,7 @@ export default function RootLayout({
           {children}
           <ToastContainer />
         </ToastProvider>
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

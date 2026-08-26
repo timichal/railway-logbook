@@ -31,6 +31,7 @@ Unified Next.js app for OSM railway data: fetches, processes, and visualizes rai
 - `npm run dev` (Turbopack), `npm run build`, `npm run start`.
 - `npm run lint` (Biome check — formatter + linter), `npm run lint:fix` (apply safe fixes), `npm run format` (format only). **All code must conform to Biome** (config in `biome.json`); run `npm run lint` and resolve findings before considering a change done.
 - `npx tsc --noEmit` — **always run this after a batch of code changes**. Do not run full builds unless the user asks.
+- `npm run generateAppIcons` — re-render the home-screen icon set from `assets/app-icon.png`. By hand, when the artwork changes; the outputs are committed. See "Installable app" below.
 
 ### Prerequisites
 Osmium Tool (`conda install conda-forge::osmium-tool`), Node, Docker, `tsx` (for TS scripts), `.env` copied from `.env.example`.
@@ -157,7 +158,7 @@ One directory per part of the app, and a component is always imported by its ful
 - **`map/`** — `RailwayMap` (the user map), `MapProgressBox` (the map's bottom-corner progress box, shared by the user and public maps so the two cannot drift; its layer switches survive only for the shared map, which has no menu to hold them (`withLayerToggles`, false everywhere else); on mobile it collapses to a percentage pill, as `AdminLayerControls` does; the same tap opens and closes it — the numbers are the control, so there is no × to aim at, and the layer switches stay outside the button so flicking one does not shut the box), `LayerToggles` (the three layer switches, in whichever container asks — the menu, or the shared map's progress box; the region rules for the Special label and the scenic outline live here so a menu can't offer a toggle the map ignores).
 - **`sharing/`** — the read-only public map: `PublicMapLayout` (slim bar: whose map, region switch, "Go to my own map"), `PublicRailwayMap` (same sources/layers/styling as the user map via `lib/map/userMapLayers.ts`, coloured by the owner; no sidebar, no route selection — `setupUserMapInteractions` is called without `onRouteClick`, which is the whole of what makes it read-only), `ShareMapDialog` (the toggle + copyable link, opened from `Navbar` and `MenuSheet`).
 - **`admin/`** — `AdminPageClient`, `AdminMap`, `AdminLayerControls`, `AdminSidebar`, `AdminCreateRouteTab`, `AdminRoutesTab`, `AdminNotesTab`, `RoutesList`, `RouteEditForm`, `NotesPopup`.
-- **`layout/`** — `MainLayout`, `Navbar`, `MenuSheet` (the hamburger's menu, at every width — a full-screen sheet on a phone, a right-hand drawer over a scrim on desktop, the direction of the open animation picked by a media query on `.menu-sheet` rather than by a class React chooses; rows are deliberately monochrome with an icon each — colouring every entry differently leaves no colour free to mark the destructive one, so red is spent only on Log out, and auth sits in a footer rather than in the list).
+- **`layout/`** — `MainLayout`, `Navbar`, `ServiceWorkerRegistrar` (renders nothing; see "Installable app"), `MenuSheet` (the hamburger's menu, at every width — a full-screen sheet on a phone, a right-hand drawer over a scrim on desktop, the direction of the open animation picked by a media query on `.menu-sheet` rather than by a class React chooses; rows are deliberately monochrome with an icon each — colouring every entry differently leaves no colour free to mark the destructive one, so red is spent only on Log out, and auth sits in a footer rather than in the list).
 - **`auth/`** — `LoginForm`, `RegisterForm` (rendered by `MenuSheet` and nowhere else, so `onSuccess` is required; each links across to the other, since the menu's footer is hidden while a form is open).
 - **`articles/`** — `HowToUseArticle`, `RailwayNotesArticle` (both reached only from the menu, which supplies their title and back arrow — they carry no header of their own).
 - **`ui/`** — the pieces with no one home: `MobileBottomSheet`, `ToggleSwitch` (`role="switch"` button, not a restyled checkbox — the whole row is the hit area), `RegionSwitch` (region segmented control, rendered by `MenuSheet` on the user map, by `Navbar` on the admin page — which has no menu — and by `PublicMapLayout` on the shared one), `ThemeSwitch` (Light / System / Dark, in the menu only — the admin page therefore follows whatever the main map set), `TagInput`, `StationSearchInput`.
@@ -167,7 +168,7 @@ One directory per part of the app, and a component is always imported by its ful
 - **Data access**: `dataAccess.ts` (DB vs localStorage abstraction), `localStorage.ts`.
 - **Pathfinding**: `routePathFinder.ts` (user-facing journey planner, excludes non-regular routes). See "Journey planner pathfinding" below.
 - **Regions**: `regions.ts` (region definitions + `regionEnvelopeSql`), `regionContext.tsx` (`RegionProvider`, `useRegion`, `useRegionId`).
-- **Theme**: `theme/index.ts` — the colour scheme preference (`useThemePreference`, `setThemePreference`), the resolved answer (`useResolvedTheme`) and `THEME_INIT_SCRIPT`. See "Dark mode" below.
+- **Theme**: `theme/index.ts` — the colour scheme preference (`useThemePreference`, `setThemePreference`), the resolved answer (`useResolvedTheme`) and `THEME_INIT_SCRIPT`. `theme/colors.ts` and `theme/types.ts` are plain modules beside it, carrying `THEME_COLORS` and the two type aliases: `app/manifest.ts` needs the colours and is a server route, so they cannot live behind the `"use client"` in `index.ts`. See "Dark mode" below.
 - **Layer prefs**: `map/layerPrefs.ts` (localStorage read/write), `map/layerPrefsContext.tsx` (`LayerPrefsProvider`, `useLayerPrefs`). The toggles are held **above** the map, by `MainLayout` and `PublicMapLayout`, because the menu that drives them is a sibling of the map rather than a child; two hooks reading the same key would disagree. `useRouteEditor` therefore returns progress only.
 - **UI classes**: `ui/buttonStyles.ts` — the named button roles (`btn(variant, size)`, `iconBtn`, `tabBtn`, `optionRow`, `LINK_BTN`) and the hover/active/disabled states each one carries. See "Interactive states" below. `ui/inputStyles.ts` — `FIELD` / `FIELD_LABEL` / `FIELD_HINT` / `FORM_ERROR`, the house input style named for the two auth forms alone (they are the only forms that are a whole screen); not a sweep of every input in the app.
 - **Utils**: `types.ts`, `constants.ts`, `routeCoverage.ts` (when logged stretches add up to a complete route — see "Progress"), `stationProximity.ts` (`stations.near_route` — see "Station proximity"), `coordinateUtils.ts` (`mergeLinearChain`, `coordinatesToWKT`), `countryUtils.ts`, `getUntimezonedDateStr.ts`.
@@ -185,6 +186,7 @@ One directory per part of the app, and a component is always imported by its ful
 
 ### Scripts (`src/scripts/`)
 - **Data**: `pruneData.ts` (also resolves the single station `name`: a CJK name prefers OSM's romanized tags — `name:ja_rm`, then `name:ja-Latn`, then `name:en` — since the `transliteration` package romanizes kanji through Chinese readings — 東京 → "Dong Jing". The romaji tags come first because they are transcriptions and keep their macrons (Tōkyō), while `name:en` is an English name and routinely drops them; Cyrillic/Greek are transliterated as before), `importMapData.ts`, `verifyRouteData.ts`, `applyVectorTiles.ts`, `markAllRoutesInvalid.ts` (migration reference), `fixSequences.ts` (resync SERIAL sequences), `listStations.ts`, `inspectPath.ts` (journey-planner debug), `showBacktracking.ts` (locates each flagged route's backtracking — the pathfinder returns it as `PathResult.backtrackingAt`), `exportRoutes.ts`, `importRoutes.ts`.
+- **Assets**: `generateAppIcons.ts` (the home-screen icon set, from `assets/app-icon.png` — see "Installable app"), `copyMaplibreWorker.ts` (the GL worker and its shared chunk into `public/maplibre/`; runs on `predev`/`prebuild`).
 - **Shared**: `lib/geojsonFeatureStream.ts` (string-aware incremental FeatureCollection reader — see below), `lib/loadRailwayData.ts`, `lib/railwayPathFinder.ts` (admin route creation + recalc).
 
 **Reading GeoJSON.** Both `pruneData` and `loadRailwayData` stream multi-gigabyte FeatureCollections through `streamFeatures` in `lib/geojsonFeatureStream.ts`, which cuts out one feature at a time. It tracks string and escape state while counting braces: `osmium export` writes every OSM tag as a property, and a tag value containing an unmatched brace otherwise ends a feature early or runs past its end and swallows the ones that follow. Features that still fail to parse, and input that ends mid-feature, are **counted and raised** rather than skipped silently.
@@ -268,6 +270,61 @@ Every control answers to one agreed set — **hover, active, focus-visible, disa
 `globals.css` carries the other two, as `@layer base` rules on `button`/`a`/`[role]`/checkbox rather than as classes, because a class is something you can forget: `cursor: pointer` (Tailwind v4 dropped the preflight that used to set it, and it had been hand-applied and hand-missed ever since), and the `:focus-visible` outline. They are **layered** so a `cursor-*` utility still wins — unlayered, `button:not(:disabled)` outranks `.cursor-grab` and the bottom sheet's drag handle loses its cursor. A control inside an `overflow-hidden` parent clips that outline and must inset its own (`focus-visible:-outline-offset-2`, as `RegionSwitch` does).
 
 A call site adds **layout only** — `w-full`, `flex-1`, `flex-shrink-0`, margins. Appending an appearance utility is a coin toss, since Tailwind resolves conflicts by source order in the generated CSS and not by class order in the attribute; a size that needs a different radius belongs in the table's `SIZES`. About a dozen bespoke controls stay outside it (the region switch, the toggle switch, the drag handle, the drawer scrim, the dashed "add via station" button) — each carries its own states, and `ToggleSwitch` documents why it deliberately carries none.
+
+### Installable app
+
+The app installs to a home screen and opens in its own window — a manifest, an icon
+set, a `theme-color` and a small service worker. It is a **web app made installable**,
+not the native app in `MOBILE_APP_PLAN.md`: no store listing, no offline maps, no
+background geolocation, no push.
+
+**`src/app/manifest.ts`** (Next's file convention) declares `display: "standalone"`,
+which is what drops the browser chrome and finally makes the safe-area padding below
+earn its keep.
+
+**The icons are rendered from one master** (`assets/app-icon.png`, the original
+transparent artwork) by `generateAppIcons.ts`, because the three places an icon lands
+want three framings and only one of them is the master's own. iOS composites a
+transparent home-screen icon onto **black**, so `src/app/apple-icon.png` is generated
+with the white ground the art was drawn against rather than shipped as-is. The
+manifest's `purpose: "any"` pair carries that ground with a little edge room. The
+`maskable` one is cropped by the launcher to the device's icon shape, and the only
+region guaranteed to survive is a centred circle 80% of the canvas wide — so the art
+is scaled until its **diagonal** fits that circle, which for a landscape train is
+markedly smaller than the width alone would suggest. The master is 180px, so the 512s
+are an upscale; flat vector-style art takes Lanczos well, and redrawing the art larger
+is all it would take to improve them.
+
+**`theme-color` is written by `THEME_INIT_SCRIPT`, not by Next's metadata.** The
+scheme is a *setting* here (see "Dark mode"), and `viewport.themeColor` can only
+express `prefers-color-scheme` — the right answer for the default "system" and the
+wrong one for either explicit choice. The init script creates the single tag before
+first paint and `setThemePreference` repoints it along with the class, so the status
+bar follows the menu. `THEME_COLORS` (`src/lib/theme/colors.ts`) restates
+`--color-surface` as literals for the two readers outside CSS's reach: the manifest,
+read before the app has ever run, and that script, which runs before the stylesheet is
+guaranteed parsed. iOS additionally gets `appleWebApp` metadata for the home-screen
+title and a `default` status bar — `black-translucent` would put the page under the
+bar with light text pinned on, unreadable over the light navbar.
+
+**The service worker (`public/sw.js`) caches no HTML and no data**, and that is its
+entire safety argument. Documents are per-session and per-visitor (`page.tsx` reads the
+session and the region cookie, so the markup carries the signed-in name and that
+region's map), and route tiles carry visit colours — a stale one paints a map that lies
+about what has been ridden. What it does take is content-addressed and public:
+`/_next/static/` cache-first, since a build hash in the filename means a new deploy
+asks a new URL and can never be answered with an old one, plus stale-while-revalidate
+for `/maplibre/`, whose names are fixed by `copyMaplibreWorker` while its bytes turn
+over with the dependency. Cross-origin requests — the basemap, the tiles — are never
+touched. Everything else falls through to the network with no worker in the way.
+
+It exists for two reasons, neither of them offline: Chrome will not offer to install an
+app whose worker has no fetch handler, and a cold start on a phone is mostly those
+chunks. `ServiceWorkerRegistrar` mounts it from the root layout, **in production
+only** — in development it instead unregisters whatever a previous production build
+left on the same origin, a worker installed once on `localhost` outliving the session
+that installed it. `next.config.ts` serves `/sw.js` `no-store`, since a worker script
+pinned in the HTTP cache is a site pinned to an old worker.
 
 ### Safe areas
 

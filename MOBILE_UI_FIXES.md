@@ -107,6 +107,41 @@ far:
   focus and the 200ms blur timer cannot close the list under the tap — scrolling
   the list included. The timer stays for a genuine focus-out; selecting now blurs
   the field explicitly, so the keyboard still drops.
+- **12 — installable.** A web app manifest (`src/app/manifest.ts`), an icon set,
+  a `theme-color` and a small service worker, which between them get the app onto
+  a home screen in its own chrome-less window. The icons are rendered from one
+  master (`assets/app-icon.png`) by `npm run generateAppIcons`, because the three
+  places an icon lands want three framings: iOS composites a *transparent*
+  home-screen icon onto black, so `apple-icon` gained the white ground the art was
+  always drawn against; the `any` icons carry the same ground with a little edge
+  room; and the `maskable` one is scaled so the art's **diagonal** fits the
+  centred circle 80% wide that a launcher guarantees not to crop — which for a
+  landscape train is a good deal smaller than it looks like it should be.
+  `theme-color` is written by `THEME_INIT_SCRIPT` rather than declared through
+  Next's `viewport.themeColor`, because the scheme here is a *setting*: the
+  metadata export can only express `prefers-color-scheme`, right for the default
+  "system" and wrong for either explicit choice. One tag, one owner, repointed by
+  `setThemePreference` along with the class. iOS gets `appleWebApp` metadata for
+  the home-screen title and a `default` status bar — `black-translucent` pins
+  light text on, unreadable over the light navbar.
+  The **service worker caches no HTML and no data**, which is the whole of its
+  safety argument: the documents are per-session (the navbar carries the signed-in
+  name, the region comes from a cookie) and the route tiles carry visit colours, so
+  a stale one would paint a map that lies about what you have ridden. It takes only
+  what is content-addressed and public — `_next/static` cache-first, since a build
+  hash in the filename means a new deploy asks a new URL — plus
+  stale-while-revalidate for `/maplibre/`, whose filenames are fixed while its bytes
+  are not. Everything else falls through untouched. It is there because Chrome will
+  not offer to install an app whose worker has no fetch handler, and because the
+  cold start on a phone is mostly those chunks; it is *not* offline maps, which is
+  what `MOBILE_APP_PLAN.md` is for.
+  **Not verified on a device.** The manifest, the icons, the tags and the worker's
+  routing were checked against the running server; what nobody has looked at yet is
+  the app *installed*, where `h-dvh` is the screen rather than the screen minus
+  browser chrome — so the bottom sheet's snap points (item 2) and the overlays that
+  pad themselves out of the home-indicator strip (item 8) want a look on a real
+  home screen before this is called finished.
+
 - **13 — dark mode (beta).** The palette *is* the token layer: Tailwind v4
   compiles `border-gray-300` to `var(--color-gray-300)`, so `html.dark` in
   `globals.css` re-points the neutral ramp and the whole app flips at once —
@@ -138,38 +173,7 @@ far:
   hand. All but a dozen bespoke controls (segmented switch, drag handle,
   scrim) now go through it.
 
-What is left is 12, plus the tail of 13. Section 12 (installable app) is the
-cheapest way to get the app onto a home screen, and worth having whether or not
-the native app in `MOBILE_APP_PLAN.md` happens.
-
----
-
-## 12. Make it installable (home-screen app)
-
-Roughly half a day. No Mac, no Xcode, no developer-program fee, no store review.
-Gets an icon on the home screen and a standalone window with no browser chrome.
-Does **not** get: store listing, real offline maps, background geolocation, push —
-those are what `MOBILE_APP_PLAN.md` is for.
-
-- [ ] **Web app manifest.** Add `src/app/manifest.ts` (Next's file convention,
-      returning a `MetadataRoute.Manifest`). Needs `name`, `short_name`,
-      `start_url: "/"`, `display: "standalone"`, `background_color`,
-      `theme_color`, and the icon list.
-- [ ] **Icons.** `src/app/apple-icon.png` and `favicon.ico` already exist.
-      Android additionally wants 192×192 and 512×512 PNGs declared in the
-      manifest, plus a `maskable` variant so the launcher can crop to the
-      device's icon shape without clipping content.
-- [ ] **`theme-color`** in `layout.tsx`'s metadata, so the status bar matches the
-      navbar instead of defaulting to white.
-- [x] **`viewportFit: "cover"`** in the `viewport` export — done with item 8,
-      which is where the `env(safe-area-inset-*)` padding lives.
-- [ ] **Service worker** for the app shell. Keep it conservative: cache the shell
-      and static assets, leave tile and API requests network-first. Caching MVT
-      tiles is tempting but it is not the same thing as offline maps (see the
-      plan doc), and a stale route tile shows wrong visit colours.
-- [ ] **Verify standalone mode.** `h-dvh` behaves differently without browser
-      chrome; check the sheet from item 2 and the bottom overlays in item 8 once
-      installed, not just in Safari.
+What is left is the tail of 13.
 
 ---
 
