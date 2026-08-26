@@ -17,7 +17,6 @@ interface NavbarProps {
   onOpenHowTo?: () => void;
   onOpenNotes?: () => void;
   isAdminPage?: boolean;
-  isMobile?: boolean;
   /**
    * Hamburger tap, and the mobile Sign in button. Each page decides what it opens
    * (menu sheet / admin drawer); the argument names the sub-view to land on.
@@ -28,6 +27,24 @@ interface NavbarProps {
 /** Mobile bar icon button: 44pt target, no label. */
 const BAR_BUTTON = iconBtn("md");
 
+/**
+ * The navbar picks its bar with `md:` classes rather than with `useIsMobile`,
+ * and it is the one component in the app that has to.
+ *
+ * It is the whole of what the server renders above the map (both maps are
+ * `ssr: false`), so it is what a phone *paints* while the JS bundle is still
+ * downloading — before any hook has run and before hydration can correct
+ * anything. A JS branch therefore showed the desktop bar first, with its
+ * two-line title, region switch and five buttons, and swapped to the compact
+ * one on hydration: the "flash of the desktop site" on every mobile load.
+ * `useIsMobile`'s `useSyncExternalStore` fixes the *hydration* render; it
+ * cannot touch the paint that precedes it. CSS can, because the stylesheet is
+ * render-blocking and the media query is resolved before the first pixel.
+ *
+ * The cost is both bars in the DOM at every width, one of them `display: none`.
+ * That is cheap here — a handful of buttons, no data — and the shared state
+ * (the dropdowns, the share dialog) stays single because it is one component.
+ */
 export default function Navbar({
   user,
   onLogout,
@@ -35,7 +52,6 @@ export default function Navbar({
   onOpenHowTo,
   onOpenNotes,
   isAdminPage = false,
-  isMobile = false,
   onOpenMenu,
 }: NavbarProps) {
   const region = useRegion();
@@ -72,12 +88,12 @@ export default function Navbar({
     if (onAuthSuccess) onAuthSuccess();
   };
 
-  // Mobile navbar — title, then auth / share / hamburger as icon buttons. Everything
-  // else (region switch, layer toggles, articles, admin link, back-to-map) lives
-  // behind the hamburger.
-  if (isMobile) {
-    return (
-      <header className="bg-white border-b border-gray-200 px-3 py-2 flex-shrink-0">
+  return (
+    <header className="bg-white border-b border-gray-200 px-3 py-2 md:p-4 flex-shrink-0">
+      {/* Mobile navbar — title, then auth / share / hamburger as icon buttons. Everything
+          else (region switch, layer toggles, articles, admin link, back-to-map) lives
+          behind the hamburger. */}
+      <div className="md:hidden">
         <div className="flex justify-between items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900 truncate">
             {isAdminPage ? "Admin" : "Railway Logbook"}
@@ -183,131 +199,127 @@ export default function Navbar({
             </button>
           )}
         </div>
+      </div>
 
-        <ShareMapDialog isOpen={showShareDialog} onClose={() => setShowShareDialog(false)} />
-      </header>
-    );
-  }
+      {/* Desktop navbar */}
+      <div className="hidden md:block">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {isAdminPage ? "Admin - Railway Management" : "The Railway Logbook"}
+              </h1>
+              <p className="text-gray-600 mt-1">
+                {isAdminPage
+                  ? `Welcome, ${user?.name || user?.email} - Manage railway routes and view raw data`
+                  : user
+                    ? `Welcome, ${user.name || user.email}! Log your rail journeys around ${region.label}.`
+                    : `Log your rail journeys around ${region.label}`}
+              </p>
+            </div>
 
-  // Desktop navbar (unchanged)
-  return (
-    <header className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
-      <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {isAdminPage ? "Admin - Railway Management" : "The Railway Logbook"}
-            </h1>
-            <p className="text-gray-600 mt-1">
-              {isAdminPage
-                ? `Welcome, ${user?.name || user?.email} - Manage railway routes and view raw data`
-                : user
-                  ? `Welcome, ${user.name || user.email}! Log your rail journeys around ${region.label}.`
-                  : `Log your rail journeys around ${region.label}`}
-            </p>
+            <div className="flex items-center gap-2 ml-4">
+              <RegionSwitch />
+              {/* Article views live in the user sidebar only — the admin page has no place to open them. */}
+              {!isAdminPage && (
+                <>
+                  <button type="button" onClick={onOpenHowTo} className={btn("softPrimary", "bar")}>
+                    How To Use
+                  </button>
+                  <button type="button" onClick={onOpenNotes} className={btn("softSuccess", "bar")}>
+                    Railway Notes
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 ml-4">
-            <RegionSwitch />
-            {/* Article views live in the user sidebar only — the admin page has no place to open them. */}
-            {!isAdminPage && (
+          <div className="flex items-center gap-4">
+            {/* Share map — a logged-in user's own map is the only one there is to
+              publish, so this is hidden for anonymous visitors and on the admin page. */}
+            {user && !isAdminPage && (
+              <button
+                type="button"
+                onClick={() => setShowShareDialog(true)}
+                className={btn("softIndigo", "bar")}
+              >
+                Share Map
+              </button>
+            )}
+
+            {/* Admin link or Back to Main Map */}
+            {user?.id === 1 && !isAdminPage && (
+              <Link href="/admin" className={btn("primary", "bar")}>
+                Admin
+              </Link>
+            )}
+            {isAdminPage && (
+              <Link href="/" className={btn("neutral", "bar")}>
+                Back to Main Map
+              </Link>
+            )}
+
+            {/* Login/Register or Logout */}
+            {user ? (
+              onLogout && (
+                <button type="button" onClick={onLogout} className={btn("danger", "bar")}>
+                  Logout
+                </button>
+              )
+            ) : (
               <>
-                <button type="button" onClick={onOpenHowTo} className={btn("softPrimary", "bar")}>
-                  How To Use
-                </button>
-                <button type="button" onClick={onOpenNotes} className={btn("softSuccess", "bar")}>
-                  Railway Notes
-                </button>
+                {/* Login dropdown */}
+                <div className="relative" ref={loginRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLoginDropdown(!showLoginDropdown);
+                      setShowRegisterDropdown(false);
+                    }}
+                    className={btn("primary", "bar")}
+                  >
+                    Login
+                  </button>
+
+                  {showLoginDropdown && (
+                    <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                      <div className="p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                          Sign in to your account
+                        </h3>
+                        <LoginForm onSuccess={handleLoginSuccess} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Register dropdown */}
+                <div className="relative" ref={registerRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRegisterDropdown(!showRegisterDropdown);
+                      setShowLoginDropdown(false);
+                    }}
+                    className={btn("success", "bar")}
+                  >
+                    Register
+                  </button>
+
+                  {showRegisterDropdown && (
+                    <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                      <div className="p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                          Create your account
+                        </h3>
+                        <RegisterForm onSuccess={handleRegisterSuccess} />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          {/* Share map — a logged-in user's own map is the only one there is to
-              publish, so this is hidden for anonymous visitors and on the admin page. */}
-          {user && !isAdminPage && (
-            <button
-              type="button"
-              onClick={() => setShowShareDialog(true)}
-              className={btn("softIndigo", "bar")}
-            >
-              Share Map
-            </button>
-          )}
-
-          {/* Admin link or Back to Main Map */}
-          {user?.id === 1 && !isAdminPage && (
-            <Link href="/admin" className={btn("primary", "bar")}>
-              Admin
-            </Link>
-          )}
-          {isAdminPage && (
-            <Link href="/" className={btn("neutral", "bar")}>
-              Back to Main Map
-            </Link>
-          )}
-
-          {/* Login/Register or Logout */}
-          {user ? (
-            onLogout && (
-              <button type="button" onClick={onLogout} className={btn("danger", "bar")}>
-                Logout
-              </button>
-            )
-          ) : (
-            <>
-              {/* Login dropdown */}
-              <div className="relative" ref={loginRef}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLoginDropdown(!showLoginDropdown);
-                    setShowRegisterDropdown(false);
-                  }}
-                  className={btn("primary", "bar")}
-                >
-                  Login
-                </button>
-
-                {showLoginDropdown && (
-                  <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-                    <div className="p-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                        Sign in to your account
-                      </h3>
-                      <LoginForm onSuccess={handleLoginSuccess} />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Register dropdown */}
-              <div className="relative" ref={registerRef}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRegisterDropdown(!showRegisterDropdown);
-                    setShowLoginDropdown(false);
-                  }}
-                  className={btn("success", "bar")}
-                >
-                  Register
-                </button>
-
-                {showRegisterDropdown && (
-                  <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-                    <div className="p-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                        Create your account
-                      </h3>
-                      <RegisterForm onSuccess={handleRegisterSuccess} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
         </div>
       </div>
 

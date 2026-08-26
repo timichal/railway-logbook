@@ -62,7 +62,6 @@ export default function MainLayout({
           onAuthSuccess={handleAuthSuccess}
           onOpenHowTo={() => setActiveTab("howto")}
           onOpenNotes={() => setActiveTab("notes")}
-          isMobile={isMobile}
           onOpenMenu={(view) => setMenuView(view ?? "menu")}
         />
 

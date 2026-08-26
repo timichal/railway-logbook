@@ -56,7 +56,15 @@ export default function PublicMapLayout({
             </div>
 
             <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-              <RegionSwitch compact={isMobile} />
+              {/* Two switches, one hidden — the bar is server-rendered above an
+                  `ssr: false` map, so a JS-chosen variant is painted wrong until
+                  hydration. Same reason as `Navbar`'s two bars. */}
+              <span className="md:hidden">
+                <RegionSwitch compact />
+              </span>
+              <span className="hidden md:inline">
+                <RegionSwitch />
+              </span>
               <Link href="/" className={`${btn("primary", "sm")} whitespace-nowrap`}>
                 Go to my own map
               </Link>

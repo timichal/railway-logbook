@@ -8,9 +8,16 @@ plus the installable-web-app work that belongs with them.
 original numbers, so the gaps in the numbering are the finished work. Landed so
 far:
 
-- **1 — layout flash.** `useIsMobile` moved to `useSyncExternalStore` and
-  `useResizableSidebar` adjusts `sidebarOpen` during render, so the corrected
-  mobile layout is in the first paint instead of a desktop-then-mobile flip.
+- **1 — layout flash.** Two halves. `useIsMobile` moved to
+  `useSyncExternalStore` and `useResizableSidebar` adjusts `sidebarOpen` during
+  render, so the corrected mobile layout is in the first *hydration* render
+  instead of a desktop-then-mobile flip. That still left the paint that comes
+  *before* hydration: the navbar is the whole of what the server renders above
+  an `ssr: false` map, so a phone painted the desktop bar while the bundle
+  downloaded. It now picks its bar with `md:` classes and renders both, one
+  `display: none` — the stylesheet is render-blocking, so the media query is
+  resolved before the first pixel. `PublicMapLayout`'s region switch is
+  server-rendered for the same reason and does the same.
 - **2 — bottom sheet, mechanics only.** `MobileBottomSheet` replaced the fixed
   top `h-1/2` drawer. The styling is still open; see the section below, which is
   what is left of item 2.

@@ -275,13 +275,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
 
   return (
     <div className="h-dvh flex flex-col bg-white safe-area">
-      <Navbar
-        user={user}
-        onLogout={handleLogout}
-        isAdminPage={true}
-        isMobile={isMobile}
-        onOpenMenu={toggleSidebar}
-      />
+      <Navbar user={user} onLogout={handleLogout} isAdminPage={true} onOpenMenu={toggleSidebar} />
 
       <main className="flex-1 overflow-hidden flex relative">
         {/* Desktop sidebar */}
