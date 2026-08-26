@@ -14,6 +14,10 @@ far:
 - **2 — bottom sheet, mechanics only.** `MobileBottomSheet` replaced the fixed
   top `h-1/2` drawer. The styling is still open; see the section below, which is
   what is left of item 2.
+- **4 — via-station reordering.** The HTML5 drag handle (dead on iOS, which never
+  fires `dragstart` from a touch) is gone; each via row carries ▲▼ buttons at
+  `iconBtn("responsive")`, shown only once there are two vias to reorder. Also
+  the first keyboard-operable reordering the field has had.
 - **5 — touch targets.** 44pt floors (`min-h-11`, `w-11 h-11`) across the mobile
   paths, `md:`-reset so desktop keeps its density.
 - **6 — the menu is a menu.** `MobileMenuSheet` (full height, behind the
@@ -23,11 +27,24 @@ far:
 - **7 — progress box collapses** to a percentage pill on mobile
   (`MapProgressBox`, now shared with the public map), and its layer checkboxes
   became `ToggleSwitch`es that live in the menu.
+- **8 — safe areas.** `viewportFit: "cover"` in `layout.tsx`'s viewport export,
+  and a `safe-area` utility in `globals.css` that pads the whole app frame back
+  out of the notch and home-indicator strips (`h-dvh` + `border-box`, so it eats
+  into the 100dvh rather than overflowing). The three `h-dvh` page roots wear it,
+  as do the `fixed` overlays that sit outside them — the mobile menu, the admin
+  drawer, and the toast stack (`safe-area-bottom`, since a top inset there would
+  only add an invisible band over the map). The map's own `absolute` furniture is
+  inside the padded frame and needed nothing.
 - **9 — fonts.** Inter (not Geist — too display-leaning at 12–14px, which is
   where most of this app's text is), `body` no longer overrides it with Arial,
   Geist Mono dropped.
 - **10 — dark mode.** The half-finished `prefers-color-scheme` variables are
   gone; see item 13 for doing it properly.
+- **11 — suggestion lists.** The dropdowns (map search on both maps, and
+  `StationSearchInput`) `preventDefault` on pointerdown, so the input never loses
+  focus and the 200ms blur timer cannot close the list under the tap — scrolling
+  the list included. The timer stays for a genuine focus-out; selecting now blurs
+  the field explicitly, so the keyboard still drops.
 - **14 — interactive states.** `src/lib/ui/buttonStyles.ts` names the button
   roles (`btn`, `iconBtn`, `tabBtn`, `optionRow`, `LINK_BTN`) and carries
   hover / active / disabled for each; `globals.css` adds `cursor` and a
@@ -81,29 +98,6 @@ What touch wants: one tap → a small info sheet carrying the route name, the
 badges, and **buttons** ("Add to selection", "Open website"). That also makes the
 `dblclick` handler unnecessary on touch.
 
-## 4. Via-station reordering does not work on mobile at all
-
-`src/components/JourneyPlanner.tsx:420` uses HTML5 `draggable` + `dragstart`. iOS
-Safari does not fire those from touch, so the `☰` handle is dead — silently. Add
-▲▼ buttons (or move to pointer events). The handle is also only ~16px of tap
-target.
-
-## 8. No safe-area handling
-
-`h-dvh` covers the dynamic toolbar, but `layout.tsx:21-24` has no
-`viewportFit: "cover"`, so `env(safe-area-inset-*)` resolves to 0 and cannot be
-opted into later. On a home-indicator iPhone the `bottom-10` overlays sit close
-to the indicator, as does the toast at `bottom-16`
-(`src/lib/toast/ToastContainer.tsx:50`).
-
-## 11. Suggestion lists use the blur/200ms race
-
-Both the map search (`VectorRailwayMap.tsx`, `onBlur` → `setTimeout(…, 200)`) and
-`StationSearchInput` (via `JourneyPlanner`'s `onBlur` handlers) close on a timer.
-On touch, scrolling the suggestion list blurs the input and the tap lands on
-nothing — the classic "tapped it, nothing happened". Select on `pointerdown`
-instead of relying on the timer.
-
 ---
 
 ## 12. Make it installable (home-screen app)
@@ -123,8 +117,8 @@ those are what `MOBILE_APP_PLAN.md` is for.
       device's icon shape without clipping content.
 - [ ] **`theme-color`** in `layout.tsx`'s metadata, so the status bar matches the
       navbar instead of defaulting to white.
-- [ ] **`viewportFit: "cover"`** in the `viewport` export (`layout.tsx:21-24`) —
-      required before any `env(safe-area-inset-*)` in item 8 does anything.
+- [x] **`viewportFit: "cover"`** in the `viewport` export — done with item 8,
+      which is where the `env(safe-area-inset-*)` padding lives.
 - [ ] **Service worker** for the app shell. Keep it conservative: cache the shell
       and static assets, leave tile and API requests network-first. Caching MVT
       tiles is tempting but it is not the same thing as offline maps (see the

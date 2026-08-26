@@ -32,6 +32,30 @@ body,
   height: 100%;
 }
 
+/* Safe areas. `viewportFit: "cover"` (layout.tsx) lets the page draw under the
+   notch and the home indicator, which is what `h-dvh` wants — the alternative
+   leaves black bars — so the padding has to come back somewhere, and it is cheaper
+   to inset the whole app frame once than to remember it at every edge-touching
+   element. `h-dvh` plus `border-box` means this padding eats into the 100dvh
+   rather than overflowing it, and the strips it leaves show `body`'s white, which
+   is the colour of the navbar and the sheet that meet them.
+
+   Absolutely-positioned map furniture (the progress box, the layer controls) is
+   inside the padded frame and needs nothing of its own; anything `fixed` is
+   positioned against the viewport instead and has to ask. */
+@utility safe-area {
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* For a bottom-anchored `fixed` element: the top inset would only add an invisible
+   band that swallows taps on the map above it. */
+@utility safe-area-bottom {
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
 /* The two interactive states that have to hold for *every* control, applied once
    here rather than as a class per control — which is how they came to be missing on
    the article close buttons, the admin sidebar's bare glyphs and a dozen others.

@@ -24,7 +24,7 @@ export default async function Home() {
   }
 
   return (
-    <div className="h-dvh flex flex-col bg-white">
+    <div className="h-dvh flex flex-col bg-white safe-area">
       <MainLayout
         user={user}
         onLogout={handleLogout}

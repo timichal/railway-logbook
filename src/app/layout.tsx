@@ -21,6 +21,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // The layout draws into the notch and home-indicator strips and pads itself back
+  // out of them (`safe-area` in globals.css). Without `cover` every
+  // `env(safe-area-inset-*)` resolves to 0 and cannot be opted into later.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

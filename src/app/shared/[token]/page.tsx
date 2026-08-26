@@ -52,7 +52,7 @@ export default async function SharedMapPage({
   }
 
   return (
-    <div className="h-dvh flex flex-col bg-white">
+    <div className="h-dvh flex flex-col bg-white safe-area">
       <PublicMapLayout
         token={token}
         ownerId={owner.userId}

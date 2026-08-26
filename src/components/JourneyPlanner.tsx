@@ -5,7 +5,7 @@ import { useRegionId } from "@/lib/regionContext";
 import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
 import { useToast } from "@/lib/toast";
 import type { HighlightRoutesFn, PlannerRoute, Station } from "@/lib/types";
-import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import { searchStations } from "@/lib/userActions";
 import StationSearchInput from "./StationSearchInput";
 
@@ -37,7 +37,6 @@ export default function JourneyPlanner({
   const [totalDistance, setTotalDistance] = useState(0);
   const [pathError, setPathError] = useState<string | null>(null);
   const [isSearchingPath, setIsSearchingPath] = useState(false);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   // Station search for each input
   const [activeSearch, setActiveSearch] = useState<"from" | "to" | number | null>(null); // number for via index
@@ -327,40 +326,24 @@ export default function JourneyPlanner({
     setViaSearchQueries(viaSearchQueries.filter((_, i) => i !== index));
   };
 
-  // Drag and drop handlers
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index);
-  };
+  // Reorder via stations. Buttons rather than the HTML5 drag-and-drop this used to
+  // use: iOS Safari never fires `dragstart` from a touch, so the drag handle was
+  // dead on a phone with nothing to say so — and a 16px handle was barely a target
+  // even where it worked. Two taps also give keyboard users the reordering that
+  // drag-and-drop had no equivalent for.
+  const moveViaStation = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= viaStations.length) return;
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-
-    if (draggedIndex === null || draggedIndex === dropIndex) {
-      setDraggedIndex(null);
-      return;
-    }
-
-    // Reorder via stations
-    const newViaStations = [...viaStations];
-    const [draggedStation] = newViaStations.splice(draggedIndex, 1);
-    newViaStations.splice(dropIndex, 0, draggedStation);
-    setViaStations(newViaStations);
-
-    // Reorder via search queries
-    const newViaQueries = [...viaSearchQueries];
-    const [draggedQuery] = newViaQueries.splice(draggedIndex, 1);
-    newViaQueries.splice(dropIndex, 0, draggedQuery);
-    setViaSearchQueries(newViaQueries);
-
-    setDraggedIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
+    // The station and its query text are parallel arrays keyed by position, so both
+    // move together or the row would show someone else's name.
+    const swap = <T,>(list: T[]): T[] => {
+      const next = [...list];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    };
+    setViaStations(swap(viaStations));
+    setViaSearchQueries(swap(viaSearchQueries));
   };
 
   return (
@@ -410,19 +393,31 @@ export default function JourneyPlanner({
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: via rows are positional parallel arrays (viaStations[i] ↔ viaSearchQueries[i]) reordered together, so the index is the row identity.
           key={viaIndex}
-          className={`flex items-center gap-2 ${draggedIndex === viaIndex ? "opacity-50" : ""}`}
+          className="flex items-center gap-1"
         >
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: native HTML5 drag handle; drag-and-drop reordering has no keyboard equivalent, and the via input below is fully keyboard-operable. */}
-          <div
-            draggable
-            onDragStart={() => handleDragStart(viaIndex)}
-            onDragOver={(e) => handleDragOver(e)}
-            onDrop={(e) => handleDrop(e, viaIndex)}
-            onDragEnd={handleDragEnd}
-            className="cursor-move text-gray-400 text-lg"
-          >
-            ☰
-          </div>
+          {/* Only worth the width once there is something to reorder. */}
+          {viaStations.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => moveViaStation(viaIndex, -1)}
+                disabled={viaIndex === 0}
+                aria-label={`Move via station ${viaIndex + 1} up`}
+                className={`${iconBtn("responsive")} text-xs`}
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                onClick={() => moveViaStation(viaIndex, 1)}
+                disabled={viaIndex === viaStations.length - 1}
+                aria-label={`Move via station ${viaIndex + 1} down`}
+                className={`${iconBtn("responsive")} text-xs`}
+              >
+                ▼
+              </button>
+            </>
+          )}
           <StationSearchInput
             containerClassName="flex-1"
             value={viaSearchQueries[viaIndex] || ""}

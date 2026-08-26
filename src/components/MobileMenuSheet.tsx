@@ -223,7 +223,7 @@ export default function MobileMenuSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-white flex flex-col sheet-slide-up">
+    <div className="fixed inset-0 z-40 bg-white flex flex-col sheet-slide-up safe-area">
       <header className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0">
         {view !== "menu" && (
           <IconButton onClick={backToMenu} label="Back to menu" path={CHEVRON_LEFT} />

@@ -126,6 +126,9 @@ export default function PublicRailwayMap({
     stationSearch.setSearchQuery("");
     stationSearch.setShowSuggestions(false);
     stationSearch.setSelectedStationIndex(-1);
+    // The dropdown holds focus in the input (see the suggestion list below), so the
+    // field has to be released here or the keyboard stays up over the map.
+    stationSearch.searchInputRef.current?.blur();
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -208,7 +211,13 @@ export default function PublicRailwayMap({
           {stationSearch.showSuggestions &&
             !stationSearch.isSearching &&
             stationSearch.searchResults.length > 0 && (
-              <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto z-20">
+              <div
+                // Keeps the focus in the input: without it the pointerdown blurs the
+                // field and the 200ms blur timer above hides the list before the
+                // click lands — on touch, even scrolling the list did it.
+                onPointerDown={(e) => e.preventDefault()}
+                className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto z-20"
+              >
                 {stationSearch.searchResults.map((station, index) => (
                   <button
                     type="button"
