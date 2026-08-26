@@ -109,7 +109,7 @@ export default function JourneyLogger({
   const totalDistance = selectedRoutes.reduce((sum, route) => sum + route.length_km, 0);
 
   return (
-    <div className="p-4 text-black space-y-4">
+    <div className="p-4 text-fg space-y-4">
       {/* Journey Form Section */}
       <div>
         <h3 className="text-lg font-bold mb-3">New Journey</h3>

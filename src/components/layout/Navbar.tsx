@@ -46,7 +46,7 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
   const [showShareDialog, setShowShareDialog] = useState(false);
 
   return (
-    <header className="bg-white border-b border-gray-200 px-3 py-2 md:p-4 flex-shrink-0">
+    <header className="bg-surface border-b border-gray-200 px-3 py-2 md:p-4 flex-shrink-0">
       {/* Mobile navbar — title, then auth / share / hamburger as icon buttons. Everything
           else (region switch, layer toggles, articles, admin link, back-to-map) lives
           behind the hamburger. */}

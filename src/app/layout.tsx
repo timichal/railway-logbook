@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ToastContainer, ToastProvider } from "@/lib/toast";
 
 // Inter rather than Geist: Geist is a display-leaning face and reads as a headline
@@ -33,7 +34,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // The init script writes `class="dark"` onto this element, which React would
+    // otherwise flag as a hydration mismatch against the server's bare <html>.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Before the stylesheet paints anything, so a dark-mode visitor never gets a
+            white flash. It has to be inline and synchronous — an external script or
+            a `useEffect` both run too late to beat the first paint. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed, self-authored constant with no interpolated input — see THEME_INIT_SCRIPT. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className={`${inter.variable} antialiased`}>
         <ToastProvider>
           {children}

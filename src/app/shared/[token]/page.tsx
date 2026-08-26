@@ -39,7 +39,7 @@ export default async function SharedMapPage({
 
   if (!owner) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center bg-white px-6 text-center">
+      <div className="h-dvh flex flex-col items-center justify-center bg-surface px-6 text-center">
         <h1 className="text-2xl font-bold text-gray-900">This map is not available</h1>
         <p className="text-gray-600 mt-2 max-w-md">
           The link is either wrong or its owner has turned public sharing off.
@@ -52,7 +52,7 @@ export default async function SharedMapPage({
   }
 
   return (
-    <div className="h-dvh flex flex-col bg-white safe-area">
+    <div className="h-dvh flex flex-col bg-surface safe-area">
       <PublicMapLayout
         token={token}
         ownerId={owner.userId}

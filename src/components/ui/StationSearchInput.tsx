@@ -107,7 +107,7 @@ export default function StationSearchInput({
       {showResults && searchResults.length > 0 && (
         <div
           onPointerDown={keepFocus}
-          className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20"
+          className="absolute top-full mt-1 w-full bg-surface border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20"
         >
           {searchResults.map((station, index) => (
             <button

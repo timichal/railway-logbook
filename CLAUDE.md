@@ -109,7 +109,8 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 
 `src/lib/map/style.ts` is the **single source of truth** for colors/widths/opacities (`COLORS`, `WIDTHS`, `CIRCLES`, `LABELS`, `OPACITIES`). Route colors come from visit status × line_class (green/orange/red, darker for highspeed). Width is a single z4→z7 zoom interpolate; all line classes visible at all zooms, just thinner when zoomed out. Scenic routes get an amber outline (its own layer because MapLibre forbids wrapping a zoom-interpolate). An invisible wide `railway_routes_click` layer sits over the visible line for touch hit areas. Hover popups use badge formatting from `utils/tooltipFormatting.ts`.
 
-**Basemap** (`basemap.ts`). The background is OpenFreeMap's `liberty` vector style (OpenMapTiles schema, no API key, attribution declared by the source TileJSON so MapLibre picks it up unaided — where it is drawn is `useMapLibre`'s business, see "Attribution" below). It is **vector rather than raster for one reason: label language.** A raster basemap bakes its labels into the image from OSM's local `name`, so the Japan region came out in kanji with nothing to configure; in a vector style the label is a property we own, and `latinizeLabels` rewrites every name-bearing symbol layer's `text-field` to `coalesce(name:latin, name_en, name)` — Latin script, falling back to the local name so a place with no Latin name is labelled rather than blank. The test is what a layer *reads*, not what it is called: `highway-shield-non-us` and the one-way arrows read `ref`, not a name, and are left alone (`highway-name-major` does read a name).
+**Basemap** (`basemap.ts`). The background is OpenFreeMap's `liberty` vector style
+(its `dark` sibling in dark mode — see "Dark mode" below) (OpenMapTiles schema, no API key, attribution declared by the source TileJSON so MapLibre picks it up unaided — where it is drawn is `useMapLibre`'s business, see "Attribution" below). It is **vector rather than raster for one reason: label language.** A raster basemap bakes its labels into the image from OSM's local `name`, so the Japan region came out in kanji with nothing to configure; in a vector style the label is a property we own, and `latinizeLabels` rewrites every name-bearing symbol layer's `text-field` to `coalesce(name:latin, name_en, name)` — Latin script, falling back to the local name so a place with no Latin name is labelled rather than blank. The test is what a layer *reads*, not what it is called: `highway-shield-non-us` and the one-way arrows read `ref`, not a name, and are left alone (`highway-name-major` does read a name).
 
 Two consequences of the basemap being ~110 layers instead of one raster layer:
 - **The fade is its own layer.** `raster-opacity: 0.6` has no vector equivalent, so `createBasemapFadeLayer` puts a `background`-type layer (needs no source, paints the whole viewport) above the basemap and below our layers, at `OPACITIES.basemapFade`. Our layers still sit on top of everything, as they did over the raster tiles.
@@ -159,13 +160,14 @@ One directory per part of the app, and a component is always imported by its ful
 - **`layout/`** — `MainLayout`, `Navbar`, `MenuSheet` (the hamburger's menu, at every width — a full-screen sheet on a phone, a right-hand drawer over a scrim on desktop, the direction of the open animation picked by a media query on `.menu-sheet` rather than by a class React chooses; rows are deliberately monochrome with an icon each — colouring every entry differently leaves no colour free to mark the destructive one, so red is spent only on Log out, and auth sits in a footer rather than in the list).
 - **`auth/`** — `LoginForm`, `RegisterForm` (rendered by `MenuSheet` and nowhere else, so `onSuccess` is required; each links across to the other, since the menu's footer is hidden while a form is open).
 - **`articles/`** — `HowToUseArticle`, `RailwayNotesArticle` (both reached only from the menu, which supplies their title and back arrow — they carry no header of their own).
-- **`ui/`** — the pieces with no one home: `MobileBottomSheet`, `ToggleSwitch` (`role="switch"` button, not a restyled checkbox — the whole row is the hit area), `RegionSwitch` (region segmented control, rendered by `MenuSheet` on the user map, by `Navbar` on the admin page — which has no menu — and by `PublicMapLayout` on the shared one), `TagInput`, `StationSearchInput`.
+- **`ui/`** — the pieces with no one home: `MobileBottomSheet`, `ToggleSwitch` (`role="switch"` button, not a restyled checkbox — the whole row is the hit area), `RegionSwitch` (region segmented control, rendered by `MenuSheet` on the user map, by `Navbar` on the admin page — which has no menu — and by `PublicMapLayout` on the shared one), `ThemeSwitch` (Light / System / Dark, in the menu only — the admin page therefore follows whatever the main map set), `TagInput`, `StationSearchInput`.
 
 ### Library (`src/lib/`)
 - **DB/actions**: `db.ts`, `dbConfig.ts`, `userActions.ts`, `progressQueries.ts` (user-scoped progress/coverage SQL, shared by the authenticated and token-checked wrappers), `publicMapActions.ts`, `userPreferencesActions.ts`, `journeyActions.ts`, `tripActions.ts`, `adminRouteActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts`, `authActions.ts`, `migrationActions.ts`.
 - **Data access**: `dataAccess.ts` (DB vs localStorage abstraction), `localStorage.ts`.
 - **Pathfinding**: `routePathFinder.ts` (user-facing journey planner, excludes non-regular routes). See "Journey planner pathfinding" below.
 - **Regions**: `regions.ts` (region definitions + `regionEnvelopeSql`), `regionContext.tsx` (`RegionProvider`, `useRegion`, `useRegionId`).
+- **Theme**: `theme/index.ts` — the colour scheme preference (`useThemePreference`, `setThemePreference`), the resolved answer (`useResolvedTheme`) and `THEME_INIT_SCRIPT`. See "Dark mode" below.
 - **Layer prefs**: `map/layerPrefs.ts` (localStorage read/write), `map/layerPrefsContext.tsx` (`LayerPrefsProvider`, `useLayerPrefs`). The toggles are held **above** the map, by `MainLayout` and `PublicMapLayout`, because the menu that drives them is a sibling of the map rather than a child; two hooks reading the same key would disagree. `useRouteEditor` therefore returns progress only.
 - **UI classes**: `ui/buttonStyles.ts` — the named button roles (`btn(variant, size)`, `iconBtn`, `tabBtn`, `optionRow`, `LINK_BTN`) and the hover/active/disabled states each one carries. See "Interactive states" below. `ui/inputStyles.ts` — `FIELD` / `FIELD_LABEL` / `FIELD_HINT` / `FORM_ERROR`, the house input style named for the two auth forms alone (they are the only forms that are a whole screen); not a sweep of every input in the app.
 - **Utils**: `types.ts`, `constants.ts`, `routeCoverage.ts` (when logged stretches add up to a complete route — see "Progress"), `stationProximity.ts` (`stations.near_route` — see "Station proximity"), `coordinateUtils.ts` (`mergeLinearChain`, `coordinatesToWKT`), `countryUtils.ts`, `getUntimezonedDateStr.ts`.
@@ -198,6 +200,63 @@ One directory per part of the app, and a component is always imported by its ful
 
 ## UI structure
 
+### Dark mode
+
+**The palette is the token layer.** Tailwind v4 compiles `border-gray-300` to
+`var(--color-gray-300)`, so `html.dark` in `globals.css` re-points the neutral ramp
+and the whole app flips at once — there is no bespoke token vocabulary to learn, and
+a component written the ordinary way (`bg-gray-50`, `text-gray-700`,
+`border-gray-200`) is dark-correct for free. Write colours that way and nothing more
+is needed.
+
+Two things could not ride on that:
+
+- **`bg-surface` / `text-fg`** replaced the `bg-white` / `text-black` literals. `white`
+  and `black` themselves are left alone deliberately — `text-white` on a solid button
+  and `bg-black/40` on a scrim mean the literal colour, not "the foreground", and
+  inverting the ramp under them would have flipped exactly the things that must not
+  flip. Same reasoning gives `ToggleSwitch` its knob: `bg-white`, because the knob is
+  the physical thing sliding in the track.
+- **The accent ramps flip only at their ends.** 50–300 are tints used as surfaces and
+  borders and go dark; 700–950 are the text drawn on those tints and go light; 400–600
+  are the solid buttons and the accent text and stay put, so `bg-blue-600 text-white`
+  keeps working. (blue-600 alone is nudged a step brighter, so `text-blue-600` clears
+  its new dark backing.) The places that used `hover:bg-blue-700` to mean "a step
+  deeper than the resting button" therefore need a `dark:` override written as literal
+  hex — an arbitrary value never goes through the palette. Nearly all of them are the
+  solid variants in `buttonStyles.ts`; the toast borders are the other one.
+
+**It is a setting, not `prefers-color-scheme`** — Light / System / Dark, in the menu
+above the layer switches (`ThemeSwitch`; three states, because "follow the OS" is a
+real answer and the default one). `src/lib/theme` owns it, in **localStorage rather
+than `user_preferences`**: it then needs no account, and the shared map follows the
+*visitor's* choice rather than the owner's. `THEME_INIT_SCRIPT` runs inline in
+`layout.tsx`'s `<head>` and sets the class before the first paint, so a dark-mode
+visitor never sees a white flash — hence `suppressHydrationWarning` on `<html>`, and
+`useResolvedTheme` reading the class the script already set rather than storage, so
+the hydration render agrees with what is on screen. It also sets `color-scheme`,
+which is what gives the inputs that declare no background of their own a dark one.
+
+**On the map**, the scheme reaches `useMapLibre`, which appends it to the caller's
+deps — MapLibre takes one style object at construction, so a scheme change rebuilds
+the map exactly as a region change does. The basemap swaps to OpenFreeMap's `dark`
+style (`BASEMAP_STYLE_URLS`; 47 layers to liberty's ~110, with no POI layers and no
+extrusion for `dropPoiLayers`/`flattenBuildings` to find — they run anyway, keying on
+what a layer *is*), `createBasemapFadeLayer` washes toward near-black and a little
+harder, and the raster fallback gets a black ground layer to fade its white-printed
+tiles into. **The stations layers are the only two of ours that take the scheme**
+(`COLORS.stationsDark`), because they are the only two whose colours are picked
+against the ground under them rather than against the data in them: the label goes
+light and its halo goes from translucent white to translucent black. The route colours
+are still the light ones — see item 13 in `MOBILE_UI_FIXES.md` for why that one is not
+a constant swap.
+
+**Popups are inline styles, which no stylesheet rule can override**, so
+`tooltipFormatting.ts` and both interaction modules read `var(--color-fg)`,
+`var(--color-gray-500)` and `var(--color-link)` directly instead of naming a colour.
+MapLibre's own popup chrome and control stacks are overridden in `globals.css` — its
+control glyphs are SVG fills with no colour hook, so the button is inverted whole.
+
 ### Interactive states
 
 Every control answers to one agreed set — **hover, active, focus-visible, disabled** — and the set is applied in two places, never by hand at a call site.
@@ -226,7 +285,7 @@ It **reads as a sheet through three things that all cost something**. The rounde
 The **sidebar is the three logging tabs and nothing else**: **Route Logger**, **My Trips** (auth) / **My Journeys** (unauth), **Country Settings & Stats** (hidden in a single-country region; if it is open when the region changes, the sidebar falls back to Route Logger). `activeTab` lives in `MainLayout`, flows down via props (no useEffect sync). Map route/station clicks are only active in the Route Logger tab. The articles used to be two more tabs here, taking over the whole pane with a close button of their own; they are menu rows now.
 
 ### Menu (hamburger)
-`MenuSheet` is what the hamburger opens, **at every width** — a full-screen sheet rising from the bottom of a phone, a ~380px right-hand drawer over a dimmed page on desktop. One component and one set of contents, so the two cannot drift: the region switch, the layer switches, the two articles, the admin link, and auth in a footer.
+`MenuSheet` is what the hamburger opens, **at every width** — a full-screen sheet rising from the bottom of a phone, a ~380px right-hand drawer over a dimmed page on desktop. One component and one set of contents, so the two cannot drift: the region switch, the colour scheme, the layer switches, the two articles, the admin link, and auth in a footer.
 
 It exists because the same handful of *settings* were spread across three places that each charged permanent screen space to say nothing most of the time — the region switch and two article buttons in the top bar, the layer switches in the map's corner box, the articles again as sidebar tabs. Gathering them behind one button leaves the bar to identity and auth, the map corner to the numbers, and the sidebar to logging.
 

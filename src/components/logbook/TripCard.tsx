@@ -187,7 +187,7 @@ export default function TripCard({
   };
 
   return (
-    <div className="bg-white border border-purple-300 rounded shadow-sm">
+    <div className="bg-surface border border-purple-300 rounded shadow-sm">
       <div className="px-3 py-2 flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 overflow-hidden">
@@ -352,7 +352,7 @@ export default function TripCard({
                   {unassignedJourneys.map((j) => (
                     <div
                       key={j.id}
-                      className="p-2 bg-white border border-gray-200 rounded text-xs flex items-center justify-between gap-2"
+                      className="p-2 bg-surface border border-gray-200 rounded text-xs flex items-center justify-between gap-2"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{j.name}</div>

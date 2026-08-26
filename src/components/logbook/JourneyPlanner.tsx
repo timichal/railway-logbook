@@ -347,7 +347,7 @@ export default function JourneyPlanner({
   };
 
   return (
-    <div className="space-y-3 text-black">
+    <div className="space-y-3 text-fg">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-bold">Journey Planner</h3>
         <button type="button" onClick={resetForm} className={LINK_BTN}>

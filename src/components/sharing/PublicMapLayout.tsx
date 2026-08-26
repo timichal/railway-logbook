@@ -44,7 +44,7 @@ export default function PublicMapLayout({
   return (
     <RegionProvider initialRegion={initialRegion}>
       <LayerPrefsProvider>
-        <header className="bg-white border-b border-gray-200 px-3 py-2 md:px-4 md:py-3 flex-shrink-0">
+        <header className="bg-surface border-b border-gray-200 px-3 py-2 md:px-4 md:py-3 flex-shrink-0">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h1 className="text-lg md:text-2xl font-bold text-gray-900 truncate">

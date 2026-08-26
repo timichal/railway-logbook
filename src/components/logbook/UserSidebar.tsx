@@ -79,7 +79,7 @@ export default function UserSidebar({
       style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined}
       // The right border belongs to the desktop sidebar, which has a map beside it.
       // In the mobile sheet it is a hairline down the inside of a rounded panel.
-      className={`bg-white flex flex-col ${
+      className={`bg-surface flex flex-col ${
         sidebarWidth != null ? "border-r border-gray-200 flex-shrink-0" : "flex-1 min-h-0"
       }`}
     >

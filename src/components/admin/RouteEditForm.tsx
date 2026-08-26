@@ -143,7 +143,7 @@ export default function RouteEditForm({
                 type="text"
                 value={editForm.name}
                 onChange={(e) => onEditFormChange({ ...editForm, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
                 placeholder="Line name"
               />
             </div>
@@ -164,7 +164,7 @@ export default function RouteEditForm({
                   onEditFormChange({ ...editForm, from_station: value }),
                 )
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
             />
           </div>
 
@@ -183,7 +183,7 @@ export default function RouteEditForm({
                   onEditFormChange({ ...editForm, to_station: value }),
                 )
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
             />
           </div>
 
@@ -200,7 +200,7 @@ export default function RouteEditForm({
               value={editForm.description}
               onChange={(e) => onEditFormChange({ ...editForm, description: e.target.value })}
               rows={5}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
             />
           </div>
 
@@ -214,7 +214,7 @@ export default function RouteEditForm({
               type="url"
               value={editForm.link}
               onChange={(e) => onEditFormChange({ ...editForm, link: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
               placeholder="https://example.com"
             />
           </div>
@@ -282,7 +282,7 @@ export default function RouteEditForm({
               onChange={(e) =>
                 onEditFormChange({ ...editForm, line_class: e.target.value as LineClass })
               }
-              className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm text-black"
+              className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm text-fg"
             >
               {lineClassOptions.map((option) => (
                 <option key={option.id} value={option.id}>

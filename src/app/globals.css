@@ -7,16 +7,153 @@
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
-/* No dark mode. The `--background`/`--foreground` pair that used to live here (with
-   a `prefers-color-scheme: dark` override) was Next's boilerplate and never
-   finished: `body` hardcoded a white background while its *colour* followed the
-   scheme, and every component is `bg-white` / `text-black`. So on a machine set to
-   dark, anything that inherited its colour — the toggle switch labels, for one —
-   came out #ededed on white, i.e. invisible. Supporting dark mode properly means
-   auditing every component; until then this says plainly that it is light-only. */
+/* ---------------------------------------------------------------------------
+   Dark mode (beta).
+   ---------------------------------------------------------------------------
+   Every component in this app writes its colours as Tailwind literals —
+   `bg-white`, `text-gray-700`, `border-gray-300`. Rather than rewrite 400-odd
+   of them into a bespoke token vocabulary, the palette *itself* is the token
+   layer: Tailwind v4 compiles `border-gray-300` to `var(--color-gray-300)`, so
+   re-pointing that variable under `html.dark` flips the whole app at once, and
+   a component written the ordinary way is dark-mode-correct by default.
+
+   Two things could not ride on that and are named tokens instead:
+
+   - `--color-surface` / `--color-fg`, which replaced the `bg-white` /
+     `text-black` literals (a mechanical rename). `white` and `black` are left
+     alone deliberately: `text-white` on a solid button and `bg-black/40` on a
+     scrim both mean the literal colour, not "the foreground/background", and
+     flipping the ramp under them would have inverted exactly the things that
+     must not invert.
+   - The accent ramps flip only at their *ends*. Steps 50–300 are tints used as
+     surfaces and borders and go dark; 700–950 are the text drawn on those tints
+     and go light. 400–600 are the solid buttons and the accent text, and stay
+     where they are — `bg-blue-600 text-white` has to keep working. The one
+     exception is blue-600, nudged a step brighter so `text-blue-600` clears its
+     new dark backing.
+
+   The class is set by the inline script in `layout.tsx` before first paint, so
+   there is no light flash; `src/lib/theme` owns the preference (system / light /
+   dark, localStorage, no account needed — the shared map then follows the
+   *visitor's* choice rather than the owner's). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Not `@theme inline`: these have to stay `var()` references for html.dark to
+     be able to re-point them. */
+  --color-surface: #ffffff;
+  --color-fg: #171717;
+  /* The `:focus-visible` ring below, which needs to lift off a dark ground. */
+  --color-focus-ring: #2563eb;
+  /* Links inside the map popups. Those are raw HTML strings with *inline* styles
+     (`tooltipFormatting.ts`), which no stylesheet rule can override — so they read
+     these variables directly instead of naming a colour. */
+  --color-link: #1d4ed8;
+}
+
+html.dark {
+  --color-surface: #14161a;
+  --color-fg: #e9ecf1;
+  --color-focus-ring: #7aa7f7;
+  --color-link: #93b4f8;
+
+  /* The neutral ramp, inverted. 50 → 300 were near-white surfaces and are now
+     the raised ones (lighter than `surface`, as a raised surface should be on a
+     dark ground); 400 → 900 were text and borders and become their light
+     counterparts, keeping the same ordering so `text-gray-500` stays quieter
+     than `text-gray-700` either way round. */
+  --color-gray-50: #1b1e24;
+  --color-gray-100: #22262e;
+  --color-gray-200: #2a2f38;
+  --color-gray-300: #3a414d;
+  --color-gray-400: #5c6573;
+  --color-gray-500: #98a1b0;
+  --color-gray-600: #aab3c0;
+  --color-gray-700: #c6cdd8;
+  --color-gray-800: #dde2e9;
+  --color-gray-900: #eef1f5;
+  --color-gray-950: #f7f9fb;
+
+  --color-blue-50: #10192e;
+  --color-blue-100: #16233f;
+  --color-blue-200: #1e3155;
+  --color-blue-300: #274177;
+  --color-blue-600: #3b82f6;
+  --color-blue-700: #93b4f8;
+  --color-blue-800: #b6cdfa;
+  --color-blue-900: #d3e0fc;
+  --color-blue-950: #eaf1fe;
+
+  --color-green-50: #0d1f14;
+  --color-green-100: #122a1b;
+  --color-green-200: #183a25;
+  --color-green-300: #1f5033;
+  --color-green-700: #86e0a5;
+  --color-green-800: #b0ecc4;
+  --color-green-900: #d0f5dd;
+  --color-green-950: #e9fbef;
+
+  --color-emerald-50: #0d1f18;
+  --color-emerald-100: #122a20;
+  --color-emerald-700: #7ce0be;
+  --color-emerald-800: #a9ecd5;
+
+  --color-red-50: #2a1113;
+  --color-red-100: #37171a;
+  --color-red-200: #4b1e22;
+  --color-red-300: #66282e;
+  --color-red-700: #ff9d9d;
+  --color-red-800: #ffbdbd;
+  --color-red-900: #ffd8d8;
+  --color-red-950: #fff0f0;
+
+  --color-amber-50: #2a1d05;
+  --color-amber-100: #372608;
+  --color-amber-200: #4b330a;
+  --color-amber-300: #66450d;
+  --color-amber-700: #f2c14e;
+  --color-amber-800: #f7d582;
+  --color-amber-900: #fbe6b4;
+
+  --color-orange-50: #2b1a08;
+  --color-orange-100: #38220b;
+  --color-orange-200: #4c2e0e;
+  --color-orange-300: #663e12;
+  --color-orange-700: #ffb37a;
+  --color-orange-800: #ffcaa3;
+  --color-orange-900: #ffe1c9;
+
+  --color-yellow-50: #2b2405;
+  --color-yellow-100: #382f08;
+  --color-yellow-700: #f0d14e;
+  --color-yellow-800: #f6e187;
+
+  --color-violet-50: #1b1430;
+  --color-violet-100: #241a40;
+  --color-violet-200: #322456;
+  --color-violet-300: #432f76;
+  --color-violet-700: #c0a8ff;
+  --color-violet-800: #d5c6ff;
+  --color-violet-900: #e8e0ff;
+
+  --color-indigo-50: #151831;
+  --color-indigo-100: #1c2042;
+  --color-indigo-200: #262c59;
+  --color-indigo-300: #333b79;
+  --color-indigo-700: #a8b4ff;
+  --color-indigo-800: #c6ceff;
+
+  --color-purple-50: #221334;
+  --color-purple-100: #2d1944;
+  --color-purple-200: #3d235c;
+  --color-purple-300: #522f7c;
+  --color-purple-700: #d6a4ff;
+  --color-purple-800: #e5c5ff;
+}
+
 body {
-  background: #ffffff;
-  color: #171717;
+  background: var(--color-surface);
+  color: var(--color-fg);
   /* The webfont was previously loaded in layout.tsx and then overridden by a
      hardcoded Arial here, so every load paid for a font it never rendered.
      `system-ui` first in the fallback, so a failed font load lands on the
@@ -37,8 +174,8 @@ body,
    leaves black bars — so the padding has to come back somewhere, and it is cheaper
    to inset the whole app frame once than to remember it at every edge-touching
    element. `h-dvh` plus `border-box` means this padding eats into the 100dvh
-   rather than overflowing it, and the strips it leaves show `body`'s white, which
-   is the colour of the navbar and the sheet that meet them.
+   rather than overflowing it, and the strips it leaves show `body`'s own surface
+   colour, which is the colour of the navbar and the sheet that meet them.
 
    Absolutely-positioned map furniture (the progress box, the layer controls) is
    inside the padded frame and needs nothing of its own; anything `fixed` is
@@ -91,7 +228,7 @@ body,
   [role="button"]:focus-visible,
   [role="switch"]:focus-visible,
   summary:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
   }
 }
@@ -180,8 +317,68 @@ body,
 
 .railway-popup a,
 .railway-click-menu a {
-  color: #1d4ed8;
+  color: var(--color-link);
   text-decoration: none;
+}
+
+/* MapLibre draws its popups and its own controls in its stylesheet's hardcoded
+   white, which no Tailwind class of ours can reach — the popup content element is
+   MapLibre's, and the control buttons are its SVG glyphs on a white ground. The
+   popup *bodies* are ours (built in `tooltipFormatting.ts` with the same
+   `text-gray-*` classes as the rest of the app) and flip with the palette, so
+   without this they were dark text on white inside a dark app. The tip is a
+   separate triangle drawn with `border-*-color`, hence the second rule. */
+html.dark {
+  .maplibregl-popup-content {
+    background: var(--color-surface);
+    color: var(--color-fg);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  }
+  .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+  .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+  .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+    border-bottom-color: var(--color-surface);
+  }
+  .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+  .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+  .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+    border-top-color: var(--color-surface);
+  }
+  .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+    border-right-color: var(--color-surface);
+  }
+  .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+    border-left-color: var(--color-surface);
+  }
+  .maplibregl-popup-close-button {
+    color: var(--color-gray-500);
+  }
+
+  /* The navigation / geolocate / attribution controls, and the scale bar's rule. */
+  .maplibregl-ctrl-group {
+    background: var(--color-surface);
+  }
+  .maplibregl-ctrl-group button + button {
+    border-top-color: var(--color-gray-300);
+  }
+  .maplibregl-ctrl-group button:not(:disabled):hover {
+    background-color: var(--color-gray-100);
+  }
+  /* The control glyphs are SVG `fill`s baked dark into MapLibre's stylesheet;
+     there is no colour hook, so the whole button is inverted instead. */
+  .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  .maplibregl-ctrl-attrib,
+  .maplibregl-ctrl-attrib a {
+    background-color: var(--color-surface);
+    color: var(--color-gray-700);
+  }
+  .maplibregl-ctrl-scale {
+    background-color: rgb(20 22 26 / 0.7);
+    border-color: var(--color-gray-500);
+    color: var(--color-gray-800);
+  }
 }
 
 /* Toast notification animations */

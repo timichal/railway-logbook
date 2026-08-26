@@ -120,7 +120,7 @@ export default function TagInput({
           onBlur={() => setOpen(false)}
           onKeyDown={handleKeyDown}
           placeholder={value.length === 0 ? placeholder : ""}
-          className="flex-1 min-w-[80px] text-sm outline-none text-black bg-transparent"
+          className="flex-1 min-w-[80px] text-sm outline-none text-fg bg-transparent"
         />
       </div>
 
@@ -128,7 +128,7 @@ export default function TagInput({
         <ul
           // Keep focus on the input so onBlur doesn't fire before the click lands.
           onMouseDown={(e) => e.preventDefault()}
-          className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg py-1"
+          className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-surface border border-gray-200 rounded-md shadow-lg py-1"
         >
           {options.map((opt, i) => (
             <li key={`${opt.type}-${opt.value}`}>

@@ -152,7 +152,7 @@ export default function JourneysAndTripsTab({
   };
 
   return (
-    <div className="p-4 text-black space-y-4">
+    <div className="p-4 text-fg space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-bold">My Trips</h3>

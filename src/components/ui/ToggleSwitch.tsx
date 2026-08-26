@@ -45,6 +45,9 @@ export default function ToggleSwitch({
           compact ? "w-9 h-5" : "w-11 h-6"
         } ${checked ? "bg-blue-600" : "bg-gray-300"}`}
       >
+        {/* `bg-white`, not `bg-surface`: the knob is the physical thing sliding in
+            the track, and it stays light on either scheme — inverted with the rest
+            of the app it became a near-black knob in a dark grey track. */}
         <span
           className={`rounded-full bg-white shadow transition-transform ${
             compact ? "w-4 h-4" : "w-5 h-5"

@@ -106,7 +106,7 @@ export default function NotesPopup({
   };
 
   return (
-    <div className="w-64 bg-white">
+    <div className="w-64 bg-surface">
       <div className="flex items-center justify-between mb-2">
         <div>
           <h3 className="text-sm font-semibold text-gray-800">
@@ -135,7 +135,7 @@ export default function NotesPopup({
         id="note-type"
         value={noteType}
         onChange={(e) => setNoteType(e.target.value as NoteType | "")}
-        className="w-full px-2 py-1 mb-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
+        className="w-full px-2 py-1 mb-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-fg bg-surface"
       >
         <option value="">-- Select type --</option>
         {noteTypeOptions.map((opt) => (
@@ -151,7 +151,7 @@ export default function NotesPopup({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Enter note text..."
-        className="w-full h-24 px-2 py-1 text-sm border border-gray-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+        className="w-full h-24 px-2 py-1 text-sm border border-gray-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-fg"
       />
 
       <label htmlFor="note-source" className="block text-xs font-medium text-gray-700 mt-2 mb-1">
@@ -164,7 +164,7 @@ export default function NotesPopup({
         onChange={(e) => setSource(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="https://..."
-        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
+        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-fg bg-surface"
       />
 
       <div className="flex gap-2 mt-2">

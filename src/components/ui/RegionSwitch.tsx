@@ -43,7 +43,7 @@ export default function RegionSwitch({ compact = false, stretch = false }: Regio
             className={`${compact ? "px-3 text-lg" : "px-3 text-sm"} ${stretch ? "flex-1" : ""} inline-flex items-center justify-center font-medium transition-colors focus-visible:-outline-offset-2 border-r border-gray-300 last:border-r-0 ${
               isActive
                 ? "bg-blue-600 text-white"
-                : "bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200"
+                : "bg-surface text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200"
             }`}
           >
             <span aria-hidden="true">{region.flag}</span>

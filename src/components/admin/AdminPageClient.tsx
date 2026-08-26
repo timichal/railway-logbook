@@ -274,7 +274,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   );
 
   return (
-    <div className="h-dvh flex flex-col bg-white safe-area">
+    <div className="h-dvh flex flex-col bg-surface safe-area">
       <Navbar user={user} onLogout={handleLogout} isAdminPage={true} onOpenMenu={toggleSidebar} />
 
       <main className="flex-1 overflow-hidden flex relative">
@@ -301,7 +301,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
               className="fixed inset-0 bg-black/40 z-30"
               onClick={toggleSidebar}
             />
-            <div className="fixed inset-y-0 left-0 z-40 w-full max-w-md bg-white flex flex-col sidebar-drawer-open safe-area">
+            <div className="fixed inset-y-0 left-0 z-40 w-full max-w-md bg-surface flex flex-col sidebar-drawer-open safe-area">
               <div className="border-b border-gray-200 px-3 py-2 flex flex-wrap gap-2 flex-shrink-0">
                 <Link href="/" className={btn("neutral", "xs")}>
                   Back to Map

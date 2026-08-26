@@ -1,4 +1,5 @@
 import type * as maplibregl from "maplibre-gl";
+import type { ResolvedTheme } from "@/lib/theme";
 import {
   createPublicNotesLayer,
   createRailwayRoutesClickLayer,
@@ -22,8 +23,8 @@ import {
  * The user map's route layers, shared by the interactive map and the read-only
  * shared view (`/shared/<token>`).
  *
- * Module-level constants rather than per-component memos: none of them depends
- * on anything, and a single stable reference is what `useMapTileRefresh` wants
+ * The route configs below are module-level constants rather than per-component
+ * memos: none of them depends on anything, and a single stable reference is what `useMapTileRefresh` wants
  * anyway. Both maps must draw the same lines in the same colours — a shared map
  * that styled its routes differently from the owner's own would be a bug that
  * only shows up once someone opens the link.
@@ -73,15 +74,17 @@ export const userClickBufferLayerConfig: RailwayRoutesPaintConfig = {
  * thin, and hovering the visible line alone is finicky), and nothing but the
  * absence of a click handler makes that map read-only.
  */
-export function createUserMapLayers(): maplibregl.LayerSpecification[] {
+export function createUserMapLayers(
+  theme: ResolvedTheme = "light",
+): maplibregl.LayerSpecification[] {
   return [
     createScenicRoutesOutlineLayer(userScenicLayerConfig),
     createRailwayRoutesLayer(userRouteLayerConfig),
     createRailwayRoutesHeritageLayer(userHeritageLayerConfig),
     createRailwayRoutesSpecialLayer(userSpecialLayerConfig),
     createRailwayRoutesClickLayer(userClickBufferLayerConfig),
-    createStationsLayer(),
-    createStationLabelsLayer(),
+    createStationsLayer(theme),
+    createStationLabelsLayer(theme),
     // Public Usage notes render on top (route tile refresh re-inserts route
     // layers before "stations", so this stays above them).
     createPublicNotesLayer(),

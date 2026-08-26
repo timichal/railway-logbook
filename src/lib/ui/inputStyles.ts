@@ -17,7 +17,7 @@
 export const FIELD_LABEL = "block text-sm font-medium text-gray-700 mb-1.5";
 
 export const FIELD =
-  "w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm text-black placeholder-gray-400 transition-colors focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
+  "w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm text-fg placeholder-gray-400 transition-colors focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
 
 /** Under-field hint. Says what the server would otherwise only say after a refusal. */
 export const FIELD_HINT = "mt-1.5 text-xs text-gray-500";

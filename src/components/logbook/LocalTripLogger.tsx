@@ -95,7 +95,7 @@ export default function LocalTripLogger({
   const totalDistance = selectedRoutes.reduce((sum, route) => sum + route.length_km, 0);
 
   return (
-    <div className="p-4 text-black space-y-4">
+    <div className="p-4 text-fg space-y-4">
       {/* Storage Info */}
       <div
         className={`text-xs px-3 py-2 rounded border ${

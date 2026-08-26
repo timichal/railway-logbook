@@ -322,7 +322,7 @@ export default function AdminCreateRouteTab({
               readOnly
               placeholder="Click a railway part on the map"
               disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg ${
                 isPreviewMode ? "bg-gray-100 cursor-not-allowed" : "bg-gray-50"
               }`}
             />
@@ -353,7 +353,7 @@ export default function AdminCreateRouteTab({
               readOnly
               placeholder="Click a railway part on the map"
               disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black ${
+              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg ${
                 isPreviewMode ? "bg-gray-100 cursor-not-allowed" : "bg-gray-50"
               }`}
             />
@@ -385,7 +385,7 @@ export default function AdminCreateRouteTab({
                   type="text"
                   value={createForm.name}
                   onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
                   placeholder="Line name"
                 />
               </div>
@@ -406,7 +406,7 @@ export default function AdminCreateRouteTab({
                     setCreateForm({ ...createForm, from_station: value }),
                   )
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
                 placeholder="Starting station"
               />
             </div>
@@ -426,7 +426,7 @@ export default function AdminCreateRouteTab({
                     setCreateForm({ ...createForm, to_station: value }),
                   )
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
                 placeholder="Ending station"
               />
             </div>
@@ -444,7 +444,7 @@ export default function AdminCreateRouteTab({
                 value={createForm.description}
                 onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
                 placeholder="Enter route description"
               />
             </div>
@@ -459,7 +459,7 @@ export default function AdminCreateRouteTab({
                 type="url"
                 value={createForm.link}
                 onChange={(e) => setCreateForm({ ...createForm, link: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
                 placeholder="https://example.com"
               />
             </div>

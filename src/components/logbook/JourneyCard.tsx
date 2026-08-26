@@ -298,7 +298,7 @@ export default function JourneyCard({
 
   return (
     <div
-      className={`border rounded shadow-sm ${nested ? "bg-gray-50 border-gray-200" : "bg-white border-gray-300"}`}
+      className={`border rounded shadow-sm ${nested ? "bg-gray-50 border-gray-200" : "bg-surface border-gray-300"}`}
     >
       <div className="px-3 py-2 flex items-center gap-3">
         <div className="flex-1 min-w-0">
@@ -466,7 +466,7 @@ export default function JourneyCard({
                     {viewedRoutes.map((route) => (
                       <div
                         key={route.track_id}
-                        className="p-2 bg-white border border-gray-200 rounded text-xs"
+                        className="p-2 bg-surface border border-gray-200 rounded text-xs"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium truncate">

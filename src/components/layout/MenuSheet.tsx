@@ -8,6 +8,7 @@ import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
 import LayerToggles from "@/components/map/LayerToggles";
 import RegionSwitch from "@/components/ui/RegionSwitch";
+import ThemeSwitch from "@/components/ui/ThemeSwitch";
 import type { User } from "@/lib/authActions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
@@ -209,6 +210,16 @@ export default function MenuSheet({
           <RegionSwitch stretch />
         </div>
 
+        {/* Under the region, and above the map's own switches: it is a setting for
+            the whole app rather than for the map, but the two read as one group of
+            appearance controls and a visitor looking for one will scan for the other. */}
+        <div className="px-4 py-4 border-b border-gray-100">
+          <span className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
+            Appearance
+          </span>
+          <ThemeSwitch />
+        </div>
+
         {/* The layer switches used to sit in the map's own corner box. They are
             settings, not readouts, and the corner of a map is for readouts — so they
             live here and the box keeps only the numbers. (The shared map has no
@@ -247,7 +258,7 @@ export default function MenuSheet({
         className="hidden md:block absolute inset-0 bg-black/40"
       />
 
-      <div className="menu-sheet relative w-full md:w-[380px] bg-white md:shadow-2xl flex flex-col safe-area">
+      <div className="menu-sheet relative w-full md:w-[380px] bg-surface md:shadow-2xl flex flex-col safe-area">
         <header className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0">
           {view !== "menu" && (
             <IconButton onClick={backToMenu} label="Back to menu" path={CHEVRON_LEFT} />

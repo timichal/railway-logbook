@@ -57,25 +57,46 @@ const SIZES = {
   lg: "text-base min-h-11 px-4 rounded-lg",
 } as const;
 
+/**
+ * The solid variants' hover and active steps are written as literal hex under
+ * `dark:`, and that is deliberate.
+ *
+ * `globals.css` flips dark mode by re-pointing Tailwind's own colour variables, and
+ * the accent ramps flip at their ends: 700 and 800 are the *text* colours drawn on
+ * a tinted surface, so they go light. That is right everywhere except here, where
+ * `hover:bg-blue-700` means "a step deeper than the resting button" — flipped, it
+ * turned a pressed primary button pale with white text still on it. An arbitrary
+ * hex never goes through the palette, so these stay put whichever scheme is on.
+ * (`bg-*-600` needs no override: 400–600 are exactly the steps the flip leaves
+ * alone, so the resting colour is the same in both.)
+ *
+ * `neutral` is the exception that needs its resting colour overridden too: it is
+ * built on the *grey* ramp, which inverts wholesale, so `bg-gray-600` would have
+ * come out as a light grey button carrying white text.
+ */
 const VARIANTS = {
   // Solid — one per page region at most: the thing you came here to do.
-  primary: "bg-blue-600 text-white not-disabled:hover:bg-blue-700 not-disabled:active:bg-blue-800",
+  primary:
+    "bg-blue-600 text-white not-disabled:hover:bg-blue-700 not-disabled:active:bg-blue-800 dark:not-disabled:hover:bg-[#2563eb] dark:not-disabled:active:bg-[#1d4ed8]",
   success:
-    "bg-green-600 text-white not-disabled:hover:bg-green-700 not-disabled:active:bg-green-800",
-  danger: "bg-red-600 text-white not-disabled:hover:bg-red-700 not-disabled:active:bg-red-800",
-  neutral: "bg-gray-600 text-white not-disabled:hover:bg-gray-700 not-disabled:active:bg-gray-800",
+    "bg-green-600 text-white not-disabled:hover:bg-green-700 not-disabled:active:bg-green-800 dark:not-disabled:hover:bg-[#15803d] dark:not-disabled:active:bg-[#166534]",
+  danger:
+    "bg-red-600 text-white not-disabled:hover:bg-red-700 not-disabled:active:bg-red-800 dark:not-disabled:hover:bg-[#b91c1c] dark:not-disabled:active:bg-[#991b1b]",
+  neutral:
+    "bg-gray-600 text-white not-disabled:hover:bg-gray-700 not-disabled:active:bg-gray-800 dark:bg-[#39414e] dark:not-disabled:hover:bg-[#454e5d] dark:not-disabled:active:bg-[#525c6d]",
   /**
    * Amber, for the two things that mean "careful, this is not the resting state":
    * the confirm button of a warning dialog, and the open half of a View / Hide pair.
    */
   warning:
-    "bg-amber-600 text-white not-disabled:hover:bg-amber-700 not-disabled:active:bg-amber-800",
+    "bg-amber-600 text-white not-disabled:hover:bg-amber-700 not-disabled:active:bg-amber-800 dark:not-disabled:hover:bg-[#b45309] dark:not-disabled:active:bg-[#92400e]",
   /** `under_repair`, matching the violet the map draws those routes in. */
   repair:
-    "bg-violet-600 text-white not-disabled:hover:bg-violet-700 not-disabled:active:bg-violet-800",
+    "bg-violet-600 text-white not-disabled:hover:bg-violet-700 not-disabled:active:bg-violet-800 dark:not-disabled:hover:bg-[#6d28d9] dark:not-disabled:active:bg-[#5b21b6]",
 
   // Tinted — secondary actions that sit in a bar or next to a heading, where a row of
-  // solid buttons would all shout at once.
+  // solid buttons would all shout at once. These need nothing for dark: the tint
+  // steps go dark and the text steps go light, which is the flip working as intended.
   softPrimary:
     "bg-blue-100 text-blue-700 not-disabled:hover:bg-blue-200 not-disabled:active:bg-blue-300",
   softSuccess:
@@ -90,10 +111,10 @@ const VARIANTS = {
   subtle:
     "bg-gray-200 text-gray-700 not-disabled:hover:bg-gray-300 not-disabled:active:bg-gray-400",
   outline:
-    "bg-white text-gray-700 border border-gray-300 not-disabled:hover:bg-gray-50 not-disabled:active:bg-gray-100",
+    "bg-surface text-gray-700 border border-gray-300 not-disabled:hover:bg-gray-50 not-disabled:active:bg-gray-100",
   /** Destructive, but not the main action on screen — the menu's Log out. */
   outlineDanger:
-    "bg-white text-red-700 border border-red-200 not-disabled:hover:bg-red-50 not-disabled:active:bg-red-100",
+    "bg-surface text-red-700 border border-red-200 not-disabled:hover:bg-red-50 not-disabled:active:bg-red-100",
   ghost:
     "text-gray-600 not-disabled:hover:bg-gray-100 not-disabled:hover:text-gray-900 not-disabled:active:bg-gray-200",
 } as const;

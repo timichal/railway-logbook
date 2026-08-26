@@ -112,7 +112,7 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+      <div className="bg-surface rounded-lg shadow-xl max-w-lg w-full p-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Share your map</h3>
@@ -177,7 +177,7 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
                     readOnly
                     value={shareUrl}
                     onFocus={(event) => event.currentTarget.select()}
-                    className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm text-black bg-white"
+                    className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm text-fg bg-surface"
                   />
                   <button
                     type="button"

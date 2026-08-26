@@ -59,7 +59,7 @@ export const POPUP_ROW_STYLE = "margin-top: 6px; line-height: 1.4;";
 
 /** The rule above the "most recent journey" line. */
 export const POPUP_DIVIDER =
-  '<hr style="margin: 8px 0 0; border: none; border-top: 1px solid #e5e7eb;" />';
+  '<hr style="margin: 8px 0 0; border: none; border-top: 1px solid var(--color-gray-200);" />';
 
 /**
  * The heading of a route's hover popup, shared by the user and admin maps so the
@@ -82,12 +82,12 @@ export function formatRouteTitle(
   // Margins are set inline on both branches: `.railway-popup h3` in globals.css
   // would otherwise space the user map's heading differently from the admin's.
   if (typeof name !== "string" || !name.trim()) {
-    return `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0 0 6px; color: black;">${endpoints}</h3>`;
+    return `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0 0 6px; color: var(--color-fg);">${endpoints}</h3>`;
   }
 
   return (
-    `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0; color: black;">${escapeHtml(name)}</h3>` +
-    `<div style="margin: 0 0 6px; color: black;">${endpoints}</div>`
+    `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0; color: var(--color-fg);">${escapeHtml(name)}</h3>` +
+    `<div style="margin: 0 0 6px; color: var(--color-fg);">${endpoints}</div>`
   );
 }
 

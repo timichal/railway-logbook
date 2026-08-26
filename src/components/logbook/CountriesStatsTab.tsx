@@ -62,7 +62,7 @@ export default function CountriesStatsTab({
   };
 
   return (
-    <div className="p-4 text-black">
+    <div className="p-4 text-fg">
       <h3 className="text-lg font-bold mb-4">Countries & Statistics</h3>
 
       {/* Quick Actions */}

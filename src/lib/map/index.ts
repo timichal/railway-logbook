@@ -1,4 +1,5 @@
 import type * as maplibregl from "maplibre-gl";
+import type { ResolvedTheme } from "@/lib/theme";
 import { getNoteTypeColor, noteTypeOptions } from "../constants";
 import { BASEMAP_FONT_BOLD } from "./basemap";
 import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES } from "./style";
@@ -7,8 +8,9 @@ import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES } from "./style";
 export {
   BASEMAP_FONT,
   BASEMAP_FONT_BOLD,
-  BASEMAP_STYLE_URL,
+  BASEMAP_STYLE_URLS,
   createBasemapFadeLayer,
+  createOSMBackgroundGroundLayer,
   createOSMBackgroundLayer,
   createOSMBackgroundSource,
   dropPoiLayers,
@@ -320,7 +322,20 @@ export function createPublicStationsSource(): maplibregl.VectorSourceSpecificati
   };
 }
 
-export function createStationsLayer(): maplibregl.CircleLayerSpecification {
+/**
+ * The dots and their names are the only two of our layers whose colours depend on
+ * the basemap under them rather than on the data in them, so they are the only two
+ * that take the scheme. Everything else (routes, notes, admin markers) is drawn in
+ * a saturated colour that carries on either ground.
+ */
+function stationColors(theme: ResolvedTheme) {
+  return theme === "dark" ? COLORS.stationsDark : COLORS.stations;
+}
+
+export function createStationsLayer(
+  theme: ResolvedTheme = "light",
+): maplibregl.CircleLayerSpecification {
+  const colors = stationColors(theme);
   return {
     id: "stations",
     type: "circle",
@@ -329,8 +344,8 @@ export function createStationsLayer(): maplibregl.CircleLayerSpecification {
     minzoom: ZOOM_RANGES.stations.min,
     paint: {
       "circle-radius": CIRCLES.station.radius,
-      "circle-color": COLORS.stations.fill,
-      "circle-stroke-color": COLORS.stations.stroke,
+      "circle-color": colors.fill,
+      "circle-stroke-color": colors.stroke,
       "circle-stroke-width": CIRCLES.station.strokeWidth,
       "circle-opacity": OPACITIES.stations,
     },
@@ -343,7 +358,10 @@ export function createStationsLayer(): maplibregl.CircleLayerSpecification {
  * Styled after openstreetmap-carto's station labels - see LABELS.station in
  * style.ts for the carto rule each value comes from.
  */
-export function createStationLabelsLayer(): maplibregl.SymbolLayerSpecification {
+export function createStationLabelsLayer(
+  theme: ResolvedTheme = "light",
+): maplibregl.SymbolLayerSpecification {
+  const colors = stationColors(theme);
   return {
     id: "station_labels",
     type: "symbol",
@@ -377,8 +395,8 @@ export function createStationLabelsLayer(): maplibregl.SymbolLayerSpecification 
       "text-padding": 2,
     },
     paint: {
-      "text-color": COLORS.stations.label,
-      "text-halo-color": COLORS.stations.labelHalo,
+      "text-color": colors.label,
+      "text-halo-color": colors.labelHalo,
       "text-halo-width": LABELS.station.haloWidth,
     },
   };

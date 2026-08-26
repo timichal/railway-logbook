@@ -53,6 +53,25 @@ export const COLORS = {
     label: "#4957ad",
     labelHalo: "rgba(255, 255, 255, 0.6)",
   },
+  /**
+   * The same dots and labels over the dark basemap.
+   *
+   * Carto's palette is chosen against paper, and both halves of it invert here:
+   * a #4957ad label is unreadable on a near-black ground, and a *white* halo
+   * around it stops being the soft wash it is on paper and becomes a glowing
+   * outline. So the text goes light and the halo goes translucent black — same
+   * trick, opposite direction, and the faded quality still comes from the
+   * alpha rather than from blur or a dimmer text colour.
+   *
+   * The dot keeps its orange, which reads on either ground; only its stroke
+   * follows the basemap it has to separate from.
+   */
+  stationsDark: {
+    fill: "#ff8c1a",
+    stroke: "#101418",
+    label: "#aab4ee",
+    labelHalo: "rgba(0, 0, 0, 0.65)",
+  },
   adminNotes: {
     fill: "#fbbf24", // Yellow/amber for notes
     stroke: "#78350f", // Dark brown stroke
@@ -188,7 +207,11 @@ export const LABELS = {
 
 export const OPACITIES = {
   // The whole basemap, washed out under the railway data (see createBasemapFadeLayer).
+  // Dark needs more of it: OpenFreeMap's dark style draws its roads and labels at a
+  // higher contrast against its own near-black ground than liberty does against
+  // white, so the same 0.25 left the basemap still competing with the routes.
   basemapFade: 0.25,
+  basemapFadeDark: 0.4,
   defaultRoute: 0.8,
   selectedRoute: 1.0,
   highlight: 1.0,

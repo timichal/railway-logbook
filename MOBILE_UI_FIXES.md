@@ -101,12 +101,36 @@ far:
   where most of this app's text is), `body` no longer overrides it with Arial,
   Geist Mono dropped.
 - **10 — dark mode.** The half-finished `prefers-color-scheme` variables are
-  gone; see item 13 for doing it properly.
+  gone; item 13 below replaced them with the real thing.
 - **11 — suggestion lists.** The dropdowns (map search on both maps, and
   `StationSearchInput`) `preventDefault` on pointerdown, so the input never loses
   focus and the 200ms blur timer cannot close the list under the tap — scrolling
   the list included. The timer stays for a genuine focus-out; selecting now blurs
   the field explicitly, so the keyboard still drops.
+- **13 — dark mode (beta).** The palette *is* the token layer: Tailwind v4
+  compiles `border-gray-300` to `var(--color-gray-300)`, so `html.dark` in
+  `globals.css` re-points the neutral ramp and the whole app flips at once —
+  no component rewrite, and a component written the ordinary way is
+  dark-correct by default. Only two things could not ride on that. `bg-white`
+  and `text-black` became `bg-surface` / `text-fg` (a mechanical rename), since
+  `text-white` on a solid button and `bg-black/40` on a scrim mean the literal
+  colour and must *not* invert. And the accent ramps flip only at their ends —
+  50–300 are tints used as surfaces, 700–950 the text drawn on them, while
+  400–600 are the solid buttons and stay put; the handful of places that used
+  `hover:bg-blue-700` to mean "a step deeper" carry literal-hex `dark:`
+  overrides instead, nearly all of them inside `buttonStyles.ts`.
+  The scheme is a **setting** — Light / System / Dark in the menu, above the
+  layer switches — kept in localStorage rather than `user_preferences`, so it
+  needs no account and the shared map follows the *visitor*. An inline script in
+  `layout.tsx` sets the class before first paint, so there is no white flash.
+  On the map: the basemap swaps to OpenFreeMap's `dark` style (47 layers to
+  liberty's ~110, no POIs and no extrusions to strip), the fade layer washes
+  toward near-black instead of white and a little harder, the station labels
+  invert — light text, translucent *black* halo — and the popups, whose inline
+  styles no stylesheet can reach, read `var(--color-fg)` / `--color-link`
+  directly. MapLibre's own popup chrome and control stacks are overridden in
+  `globals.css`, its control glyphs being SVG fills with no colour hook.
+  What is left is under item 13 below.
 - **14 — interactive states.** `src/lib/ui/buttonStyles.ts` names the button
   roles (`btn`, `iconBtn`, `tabBtn`, `optionRow`, `LINK_BTN`) and carries
   hover / active / disabled for each; `globals.css` adds `cursor` and a
@@ -114,10 +138,9 @@ far:
   hand. All but a dozen bespoke controls (segmented switch, drag handle,
   scrim) now go through it.
 
-What is left is 12 and 13, in either order. Section 12 (installable app) is the
+What is left is 12, plus the tail of 13. Section 12 (installable app) is the
 cheapest way to get the app onto a home screen, and worth having whether or not
-the native app in `MOBILE_APP_PLAN.md` happens; 13 (dark mode) is a real project
-rather than a fix.
+the native app in `MOBILE_APP_PLAN.md` happens.
 
 ---
 
@@ -150,33 +173,29 @@ those are what `MOBILE_APP_PLAN.md` is for.
 
 ---
 
-## 13. Dark mode, for real this time
+## 13. Dark mode — what the beta left out
 
-Item 10 deleted the boilerplate `--background`/`--foreground` pair and its
-`prefers-color-scheme` override, because it was never wired up: `body` hardcoded
-a white background while its *colour* followed the scheme, so on a machine set to
-dark anything that inherited its colour rendered #ededed on white. `globals.css`
-now says light-only outright.
+The scheme, the token layer and the basemap are done (see the landed list
+above). Three things were deliberately not attempted:
 
-Doing it properly is a real project, not a variable:
-
-- **Every component is `bg-white` / `text-black` / `text-gray-*` / `border-gray-*`
-  literals.** There is no palette to swap. The first step is a token layer —
-  surface / surface-raised / text / text-muted / border / accent — and a pass
-  converting the literals to it. `src/lib/ui/buttonStyles.ts` (item 14) is now
-  the first stop: every button's colours are in that one table, so tokenising it
-  covers most of the app's controls in a single edit. `MapProgressBox`,
-  `MobileMenuSheet`, `MobileBottomSheet` and `ToggleSwitch` are the cleanest
-  components to follow it with.
-- **The map is the hard part.** `src/lib/map/style.ts` is the single source of
-  truth for route colours, and they are chosen against a light basemap; the
-  visited green / partial orange / unvisited red have to be re-picked for a dark
-  ground, and the station labels' translucent white halo (`LABELS.station`)
-  inverts. The basemap itself needs a dark vector style — OpenFreeMap serves
-  `dark` alongside `liberty`, so `basemap.ts` would pick per scheme, and the
-  `createBasemapFadeLayer` opacity needs re-tuning against it.
-- **Decide whether it follows the OS or is a setting.** A setting means another
-  `user_preferences` column plus a localStorage fallback for anonymous visitors,
-  and the shared map has to follow the *visitor's* choice, not the owner's.
-- **Popups are raw HTML strings** built in `tooltipFormatting.ts`; their inline
-  classes need the same token treatment.
+- [ ] **The route colours are still the light ones.** `COLORS.railwayRoutes` —
+      visited green, partial orange, unvisited red, each with a darker highspeed
+      shade — was picked against a white basemap. The saturated branch/main
+      shades carry on the dark ground, but the highspeed ones (`#7a3633`,
+      `#155e34`) are close to muddy on it. Re-picking them is not the hard part;
+      *delivering* them is: `userMapLayers.ts` builds its paint configs as
+      module-level constants at import time, on purpose (stable references for
+      `useMapTileRefresh`, and both maps must draw identical lines), so a
+      per-scheme palette means turning those constants into memoised functions
+      and threading the scheme through `RailwayMap`'s tile-refresh configs too.
+      The stations layers show the shape of it — they take the scheme as an
+      argument because they were the only two whose colours depend on the ground
+      under them rather than on the data in them.
+- [ ] **The popup badges stay bright.** The line-class, Scenic and frequency
+      chips in `tooltipFormatting.ts` are pastel fills with dark text, and they
+      read as chips on a dark popup rather than as a mistake — but they are the
+      one thing in the app still lit from the light palette.
+- [ ] **The admin page cannot change the scheme.** It has no menu (its hamburger
+      opens the sidebar drawer), so the switch is not reachable there; it follows
+      whatever the main map set. Either put a compact switch in the admin bar
+      beside the region switch, or leave it — "Back to Main Map" is one click.

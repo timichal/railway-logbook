@@ -45,7 +45,7 @@ export default function AdminLayerControls({
       <button
         type="button"
         onClick={() => setCollapsed(false)}
-        className="absolute top-3 left-3 bg-white p-2 rounded shadow-lg text-black z-10 text-xs font-medium transition-colors hover:bg-gray-50 active:bg-gray-100"
+        className="absolute top-3 left-3 bg-surface p-2 rounded shadow-lg text-fg z-10 text-xs font-medium transition-colors hover:bg-gray-50 active:bg-gray-100"
       >
         Layers
       </button>
@@ -54,7 +54,7 @@ export default function AdminLayerControls({
 
   return (
     <div
-      className={`absolute bg-white p-3 rounded shadow-lg text-black z-10 ${
+      className={`absolute bg-surface p-3 rounded shadow-lg text-fg z-10 ${
         isMobile ? "top-3 left-3" : "top-4 left-4"
       }`}
     >

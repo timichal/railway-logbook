@@ -34,6 +34,7 @@ import {
   getAdminRouteWidthExpression,
 } from "@/lib/map/utils/userRouteStyling";
 import { useRegionId } from "@/lib/regionContext";
+import { useResolvedTheme } from "@/lib/theme";
 import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/types";
 
 // The base layer draws Regular routes solid; Heritage (dotted) and Special
@@ -158,6 +159,10 @@ export default function AdminMap({
   onRouteSelectRef.current = onRouteSelect;
 
   // Initialize map
+  // The station dots and their labels are picked against the basemap under them, so
+  // they follow the scheme. useMapLibre rebuilds the map when it changes.
+  const theme = useResolvedTheme();
+
   const { map, mapLoaded } = useMapLibre(
     mapContainer,
     {
@@ -175,8 +180,8 @@ export default function AdminMap({
         createRailwayRoutesHeritageLayer(),
         createRailwayRoutesSpecialLayer(),
         createRailwayRoutesClickLayer(),
-        createStationsLayer(),
-        createStationLabelsLayer(),
+        createStationsLayer(theme),
+        createStationLabelsLayer(theme),
         createAdminNotesLayer(),
       ],
       onLoad: (mapInstance) => {
@@ -314,7 +319,7 @@ export default function AdminMap({
 
       {validRoutesTotalKm !== null && (
         <div
-          className={`absolute bg-white p-3 rounded shadow-lg text-black z-10 ${
+          className={`absolute bg-surface p-3 rounded shadow-lg text-fg z-10 ${
             isMobile ? "bottom-10 left-3 text-xs" : "bottom-10 right-4"
           }`}
         >
@@ -326,7 +331,7 @@ export default function AdminMap({
       )}
 
       {(previewLength !== null || selectedRouteLength !== null) && (
-        <div className="absolute top-4 right-4 bg-white p-3 rounded shadow-lg text-black z-10">
+        <div className="absolute top-4 right-4 bg-surface p-3 rounded shadow-lg text-fg z-10">
           <h3 className="font-bold mb-2">Route Length</h3>
           {previewLength !== null && (
             <div className="text-sm">

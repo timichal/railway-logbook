@@ -2,8 +2,10 @@ import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DEFAULT_REGION, REGIONS, type RegionId } from "@/lib/regions";
+import { useResolvedTheme } from "@/lib/theme";
 import {
   createBasemapFadeLayer,
+  createOSMBackgroundGroundLayer,
   createOSMBackgroundLayer,
   createOSMBackgroundSource,
   GLYPHS_URL,
@@ -153,6 +155,14 @@ export function useMapLibre(
   const map = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
+  // The basemap style, the fade over it and the station colours are all chosen per
+  // scheme, and MapLibre takes one style object at construction — so a scheme change
+  // rebuilds the map, exactly as a region change does. Appended to the caller's deps
+  // rather than asked for as an option: every map wants this and none of them would
+  // ever pass something else.
+  const theme = useResolvedTheme();
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the dependency list is the caller's, appended with the colour scheme — the two things that must rebuild the map. Everything else the effect closes over is read once at construction and is deliberately not a trigger; this is the hook's intended API.
   useEffect(() => {
     if (!containerRef.current || map.current) return;
 
@@ -165,7 +175,7 @@ export function useMapLibre(
     let teardown: (() => void) | undefined;
 
     const init = async () => {
-      const basemap = await loadBasemapStyle();
+      const basemap = await loadBasemapStyle(theme);
       // The effect may have been torn down, or run twice, while we waited.
       if (cancelled || !containerRef.current || map.current) return;
 
@@ -182,8 +192,10 @@ export function useMapLibre(
       // Basemap underneath, faded by the layer above it, our layers on top. The
       // raster fallback carries its own opacity and needs no fade layer.
       const backgroundLayers: maplibregl.LayerSpecification[] = basemap
-        ? [...basemap.layers, createBasemapFadeLayer()]
-        : [createOSMBackgroundLayer()];
+        ? [...basemap.layers, createBasemapFadeLayer(theme)]
+        : [createOSMBackgroundGroundLayer(theme), createOSMBackgroundLayer(theme)].filter(
+            (layer) => layer !== null,
+          );
       const allLayers: maplibregl.LayerSpecification[] = [...backgroundLayers, ...layers];
 
       // Create map instance
@@ -283,8 +295,7 @@ export function useMapLibre(
       cancelled = true;
       teardown?.();
     };
-    // biome-ignore lint/correctness/useExhaustiveDependencies: deps is a caller-supplied dependency list (not a literal) used to control when the map is recreated; this is the hook's intended API.
-  }, deps);
+  }, [...deps, theme]);
 
   return { map, mapLoaded };
 }

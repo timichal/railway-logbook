@@ -244,7 +244,7 @@ export default function AdminSidebar({
   return (
     <div
       style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined}
-      className="bg-white border-r border-gray-200 flex flex-col flex-shrink-0"
+      className="bg-surface border-r border-gray-200 flex flex-col flex-shrink-0"
     >
       {/* Tab Headers */}
       <div className="flex border-b border-gray-200">

@@ -4,11 +4,17 @@ import { iconBtn } from "@/lib/ui/buttonStyles";
 import { useToast } from "./ToastContext";
 import type { Toast, ToastType } from "./types";
 
+/**
+ * The border is a step deeper than the fill, which is what `*-700` is in the light
+ * palette — in the dark one it is the *text* colour drawn on a tint, so it flips
+ * light and would ring each toast in a bright outline. `dark:` puts a shadow back
+ * in its place; the fills are 400–600 steps and the flip leaves those alone.
+ */
 const toastStyles: Record<ToastType, string> = {
-  success: "bg-green-600 border-green-700",
-  error: "bg-red-600 border-red-700",
-  warning: "bg-orange-600 border-orange-700",
-  info: "bg-blue-600 border-blue-700",
+  success: "bg-green-600 border-green-700 dark:border-black/30",
+  error: "bg-red-600 border-red-700 dark:border-black/30",
+  warning: "bg-orange-600 border-orange-700 dark:border-black/30",
+  info: "bg-blue-600 border-blue-700 dark:border-black/30",
 };
 
 const toastIcons: Record<ToastType, string> = {

@@ -225,7 +225,7 @@ export function setupAdminMapInteractions(
         }
         const routeHref = safeHref(properties.link);
         if (routeHref) {
-          formattedDescription += `<div style="${POPUP_ROW_STYLE}"><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: #1d4ed8; text-decoration: underline;">Website</a></div>`;
+          formattedDescription += `<div style="${POPUP_ROW_STYLE}"><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">Website</a></div>`;
         }
 
         if (routeHoverPopup) {
@@ -240,7 +240,7 @@ export function setupAdminMapInteractions(
         })
           .setLngLat(e.lngLat)
           .setHTML(
-            `<div style="color: black;">${formatRouteTitle(properties, region)}${formattedDescription}</div>`,
+            `<div style="color: var(--color-fg);">${formatRouteTitle(properties, region)}${formattedDescription}</div>`,
           )
           .addTo(mapInstance);
       }
@@ -279,9 +279,9 @@ export function setupAdminMapInteractions(
         })
           .setLngLat(e.lngLat)
           .setHTML(`
-            <div style="color: black;">
+            <div style="color: var(--color-fg);">
               <h3 style="font-weight: bold; margin-bottom: 2px;">${escapeHtml(properties.name) || "Unknown Station"}</h3>
-              <div style="font-size: 0.75rem; color: #6b7280;">Station</div>
+              <div style="font-size: 0.75rem; color: var(--color-gray-500);">Station</div>
             </div>
           `)
           .addTo(mapInstance);
@@ -339,10 +339,10 @@ export function setupAdminMapInteractions(
         })
           .setLngLat(e.lngLat)
           .setHTML(`
-            <div style="color: black;">
+            <div style="color: var(--color-fg);">
               <h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
-              <div style="font-size: 0.85rem; color: #374151;">${escapeHtml(properties.route_name)}</div>
-              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 4px;">Click to use this coordinate</div>
+              <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.route_name)}</div>
+              <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">Click to use this coordinate</div>
             </div>
           `)
           .addTo(mapInstance);
@@ -406,12 +406,12 @@ export function setupAdminMapInteractions(
         })
           .setLngLat(e.lngLat)
           .setHTML(`
-            <div style="color: black;">
+            <div style="color: var(--color-fg);">
               <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note: ${escapeHtml(noteTypeLabel)}</h3>
-              <div style="font-size: 0.85rem; color: #374151;">${escapeHtml(properties.text)}</div>
-              ${safeHref(properties.source) ? `<div style="font-size: 0.8rem; margin-top: 4px;"><a href="${safeHref(properties.source)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">Source ↗</a> <span style="color: #6b7280;">(double-click to open)</span></div>` : ""}
-              ${updatedAtStr ? `<div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
-              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Right-click to edit</div>
+              <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.text)}</div>
+              ${safeHref(properties.source) ? `<div style="font-size: 0.8rem; margin-top: 4px;"><a href="${safeHref(properties.source)}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">Source ↗</a> <span style="color: var(--color-gray-500);">(double-click to open)</span></div>` : ""}
+              ${updatedAtStr ? `<div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
+              <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Right-click to edit</div>
             </div>
           `)
           .addTo(mapInstance);

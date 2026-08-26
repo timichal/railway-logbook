@@ -182,7 +182,7 @@ export function setupUserMapInteractions(
     if (currentPopup) currentPopup.remove();
     currentPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
       .setLngLat(lngLat)
-      .setHTML(`<div class="${className}" style="color: black;">${body}</div>`)
+      .setHTML(`<div class="${className}" style="color: var(--color-fg);">${body}</div>`)
       .addTo(mapInstance);
   };
 
@@ -313,7 +313,7 @@ export function setupUserMapInteractions(
     }
     const routeHref = linkRow ? safeHref(properties.link) : "";
     if (routeHref) {
-      body += `<div style="${POPUP_ROW_STYLE}"><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: #1d4ed8; text-decoration: underline;">Website</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span></div>`;
+      body += `<div style="${POPUP_ROW_STYLE}"><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">Website</a> <span style="color: var(--color-gray-500); font-size: 0.85em;">(double-click to open)</span></div>`;
     }
 
     // `date` and `journey_name` are populated together from the most-recent
@@ -322,7 +322,7 @@ export function setupUserMapInteractions(
     if (properties.date) {
       const dateStr = new Intl.DateTimeFormat("cs-CZ").format(new Date(properties.date));
       body += POPUP_DIVIDER;
-      body += `<div style="${POPUP_ROW_STYLE} color: #374151;">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</div>`;
+      body += `<div style="${POPUP_ROW_STYLE} color: var(--color-gray-700);">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</div>`;
     }
 
     return body;
@@ -331,7 +331,7 @@ export function setupUserMapInteractions(
   const buildStationBody = (properties: FeatureProperties) => {
     if (!properties.name) return "";
     return (
-      `<h3 class="font-bold text-base mb-1" style="color: black;">${escapeHtml(properties.name)}</h3>` +
+      `<h3 class="font-bold text-base mb-1" style="color: var(--color-fg);">${escapeHtml(properties.name)}</h3>` +
       `<div class="text-xs text-gray-600">Station</div>`
     );
   };
@@ -344,7 +344,7 @@ export function setupUserMapInteractions(
     }
     const sourceHref = sourceRow ? safeHref(properties.source) : "";
     if (sourceHref) {
-      body += `<div style="margin-top: 6px;"><a href="${sourceHref}" target="_blank" rel="noopener noreferrer" style="color: blue; text-decoration: underline;">Source</a> <span style="color: #6b7280; font-size: 0.85em;">(double-click to open)</span></div>`;
+      body += `<div style="margin-top: 6px;"><a href="${sourceHref}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">Source</a> <span style="color: var(--color-gray-500); font-size: 0.85em;">(double-click to open)</span></div>`;
     }
     return body;
   };

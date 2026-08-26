@@ -145,7 +145,7 @@ export default function AdminNotesTab({
                     value={note.note_type}
                     disabled={savingId === note.id}
                     onChange={(e) => handleTypeChange(note, e.target.value as NoteType)}
-                    className="text-xs px-1.5 py-0.5 border border-gray-300 rounded bg-white text-gray-800"
+                    className="text-xs px-1.5 py-0.5 border border-gray-300 rounded bg-surface text-gray-800"
                   >
                     {noteTypeOptions.map((opt) => (
                       <option key={opt.id} value={opt.id}>

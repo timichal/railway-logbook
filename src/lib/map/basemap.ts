@@ -1,4 +1,5 @@
 import type * as maplibregl from "maplibre-gl";
+import type { ResolvedTheme } from "@/lib/theme";
 import { OPACITIES } from "./style";
 
 /**
@@ -13,7 +14,15 @@ import { OPACITIES } from "./style";
  * Attribution (OpenFreeMap / OpenMapTiles / OSM) is declared by the TileJSON at
  * the source `url`, so MapLibre picks it up on its own - do not restate it here.
  */
-export const BASEMAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+export const BASEMAP_STYLE_URLS: Record<ResolvedTheme, string> = {
+  light: "https://tiles.openfreemap.org/styles/liberty",
+  // OpenFreeMap serves a dark style beside liberty, so dark mode costs a URL rather
+  // than a hand-recoloured style. It is also a much smaller one - 47 layers against
+  // liberty's ~110, with no POI layers and no building extrusion - so `dropPoiLayers`
+  // and `flattenBuildings` find nothing to do in it. They are applied all the same:
+  // both key on what a layer *is*, not on the style it came from.
+  dark: "https://tiles.openfreemap.org/styles/dark",
+};
 
 /** Raster fallback, used when the vector style cannot be fetched. */
 export const OSM_TILES_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -149,13 +158,18 @@ export function latinizeLabels(
  * the whole viewport, so one of them placed above the basemap and below our
  * layers fades the lot in a single step.
  */
-export function createBasemapFadeLayer(): maplibregl.BackgroundLayerSpecification {
+export function createBasemapFadeLayer(
+  theme: ResolvedTheme = "light",
+): maplibregl.BackgroundLayerSpecification {
+  const dark = theme === "dark";
   return {
     id: "basemap_fade",
     type: "background",
     paint: {
-      "background-color": "#ffffff",
-      "background-opacity": OPACITIES.basemapFade,
+      // The wash is toward the ground the basemap is drawn on, so it fades rather
+      // than tints: white over liberty, near-black over the dark style.
+      "background-color": dark ? "#05070a" : "#ffffff",
+      "background-opacity": dark ? OPACITIES.basemapFadeDark : OPACITIES.basemapFade,
     },
   };
 }
@@ -181,16 +195,17 @@ export function resolveMissingBasemapIcons(map: maplibregl.Map): void {
   });
 }
 
-async function fetchBasemapStyle(): Promise<BasemapStyle> {
-  const response = await fetch(BASEMAP_STYLE_URL, {
+async function fetchBasemapStyle(theme: ResolvedTheme): Promise<BasemapStyle> {
+  const url = BASEMAP_STYLE_URLS[theme];
+  const response = await fetch(url, {
     signal: AbortSignal.timeout(STYLE_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
-    throw new Error(`${BASEMAP_STYLE_URL} responded ${response.status}`);
+    throw new Error(`${url} responded ${response.status}`);
   }
   const style = (await response.json()) as maplibregl.StyleSpecification;
   if (!style.sources || !style.layers) {
-    throw new Error(`${BASEMAP_STYLE_URL} returned no sources or layers`);
+    throw new Error(`${url} returned no sources or layers`);
   }
   return {
     sources: style.sources,
@@ -200,7 +215,8 @@ async function fetchBasemapStyle(): Promise<BasemapStyle> {
   };
 }
 
-let pendingStyle: Promise<BasemapStyle | null> | null = null;
+/** Memoised per theme: switching schemes rebuilds the map and re-enters here. */
+const pendingStyles: Partial<Record<ResolvedTheme, Promise<BasemapStyle | null>>> = {};
 
 /**
  * The style, fetched once per page load and shared - both maps mount it, and a
@@ -211,18 +227,22 @@ let pendingStyle: Promise<BasemapStyle | null> | null = null;
  * plain OSM background is still usable and one with no background at all is
  * not. A failure clears the memo, so the next map to mount tries again.
  */
-export function loadBasemapStyle(): Promise<BasemapStyle | null> {
-  if (!pendingStyle) {
-    pendingStyle = fetchBasemapStyle().catch((error) => {
-      console.warn("Vector basemap unavailable, falling back to OSM raster tiles", error);
-      pendingStyle = null;
-      return null;
-    });
-  }
-  return pendingStyle;
+export function loadBasemapStyle(theme: ResolvedTheme = "light"): Promise<BasemapStyle | null> {
+  const cached = pendingStyles[theme];
+  if (cached) return cached;
+  const pending = fetchBasemapStyle(theme).catch((error) => {
+    console.warn("Vector basemap unavailable, falling back to OSM raster tiles", error);
+    delete pendingStyles[theme];
+    return null;
+  });
+  pendingStyles[theme] = pending;
+  return pending;
 }
 
-export function createOSMBackgroundLayer(): maplibregl.RasterLayerSpecification {
+export function createOSMBackgroundLayer(
+  theme: ResolvedTheme = "light",
+): maplibregl.RasterLayerSpecification {
+  const dark = theme === "dark";
   return {
     id: "background",
     type: "raster",
@@ -231,10 +251,30 @@ export function createOSMBackgroundLayer(): maplibregl.RasterLayerSpecification 
     maxzoom: 19, // has to be higher than the map max zoom
     paint: {
       "raster-fade-duration": 0,
-      "raster-saturation": 0,
-      "raster-opacity": 0.6,
+      "raster-saturation": dark ? -0.5 : 0,
+      // These tiles are printed on white and there is no invert filter in the raster
+      // paint spec, so the dark fallback drops them most of the way toward the black
+      // ground layer beneath (createOSMBackgroundGroundLayer) instead. It is a dim
+      // grey basemap rather than a designed dark one - which is the deal the whole
+      // raster fallback makes: a usable map beats no map.
+      "raster-opacity": dark ? 0.3 : 0.6,
     },
   };
+}
+
+/**
+ * The black ground the dark raster fallback fades its tiles into.
+ *
+ * The vector styles paint their own background layer; the raster path has none, so
+ * without this the page's own surface shows through the 30% tiles and the "dark"
+ * fallback comes out pale grey. Returns null for light, where the tiles at 60% over
+ * white are exactly what they have always been.
+ */
+export function createOSMBackgroundGroundLayer(
+  theme: ResolvedTheme,
+): maplibregl.BackgroundLayerSpecification | null {
+  if (theme !== "dark") return null;
+  return { id: "background_ground", type: "background", paint: { "background-color": "#05070a" } };
 }
 
 export function createOSMBackgroundSource(): maplibregl.RasterSourceSpecification {

@@ -190,7 +190,7 @@ export default function MobileBottomSheet({
       // stacking context, so anything positioned inside it (the search box at z-10,
       // its dropdown at z-20, MapLibre's own control stacks at z-2) otherwise painted
       // over the rounded top edge and the handle beside it.
-      className="mobile-sheet relative z-20 flex-shrink-0 bg-white rounded-t-2xl flex flex-col sheet-slide-up"
+      className="mobile-sheet relative z-20 flex-shrink-0 bg-surface rounded-t-2xl flex flex-col sheet-slide-up"
       style={{
         marginTop: -SHEET_OVERLAP_PX,
         boxShadow: dragging

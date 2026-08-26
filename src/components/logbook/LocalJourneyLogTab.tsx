@@ -369,7 +369,7 @@ export default function LocalJourneyLogTab({
   });
 
   return (
-    <div className="p-4 text-black space-y-4">
+    <div className="p-4 text-fg space-y-4">
       {/* Header */}
       <div>
         <h3 className="text-lg font-bold mb-2">My Journeys (Local Storage)</h3>
@@ -399,7 +399,10 @@ export default function LocalJourneyLogTab({
           </div>
         ) : (
           filteredJourneys.map(({ journey, parts }) => (
-            <div key={journey.id} className="p-3 bg-white border border-gray-300 rounded shadow-sm">
+            <div
+              key={journey.id}
+              className="p-3 bg-surface border border-gray-300 rounded shadow-sm"
+            >
               {/* Journey Header */}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex-1 min-w-0">
