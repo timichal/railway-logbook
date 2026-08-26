@@ -6,13 +6,18 @@ import { register } from "@/lib/authActions";
 import * as localStore from "@/lib/localStorage";
 import { migrateLocalJourneys } from "@/lib/migrationActions";
 import { useToast } from "@/lib/toast";
-import { btn } from "@/lib/ui/buttonStyles";
+import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import { FIELD, FIELD_HINT, FIELD_LABEL, FORM_ERROR } from "@/lib/ui/inputStyles";
 
 interface RegisterFormProps {
-  onSuccess?: () => void;
+  /** Always supplied: the menu sheet is the only place either form is rendered. */
+  onSuccess: () => void;
+  /** Swaps the sheet to the sign-in view — the only route between the two forms,
+      since the menu's footer is hidden while a form is open. */
+  onSwitchToLogin?: () => void;
 }
 
-export default function RegisterForm({ onSuccess }: RegisterFormProps) {
+export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFormProps) {
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -55,15 +60,9 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
         showSuccess("Account created successfully!");
       }
 
-      // Call onSuccess callback if provided (for dropdown mode)
-      if (onSuccess) {
-        onSuccess();
-        // Refresh the page to update auth state
-        router.refresh();
-      } else {
-        // Redirect to home page (for standalone register page)
-        router.push("/");
-      }
+      // Close the sheet, then pick up the new session.
+      onSuccess();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       setLoading(false);
@@ -71,78 +70,88 @@ export default function RegisterForm({ onSuccess }: RegisterFormProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <form className="space-y-4" action={handleSubmit}>
-        <div className="rounded-md shadow-sm -space-y-px">
-          <div>
-            <label htmlFor="name" className="sr-only">
-              Display Name
-            </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              autoComplete="name"
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-              placeholder="Display name (optional)"
-            />
-          </div>
-          <div>
-            <label htmlFor="email" className="sr-only">
-              Email address
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-              placeholder="Email address"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="sr-only">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-              placeholder="Password (minimum 6 characters)"
-            />
-          </div>
-          <div>
-            <label htmlFor="confirmPassword" className="sr-only">
-              Confirm Password
-            </label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              autoComplete="new-password"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-              placeholder="Confirm password"
-            />
-          </div>
+        <div>
+          <label htmlFor="name" className={FIELD_LABEL}>
+            Display name <span className="font-normal text-gray-400">(optional)</span>
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            className={FIELD}
+            placeholder="How you want to be greeted"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="register-email" className={FIELD_LABEL}>
+            Email address
+          </label>
+          <input
+            id="register-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            className={FIELD}
+            placeholder="you@example.com"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="register-password" className={FIELD_LABEL}>
+            Password
+          </label>
+          <input
+            id="register-password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={6}
+            className={FIELD}
+            placeholder="Choose a password"
+          />
+          <p className={FIELD_HINT}>At least 6 characters.</p>
+        </div>
+
+        <div>
+          <label htmlFor="confirmPassword" className={FIELD_LABEL}>
+            Confirm password
+          </label>
+          <input
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            className={FIELD}
+            placeholder="Type it again"
+          />
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="text-sm text-red-700">{error}</div>
-          </div>
+          <p className={FORM_ERROR} role="alert">
+            {error}
+          </p>
         )}
 
-        <div>
-          <button type="submit" disabled={loading} className={`${btn("primary", "md")} w-full`}>
-            {loading ? "Creating account..." : "Create account"}
-          </button>
-        </div>
+        <button type="submit" disabled={loading} className={`${btn("primary", "lg")} w-full`}>
+          {loading ? "Creating account…" : "Create account"}
+        </button>
       </form>
+
+      {onSwitchToLogin && (
+        <p className="text-center text-sm text-gray-600">
+          Already have an account?{" "}
+          <button type="button" onClick={onSwitchToLogin} className={LINK_BTN}>
+            Sign in
+          </button>
+        </p>
+      )}
     </div>
   );
 }

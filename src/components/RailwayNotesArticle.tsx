@@ -3,7 +3,6 @@
 import type React from "react";
 import { useState } from "react";
 import { getCountryFlag } from "@/lib/countryUtils";
-import { iconBtn } from "@/lib/ui/buttonStyles";
 
 interface CollapsibleSectionProps {
   countryCode: string;
@@ -53,34 +52,12 @@ function CollapsibleSection({
   );
 }
 
-interface RailwayNotesArticleProps {
-  onClose: () => void;
-  /** The mobile menu renders its own back-arrow header, so it suppresses this one. */
-  showHeader?: boolean;
-}
-
-export default function RailwayNotesArticle({
-  onClose,
-  showHeader = true,
-}: RailwayNotesArticleProps) {
+/** Reached only through the hamburger menu, which supplies the title and the way back. */
+export default function RailwayNotesArticle() {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set([]));
 
   return (
     <div className="p-6">
-      {showHeader && (
-        <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
-          <h2 className="text-2xl font-bold text-gray-900">Railway Notes</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`${iconBtn("sm")} text-2xl font-bold`}
-            title="Close"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       <div className="text-gray-700">
         <p className="mb-4">
           For the prospective railway enthusiast, here are some notes on the European railway

@@ -1,29 +1,9 @@
 "use client";
-import { iconBtn } from "@/lib/ui/buttonStyles";
 
-interface HowToUseArticleProps {
-  onClose: () => void;
-  /** The mobile menu renders its own back-arrow header, so it suppresses this one. */
-  showHeader?: boolean;
-}
-
-export default function HowToUseArticle({ onClose, showHeader = true }: HowToUseArticleProps) {
+/** Reached only through the hamburger menu, which supplies the title and the way back. */
+export default function HowToUseArticle() {
   return (
     <div className="p-6">
-      {showHeader && (
-        <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
-          <h2 className="text-2xl font-bold text-gray-900">How To Use</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`${iconBtn("sm")} text-2xl font-bold`}
-            title="Close"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       <div className="text-gray-700">
         <p className="mb-4">
           <b>This app is a work in progress!</b> Your stored data will probably be safe, but use at
@@ -37,10 +17,10 @@ export default function HowToUseArticle({ onClose, showHeader = true }: HowToUse
         </p>
         <p className="mb-4">
           The two networks are separate views, switched with the <b>🇪🇺 / 🇯🇵</b> buttons at the top
-          of the page — or, on a phone, at the top of the menu. The map is locked to whichever one
-          you pick, and everything beside it - the station search, the journey planner, your journey
-          list and the statistics - covers that region alone. Your log is one log: journeys appear
-          under the region they were ridden in.
+          of the menu, behind the <b>☰</b> button. The map is locked to whichever one you pick, and
+          everything beside it - the station search, the journey planner, your journey list and the
+          statistics - covers that region alone. Your log is one log: journeys appear under the
+          region they were ridden in.
         </p>
         <p className="mb-4">
           Only lines that are in regular use and available in official timetables are displayed.
@@ -48,11 +28,12 @@ export default function HowToUseArticle({ onClose, showHeader = true }: HowToUse
           <i>Heritage &amp; tourist</i> lines (lines of their own, outside the national timetable
           and published through the operator's own channels - museum and preserved railways, but
           also tourist lines such as rack railways and funiculars, some of which run daily) are
-          revealed by ticking <b>Show heritage &amp; tourist lines</b> and drawn as dotted lines.{" "}
-          <i>Special</i> services (regular national tracks used only irregularly by passenger trains
-          - diversions during engineering works, festival or anniversary runs, occasional tourist
-          trains) are revealed by ticking <b>Show special services</b> and drawn as dashed lines.
-          Some of these may be missing and some may be without any traffic at the moment.
+          revealed by the <b>Heritage &amp; tourist lines</b> switch under <b>Show on map</b> in the
+          menu, and drawn as dotted lines. <i>Special</i> services (regular national tracks used
+          only irregularly by passenger trains - diversions during engineering works, festival or
+          anniversary runs, occasional tourist trains) are revealed by the <b>Special services</b>{" "}
+          switch there, and drawn as dashed lines. Some of these may be missing and some may be
+          without any traffic at the moment.
         </p>
         <p className="mb-4">
           While in the <b>Route Logger</b> mode, you can either click on individual line parts or
@@ -61,10 +42,10 @@ export default function HowToUseArticle({ onClose, showHeader = true }: HowToUse
           <b>My Trips</b> tab where you can edit them or organize them into multi-journey trips.
         </p>
         <p className="mb-4">
-          If you're an unregistered user, the app stores your data in your browser, with a limit of
-          5 journeys. To be able to access your data from multiple devices, you can create an
-          account and log in. Journeys saved in your browser can then be transferred to your
-          account.
+          Without an account, the app stores your data in your browser, with a limit of 5 journeys.
+          To reach it from more than one device, create an account and sign in — both are in the
+          menu behind the <b>☰</b> button. Journeys saved in your browser can then be transferred to
+          your account.
         </p>
         <p className="mb-4">
           The <b>Journey Planner</b> allows you to select all parts between two stations. You can

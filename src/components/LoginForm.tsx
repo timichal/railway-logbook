@@ -6,13 +6,18 @@ import { login } from "@/lib/authActions";
 import * as localStore from "@/lib/localStorage";
 import { migrateLocalJourneys } from "@/lib/migrationActions";
 import { useToast } from "@/lib/toast";
-import { btn } from "@/lib/ui/buttonStyles";
+import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import { FIELD, FIELD_LABEL, FORM_ERROR } from "@/lib/ui/inputStyles";
 
 interface LoginFormProps {
-  onSuccess?: () => void;
+  /** Always supplied: the menu sheet is the only place either form is rendered. */
+  onSuccess: () => void;
+  /** Swaps the sheet to the register view — the only route between the two forms,
+      since the menu's footer is hidden while a form is open. */
+  onSwitchToRegister?: () => void;
 }
 
-export default function LoginForm({ onSuccess }: LoginFormProps) {
+export default function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormProps) {
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -58,33 +63,26 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             } catch (err) {
               console.error("Error migrating journeys:", err);
               showSuccess(
-                "Login successful, but journey migration failed. Your local journeys are still saved.",
+                "Signed in, but journey migration failed. Your local journeys are still saved.",
               );
             }
           },
           onCancel: () => {
             // User chose to keep local - journeys stay in localStorage but invisible
-            showSuccess("Login successful! Your local journeys remain in browser storage.");
+            showSuccess("Signed in. Your local journeys remain in browser storage.");
             router.refresh();
           },
           onThird: () => {
             // User chose to delete local journeys
             localStore.clearAll();
-            showSuccess("Login successful! Local journeys have been deleted.");
+            showSuccess("Signed in. Local journeys have been deleted.");
             router.refresh();
           },
         });
       } else {
-        // No local journeys, just refresh
-        if (onSuccess) {
-          onSuccess();
-        }
-        router.refresh();
-      }
-
-      // Call onSuccess callback if provided (for dropdown mode)
-      if (onSuccess && journeyCount === 0) {
+        // No local journeys to ask about — close the sheet and pick up the session.
         onSuccess();
+        router.refresh();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -93,51 +91,57 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <form className="space-y-4" action={handleSubmit}>
-        <div className="rounded-md shadow-sm -space-y-px">
-          <div>
-            <label htmlFor="email" className="sr-only">
-              Email address
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-              placeholder="Email address"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="sr-only">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-              placeholder="Password"
-            />
-          </div>
+        <div>
+          <label htmlFor="email" className={FIELD_LABEL}>
+            Email address
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            className={FIELD}
+            placeholder="you@example.com"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="password" className={FIELD_LABEL}>
+            Password
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            className={FIELD}
+            placeholder="Your password"
+          />
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="text-sm text-red-700">{error}</div>
-          </div>
+          <p className={FORM_ERROR} role="alert">
+            {error}
+          </p>
         )}
 
-        <div>
-          <button type="submit" disabled={loading} className={`${btn("primary", "md")} w-full`}>
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-        </div>
+        <button type="submit" disabled={loading} className={`${btn("primary", "lg")} w-full`}>
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
       </form>
+
+      {onSwitchToRegister && (
+        <p className="text-center text-sm text-gray-600">
+          No account yet?{" "}
+          <button type="button" onClick={onSwitchToRegister} className={LINK_BTN}>
+            Create one
+          </button>
+        </p>
+      )}
     </div>
   );
 }

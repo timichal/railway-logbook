@@ -38,13 +38,27 @@ far:
   the first keyboard-operable reordering the field has had.
 - **5 — touch targets.** 44pt floors (`min-h-11`, `w-11 h-11`) across the mobile
   paths, `md:`-reset so desktop keeps its density.
-- **6 — the menu is a menu.** `MobileMenuSheet` (full height, behind the
-  hamburger) replaced the `MobileMenuPanel` chip strip. Auth forms, both
-  articles, the region switch and the layer switches are all in it; the navbar
-  keeps title + auth / share / hamburger icon buttons.
+- **6 — the menu is a menu.** `MenuSheet` (behind the hamburger) replaced the
+  `MobileMenuPanel` chip strip. Auth forms, both articles, the region switch and
+  the layer switches are all in it; the navbar keeps title + auth / share /
+  hamburger. **It is now the desktop menu too**, as a right-hand drawer over a
+  scrim (the phone keeps the full-screen sheet; the direction is a media query on
+  `.menu-sheet`, not a class React picks). That took the region switch and the
+  How To Use / Railway Notes buttons out of the desktop bar, the layer switches
+  out of the progress box at every width, and the two article views out of the
+  sidebar — `ActiveTab` is down to the three logging tabs, and the articles no
+  longer carry a header of their own.
+  The desktop bar's Login/Register dropdowns went with them: the auth buttons now
+  open the menu on the matching form (`onOpenMenu("login" | "register")`), so
+  there is one copy of each form instead of a sheet copy and a `w-96` dropdown
+  copy, and the wording is Sign in / Create account / Log out throughout. The forms
+  themselves got visible labels, real field spacing and a cross-link to each other
+  (`ui/inputStyles.ts`) in place of the joined placeholder-only stack. Admin is
+  back in the desktop bar as well as the menu — it is a constant back and forth.
 - **7 — progress box collapses** to a percentage pill on mobile
   (`MapProgressBox`, now shared with the public map), and its layer checkboxes
-  became `ToggleSwitch`es that live in the menu.
+  became `ToggleSwitch`es that live in the menu — the shared map, which has no
+  menu, is the only one still carrying them in the box.
 - **8 — safe areas.** `viewportFit: "cover"` in `layout.tsx`'s viewport export,
   and a `safe-area` utility in `globals.css` that pads the whole app frame back
   out of the notch and home-indicator strips (`h-dvh` + `border-box`, so it eats

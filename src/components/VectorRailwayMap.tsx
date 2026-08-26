@@ -469,10 +469,9 @@ export default function VectorRailwayMap({
   }, [isMobile, map]);
 
   // What the collapsed sheet calls itself. Not the active tab: all three of the
-  // sheet's tabs are the logger, and the two article views cannot be reached on
-  // mobile at all (the menu carries them). The count is the one thing worth
-  // surfacing from behind a closed sheet — routes are picked on the map, which is
-  // exactly when the sheet is down and the selection is out of sight.
+  // sheet's tabs are the logger. The count is the one thing worth surfacing from
+  // behind a closed sheet — routes are picked on the map, which is exactly when the
+  // sheet is down and the selection is out of sight.
   const sheetLabel =
     selectedRoutes.length > 0 ? `Route Logger · ${selectedRoutes.length} selected` : "Route Logger";
 
@@ -532,8 +531,8 @@ export default function VectorRailwayMap({
           <MapProgressBox
             progress={routeEditor.progress}
             isMobile={isMobile}
-            // Mobile keeps them in the menu instead — see MobileMenuSheet.
-            withLayerToggles={!isMobile}
+            // The switches live in the hamburger menu at every width — see MenuSheet.
+            withLayerToggles={false}
           />
         )}
 

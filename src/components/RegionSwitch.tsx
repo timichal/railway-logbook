@@ -6,7 +6,7 @@ import { REGION_IDS, REGIONS } from "@/lib/regions";
 interface RegionSwitchProps {
   /** Flag-only buttons, for a cramped navbar. */
   compact?: boolean;
-  /** Fill the container and split it evenly — for the mobile menu's own row. */
+  /** Fill the container and split it evenly — for the menu's own row. */
   stretch?: boolean;
 }
 

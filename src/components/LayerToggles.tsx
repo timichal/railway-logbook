@@ -6,7 +6,8 @@ import ToggleSwitch from "./ToggleSwitch";
 
 /**
  * The user map's three layer switches, in whichever container asks for them: the
- * map's progress box (`compact`) or the mobile menu.
+ * hamburger menu, or the shared map's progress box (`compact`), that being the one
+ * map with no menu of its own.
  *
  * One component rather than two copies, because the region rules live here — Japan
  * renames Special to "Non-JR lines", and not every region offers the scenic outline

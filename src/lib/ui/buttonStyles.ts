@@ -91,7 +91,7 @@ const VARIANTS = {
     "bg-gray-200 text-gray-700 not-disabled:hover:bg-gray-300 not-disabled:active:bg-gray-400",
   outline:
     "bg-white text-gray-700 border border-gray-300 not-disabled:hover:bg-gray-50 not-disabled:active:bg-gray-100",
-  /** Destructive, but not the main action on screen — the mobile menu's Log out. */
+  /** Destructive, but not the main action on screen — the menu's Log out. */
   outlineDanger:
     "bg-white text-red-700 border border-red-200 not-disabled:hover:bg-red-50 not-disabled:active:bg-red-100",
   ghost:

@@ -194,3 +194,18 @@ body,
 .sheet-slide-up {
   animation: slide-in-bottom 0.25s ease-out;
 }
+
+/* The hamburger menu is one panel with two shapes: a full-screen sheet rising from
+   the bottom of a phone, a right-hand drawer sliding in over a dimmed desktop page.
+   The direction has to come from CSS rather than from a class the component picks,
+   for the same reason the navbar chooses its bar with `md:` — the shape is a
+   property of the viewport, not of anything React knows before it paints. */
+.menu-sheet {
+  animation: slide-in-bottom 0.25s ease-out;
+}
+
+@media (min-width: 48rem) {
+  .menu-sheet {
+    animation: slide-in 0.25s ease-out;
+  }
+}

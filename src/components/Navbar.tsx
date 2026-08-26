@@ -1,30 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { User } from "@/lib/authActions";
 import { useRegion } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
-import LoginForm from "./LoginForm";
-import RegionSwitch from "./RegionSwitch";
-import RegisterForm from "./RegisterForm";
 import ShareMapDialog from "./ShareMapDialog";
 
 interface NavbarProps {
   user: User | null;
   onLogout?: () => void;
-  onAuthSuccess?: () => void;
-  onOpenHowTo?: () => void;
-  onOpenNotes?: () => void;
   isAdminPage?: boolean;
   /**
-   * Hamburger tap, and the mobile Sign in button. Each page decides what it opens
-   * (menu sheet / admin drawer); the argument names the sub-view to land on.
+   * Hamburger tap, and the auth buttons. Each page decides what it opens (menu
+   * sheet / admin drawer); the argument names the sub-view to land on, so the bar
+   * can send you straight to a form without owning a second copy of it.
    */
-  onOpenMenu?: (view?: "login") => void;
+  onOpenMenu?: (view?: "login" | "register") => void;
 }
 
-/** Mobile bar icon button: 44pt target, no label. */
+/** Bar icon button: 44pt target, no label. Both bars use it. */
 const BAR_BUTTON = iconBtn("md");
 
 /**
@@ -43,50 +38,11 @@ const BAR_BUTTON = iconBtn("md");
  *
  * The cost is both bars in the DOM at every width, one of them `display: none`.
  * That is cheap here — a handful of buttons, no data — and the shared state
- * (the dropdowns, the share dialog) stays single because it is one component.
+ * (the share dialog) stays single because it is one component.
  */
-export default function Navbar({
-  user,
-  onLogout,
-  onAuthSuccess,
-  onOpenHowTo,
-  onOpenNotes,
-  isAdminPage = false,
-  onOpenMenu,
-}: NavbarProps) {
+export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu }: NavbarProps) {
   const region = useRegion();
-  const [showLoginDropdown, setShowLoginDropdown] = useState(false);
-  const [showRegisterDropdown, setShowRegisterDropdown] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const loginRef = useRef<HTMLDivElement>(null);
-  const registerRef = useRef<HTMLDivElement>(null);
-
-  // Close desktop login/register dropdowns when clicking outside.
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (loginRef.current && !loginRef.current.contains(event.target as Node)) {
-        setShowLoginDropdown(false);
-      }
-      if (registerRef.current && !registerRef.current.contains(event.target as Node)) {
-        setShowRegisterDropdown(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const handleLoginSuccess = () => {
-    setShowLoginDropdown(false);
-    if (onAuthSuccess) onAuthSuccess();
-  };
-
-  const handleRegisterSuccess = () => {
-    setShowRegisterDropdown(false);
-    if (onAuthSuccess) onAuthSuccess();
-  };
 
   return (
     <header className="bg-white border-b border-gray-200 px-3 py-2 md:p-4 flex-shrink-0">
@@ -204,34 +160,17 @@ export default function Navbar({
       {/* Desktop navbar */}
       <div className="hidden md:block">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {isAdminPage ? "Admin - Railway Management" : "The Railway Logbook"}
-              </h1>
-              <p className="text-gray-600 mt-1">
-                {isAdminPage
-                  ? `Welcome, ${user?.name || user?.email} - Manage railway routes and view raw data`
-                  : user
-                    ? `Welcome, ${user.name || user.email}! Log your rail journeys around ${region.label}.`
-                    : `Log your rail journeys around ${region.label}`}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 ml-4">
-              <RegionSwitch />
-              {/* Article views live in the user sidebar only — the admin page has no place to open them. */}
-              {!isAdminPage && (
-                <>
-                  <button type="button" onClick={onOpenHowTo} className={btn("softPrimary", "bar")}>
-                    How To Use
-                  </button>
-                  <button type="button" onClick={onOpenNotes} className={btn("softSuccess", "bar")}>
-                    Railway Notes
-                  </button>
-                </>
-              )}
-            </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isAdminPage ? "Admin - Railway Management" : "The Railway Logbook"}
+            </h1>
+            <p className="text-gray-600 mt-1">
+              {isAdminPage
+                ? `Welcome, ${user?.name || user?.email} - Manage railway routes and view raw data`
+                : user
+                  ? `Welcome, ${user.name || user.email}! Log your rail journeys around ${region.label}.`
+                  : `Log your rail journeys around ${region.label}`}
+            </p>
           </div>
 
           <div className="flex items-center gap-4">
@@ -247,7 +186,9 @@ export default function Navbar({
               </button>
             )}
 
-            {/* Admin link or Back to Main Map */}
+            {/* The Admin link is in the menu too, but it stays in the bar as well:
+                switching between the map and the admin view is a constant back and
+                forth, and two clicks each way is two too many. */}
             {user?.id === 1 && !isAdminPage && (
               <Link href="/admin" className={btn("primary", "bar")}>
                 Admin
@@ -259,65 +200,60 @@ export default function Navbar({
               </Link>
             )}
 
-            {/* Login/Register or Logout */}
-            {user ? (
-              onLogout && (
-                <button type="button" onClick={onLogout} className={btn("danger", "bar")}>
-                  Logout
-                </button>
-              )
-            ) : (
-              <>
-                {/* Login dropdown */}
-                <div className="relative" ref={loginRef}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowLoginDropdown(!showLoginDropdown);
-                      setShowRegisterDropdown(false);
-                    }}
-                    className={btn("primary", "bar")}
-                  >
-                    Login
+            {/* Auth opens the menu on the matching form rather than a dropdown of its
+                own. Two copies of a login form is two places for it to rot, and the
+                dropdown was the cramped one — the sheet gives it the whole panel. */}
+            {user
+              ? onLogout && (
+                  <button type="button" onClick={onLogout} className={btn("danger", "bar")}>
+                    Log out
                   </button>
+                )
+              : onOpenMenu && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onOpenMenu("login")}
+                      className={btn("primary", "bar")}
+                    >
+                      Sign in
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenMenu("register")}
+                      className={btn("success", "bar")}
+                    >
+                      Create account
+                    </button>
+                  </>
+                )}
 
-                  {showLoginDropdown && (
-                    <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-                      <div className="p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                          Sign in to your account
-                        </h3>
-                        <LoginForm onSuccess={handleLoginSuccess} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Register dropdown */}
-                <div className="relative" ref={registerRef}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowRegisterDropdown(!showRegisterDropdown);
-                      setShowLoginDropdown(false);
-                    }}
-                    className={btn("success", "bar")}
-                  >
-                    Register
-                  </button>
-
-                  {showRegisterDropdown && (
-                    <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-                      <div className="p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                          Create your account
-                        </h3>
-                        <RegisterForm onSuccess={handleRegisterSuccess} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
+            {/* The same menu the phone gets: region, layer switches, the articles,
+                the admin link and the auth forms. The admin page has no menu of its
+                own — its hamburger opens the sidebar drawer, which on desktop is
+                already on screen. */}
+            {!isAdminPage && onOpenMenu && (
+              <button
+                type="button"
+                onClick={() => onOpenMenu()}
+                className={BAR_BUTTON}
+                aria-label="Open menu"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </button>
             )}
           </div>
         </div>

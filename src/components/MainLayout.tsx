@@ -8,7 +8,7 @@ import type { User } from "@/lib/authActions";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/regions";
-import MobileMenuSheet, { type MenuView } from "./MobileMenuSheet";
+import MenuSheet, { type MenuView } from "./MenuSheet";
 import Navbar from "./Navbar";
 import type { ActiveTab } from "./UserSidebar";
 
@@ -59,9 +59,6 @@ export default function MainLayout({
         <Navbar
           user={user}
           onLogout={handleLogout}
-          onAuthSuccess={handleAuthSuccess}
-          onOpenHowTo={() => setActiveTab("howto")}
-          onOpenNotes={() => setActiveTab("notes")}
           onOpenMenu={(view) => setMenuView(view ?? "menu")}
         />
 
@@ -79,9 +76,10 @@ export default function MainLayout({
           />
         </main>
 
-        {/* The hamburger's menu: a sheet of its own, not a strip inside the sidebar. */}
-        {isMobile && menuView && (
-          <MobileMenuSheet
+        {/* The hamburger's menu, at every width: a sheet of its own, not a strip inside
+            the sidebar and not a row of buttons in the bar. */}
+        {menuView && (
+          <MenuSheet
             user={user}
             initialView={menuView}
             onClose={() => setMenuView(null)}

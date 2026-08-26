@@ -311,7 +311,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
                   onClick={handleLogout}
                   className={`${btn("danger", "xs")} ml-auto`}
                 >
-                  Logout
+                  Log out
                 </button>
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">{sidebarContent}</div>

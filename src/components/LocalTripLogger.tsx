@@ -107,8 +107,8 @@ export default function LocalTripLogger({
         <div className="font-medium mb-1">Local Storage ({journeyCount}/5 journeys)</div>
         <div className="text-xs">
           {remainingJourneys > 0
-            ? `${remainingJourneys} journey${remainingJourneys === 1 ? "" : "s"} remaining. Register for unlimited journeys!`
-            : "Limit reached! Register to log more journeys."}
+            ? `${remainingJourneys} journey${remainingJourneys === 1 ? "" : "s"} remaining. Create an account for unlimited journeys!`
+            : "Limit reached! Create an account to log more journeys."}
         </div>
       </div>
 

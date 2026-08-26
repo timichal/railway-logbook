@@ -20,7 +20,7 @@ export function useRouteEditor(dataAccess: DataAccess, selectedCountries?: strin
   }, [dataAccess, selectedCountries]);
 
   // The layer toggles live in LayerPrefsProvider — they are also driven from the
-  // mobile menu, which is a sibling of the map rather than a child of it.
+  // hamburger menu, which is a sibling of the map rather than a child of it.
   return {
     refreshProgress,
     progress,

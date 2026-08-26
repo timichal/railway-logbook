@@ -14,35 +14,46 @@ import RegionSwitch from "./RegionSwitch";
 import RegisterForm from "./RegisterForm";
 
 /**
- * What the hamburger opens on mobile: a full-height menu, separate from the tab
- * content of the bottom sheet.
+ * What the hamburger opens: one menu, at every width — a full-screen sheet on a
+ * phone, a right-hand drawer over a dimmed page on desktop.
  *
  * It replaces `MobileMenuPanel`, which was a permanent two-row chip strip pinned
  * inside the sidebar — it ate the top of a pane that has no room to spare, and it
- * expanded Login/Register *inline*, so signing in meant scrolling a form inside a
+ * expanded the auth forms *inline*, so signing in meant scrolling a form inside a
  * ~300px box. Here the form gets the whole sheet.
+ *
+ * **Desktop uses the same menu rather than the navbar it used to have.** The region
+ * switch, the layer switches and the two articles were spread across three places —
+ * the top bar, the map's progress box, and a pair of sidebar tabs that took over the
+ * whole sidebar — none of which is where a *setting* belongs, and all of which cost
+ * permanent screen space to say nothing most of the time. Gathering them behind one
+ * hamburger leaves the bar to identity and auth, the map corner to the numbers, and
+ * the sidebar to the three tabs that actually log journeys. One component and one
+ * set of contents for both widths, so the two cannot drift.
  *
  * The articles open as a **drill-down of the menu** rather than as a sidebar tab:
  * they are full-screen reading, they have nothing to do with logging a journey, and
  * arriving at one through the menu means the way back out is the same back arrow
- * that brought you in. (Desktop still opens them in the sidebar from the navbar.)
+ * that brought you in.
  *
  * **The rows are deliberately monochrome.** Colouring each entry differently (the
  * chip strip's blue/green/indigo/red) reads as decoration and says nothing: in a
  * list where everything is coloured, colour cannot mark out the one row that is
  * destructive. So the rows are neutral, the icon carries the identity, and red is
- * spent only on Logout.
+ * spent only on Log out.
  *
  * Mounted only while open (the caller conditions on it), so closing resets the view
- * and the slide-up animation runs on every open.
+ * and the open animation runs on every open.
  */
 
-interface MobileMenuSheetProps {
+interface MenuSheetProps {
   user: User | null;
   onClose: () => void;
   onLogout: () => void;
   onAuthSuccess: () => void;
-  /** Opened straight into a sub-view — the navbar's Sign in button lands on "login". */
+  /** Opened straight into a sub-view — the navbar's auth buttons land on the form
+      they name, so the bar costs one click rather than two and neither form is
+      duplicated in a dropdown of its own. */
   initialView?: MenuView;
 }
 
@@ -118,13 +129,13 @@ function IconButton({
   );
 }
 
-export default function MobileMenuSheet({
+export default function MenuSheet({
   user,
   onClose,
   onLogout,
   onAuthSuccess,
   initialView = "menu",
-}: MobileMenuSheetProps) {
+}: MenuSheetProps) {
   const region = useRegion();
   const layerPrefs = useLayerPrefs();
   const [view, setView] = useState<MenuView>(initialView);
@@ -156,19 +167,19 @@ export default function MobileMenuSheet({
   if (view === "login") {
     body = (
       <div className="p-4">
-        <LoginForm onSuccess={handleAuthSuccess} />
+        <LoginForm onSuccess={handleAuthSuccess} onSwitchToRegister={() => setView("register")} />
       </div>
     );
   } else if (view === "register") {
     body = (
       <div className="p-4">
-        <RegisterForm onSuccess={handleAuthSuccess} />
+        <RegisterForm onSuccess={handleAuthSuccess} onSwitchToLogin={() => setView("login")} />
       </div>
     );
   } else if (view === "howto") {
-    body = <HowToUseArticle onClose={backToMenu} showHeader={false} />;
+    body = <HowToUseArticle />;
   } else if (view === "notes") {
-    body = <RailwayNotesArticle onClose={backToMenu} showHeader={false} />;
+    body = <RailwayNotesArticle />;
   } else {
     body = (
       <>
@@ -189,7 +200,8 @@ export default function MobileMenuSheet({
         )}
 
         {/* The region is the one setting that changes what the whole app is showing,
-            so it leads the menu instead of hiding in the navbar's spare corner. */}
+            so it leads the menu. It used to sit in the desktop navbar as well; two
+            copies of a segmented switch is one more than the setting deserves. */}
         <div className="px-4 py-4 border-b border-gray-100">
           <span className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
             Region
@@ -198,8 +210,9 @@ export default function MobileMenuSheet({
         </div>
 
         {/* The layer switches used to sit in the map's own corner box. They are
-            settings, not readouts, and map space on a phone is the scarcest thing
-            here — so they live in the menu and the box keeps only the numbers. */}
+            settings, not readouts, and the corner of a map is for readouts — so they
+            live here and the box keeps only the numbers. (The shared map has no
+            menu of its own, so that one still carries them in the box.) */}
         <div className="px-4 py-4 border-b border-gray-100">
           <span className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-1">
             Show on map
@@ -223,58 +236,70 @@ export default function MobileMenuSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-white flex flex-col sheet-slide-up safe-area">
-      <header className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0">
-        {view !== "menu" && (
-          <IconButton onClick={backToMenu} label="Back to menu" path={CHEVRON_LEFT} />
-        )}
-        <h2
-          className={`flex-1 text-lg font-semibold text-gray-900 truncate ${
-            view === "menu" ? "px-1" : ""
-          }`}
-        >
-          {TITLES[view]}
-        </h2>
-        <IconButton onClick={onClose} label="Close menu" path={CROSS} />
-      </header>
+    <div className="fixed inset-0 z-40 flex md:justify-end">
+      {/* The scrim is desktop-only: the phone sheet covers the screen, so there is
+          nothing left to dim, and a tap-to-close target under a full-bleed panel is
+          unreachable anyway. */}
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={onClose}
+        className="hidden md:block absolute inset-0 bg-black/40"
+      />
 
-      <div className="flex-1 min-h-0 overflow-y-auto">{body}</div>
-
-      {/* Auth lives in a footer, not in the list: it is the one action a visitor is
-          most likely here for, and Logout must not look like another navigation row. */}
-      {view === "menu" && (
-        <div className="border-t border-gray-200 p-4 flex-shrink-0">
-          {user ? (
-            <button
-              type="button"
-              onClick={() => {
-                onLogout();
-                onClose();
-              }}
-              className={`${btn("outlineDanger", "lg")} w-full`}
-            >
-              Log out
-            </button>
-          ) : (
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => setView("login")}
-                className={`${btn("primary", "lg")} w-full`}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("register")}
-                className={`${btn("outline", "lg")} w-full`}
-              >
-                Create account
-              </button>
-            </div>
+      <div className="menu-sheet relative w-full md:w-[380px] bg-white md:shadow-2xl flex flex-col safe-area">
+        <header className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0">
+          {view !== "menu" && (
+            <IconButton onClick={backToMenu} label="Back to menu" path={CHEVRON_LEFT} />
           )}
-        </div>
-      )}
+          <h2
+            className={`flex-1 text-lg font-semibold text-gray-900 truncate ${
+              view === "menu" ? "px-1" : ""
+            }`}
+          >
+            {TITLES[view]}
+          </h2>
+          <IconButton onClick={onClose} label="Close menu" path={CROSS} />
+        </header>
+
+        <div className="flex-1 min-h-0 overflow-y-auto">{body}</div>
+
+        {/* Auth lives in a footer, not in the list: it is the one action a visitor is
+            most likely here for, and Log out must not look like another navigation row. */}
+        {view === "menu" && (
+          <div className="border-t border-gray-200 p-4 flex-shrink-0">
+            {user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onLogout();
+                  onClose();
+                }}
+                className={`${btn("outlineDanger", "lg")} w-full`}
+              >
+                Log out
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setView("login")}
+                  className={`${btn("primary", "lg")} w-full`}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("register")}
+                  className={`${btn("outline", "lg")} w-full`}
+                >
+                  Create account
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
