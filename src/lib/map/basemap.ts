@@ -47,16 +47,11 @@ export type BasemapStyle = Pick<
   "sources" | "layers" | "glyphs" | "sprite"
 >;
 
-/**
- * Latin-first label text. `name:latin` is OpenMapTiles' latin-script name
- * (transliterated where OSM has no latin name), `name_en` a second chance, and
- * plain `name` the last resort - so a place with no latin name at all still gets
- * a label rather than a blank.
- */
+// try english name first, then latin, then whatever the local name is
 const LATIN_LABEL_EXPRESSION = [
   "coalesce",
-  ["get", "name:latin"],
   ["get", "name_en"],
+  ["get", "name:latin"],
   ["get", "name"],
 ] as maplibregl.ExpressionSpecification;
 

@@ -26,7 +26,7 @@
  * their own country list.
  */
 
-import { SUPPORTED_COUNTRIES } from "./constants";
+import { getUsageLabel, SUPPORTED_COUNTRIES, type UsageType, usageOptions } from "./constants";
 
 export type RegionId = "europe" | "japan";
 
@@ -54,12 +54,28 @@ export interface Region {
    */
   hasCountryFilter: boolean;
   /**
-   * Frequency tag prefilled when a route in this region is marked Special.
-   * We're using this tag for non-JR operators in Japan, so it's a default
-   * rather than something to retype; it is a plain autofill, and the
-   * admin can delete it in the tag input like any other.
+   * Whether every route here carries a line name of its own, alongside its two
+   * endpoints. Japan's network is named line by line ("Chuo Main Line"), and the
+   * name is what identifies a route there — so the admin forms require it, the
+   * routes list can filter for the ones still missing it, and the hover popups
+   * lead with it. Europe names nothing: a route is its endpoints, and the field
+   * is not even shown.
    */
-  specialUsageTag?: string;
+  hasRouteNames: boolean;
+  /**
+   * Whether the "Highlight scenic lines" toggle is offered on the user map.
+   * `scenic` is still stored and editable by the admin everywhere; this only
+   * decides whether the region's map bothers to offer the outline.
+   */
+  hasScenicHighlight: boolean;
+  /**
+   * Usage types this region renames. The axis (whose track, whose timetable) is
+   * the same everywhere, but Japan's split falls exactly on the JR / non-JR
+   * operator line, which is what a Japanese reader recognises — so Regular reads
+   * "JR line" and Special "Non-JR line" there, in the badges and the admin forms
+   * alike. Types left out keep the default label from `usageOptions`.
+   */
+  usageLabels?: Partial<Record<UsageType, string>>;
 }
 
 export const REGIONS: Record<RegionId, Region> = {
@@ -75,6 +91,8 @@ export const REGIONS: Record<RegionId, Region> = {
     ],
     countries: SUPPORTED_COUNTRIES,
     hasCountryFilter: true,
+    hasRouteNames: false,
+    hasScenicHighlight: true,
   },
   japan: {
     id: "japan",
@@ -88,7 +106,9 @@ export const REGIONS: Record<RegionId, Region> = {
     ],
     countries: [{ code: "JP", name: "Japan" }],
     hasCountryFilter: false,
-    specialUsageTag: "Non-JR line",
+    hasRouteNames: true,
+    hasScenicHighlight: false,
+    usageLabels: { 0: "JR line", 2: "Non-JR line" },
   },
 };
 
@@ -109,6 +129,23 @@ export function isRegionId(value: unknown): value is RegionId {
 /** The region for an id, falling back to the default for anything unknown. */
 export function getRegion(value: unknown): Region {
   return REGIONS[isRegionId(value) ? value : DEFAULT_REGION];
+}
+
+/**
+ * A usage type's label as this region names it — the region's own wording where
+ * it has one, the shared default otherwise. Every label shown to a user goes
+ * through here; `getUsageLabel` in constants.ts is the region-less fallback.
+ */
+export function regionUsageLabel(regionId: RegionId, usageType: UsageType): string {
+  return REGIONS[regionId].usageLabels?.[usageType] ?? getUsageLabel(usageType);
+}
+
+/** `usageOptions` with this region's labels applied, for the admin route forms. */
+export function regionUsageOptions(regionId: RegionId) {
+  return usageOptions.map((option) => ({
+    ...option,
+    label: regionUsageLabel(regionId, option.id),
+  }));
 }
 
 /** ISO country codes of a region, e.g. for the `selected_countries` tile filter. */

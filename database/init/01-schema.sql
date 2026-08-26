@@ -46,6 +46,7 @@ CREATE TABLE railway_parts (
 -- Railway lines/routes (objective data only)
 CREATE TABLE railway_routes (
     track_id SERIAL PRIMARY KEY, -- Auto-generated unique track identifier
+    name TEXT, -- Line name, where the region names its lines (Japan). NULL in regions whose routes are identified by their endpoints alone (Europe)
     from_station TEXT NOT NULL, -- Starting station/location
     to_station TEXT NOT NULL, -- Ending station/location
     description TEXT, -- Route description

@@ -183,6 +183,7 @@ export default function VectorAdminMap({
         setupAdminMapInteractions(mapInstance, {
           onCoordinateClickRef,
           onRouteSelectRef,
+          region: regionId,
         });
       },
     },

@@ -235,7 +235,9 @@ export default function VectorRailwayMap({
     map,
     routeEditor.showHeritage,
     routeEditor.showSpecial,
-    showScenicOutline,
+    // The stored preference is shared across regions; one that offers no scenic
+    // outline keeps it off regardless of what the other region left switched on.
+    showScenicOutline && region.hasScenicHighlight,
     mapLoaded,
     cacheBuster,
   );
@@ -381,6 +383,7 @@ export default function VectorRailwayMap({
           activeTab === "routes" && journeyStationClickHandler
             ? journeyStationClickHandler
             : undefined,
+        region: region.id,
       });
     };
 
@@ -393,7 +396,7 @@ export default function VectorRailwayMap({
     return () => {
       if (cleanup) cleanup();
     };
-  }, [map, mapLoaded, handleRouteClick, activeTab, journeyStationClickHandler]);
+  }, [map, mapLoaded, handleRouteClick, activeTab, journeyStationClickHandler, region.id]);
 
   // Fetch progress stats on mount
   useEffect(() => {
@@ -560,18 +563,21 @@ export default function VectorRailwayMap({
                 />
                 <span>{region.id === "japan" ? "Show non-JR lines" : "Show special services"}</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer text-xs">
-                <input
-                  type="checkbox"
-                  checked={showScenicOutline}
-                  onChange={(e) => {
-                    setShowScenicOutline(e.target.checked);
-                    saveLayerPref("showScenicOutline", e.target.checked);
-                  }}
-                  className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                />
-                <span>Highlight scenic lines</span>
-              </label>
+              {/* Not every region offers the scenic outline — see Region.hasScenicHighlight. */}
+              {region.hasScenicHighlight && (
+                <label className="flex items-center gap-2 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={showScenicOutline}
+                    onChange={(e) => {
+                      setShowScenicOutline(e.target.checked);
+                      saveLayerPref("showScenicOutline", e.target.checked);
+                    }}
+                    className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>Highlight scenic lines</span>
+                </label>
+              )}
             </div>
           </div>
         )}

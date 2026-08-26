@@ -51,9 +51,6 @@ export const usageOptions = [
 // Extract the usage type ID as a union type (0 | 1 | 2)
 export type UsageType = (typeof usageOptions)[number]["id"];
 
-/** Usage type id of "Special" — national tracks used irregularly. */
-export const USAGE_TYPE_SPECIAL: UsageType = 2;
-
 /** A route is "special" (non-regular) when it is anything other than Regular. */
 export const isSpecialUsage = (usageType: UsageType): boolean => usageType !== 0;
 

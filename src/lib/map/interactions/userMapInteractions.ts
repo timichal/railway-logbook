@@ -1,7 +1,13 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import { HIGHLIGHT_LAYER_IDS } from "@/lib/map/hooks/useRouteHighlighting";
-import { escapeHtml, formatRouteMetadataBadges, safeHref } from "@/lib/map/utils/tooltipFormatting";
+import {
+  escapeHtml,
+  formatRouteMetadataBadges,
+  formatRouteTitle,
+  safeHref,
+} from "@/lib/map/utils/tooltipFormatting";
+import type { RegionId } from "@/lib/regions";
 import type { SelectedRoute, Station } from "@/lib/types";
 
 interface UserMapInteractionCallbacks {
@@ -12,6 +18,8 @@ interface UserMapInteractionCallbacks {
    */
   onRouteClick?: (feature: SelectedRoute) => void;
   onStationClick?: (station: Station | null) => void;
+  /** Region the map is showing — decides how a route's popup is labelled. */
+  region: RegionId;
 }
 
 /**
@@ -21,7 +29,7 @@ export function setupUserMapInteractions(
   mapInstance: maplibreglType.Map,
   callbacks: UserMapInteractionCallbacks,
 ) {
-  const { onRouteClick, onStationClick } = callbacks;
+  const { onRouteClick, onStationClick, region } = callbacks;
   let currentPopup: maplibregl.Popup | null = null;
 
   // Click handler for routes — queries all route-related layers (base + click buffer + highlights)
@@ -86,17 +94,20 @@ export function setupUserMapInteractions(
 
     if (!properties) return;
 
-    let popupContent = `<div class="railway-popup" style="color: black;"><h3 class="font-bold text-lg mb-2" style="color: black;">${escapeHtml(properties.from_station)} ⟷ ${escapeHtml(properties.to_station)}</h3>`;
+    let popupContent = `<div class="railway-popup" style="color: black;">${formatRouteTitle(properties, region)}`;
 
     let formattedDescription = "";
 
     // Route metadata badges (usage type, line class, scenic, frequency)
-    formattedDescription += formatRouteMetadataBadges({
-      usage_type: properties.usage_type,
-      scenic: properties.scenic,
-      line_class: properties.line_class,
-      frequency: properties.frequency,
-    });
+    formattedDescription += formatRouteMetadataBadges(
+      {
+        usage_type: properties.usage_type,
+        scenic: properties.scenic,
+        line_class: properties.line_class,
+        frequency: properties.frequency,
+      },
+      region,
+    );
     if (properties.description) {
       formattedDescription += `<b>Note:</b> ${escapeHtml(properties.description)}`;
     }

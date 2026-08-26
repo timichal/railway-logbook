@@ -13,14 +13,28 @@ import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/regions";
  * while someone is looking: every data call the client makes re-checks the
  * token, so the map simply stops answering rather than going stale silently.
  */
-export default async function SharedMapPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function SharedMapPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ view?: string | string[] }>;
+}) {
   const { token } = await params;
+  const { view } = await searchParams;
   const owner = await getPublicMapOwner(token);
 
-  // Region comes from the same cookie as the main map, so a visitor who was
-  // last looking at Japan lands on Japan here too.
+  // `?view=` is what the sharer was looking at when they copied the link, so it
+  // wins: a shared map is shared as a view of something, and the visitor's own
+  // cookie has no bearing on which region the sender meant. Falls back to that
+  // cookie (a visitor last on Japan lands on Japan) for links made before the
+  // parameter existed, and to the default region otherwise.
   const regionCookie = (await cookies()).get(REGION_COOKIE)?.value;
-  const initialRegion = isRegionId(regionCookie) ? regionCookie : DEFAULT_REGION;
+  const initialRegion = isRegionId(view)
+    ? view
+    : isRegionId(regionCookie)
+      ? regionCookie
+      : DEFAULT_REGION;
 
   if (!owner) {
     return (

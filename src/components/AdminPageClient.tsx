@@ -149,6 +149,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   };
 
   const handleSaveRoute = async (routeData: {
+    name: string;
     from_station: string;
     to_station: string;
     description: string;
@@ -193,7 +194,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       setRefreshTrigger((prev) => prev + 1);
 
       showSuccess(
-        `Route "${routeData.from_station} ⟷ ${routeData.to_station}" saved successfully! Track ID: ${trackId}`,
+        `Route "${routeData.name || `${routeData.from_station} ⟷ ${routeData.to_station}`}" saved successfully! Track ID: ${trackId}`,
       );
     } catch (error) {
       console.error("AdminPageClient: Error saving route:", error);

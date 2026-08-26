@@ -13,6 +13,8 @@ import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./typ
  * Interface for route metadata used during creation
  */
 export interface SaveRouteData {
+  /** Line name, required in regions that name their lines; "" elsewhere. */
+  name: string;
   from_station: string;
   to_station: string;
   description: string;
@@ -35,7 +37,7 @@ export async function getAllRailwayRoutes(region: RegionId) {
   await requireAdmin();
 
   const result = await query(`
-    SELECT track_id, from_station, to_station, description, usage_type, scenic, line_class,
+    SELECT track_id, name, from_station, to_station, description, usage_type, scenic, line_class,
            starting_part_id, ending_part_id, is_valid, error_message, under_repair,
            intended_backtracking, has_backtracking
     FROM railway_routes
@@ -90,7 +92,7 @@ export async function getRailwayRoute(trackId: number) {
 
   const result = await query(
     `
-    SELECT track_id, from_station, to_station, description, usage_type, frequency, link, scenic, line_class,
+    SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, scenic, line_class,
            ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
            ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json,
@@ -279,6 +281,7 @@ export async function saveRailwayRoute(
       // Set part_id fields to NULL (deprecated)
       queryStr = `
         INSERT INTO railway_routes (
+          name,
           from_station,
           to_station,
           description,
@@ -305,22 +308,24 @@ export async function saveRailwayRoute(
           $5,
           $6,
           $7,
-          ST_GeomFromText($8, 4326),
-          ST_Length(ST_GeomFromText($8, 4326)::geography) / 1000,
-          $9,
+          $8,
+          ST_GeomFromText($9, 4326),
+          ST_Length(ST_GeomFromText($9, 4326)::geography) / 1000,
           $10,
-          ST_GeomFromText($11, 4326),
+          $11,
           ST_GeomFromText($12, 4326),
+          ST_GeomFromText($13, 4326),
           NULL,
           NULL,
           TRUE,
-          $13,
-          $14
+          $14,
+          $15
         )
         RETURNING track_id, length_km
       `;
 
       values = [
+        routeData.name.trim() || null,
         routeData.from_station,
         routeData.to_station,
         routeData.description || null,
@@ -405,12 +410,13 @@ export async function saveRailwayRoute(
 }
 
 /**
- * Update route metadata (name, description, usage_type, etc.)
+ * Update route metadata (line name, endpoints, description, usage_type, etc.)
  * Also marks route as valid since admin is manually validating — which clears
  * `under_repair` too: the flag only ever qualifies an invalid route.
  */
 export async function updateRailwayRoute(
   trackId: number,
+  name: string | null,
   fromStation: string,
   toStation: string,
   description: string | null,
@@ -426,13 +432,14 @@ export async function updateRailwayRoute(
   await query(
     `
     UPDATE railway_routes
-    SET from_station = $2, to_station = $3, description = $4, usage_type = $5, frequency = $6, link = $7,
-        scenic = $8, line_class = $9, intended_backtracking = $10, is_valid = TRUE, error_message = NULL,
-        under_repair = FALSE, updated_at = CURRENT_TIMESTAMP
+    SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
+        link = $8, scenic = $9, line_class = $10, intended_backtracking = $11, is_valid = TRUE,
+        error_message = NULL, under_repair = FALSE, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
   `,
     [
       trackId,
+      name,
       fromStation,
       toStation,
       description,
@@ -500,13 +507,13 @@ export async function duplicateRailwayRoute(trackId: number): Promise<number> {
     const insertRoute = await client.query(
       `
       INSERT INTO railway_routes (
-        from_station, to_station, description, usage_type, frequency, link, scenic,
+        name, from_station, to_station, description, usage_type, frequency, link, scenic,
         line_class, geometry, length_km, start_country, end_country,
         starting_coordinate, ending_coordinate, starting_part_id, ending_part_id,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       )
       SELECT
-        from_station || ' [duplicate]', to_station || ' [duplicate]', description,
+        name, from_station || ' [duplicate]', to_station || ' [duplicate]', description,
         usage_type, frequency, link, scenic, line_class, geometry, length_km,
         start_country, end_country, starting_coordinate, ending_coordinate,
         starting_part_id, ending_part_id, is_valid, error_message, under_repair,

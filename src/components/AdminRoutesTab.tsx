@@ -10,7 +10,7 @@ import {
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
 import type { LineClass, UsageType } from "@/lib/constants";
-import { useRegionId } from "@/lib/regionContext";
+import { useRegion } from "@/lib/regionContext";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import type { RailwayRoute } from "@/lib/types";
 import RouteEditForm from "./RouteEditForm";
@@ -37,7 +37,8 @@ export default function AdminRoutesTab({
   availableTags = [],
   onTagsChanged,
 }: AdminRoutesTabProps) {
-  const regionId = useRegionId();
+  const region = useRegion();
+  const regionId = region.id;
   const { showError, showSuccess } = useToast();
 
   // State
@@ -49,9 +50,11 @@ export default function AdminRoutesTab({
   const [showInvalidOnly, setShowInvalidOnly] = useState(false);
   const [showUnderRepairOnly, setShowUnderRepairOnly] = useState(false);
   const [showUnintendedBacktrackingOnly, setShowUnintendedBacktrackingOnly] = useState(false);
+  const [showWithoutNameOnly, setShowWithoutNameOnly] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const itemsPerPage = 100;
   const [editForm, setEditForm] = useState<{
+    name: string;
     from_station: string;
     to_station: string;
     description: string;
@@ -104,6 +107,12 @@ export default function AdminRoutesTab({
       );
     }
 
+    // Only offered where the region names its lines — the worklist of routes
+    // still waiting for a name.
+    if (showWithoutNameOnly) {
+      filtered = filtered.filter((route) => !route.name?.trim());
+    }
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((route) => {
@@ -114,7 +123,14 @@ export default function AdminRoutesTab({
     }
 
     return filtered;
-  }, [routes, searchQuery, showInvalidOnly, showUnderRepairOnly, showUnintendedBacktrackingOnly]);
+  }, [
+    routes,
+    searchQuery,
+    showInvalidOnly,
+    showUnderRepairOnly,
+    showUnintendedBacktrackingOnly,
+    showWithoutNameOnly,
+  ]);
 
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   const paginatedRoutes = useMemo(() => {
@@ -131,11 +147,18 @@ export default function AdminRoutesTab({
   const unintendedBacktrackingCount = routes.filter(
     (route) => route.has_backtracking === true && route.intended_backtracking !== true,
   ).length;
+  const withoutNameCount = routes.filter((route) => !route.name?.trim()).length;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the filter states are intentional triggers to reset pagination to page 1 when filtering changes.
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, showInvalidOnly, showUnderRepairOnly, showUnintendedBacktrackingOnly]);
+  }, [
+    searchQuery,
+    showInvalidOnly,
+    showUnderRepairOnly,
+    showUnintendedBacktrackingOnly,
+    showWithoutNameOnly,
+  ]);
 
   // Route selection
   const handleRouteClick = useCallback(
@@ -145,6 +168,7 @@ export default function AdminRoutesTab({
         const routeDetail = await getRailwayRoute(trackId);
         setSelectedRoute(routeDetail);
         setEditForm({
+          name: routeDetail.name || "",
           from_station: routeDetail.from_station,
           to_station: routeDetail.to_station,
           description: routeDetail.description || "",
@@ -195,6 +219,7 @@ export default function AdminRoutesTab({
       setIsLoading(true);
       await updateRailwayRoute(
         selectedRoute.track_id,
+        editForm.name.trim() || null,
         editForm.from_station.trim(),
         editForm.to_station.trim(),
         editForm.description || null,
@@ -211,6 +236,7 @@ export default function AdminRoutesTab({
       // Update state with trimmed values
       const trimmedForm = {
         ...editForm,
+        name: editForm.name.trim(),
         from_station: editForm.from_station.trim(),
         to_station: editForm.to_station.trim(),
       };
@@ -373,12 +399,15 @@ export default function AdminRoutesTab({
           invalidRouteCount={invalidRouteCount}
           underRepairCount={underRepairCount}
           unintendedBacktrackingCount={unintendedBacktrackingCount}
+          withoutNameCount={withoutNameCount}
+          hasRouteNames={region.hasRouteNames}
           isLoading={isLoading && !selectedRoute}
           selectedRouteId={selectedRouteId}
           searchQuery={searchQuery}
           showInvalidOnly={showInvalidOnly}
           showUnderRepairOnly={showUnderRepairOnly}
           showUnintendedBacktrackingOnly={showUnintendedBacktrackingOnly}
+          showWithoutNameOnly={showWithoutNameOnly}
           currentPage={currentPage}
           totalPages={totalPages}
           filteredCount={filteredRoutes.length}
@@ -386,6 +415,7 @@ export default function AdminRoutesTab({
           onInvalidOnlyChange={setShowInvalidOnly}
           onUnderRepairOnlyChange={setShowUnderRepairOnly}
           onUnintendedBacktrackingOnlyChange={setShowUnintendedBacktrackingOnly}
+          onWithoutNameOnlyChange={setShowWithoutNameOnly}
           onRouteClick={handleRouteClick}
           onPageChange={setCurrentPage}
         />

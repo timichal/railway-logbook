@@ -80,6 +80,11 @@ export type Station = {
 // Railway route from database (with geometry as JSON string)
 export type RailwayRoute = {
   track_id: number;
+  /**
+   * Line name, in regions that name their lines (Japan). NULL where a route is
+   * identified by its endpoints alone — see Region.hasRouteNames.
+   */
+  name?: string | null;
   from_station: string;
   to_station: string;
   description: string | null;

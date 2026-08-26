@@ -2,11 +2,19 @@ import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import type { MutableRefObject } from "react";
 import { getNoteTypeLabel } from "@/lib/constants";
-import { escapeHtml, formatRouteMetadataBadges, safeHref } from "@/lib/map/utils/tooltipFormatting";
+import {
+  escapeHtml,
+  formatRouteMetadataBadges,
+  formatRouteTitle,
+  safeHref,
+} from "@/lib/map/utils/tooltipFormatting";
+import type { RegionId } from "@/lib/regions";
 
 interface AdminMapCallbacks {
   onCoordinateClickRef: MutableRefObject<((coordinate: [number, number]) => void) | undefined>;
   onRouteSelectRef: MutableRefObject<((routeId: number | null) => void) | undefined>;
+  /** Region the map is showing — decides how a route's popup is labelled. */
+  region: RegionId;
 }
 
 /**
@@ -16,7 +24,7 @@ export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
   callbacks: AdminMapCallbacks,
 ) {
-  const { onCoordinateClickRef, onRouteSelectRef } = callbacks;
+  const { onCoordinateClickRef, onRouteSelectRef, region } = callbacks;
 
   // Click handler for railway_parts - extracts exact click coordinate
   const handlePartClick = (e: maplibreglType.MapLayerMouseEvent) => {
@@ -203,12 +211,15 @@ export function setupAdminMapInteractions(
         let formattedDescription = "";
 
         // Route metadata badges (usage type, line class, scenic, frequency)
-        formattedDescription += formatRouteMetadataBadges({
-          usage_type: properties.usage_type,
-          scenic: properties.scenic,
-          line_class: properties.line_class,
-          frequency: properties.frequency,
-        });
+        formattedDescription += formatRouteMetadataBadges(
+          {
+            usage_type: properties.usage_type,
+            scenic: properties.scenic,
+            line_class: properties.line_class,
+            frequency: properties.frequency,
+          },
+          region,
+        );
         if (properties.description) {
           formattedDescription += `<b>Note:</b> ${escapeHtml(properties.description)}`;
         }
@@ -230,8 +241,8 @@ export function setupAdminMapInteractions(
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="color: black;">
-              <h3 style="font-weight: bold; margin-bottom: 4px;">${escapeHtml(properties.from_station)} ⟷ ${escapeHtml(properties.to_station)}</h3>
-              ${formattedDescription}</p>
+              ${formatRouteTitle(properties, region)}
+              ${formattedDescription}
             </div>
           `)
           .addTo(mapInstance);

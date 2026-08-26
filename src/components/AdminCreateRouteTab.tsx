@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
-import { USAGE_TYPE_SPECIAL, type UsageType, usageOptions } from "@/lib/constants";
+import type { UsageType } from "@/lib/constants";
 import { handleJunctionShortcut } from "@/lib/junctionShortcut";
-import { useRegionId } from "@/lib/regionContext";
-import { REGIONS } from "@/lib/regions";
+import { useRegion } from "@/lib/regionContext";
+import { regionUsageOptions } from "@/lib/regions";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
 import TagInput from "./TagInput";
@@ -27,6 +27,7 @@ interface AdminCreateRouteTabProps {
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
   onSaveRoute?: (routeData: {
+    name: string;
     from_station: string;
     to_station: string;
     description: string;
@@ -64,12 +65,13 @@ export default function AdminCreateRouteTab({
   onTagsChanged,
 }: AdminCreateRouteTabProps) {
   const { showError, showSuccess } = useToast();
-  const regionId = useRegionId();
-  // Some regions prefill a frequency tag for Special routes (Japan: "Non-JR line").
-  const specialUsageTag = REGIONS[regionId].specialUsageTag;
+  const region = useRegion();
+  // Japan calls its usage types JR / non-JR lines; Europe keeps the defaults.
+  const usageOptions = regionUsageOptions(region.id);
 
   // Create route form state (without the coordinates that are managed by parent)
   const [createForm, setCreateForm] = useState({
+    name: "",
     from_station: "",
     to_station: "",
     description: "",
@@ -94,6 +96,7 @@ export default function AdminCreateRouteTab({
   // Reset form function
   const resetForm = () => {
     setCreateForm({
+      name: "",
       from_station: "",
       to_station: "",
       description: "",
@@ -178,6 +181,7 @@ export default function AdminCreateRouteTab({
     if (!onSaveRoute || createForm.usage_type === undefined || !currentPathResult) return;
 
     await onSaveRoute({
+      name: createForm.name.trim(),
       from_station: createForm.from_station.trim(),
       to_station: createForm.to_station.trim(),
       description: createForm.description,
@@ -207,6 +211,7 @@ export default function AdminCreateRouteTab({
       // Metadata (name, description, usage_type, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
       await saveRailwayRoute(
         {
+          name: "",
           from_station: "",
           to_station: "",
           description: "",
@@ -365,6 +370,26 @@ export default function AdminCreateRouteTab({
         {/* Only show metadata fields in create mode */}
         {!isEditMode && (
           <>
+            {/* Line Name — only where the region names its lines (Japan) */}
+            {region.hasRouteNames && (
+              <div>
+                <label
+                  htmlFor="route-name"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Name *
+                </label>
+                <input
+                  id="route-name"
+                  type="text"
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                  placeholder="Line name"
+                />
+              </div>
+            )}
+
             {/* From Station */}
             <div>
               <label htmlFor="route-from" className="block text-sm font-medium text-gray-700 mb-1">
@@ -449,20 +474,12 @@ export default function AdminCreateRouteTab({
                       name="usage_type"
                       value={option.id}
                       checked={createForm.usage_type === option.id}
-                      onChange={(e) => {
-                        const usage_type = Number(e.target.value) as UsageType;
-                        const autofillTag =
-                          usage_type === USAGE_TYPE_SPECIAL &&
-                          specialUsageTag &&
-                          !createForm.frequency.includes(specialUsageTag);
+                      onChange={(e) =>
                         setCreateForm({
                           ...createForm,
-                          usage_type,
-                          frequency: autofillTag
-                            ? [...createForm.frequency, specialUsageTag]
-                            : createForm.frequency,
-                        });
-                      }}
+                          usage_type: Number(e.target.value) as UsageType,
+                        })
+                      }
                       className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500 cursor-pointer"
                     />
                     <span className="text-sm text-gray-700">{option.label}</span>
@@ -547,6 +564,7 @@ export default function AdminCreateRouteTab({
                 onClick={handleSaveRoute}
                 disabled={
                   !isPreviewMode ||
+                  (region.hasRouteNames && !createForm.name.trim()) ||
                   !createForm.from_station ||
                   !createForm.to_station ||
                   createForm.usage_type === undefined

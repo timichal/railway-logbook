@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getPublicMapSettings, setPublicMapEnabled } from "@/lib/publicMapActions";
+import { useRegionId } from "@/lib/regionContext";
 
 interface ShareMapDialogProps {
   isOpen: boolean;
@@ -15,8 +16,15 @@ interface ShareMapDialogProps {
  * token is minted on that first read, so a user who never opens this dialog
  * never gets one. The link appears only while sharing is on — the same one every
  * time, since the token outlives the switch.
+ *
+ * The link carries `?view=<region>` — whichever region the sharer is looking at
+ * right now. A shared map is shared as a *view* of something, and without it the
+ * visitor lands on whatever region their own cookie happens to hold: someone
+ * sending their Japan map to a friend who last browsed Europe would have them
+ * open an empty Europe map. The token is unchanged by this; only the query is.
  */
 export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps) {
+  const regionId = useRegionId();
   const [enabled, setEnabled] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +35,9 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
   // The token only ever arrives from the effect below, so this is a browser-only
   // value in practice; the explicit check keeps it safe under SSR regardless.
   const shareUrl =
-    token && typeof window !== "undefined" ? `${window.location.origin}/shared/${token}` : "";
+    token && typeof window !== "undefined"
+      ? `${window.location.origin}/shared/${token}?view=${regionId}`
+      : "";
 
   useEffect(() => {
     if (!isOpen) return;

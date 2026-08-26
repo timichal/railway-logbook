@@ -199,6 +199,7 @@ BEGIN
     FROM (
         SELECT
             rr.track_id,
+            rr.name,
             rr.from_station,
             rr.to_station,
             rr.description,

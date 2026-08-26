@@ -1,10 +1,10 @@
 import {
   getLineClassLabel,
   getUsageBadgeColors,
-  getUsageLabel,
   type LineClass,
   type UsageType,
 } from "@/lib/constants";
+import { REGIONS, type RegionId, regionUsageLabel } from "@/lib/regions";
 
 /**
  * Escape a value for interpolation into popup HTML (MapLibre popups are built as
@@ -43,14 +43,46 @@ const BADGE_STYLE =
   "display: inline-block; white-space: nowrap; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;";
 
 /**
+ * The heading of a route's hover popup, shared by the user and admin maps so the
+ * two never drift apart.
+ *
+ * Where the region names its lines (Japan), the name leads and the endpoints
+ * follow underneath — the name is what identifies the route there, and the
+ * endpoints only say which stretch of it this is. Everywhere else the endpoints
+ * are the title, as they always were. An unnamed route in a naming region falls
+ * back to the endpoints rather than showing a blank line.
+ */
+export function formatRouteTitle(
+  /** Straight off an MVT feature, so every field is loosely typed. */
+  properties: { [key: string]: unknown },
+  regionId: RegionId,
+): string {
+  const endpoints = `${escapeHtml(properties.from_station)} ⟷ ${escapeHtml(properties.to_station)}`;
+  const name = REGIONS[regionId].hasRouteNames ? properties.name : null;
+
+  if (typeof name !== "string" || !name.trim()) {
+    return `<h3 style="font-weight: 700; font-size: 1.05rem; margin-bottom: 6px; color: black;">${endpoints}</h3>`;
+  }
+
+  return (
+    `<h3 style="font-weight: 700; font-size: 1.05rem; color: black;">${escapeHtml(name)}</h3>` +
+    `<div style="margin-bottom: 6px; color: black;">${endpoints}</div>`
+  );
+}
+
+/**
  * Format route metadata as color-coded badges for tooltips
  */
-export function formatRouteMetadataBadges(properties: {
-  usage_type: UsageType;
-  scenic?: boolean;
-  line_class?: LineClass;
-  frequency?: string;
-}): string {
+export function formatRouteMetadataBadges(
+  properties: {
+    usage_type: UsageType;
+    scenic?: boolean;
+    line_class?: LineClass;
+    frequency?: string;
+  },
+  /** Usage types are labelled per region — Japan calls them JR / non-JR lines. */
+  regionId: RegionId,
+): string {
   let badges = "";
 
   // Line class badge
@@ -63,7 +95,7 @@ export function formatRouteMetadataBadges(properties: {
   }
 
   // Usage type badge (Regular=blue, Heritage=purple, Special=teal)
-  const usageLabel = getUsageLabel(properties.usage_type);
+  const usageLabel = regionUsageLabel(regionId, properties.usage_type);
   const { color: usageColor, bgColor: usageBgColor } = getUsageBadgeColors(properties.usage_type);
   badges += `<span style="${BADGE_STYLE} background-color: ${usageBgColor}; color: ${usageColor};">${usageLabel}</span>`;
 

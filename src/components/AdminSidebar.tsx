@@ -29,6 +29,7 @@ interface AdminSidebarProps {
   isPreviewMode?: boolean;
   onCancelPreview?: () => void;
   onSaveRoute?: (routeData: {
+    name: string;
     from_station: string;
     to_station: string;
     description: string;

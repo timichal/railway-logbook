@@ -1,11 +1,15 @@
 "use client";
 
-import { type LineClass, lineClassOptions, type UsageType, usageOptions } from "@/lib/constants";
+import { type LineClass, lineClassOptions, type UsageType } from "@/lib/constants";
 import { handleJunctionShortcut } from "@/lib/junctionShortcut";
+import { useRegion } from "@/lib/regionContext";
+import { regionUsageOptions } from "@/lib/regions";
 import type { RailwayRoute } from "@/lib/types";
 import TagInput from "./TagInput";
 
 interface EditFormData {
+  /** Line name, only edited (and required) where the region names its lines. */
+  name: string;
   from_station: string;
   to_station: string;
   description: string;
@@ -44,7 +48,11 @@ export default function RouteEditForm({
   onToggleUnderRepair,
   onUnselect,
 }: RouteEditFormProps) {
+  const region = useRegion();
+  // Japan calls its usage types JR / non-JR lines; Europe keeps the defaults.
+  const usageOptions = regionUsageOptions(region.id);
   const underRepair = selectedRoute?.under_repair === true;
+  const nameMissing = region.hasRouteNames && !editForm?.name.trim();
 
   if (!selectedRoute) {
     return (
@@ -124,6 +132,23 @@ export default function RouteEditForm({
               >
                 {underRepair ? "Unmark as under repair" : "Mark as under repair"}
               </button>
+            </div>
+          )}
+
+          {/* Line Name — only where the region names its lines (Japan) */}
+          {region.hasRouteNames && (
+            <div>
+              <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700 mb-1">
+                Name *
+              </label>
+              <input
+                id="edit-name"
+                type="text"
+                value={editForm.name}
+                onChange={(e) => onEditFormChange({ ...editForm, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Line name"
+              />
             </div>
           )}
 
@@ -290,7 +315,7 @@ export default function RouteEditForm({
             <button
               type="button"
               onClick={onSave}
-              disabled={isLoading}
+              disabled={isLoading || nameMissing}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
             >
               {isLoading ? "Saving..." : "Save Metadata"}

@@ -9,12 +9,16 @@ interface RoutesListProps {
   invalidRouteCount: number;
   underRepairCount: number;
   unintendedBacktrackingCount: number;
+  withoutNameCount: number;
+  /** Whether this region names its lines — gates the "Without name" filter. */
+  hasRouteNames: boolean;
   isLoading: boolean;
   selectedRouteId?: number | null;
   searchQuery: string;
   showInvalidOnly: boolean;
   showUnderRepairOnly: boolean;
   showUnintendedBacktrackingOnly: boolean;
+  showWithoutNameOnly: boolean;
   currentPage: number;
   totalPages: number;
   filteredCount: number;
@@ -22,6 +26,7 @@ interface RoutesListProps {
   onInvalidOnlyChange: (checked: boolean) => void;
   onUnderRepairOnlyChange: (checked: boolean) => void;
   onUnintendedBacktrackingOnlyChange: (checked: boolean) => void;
+  onWithoutNameOnlyChange: (checked: boolean) => void;
   onRouteClick: (trackId: number) => void;
   onPageChange: (page: number) => void;
 }
@@ -32,12 +37,15 @@ export default function RoutesList({
   invalidRouteCount,
   underRepairCount,
   unintendedBacktrackingCount,
+  withoutNameCount,
+  hasRouteNames,
   isLoading,
   selectedRouteId,
   searchQuery,
   showInvalidOnly,
   showUnderRepairOnly,
   showUnintendedBacktrackingOnly,
+  showWithoutNameOnly,
   currentPage,
   totalPages,
   filteredCount,
@@ -45,6 +53,7 @@ export default function RoutesList({
   onInvalidOnlyChange,
   onUnderRepairOnlyChange,
   onUnintendedBacktrackingOnlyChange,
+  onWithoutNameOnlyChange,
   onRouteClick,
   onPageChange,
 }: RoutesListProps) {
@@ -89,6 +98,19 @@ export default function RoutesList({
                 Unintended backtracking ({unintendedBacktrackingCount})
               </span>
             </label>
+            {/* Without Name Filter — the worklist of routes still missing their
+                line name. Only regions that name their lines have one to miss. */}
+            {hasRouteNames && (
+              <label className="flex justify-center items-center cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={showWithoutNameOnly}
+                  onChange={(e) => onWithoutNameOnlyChange(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-gray-700">Without name ({withoutNameCount})</span>
+              </label>
+            )}
           </div>
         </div>
         {/* Search Box */}
