@@ -12,6 +12,7 @@ import type {
   RailwayRoute,
   SelectedRoute,
 } from "@/lib/types";
+import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 import { getRegionTrackIds, getRoutesByIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
@@ -405,14 +406,14 @@ export default function LocalJourneyLogTab({
                   <button
                     type="button"
                     onClick={() => handleDelete(journey.id)}
-                    className="flex-1 px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700"
+                    className={`${btn("danger")} flex-1`}
                   >
                     Confirm Delete
                   </button>
                   <button
                     type="button"
                     onClick={() => setDeleteConfirmId(null)}
-                    className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400"
+                    className={`${btn("subtle")} flex-1`}
                   >
                     Cancel
                   </button>
@@ -422,18 +423,14 @@ export default function LocalJourneyLogTab({
                   <button
                     type="button"
                     onClick={() => handleViewJourney(journey.id)}
-                    className={`flex-1 px-3 py-1.5 rounded text-sm font-medium ${
-                      viewedJourneyId === journey.id
-                        ? "bg-amber-600 text-white hover:bg-amber-700"
-                        : "bg-blue-600 text-white hover:bg-blue-700"
-                    }`}
+                    className={`${btn(viewedJourneyId === journey.id ? "warning" : "primary")} flex-1`}
                   >
                     {viewedJourneyId === journey.id ? "Hide Details" : "View / Edit"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setDeleteConfirmId(journey.id)}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700"
+                    className={btn("danger")}
                   >
                     Delete
                   </button>
@@ -501,18 +498,14 @@ export default function LocalJourneyLogTab({
                           type="button"
                           onClick={handleSaveEdit}
                           disabled={!editName.trim() || !editDate}
-                          className={`flex-1 px-3 py-1.5 rounded text-xs font-medium ${
-                            !editName.trim() || !editDate
-                              ? "bg-gray-400 text-white cursor-not-allowed"
-                              : "bg-green-600 text-white hover:bg-green-700"
-                          }`}
+                          className={`${btn("success", "xs")} flex-1`}
                         >
                           Save Changes
                         </button>
                         <button
                           type="button"
                           onClick={handleCancelEdit}
-                          className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-xs font-medium hover:bg-gray-400"
+                          className={`${btn("subtle", "xs")} flex-1`}
                         >
                           Cancel
                         </button>
@@ -545,12 +538,12 @@ export default function LocalJourneyLogTab({
                                   )}
                                 </span>
                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                  <label className="flex items-center gap-1.5 cursor-pointer select-none min-h-11 md:min-h-0 px-1 md:px-0">
+                                  <label className="flex items-center gap-1.5 select-none min-h-11 md:min-h-0 px-1 md:px-0">
                                     <input
                                       type="checkbox"
                                       checked={part.partial}
                                       onChange={() => handleTogglePartial(part.id, part.partial)}
-                                      className="w-4 h-4 cursor-pointer"
+                                      className="w-4 h-4"
                                     />
                                     <span className="text-gray-500">partial</span>
                                   </label>
@@ -558,7 +551,7 @@ export default function LocalJourneyLogTab({
                                     type="button"
                                     onClick={() => handleDeletePart(part.id)}
                                     title="Remove route from journey"
-                                    className="w-11 h-11 md:w-6 md:h-6 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                    className={iconBtn("responsive", "danger")}
                                   >
                                     <svg
                                       xmlns="http://www.w3.org/2000/svg"

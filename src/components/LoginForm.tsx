@@ -6,6 +6,7 @@ import { login } from "@/lib/authActions";
 import * as localStore from "@/lib/localStorage";
 import { migrateLocalJourneys } from "@/lib/migrationActions";
 import { useToast } from "@/lib/toast";
+import { btn } from "@/lib/ui/buttonStyles";
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -132,11 +133,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         )}
 
         <div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 cursor-pointer"
-          >
+          <button type="submit" disabled={loading} className={`${btn("primary", "md")} w-full`}>
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </div>

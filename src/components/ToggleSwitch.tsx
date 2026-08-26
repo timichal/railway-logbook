@@ -14,6 +14,11 @@ interface ToggleSwitchProps {
  * A `role="switch"` button rather than a styled `<input type="checkbox">`: the whole
  * row is the hit area (44pt on touch, `md:`-reset for desktop density), and there is
  * no native box to hide and re-draw. Screen readers get the same semantics either way.
+ *
+ * It carries no `hover:`/`active:` styling, unlike every other control in the app: the
+ * knob slides and the track changes colour the instant it is pressed, which is louder
+ * feedback than a background tint, and a hover tint on a row this wide reads as a
+ * selection rather than a target. Focus still comes from the `globals.css` base rule.
  */
 export default function ToggleSwitch({
   label,
@@ -27,7 +32,7 @@ export default function ToggleSwitch({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`w-full flex items-center justify-between gap-3 text-left text-gray-900 cursor-pointer min-h-11 md:min-h-0 ${
+      className={`w-full flex items-center justify-between gap-3 text-left text-gray-900 min-h-11 md:min-h-0 ${
         compact ? "text-xs md:py-0.5" : "text-sm py-1"
       }`}
     >

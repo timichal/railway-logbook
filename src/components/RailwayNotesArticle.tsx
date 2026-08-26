@@ -3,6 +3,7 @@
 import type React from "react";
 import { useState } from "react";
 import { getCountryFlag } from "@/lib/countryUtils";
+import { iconBtn } from "@/lib/ui/buttonStyles";
 
 interface CollapsibleSectionProps {
   countryCode: string;
@@ -40,7 +41,7 @@ function CollapsibleSection({
           type="button"
           aria-expanded={isOpen}
           onClick={handleToggle}
-          className="w-full text-xl font-bold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-gray-700 select-none text-left"
+          className="w-full text-xl font-bold text-gray-900 flex items-center gap-2 select-none text-left transition-colors hover:text-gray-700 active:text-gray-500"
         >
           <span className="text-sm">{isOpen ? "▼" : "▶"}</span>
           <span className="text-2xl">{getCountryFlag(countryCode)}</span>
@@ -72,7 +73,7 @@ export default function RailwayNotesArticle({
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
+            className={`${iconBtn("sm")} text-2xl font-bold`}
             title="Close"
           >
             ×
@@ -109,7 +110,12 @@ export default function RailwayNotesArticle({
           </p>
           <p className="mb-4">
             The government railway operator is{" "}
-            <a href="https://www.cd.cz/" target="_blank" className="underline" rel="noopener">
+            <a
+              href="https://www.cd.cz/"
+              target="_blank"
+              className="underline transition-colors hover:text-blue-700 active:text-blue-900"
+              rel="noopener"
+            >
               České dráhy
             </a>
             , however, as Czech railways have undergone thorough liberalization, many regional and
@@ -127,7 +133,12 @@ export default function RailwayNotesArticle({
           </p>
           <p className="mb-4">
             Czech (and many European) timetables are available in the local{" "}
-            <a href="https://idos.cz/vlaky/" target="_blank" className="underline" rel="noopener">
+            <a
+              href="https://idos.cz/vlaky/"
+              target="_blank"
+              className="underline transition-colors hover:text-blue-700 active:text-blue-900"
+              rel="noopener"
+            >
               IDOS
             </a>{" "}
             app and website.

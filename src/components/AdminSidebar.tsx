@@ -5,6 +5,7 @@ import { getFrequencyTags } from "@/lib/adminRouteActions";
 import type { UsageType } from "@/lib/constants";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
+import { tabBtn } from "@/lib/ui/buttonStyles";
 import AdminCreateRouteTab from "./AdminCreateRouteTab";
 import AdminNotesTab from "./AdminNotesTab";
 import AdminRoutesTab from "./AdminRoutesTab";
@@ -254,11 +255,7 @@ export default function AdminSidebar({
             // Clear form coordinates when manually switching to Railway Routes
             setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
           }}
-          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
-            activeTab === "routes"
-              ? "border-blue-500 text-blue-600 bg-blue-50"
-              : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-          }`}
+          className={tabBtn(activeTab === "routes")}
         >
           Railway Routes
         </button>
@@ -271,11 +268,7 @@ export default function AdminSidebar({
               onRouteSelect(null);
             }
           }}
-          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
-            activeTab === "create"
-              ? "border-blue-500 text-blue-600 bg-blue-50"
-              : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-          }`}
+          className={tabBtn(activeTab === "create")}
         >
           Create New
         </button>
@@ -286,11 +279,7 @@ export default function AdminSidebar({
             if (onRouteSelect) onRouteSelect(null);
             setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
           }}
-          className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
-            activeTab === "notes"
-              ? "border-blue-500 text-blue-600 bg-blue-50"
-              : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-          }`}
+          className={tabBtn(activeTab === "notes")}
         >
           Notes
         </button>

@@ -5,6 +5,7 @@ import { getCountryFlag } from "@/lib/countryUtils";
 import type { DataAccess } from "@/lib/dataAccess";
 import type { ProgressByCountry } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
+import { btn } from "@/lib/ui/buttonStyles";
 
 interface CountriesStatsTabProps {
   dataAccess: DataAccess;
@@ -66,18 +67,10 @@ export default function CountriesStatsTab({
 
       {/* Quick Actions */}
       <div className="flex gap-2 mb-4">
-        <button
-          type="button"
-          onClick={handleSelectAll}
-          className="flex-1 px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
+        <button type="button" onClick={handleSelectAll} className={`${btn("primary")} flex-1`}>
           Select All
         </button>
-        <button
-          type="button"
-          onClick={handleSelectNone}
-          className="flex-1 px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-        >
+        <button type="button" onClick={handleSelectNone} className={`${btn("subtle")} flex-1`}>
           Select None
         </button>
       </div>
@@ -106,7 +99,7 @@ export default function CountriesStatsTab({
             return (
               <label
                 key={country.code}
-                className={`flex items-center justify-between p-2 rounded cursor-pointer hover:bg-gray-50 ${
+                className={`flex items-center justify-between p-2 rounded hover:bg-gray-50 ${
                   isSelected ? "bg-blue-50" : ""
                 }`}
               >

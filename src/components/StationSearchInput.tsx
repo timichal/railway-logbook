@@ -1,6 +1,7 @@
 "use client";
 
 import type { Station } from "@/lib/types";
+import { iconBtn, optionRow } from "@/lib/ui/buttonStyles";
 
 interface StationSearchInputProps {
   /** Optional id for the input (used to associate the label). */
@@ -78,7 +79,7 @@ export default function StationSearchInput({
         <button
           type="button"
           onClick={onClear}
-          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+          className={`${iconBtn("sm")} absolute right-2 top-1/2 -translate-y-1/2`}
         >
           ×
         </button>
@@ -91,9 +92,7 @@ export default function StationSearchInput({
               key={station.id}
               onClick={() => onSelectResult(station)}
               onMouseEnter={() => onHoverResult(index)}
-              className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
-                selectedIndex === index ? "bg-blue-50" : ""
-              }`}
+              className={`${optionRow(selectedIndex === index)} px-3 py-2 text-sm border-b border-gray-100 last:border-b-0`}
             >
               {station.name}
             </button>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@/lib/authActions";
 import { useRegion } from "@/lib/regionContext";
+import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 import LoginForm from "./LoginForm";
 import RegionSwitch from "./RegionSwitch";
 import RegisterForm from "./RegisterForm";
@@ -25,8 +26,7 @@ interface NavbarProps {
 }
 
 /** Mobile bar icon button: 44pt target, no label. */
-const BAR_BUTTON =
-  "w-11 h-11 flex items-center justify-center flex-shrink-0 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md cursor-pointer";
+const BAR_BUTTON = iconBtn("md");
 
 export default function Navbar({
   user,
@@ -212,18 +212,10 @@ export default function Navbar({
             {/* Article views live in the user sidebar only — the admin page has no place to open them. */}
             {!isAdminPage && (
               <>
-                <button
-                  type="button"
-                  onClick={onOpenHowTo}
-                  className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium inline-flex items-center h-10 px-4 rounded-md text-sm border border-blue-300 cursor-pointer"
-                >
+                <button type="button" onClick={onOpenHowTo} className={btn("softPrimary", "bar")}>
                   How To Use
                 </button>
-                <button
-                  type="button"
-                  onClick={onOpenNotes}
-                  className="bg-green-100 hover:bg-green-200 text-green-700 font-medium inline-flex items-center h-10 px-4 rounded-md text-sm border border-green-300 cursor-pointer"
-                >
+                <button type="button" onClick={onOpenNotes} className={btn("softSuccess", "bar")}>
                   Railway Notes
                 </button>
               </>
@@ -238,7 +230,7 @@ export default function Navbar({
             <button
               type="button"
               onClick={() => setShowShareDialog(true)}
-              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium inline-flex items-center h-10 px-4 rounded-md text-sm border border-indigo-300 cursor-pointer"
+              className={btn("softIndigo", "bar")}
             >
               Share Map
             </button>
@@ -246,18 +238,12 @@ export default function Navbar({
 
           {/* Admin link or Back to Main Map */}
           {user?.id === 1 && !isAdminPage && (
-            <Link
-              href="/admin"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm"
-            >
+            <Link href="/admin" className={btn("primary", "bar")}>
               Admin
             </Link>
           )}
           {isAdminPage && (
-            <Link
-              href="/"
-              className="bg-gray-600 hover:bg-gray-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm"
-            >
+            <Link href="/" className={btn("neutral", "bar")}>
               Back to Main Map
             </Link>
           )}
@@ -265,11 +251,7 @@ export default function Navbar({
           {/* Login/Register or Logout */}
           {user ? (
             onLogout && (
-              <button
-                type="button"
-                onClick={onLogout}
-                className="bg-red-600 hover:bg-red-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm cursor-pointer"
-              >
+              <button type="button" onClick={onLogout} className={btn("danger", "bar")}>
                 Logout
               </button>
             )
@@ -283,7 +265,7 @@ export default function Navbar({
                     setShowLoginDropdown(!showLoginDropdown);
                     setShowRegisterDropdown(false);
                   }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm cursor-pointer"
+                  className={btn("primary", "bar")}
                 >
                   Login
                 </button>
@@ -308,7 +290,7 @@ export default function Navbar({
                     setShowRegisterDropdown(!showRegisterDropdown);
                     setShowLoginDropdown(false);
                   }}
-                  className="bg-green-600 hover:bg-green-700 text-white font-medium inline-flex items-center h-10 px-4 rounded-md text-sm cursor-pointer"
+                  className={btn("success", "bar")}
                 >
                   Register
                 </button>

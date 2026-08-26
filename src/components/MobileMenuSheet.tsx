@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import type { User } from "@/lib/authActions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
+import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 import HowToUseArticle from "./HowToUseArticle";
 import LayerToggles from "./LayerToggles";
 import LoginForm from "./LoginForm";
@@ -86,11 +87,11 @@ function Chevron() {
 
 /** Full-width list row; 56px clears the 44pt touch floor without feeling stretched. */
 const ROW =
-  "w-full flex items-center gap-3.5 min-h-14 px-4 text-left text-base text-gray-900 hover:bg-gray-50 active:bg-gray-100";
+  "w-full flex items-center gap-3.5 min-h-14 px-4 text-left text-base text-gray-900 transition-colors hover:bg-gray-50 active:bg-gray-100";
 
 function Row({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={`${ROW} cursor-pointer`}>
+    <button type="button" onClick={onClick} className={ROW}>
       <Icon path={icon} className="w-5 h-5 text-gray-400 flex-shrink-0" />
       <span className="flex-1">{label}</span>
       <Chevron />
@@ -111,12 +112,7 @@ function IconButton({
   path: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="w-11 h-11 flex items-center justify-center flex-shrink-0 text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer"
-    >
+    <button type="button" onClick={onClick} aria-label={label} className={iconBtn("md")}>
       <Icon path={path} />
     </button>
   );
@@ -255,7 +251,7 @@ export default function MobileMenuSheet({
                 onLogout();
                 onClose();
               }}
-              className="w-full min-h-11 rounded-lg border border-red-200 text-red-700 font-medium hover:bg-red-50 cursor-pointer"
+              className={`${btn("outlineDanger", "lg")} w-full`}
             >
               Log out
             </button>
@@ -264,14 +260,14 @@ export default function MobileMenuSheet({
               <button
                 type="button"
                 onClick={() => setView("login")}
-                className="w-full min-h-11 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 cursor-pointer"
+                className={`${btn("primary", "lg")} w-full`}
               >
                 Sign in
               </button>
               <button
                 type="button"
                 onClick={() => setView("register")}
-                className="w-full min-h-11 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 cursor-pointer"
+                className={`${btn("outline", "lg")} w-full`}
               >
                 Create account
               </button>

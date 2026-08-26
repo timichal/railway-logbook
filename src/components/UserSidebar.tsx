@@ -5,6 +5,7 @@ import type { User } from "@/lib/authActions";
 import type { DataAccess } from "@/lib/dataAccess";
 import { useRegion } from "@/lib/regionContext";
 import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
+import { tabBtn } from "@/lib/ui/buttonStyles";
 import CountriesStatsTab from "./CountriesStatsTab";
 import HowToUseArticle from "./HowToUseArticle";
 import JourneyLogger from "./JourneyLogger";
@@ -84,11 +85,7 @@ export default function UserSidebar({
           <button
             type="button"
             onClick={() => setActiveTab("routes")}
-            className={`flex-1 py-3 px-2 md:px-4 text-sm font-medium border-b-2 ${
-              activeTab === "routes"
-                ? "border-blue-500 text-blue-600 bg-blue-50"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-            }`}
+            className={tabBtn(activeTab === "routes")}
           >
             <span className="md:hidden">Logger</span>
             <span className="hidden md:inline">Route Logger</span>
@@ -96,11 +93,7 @@ export default function UserSidebar({
           <button
             type="button"
             onClick={() => setActiveTab("journeylog")}
-            className={`flex-1 py-3 px-2 md:px-4 text-sm font-medium border-b-2 ${
-              activeTab === "journeylog"
-                ? "border-blue-500 text-blue-600 bg-blue-50"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-            }`}
+            className={tabBtn(activeTab === "journeylog")}
           >
             <span className="md:hidden">{user ? "Trips" : "Journeys"}</span>
             <span className="hidden md:inline">{user ? "My Trips" : "My Journeys"}</span>
@@ -109,11 +102,7 @@ export default function UserSidebar({
             <button
               type="button"
               onClick={() => setActiveTab("filter")}
-              className={`flex-1 py-3 px-2 md:px-4 text-sm font-medium border-b-2 ${
-                activeTab === "filter"
-                  ? "border-blue-500 text-blue-600 bg-blue-50"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
+              className={tabBtn(activeTab === "filter")}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

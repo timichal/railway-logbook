@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { optionRow } from "@/lib/ui/buttonStyles";
 
 interface TagInputProps {
   /** Currently selected tags. */
@@ -100,7 +101,7 @@ export default function TagInput({
             <button
               type="button"
               onClick={() => removeTag(tag)}
-              className="text-green-700 hover:text-green-900 leading-none cursor-pointer"
+              className="text-green-700 leading-none transition-colors hover:text-green-900 active:text-green-950"
               aria-label={`Remove ${tag}`}
             >
               ×
@@ -135,8 +136,8 @@ export default function TagInput({
                 type="button"
                 onClick={() => addTag(opt.value)}
                 onMouseEnter={() => setHighlight(i)}
-                className={`w-full text-left px-3 py-1.5 text-sm cursor-pointer ${
-                  i === safeHighlight ? "bg-blue-50 text-blue-700" : "text-gray-700"
+                className={`${optionRow(i === safeHighlight)} px-3 py-1.5 text-sm ${
+                  i === safeHighlight ? "text-blue-700" : "text-gray-700"
                 }`}
               >
                 {opt.type === "create" ? (

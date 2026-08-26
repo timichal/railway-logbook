@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { iconBtn } from "@/lib/ui/buttonStyles";
 
 interface AdminLayerControlsProps {
   showPartsLayer: boolean;
@@ -44,7 +45,7 @@ export default function AdminLayerControls({
       <button
         type="button"
         onClick={() => setCollapsed(false)}
-        className="absolute top-3 left-3 bg-white p-2 rounded shadow-lg text-black z-10 text-xs font-medium cursor-pointer hover:bg-gray-50"
+        className="absolute top-3 left-3 bg-white p-2 rounded shadow-lg text-black z-10 text-xs font-medium transition-colors hover:bg-gray-50 active:bg-gray-100"
       >
         Layers
       </button>
@@ -63,7 +64,7 @@ export default function AdminLayerControls({
           <button
             type="button"
             onClick={() => setCollapsed(true)}
-            className="ml-3 text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer"
+            className={`${iconBtn("sm")} ml-3 text-lg`}
             aria-label="Collapse layers"
           >
             &times;
@@ -72,7 +73,7 @@ export default function AdminLayerControls({
       </div>
       <div className="space-y-2">
         {layers.map(({ label, checked, toggle }) => (
-          <label key={label} className="flex items-center cursor-pointer">
+          <label key={label} className="flex items-center">
             <input
               type="checkbox"
               checked={checked}

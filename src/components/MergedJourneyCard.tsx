@@ -14,6 +14,7 @@ import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { assignJourneyToTrip, unassignJourneyFromTrip } from "@/lib/tripActions";
 import type { HighlightRoutesFn, Journey, RailwayRoute, SelectedRoute } from "@/lib/types";
+import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
   return {
@@ -308,14 +309,14 @@ export default function MergedJourneyCard({
             <button
               type="button"
               onClick={handleDelete}
-              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
+              className={`${btn("danger")} flex-shrink-0`}
             >
               Confirm Delete
             </button>
             <button
               type="button"
               onClick={() => setDeleteConfirm(false)}
-              className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 flex-shrink-0"
+              className={`${btn("subtle")} flex-shrink-0`}
             >
               Cancel
             </button>
@@ -326,7 +327,7 @@ export default function MergedJourneyCard({
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              className={`${btn("success")} flex-shrink-0`}
             >
               {isSaving ? "Saving…" : "Save"}
             </button>
@@ -334,7 +335,7 @@ export default function MergedJourneyCard({
               type="button"
               onClick={onRequestClose}
               disabled={isSaving}
-              className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              className={`${btn("subtle")} flex-shrink-0`}
             >
               Cancel
             </button>
@@ -344,14 +345,14 @@ export default function MergedJourneyCard({
             <button
               type="button"
               onClick={onRequestOpen}
-              className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 flex-shrink-0"
+              className={`${btn("primary")} flex-shrink-0`}
             >
               View / Edit
             </button>
             <button
               type="button"
               onClick={() => setDeleteConfirm(true)}
-              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
+              className={`${btn("danger")} flex-shrink-0`}
             >
               Delete
             </button>
@@ -459,14 +460,14 @@ export default function MergedJourneyCard({
                             {route.from_station} ⟷ {route.to_station}
                           </span>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <label className="flex items-center gap-1.5 cursor-pointer select-none min-h-11 md:min-h-0 px-1 md:px-0">
+                            <label className="flex items-center gap-1.5 select-none min-h-11 md:min-h-0 px-1 md:px-0">
                               <input
                                 type="checkbox"
                                 checked={route.partial ?? false}
                                 onChange={() =>
                                   handleTogglePartial(route.track_id, !(route.partial ?? false))
                                 }
-                                className="w-4 h-4 cursor-pointer"
+                                className="w-4 h-4"
                               />
                               <span className="text-gray-500">partial</span>
                             </label>
@@ -474,7 +475,7 @@ export default function MergedJourneyCard({
                               type="button"
                               onClick={() => handleRemoveRoute(route.track_id)}
                               title="Remove route from journey"
-                              className="w-11 h-11 md:w-6 md:h-6 flex items-center justify-center rounded bg-red-100 text-red-700 hover:bg-red-200"
+                              className={iconBtn("responsive", "danger")}
                             >
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"

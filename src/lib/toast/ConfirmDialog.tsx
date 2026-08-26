@@ -1,4 +1,5 @@
 "use client";
+import { btn } from "@/lib/ui/buttonStyles";
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -27,11 +28,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   if (!isOpen) return null;
 
-  const variantStyles = {
-    danger: "bg-red-600 hover:bg-red-700",
-    warning: "bg-orange-600 hover:bg-orange-700",
-    info: "bg-blue-600 hover:bg-blue-700",
-  };
+  const confirmVariant = { danger: "danger", warning: "warning", info: "primary" } as const;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -40,27 +37,15 @@ export function ConfirmDialog({
         <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{message}</p>
 
         <div className="flex gap-3 justify-end">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-          >
+          <button type="button" onClick={onCancel} className={btn("subtle", "md")}>
             {cancelLabel}
           </button>
           {thirdLabel && onThird && (
-            <button
-              type="button"
-              onClick={onThird}
-              className="px-4 py-2 text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 rounded-md"
-            >
+            <button type="button" onClick={onThird} className={btn("neutral", "md")}>
               {thirdLabel}
             </button>
           )}
-          <button
-            type="button"
-            onClick={onConfirm}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-md ${variantStyles[variant]}`}
-          >
+          <button type="button" onClick={onConfirm} className={btn(confirmVariant[variant], "md")}>
             {confirmLabel}
           </button>
         </div>

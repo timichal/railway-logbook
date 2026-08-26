@@ -5,6 +5,7 @@ import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 import { useRegion } from "@/lib/regionContext";
 import { regionUsageOptions } from "@/lib/regions";
 import type { RailwayRoute } from "@/lib/types";
+import { btn } from "@/lib/ui/buttonStyles";
 import TagInput from "./TagInput";
 
 interface EditFormData {
@@ -75,11 +76,7 @@ export default function RouteEditForm({
         {/* Header */}
         <div className="mb-4 flex justify-between items-center">
           <h4 className="font-semibold text-gray-900">Edit Route</h4>
-          <button
-            type="button"
-            onClick={onUnselect}
-            className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md border border-gray-300"
-          >
+          <button type="button" onClick={onUnselect} className={btn("outline", "sm")}>
             Unselect
           </button>
         </div>
@@ -128,7 +125,7 @@ export default function RouteEditForm({
                 type="button"
                 onClick={() => onToggleUnderRepair(!underRepair)}
                 disabled={isLoading}
-                className="mt-3 w-full bg-violet-600 hover:bg-violet-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+                className={`${btn("repair", "md")} mt-3 w-full`}
               >
                 {underRepair ? "Unmark as under repair" : "Mark as under repair"}
               </button>
@@ -227,7 +224,7 @@ export default function RouteEditForm({
             <span className="block text-sm font-medium text-gray-700 mb-2">Usage Type *</span>
             <div className="space-y-2">
               {usageOptions.map((option) => (
-                <label key={option.key} className="flex items-center gap-2 cursor-pointer">
+                <label key={option.key} className="flex items-center gap-2">
                   <input
                     type="radio"
                     name="usage_type"
@@ -239,7 +236,7 @@ export default function RouteEditForm({
                         usage_type: Number(e.target.value) as UsageType,
                       })
                     }
-                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500"
                   />
                   <span className="text-sm text-gray-700">{option.label}</span>
                 </label>
@@ -260,12 +257,12 @@ export default function RouteEditForm({
           <span className="block text-sm font-medium text-gray-700 mb-2">Other</span>
           {/* Scenic */}
           <div>
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={editForm.scenic}
                 onChange={(e) => onEditFormChange({ ...editForm, scenic: e.target.checked })}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
               />
               <span className="text-sm font-medium text-gray-700">Scenic route</span>
             </label>
@@ -297,14 +294,14 @@ export default function RouteEditForm({
 
           {/* Intended Backtracking */}
           <div>
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={editForm.intended_backtracking}
                 onChange={(e) =>
                   onEditFormChange({ ...editForm, intended_backtracking: e.target.checked })
                 }
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
               />
               <span className="text-sm font-medium text-gray-700">Intended backtracking</span>
             </label>
@@ -316,7 +313,7 @@ export default function RouteEditForm({
               type="button"
               onClick={onSave}
               disabled={isLoading || nameMissing}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+              className={`${btn("primary", "md")} w-full`}
             >
               {isLoading ? "Saving..." : "Save Metadata"}
             </button>
@@ -325,7 +322,7 @@ export default function RouteEditForm({
               type="button"
               onClick={() => onEditGeometry(selectedRoute.track_id)}
               disabled={isLoading}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+              className={`${btn("success", "md")} w-full`}
             >
               Edit Route Geometry
             </button>
@@ -334,7 +331,7 @@ export default function RouteEditForm({
               type="button"
               onClick={onDelete}
               disabled={isLoading}
-              className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+              className={`${btn("danger", "md")} w-full`}
             >
               {isLoading ? "Deleting..." : "Delete Route"}
             </button>
@@ -343,7 +340,7 @@ export default function RouteEditForm({
               type="button"
               onClick={onDuplicate}
               disabled={isLoading}
-              className="w-full bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer"
+              className={`${btn("neutral", "md")} w-full`}
             >
               Duplicate Route
             </button>

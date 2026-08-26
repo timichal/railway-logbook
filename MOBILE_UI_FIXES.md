@@ -28,6 +28,12 @@ far:
   Geist Mono dropped.
 - **10 — dark mode.** The half-finished `prefers-color-scheme` variables are
   gone; see item 13 for doing it properly.
+- **14 — interactive states.** `src/lib/ui/buttonStyles.ts` names the button
+  roles (`btn`, `iconBtn`, `tabBtn`, `optionRow`, `LINK_BTN`) and carries
+  hover / active / disabled for each; `globals.css` adds `cursor` and a
+  `:focus-visible` ring as `@layer base` rules, so nothing can be missed by
+  hand. All but a dozen bespoke controls (segmented switch, drag handle,
+  scrim) now go through it.
 
 Suggested order for the rest: **3**, then the rest. Section 12 (installable app)
 is independent and can be done at any point — it is also the cheapest way to get
@@ -142,9 +148,11 @@ Doing it properly is a real project, not a variable:
 - **Every component is `bg-white` / `text-black` / `text-gray-*` / `border-gray-*`
   literals.** There is no palette to swap. The first step is a token layer —
   surface / surface-raised / text / text-muted / border / accent — and a pass
-  converting the literals to it. `MapProgressBox`, `MobileMenuSheet`,
-  `MobileBottomSheet` and `ToggleSwitch` are the newest and cleanest places to
-  start.
+  converting the literals to it. `src/lib/ui/buttonStyles.ts` (item 14) is now
+  the first stop: every button's colours are in that one table, so tokenising it
+  covers most of the app's controls in a single edit. `MapProgressBox`,
+  `MobileMenuSheet`, `MobileBottomSheet` and `ToggleSwitch` are the cleanest
+  components to follow it with.
 - **The map is the hard part.** `src/lib/map/style.ts` is the single source of
   truth for route colours, and they are chosen against a light basemap; the
   visited green / partial orange / unvisited red have to be re-picked for a dark
@@ -157,24 +165,3 @@ Doing it properly is a real project, not a variable:
   and the shared map has to follow the *visitor's* choice, not the owner's.
 - **Popups are raw HTML strings** built in `tooltipFormatting.ts`; their inline
   classes need the same token treatment.
-
-## 14. Audit interactive states on every control
-
-The 44pt pass fixed sizes but not feedback. Buttons across the app are
-inconsistent about `hover:`, `active:`, `focus-visible:`, `disabled:` and
-`cursor-pointer` — some have all of them, some have only `hover:`, and a few
-(the article close `×`, the bare glyph buttons in the admin sidebar) have
-nothing.
-
-- Grep for `<button` and `<Link` and check each against a single agreed set:
-  hover, an `active:` state (the only one a touch device can show — hover is
-  meaningless there and a phone shows the hover style as a sticky highlight
-  after a tap), `focus-visible:` ring for keyboard, and `disabled:` styling
-  wherever a `disabled` prop exists.
-- **`cursor-pointer` is applied by hand throughout** and missed in places, since
-  Tailwind v4 dropped the preflight that used to set it on buttons. Either add it
-  back globally in `globals.css` (`button:not(:disabled), [role="button"] {
-  cursor: pointer }`) or make it part of the shared classes — not both.
-- The shared class constants that now exist (`BAR_BUTTON` in `Navbar`, `ROW` in
-  `MobileMenuSheet`) are the pattern to extend: a handful of named button
-  classes beats 200 hand-assembled ones.

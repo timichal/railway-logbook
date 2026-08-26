@@ -5,6 +5,7 @@ import { useRegionId } from "@/lib/regionContext";
 import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
 import { useToast } from "@/lib/toast";
 import type { HighlightRoutesFn, PlannerRoute, Station } from "@/lib/types";
+import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import { searchStations } from "@/lib/userActions";
 import StationSearchInput from "./StationSearchInput";
 
@@ -366,11 +367,7 @@ export default function JourneyPlanner({
     <div className="space-y-3 text-black">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-bold">Journey Planner</h3>
-        <button
-          type="button"
-          onClick={resetForm}
-          className="text-xs text-gray-500 hover:text-gray-700 underline"
-        >
+        <button type="button" onClick={resetForm} className={LINK_BTN}>
           Clear all
         </button>
       </div>
@@ -461,7 +458,7 @@ export default function JourneyPlanner({
       <button
         type="button"
         onClick={addViaStation}
-        className="w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded text-sm text-gray-600 hover:border-gray-400 hover:text-gray-800"
+        className="w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded-md text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-800 hover:bg-gray-50 active:bg-gray-100"
       >
         + Add via station
       </button>
@@ -504,11 +501,7 @@ export default function JourneyPlanner({
         type="button"
         onClick={handleFindPath}
         disabled={!fromStation || !toStation || isSearchingPath}
-        className={`w-full px-4 py-2 text-white rounded font-medium ${
-          !fromStation || !toStation || isSearchingPath
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
-        }`}
+        className={`${btn("primary", "md")} w-full`}
       >
         {isSearchingPath ? "Finding path..." : "Find Path"}
       </button>
@@ -549,7 +542,7 @@ export default function JourneyPlanner({
           <button
             type="button"
             onClick={handleAddToSelection}
-            className="w-full px-4 py-2 text-white rounded font-medium bg-blue-600 hover:bg-blue-700 cursor-pointer"
+            className={`${btn("primary", "md")} w-full`}
           >
             Add Routes to Selection
           </button>

@@ -152,9 +152,9 @@ export default function MobileBottomSheet({ onHeightSettled, children }: MobileB
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         onKeyDown={handleKeyDown}
-        className="w-full py-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
+        className="group w-full py-2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
       >
-        <span className="w-10 h-1.5 rounded-full bg-gray-400" />
+        <span className="w-10 h-1.5 rounded-full bg-gray-400 transition-colors group-hover:bg-gray-500 group-active:bg-gray-600" />
       </button>
       <div
         className={`min-h-0 overflow-hidden flex flex-col ${

@@ -1,4 +1,5 @@
 "use client";
+import { iconBtn } from "@/lib/ui/buttonStyles";
 
 interface HowToUseArticleProps {
   onClose: () => void;
@@ -15,7 +16,7 @@ export default function HowToUseArticle({ onClose, showHeader = true }: HowToUse
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
+            className={`${iconBtn("sm")} text-2xl font-bold`}
             title="Close"
           >
             ×

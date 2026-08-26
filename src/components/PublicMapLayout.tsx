@@ -6,6 +6,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/regions";
+import { btn } from "@/lib/ui/buttonStyles";
 import RegionSwitch from "./RegionSwitch";
 
 // Same reason as the interactive map: MapLibre can't be server-rendered.
@@ -56,10 +57,7 @@ export default function PublicMapLayout({
 
             <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
               <RegionSwitch compact={isMobile} />
-              <Link
-                href="/"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-3 md:py-2 md:px-4 rounded-md text-xs md:text-sm whitespace-nowrap"
-              >
+              <Link href="/" className={`${btn("primary", "sm")} whitespace-nowrap`}>
                 Go to my own map
               </Link>
             </div>

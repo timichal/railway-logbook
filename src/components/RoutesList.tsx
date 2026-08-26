@@ -1,6 +1,7 @@
 "use client";
 
 import type { RailwayRoute } from "@/lib/types";
+import { btn, optionRow } from "@/lib/ui/buttonStyles";
 
 interface RoutesListProps {
   routes: RailwayRoute[];
@@ -66,7 +67,7 @@ export default function RoutesList({
           {/* Filters */}
           <div className="flex flex-col items-start gap-1">
             {/* Invalid Only Filter */}
-            <label className="flex justify-center items-center cursor-pointer text-sm">
+            <label className="flex justify-center items-center text-sm">
               <input
                 type="checkbox"
                 checked={showInvalidOnly}
@@ -77,7 +78,7 @@ export default function RoutesList({
             </label>
             {/* Under Repair Filter — invalid routes parked pending OSM works.
                 Disjoint from "Invalid": tick both to see every invalid route. */}
-            <label className="flex justify-center items-center cursor-pointer text-sm">
+            <label className="flex justify-center items-center text-sm">
               <input
                 type="checkbox"
                 checked={showUnderRepairOnly}
@@ -87,7 +88,7 @@ export default function RoutesList({
               <span className="text-gray-700">Under repair ({underRepairCount})</span>
             </label>
             {/* Unintended Backtracking Filter */}
-            <label className="flex justify-center items-center cursor-pointer text-sm">
+            <label className="flex justify-center items-center text-sm">
               <input
                 type="checkbox"
                 checked={showUnintendedBacktrackingOnly}
@@ -101,7 +102,7 @@ export default function RoutesList({
             {/* Without Name Filter — the worklist of routes still missing their
                 line name. Only regions that name their lines have one to miss. */}
             {hasRouteNames && (
-              <label className="flex justify-center items-center cursor-pointer text-sm">
+              <label className="flex justify-center items-center text-sm">
                 <input
                   type="checkbox"
                   checked={showWithoutNameOnly}
@@ -139,9 +140,7 @@ export default function RoutesList({
                 type="button"
                 key={route.track_id}
                 onClick={() => onRouteClick(route.track_id)}
-                className={`w-full p-3 text-left hover:bg-gray-50 focus:bg-blue-50 focus:outline-none ${
-                  selectedRouteId === route.track_id ? "bg-blue-50" : ""
-                }`}
+                className={`${optionRow(selectedRouteId === route.track_id)} p-3`}
               >
                 <div className="font-medium text-sm text-gray-900 truncate">
                   {route.from_station} ⟷ {route.to_station}
@@ -160,7 +159,7 @@ export default function RoutesList({
               type="button"
               onClick={() => onPageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-black cursor-pointer"
+              className={btn("outline", "sm")}
             >
               Previous
             </button>
@@ -171,7 +170,7 @@ export default function RoutesList({
               type="button"
               onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-black cursor-pointer"
+              className={btn("outline", "sm")}
             >
               Next
             </button>

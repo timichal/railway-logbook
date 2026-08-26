@@ -32,6 +32,46 @@ body,
   height: 100%;
 }
 
+/* The two interactive states that have to hold for *every* control, applied once
+   here rather than as a class per control — which is how they came to be missing on
+   the article close buttons, the admin sidebar's bare glyphs and a dozen others.
+   `src/lib/ui/buttonStyles.ts` carries the rest of the set (hover, active, disabled).
+
+   In `@layer base` on purpose: unlayered rules beat Tailwind's `@layer utilities`
+   regardless of specificity, and `button:not(:disabled)` is specific enough to have
+   overridden every `cursor-*` utility in the app — the bottom sheet's drag handle
+   (`cursor-grab`) among them. Layered, a utility still wins. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  /* A tick box and the label that wraps it are one control; the label is usually the
+     bigger half of the hit area, so it has to say so too. */
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  label:has(input[type="checkbox"]:not(:disabled)),
+  label:has(input[type="radio"]:not(:disabled)) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  input[type="checkbox"]:disabled,
+  input[type="radio"]:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Keyboard focus only — `:focus-visible`, so a mouse click never draws a ring.
+     Inputs are left out: they carry their own `focus:ring-*` styling, and the two
+     together read as a double outline. */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  [role="switch"]:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+}
+
 /* iOS Safari zooms the whole page in when a form control is focused and its
    text is under 16px — every `text-sm`/`text-xs` input on the site triggers it.
    `-webkit-touch-callout` is iOS-only, so this leaves desktop sizing alone.

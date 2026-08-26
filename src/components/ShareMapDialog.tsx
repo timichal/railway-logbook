@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getPublicMapSettings, setPublicMapEnabled } from "@/lib/publicMapActions";
 import { useRegionId } from "@/lib/regionContext";
+import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 
 interface ShareMapDialogProps {
   isOpen: boolean;
@@ -123,7 +124,7 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-gray-400 hover:text-gray-600 cursor-pointer ml-4"
+            className={`${iconBtn("sm")} ml-4`}
           >
             <svg
               className="w-5 h-5"
@@ -149,7 +150,7 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
           </div>
         ) : (
           <>
-            <label className="flex items-center justify-between gap-4 py-3 border-t border-b border-gray-200 cursor-pointer">
+            <label className="flex items-center justify-between gap-4 py-3 border-t border-b border-gray-200">
               <span className="text-sm font-medium text-gray-900">Enable public map display</span>
               <span className="relative inline-flex flex-shrink-0">
                 <input
@@ -182,7 +183,7 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
                     type="button"
                     onClick={handleCopy}
                     disabled={!shareUrl}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded-md text-sm cursor-pointer whitespace-nowrap"
+                    className={`${btn("primary", "md")} whitespace-nowrap`}
                   >
                     {copied ? "Copied!" : "Copy"}
                   </button>

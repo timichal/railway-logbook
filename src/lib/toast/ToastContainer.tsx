@@ -1,4 +1,5 @@
 "use client";
+import { iconBtn } from "@/lib/ui/buttonStyles";
 
 import { useToast } from "./ToastContext";
 import type { Toast, ToastType } from "./types";
@@ -32,7 +33,7 @@ function ToastItem({ toast }: { toast: Toast }) {
       <button
         type="button"
         onClick={() => removeToast(toast.id)}
-        className="flex-shrink-0 text-white hover:text-gray-200 text-lg font-bold leading-none cursor-pointer"
+        className={`${iconBtn("sm", "onColor")} text-lg font-bold`}
         aria-label="Close notification"
       >
         &times;

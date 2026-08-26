@@ -3,6 +3,7 @@ import Link from "next/link";
 import PublicMapLayout from "@/components/PublicMapLayout";
 import { getPublicMapOwner } from "@/lib/publicMapActions";
 import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/regions";
+import { btn } from "@/lib/ui/buttonStyles";
 
 /**
  * A user's map, shared read-only.
@@ -43,10 +44,7 @@ export default async function SharedMapPage({
         <p className="text-gray-600 mt-2 max-w-md">
           The link is either wrong or its owner has turned public sharing off.
         </p>
-        <Link
-          href="/"
-          className="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm"
-        >
+        <Link href="/" className={`${btn("primary", "md")} mt-6`}>
           Go to my own map
         </Link>
       </div>

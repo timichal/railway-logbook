@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { createAdminNote, deleteAdminNote, updateAdminNote } from "@/lib/adminNotesActions";
 import { type NoteType, noteTypeOptions } from "@/lib/constants";
+import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 
 interface NotesPopupProps {
   noteId?: number | null; // If set, editing existing note; if null, creating new note
@@ -120,7 +121,7 @@ export default function NotesPopup({
         <button
           type="button"
           onClick={onClose}
-          className="text-gray-500 hover:text-gray-700 text-lg leading-none"
+          className={`${iconBtn("sm")} text-lg`}
           aria-label="Close"
         >
           ×
@@ -171,7 +172,7 @@ export default function NotesPopup({
           type="button"
           onClick={handleSave}
           disabled={isSaving || !canSave}
-          className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className={`${btn("primary")} flex-1`}
         >
           {isSaving ? "Saving..." : "Save"}
         </button>
@@ -181,7 +182,7 @@ export default function NotesPopup({
             type="button"
             onClick={handleDelete}
             disabled={isDeleting}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className={btn("danger")}
           >
             {isDeleting ? "Deleting..." : "Delete"}
           </button>

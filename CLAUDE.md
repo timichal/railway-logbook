@@ -155,6 +155,7 @@ Highlights are tile-filter overlays (`in ["id"], [literal ids]`), so they can on
 - **Pathfinding**: `routePathFinder.ts` (user-facing journey planner, excludes non-regular routes). See "Journey planner pathfinding" below.
 - **Regions**: `regions.ts` (region definitions + `regionEnvelopeSql`), `regionContext.tsx` (`RegionProvider`, `useRegion`, `useRegionId`).
 - **Layer prefs**: `map/layerPrefs.ts` (localStorage read/write), `map/layerPrefsContext.tsx` (`LayerPrefsProvider`, `useLayerPrefs`). The toggles are held **above** the map, by `MainLayout` and `PublicMapLayout`, because the mobile menu that drives them is a sibling of the map rather than a child; two hooks reading the same key would disagree. `useRouteEditor` therefore returns progress only.
+- **UI classes**: `ui/buttonStyles.ts` — the named button roles (`btn(variant, size)`, `iconBtn`, `tabBtn`, `optionRow`, `LINK_BTN`) and the hover/active/disabled states each one carries. See "Interactive states" below.
 - **Utils**: `types.ts`, `constants.ts`, `routeCoverage.ts` (when logged stretches add up to a complete route — see "Progress"), `stationProximity.ts` (`stations.near_route` — see "Station proximity"), `coordinateUtils.ts` (`mergeLinearChain`, `coordinatesToWKT`), `countryUtils.ts`, `getUntimezonedDateStr.ts`.
 - **Toast**: `toast/` (`useToast`, `ToastContainer`, `ConfirmDialog`).
 
@@ -184,6 +185,18 @@ Highlights are tile-filter overlays (`in ["id"], [literal ids]`), so they can on
 - `prepare.sh` — unified download/filter/convert pipeline.
 
 ## UI structure
+
+### Interactive states
+
+Every control answers to one agreed set — **hover, active, focus-visible, disabled** — and the set is applied in two places, never by hand at a call site.
+
+`src/lib/ui/buttonStyles.ts` holds a named class per button *role* (`btn("danger", "sm")`, `iconBtn("responsive", "danger")`, `tabBtn(active)`, `optionRow(active)`, `LINK_BTN`) rather than a string per button. The roles are a short list; a state added to the table reaches every button that plays that role, which is what the previous 106 hand-assembled strings could not do — the same Cancel button was `bg-gray-200` in one card and `bg-gray-300` in the next, and `active:` was missing almost everywhere.
+
+**`active:` is the point of the exercise.** Tailwind v4 emits `hover:` inside `@media (hover: hover)`, so a hover style is never painted on a phone — which also means a phone had *no* press feedback at all until `active:` was added. `disabled:` is `disabled:opacity-50` for every variant (it reads the same on a solid, soft, outlined or ghost button, unlike the `disabled:bg-gray-400` that only solid ones had), and hover/active are `not-disabled:`-prefixed — `not-*` rather than `enabled:`, because `:enabled` never matches an `<a>` and several of these classes are worn by a `next/link`.
+
+`globals.css` carries the other two, as `@layer base` rules on `button`/`a`/`[role]`/checkbox rather than as classes, because a class is something you can forget: `cursor: pointer` (Tailwind v4 dropped the preflight that used to set it, and it had been hand-applied and hand-missed ever since), and the `:focus-visible` outline. They are **layered** so a `cursor-*` utility still wins — unlayered, `button:not(:disabled)` outranks `.cursor-grab` and the bottom sheet's drag handle loses its cursor. A control inside an `overflow-hidden` parent clips that outline and must inset its own (`focus-visible:-outline-offset-2`, as `RegionSwitch` does).
+
+A call site adds **layout only** — `w-full`, `flex-1`, `flex-shrink-0`, margins. Appending an appearance utility is a coin toss, since Tailwind resolves conflicts by source order in the generated CSS and not by class order in the attribute; a size that needs a different radius belongs in the table's `SIZES`. About a dozen bespoke controls stay outside it (the region switch, the toggle switch, the drag handle, the drawer scrim, the dashed "add via station" button) — each carries its own states, and `ToggleSwitch` documents why it deliberately carries none.
 
 ### Sidebar (main map)
 Desktop: resizable left sidebar (400–1200px, default 600px). Mobile: a **bottom sheet** (`MobileBottomSheet`) below the map — anchored at the bottom because that is where the thumb is, and because a sheet growing upward does not cover the part of the map that was just tapped. It is a flex sibling of the map rather than an overlay, so the map's own bottom furniture (progress box, MapLibre attribution and controls) stays visible above it. Four snap points — collapsed / peek 120px / half / 90% of the column — reached by dragging the handle, tapping it to cycle, or ArrowUp/ArrowDown; the handle stays visible at the collapsed snap, since it is the sheet's only control. A settled height calls back so the map `resize()`s once, not per pointer move.

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import type { UserProgress } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
+import { iconBtn } from "@/lib/ui/buttonStyles";
 import LayerToggles from "./LayerToggles";
 
 /**
@@ -44,7 +45,7 @@ export default function MapProgressBox({
         type="button"
         onClick={() => setCollapsed(false)}
         aria-label={`Completed ${progress.percentage}% — show progress and layers`}
-        className="absolute bottom-10 left-3 z-10 min-h-11 px-3 flex items-center gap-1.5 bg-white rounded-full shadow-lg text-black cursor-pointer hover:bg-gray-50"
+        className="absolute bottom-10 left-3 z-10 min-h-11 px-3 flex items-center gap-1.5 bg-white rounded-full shadow-lg text-black transition-colors hover:bg-gray-50 active:bg-gray-100"
       >
         <span className="font-bold text-green-600 text-base">{progress.percentage}%</span>
         <span className="text-xs text-gray-500">done</span>
@@ -65,7 +66,7 @@ export default function MapProgressBox({
             type="button"
             onClick={() => setCollapsed(true)}
             aria-label="Collapse progress"
-            className="w-8 h-8 -mt-1.5 -mr-1.5 flex items-center justify-center text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer"
+            className={`${iconBtn("sm")} -mt-1.5 -mr-1.5 text-lg`}
           >
             &times;
           </button>

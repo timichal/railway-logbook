@@ -12,6 +12,7 @@ import {
   updateTrip,
 } from "@/lib/tripActions";
 import type { HighlightRoutesFn, SelectedRoute } from "@/lib/types";
+import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import MergedJourneyCard from "./MergedJourneyCard";
 
 interface MergedTripCardProps {
@@ -213,14 +214,14 @@ export default function MergedTripCard({
             <button
               type="button"
               onClick={handleDelete}
-              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
+              className={`${btn("danger")} flex-shrink-0`}
             >
               Confirm Delete
             </button>
             <button
               type="button"
               onClick={() => setDeleteConfirm(false)}
-              className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400 flex-shrink-0"
+              className={`${btn("subtle")} flex-shrink-0`}
             >
               Cancel
             </button>
@@ -230,18 +231,14 @@ export default function MergedTripCard({
             <button
               type="button"
               onClick={isOpen ? onRequestClose : onRequestOpen}
-              className={`px-3 py-1.5 rounded text-sm font-medium flex-shrink-0 ${
-                isOpen
-                  ? "bg-amber-600 text-white hover:bg-amber-700"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
+              className={`${btn(isOpen ? "warning" : "primary")} flex-shrink-0`}
             >
               {isOpen ? "Hide" : "View / Edit"}
             </button>
             <button
               type="button"
               onClick={() => setDeleteConfirm(true)}
-              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 flex-shrink-0"
+              className={`${btn("danger")} flex-shrink-0`}
             >
               Delete
             </button>
@@ -287,11 +284,7 @@ export default function MergedTripCard({
                 type="button"
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit || !editName.trim()}
-                className={`flex-1 px-3 py-1.5 rounded text-xs font-medium ${
-                  isSavingEdit || !editName.trim()
-                    ? "bg-gray-400 text-white cursor-not-allowed"
-                    : "bg-green-600 text-white hover:bg-green-700"
-                }`}
+                className={`${btn("success", "xs")} flex-1`}
               >
                 {isSavingEdit ? "Saving..." : "Save Changes"}
               </button>
@@ -299,7 +292,7 @@ export default function MergedTripCard({
                 type="button"
                 onClick={handleCancelEdit}
                 disabled={isSavingEdit}
-                className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-xs font-medium hover:bg-gray-400"
+                className={`${btn("subtle", "xs")} flex-1`}
               >
                 Reset
               </button>
@@ -309,11 +302,7 @@ export default function MergedTripCard({
           <div>
             <div className="flex items-center justify-between mb-2">
               <h5 className="text-sm font-semibold text-gray-700">Journeys ({journeys.length})</h5>
-              <button
-                type="button"
-                onClick={handleShowPicker}
-                className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-medium"
-              >
+              <button type="button" onClick={handleShowPicker} className={btn("softPrimary", "xs")}>
                 Add Journeys
               </button>
             </div>
@@ -348,11 +337,7 @@ export default function MergedTripCard({
             <div className="border border-blue-200 rounded bg-blue-50 p-2">
               <div className="flex items-center justify-between mb-2">
                 <h5 className="text-xs font-semibold text-blue-800">Unassigned Journeys</h5>
-                <button
-                  type="button"
-                  onClick={() => setShowPicker(false)}
-                  className="text-xs text-gray-500 hover:text-gray-700"
-                >
+                <button type="button" onClick={() => setShowPicker(false)} className={LINK_BTN}>
                   Close
                 </button>
               </div>
@@ -379,7 +364,7 @@ export default function MergedTripCard({
                       <button
                         type="button"
                         onClick={() => handleAssignJourney(j.id)}
-                        className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 font-medium flex-shrink-0"
+                        className={`${btn("success", "xs")} flex-shrink-0`}
                       >
                         Add
                       </button>

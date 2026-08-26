@@ -6,6 +6,7 @@ import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/constant
 import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type { AdminNote } from "@/lib/types";
+import { btn } from "@/lib/ui/buttonStyles";
 
 type TypeFilter = NoteType | "all";
 
@@ -82,10 +83,8 @@ export default function AdminNotesTab({
         type="button"
         key={key}
         onClick={() => setFilter(key)}
-        className={`px-2 py-1 text-xs rounded border flex items-center gap-1.5 ${
-          active
-            ? "bg-blue-100 border-blue-500 text-blue-800"
-            : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+        className={`${btn(active ? "softPrimary" : "outline", "xs")} ${
+          active ? "border border-blue-500" : ""
         }`}
       >
         {color && (
@@ -116,12 +115,17 @@ export default function AdminNotesTab({
           <div className="p-4 text-sm text-gray-500">No notes match this filter.</div>
         ) : (
           <ul className="divide-y divide-gray-200">
+            {/* `:active` reaches an ancestor while its descendant is pressed, so the row
+                lights up from the button inside it. */}
             {filteredNotes.map((note) => (
-              <li key={note.id} className="p-3 hover:bg-gray-50">
+              <li
+                key={note.id}
+                className="p-3 transition-colors hover:bg-gray-50 active:bg-gray-100"
+              >
                 <button
                   type="button"
                   onClick={() => onFocusNote?.(note.coordinate)}
-                  className="w-full text-left flex items-start gap-2 cursor-pointer"
+                  className="w-full text-left flex items-start gap-2"
                 >
                   <span
                     className="inline-block w-3 h-3 rounded-full border border-gray-700 mt-1 flex-shrink-0"

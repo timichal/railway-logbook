@@ -6,6 +6,7 @@ import { useToast } from "@/lib/toast";
 import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
 import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
 import type { HighlightRoutesFn, SelectedRoute } from "@/lib/types";
+import { btn } from "@/lib/ui/buttonStyles";
 import MergedJourneyCard from "./MergedJourneyCard";
 import MergedTripCard from "./MergedTripCard";
 
@@ -158,11 +159,7 @@ export default function JourneysAndTripsTab({
           <p className="text-sm text-gray-600">Trips and journeys, sorted by date</p>
         </div>
         {!isCreatingTrip && (
-          <button
-            type="button"
-            onClick={() => setIsCreatingTrip(true)}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
-          >
+          <button type="button" onClick={() => setIsCreatingTrip(true)} className={btn("primary")}>
             New Trip
           </button>
         )}
@@ -204,11 +201,7 @@ export default function JourneysAndTripsTab({
               type="button"
               onClick={handleCreateTrip}
               disabled={isSavingNewTrip || !newTripName.trim()}
-              className={`flex-1 px-3 py-1.5 rounded text-sm font-medium ${
-                isSavingNewTrip || !newTripName.trim()
-                  ? "bg-gray-400 text-white cursor-not-allowed"
-                  : "bg-green-600 text-white hover:bg-green-700"
-              }`}
+              className={`${btn("success")} flex-1`}
             >
               {isSavingNewTrip ? "Creating..." : "Create Trip"}
             </button>
@@ -220,7 +213,7 @@ export default function JourneysAndTripsTab({
                 setNewTripDescription("");
               }}
               disabled={isSavingNewTrip}
-              className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-400"
+              className={`${btn("subtle")} flex-1`}
             >
               Cancel
             </button>
@@ -295,7 +288,7 @@ export default function JourneysAndTripsTab({
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-xs font-medium hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            className={btn("subtle", "xs")}
           >
             ← Prev
           </button>
@@ -306,7 +299,7 @@ export default function JourneysAndTripsTab({
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
-            className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-xs font-medium hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            className={btn("subtle", "xs")}
           >
             Next →
           </button>

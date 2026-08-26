@@ -7,6 +7,7 @@ import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { getAllTrips } from "@/lib/tripActions";
 import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
+import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import JourneyPlanner from "./JourneyPlanner";
 
 interface JourneyLoggerProps {
@@ -194,11 +195,7 @@ export default function JourneyLogger({
             Selected Routes ({selectedRoutes.length})
           </h3>
           {selectedRoutes.length > 0 && (
-            <button
-              type="button"
-              onClick={onClearSelection}
-              className="text-xs text-gray-500 hover:text-gray-700 underline"
-            >
+            <button type="button" onClick={onClearSelection} className={LINK_BTN}>
               Clear all
             </button>
           )}
@@ -223,12 +220,12 @@ export default function JourneyLogger({
                     </div>
                     <div className="flex items-center gap-4 mt-1">
                       <span className="text-gray-600">{route.length_km.toFixed(1)} km</span>
-                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700 min-h-11 md:min-h-0 pr-2 md:pr-0">
+                      <label className="flex items-center gap-1.5 text-xs text-gray-700 min-h-11 md:min-h-0 pr-2 md:pr-0">
                         <input
                           type="checkbox"
                           checked={route.partial ?? false}
                           onChange={(e) => onUpdateRoutePartial(route.track_id, e.target.checked)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                         />
                         <span>Partial</span>
                       </label>
@@ -238,7 +235,7 @@ export default function JourneyLogger({
                     <button
                       type="button"
                       onClick={() => onRemoveRoute(route.track_id)}
-                      className="flex items-center justify-center w-11 h-11 -my-2 -mr-1 md:w-6 md:h-6 md:my-0 md:mr-0 text-gray-500 hover:text-gray-700 text-lg leading-none cursor-pointer"
+                      className={`${iconBtn("responsive")} -my-2 -mr-1 md:my-0 md:mr-0 text-lg`}
                       title="Remove route"
                     >
                       ×
@@ -263,11 +260,7 @@ export default function JourneyLogger({
           type="button"
           onClick={handleCreateJourney}
           disabled={isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0}
-          className={`w-full px-4 py-2 text-white rounded font-medium transition-colors ${
-            isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-green-600 hover:bg-green-700 cursor-pointer"
-          }`}
+          className={`${btn("success", "md")} w-full`}
           title={
             !journeyName.trim()
               ? "Journey name is required"

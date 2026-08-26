@@ -14,6 +14,7 @@ import { RegionProvider, useRegionId } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/regions";
 import { useToast } from "@/lib/toast";
 import type { RailwayPart } from "@/lib/types";
+import { btn } from "@/lib/ui/buttonStyles";
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
 const VectorAdminMap = dynamic(() => import("./VectorAdminMap"), {
@@ -308,16 +309,13 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
             />
             <div className="fixed inset-y-0 left-0 z-40 w-full max-w-md bg-white flex flex-col sidebar-drawer-open">
               <div className="border-b border-gray-200 px-3 py-2 flex flex-wrap gap-2 flex-shrink-0">
-                <Link
-                  href="/"
-                  className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-1.5 px-3 rounded-md text-xs"
-                >
+                <Link href="/" className={btn("neutral", "xs")}>
                   Back to Map
                 </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="bg-red-600 hover:bg-red-700 text-white font-medium py-1.5 px-3 rounded-md text-xs cursor-pointer ml-auto"
+                  className={`${btn("danger", "xs")} ml-auto`}
                 >
                   Logout
                 </button>
