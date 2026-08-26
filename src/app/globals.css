@@ -121,6 +121,16 @@ body,
   bottom: 12px;
 }
 
+/* At the sheet's topmost snap the map is left a ~40px strip, which MapLibre's top
+   control stacks overflow: the pane clips them, but not before the part of them lying
+   in the seam the sheet overlaps had painted over its rounded top edge. Below
+   MAP_FURNITURE_MIN_HEIGHT_PX (VectorRailwayMap) the pane is marked short and they
+   stand down, as the station search beside them does. The bottom stacks stay — the
+   attribution has to remain visible, and it is lifted clear of the seam above. */
+.map-pane-short :is(.maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right) {
+  display: none;
+}
+
 /* The compact attribution (a narrow map; it starts collapsed behind its ⓘ — see
    `addAttribution` in useMapLibre) lays itself out as one long line when opened and
    runs off the side of the map, so it is capped and left to wrap. It is anchored to

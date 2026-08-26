@@ -54,6 +54,17 @@ interface VectorRailwayMapProps {
   isMobile: boolean;
 }
 
+/**
+ * Below this the map pane is too short to carry its own furniture. At the mobile
+ * sheet's topmost snap the map is a ~40px strip: the station search and MapLibre's
+ * top-right control stack no longer fit in it, and — being positioned above the
+ * sheet's stacking level — the part of them that fell in the seam the sheet overlaps
+ * painted over its rounded top edge. They stand down until there is room again. The
+ * bottom-corner furniture is left alone: the attribution has to stay visible and
+ * already clears the seam (see globals.css).
+ */
+const MAP_FURNITURE_MIN_HEIGHT_PX = 180;
+
 export default function VectorRailwayMap({
   className = "",
   user,
@@ -66,6 +77,8 @@ export default function VectorRailwayMap({
   isMobile,
 }: VectorRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
+  const mapPane = useRef<HTMLDivElement>(null);
+  const [furnitureFits, setFurnitureFits] = useState(true);
   const { showError } = useToast();
 
   const userId = user?.id || null;
@@ -490,6 +503,19 @@ export default function VectorRailwayMap({
     }
   };
 
+  // Watch the pane rather than the sheet's height: the same measurement then covers
+  // every way the map can lose room, and it updates during the drag (not only once
+  // the sheet has settled), so the controls are gone before they reach the seam.
+  useEffect(() => {
+    const pane = mapPane.current;
+    if (!pane) return;
+    const update = () => setFurnitureFits(pane.clientHeight >= MAP_FURNITURE_MIN_HEIGHT_PX);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, []);
+
   // The mobile sheet settles at a new height -> the map has more or less room.
   const handleSheetHeightSettled = useCallback(() => {
     map.current?.resize();
@@ -555,7 +581,12 @@ export default function VectorRailwayMap({
 
       {/* Map Container. `map-pane` is what globals.css keys on to lift MapLibre's
           bottom controls clear of the sheet's overlapping top edge. */}
-      <div className="map-pane flex-1 min-h-0 overflow-hidden relative">
+      <div
+        ref={mapPane}
+        className={`map-pane flex-1 min-h-0 overflow-hidden relative ${
+          furnitureFits ? "" : "map-pane-short"
+        }`}
+      >
         <div
           ref={mapContainer}
           className={`w-full h-full ${className}`}
@@ -577,7 +608,9 @@ export default function VectorRailwayMap({
 
         {/* Station Search Box */}
         <div
-          className={`absolute z-10 ${isMobile ? "top-3 left-3 right-14" : "top-4 right-12 w-80"}`}
+          className={`absolute z-10 ${isMobile ? "top-3 left-3 right-14" : "top-4 right-12 w-80"} ${
+            furnitureFits ? "" : "hidden"
+          }`}
         >
           <div className="relative">
             <input
