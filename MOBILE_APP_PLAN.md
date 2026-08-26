@@ -4,9 +4,10 @@ A real native app built on **React Native + Expo** with
 **`@maplibre/maplibre-react-native`**, sharing one codebase across iOS and
 Android. Written for someone fluent in JS/TS and React but new to mobile.
 
-This is a separate project from `MOBILE_UI_FIXES.md`. That file makes the *web*
-app pleasant on a phone (and installable to the home screen); this one is a
-distinct app in the two stores.
+This is a separate project from the mobile-web work, which is finished: the *web*
+app is pleasant on a phone and installable to the home screen (see the bottom
+sheet, the touch sheets, the safe areas and the manifest in `CLAUDE.md`). This one
+is a distinct app in the two stores.
 
 ---
 
@@ -68,8 +69,9 @@ These are plain data, style objects, or pure logic — no DOM, no browser:
   layer are all still wanted, applied against the native style object.
 - **The whole component tree.** No DOM, no CSS. **NativeWind** gives you Tailwind
   class names in RN, which makes this mostly transcription rather than redesign —
-  and the mobile decisions from `MOBILE_UI_FIXES.md` (bottom sheet, tap-to-inspect,
-  44pt targets) are the ones you build here from the start.
+  and the web app's mobile decisions (bottom sheet, tap-to-inspect, 44pt targets;
+  all documented under **UI structure** in `CLAUDE.md`) are the ones you build here
+  from the start.
 
 ### The hard blocker: the data layer
 

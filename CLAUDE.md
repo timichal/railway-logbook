@@ -250,8 +250,8 @@ tiles into. **The stations layers are the only two of ours that take the scheme*
 (`COLORS.stationsDark`), because they are the only two whose colours are picked
 against the ground under them rather than against the data in them: the label goes
 light and its halo goes from translucent white to translucent black. The route colours
-are still the light ones — see item 13 in `MOBILE_UI_FIXES.md` for why that one is not
-a constant swap.
+are still the light ones — see `DARK_MODE_TODO.md` for why that one is not a constant
+swap.
 
 **Popups are inline styles, which no stylesheet rule can override**, so
 `tooltipFormatting.ts` and both interaction modules read `var(--color-fg)`,
