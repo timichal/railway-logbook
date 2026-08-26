@@ -20,7 +20,6 @@
     "importRouteData": "tsx src/scripts/importRoutes.ts",
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
-    "addRouteName": "tsx src/scripts/addRouteName.ts",
     "fixSequences": "tsx src/scripts/fixSequences.ts",
     "listStations": "tsx src/scripts/listStations.ts",
     "inspectPath": "tsx src/scripts/inspectPath.ts",
