@@ -7,6 +7,7 @@ import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type {
   HighlightRoutesFn,
+  JourneyEditStartFn,
   LocalJourney,
   LocalLoggedPart,
   RailwayRoute,
@@ -23,7 +24,7 @@ interface JourneyWithRoutes {
 interface LocalJourneyLogTabProps {
   onHighlightRoutes?: HighlightRoutesFn;
   onJourneyChanged?: () => void;
-  onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
+  onJourneyEditStart?: JourneyEditStartFn;
   onJourneyEditEnd?: () => void;
 }
 
@@ -183,15 +184,35 @@ export default function LocalJourneyLogTab({
     handleMapRouteClickRef.current?.(route);
   }, []);
 
+  // Same ref dance, for the touch sheet's button label ("Add to journey" vs
+  // "Remove from journey") — the map holds this for the whole edit session.
+  const isRouteInJourneyRef = useRef<((trackId: number) => boolean) | null>(null);
+  isRouteInJourneyRef.current = (trackId: number) => {
+    if (!viewedJourneyId) return false;
+    return localStore
+      .getLoggedPartsByJourneyId(viewedJourneyId)
+      .some((p) => p.track_id === trackId);
+  };
+  const stableIsRouteInJourney = useCallback(
+    (trackId: number) => isRouteInJourneyRef.current?.(trackId) ?? false,
+    [],
+  );
+
   // Register the map click handler while a journey is open; tear it down when it
   // closes or the tab unmounts.
   useEffect(() => {
     if (!viewedJourneyId) return;
-    onJourneyEditStart?.(stableHandleMapRouteClick);
+    onJourneyEditStart?.(stableHandleMapRouteClick, stableIsRouteInJourney);
     return () => {
       onJourneyEditEnd?.();
     };
-  }, [viewedJourneyId, stableHandleMapRouteClick, onJourneyEditStart, onJourneyEditEnd]);
+  }, [
+    viewedJourneyId,
+    stableHandleMapRouteClick,
+    stableIsRouteInJourney,
+    onJourneyEditStart,
+    onJourneyEditEnd,
+  ]);
 
   const handleViewJourney = (journeyId: string) => {
     // Toggle view - if already viewing this journey, collapse it

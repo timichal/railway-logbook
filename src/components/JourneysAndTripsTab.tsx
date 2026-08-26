@@ -5,7 +5,7 @@ import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
 import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
-import type { HighlightRoutesFn, SelectedRoute } from "@/lib/types";
+import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
 import MergedJourneyCard from "./MergedJourneyCard";
 import MergedTripCard from "./MergedTripCard";
@@ -16,7 +16,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 interface JourneysAndTripsTabProps {
   onHighlightRoutes?: HighlightRoutesFn;
   onJourneyChanged?: () => void;
-  onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
+  onJourneyEditStart?: JourneyEditStartFn;
   onJourneyEditEnd?: () => void;
 }
 

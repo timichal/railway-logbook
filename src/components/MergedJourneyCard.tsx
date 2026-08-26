@@ -13,7 +13,13 @@ import {
 import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { assignJourneyToTrip, unassignJourneyFromTrip } from "@/lib/tripActions";
-import type { HighlightRoutesFn, Journey, RailwayRoute, SelectedRoute } from "@/lib/types";
+import type {
+  HighlightRoutesFn,
+  Journey,
+  JourneyEditStartFn,
+  RailwayRoute,
+  SelectedRoute,
+} from "@/lib/types";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
@@ -47,7 +53,7 @@ interface MergedJourneyCardProps {
   onChanged: () => void; // After save/delete/route changes — refresh the list and map
   // Map interaction
   onHighlightRoutes?: HighlightRoutesFn;
-  onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
+  onJourneyEditStart?: JourneyEditStartFn;
   onJourneyEditEnd?: () => void;
   // Visual nesting (when rendered inside a trip card)
   nested?: boolean;
@@ -106,6 +112,13 @@ export default function MergedJourneyCard({
     handleMapRouteClickRef.current?.(route);
   }, []);
 
+  // Read through the ref for the same reason the handler above is: the map keeps
+  // whatever it was handed for the whole edit session.
+  const stableIsRouteInJourney = useCallback(
+    (trackId: number) => editStateRef.current.viewedRoutes.some((r) => r.track_id === trackId),
+    [],
+  );
+
   // Load journey details when this card opens
   // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes is intentionally omitted; the effect should fire only when the card opens or the journey changes, not when the callback identity changes.
   useEffect(() => {
@@ -139,7 +152,7 @@ export default function MergedJourneyCard({
       }
       setIsLoadingDetails(false);
       onHighlightRoutes?.(routes.map((r) => r.track_id));
-      onJourneyEditStart?.(stableHandleMapRouteClick);
+      onJourneyEditStart?.(stableHandleMapRouteClick, stableIsRouteInJourney);
     })();
 
     return () => {

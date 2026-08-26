@@ -102,9 +102,13 @@ export default function PublicRailwayMap({
     if (!map.current || !mapLoaded) return;
 
     let cleanup: (() => void) | undefined;
+    // See VectorRailwayMap: a setup deferred to "idle" outlives the effect run
+    // that queued it, so it has to be cancellable or a re-run leaves two live sets
+    // of handlers behind.
+    let cancelled = false;
 
     const setupWhenReady = () => {
-      if (!map.current?.getLayer("railway_routes")) return;
+      if (cancelled || !map.current?.getLayer("railway_routes")) return;
       cleanup = setupUserMapInteractions(map.current, { region: region.id });
     };
 
@@ -115,6 +119,8 @@ export default function PublicRailwayMap({
     }
 
     return () => {
+      cancelled = true;
+      map.current?.off("idle", setupWhenReady);
       if (cleanup) cleanup();
     };
   }, [map, mapLoaded, region.id]);

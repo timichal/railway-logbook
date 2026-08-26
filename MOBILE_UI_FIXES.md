@@ -32,6 +32,36 @@ far:
   count) and a chevron instead of being a bare grey bar. The progress pill moved
   up to clear the raised scale bar, and the sidebar's right border is now
   desktop-only — inside the sheet it was a hairline down a rounded panel.
+- **3 — hover-only popups on a touch device.** A tap now opens a **sheet** rather
+  than the hover popup: the same title, badges and body, plus a wrapping row of
+  buttons for what a mouse gets from hovering and double-clicking — "Add to
+  selection" / "Remove from selection" (or "Add to journey" / "Remove from
+  journey" while a journey card is open, which is what `JourneyEditStartFn`'s
+  second callback is for) and "Website". The sheet is hung on that first button
+  rather than on the tapped point — anchored `center`, then offset by the measured
+  distance from its own middle to the button's — so selecting a route is a double
+  tap in one place instead of a tap and a hunt, and the body sits above the finger
+  where it can be read. No × on it: every tap ends it, a button having run its
+  action on the way past. Because that puts the sheet and the route on the same
+  spot on screen, a tap in the sheet and a tap on the map are told apart by
+  geometry — a click inside the sheet's rect is the sheet's, one outside is the
+  dismissal and nothing else, and taps for 400ms after it closes are still the
+  tail of the gesture that closed it — or of the one that opened it (with
+  double-click zoom suspended over the same span). Otherwise the sheet closed and
+  instantly reopened, opened and instantly closed, or the two taps read as a
+  double tap and zoomed. Both maps' interaction effects also had to learn to
+  cancel a setup deferred to `"idle"`, which otherwise left a second live set of
+  handlers behind after a re-run.
+  MapLibre gives popups no `z-index`, so they also had to be lifted (30) over the
+  progress box, the station search and the map's own controls. The tap no longer
+  acts on the route by itself, so the sheet can say what the press will do, and
+  the `dblclick` handler stands down on touch — every route has its
+  double-tap-to-zoom back. Stations and public notes got the same treatment, the
+  notes having had no touch path at all. Which mode is live is decided per
+  interaction from `pointerdown`/`pointermove`, not from a width query, so a
+  hybrid laptop keeps hover popups under its mouse. The shared map's routes are
+  now readable on a phone too: its click handler is attached even though nothing
+  there can be selected.
 - **4 — via-station reordering.** The HTML5 drag handle (dead on iOS, which never
   fires `dragstart` from a touch) is gone; each via row carries ▲▼ buttons at
   `iconBtn("responsive")`, shown only once there are two vias to reorder. Also
@@ -84,28 +114,10 @@ far:
   hand. All but a dozen bespoke controls (segmented switch, drag handle,
   scrim) now go through it.
 
-Suggested order for the rest: **3**, then the rest. Section 12 (installable app)
-is independent and can be done at any point — it is also the cheapest way to get
-the app onto a home screen, and worth having whether or not the native app in
-`MOBILE_APP_PLAN.md` happens.
-
----
-
-## 3. Hover-only popups on a touch device
-
-Route and station popups are bound to `mousemove` (the `mousemove` handlers near
-the bottom of `setupUserMapInteractions`,
-`src/lib/map/interactions/userMapInteractions.ts`). iOS synthesizes a mousemove
-on tap so this half-works, but:
-
-- the popup and the route selection both happen on the same tap;
-- the popup body says *"double-click to open"*, which is a strange instruction on
-  a phone — and the `dblclick` handler calls `preventDefault()`, so users lose
-  double-tap-to-zoom on any route.
-
-What touch wants: one tap → a small info sheet carrying the route name, the
-badges, and **buttons** ("Add to selection", "Open website"). That also makes the
-`dblclick` handler unnecessary on touch.
+What is left is 12 and 13, in either order. Section 12 (installable app) is the
+cheapest way to get the app onto a home screen, and worth having whether or not
+the native app in `MOBILE_APP_PLAN.md` happens; 13 (dark mode) is a real project
+rather than a fix.
 
 ---
 

@@ -11,7 +11,7 @@ import {
   getUnassignedJourneys,
   updateTrip,
 } from "@/lib/tripActions";
-import type { HighlightRoutesFn, SelectedRoute } from "@/lib/types";
+import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/types";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import MergedJourneyCard from "./MergedJourneyCard";
 
@@ -28,7 +28,7 @@ interface MergedTripCardProps {
   // Forwarded to nested journey cards
   openNestedJourneyId: number | null;
   onNestedJourneyOpenChange: (journeyId: number | null) => void;
-  onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
+  onJourneyEditStart?: JourneyEditStartFn;
   onJourneyEditEnd?: () => void;
 }
 

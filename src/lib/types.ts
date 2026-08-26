@@ -236,6 +236,22 @@ export type HighlightRoutesFn = (
 ) => void;
 
 /**
+ * A journey card opening for editing hands the map two things: the handler that
+ * toggles a route in and out of that journey, and a predicate saying whether a
+ * route is in it already.
+ *
+ * The predicate exists for touch: there the tap opens a sheet whose button has to
+ * say which way it goes ("Add to journey" / "Remove from journey") *before* it is
+ * pressed, and only the card holds that journey's route list. Both callbacks must
+ * be stable — the map registers them once per edit session and reads fresh state
+ * through refs.
+ */
+export type JourneyEditStartFn = (
+  onRouteClick: (route: SelectedRoute) => void,
+  isRouteInJourney: (trackId: number) => boolean,
+) => void;
+
+/**
  * Which stretch of a route was covered, as fractions along its geometry
  * (`ST_LineLocatePoint` space, 0 = the geometry's first point).
  *

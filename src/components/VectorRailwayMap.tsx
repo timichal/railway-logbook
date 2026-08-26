@@ -31,6 +31,7 @@ import { useToast } from "@/lib/toast";
 import type {
   HighlightKind,
   HighlightRoutesFn,
+  JourneyEditStartFn,
   PartialRouteGeometry,
   PlannerRoute,
   SelectedRoute,
@@ -100,13 +101,18 @@ export default function VectorRailwayMap({
 
   // Journey edit mode: route clicks in My Journeys tab go to the edit handler
   const journeyRouteClickHandlerRef = useRef<((route: SelectedRoute) => void) | null>(null);
+  // Whether a route is already in the journey being edited — the touch sheet asks
+  // before it labels its button. Only the open card knows.
+  const journeyContainsRouteRef = useRef<((trackId: number) => boolean) | null>(null);
   const [journeyEditActive, setJourneyEditActive] = useState(false);
-  const handleJourneyEditStart = useCallback((handler: (route: SelectedRoute) => void) => {
+  const handleJourneyEditStart = useCallback<JourneyEditStartFn>((handler, isRouteInJourney) => {
     journeyRouteClickHandlerRef.current = handler;
+    journeyContainsRouteRef.current = isRouteInJourney;
     setJourneyEditActive(true);
   }, []);
   const handleJourneyEditEnd = useCallback(() => {
     journeyRouteClickHandlerRef.current = null;
+    journeyContainsRouteRef.current = null;
     setJourneyEditActive(false);
   }, []);
 
@@ -267,6 +273,22 @@ export default function VectorRailwayMap({
     [activeTab, journeyEditActive, user, dataAccess, showError],
   );
 
+  // What a tap on a route is about to do, worded for the touch sheet's button.
+  // It mirrors handleRouteClick above branch for branch — the sheet says what the
+  // press will do, so the two must not drift. Null where a tap does nothing.
+  const routeTapAction = useCallback(
+    (trackId: number) => {
+      if (journeyEditActive) {
+        const inJourney = journeyContainsRouteRef.current?.(trackId) ?? false;
+        return { label: inJourney ? "Remove from journey" : "Add to journey" };
+      }
+      if (activeTab !== "routes") return null;
+      const isSelected = selectedRoutesRef.current.some((r) => r.track_id === trackId);
+      return { label: isSelected ? "Remove from selection" : "Add to selection" };
+    },
+    [activeTab, journeyEditActive],
+  );
+
   // Switching regions drops everything picked out of the old one: a selection
   // logged after the switch would file the other continent's routes under this
   // journey, and a highlight would point at track the map can no longer show.
@@ -367,9 +389,15 @@ export default function VectorRailwayMap({
     if (!map.current || !mapLoaded) return;
 
     let cleanup: (() => void) | undefined;
+    // A setup deferred to "idle" outlives the effect run that queued it: without
+    // this, an effect re-run while the map is still moving queues a second one and
+    // both fire, leaving two live sets of handlers with only the later set's
+    // teardown tracked. Two sets means one tap handled twice, by two closures that
+    // disagree about which popup is open.
+    let cancelled = false;
 
     const setupWhenReady = () => {
-      if (!map.current?.getLayer("railway_routes")) return;
+      if (cancelled || !map.current?.getLayer("railway_routes")) return;
 
       cleanup = setupUserMapInteractions(map.current, {
         onRouteClick: handleRouteClick,
@@ -378,6 +406,7 @@ export default function VectorRailwayMap({
             ? journeyStationClickHandler
             : undefined,
         region: region.id,
+        routeTapAction,
       });
     };
 
@@ -388,9 +417,19 @@ export default function VectorRailwayMap({
     }
 
     return () => {
+      cancelled = true;
+      map.current?.off("idle", setupWhenReady);
       if (cleanup) cleanup();
     };
-  }, [map, mapLoaded, handleRouteClick, activeTab, journeyStationClickHandler, region.id]);
+  }, [
+    map,
+    mapLoaded,
+    handleRouteClick,
+    activeTab,
+    journeyStationClickHandler,
+    region.id,
+    routeTapAction,
+  ]);
 
   // Fetch progress stats on mount
   useEffect(() => {

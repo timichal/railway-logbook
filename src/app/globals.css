@@ -131,6 +131,29 @@ body,
   max-width: 10rem;
 }
 
+/* MapLibre gives popups no z-index at all, which put every one of them *under*
+   the furniture the map carries in its corners — the progress box and station
+   search (z-10/20, siblings of the map container) and MapLibre's own control
+   stacks (z-2, inside it). A hover popup half-hidden behind the search box was
+   survivable; the touch sheet is not, since its buttons have to be pressable.
+
+   30 works because nothing between the popup and `.map-pane` opens a stacking
+   context — `.maplibregl-map` is `position: relative` with `z-index: auto` — so
+   the popup competes directly with those siblings. It stays below the menu sheet
+   (z-40) and the toasts (z-50), both of which should cover a map popup. */
+.maplibregl-popup {
+  z-index: 30;
+}
+
+/* A touch sheet carrying an action (see `setupUserMapInteractions`) is hung on
+   its own button rather than on the tapped point, so it is anchored `center` and
+   offset until the button lands under the finger. A tip is a claim about which
+   edge faces the feature, and this one faces it through its middle — so it has
+   none. The tipless sheet with no action keeps its. */
+.map-touch-sheet-on-point .maplibregl-popup-tip {
+  display: none;
+}
+
 /* Leaflet popup styling */
 .railway-popup h3,
 .railway-click-menu h3 {

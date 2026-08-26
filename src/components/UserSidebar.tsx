@@ -4,7 +4,13 @@ import { useEffect } from "react";
 import type { User } from "@/lib/authActions";
 import type { DataAccess } from "@/lib/dataAccess";
 import { useRegion } from "@/lib/regionContext";
-import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
+import type {
+  HighlightRoutesFn,
+  JourneyEditStartFn,
+  PlannerRoute,
+  SelectedRoute,
+  Station,
+} from "@/lib/types";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 import CountriesStatsTab from "./CountriesStatsTab";
 import JourneyLogger from "./JourneyLogger";
@@ -36,7 +42,7 @@ interface UserSidebarProps {
   setActiveTab: (tab: ActiveTab) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
   sidebarWidth?: number | null;
-  onJourneyEditStart?: (handler: (route: SelectedRoute) => void) => void;
+  onJourneyEditStart?: JourneyEditStartFn;
   onJourneyEditEnd?: () => void;
 }
 
