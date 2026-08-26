@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { User } from "@/lib/authActions";
 import { useRegion } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import RegionSwitch from "./RegionSwitch";
 import ShareMapDialog from "./ShareMapDialog";
 
 interface NavbarProps {
@@ -105,8 +106,12 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
                 </button>
               )}
 
-          {/* Share as the platform share glyph; the region switch moved down into the
-              menu, which is where a setting that changes the whole app belongs. */}
+          {/* The admin page has no menu, so its region switch has to live in the bar.
+              The user map's is in the menu, where a setting that changes what the
+              whole app is showing belongs. */}
+          {isAdminPage && <RegionSwitch compact />}
+
+          {/* Share as the platform share glyph. */}
           {user && !isAdminPage && (
             <button
               type="button"
@@ -174,6 +179,9 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Admin only — see the mobile bar above. */}
+            {isAdminPage && <RegionSwitch />}
+
             {/* Share map — a logged-in user's own map is the only one there is to
               publish, so this is hidden for anonymous visitors and on the admin page. */}
             {user && !isAdminPage && (
