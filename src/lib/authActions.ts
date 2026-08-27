@@ -1,40 +1,32 @@
 "use server";
 
-import bcrypt from "bcryptjs";
-import { jwtVerify, SignJWT } from "jose";
+/**
+ * Auth for the web app: the cookie transport, and nothing else.
+ *
+ * The credential work lives in `authQueries.ts` and the JWT work in
+ * `authTokens.ts`, because the mobile API needs both without a cookie in sight
+ * (see MOBILE_APP_PLAN.md, Phase 1). What is left here is exactly the part that
+ * is browser-specific — reading and writing `railway-auth`.
+ */
+
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { query } from "./db";
+import { authenticateUser, registerUser } from "./authQueries";
+import { COOKIE_NAME, createToken, type User, verifyToken } from "./authTokens";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "your-secret-key-change-in-production",
-);
-const COOKIE_NAME = "railway-auth";
+export type { User };
 
-export interface User {
-  id: number;
-  email: string;
-  name?: string;
-}
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days, matching the token's own TTL
 
-export async function createToken(user: User): Promise<string> {
-  return new SignJWT({ userId: user.id, email: user.email, name: user.name })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("7d")
-    .sign(JWT_SECRET);
-}
-
-export async function verifyToken(token: string): Promise<User | null> {
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    return {
-      id: payload.userId as number,
-      email: payload.email as string,
-      name: payload.name as string,
-    };
-  } catch {
-    return null;
-  }
+async function setSessionCookie(user: User): Promise<void> {
+  const token = await createToken(user);
+  const cookieStore = await cookies();
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: COOKIE_MAX_AGE,
+  });
 }
 
 export async function getUser(): Promise<User | null> {
@@ -52,108 +44,26 @@ export async function login(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
-  if (!email || !password) {
-    throw new Error("Email and password are required");
-  }
+  const user = await authenticateUser(email, password);
+  await setSessionCookie(user);
 
-  // Get user from database
-  const result = await query("SELECT id, email, name, password FROM users WHERE email = $1", [
-    email,
-  ]);
-
-  if (result.rows.length === 0) {
-    throw new Error("Invalid email or password");
-  }
-
-  const user = result.rows[0];
-
-  // Check password
-  const isValid = await bcrypt.compare(password, user.password || "");
-
-  if (!isValid) {
-    throw new Error("Invalid email or password");
-  }
-
-  // Create JWT token
-  const token = await createToken({ id: user.id, email: user.email, name: user.name });
-
-  // Set cookie
-  const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
-
-  return { success: true, user: { id: user.id, email: user.email, name: user.name } };
+  return { success: true, user };
 }
 
 export async function register(formData: FormData, localPreferences?: string[]) {
-  const name = formData.get("name") as string;
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const confirmPassword = formData.get("confirmPassword") as string;
-
-  if (!email || !password || !confirmPassword) {
-    throw new Error("All fields are required");
-  }
-
-  if (password !== confirmPassword) {
-    throw new Error("Passwords do not match");
-  }
-
-  if (password.length < 6) {
-    throw new Error("Password must be at least 6 characters");
-  }
-
-  // Check if user already exists
-  const existingUser = await query("SELECT id FROM users WHERE email = $1", [email]);
-
-  if (existingUser.rows.length > 0) {
-    throw new Error("User with this email already exists");
-  }
-
-  // Hash password
-  const hashedPassword = await bcrypt.hash(password, 12);
-
-  // Insert user
-  const result = await query(
-    "INSERT INTO users (email, name, password) VALUES ($1, $2, $3) RETURNING id, email, name",
-    [email, name || null, hashedPassword],
+  const user = await registerUser(
+    {
+      name: formData.get("name") as string,
+      email: formData.get("email") as string,
+      password: formData.get("password") as string,
+      confirmPassword: formData.get("confirmPassword") as string,
+    },
+    localPreferences,
   );
 
-  const user = result.rows[0];
+  await setSessionCookie(user);
 
-  // Migrate localStorage preferences if provided
-  if (localPreferences && localPreferences.length > 0) {
-    try {
-      await query("INSERT INTO user_preferences (user_id, selected_countries) VALUES ($1, $2)", [
-        user.id,
-        localPreferences,
-      ]);
-    } catch (error) {
-      console.error("Error migrating preferences:", error);
-      // Non-fatal, continue
-    }
-  }
-
-  // Create JWT token
-  const token = await createToken({ id: user.id, email: user.email, name: user.name });
-
-  // Set cookie
-  const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
-
-  return {
-    success: true,
-    user: { id: user.id, email: user.email, name: user.name },
-  };
+  return { success: true, user };
 }
 
 export async function logout() {
