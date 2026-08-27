@@ -127,6 +127,39 @@ export function flattenBuildings(
 }
 
 /**
+ * Keeps park label points out of the park *outline* layer.
+ *
+ * OpenMapTiles' `park` source-layer carries a label **point** per park alongside
+ * the park polygon, and liberty's `park_outline` is a `line` layer over that
+ * source-layer with no filter at all - so every one of those points is handed to
+ * a line bucket as a single-coordinate geometry. There are dozens per tile from
+ * z6 up (269 on one z6 tile over the Netherlands).
+ *
+ * Nothing renders wrong - a point cannot be drawn as a line, so both renderers
+ * discard it - but MapLibre Native says so out loud, once per process:
+ * `Invalid geometry in line layer` (`line_bucket.cpp`, the branch that fires only
+ * when the *source* geometry is short, not when de-duplication shortened it).
+ * That is the warning the mobile spike reports against this style, and it is the
+ * basemap's, not our route tile's - the route tiles decode as 100% LineString.
+ * Filtering the points out silences it and saves the wasted bucket work on both
+ * platforms.
+ *
+ * Applied only where the layer carries no filter of its own, which is the case
+ * here: liberty's filters are in the legacy syntax, and a legacy filter cannot be
+ * `["all", ...]`-combined with an expression one. If upstream ever gives this
+ * layer a filter, it has taken its own view of which features it draws.
+ */
+export function filterPointsFromParkOutlines(
+  layers: maplibregl.LayerSpecification[],
+): maplibregl.LayerSpecification[] {
+  return layers.map((layer) => {
+    if (layer.type !== "line" || layer["source-layer"] !== "park") return layer;
+    if (layer.filter !== undefined) return layer;
+    return { ...layer, filter: ["!=", ["geometry-type"], "Point"] };
+  });
+}
+
+/**
  * Rewrite every name-based label in the style to Latin script.
  *
  * The stock style prints `name:latin` and `name:nonlatin` stacked, which is how
@@ -209,7 +242,9 @@ async function fetchBasemapStyle(theme: ResolvedTheme): Promise<BasemapStyle> {
   }
   return {
     sources: style.sources,
-    layers: latinizeLabels(flattenBuildings(dropPoiLayers(style.layers))),
+    layers: filterPointsFromParkOutlines(
+      latinizeLabels(flattenBuildings(dropPoiLayers(style.layers))),
+    ),
     glyphs: style.glyphs,
     sprite: style.sprite,
   };
