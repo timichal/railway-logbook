@@ -27,6 +27,7 @@
     "showBacktracking": "tsx src/scripts/showBacktracking.ts",
     "downloadMapData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.geojson ./data/",
     "downloadRouteData": "pscp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.sql ./data/",
+    "downloadRouteDataMac": "scp railmap@railmap.zlatkovsky.cz:/home/railmap/osm-trains/data/*.sql ./data/",
     "deployMapData": "sh ./osmium-scripts/deploy.sh"
   },
   "repository": {
