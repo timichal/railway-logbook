@@ -1,4 +1,12 @@
-"use server";
+/**
+ * Journey-planner pathfinding over whole routes. See "Journey planner
+ * pathfinding" in CLAUDE.md for the search itself.
+ *
+ * A plain module rather than a "use server" one: the web app reaches it through
+ * `plannerActions.ts`, the mobile API through its own route handler, and
+ * `inspectPath.ts` imports it straight from the CLI (MOBILE_APP_PLAN.md,
+ * Phase 1). Nothing here touches a cookie or a request.
+ */
 
 import pool from "./db";
 import {
@@ -10,7 +18,7 @@ import {
 import { UNTRAVELLED_NOISE_KM } from "./routeCoverage";
 import type { PartialRouteGeometry, PlannerRoute } from "./types";
 
-interface PathResult {
+export interface PathResult {
   routes: PlannerRoute[];
   totalDistance: number;
   error?: string;

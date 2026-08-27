@@ -21,9 +21,10 @@ and add a line to the Session log at the bottom.
 | --- | --- |
 | **Branch** | `mobile-app` — all of this work lives here, not on `main` |
 | **Phase 0** | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware |
-| **Current phase** | **Phase 1 — the HTTP API layer.** Not started |
+| **Phase 1** | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md` |
+| **Current phase** | **Phase 2 — the app shell.** Not started |
 | **Blocked on** | nothing |
-| **Next** | Build the route handlers described under Phase 1. Nothing needs re-proving first |
+| **Next** | Create the Expo project and log in against `/api/v1/auth/login`. Budget the first half-day for the tooling under "Getting the tooling to run" |
 
 The spike that answered Phase 0 has been **deleted** — it was throwaway by design
 and everything it taught is written down below. What it proved, in one line: the
@@ -293,10 +294,13 @@ Plain data, style objects, or pure logic — no DOM, no browser:
   all documented under **UI structure** in `CLAUDE.md`) are the ones you build here
   from the start.
 
-### The hard blocker: the data layer
+### The data layer — was the hard blocker, now solved
 
-**The entire data layer is server actions, and React Native cannot call them.**
-That is what Phase 1 exists to solve; the inventory is in the Phase 1 section.
+**The entire data layer was server actions, and React Native cannot call them.**
+Phase 1 fixed that: every user-scoped query now lives in a plain module taking a
+`userId`, and three callers resolve *which* user — a server action from the
+cookie, `publicMapActions` from a share token, a route handler from a bearer
+token. `API.md` is the endpoint reference; the web app is unchanged.
 
 ### Tiles are already fine
 
@@ -321,59 +325,77 @@ JS/React and new to RN, vibe-coding with an assistant. Full-time, halve them.
 Everything it established is in "What Phase 0 established" above; the
 `mobile-spike/` directory has been deleted as designed.
 
-### Phase 1 — HTTP API layer (1–1.5 weeks) — **CURRENT, not started**
+### Phase 1 — HTTP API layer — **DONE**
 
-Route handlers under `src/app/api/` in front of the modules the app needs, with
-token auth alongside the existing cookie auth so **the web app keeps working
-untouched** — it is also the regression test for the whole phase. Mechanical but
-broad.
+23 route handlers under `src/app/api/v1`, in front of the query modules the app
+needs. **`API.md` is the reference** — endpoints, request and response shapes,
+and the rules that apply to all of them. What follows is only what a future
+session needs to know about *why* it looks like this.
 
-**The shape to follow** is the one `src/lib/progressQueries.ts` already
-demonstrates, and its header comment explains why it exists: it is deliberately
-*not* a `"use server"` module, because every export of one is a client-callable
-endpoint, and these take a `userId` argument. `userActions.ts` resolves the
-session and calls in; `publicMapActions.ts` resolves a share token and calls the
-same functions. A route handler is a third caller of exactly that kind. So:
-**handler resolves auth → calls the query module**, never the other way round.
-Where a needed query is still embedded in a `"use server"` module, lift it out the
-same way rather than letting the handler import an action.
+**The shape, as planned: handler resolves auth → calls a query module.** The
+queries were lifted out of the `"use server"` modules into plain ones taking a
+`userId`, following `progressQueries.ts`: `journeyQueries.ts`, `tripQueries.ts`,
+`preferencesQueries.ts`, plus the user-less `routeQueries.ts`, `authQueries.ts`
+and `routePathFinder.ts` (which stopped being `"use server"` — `plannerActions.ts`
+is now the web's one-line way in). The `*Actions.ts` modules kept their exact
+export signatures, so **not one component changed**, which is what made the web
+app usable as the regression test. A handler importing an action is the one thing
+that must not creep back in; the reason is in `progressQueries.ts`'s header.
 
-**The surface.** Twelve `"use server"` modules exist; the app needs seven, and
-leaving admin out keeps it roughly half the size.
+**Auth.** `authTokens.ts` holds the JWT work for both transports, `authQueries.ts`
+the bcrypt work, and `authActions.ts` is now only the cookie. The app gets an
+**access token (7d) plus a refresh token (180d)**, swapped as a pair at
+`POST /auth/refresh` — the plan asked for a refresh story because being logged
+out on a train is worse than useless, and 180 days is sized for a logbook that
+gets opened when a trip happens. Tokens are stateless: no revocation, **no logout
+endpoint**, logging out is the client dropping both. A cookie session token also
+verifies as an access token (same secret, same claims), which is convenient for
+poking at the API from a browser; a refresh token never does.
 
-| Module | Mobile needs | Exports to front |
-| --- | --- | --- |
-| `authActions.ts` | yes | `login`, `register`, `logout`, `getUser`, plus `createToken`/`verifyToken` which already exist and already sign JWTs |
-| `journeyActions.ts` | yes | `getJourney`, `createJourney`, `updateJourney`, `deleteJourney`, `addRoutesToJourney`, `removeRouteFromJourney`, `updateLoggedPartPartial` |
-| `tripActions.ts` | yes | `getAllTrips`, `getTrip`, `createTrip`, `updateTrip`, `deleteTrip`, `assignJourneyToTrip`, `unassignJourneyFromTrip`, `getJourneysAndTrips`, `getUnassignedJourneys` |
-| `userActions.ts` | yes | `searchStations`, `getRegionTrackIds`, `getAllRoutes`, `getRoutesByIds`, `getUserProgress`, `getProgressByCountry`, `getCoveredStretches`, `getCoveredStretchesFor` |
-| `userPreferencesActions.ts` | yes | `getUserPreferences`, `updateUserPreferences` |
-| `routePathFinder.ts` | yes | `findRoutePathBetweenStations` — the journey planner |
-| `publicMapActions.ts` | probably | `getPublicMapOwner`, `getPublicProgress`, `getPublicProgressByCountry`, `getPublicCoveredStretches` — only if the app opens shared links (open decision) |
-| `migrationActions.ts` | **no** | localStorage migration is web-only |
-| `adminMapActions.ts`, `adminNotesActions.ts`, `adminRouteActions.ts` | **no** | admin stays web-only |
+**Error taxonomy, which was the one thing the plan didn't foresee.** Query
+modules report failure two different ways, and both had to reach HTTP correctly:
+an in-band `{ error: "…" }` (what the journey and trip modules return, because
+the web callers render it) is mapped by `statusForMessage` — "not found" → 404,
+"Failed to …" → 500, anything else → 400. Thrown failures needed a distinction
+that did not exist: a rejected password is for the user, a Postgres error is not.
+`ValidationError` (`src/lib/errors.ts`) is that line — 400 with its message,
+while a plain exception is logged and returned as an opaque 500. Found by the
+smoke test, which had `register` with a short password coming back as a 500.
 
-**Auth changes shape.** Cookie sessions signed with `jose` become **bearer tokens
-in `expo-secure-store`**. The signing carries over unchanged — `createToken` and
-`verifyToken` in `authActions.ts` already do exactly what is needed and are
-already cookie-independent; only `getUser` reads `cookies()`. What changes is
-where the token lives and that a handler reads an `Authorization` header. Plan for
-refresh: tokens currently expire in 7 days, and a logbook app that logs you out on
-a train is worse than useless.
+**Region scoping** is an explicit `?region=` and a 400 when it is missing —
+never a default, since a missing region is a query answering for the other
+continent.
 
-**Region scoping.** Many of these actions take a region (see the region-scoped
-list under Regions in `CLAUDE.md`). The region lives in a cookie on the web; over
-HTTP it becomes an explicit parameter. Do not let it default silently — a missing
-region means a query that leaks the other continent.
+**What was left out**, all deliberately: admin (single-user, web-only, would
+roughly double the layer), `migrationActions` (web-only by nature), and the
+shared-map endpoints, which stay an open decision below — the queries are already
+shared, so they are an afternoon whenever the app decides to open those links.
 
-**Version the routes from day one.** Once a binary is in the wild its API cannot
-break.
+**Verified against the dev database**, not just typechecked: every endpoint, the
+region guard, the auth failures, and a full write lifecycle (create a trip and a
+journey → assign → flip `partial` → add and remove routes → delete both → 404),
+which also confirmed a `covered` fraction range round-trips. The planner endpoint
+returns exactly what `npm run inspectPath` does for the same pair (Praha hl.n. →
+Kolín: 4 routes, 62.2 km, same ids). `/routes?region=europe` is 5530 routes in
+~1.9s — the one call worth caching on the device rather than repeating.
 
-### Phase 2 — App shell (1 week)
+One thing to know for Phase 2: a **station id can be negative**. An OSM area
+station is stored under a negated id, so `fromStationId` is validated as non-zero
+rather than positive.
 
-Expo project, navigation, login/register against the new API, secure token
-storage, region switching. No map yet. The tooling setup under "Getting the
-tooling to run" is the first half-day of this phase; budget it.
+
+### Phase 2 — App shell (1 week) — **CURRENT, not started**
+
+Expo project, navigation, login/register against the API, secure token storage,
+region switching. No map yet. The tooling setup under "Getting the tooling to
+run" is the first half-day of this phase; budget it.
+
+The API is ready and documented in `API.md`; `POST /auth/login` returns the token
+pair, `GET /auth/me` is the "am I still signed in" call, and
+`POST /auth/refresh` is what a cold start should try before deciding it is logged
+out. `getTileBaseUrl()`'s `window.location` needs replacing with a build-time
+constant per environment, and the API base URL is the same decision — make it one
+config module.
 
 ### Phase 3 — The map (2–3 weeks)
 
@@ -461,7 +483,9 @@ accounts — which this one does.
   creation, geometry editing, notes).
 - **Shared public maps** — does the app open a `/shared/<token>` link, or bounce
   it to the browser? Deep links are cheap; the read-only map view is not free.
-  This decides whether `publicMapActions.ts` is in Phase 1's surface.
+  Phase 1 left the endpoints out, which costs nothing to reverse: the queries are
+  already shared through `progressQueries.ts`, so four token-resolving handlers
+  are all that is missing whenever the answer is yes.
 - **How much does the web app converge?** After Phase 1 the web app could also
   move off server actions onto the same HTTP API. Tempting for consistency, but
   it is a large refactor of working code for no user-visible gain. Recommend not
@@ -489,3 +513,14 @@ pick up. Keep it short — the phase sections carry the detail.
   Europe z4", which is what it existed to establish. **Decision: GO.** Deleted
   `mobile-spike/` and moved its tooling setup into this file. **Next: Phase 1**,
   the HTTP API layer — the inventory is in its section.
+- **2026-08-27 — Phase 1, start to finish.** Lifted every user-scoped query out
+  of the `"use server"` modules into plain modules taking a `userId` (the
+  `*Actions.ts` files kept their signatures, so no component changed), split auth
+  into `authTokens` / `authQueries` / the cookie-only `authActions`, and built 23
+  handlers under `/api/v1` with bearer auth and a 7d/180d token pair. Added
+  `ValidationError` to separate a message meant for the user from one meant for
+  the log — the smoke test caught a rejected password coming back as a 500.
+  Wrote `API.md`. Verified every endpoint plus a full create/assign/delete
+  lifecycle against the dev database, and checked the planner endpoint agrees
+  with `npm run inspectPath`. **Next: Phase 2**, the Expo shell — nothing in the
+  API needs proving first.

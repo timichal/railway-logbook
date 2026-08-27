@@ -1,0 +1,360 @@
+/**
+ * Journey reads and writes, taking the user id explicitly.
+ *
+ * Plain module, not "use server" — same reasoning as `progressQueries.ts`.
+ * `journeyActions.ts` resolves the session and calls in; the mobile API's route
+ * handlers resolve a bearer token and call the same functions
+ * (MOBILE_APP_PLAN.md, Phase 1).
+ *
+ * Failures come back in-band as `{ error }` rather than as thrown exceptions,
+ * which is what the web callers already expect; the route handlers turn the
+ * message into a status code (see `src/lib/api/response.ts`).
+ */
+
+import pool from "./db";
+import type { Journey, LoggedPart, RailwayRoute } from "./types";
+
+/** Fraction range along a route's geometry — see user_logged_parts.covered_start. */
+export interface LoggedRange {
+  covered_start: number;
+  covered_end: number;
+}
+
+/**
+ * A ridden stretch is only stored when it is a genuine, non-degenerate part of
+ * the route, and only for a partial ride: a route logged whole covers all of it,
+ * so a range would be redundant (and would draw a stray overlay).
+ */
+function sanitizeRange(
+  range: LoggedRange | null | undefined,
+  partial: boolean,
+): LoggedRange | null {
+  if (!partial || !range) return null;
+  const start = Number(range.covered_start);
+  const end = Number(range.covered_end);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (start < 0 || end > 1 || start >= end) return null;
+  return { covered_start: start, covered_end: end };
+}
+
+/**
+ * Get a single journey with all its logged routes
+ */
+export async function journeyForUser(
+  userId: number,
+  journeyId: number,
+): Promise<{
+  journey: Journey | null;
+  routes: RailwayRoute[];
+  error?: string;
+}> {
+  try {
+    // Fetch journey metadata
+    const journeyResult = await pool.query<Journey>(
+      "SELECT * FROM user_journeys WHERE id = $1 AND user_id = $2",
+      [journeyId, userId],
+    );
+
+    if (journeyResult.rows.length === 0) {
+      return { journey: null, routes: [], error: "Journey not found" };
+    }
+
+    // Fetch all routes in this journey (exclude heavy geometry column)
+    const routesResult = await pool.query<RailwayRoute & LoggedPart>(
+      `SELECT
+        rr.track_id, rr.from_station, rr.to_station,
+        rr.description, rr.usage_type, rr.frequency, rr.link, rr.scenic, rr.line_class,
+        rr.length_km, rr.start_country, rr.end_country,
+        rr.is_valid, rr.error_message,
+        ulp.partial, ulp.covered_start, ulp.covered_end
+      FROM user_logged_parts ulp
+      LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
+      WHERE ulp.journey_id = $1 AND ulp.user_id = $2
+      ORDER BY ulp.created_at ASC`,
+      [journeyId, userId],
+    );
+
+    return {
+      journey: journeyResult.rows[0],
+      routes: routesResult.rows,
+    };
+  } catch (error) {
+    console.error("Error fetching journey:", error);
+    return { journey: null, routes: [], error: "Failed to fetch journey" };
+  }
+}
+
+/**
+ * Create a new journey and log routes to it (atomic operation)
+ */
+export async function createJourneyForUser(
+  userId: number,
+  name: string,
+  description: string | null,
+  date: string, // YYYY-MM-DD
+  trackIds: number[],
+  partialFlags: boolean[],
+  tripId?: number | null,
+  /**
+   * Stretch ridden per route, positionally aligned with trackIds; null where the
+   * extent isn't known (see user_logged_parts.covered_start).
+   */
+  coveredRanges?: (LoggedRange | null)[],
+): Promise<{ journey: Journey | null; error?: string }> {
+  const client = await pool.connect();
+
+  try {
+    // Validate inputs
+    if (!name || name.trim() === "") {
+      return { journey: null, error: "Journey name is required" };
+    }
+
+    if (!date) {
+      return { journey: null, error: "Journey date is required" };
+    }
+
+    if (trackIds.length !== partialFlags.length) {
+      return { journey: null, error: "Track IDs and partial flags length mismatch" };
+    }
+
+    await client.query("BEGIN");
+
+    // Create journey
+    const journeyResult = await client.query<Journey>(
+      `INSERT INTO user_journeys (user_id, name, description, date, trip_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [userId, name.trim(), description, date, tripId || null],
+    );
+
+    const journey = journeyResult.rows[0];
+
+    // Log routes to journey (batch insert)
+    if (trackIds.length > 0) {
+      // Build VALUES clause for batch insert
+      const values: (number | boolean | null)[] = [];
+      const valuePlaceholders: string[] = [];
+
+      trackIds.forEach((trackId, index) => {
+        const offset = index * 6;
+        const range = sanitizeRange(coveredRanges?.[index], partialFlags[index]);
+        valuePlaceholders.push(
+          `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`,
+        );
+        values.push(
+          userId,
+          journey.id,
+          trackId,
+          partialFlags[index],
+          range?.covered_start ?? null,
+          range?.covered_end ?? null,
+        );
+      });
+
+      await client.query(
+        `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
+         VALUES ${valuePlaceholders.join(", ")}
+         ON CONFLICT (journey_id, track_id) DO NOTHING`,
+        values,
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return { journey };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error creating journey:", error);
+    return { journey: null, error: "Failed to create journey" };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Update journey metadata (name, description, date)
+ */
+export async function updateJourneyForUser(
+  userId: number,
+  journeyId: number,
+  name: string,
+  description: string | null,
+  date: string,
+): Promise<{ journey: Journey | null; error?: string }> {
+  try {
+    // Validate inputs
+    if (!name || name.trim() === "") {
+      return { journey: null, error: "Journey name is required" };
+    }
+
+    if (!date) {
+      return { journey: null, error: "Journey date is required" };
+    }
+
+    const result = await pool.query<Journey>(
+      `UPDATE user_journeys
+       SET name = $1, description = $2, date = $3
+       WHERE id = $4 AND user_id = $5
+       RETURNING *`,
+      [name.trim(), description, date, journeyId, userId],
+    );
+
+    if (result.rows.length === 0) {
+      return { journey: null, error: "Journey not found" };
+    }
+
+    return { journey: result.rows[0] };
+  } catch (error) {
+    console.error("Error updating journey:", error);
+    return { journey: null, error: "Failed to update journey" };
+  }
+}
+
+/**
+ * Delete a journey and all its logged parts
+ */
+export async function deleteJourneyForUser(
+  userId: number,
+  journeyId: number,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const result = await pool.query("DELETE FROM user_journeys WHERE id = $1 AND user_id = $2", [
+      journeyId,
+      userId,
+    ]);
+
+    if (result.rowCount === 0) {
+      return { success: false, error: "Journey not found" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting journey:", error);
+    return { success: false, error: "Failed to delete journey" };
+  }
+}
+
+/**
+ * Add routes to an existing journey
+ */
+export async function addRoutesToJourneyForUser(
+  userId: number,
+  journeyId: number,
+  trackIds: number[],
+  partialFlags: boolean[],
+  /** Stretch ridden per route, positionally aligned with trackIds (see createJourney). */
+  coveredRanges?: (LoggedRange | null)[],
+): Promise<{ success: boolean; error?: string }> {
+  const client = await pool.connect();
+
+  try {
+    if (trackIds.length !== partialFlags.length) {
+      return { success: false, error: "Track IDs and partial flags length mismatch" };
+    }
+
+    // Verify journey belongs to user
+    const journeyCheck = await client.query(
+      "SELECT id FROM user_journeys WHERE id = $1 AND user_id = $2",
+      [journeyId, userId],
+    );
+
+    if (journeyCheck.rows.length === 0) {
+      return { success: false, error: "Journey not found" };
+    }
+
+    await client.query("BEGIN");
+
+    // Batch insert routes
+    if (trackIds.length > 0) {
+      const values: (number | boolean | null)[] = [];
+      const valuePlaceholders: string[] = [];
+
+      trackIds.forEach((trackId, index) => {
+        const offset = index * 6;
+        const range = sanitizeRange(coveredRanges?.[index], partialFlags[index]);
+        valuePlaceholders.push(
+          `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`,
+        );
+        values.push(
+          userId,
+          journeyId,
+          trackId,
+          partialFlags[index],
+          range?.covered_start ?? null,
+          range?.covered_end ?? null,
+        );
+      });
+
+      await client.query(
+        `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
+         VALUES ${valuePlaceholders.join(", ")}
+         ON CONFLICT (journey_id, track_id) DO UPDATE SET
+           partial = EXCLUDED.partial,
+           covered_start = EXCLUDED.covered_start,
+           covered_end = EXCLUDED.covered_end`,
+        values,
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return { success: true };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error adding routes to journey:", error);
+    return { success: false, error: "Failed to add routes to journey" };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Remove a single route from a journey
+ */
+export async function removeRouteFromJourneyForUser(
+  userId: number,
+  journeyId: number,
+  trackId: number,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const result = await pool.query(
+      "DELETE FROM user_logged_parts WHERE journey_id = $1 AND track_id = $2 AND user_id = $3",
+      [journeyId, trackId, userId],
+    );
+
+    if (result.rowCount === 0) {
+      return { success: false, error: "Route not found in journey" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error removing route from journey:", error);
+    return { success: false, error: "Failed to remove route from journey" };
+  }
+}
+
+/**
+ * Toggle partial flag for a logged part
+ */
+export async function updateLoggedPartPartialForUser(
+  userId: number,
+  journeyId: number,
+  trackId: number,
+  partial: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const result = await pool.query(
+      "UPDATE user_logged_parts SET partial = $1 WHERE journey_id = $2 AND track_id = $3 AND user_id = $4",
+      [partial, journeyId, trackId, userId],
+    );
+
+    if (result.rowCount === 0) {
+      return { success: false, error: "Route not found in journey" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating logged part partial:", error);
+    return { success: false, error: "Failed to update partial flag" };
+  }
+}

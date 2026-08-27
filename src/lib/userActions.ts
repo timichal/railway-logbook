@@ -1,7 +1,16 @@
 "use server";
 
+/**
+ * The web app's user-facing server actions.
+ *
+ * Each one resolves the session and delegates: the public route and station
+ * reads live in `routeQueries.ts`, the user-scoped progress and coverage SQL in
+ * `progressQueries.ts`. Both are plain modules so the mobile API's route
+ * handlers can call them after resolving a bearer token instead
+ * (MOBILE_APP_PLAN.md, Phase 1).
+ */
+
 import { getUser } from "./authActions";
-import { query } from "./db";
 import {
   buildCoveredStretches,
   coveredStretchesForUser,
@@ -11,133 +20,33 @@ import {
   progressForUser,
   type UserProgress,
 } from "./progressQueries";
-import { type RegionId, regionEnvelopeSql } from "./regions";
+import type { RegionId } from "./regions";
+import {
+  routeMetadataByIds,
+  routesInRegion,
+  searchStationsByName,
+  trackIdsInRegion,
+} from "./routeQueries";
 import type { CoveredRange, CoveredStretch, RailwayRoute, Station } from "./types";
 
-/**
- * Station name search for the user map search box and the Journey Planner.
- *
- * Restricted to `near_route` stations — the same set the user map draws
- * (public_stations_tile), so the autocomplete can't offer a station that isn't
- * on the map and has no route within reach of the planner. The admin map is
- * unaffected; it has its own search and sees every station.
- *
- * Also restricted to the current region: the map is locked to it, so a hit in
- * the other one could neither be flown to nor routed from.
- */
+/** Station name search for the map search box and the Journey Planner. */
 export async function searchStations(searchQuery: string, region: RegionId): Promise<Station[]> {
-  if (searchQuery.trim().length < 2) {
-    return [];
-  }
-
-  const result = await query(
-    `
-    SELECT id, name,
-           ST_X(coordinates) as lon,
-           ST_Y(coordinates) as lat
-    FROM stations
-    WHERE near_route
-      AND coordinates && ${regionEnvelopeSql(region)}
-      AND unaccent(name) ILIKE unaccent($1)
-    ORDER BY
-      CASE
-        WHEN unaccent(name) ILIKE unaccent($2) THEN 0  -- Exact start match first
-        ELSE 1                                          -- Contains match second
-      END,
-      name
-    LIMIT 10
-  `,
-    [`%${searchQuery}%`, `${searchQuery}%`],
-  );
-
-  return result.rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    coordinates: [row.lon, row.lat],
-  }));
+  return searchStationsByName(searchQuery, region);
 }
 
-/**
- * The track ids of every route in a region.
- *
- * A few thousand integers, cheap to ship whole, and the only thing the
- * localStorage journey list can use to tell which of its journeys belong to the
- * region on screen: it stores track ids and nothing else, so unlike the
- * database journey list it cannot ask the question in SQL.
- */
+/** The track ids of every route in a region. */
 export async function getRegionTrackIds(region: RegionId): Promise<number[]> {
-  const result = await query(`
-    SELECT track_id
-    FROM railway_routes
-    WHERE geometry && ${regionEnvelopeSql(region)}
-  `);
-
-  return result.rows.map((row) => row.track_id as number);
+  return trackIdsInRegion(region);
 }
 
-/**
- * Get all railway routes without user-specific data
- * Used for unlogged users to calculate progress stats client-side
- * No authentication required
- */
+/** Every route in a region, geometry included. No authentication required. */
 export async function getAllRoutes(region: RegionId): Promise<RailwayRoute[]> {
-  const result = await query(`
-    SELECT
-      track_id,
-      from_station,
-      to_station,
-      description,
-      usage_type,
-      frequency,
-      link,
-      scenic,
-      ST_AsGeoJSON(geometry) as geometry,
-      length_km,
-      start_country,
-      end_country
-    FROM railway_routes
-    WHERE geometry && ${regionEnvelopeSql(region)}
-    ORDER BY track_id
-  `);
-
-  return result.rows as RailwayRoute[];
+  return routesInRegion(region);
 }
 
-/**
- * Get metadata (no geometry) for a specific set of routes by track_id.
- * Used by unauthenticated users to label logged parts stored in localStorage,
- * which only retain track_id. No authentication required — route data is public.
- */
+/** Metadata for a set of routes. No authentication required — route data is public. */
 export async function getRoutesByIds(trackIds: number[]): Promise<RailwayRoute[]> {
-  if (trackIds.length === 0) return [];
-
-  const result = await query(
-    `
-    SELECT
-      track_id,
-      from_station,
-      to_station,
-      description,
-      usage_type,
-      frequency,
-      link,
-      scenic,
-      line_class,
-      length_km,
-      start_country,
-      end_country,
-      is_valid,
-      error_message
-    FROM railway_routes
-    WHERE track_id = ANY($1::int[])
-  `,
-    [trackIds],
-  );
-
-  return result.rows.map((row) => ({
-    ...row,
-    geometry: "",
-  }));
+  return routeMetadataByIds(trackIds);
 }
 
 /**

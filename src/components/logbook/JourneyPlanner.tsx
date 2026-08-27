@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import StationSearchInput from "@/components/ui/StationSearchInput";
+import { findRoutePathBetweenStations } from "@/lib/plannerActions";
 import { useRegionId } from "@/lib/regionContext";
-import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
 import { useToast } from "@/lib/toast";
 import type { HighlightRoutesFn, PlannerRoute, Station } from "@/lib/types";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
