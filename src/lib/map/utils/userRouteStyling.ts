@@ -9,24 +9,48 @@ import { COLORS, lineClassColorExpression, WIDTHS } from "@/lib/map";
  * - For logged users: Uses 'date' property from tile data
  * - For unlogged users: Uses feature-state set from localStorage
  * Note: Scenic routes use same colors but with outline effect (separate layer)
+ *
+ * **Nested single-condition `case`s, and deliberately no `["all", ...]`.** The
+ * flat five-branch form this replaced said the same thing more readably, but
+ * MapLibre Native's React binding throws `std::bad_alloc` converting a `case`
+ * that carries an `all` condition alongside a further branch — which killed the
+ * Phase 0 mobile spike on launch, with no JS error and no crash report (see
+ * MOBILE_APP_PLAN.md, "The colour expression"). Nesting expresses exactly the
+ * same precedence: reaching an inner `case` already means the outer condition
+ * held, so `has date` + `whole` needs no conjunction. GL JS is indifferent
+ * between the two forms, so the web app carries the shape that also works on
+ * native rather than leaving a second implementation to be written later.
+ *
+ * The tile branches still take precedence over the feature-state ones, as
+ * before: a logged-in user's `date` decides it outright and the localStorage
+ * path is only consulted when there is none.
  */
 export function getUserRouteColorExpression(): maplibregl.ExpressionSpecification {
   return [
     "case",
-    // Logged users: Has at least one complete trip (from tile data) → green shades
-    ["all", ["has", "date"], ["==", ["get", "has_complete_trip"], true]],
-    lineClassColorExpression(COLORS.railwayRoutes.visited),
-    // Logged users: Has trips but no complete trip (from tile data) → orange shades
+    // Logged users: the tile carries this user's trips.
     ["has", "date"],
-    lineClassColorExpression(COLORS.railwayRoutes.partial),
-    // Unlogged users: Has partial trip (from feature-state) → orange shades
-    ["all", ["==", ["feature-state", "hasTrip"], true], ["==", ["feature-state", "partial"], true]],
-    lineClassColorExpression(COLORS.railwayRoutes.partial),
-    // Unlogged users: Has complete trip (from feature-state) → green shades
-    ["==", ["feature-state", "hasTrip"], true],
-    lineClassColorExpression(COLORS.railwayRoutes.visited),
-    // No trips → red shades
-    lineClassColorExpression(COLORS.railwayRoutes.unvisited),
+    [
+      "case",
+      // At least one complete trip → green shades, else orange.
+      ["==", ["get", "has_complete_trip"], true],
+      lineClassColorExpression(COLORS.railwayRoutes.visited),
+      lineClassColorExpression(COLORS.railwayRoutes.partial),
+    ],
+    // Unlogged users: feature-state, set from localStorage.
+    [
+      "case",
+      ["==", ["feature-state", "hasTrip"], true],
+      [
+        "case",
+        // Partial → orange shades, whole → green.
+        ["==", ["feature-state", "partial"], true],
+        lineClassColorExpression(COLORS.railwayRoutes.partial),
+        lineClassColorExpression(COLORS.railwayRoutes.visited),
+      ],
+      // No trips → red shades
+      lineClassColorExpression(COLORS.railwayRoutes.unvisited),
+    ],
   ] as maplibregl.ExpressionSpecification;
 }
 

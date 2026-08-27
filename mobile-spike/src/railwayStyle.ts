@@ -92,14 +92,20 @@ export const BASEMAP_FONT_BOLD = "Noto Sans Bold";
 type ClassColors = { branch: string; main: string; highspeed: string };
 type WidthStop = { branch: number; main: number; highspeed: number };
 
-/** `lineClassColorExpression` from `src/lib/map/index.ts`. */
+/**
+ * `lineClassColorExpression` from `src/lib/map/index.ts`.
+ *
+ * A `match`, not a chain of `==` cases: proven on the device to convert
+ * cleanly, and one property read instead of three.
+ */
 function lineClassColorExpression(colors: ClassColors): ExpressionSpecification {
   return [
-    "case",
-    ["==", ["get", "line_class"], "branch"],
-    colors.branch,
-    ["==", ["get", "line_class"], "highspeed"],
+    "match",
+    ["get", "line_class"],
+    "highspeed",
     colors.highspeed,
+    "branch",
+    colors.branch,
     colors.main,
   ] as ExpressionSpecification;
 }
@@ -113,14 +119,27 @@ function lineClassColorExpression(colors: ClassColors): ExpressionSpecification 
  * With no `user_id` on the tile, `date` is never present and every route falls
  * through to unvisited red; with `user_id=1` the green/orange branches light up,
  * which is how the spike checks the tile's per-user join actually arrives.
+ *
+ * **This is the shape the device forced, and the reason the spike was worth
+ * running.** The original — a flat `case` whose first condition was
+ * `["all", ["has", "date"], ["==", ["get", "has_complete_trip"], true]]` —
+ * crashes the app on launch with `std::bad_alloc` thrown out of the binding's
+ * `layer.lineColor = styleValue.mlnStyleValue`. The trigger is an `all`
+ * condition in a `case` that has a further branch; an `all` alone is fine, and
+ * two plain conditions are fine. Nesting says the same thing without any
+ * conjunction, because reaching the inner `case` already means `has date` held.
+ * The web app now carries this same shape (see `userRouteStyling.ts`).
  */
 export function getUserRouteColorExpression(): ExpressionSpecification {
   return [
     "case",
-    ["all", ["has", "date"], ["==", ["get", "has_complete_trip"], true]],
-    lineClassColorExpression(COLORS.railwayRoutes.visited),
     ["has", "date"],
-    lineClassColorExpression(COLORS.railwayRoutes.partial),
+    [
+      "case",
+      ["==", ["get", "has_complete_trip"], true],
+      lineClassColorExpression(COLORS.railwayRoutes.visited),
+      lineClassColorExpression(COLORS.railwayRoutes.partial),
+    ],
     lineClassColorExpression(COLORS.railwayRoutes.unvisited),
   ] as ExpressionSpecification;
 }

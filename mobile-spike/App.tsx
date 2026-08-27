@@ -33,6 +33,53 @@ import { useFrameRate } from "./src/useFrameRate";
 /** The owner/admin user id, whose rides colour the routes. */
 const OWNER_USER_ID = 1;
 
+/**
+ * A ladder for isolating a native crash, kept because it earned its keep: the
+ * launch crash traced through it to the colour expression (see
+ * `railwayStyle.ts`), and the top two rungs are still unmeasured. Each level
+ * adds one piece of the map subtree, and a bump is JS only — relaunch, no native
+ * rebuild. 12 is the whole thing.
+ *
+ * Confirmed working on a physical iPhone up to and including 8:
+ *
+ *   0 — no <Map> at all (the app shell alone)
+ *   1 — bare <Map> with MINIMAL_STYLE, no handlers, no children
+ *   2 — + the fetched & transformed basemap style
+ *   3 — + <Camera> (initialViewState / maxBounds / zoom limits)
+ *   4 — + the event handlers. onDidFinishRenderingFrame is fine on iOS under
+ *         the New Architecture, despite maplibre-react-native#1165
+ *   5 — + the stations source, circles and labels — glyphs resolve, bold Noto
+ *   6 — route source + main layer, CONSTANT colour and width, no filter. The
+ *         789 KB z4 tile fetches, parses and draws: question 2's premise holds
+ *   7 — + the REGULAR_ONLY_FILTER expression
+ *   8 — + the real line-color expression. This is what crashed, until it was
+ *         restructured; see getUserRouteColorExpression in railwayStyle.ts
+ *
+ * Still to check on the device:
+ *
+ *   9 — + the real line-width expression: a zoom `interpolate` whose stop values
+ *         are `case` expressions. The other composite, and untested — if it
+ *         crashes, expect the same std::bad_alloc and the same kind of fix
+ *  10 — + the scenic outline layer (its filter nests REGULAR_ONLY_FILTER in an
+ *         `["all", ...]`, which is the construct that broke line-color)
+ *  11 — + the heritage layer. Does dasharray [0, 3] — a zero-length dash — give
+ *         round dots on native as it does in GL JS?
+ *  12 — + the special layer (dasharray [2.5, 2]). The full stack.
+ */
+const BISECT_LEVEL: number = 12;
+
+/**
+ * Level 1's stand-in for the real basemap: the smallest style the spec allows,
+ * so a crash at level 1 is the native map itself rather than anything about our
+ * fetched-and-transformed style. `mapStyle` is required, hence a style rather
+ * than `undefined`.
+ */
+const MINIMAL_STYLE = {
+  version: 8 as const,
+  sources: {},
+  layers: [{ id: "bg", type: "background" as const, paint: { "background-color": "#e5e7eb" } }],
+};
+
 export default function App() {
   const [regionId, setRegionId] = useState<RegionId>("europe");
   const [showRoutes, setShowRoutes] = useState(true);
@@ -54,6 +101,19 @@ export default function App() {
 
   const { fps, minFps, onFrame, reset } = useFrameRate(meterOn);
   const region = REGIONS[regionId];
+
+  if (BISECT_LEVEL === 0) {
+    return (
+      <View style={styles.centered}>
+        <StatusBar style="dark" />
+        <Text style={styles.errorTitle}>Shell launched, no map</Text>
+        <Text style={styles.errorBody}>
+          Level 0 renders no map at all. If this shows, the app shell is fine and anything wrong is
+          in the map subtree. Bump BISECT_LEVEL.
+        </Text>
+      </View>
+    );
+  }
 
   // Fetched once and reused across region switches: the style carries no region
   // of its own, and refetching would only re-measure the same thing.
@@ -93,7 +153,7 @@ export default function App() {
     );
   }
 
-  if (!basemap) {
+  if (!basemap && BISECT_LEVEL >= 2) {
     return (
       <View style={styles.centered}>
         <StatusBar style="dark" />
@@ -108,11 +168,17 @@ export default function App() {
       <StatusBar style="dark" />
       <Map
         style={styles.map}
-        mapStyle={basemap}
-        onDidFinishRenderingFrame={meterOn ? onFrame : undefined}
-        onDidFinishRenderingMapFully={() => setFullyRendered(true)}
-        onDidFailLoadingMap={() => setMapError("onDidFailLoadingMap fired")}
-        onRegionDidChange={(event) => setZoom(event.nativeEvent.zoom)}
+        mapStyle={BISECT_LEVEL >= 2 && basemap ? basemap : MINIMAL_STYLE}
+        onDidFinishRenderingFrame={BISECT_LEVEL >= 4 && meterOn ? onFrame : undefined}
+        onDidFinishRenderingMapFully={
+          BISECT_LEVEL >= 4 ? () => setFullyRendered(true) : undefined
+        }
+        onDidFailLoadingMap={
+          BISECT_LEVEL >= 4 ? () => setMapError("onDidFailLoadingMap fired") : undefined
+        }
+        onRegionDidChange={
+          BISECT_LEVEL >= 4 ? (event) => setZoom(event.nativeEvent.zoom) : undefined
+        }
       >
         {/*
           Remounted per region so the camera re-applies its view state and
@@ -120,20 +186,22 @@ export default function App() {
           Note LngLatBounds is FLAT [w, s, e, n] in this binding, unlike the web
           app's nested [[w, s], [e, n]].
         */}
-        <Camera
-          key={regionId}
-          initialViewState={{ center: region.center, zoom: region.zoom }}
-          maxBounds={[
-            region.bounds[0][0],
-            region.bounds[0][1],
-            region.bounds[1][0],
-            region.bounds[1][1],
-          ]}
-          minZoom={ZOOM_RANGES.railwayRoutes.min}
-          maxZoom={ZOOM_RANGES.railwayRoutes.max}
-        />
+        {BISECT_LEVEL >= 3 ? (
+          <Camera
+            key={regionId}
+            initialViewState={{ center: region.center, zoom: region.zoom }}
+            maxBounds={[
+              region.bounds[0][0],
+              region.bounds[0][1],
+              region.bounds[1][0],
+              region.bounds[1][1],
+            ]}
+            minZoom={ZOOM_RANGES.railwayRoutes.min}
+            maxZoom={ZOOM_RANGES.railwayRoutes.max}
+          />
+        ) : null}
 
-        {showRoutes ? (
+        {BISECT_LEVEL >= 6 && showRoutes ? (
           // Keyed on the tile URL so flipping "my rides" genuinely re-creates the
           // source rather than leaving the previous tiles in place.
           <VectorSource
@@ -144,63 +212,69 @@ export default function App() {
             maxzoom={ZOOM_RANGES.railwayRoutes.max}
           >
             {/* Bottom to top, matching createUserMapLayers(). */}
-            <Layer
-              id="railway_routes_scenic_outline"
-              type="line"
-              source-layer="railway_routes"
-              layout={{ visibility: showScenic ? "visible" : "none" }}
-              filter={["all", ["==", ["get", "scenic"], true], REGULAR_ONLY_FILTER]}
-              paint={{
-                "line-color": COLORS.scenicOutline,
-                "line-width": getUserRouteScenicOutlineWidthExpression(),
-                "line-opacity": OPACITIES.scenicOutline,
-              }}
-            />
+            {BISECT_LEVEL >= 10 ? (
+              <Layer
+                id="railway_routes_scenic_outline"
+                type="line"
+                source-layer="railway_routes"
+                layout={{ visibility: showScenic ? "visible" : "none" }}
+                filter={["all", ["==", ["get", "scenic"], true], REGULAR_ONLY_FILTER]}
+                paint={{
+                  "line-color": COLORS.scenicOutline,
+                  "line-width": getUserRouteScenicOutlineWidthExpression(),
+                  "line-opacity": OPACITIES.scenicOutline,
+                }}
+              />
+            ) : null}
             <Layer
               id="railway_routes"
               type="line"
               source-layer="railway_routes"
-              filter={REGULAR_ONLY_FILTER}
+              filter={BISECT_LEVEL >= 7 ? REGULAR_ONLY_FILTER : undefined}
               paint={{
-                "line-color": getUserRouteColorExpression(),
-                "line-width": getUserRouteWidthExpression(),
+                "line-color": BISECT_LEVEL >= 8 ? getUserRouteColorExpression() : "#b8554f",
+                "line-width": BISECT_LEVEL >= 9 ? getUserRouteWidthExpression() : 1.5,
                 "line-opacity": OPACITIES.defaultRoute,
               }}
             />
-            <Layer
-              id="railway_routes_heritage"
-              type="line"
-              source-layer="railway_routes"
-              layout={{
-                visibility: showHeritage ? "visible" : "none",
-                // Without the round cap the zero-length dashes render as nothing.
-                "line-cap": "round",
-              }}
-              filter={["==", ["get", "usage_type"], 1]}
-              paint={{
-                "line-color": getUserRouteColorExpression(),
-                "line-width": getUserRouteHeritageWidthExpression(),
-                "line-opacity": OPACITIES.defaultRoute,
-                "line-dasharray": [...DASHES.heritage],
-              }}
-            />
-            <Layer
-              id="railway_routes_special"
-              type="line"
-              source-layer="railway_routes"
-              layout={{ visibility: showSpecial ? "visible" : "none" }}
-              filter={["==", ["get", "usage_type"], 2]}
-              paint={{
-                "line-color": getUserRouteColorExpression(),
-                "line-width": getUserRouteWidthExpression(),
-                "line-opacity": OPACITIES.defaultRoute,
-                "line-dasharray": [...DASHES.special],
-              }}
-            />
+            {BISECT_LEVEL >= 11 ? (
+              <Layer
+                id="railway_routes_heritage"
+                type="line"
+                source-layer="railway_routes"
+                layout={{
+                  visibility: showHeritage ? "visible" : "none",
+                  // Without the round cap the zero-length dashes render as nothing.
+                  "line-cap": "round",
+                }}
+                filter={["==", ["get", "usage_type"], 1]}
+                paint={{
+                  "line-color": getUserRouteColorExpression(),
+                  "line-width": getUserRouteHeritageWidthExpression(),
+                  "line-opacity": OPACITIES.defaultRoute,
+                  "line-dasharray": [...DASHES.heritage],
+                }}
+              />
+            ) : null}
+            {BISECT_LEVEL >= 12 ? (
+              <Layer
+                id="railway_routes_special"
+                type="line"
+                source-layer="railway_routes"
+                layout={{ visibility: showSpecial ? "visible" : "none" }}
+                filter={["==", ["get", "usage_type"], 2]}
+                paint={{
+                  "line-color": getUserRouteColorExpression(),
+                  "line-width": getUserRouteWidthExpression(),
+                  "line-opacity": OPACITIES.defaultRoute,
+                  "line-dasharray": [...DASHES.special],
+                }}
+              />
+            ) : null}
           </VectorSource>
         ) : null}
 
-        {showStations ? (
+        {BISECT_LEVEL >= 5 && showStations ? (
           <VectorSource
             id="stations"
             tiles={[publicStationsTileUrl()]}

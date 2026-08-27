@@ -129,6 +129,36 @@ The chips along the bottom:
 
 ---
 
+## Findings so far
+
+Run once on a physical iPhone (Xcode 26.6, iOS 26). **Question 1 is answered
+positively and question 2's premise holds**: the 789 KB z4 tile fetches, parses
+and renders, the styling port reproduces the web app's appearance, station labels
+come out in bold Noto, and the camera and event handlers work.
+
+The frame rate — question 2's actual number — is **still unmeasured**, along with
+Japan's Latin labels, the heritage/special dash rendering and Android.
+
+One blocker was found and fixed: the binding throws `std::bad_alloc` converting
+the web app's colour expression, because it contains an `["all", ...]` condition
+in a `case` that has a further branch. `getUserRouteColorExpression` in
+`src/railwayStyle.ts` now uses single-condition nesting instead, and the web app
+has adopted the same shape. Full account in `../MOBILE_APP_PLAN.md`.
+
+`BISECT_LEVEL` in `App.tsx` is the ladder that found it; levels 9–12 are the ones
+still to try, and its own comment says what each adds.
+
+**If a crash leaves no red box and no crash report, run from Xcode**
+(`open ios/RailwaySpike.xcworkspace`, pick the iPhone, ▶). The device log in
+Console.app carries plenty of alarming-looking noise that is not the problem — a
+`UIScene` deprecation fault, sandbox `vfs.disk-space` denials, a refused
+connection to React DevTools on port 8097 — while Xcode names the actual
+exception immediately.
+
+Note also that **iOS pulls the JS bundle over Wi-Fi even with the phone
+cabled**; the cable carries the install and the debugger only. Wrong network
+means a white screen and `ECONNREFUSED`.
+
 ## What to report back
 
 Paste the answers into the **Phase 0** section of `../MOBILE_APP_PLAN.md`; that

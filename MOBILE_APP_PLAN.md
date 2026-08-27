@@ -20,9 +20,9 @@ and add a line to the Session log at the bottom.
 | | |
 | --- | --- |
 | **Branch** | `mobile-app` — all of this work lives here, not on `main` |
-| **Current phase** | Phase 0 — spike **built, not yet run** |
-| **Blocked on** | Michal running the spike on a physical iPhone (Mac required for the build) |
-| **Next after that** | Record the findings in Phase 0 below, then decide go / no-go before starting Phase 1 |
+| **Current phase** | Phase 0 — spike **run on a physical iPhone**; both headline questions answered, one upstream bug found and worked around |
+| **Blocked on** | nothing |
+| **Next** | Collect the remaining device answers (fps, Japan's Latin labels, heritage/special rendering, Android), then decide go / no-go before starting Phase 1 |
 
 **On the Mac:** `git fetch && git checkout mobile-app`, then follow
 `mobile-spike/README.md` from the top — it assumes no mobile tooling is installed.
@@ -30,9 +30,12 @@ and add a line to the Session log at the bottom.
 ### Done
 
 - **Phase 0 spike written** — `mobile-spike/`, with its own README covering setup
-  from scratch, how to read the HUD, and a findings template to fill in. It
-  typechecks clean (`cd mobile-spike && npx tsc --noEmit`) but has never been
-  built or run on a device.
+  from scratch, how to read the HUD, and a findings template to fill in.
+- **Phase 0 spike run on a physical iPhone** (Xcode 26.6, iOS 26). Route tiles
+  render on the native SDK and the styling port works; a launch crash traced to
+  the binding's expression conversion is fixed by restructuring the colour
+  expression. See Phase 0 below for the findings, and "The colour expression"
+  for the one thing that changed in the web app as a result.
 
 ### Hardware reality (differs from what this plan originally assumed)
 
@@ -79,6 +82,12 @@ assumed.
   `@maplibre/maplibre-gl-style-spec`, the same package `maplibre-gl`'s types come
   from, so the ported expressions typecheck against the **identical**
   `ExpressionSpecification`. The port can be properly typed, not loosely.
+- **Typechecking against the same spec does not mean the expression works.**
+  Found on the device, not at the desk: the binding throws `std::bad_alloc`
+  converting some spec-valid expressions to native style values. See "The colour
+  expression" below. Nothing in the type system or in `npx tsc --noEmit` catches
+  it, and the process dies with no JS error and no crash report — so an
+  expression that typechecks still has to be *run*.
 
 ### Two repo-hygiene facts the spike introduced
 
@@ -223,7 +232,7 @@ there is no `window`; this becomes a build-time config constant per environment.
 Estimates assume **part-time work** (evenings and weekends) by someone strong in
 JS/React and new to RN, vibe-coding with an assistant. Full-time, halve them.
 
-### Phase 0 — Spike, before committing (2–3 days) — **BUILT, NOT RUN**
+### Phase 0 — Spike, before committing (2–3 days) — **RUN; both headline questions answered**
 
 Do not skip this. It answers the two questions that decide the whole project:
 does the tile server behave against the native SDK, and does a 5000-route z4 tile
@@ -248,26 +257,107 @@ the most expensive part of the query.
 - The ported styling typechecks against the same style spec the web app uses (see
   the corrections above).
 
-**To answer on the device — fill this in:**
+**Answered on the device** (physical iPhone, Xcode 26.6, iOS 26):
 
 | Question | Answer |
 | --- | --- |
-| Route tiles load over HTTPS at all? Any `onDidFailLoadingMap`? | |
-| Does it look like the web app — same colours, same relative line weights? | |
-| Station labels in bold Noto, or a substituted system font? | |
-| Japan: place names in **Latin script** (the `latinizeLabels` port) or kanji? | |
-| Heritage layer renders as round dots? Special as dashes? | |
-| Europe z4, panning: fps with `routes` off / on | |
-| Europe z8, panning: fps with `routes` off / on | |
-| Japan z6, panning: fps with `routes` off / on | |
-| Pinch-zoom fps with `routes` on | |
-| Does `my rides` visibly slow the first paint? | |
-| Subjective with the meter off: smooth / acceptable / bad | |
-| Android (emulator only — tiles/expressions/glyphs, **not** fps) | |
-| Anything that surprised you | |
+| Route tiles load over HTTPS at all? Any `onDidFailLoadingMap`? | **Yes, they load and render.** No `onDidFailLoadingMap`. The z4 tile (789 KB, ~5000 routes) parses and draws. |
+| Does it look like the web app — same colours, same relative line weights? | **Yes**, once the colour expression was restructured (below). Visit-status colouring via `?user_id=1` arrives correctly: green / dark green / orange / red / dark red as on the web. |
+| Station labels in bold Noto, or a substituted system font? | **Bold Noto** — the glyph path works, no substitution. |
+| Japan: place names in **Latin script** (the `latinizeLabels` port) or kanji? | *not yet checked* |
+| Heritage layer renders as round dots? Special as dashes? | *not yet checked* (bisect levels 11 and 12) |
+| Europe z4, panning: fps with `routes` off / on | *not yet measured* |
+| Europe z8, panning: fps with `routes` off / on | *not yet measured* |
+| Japan z6, panning: fps with `routes` off / on | *not yet measured* |
+| Pinch-zoom fps with `routes` on | *not yet measured* |
+| Does `my rides` visibly slow the first paint? | *not yet measured* |
+| Subjective with the meter off: smooth / acceptable / bad | *not yet judged* |
+| Android (emulator only — tiles/expressions/glyphs, **not** fps) | *not yet run* |
+| Anything that surprised you | **Three things.** (1) The binding's `std::bad_alloc` on spec-valid expressions — see below. (2) MapLibre Native logs `Invalid geometry in line layer` against our route tile; GL JS never mentions it. (3) The setup friction was the bulk of the effort — see "Getting it to run". |
 
-**Then decide, and write the decision here:** go / no-go, and if go, whether
-anything about Phases 3 and 5 needs re-scoping in light of what the numbers say.
+**What is confirmed, and it is the important half.** The two questions Phase 0
+existed to answer both came back positive: the tile server behaves against the
+native SDK, and the styling port is real — `style.ts`, `userRouteStyling.ts` and
+`basemap.ts` all produced the web app's own appearance on the phone, including
+the four basemap transforms, the fade layer, the station dots and our own station
+labels. The camera (flat `LngLatBounds` and all) and the event handlers work,
+`onDidFinishRenderingFrame` included — [issue #1165](https://github.com/maplibre/maplibre-react-native/issues/1165)
+reports that one broken under Fabric on Android, and it is fine on iOS with the
+New Architecture on.
+
+**What is still unknown is the frame rate**, which was question 2's actual
+number. Everything above is correctness. Measure it at bisect level 7 (real tile,
+constant colour) or with the restructured expression in place; the ladder in
+`mobile-spike/App.tsx` is still wired up and documented in its own comments.
+
+#### The colour expression — the one thing that had to change
+
+`getUserRouteColorExpression()` as the web app wrote it **kills the app on
+iOS**: `std::bad_alloc`, thrown at `layer.lineColor = styleValue.mlnStyleValue`,
+i.e. inside the binding's conversion of the expression to a native style value.
+It is not the renderer, not the tile, and not feature count — a high start zoom
+with few features on screen dies just as fast.
+
+Bisecting the expression (variants 1–11 in the spike, each documented there)
+isolates the trigger to **an `["all", ...]` condition inside a `case` that has
+more than one branch**:
+
+| Shape | Result |
+| --- | --- |
+| `all` condition, one branch | works |
+| simple conditions, two branches | works |
+| `match`, three branches | works |
+| **`all` condition + a second branch** | **`std::bad_alloc`** |
+
+The fix needs no `all`, because the three-state visit logic is the same thing as
+single-condition nesting:
+
+```
+case  all(has date, whole) → visited        case  has date → (case whole → visited : partial)
+      has date            → partial   ==>                 → unvisited
+                          → unvisited
+```
+
+`match` replaces the `line_class` chain at each leaf. **This shape works on both
+platforms**, so the web app now uses it too (`userRouteStyling.ts` and
+`lineClassColorExpression`) rather than keeping a native-only variant — one
+implementation, and Phase 3 inherits it working. See "Route colours" in
+`CLAUDE.md`.
+
+Worth filing upstream: spec-valid input, silent process death, no crash report,
+and a two-line reproduction.
+
+#### Getting it to run
+
+Most of the effort was not the map. Recorded because the next person pays it too:
+
+- **npm nests `expo`'s own sub-dependencies** (`expo-asset`, `@expo/log-box`, …)
+  under `node_modules/expo/node_modules/` rather than hoisting them, and the
+  spike's `disableHierarchicalLookup: true` blocked Metro from looking there —
+  so the bundler could not resolve them. That setting was there to stop Metro
+  walking *up* into the Next.js repo's conflicting React; it is now a `blockList`
+  on the parent `node_modules` alone, which is narrow enough to leave nested
+  resolution intact. See the comment in `mobile-spike/metro.config.js`.
+- **iOS fetches the JS bundle over Wi-Fi even when the phone is tethered by
+  cable.** USB carries the install and the debugger, not Metro; there is no
+  `adb reverse` equivalent. Different Wi-Fi networks means `ECONNREFUSED` and a
+  white screen, and it bit twice.
+- **A silent launch death leaves no crash report.** Console.app's device log
+  showed only red herrings (a `UIScene` lifecycle deprecation fault — a warning
+  on Xcode 26.6, enforced only against the iOS 27 SDK per
+  [expo/expo#46663](https://github.com/expo/expo/issues/46663); sandbox
+  `vfs.disk-space` denials; a refused connection to React DevTools on 8097).
+  **Running from Xcode with the debugger attached named the exception in
+  seconds.** Do that first next time.
+- `NSLocalNetworkUsageDescription` / `NSBonjourServices` were missing from the
+  generated `Info.plist`; added via `app.json`'s `ios.infoPlist` so they survive
+  `expo prebuild`. Not the cause of anything here, but correct to have.
+
+**Decision: not yet taken.** Correctness is proven and the one blocker is
+understood and fixed. The go / no-go still wants the fps numbers, since "does a
+5000-route tile render at an acceptable frame rate on a phone" is the question
+that decides whether Phases 3 and 5 are worth their weeks. Nothing found so far
+argues against continuing.
 
 ### Phase 1 — HTTP API layer (1–1.5 weeks)
 
@@ -397,3 +487,18 @@ pick up. Keep it short — the phase sections carry the detail.
   findings table, decide go / no-go. Nothing has been built or run on a device
   yet, so any Phase 0 answer below that is still blank is genuinely unknown —
   don't infer one from the fact that the code typechecks.
+- **2026-08-27 (later)** — Ran the spike on a physical iPhone. **Tiles and
+  styling both confirmed working**, including the 789 KB z4 tile, the basemap
+  transforms, the glyph path and our station labels. Found and fixed the one
+  blocker: the binding throws `std::bad_alloc` converting a `case` that carries
+  an `["all", ...]` condition alongside a second branch, which is exactly the
+  shape of `getUserRouteColorExpression()`. Restructured it to single-condition
+  nesting plus `match`, **applied to the web app too** so both platforms share
+  one shape. Fixed the spike's Metro resolver (`blockList` instead of
+  `disableHierarchicalLookup`) and added the local-network `Info.plist` keys.
+  **Next:** the remaining device answers — fps at Europe z4/z8 and Japan z6,
+  Japan's Latin labels, heritage dots and special dashes (bisect levels 11–12),
+  then Android on the emulator for correctness only. The bisect ladder in
+  `mobile-spike/App.tsx` is still in place; set `BISECT_LEVEL = 12` and
+  `COLOR_VARIANT = 11` for the full stack, or delete the gating once done. After
+  that, take the go / no-go.
