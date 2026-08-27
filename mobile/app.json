@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Railway Logbook",
+    "slug": "railway-logbook",
+    "scheme": "railwaylogbook",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "cz.zlatkovsky.railwaylogbook",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Railway Logbook connects to the development server on your local network while it is being developed.",
+        "NSBonjourServices": ["_expo._tcp", "_expo-dev-server._tcp"]
+      }
+    },
+    "android": {
+      "package": "cz.zlatkovsky.railwaylogbook",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": { "backgroundColor": "#0b0f14" }
+        }
+      ]
+    ]
+  }
+}

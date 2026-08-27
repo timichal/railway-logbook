@@ -6,6 +6,14 @@ Guidance for Claude Code working in this repo.
 
 Unified Next.js app for OSM railway data: fetches, processes, and visualizes railway data for two regions — 21 European countries (see `SUPPORTED_COUNTRIES` in `src/lib/constants.ts`) and Japan (see `REGIONS` in `src/lib/regions.ts`). One database, one pipeline, one deploy; the regions differ only in where they are. Single `package.json`, single `.env`, one container. Data processing scripts live alongside the web app under `src/`.
 
+**`mobile/` is a second app, not part of this one.** The React Native / Expo client from `MOBILE_APP_PLAN.md`, with its own `package.json` and `node_modules`. Everything below describes the web app unless it says otherwise.
+
+Its **TypeScript program is separate** and this project's `tsconfig.json` excludes it: React Native's global `setTimeout` declaration otherwise leaks in and breaks the web app on `Type 'number' is not assignable to type 'Timeout'`. So `npx tsc --noEmit` at the root does not check it — `npm run typecheck` inside `mobile/` does.
+
+Its **Biome config is nested, not separate** (`mobile/biome.json`, `"root": false`). Biome 2 refuses a second *root* config in one project, so the split is the one it is built for: the root `npm run lint` walks the whole repo and applies the nested config to everything under `mobile/`, which is what keeps the `next` lint domain and the Tailwind-v4 CSS parser away from RN code. One Biome binary, one formatting style, both apps covered by either command.
+
+It **imports this app's `src/lib` directly** as `@shared/*` (Metro `watchFolders`), so the modules there are shared source with a second consumer: a change to `style.ts`, `regions.ts`, `constants.ts`, `types.ts` or `routeCoverage.ts` is a change to both apps, and adding a server-only import (anything reaching `pg`) to one of them breaks the native build. The API those two clients share is `API.md`.
+
 ## Core Commands
 
 ### Data pipeline

@@ -22,9 +22,10 @@ and add a line to the Session log at the bottom.
 | **Branch** | `mobile-app` — all of this work lives here, not on `main` |
 | **Phase 0** | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware |
 | **Phase 1** | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md` |
-| **Current phase** | **Phase 2 — the app shell.** Not started |
+| **Phase 2** | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android |
+| **Current phase** | **Phase 3 — the map.** Not started |
 | **Blocked on** | nothing |
-| **Next** | Create the Expo project and log in against `/api/v1/auth/login`. Budget the first half-day for the tooling under "Getting the tooling to run" |
+| **Next** | Add `@maplibre/maplibre-react-native` (11.3.7) and port `style.ts` + `userMapLayers.ts` first — Phase 0 proved both. Adding it is a native dependency, so it needs a fresh `expo run:ios`, not just a reload |
 
 The spike that answered Phase 0 has been **deleted** — it was throwaway by design
 and everything it taught is written down below. What it proved, in one line: the
@@ -384,18 +385,151 @@ station is stored under a negated id, so `fromStationId` is validated as non-zer
 rather than positive.
 
 
-### Phase 2 — App shell (1 week) — **CURRENT, not started**
+### Phase 2 — App shell — **DONE**
 
-Expo project, navigation, login/register against the API, secure token storage,
-region switching. No map yet. The tooling setup under "Getting the tooling to
-run" is the first half-day of this phase; budget it.
+The Expo app lives in **`mobile/`**: expo-router navigation, login and register
+against the API, the token pair in the keychain, the region switch, and a
+Light/System/Dark setting. No map — that is Phase 3, and the Map tab shows this
+region's progress numbers instead, which is what proves the shell works end to
+end: a bearer token, a region parameter and a real answer from production.
 
-The API is ready and documented in `API.md`; `POST /auth/login` returns the token
-pair, `GET /auth/me` is the "am I still signed in" call, and
-`POST /auth/refresh` is what a cold start should try before deciding it is logged
-out. `getTileBaseUrl()`'s `window.location` needs replacing with a build-time
-constant per environment, and the API base URL is the same decision — make it one
-config module.
+**It is a separate npm project, not a workspace.** Its own `package.json` and
+`node_modules` one level down from a Next.js app that pins a different React. A
+workspace would hoist the two into one tree, which is the thing to avoid.
+
+#### Shared code: `@shared/*` → `../src/lib/*`
+
+The app imports the web app's modules directly rather than copying them, so
+`style.ts` stays the single source of truth that "Ports nearly verbatim" above
+assumes. Two pieces make it work, and both are load-bearing:
+
+- **`metro.config.js`** adds `src/lib` to `watchFolders` (Metro will not read a
+  file outside the project root otherwise) and blocks **exactly one** directory:
+  the parent `node_modules`. Blocking it is what stops Metro resolving the web
+  app's React; blocking it *specifically*, rather than setting
+  `disableHierarchicalLookup`, is what keeps expo's own nested
+  sub-dependencies resolvable — the trap recorded under "Getting the tooling to
+  run".
+- **`tsconfig.json`** maps `@shared/*` to `../src/lib/*`, and the web app's
+  `tsconfig.json` now **excludes `mobile`** so React Native's globals stay out of
+  its program — the leak the Phase 0 notes predicted, and the reason `tsc` is two
+  runs rather than one.
+
+**What may be imported is decided by dependencies, not by intent.** A module that
+reaches `pg` is server-only however plain it looks — which is why the API response
+types are declared in `src/api/endpoints.ts` rather than imported from
+`progressQueries.ts`, where `UserProgress` actually lives. `regions.ts`,
+`constants.ts` and `types.ts` are dependency-free and cross over untouched;
+`regionCountryCodes` is already shared, so the app filters its progress by the
+same rule `RailwayMap` uses (stored preference where the region allows a country
+filter, the region's own list where it does not).
+
+#### The shape of it
+
+| | |
+| --- | --- |
+| `src/config.ts` | `API_BASE_URL` and `TILE_BASE_URL`, both derived from one origin. Defaults to **production over HTTPS**, overridable at bundle time with `EXPO_PUBLIC_API_ORIGIN`. This is what replaces `getTileBaseUrl()`'s `window.location` |
+| `src/auth/tokenStore.ts` | the pair in `expo-secure-store`, cached in memory so the keychain is off the request path |
+| `src/api/client.ts` | bearer header, error mapping, and the refresh dance |
+| `src/auth/AuthContext.tsx` | `loading` / `signedOut` / `signedIn`, settled at cold start by `GET /auth/me` |
+| `src/region/RegionContext.tsx` | the region in `AsyncStorage`, hydrated before the first render |
+| `src/theme/ThemeContext.tsx` | Light/System/Dark via NativeWind's `colorScheme` plus `expo-system-ui` |
+| `src/ui/` | `Button`, `TextField`, `SegmentedControl`, `Screen` — a class per *role*, as `buttonStyles.ts` is on the web |
+| `app/` | `index` (the fallback route), `(auth)/login`, `(auth)/register`, `(tabs)/map`, `(tabs)/logbook`, `(tabs)/settings` |
+
+Three decisions worth not re-deriving:
+
+- **The refresh is single-flight.** Three requests firing at once on a cold start
+  would otherwise send three refreshes, and since each one issues a *new* pair,
+  the last write would win and the other two replies would be discarded — leaving
+  tokens in the keychain that no response ever confirmed.
+- **A failed refresh is not the calling screen's problem.** The client reports it
+  through `onSignedOut`, which the auth context registers, rather than throwing a
+  401 at whichever screen happened to ask.
+- **Routing is `Stack.Protected` plus an unguarded `index`.** The two trees are
+  declared side by side and the guard decides which exists, so no screen redirects
+  on mount and no protected screen is ever briefly mounted. `index` exists
+  unguarded because signing out removes the `(tabs)` group from under the router:
+  it lands on `index`, which sends it to `/login`.
+
+#### Tooling traps, all new since Phase 0
+
+- **`create-expo-app` is broken under npm 12.** It shells out to
+  `npm pack --dry-run` and cannot parse what npm 12 prints back. Fetch the
+  template tarball from the registry and extract it — that is all the tool does.
+- **`react-dom` needs pinning.** `expo-router` pulls `vaul` → Radix, which
+  peer-depends on `react-dom`; npm resolves the newest, whose own peer demands a
+  `react` newer than the one Expo pins, and *every* subsequent `npm install`
+  fails `ERESOLVE`. `"overrides": { "react-dom": "19.2.3" }` in
+  `mobile/package.json` matches it to Expo's `react`. Nothing native imports
+  react-dom; it is there for expo-router's web path.
+- **`babel-preset-expo` must be an explicit devDependency.** npm nests it under
+  `node_modules/expo/node_modules/`, and Babel resolves preset *names* relative
+  to `babel.config.js`, so a hand-written config cannot see it. The failure is
+  `Cannot find module 'babel-preset-expo'` from the Metro transformer, which
+  reads like a broken install and is not.
+- **npm 12 blocks install scripts.** `fsevents` is approved in `allowScripts`;
+  without it Metro's file watching falls back to polling.
+- **CocoaPods is a gem, not a brew formula here.** Its binary lives in
+  `/opt/homebrew/lib/ruby/gems/*/bin`, which a non-login shell does not have on
+  `PATH` — `expo run:ios` then fails at `pod install`.
+
+#### Linting
+
+`mobile/biome.json` is a **nested config** (`"root": false`), not the separate one
+the Phase 0 notes assumed. Biome 2 refuses to sit beside a second *root* config —
+excluding `mobile/**` from the root config and giving it its own made
+`npm run lint` fail at the repo root with "Found a nested root configuration".
+Nesting is what it is built for instead: the root run walks the whole repo and
+applies this config to everything under `mobile/`, which is what keeps the `next`
+lint domain away from RN code and gives `global.css` its exception (the Tailwind 3
+`@tailwind` directives are not the v4 syntax the root's `tailwindDirectives`
+knows). It runs off the **root's** Biome binary, so `npm run lint` from either
+directory covers this code, with one copy of Biome and one formatting style.
+
+#### Icons
+
+`npm run generateAppIcons` now also writes `mobile/assets/` — `icon.png` at 1024,
+`adaptive-icon.png` in the maskable framing (a launcher crops Android's foreground
+layer exactly as the web manifest's maskable icon is cropped), and a transparent
+`splash-icon.png`, since Expo composites that one onto a background colour that
+differs between light and dark. One master, one script; the native app has no
+artwork of its own.
+
+#### Verified
+
+`npm run lint` and `npm run typecheck` clean in `mobile/`, and both still clean at
+the repo root. `npx expo export --platform ios` bundles, which is what proves the
+Metro wiring — and a grep of the non-bytecode bundle for `hasScenicHighlight`
+proves `@shared` really resolves into `../src/lib` rather than silently resolving
+somewhere else.
+
+Then **built and ran on the iOS simulator**: prebuild, CocoaPods and the config
+plugins applied, the app launched, and the router landed on `/login` — which is
+the whole cold-start chain working (keychain read → no tokens → `signedOut` →
+unguarded `index` → redirect). NativeWind renders, and flipping the simulator to
+dark mode flips the whole tree, so the theme wiring is confirmed on the "system"
+default. Production already serves `/api/v1`, so the shell talks to real data.
+
+One thing that fixing needed a device to find: **`className` on expo-router's
+`Link` does not reach the `Text` it renders** — the link was drawn in the default
+colour with the class silently ignored. Both auth screens now put a styled `Text`
+inside the `Link` instead. Worth remembering as a class of bug: a component that
+merely *accepts* `className` in its types has not necessarily applied it.
+
+**Signing in works** — confirmed by hand on iOS, which is the whole of the rest of
+the chain: the token pair into the keychain, `Stack.Protected` swapping to the tab
+tree, and the progress request answering with a bearer token against production.
+
+**Android has not been run.** Nothing suggests it won't (Phase 0 ran the map
+itself on an emulator), but the shell has not been on it — and `expo-system-ui` is
+installed precisely because `userInterfaceStyle` is otherwise ignored there, which
+is the one thing worth looking at first.
+
+Two notes for whoever runs it: Metro must not be started with `CI=1` (it disables
+watch, and an edit then silently serves the old bundle — which cost a confusing
+round here), and on a physical iPhone the phone must be on the same Wi-Fi as the
+Mac, per "Getting the tooling to run".
 
 ### Phase 3 — The map (2–3 weeks)
 
@@ -524,3 +658,18 @@ pick up. Keep it short — the phase sections carry the detail.
   lifecycle against the dev database, and checked the planner endpoint agrees
   with `npm run inspectPath`. **Next: Phase 2**, the Expo shell — nothing in the
   API needs proving first.
+- **2026-08-27 — Phase 2, start to finish.** Scaffolded the Expo app in `mobile/`
+  (SDK 57, RN 0.86, expo-router, NativeWind 4 on Tailwind 3) and wired it to
+  production over HTTPS, which is already serving `/api/v1`. Built the auth story
+  (keychain token pair, single-flight refresh, `Stack.Protected` routing), the
+  region switch, and a Light/System/Dark setting; the Map tab shows this region's
+  progress as the end-to-end proof until Phase 3. Chose to **import the web app's
+  `src/lib` directly** (`@shared/*` + Metro `watchFolders`) rather than copy it, so
+  `style.ts` stays one source of truth for Phase 3. Four new tooling traps, all
+  npm-12 or SDK-57 packaging rather than anything to do with the map — written up
+  in the phase section; `create-expo-app` itself does not run. Extended
+  `generateAppIcons` to feed the native icon set from the same master. Built and
+  ran it on the iOS simulator, which caught one bug no typecheck could
+  (`className` on expo-router's `Link` is accepted and ignored) and confirmed the
+  cold-start routing and dark mode; signing in against production then confirmed
+  the authenticated half by hand. **Next: Phase 3**, the map.
