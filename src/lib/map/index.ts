@@ -73,6 +73,11 @@ export interface RailwayRoutesPaintConfig {
 
 /**
  * Helper: returns a MapLibre expression that picks a color based on line_class
+ *
+ * A `match` rather than a chain of `["==", ["get", "line_class"], ...]` cases:
+ * one property read instead of three, and it is a shape MapLibre Native's
+ * binding converts without trouble. See "Route colours" in CLAUDE.md for why
+ * that second point matters here.
  */
 export function lineClassColorExpression(colors: {
   branch: string;
@@ -80,10 +85,11 @@ export function lineClassColorExpression(colors: {
   highspeed: string;
 }): maplibregl.ExpressionSpecification {
   return [
-    "case",
-    ["==", ["get", "line_class"], "highspeed"],
+    "match",
+    ["get", "line_class"],
+    "highspeed",
     colors.highspeed,
-    ["==", ["get", "line_class"], "main"],
+    "main",
     colors.main,
     colors.branch,
   ] as maplibregl.ExpressionSpecification;
