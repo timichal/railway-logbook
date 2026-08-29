@@ -191,7 +191,10 @@ export const CIRCLES = {
 export const LABELS = {
   // modified from carto defaults
   station: {
-    minZoom: 11,
+    // Carto starts these at z14; this map wants them further out, and z9 is as
+    // far as they can go — it is the `stations` tile's own minzoom
+    // (ZOOM_RANGES.stations), below which the dots aren't served either.
+    minZoom: 9,
     size: { base: 13, large: 14 },
     largeZoom: 16,
     haloWidth: 1.5,
