@@ -1,6 +1,6 @@
 import type * as maplibregl from "maplibre-gl";
 import type { ResolvedTheme } from "@/lib/theme";
-import { OPACITIES } from "./style";
+import { COLORS, OPACITIES, WIDTHS } from "./style";
 
 /**
  * The basemap under the railway data.
@@ -203,6 +203,65 @@ export function createBasemapFadeLayer(
       // than tints: white over liberty, near-black over the dark style.
       "background-color": dark ? "#05070a" : "#ffffff",
       "background-opacity": dark ? OPACITIES.basemapFadeDark : OPACITIES.basemapFade,
+    },
+  };
+}
+
+/**
+ * Country borders, redrawn by us *above* the fade layer.
+ *
+ * Zoomed out to a continent the map is a jumble of rail lines with nothing to
+ * hang them on, and the borders that would give it a frame are exactly what the
+ * fade takes away: both basemap styles draw admin_level 2 in a grey that is
+ * already faint at full strength (liberty `hsl(248,1%,41%)`, dark
+ * `hsl(0,0%,23%)`) and then loses another 25-40% of itself under the wash. Their
+ * own layers are left where they are — the geometry is identical, so what shows
+ * through underneath is a soft casing rather than a second line.
+ *
+ * It goes above the fade and below our data: the borders are the one piece of
+ * basemap the routes are read *against*, so they earn full contrast, and the
+ * routes still draw over them.
+ *
+ * **One layer serves both styles because the schema, not the style, is what it
+ * reads.** Liberty and dark disagree on everything here — three boundary layers
+ * each, no id in common, split by zoom in one and by admin level in the other —
+ * but both are OpenMapTiles, so `openmaptiles`/`boundary` with `admin_level == 2`
+ * is the same query against either. That is also why there is nothing for the
+ * raster fallback: no vector source, no borders (`useMapLibre` adds this only
+ * alongside a vector basemap).
+ *
+ * The filter drops **maritime** boundaries, which otherwise run the sea borders
+ * out across open water and put more line on the map than they explain, and
+ * anything with `claimed_by`, which draws a disputed frontier once per claimant
+ * — two lines a few pixels apart saying the same thing at this zoom.
+ */
+export function createCountryBordersLayer(
+  theme: ResolvedTheme = "light",
+): maplibregl.LineLayerSpecification {
+  return {
+    id: "country_borders",
+    type: "line",
+    source: "openmaptiles",
+    "source-layer": "boundary",
+    filter: [
+      "all",
+      ["==", ["get", "admin_level"], 2],
+      ["!=", ["get", "maritime"], 1],
+      ["!", ["has", "claimed_by"]],
+    ],
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": theme === "dark" ? COLORS.countryBorderDark : COLORS.countryBorder,
+      "line-opacity": OPACITIES.countryBorder,
+      "line-width": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        4,
+        WIDTHS.countryBorder.z4,
+        10,
+        WIDTHS.countryBorder.z10,
+      ],
     },
   };
 }

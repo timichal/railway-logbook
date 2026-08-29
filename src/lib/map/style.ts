@@ -72,6 +72,24 @@ export const COLORS = {
     label: "#aab4ee",
     labelHalo: "rgba(0, 0, 0, 0.65)",
   },
+  /**
+   * Country borders, drawn by us above the basemap fade (see
+   * `createCountryBordersLayer`).
+   *
+   * **Neutral on purpose.** Zoomed out over Europe the routes are the only
+   * saturated thing on the map, and a border has to be traceable through them
+   * without joining in - anything with a hue reads as one more line of data, and
+   * the greens/oranges/reds and the scenic amber are all spoken for. A grey at
+   * this contrast is the one thing that can be crisp without competing: it is the
+   * only sharp element left on a basemap washed 25-40% toward its own ground.
+   *
+   * Each theme's value is picked against that ground, not derived from the other:
+   * mid-grey over the whitened liberty, a lighter one over the near-black dark
+   * style, both a little cool so they sit under the warm basemap rather than in
+   * front of it.
+   */
+  countryBorder: "#6b7280",
+  countryBorderDark: "#9aa4b2",
   adminNotes: {
     fill: "#fbbf24", // Yellow/amber for notes
     stroke: "#78350f", // Dark brown stroke
@@ -127,6 +145,13 @@ export const WIDTHS = {
   selectedRoute: 5,
   // Bright preview line shown while creating/editing an admin route.
   preview: 8,
+  /**
+   * Country borders. Widest, relatively, exactly where they are needed most: at
+   * z4 a border is 1.6px against a 0.5-0.8px route, so the outline of a country
+   * still reads through the tangle; by z10 the routes have caught up and the
+   * border settles back to being context.
+   */
+  countryBorder: { z4: 1.6, z10: 2.6 },
 } as const;
 
 // ============================================================================
@@ -225,6 +250,10 @@ export const OPACITIES = {
   scenicOutline: 0.6,
   railwayParts: 0.7,
   stations: 0.8,
+  // Country borders (createCountryBordersLayer). Just short of solid: they are
+  // drawn above the fade at full contrast, and the small transparency is what
+  // keeps them reading as the frame around the data rather than as data.
+  countryBorder: 0.9,
   adminNotes: 0.9,
   routeEndpoint: 0.8,
 } as const;

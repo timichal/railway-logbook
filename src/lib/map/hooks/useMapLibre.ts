@@ -5,6 +5,7 @@ import { DEFAULT_REGION, REGIONS, type RegionId } from "@/lib/regions";
 import { useResolvedTheme } from "@/lib/theme";
 import {
   createBasemapFadeLayer,
+  createCountryBordersLayer,
   createOSMBackgroundGroundLayer,
   createOSMBackgroundLayer,
   createOSMBackgroundSource,
@@ -190,9 +191,12 @@ export function useMapLibre(
         : { osm: createOSMBackgroundSource(), ...sources };
 
       // Basemap underneath, faded by the layer above it, our layers on top. The
-      // raster fallback carries its own opacity and needs no fade layer.
+      // raster fallback carries its own opacity and needs no fade layer — and no
+      // borders either: it has no vector source for them to be drawn from.
+      // Country borders sit between the fade and our data, the one bit of
+      // basemap the routes are meant to be read against (createCountryBordersLayer).
       const backgroundLayers: maplibregl.LayerSpecification[] = basemap
-        ? [...basemap.layers, createBasemapFadeLayer(theme)]
+        ? [...basemap.layers, createBasemapFadeLayer(theme), createCountryBordersLayer(theme)]
         : [createOSMBackgroundGroundLayer(theme), createOSMBackgroundLayer(theme)].filter(
             (layer) => layer !== null,
           );
