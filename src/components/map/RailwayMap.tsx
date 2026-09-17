@@ -31,7 +31,6 @@ import {
 import { useRegion } from "@/lib/regionContext";
 import { regionCountryCodes } from "@/lib/regions";
 import { useResolvedTheme } from "@/lib/theme";
-import { useToast } from "@/lib/toast";
 import type {
   HighlightKind,
   HighlightRoutesFn,
@@ -80,7 +79,6 @@ export default function RailwayMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapPane = useRef<HTMLDivElement>(null);
   const [furnitureFits, setFurnitureFits] = useState(true);
-  const { showError } = useToast();
 
   const userId = user?.id || null;
   const region = useRegion();
@@ -262,7 +260,7 @@ export default function RailwayMap({
 
   // Route click handler
   const handleRouteClick = useCallback(
-    async (route: SelectedRoute) => {
+    (route: SelectedRoute) => {
       // Journey edit mode: delegate to the journey edit handler
       if (journeyEditActive && journeyRouteClickHandlerRef.current) {
         journeyRouteClickHandlerRef.current(route);
@@ -278,17 +276,14 @@ export default function RailwayMap({
         return;
       }
 
-      if (!user) {
-        const canAdd = await dataAccess.canAddMoreJourneys();
-        if (!canAdd) {
-          showError("Trip limit reached (50/50). Please register to log more routes.");
-          return;
-        }
-      }
-
+      // No journey-cap check here: selecting a route is reading the map, not
+      // logging, and the cap is enforced where it is actually reached — the
+      // local logger's banner counts the journeys down and its Log Journey
+      // button is disabled at the limit. Checking on every click only meant an
+      // error toast for a capped user who wanted to look at a line.
       setSelectedRoutes((prev) => [...prev, route]);
     },
-    [activeTab, journeyEditActive, user, dataAccess, showError],
+    [activeTab, journeyEditActive],
   );
 
   // What a tap on a route is about to do, worded for the touch sheet's button.
@@ -331,42 +326,31 @@ export default function RailwayMap({
     );
   }, []);
 
-  const handleAddRoutesFromLogger = useCallback(
-    async (routes: PlannerRoute[]) => {
-      if (!user) {
-        const canAdd = await dataAccess.canAddMoreJourneys();
-        if (!canAdd) {
-          showError("Trip limit reached (50/50). Please register to log more routes.");
-          return;
-        }
-      }
+  const handleAddRoutesFromLogger = useCallback((routes: PlannerRoute[]) => {
+    const newRoutes = routes.map((route) => ({
+      track_id: route.track_id,
+      from_station: route.from_station,
+      to_station: route.to_station,
+      description: route.description || "",
+      usage_types: "",
+      link: null,
+      date: null,
+      journey_name: null,
+      // A plan that joins this route mid-way only covers part of it, so the
+      // route arrives in the selection with "partial" already ticked and the
+      // ridden stretch attached, ready to be stored with the journey
+      partial: route.partial ? true : null,
+      covered: route.partial ?? null,
+      length_km: route.length_km,
+    }));
 
-      const newRoutes = routes.map((route) => ({
-        track_id: route.track_id,
-        from_station: route.from_station,
-        to_station: route.to_station,
-        description: route.description || "",
-        usage_types: "",
-        link: null,
-        date: null,
-        journey_name: null,
-        // A plan that joins this route mid-way only covers part of it, so the
-        // route arrives in the selection with "partial" already ticked and the
-        // ridden stretch attached, ready to be stored with the journey
-        partial: route.partial ? true : null,
-        covered: route.partial ?? null,
-        length_km: route.length_km,
-      }));
-
-      setSelectedRoutes((prev) => {
-        const routesToAdd = newRoutes.filter(
-          (newRoute) => !prev.some((existingRoute) => existingRoute.track_id === newRoute.track_id),
-        );
-        return [...prev, ...routesToAdd];
-      });
-    },
-    [user, dataAccess, showError],
-  );
+    setSelectedRoutes((prev) => {
+      const routesToAdd = newRoutes.filter(
+        (newRoute) => !prev.some((existingRoute) => existingRoute.track_id === newRoute.track_id),
+      );
+      return [...prev, ...routesToAdd];
+    });
+  }, []);
 
   const handleRoutesLogged = useCallback(() => {
     if (user) {

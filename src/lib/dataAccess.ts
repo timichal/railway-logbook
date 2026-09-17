@@ -171,9 +171,12 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
       try {
         const allRoutes = await ensureRoutes();
 
-        // Apply country filter if provided
+        // The same three-state contract progressForUser implements on the SQL
+        // side: undefined = no filter, [] = nothing matches, [...] = those
+        // countries. Treating [] as "no filter" left the progress box showing
+        // full network totals over a map the None button had just emptied.
         let filteredRoutes = allRoutes;
-        if (selectedCountries !== undefined && selectedCountries.length > 0) {
+        if (selectedCountries !== undefined) {
           filteredRoutes = allRoutes.filter(
             (route) =>
               route.start_country &&

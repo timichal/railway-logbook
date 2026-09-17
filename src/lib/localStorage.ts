@@ -1,6 +1,6 @@
 /**
  * LocalStorage access for storing journeys and preferences for unauthenticated users.
- * Max 5 journeys allowed, no limit on logged parts.
+ * Max MAX_JOURNEYS journeys allowed, no limit on logged parts.
  *
  * Exposed as plain module functions; callers typically import the namespace
  * (`import * as localStore from "@/lib/localStorage"`).
@@ -27,7 +27,14 @@ interface LocalPreferencesData {
 const JOURNEYS_KEY = "railway_journeys";
 const LOGGED_PARTS_KEY = "railway_logged_parts";
 const PREFS_KEY = "railway_preferences";
-const MAX_JOURNEYS = 5;
+/**
+ * The cap on locally stored journeys. Exported because the number is also shown
+ * to the user (the Route Logger's storage banner, the disabled-button title),
+ * and a second hard-coded copy is how those strings went stale before.
+ */
+export const MAX_JOURNEYS = 5;
+/** The one wording of the cap, so the toast and the throw cannot disagree. */
+export const JOURNEY_LIMIT_MESSAGE = `Journey limit reached (${MAX_JOURNEYS}/${MAX_JOURNEYS}). Please register to log more journeys.`;
 // Returns a fresh array each call: getPreferences hands its result to callers
 // that put it in React state, and a shared mutable module-level array would let
 // one of them corrupt the defaults for everyone else.
@@ -71,7 +78,7 @@ export function addJourney(
 
   // Check limit before adding
   if (!canAddMoreJourneys()) {
-    throw new Error("Journey limit reached (5/5). Please register to log more journeys.");
+    throw new Error(JOURNEY_LIMIT_MESSAGE);
   }
 
   try {
@@ -177,7 +184,7 @@ export function getJourneyCount(): number {
 }
 
 /**
- * Check if user can add more journeys (under 5 limit)
+ * Check if user can add more journeys (under the MAX_JOURNEYS limit)
  */
 export function canAddMoreJourneys(): boolean {
   return getJourneyCount() < MAX_JOURNEYS;

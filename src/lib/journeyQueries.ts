@@ -264,13 +264,24 @@ export async function addRoutesToJourneyForUser(
 
     await client.query("BEGIN");
 
+    // One row per track_id: Postgres rejects an ON CONFLICT DO UPDATE whose
+    // statement touches the same conflicting row twice ("cannot affect row a
+    // second time"), so a repeated trackId in one request would roll the whole
+    // insert back. Last entry wins, which is what DO UPDATE would have done had
+    // they arrived as separate statements. The web selection is already deduped
+    // by track_id; the HTTP API is where a repeat can reach this.
+    const lastIndexByTrackId = new Map<number, number>();
+    trackIds.forEach((trackId, index) => {
+      lastIndexByTrackId.set(trackId, index);
+    });
+
     // Batch insert routes
-    if (trackIds.length > 0) {
+    if (lastIndexByTrackId.size > 0) {
       const values: (number | boolean | null)[] = [];
       const valuePlaceholders: string[] = [];
 
-      trackIds.forEach((trackId, index) => {
-        const offset = index * 6;
+      for (const [trackId, index] of lastIndexByTrackId) {
+        const offset = values.length;
         const range = sanitizeRange(coveredRanges?.[index], partialFlags[index]);
         valuePlaceholders.push(
           `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`,
@@ -283,7 +294,7 @@ export async function addRoutesToJourneyForUser(
           range?.covered_start ?? null,
           range?.covered_end ?? null,
         );
-      });
+      }
 
       await client.query(
         `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
@@ -334,7 +345,12 @@ export async function removeRouteFromJourneyForUser(
 }
 
 /**
- * Toggle partial flag for a logged part
+ * Toggle partial flag for a logged part.
+ *
+ * Clearing `partial` clears the stretch with it, the same rule `sanitizeRange`
+ * applies on every other write path: a route logged whole covers all of it, so a
+ * range left behind would claim the whole route while still carrying fractions —
+ * a state the rest of the code assumes cannot exist.
  */
 export async function updateLoggedPartPartialForUser(
   userId: number,
@@ -344,7 +360,11 @@ export async function updateLoggedPartPartialForUser(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const result = await pool.query(
-      "UPDATE user_logged_parts SET partial = $1 WHERE journey_id = $2 AND track_id = $3 AND user_id = $4",
+      `UPDATE user_logged_parts
+       SET partial = $1,
+           covered_start = CASE WHEN $1 THEN covered_start ELSE NULL END,
+           covered_end = CASE WHEN $1 THEN covered_end ELSE NULL END
+       WHERE journey_id = $2 AND track_id = $3 AND user_id = $4`,
       [partial, journeyId, trackId, userId],
     );
 

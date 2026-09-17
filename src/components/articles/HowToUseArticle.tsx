@@ -44,8 +44,8 @@ export default function HowToUseArticle() {
         <p className="mb-4">
           Without an account, the app stores your data in your browser, with a limit of 5 journeys.
           To reach it from more than one device, create an account and sign in — both are in the
-          menu behind the <b>☰</b> button. Journeys saved in your browser can then be transferred to
-          your account.
+          menu behind the <b>☰</b> button. Journeys saved in your browser can then be transferred
+          to your account.
         </p>
         <p className="mb-4">
           The <b>Journey Planner</b> allows you to select all parts between two stations. You can

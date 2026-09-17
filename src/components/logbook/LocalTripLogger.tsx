@@ -39,7 +39,7 @@ export default function LocalTripLogger({
 
   const journeyCount = localStore.getJourneyCount();
   const canAddMore = localStore.canAddMoreJourneys();
-  const remainingJourneys = 5 - journeyCount;
+  const remainingJourneys = localStore.MAX_JOURNEYS - journeyCount;
 
   const handleCreateJourney = async () => {
     if (!journeyName.trim() || !journeyDate || selectedRoutes.length === 0) {
@@ -104,7 +104,9 @@ export default function LocalTripLogger({
             : "bg-blue-50 border-blue-200 text-blue-700"
         }`}
       >
-        <div className="font-medium mb-1">Local Storage ({journeyCount}/5 journeys)</div>
+        <div className="font-medium mb-1">
+          Local Storage ({journeyCount}/{localStore.MAX_JOURNEYS} journeys)
+        </div>
         <div className="text-xs">
           {remainingJourneys > 0
             ? `${remainingJourneys} journey${remainingJourneys === 1 ? "" : "s"} remaining. Create an account for unlimited journeys!`
@@ -253,7 +255,7 @@ export default function LocalTripLogger({
           className={`${btn("success", "md")} w-full`}
           title={
             !canAddMore
-              ? "Journey limit reached (5/5). Please register to log more journeys."
+              ? localStore.JOURNEY_LIMIT_MESSAGE
               : !journeyName.trim()
                 ? "Journey name is required"
                 : !journeyDate
