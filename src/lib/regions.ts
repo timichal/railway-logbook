@@ -26,7 +26,13 @@
  * their own country list.
  */
 
-import { getUsageLabel, SUPPORTED_COUNTRIES, type UsageType, usageOptions } from "./constants";
+import {
+  getUsageLabel,
+  getUsagePluralLabel,
+  SUPPORTED_COUNTRIES,
+  type UsageType,
+  usageOptions,
+} from "./constants";
 
 export type RegionId = "europe" | "japan";
 
@@ -138,6 +144,20 @@ export function getRegion(value: unknown): Region {
  */
 export function regionUsageLabel(regionId: RegionId, usageType: UsageType): string {
   return REGIONS[regionId].usageLabels?.[usageType] ?? getUsageLabel(usageType);
+}
+
+/**
+ * A usage type as the map's layer switch names it — the plural of
+ * `regionUsageLabel`, for the switch that shows or hides the whole set ("Non-JR
+ * lines", "Special services").
+ *
+ * A region's `usageLabels` are singular by contract, so an override is pluralised
+ * by appending "s"; only where a region says nothing does the default come from
+ * `getUsagePluralLabel`, whose nouns differ per type and cannot be derived.
+ */
+export function regionUsagePluralLabel(regionId: RegionId, usageType: UsageType): string {
+  const override = REGIONS[regionId].usageLabels?.[usageType];
+  return override ? `${override}s` : getUsagePluralLabel(usageType);
 }
 
 /** `usageOptions` with this region's labels applied, for the admin route forms. */

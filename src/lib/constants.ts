@@ -26,6 +26,7 @@ export const usageOptions = [
     id: 0,
     key: "REGULAR",
     label: "Regular",
+    pluralLabel: "Regular lines",
     // Blue
     color: "#2563eb",
     bgColor: "#dbeafe",
@@ -34,6 +35,7 @@ export const usageOptions = [
     id: 1,
     key: "HERITAGE",
     label: "Heritage & tourist",
+    pluralLabel: "Heritage & tourist lines",
     // Purple
     color: "#9333ea",
     bgColor: "#f3e8ff",
@@ -42,6 +44,9 @@ export const usageOptions = [
     id: 2,
     key: "SPECIAL",
     label: "Special",
+    // A special is a service over someone else's track, not a line of its own,
+    // so the set of them is named for the service rather than for the line.
+    pluralLabel: "Special services",
     // Teal
     color: "#0d9488",
     bgColor: "#ccfbf1",
@@ -57,6 +62,17 @@ export const isSpecialUsage = (usageType: UsageType): boolean => usageType !== 0
 export const getUsageLabel = (usageType: UsageType): string => {
   const option = usageOptions.find((opt) => opt.id === usageType);
   return option ? option.label : "Unknown";
+};
+
+/**
+ * The name for a *set* of routes of this type, as the map's layer switches say it
+ * ("Heritage & tourist lines"). Held beside the badge label rather than derived
+ * from it, because the noun is not the same for every type — see `pluralLabel`
+ * on Special. `regionUsagePluralLabel` in regions.ts is the region-aware caller.
+ */
+export const getUsagePluralLabel = (usageType: UsageType): string => {
+  const option = usageOptions.find((opt) => opt.id === usageType);
+  return option ? option.pluralLabel : "Unknown";
 };
 
 export const getUsageBadgeColors = (usageType: UsageType): { color: string; bgColor: string } => {

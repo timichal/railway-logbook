@@ -9,33 +9,12 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-6 and 20 have
-since been fixed and removed).
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-7, 13 and 20
+have since been fixed or dismissed and removed).
 
 ---
 
 ## Bugs
-
-### 7. `duplicateRailwayRoute` clones every user's logs
-
-`src/lib/adminRouteActions.ts:539`
-
-```sql
-INSERT INTO user_logged_parts (...)
-SELECT user_id, journey_id, $2, partial, covered_start, covered_end, created_at
-FROM user_logged_parts WHERE track_id = $1
-```
-
-No user filter — deliberate per the docstring, and right while the copy is an
-exact clone. But the copy exists to be re-pointed at a different stretch, and
-after that every user who rode the original has both stretches logged, inflating
-completed km for track they never rode.
-
-**Fix:** decide the intent. Either clone only the acting admin's rows, or leave
-the copy's logs empty and let the admin re-log, or keep the current behaviour and
-write the trade-off into `CLAUDE.md` so it is a decision rather than a surprise.
-
----
 
 ### 8. Login is a user-enumeration oracle, and unthrottled
 
@@ -116,25 +95,6 @@ this is cosmetic only.
 ---
 
 ## Refactors
-
-### 13. The one hardcoded region check
-
-`src/components/map/LayerToggles.tsx:34`
-
-```tsx
-label={region.id === "japan" ? "Non-JR lines" : "Special services"}
-```
-
-This is the **only** `region.id === "..."` comparison in `src/` — everything else
-goes through the declarative `Region` flags. `Region.usageLabels`
-(`{ 0: "JR line", 2: "Non-JR line" }`) exists for exactly this, and
-`regionUsageLabel(region.id, 2)` is the intended call. A third region with renamed
-usage types would silently get "Special services" here.
-
-Note the label is plural here ("Non-JR line**s**") where `usageLabels` is
-singular, so the fix needs a small pluralisation decision.
-
----
 
 ### 14. `saveRailwayRoute` is not transactional
 

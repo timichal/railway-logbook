@@ -493,6 +493,12 @@ export async function setRouteUnderRepair(trackId: number, underRepair: boolean)
  * journey's partial flag and ridden stretch — the geometry is identical, so the
  * covered fractions still mean the same thing. Runs in a transaction. Returns the
  * new track_id.
+ *
+ * Every user's logs are cloned, not just the acting admin's, because duplication
+ * is how a route is split: A–C grows a branch at B, so the copy is made and the
+ * two are re-pointed at A–B and B–C. Everyone who rode A–C rode both halves, so
+ * both copies of their log are correct. Finish the split — a duplicate left
+ * un-split double-counts.
  */
 export async function duplicateRailwayRoute(trackId: number): Promise<number> {
   await requireAdmin();
