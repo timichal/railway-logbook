@@ -42,11 +42,11 @@
   "homepage": "https://github.com/timichal/railway-logbook#readme",
   "dependencies": {
     "@rapideditor/country-coder": "^5.6.1",
-    "autoprefixer": "^10.6.0",
+    "autoprefixer": "^10.6.1",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "jose": "^6.2.12",
-    "maplibre-gl": "^6.9.0",
+    "maplibre-gl": "^6.10.0",
     "next": "^16.3.5",
     "pg": "^8.23.0",
     "postcss": "^8.5.28",
@@ -57,11 +57,11 @@
     "typescript": "^7.0.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.13",
+    "@biomejs/biome": "^2.5.14",
     "@maplibre/maplibre-gl-style-spec": "^26.4.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.1",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -71,6 +71,7 @@
   },
   "allowScripts": {
     "esbuild@0.28.0": true,
-    "sharp@0.34.5": true
+    "sharp@0.34.5": true,
+    "fsevents@2.3.3": true
   }
 }
