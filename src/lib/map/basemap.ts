@@ -1,5 +1,13 @@
-import type * as maplibregl from "maplibre-gl";
-import type { ResolvedTheme } from "@/lib/theme";
+import type {
+  BackgroundLayerSpecification,
+  ExpressionSpecification,
+  FillLayerSpecification,
+  LayerSpecification,
+  RasterLayerSpecification,
+  RasterSourceSpecification,
+  StyleSpecification,
+} from "@maplibre/maplibre-gl-style-spec";
+import type { ResolvedTheme } from "../theme/types";
 import { OPACITIES } from "./style";
 
 /**
@@ -51,10 +59,7 @@ const STYLE_FETCH_TIMEOUT_MS = 6000;
  * along because the basemap's own label and POI layers need them; our layers
  * carry no text or icons.
  */
-export type BasemapStyle = Pick<
-  maplibregl.StyleSpecification,
-  "sources" | "layers" | "glyphs" | "sprite"
->;
+export type BasemapStyle = Pick<StyleSpecification, "sources" | "layers" | "glyphs" | "sprite">;
 
 // try english name first, then latin, then whatever the local name is
 const LATIN_LABEL_EXPRESSION = [
@@ -62,7 +67,7 @@ const LATIN_LABEL_EXPRESSION = [
   ["get", "name_en"],
   ["get", "name:latin"],
   ["get", "name"],
-] as maplibregl.ExpressionSpecification;
+] as ExpressionSpecification;
 
 /**
  * The basemap's POI layers, dropped on load.
@@ -80,9 +85,7 @@ const POI_LAYER_IDS = new Set(["poi_r1", "poi_r7", "poi_r20", "poi_transit"]);
 const BUILDING_FILL_COLOR = "hsl(35,8%,85%)";
 const BUILDING_OUTLINE_COLOR = "hsl(35,6%,79%)";
 
-export function dropPoiLayers(
-  layers: maplibregl.LayerSpecification[],
-): maplibregl.LayerSpecification[] {
+export function dropPoiLayers(layers: LayerSpecification[]): LayerSpecification[] {
   return layers.filter((layer) => !POI_LAYER_IDS.has(layer.id));
 }
 
@@ -104,12 +107,10 @@ export function dropPoiLayers(
  * Keyed on the layer *type*, not on `building-3d` by name - any extrusion in the
  * style is the same effect and gets the same treatment.
  */
-export function flattenBuildings(
-  layers: maplibregl.LayerSpecification[],
-): maplibregl.LayerSpecification[] {
+export function flattenBuildings(layers: LayerSpecification[]): LayerSpecification[] {
   return layers.map((layer) => {
     if (layer.type !== "fill-extrusion") return layer;
-    const flattened: maplibregl.FillLayerSpecification = {
+    const flattened: FillLayerSpecification = {
       id: layer.id,
       type: "fill",
       source: layer.source,
@@ -149,9 +150,7 @@ export function flattenBuildings(
  * `["all", ...]`-combined with an expression one. If upstream ever gives this
  * layer a filter, it has taken its own view of which features it draws.
  */
-export function filterPointsFromParkOutlines(
-  layers: maplibregl.LayerSpecification[],
-): maplibregl.LayerSpecification[] {
+export function filterPointsFromParkOutlines(layers: LayerSpecification[]): LayerSpecification[] {
   return layers.map((layer) => {
     if (layer.type !== "line" || layer["source-layer"] !== "park") return layer;
     if (layer.filter !== undefined) return layer;
@@ -168,9 +167,7 @@ export function filterPointsFromParkOutlines(
  * left alone - the test is what the layer reads, not what it is called, since
  * `highway-name-major` draws a name and `highway-shield-non-us` does not.
  */
-export function latinizeLabels(
-  layers: maplibregl.LayerSpecification[],
-): maplibregl.LayerSpecification[] {
+export function latinizeLabels(layers: LayerSpecification[]): LayerSpecification[] {
   return layers.map((layer) => {
     if (layer.type !== "symbol") return layer;
     const textField = layer.layout?.["text-field"];
@@ -193,7 +190,7 @@ export function latinizeLabels(
  */
 export function createBasemapFadeLayer(
   theme: ResolvedTheme = "light",
-): maplibregl.BackgroundLayerSpecification {
+): BackgroundLayerSpecification {
   const dark = theme === "dark";
   return {
     id: "basemap_fade",
@@ -207,36 +204,23 @@ export function createBasemapFadeLayer(
   };
 }
 
-/**
- * Stands a blank image in for basemap icons the sprite does not carry.
- *
- * `dropPoiLayers` removes the layers that produced this in bulk (`bollard`,
- * `atm`, `athletics` and every other OSM POI class absent from the sprite's 264
- * names). This stays as the backstop for the ones left: the route shields build
- * their icon name from tag values too (`concat(network, "_", ref_length)`), so an
- * unusual network still asks for a name upstream may not ship.
- *
- * A 1x1 transparent pixel is exactly what the map already looked like - MapLibre
- * draws the label and skips the icon when it cannot resolve one - so this changes
- * nothing but the console. MapLibre caches the image under the name it asked for,
- * so each missing name resolves once.
- */
-export function resolveMissingBasemapIcons(map: maplibregl.Map): void {
-  map.setMissingStyleImageResolver((id) => {
-    if (map.hasImage(id)) return;
-    map.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) });
-  });
-}
-
 async function fetchBasemapStyle(theme: ResolvedTheme): Promise<BasemapStyle> {
   const url = BASEMAP_STYLE_URLS[theme];
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(STYLE_FETCH_TIMEOUT_MS),
-  });
+  // `AbortSignal.timeout` would say this in one line, but React Native does not
+  // carry that static - and a fetch with no ceiling is exactly the case the raster
+  // fallback exists for (a phone with a signal too weak to finish the request).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STYLE_FETCH_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) {
     throw new Error(`${url} responded ${response.status}`);
   }
-  const style = (await response.json()) as maplibregl.StyleSpecification;
+  const style = (await response.json()) as StyleSpecification;
   if (!style.sources || !style.layers) {
     throw new Error(`${url} returned no sources or layers`);
   }
@@ -274,9 +258,7 @@ export function loadBasemapStyle(theme: ResolvedTheme = "light"): Promise<Basema
   return pending;
 }
 
-export function createOSMBackgroundLayer(
-  theme: ResolvedTheme = "light",
-): maplibregl.RasterLayerSpecification {
+export function createOSMBackgroundLayer(theme: ResolvedTheme = "light"): RasterLayerSpecification {
   const dark = theme === "dark";
   return {
     id: "background",
@@ -307,12 +289,12 @@ export function createOSMBackgroundLayer(
  */
 export function createOSMBackgroundGroundLayer(
   theme: ResolvedTheme,
-): maplibregl.BackgroundLayerSpecification | null {
+): BackgroundLayerSpecification | null {
   if (theme !== "dark") return null;
   return { id: "background_ground", type: "background", paint: { "background-color": "#05070a" } };
 }
 
-export function createOSMBackgroundSource(): maplibregl.RasterSourceSpecification {
+export function createOSMBackgroundSource(): RasterSourceSpecification {
   return {
     type: "raster",
     tiles: [OSM_TILES_URL],

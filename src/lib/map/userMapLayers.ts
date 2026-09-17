@@ -1,5 +1,5 @@
-import type * as maplibregl from "maplibre-gl";
-import type { ResolvedTheme } from "@/lib/theme";
+import type { FilterSpecification, LayerSpecification } from "@maplibre/maplibre-gl-style-spec";
+import type { ResolvedTheme } from "../theme/types";
 import {
   createPublicNotesLayer,
   createRailwayRoutesClickLayer,
@@ -10,7 +10,7 @@ import {
   createStationLabelsLayer,
   createStationsLayer,
   type RailwayRoutesPaintConfig,
-} from "./index";
+} from "./layers";
 import {
   getUserRouteClickBufferWidthExpression,
   getUserRouteColorExpression,
@@ -69,14 +69,51 @@ export const userClickBufferLayerConfig: RailwayRoutesPaintConfig = {
 };
 
 /**
+ * What the three layer toggles do to the filters, as expressions.
+ *
+ * Which usage types the two clients draw is one decision with two very different
+ * implementations — the web app calls `setFilter` on a live map (`useLayerFilters`),
+ * the native app passes a `filter` prop to a `<Layer>` — so the *filters* live here
+ * rather than in either of them. Visibility is not: "hidden" is a layout property on
+ * the web and an absent child on native, and there is nothing to share in that.
+ */
+
+/**
+ * The scenic outline mirrors whatever the solid line is currently drawing, which is
+ * Regular plus Heritage-when-shown. Never Special: a dashed route with an amber
+ * casing under it reads as a solid amber line.
+ */
+export function scenicOutlineFilter(showHeritage: boolean): FilterSpecification {
+  return showHeritage
+    ? ["all", ["==", ["get", "scenic"], true], ["!=", ["get", "usage_type"], 2]]
+    : ["all", ["==", ["get", "scenic"], true], ["==", ["get", "usage_type"], 0]];
+}
+
+/**
+ * Every currently-visible usage type stays clickable. Returns null — no filter at
+ * all — once all three are shown, so the common case costs no per-feature test.
+ *
+ * Web-only in effect: the native app has no click-buffer layer, because a press
+ * arrives through the source's own 44×44pt hitbox instead.
+ */
+export function clickBufferFilter(
+  showHeritage: boolean,
+  showSpecial: boolean,
+): FilterSpecification | null {
+  const clickable = [0]; // Regular always
+  if (showHeritage) clickable.push(1);
+  if (showSpecial) clickable.push(2);
+  if (clickable.length === 3) return null;
+  return ["match", ["get", "usage_type"], clickable, true, false] as FilterSpecification;
+}
+
+/**
  * The full layer stack of the user map, bottom to top. The click-buffer layer is
  * included on the read-only map too: it carries the hover popups (routes are
  * thin, and hovering the visible line alone is finicky), and nothing but the
  * absence of a click handler makes that map read-only.
  */
-export function createUserMapLayers(
-  theme: ResolvedTheme = "light",
-): maplibregl.LayerSpecification[] {
+export function createUserMapLayers(theme: ResolvedTheme = "light"): LayerSpecification[] {
   return [
     createScenicRoutesOutlineLayer(userScenicLayerConfig),
     createRailwayRoutesLayer(userRouteLayerConfig),

@@ -1,7 +1,7 @@
 /**
- * What the web app keeps behind its hamburger: the region, the colour scheme, who is
- * signed in, and the way out. The layer switches and the articles follow with the map
- * and the features they belong to.
+ * What the web app keeps behind its hamburger: the region, the colour scheme, the map
+ * layer switches, who is signed in, and the way out. The articles follow with the
+ * features they belong to.
  */
 
 import { REGIONS, type RegionId } from "@shared/regions";
@@ -9,6 +9,7 @@ import { type ReactNode, useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useAuth } from "@/auth/AuthContext";
 import { API_ORIGIN } from "@/config";
+import { LayerToggles } from "@/map/LayerToggles";
 import { useRegion } from "@/region/RegionContext";
 import { type ThemePreference, useTheme } from "@/theme/ThemeContext";
 import { Button } from "@/ui/Button";
@@ -51,6 +52,10 @@ export default function SettingsScreen(): ReactNode {
             value={regionId}
             onChange={setRegion}
           />
+        </Section>
+
+        <Section title="Map layers" hint="Which lines the map draws beyond the regular network.">
+          <LayerToggles />
         </Section>
 
         <Section title="Appearance">

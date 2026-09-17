@@ -8,6 +8,9 @@
       ],
       "@shared/*": [
         "../src/lib/*"
+      ],
+      "@maplibre/maplibre-gl-style-spec": [
+        "./node_modules/@maplibre/maplibre-gl-style-spec"
       ]
     }
   },

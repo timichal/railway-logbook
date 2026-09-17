@@ -17,15 +17,16 @@ is a distinct app in the two stores.
 phase moves, edit the phase's own section rather than appending a note elsewhere,
 and add a line to the Session log at the bottom.
 
-| | |
-| --- | --- |
-| **Branch** | `mobile-app` — all of this work lives here, not on `main` |
-| **Phase 0** | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware |
-| **Phase 1** | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md` |
-| **Phase 2** | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android |
-| **Current phase** | **Phase 3 — the map.** Not started |
-| **Blocked on** | nothing |
-| **Next** | Add `@maplibre/maplibre-react-native` (11.3.7) and port `style.ts` + `userMapLayers.ts` first — Phase 0 proved both. Adding it is a native dependency, so it needs a fresh `expo run:ios`, not just a reload |
+|                   |                                                                                                                                                                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**        | `mobile-app` — all of this work lives here, not on `main`                                                                                                                                                                                                                   |
+| **Phase 0**       | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware                                                                                                                                                                     |
+| **Phase 1**       | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md`                                                                                                                                                        |
+| **Phase 2**       | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android                                                                                                                                   |
+| **Phase 3**       | **Mostly done** (2026-08-27). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. The two **overlays** are deliberately left — they are driven by Phase 4 state                                           |
+| **Current phase** | **Phase 4 — features**, with Phase 3's two overlays folded into it                                                                                                                                                                                                          |
+| **Blocked on**    | nothing                                                                                                                                                                                                                                                                     |
+| **Next**          | Phase 4's own list (route logger, journeys and trips, planner, country stats, station search), and then the highlight and coverage overlays on top of the state it creates. The coverage overlay needs one new endpoint — Phase 1 built nothing shaped like `GET /coverage` |
 
 The spike that answered Phase 0 has been **deleted** — it was throwaway by design
 and everything it taught is written down below. What it proved, in one line: the
@@ -43,16 +44,16 @@ made**, so treat them as facts rather than as notes.
 
 ### The answers
 
-| Question | Answer |
-| --- | --- |
-| Route tiles over HTTPS against the native SDK | **Yes.** No `onDidFailLoadingMap`. The z4 Europe tile — 789 KB of protobuf, ~5000 routes — fetches, parses and draws |
-| Does it look like the web app? | **Yes.** Same colours, same relative line weights. Visit-status colouring via `?user_id=1` arrives correctly |
-| Station labels: bold Noto or a substituted system font? | **Bold Noto.** The glyph path works |
-| Japan: Latin script or kanji? | **Latin** — the `latinizeLabels` port does it. Native does *not* do this for free (see below) |
-| Heritage as round dots, Special as dashes? | **Both render.** The zero-length `[0, 3]` dash plus a round cap gives dots on native as in GL JS. They read a little alike — a Phase 3 styling question, not a rendering one |
-| Does the per-user tile join slow the first paint? | **No, effectively instant** — including `user_fully_ridden_routes`, the expensive half of the query |
-| Frame rate, Europe z4, panning | **Smooth subjectively** — "not exactly 60, but fine" — at full zoom-out with the whole route stack on. Never captured as a *number*: the spike's meter was counting the wrong frames (see below) and the project moved on |
-| Android | **Works** on an arm64 emulator, API 34+ — tiles load, expressions parse, the map renders. Its fps is meaningless (it renders on the Mac's GPU and is slow at everything) |
+| Question                                                | Answer                                                                                                                                                                                                                    |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Route tiles over HTTPS against the native SDK           | **Yes.** No `onDidFailLoadingMap`. The z4 Europe tile — 789 KB of protobuf, ~5000 routes — fetches, parses and draws                                                                                                      |
+| Does it look like the web app?                          | **Yes.** Same colours, same relative line weights. Visit-status colouring via `?user_id=1` arrives correctly                                                                                                              |
+| Station labels: bold Noto or a substituted system font? | **Bold Noto.** The glyph path works                                                                                                                                                                                       |
+| Japan: Latin script or kanji?                           | **Latin** — the `latinizeLabels` port does it. Native does *not* do this for free (see below)                                                                                                                             |
+| Heritage as round dots, Special as dashes?              | **Both render.** The zero-length `[0, 3]` dash plus a round cap gives dots on native as in GL JS. They read a little alike — a Phase 3 styling question, not a rendering one                                              |
+| Does the per-user tile join slow the first paint?       | **No, effectively instant** — including `user_fully_ridden_routes`, the expensive half of the query                                                                                                                       |
+| Frame rate, Europe z4, panning                          | **Smooth subjectively** — "not exactly 60, but fine" — at full zoom-out with the whole route stack on. Never captured as a *number*: the spike's meter was counting the wrong frames (see below) and the project moved on |
+| Android                                                 | **Works** on an arm64 emulator, API 34+ — tiles load, expressions parse, the map renders. Its fps is meaningless (it renders on the Mac's GPU and is slow at everything)                                                  |
 
 Both regions behave, so **shipping Europe and Japan both is confirmed nearly
 free** — that was an open decision and it is now closed.
@@ -78,8 +79,13 @@ free** — that was an open decision and it is now closed.
   `beforeId`/`afterId`/`layerIndex` — so the web app's `moveLayer` ordering has a
   declarative equivalent). The binding depends on
   `@maplibre/maplibre-gl-style-spec`, the same package `maplibre-gl`'s types come
-  from, so ported expressions typecheck against the **identical**
-  `ExpressionSpecification`. The port can be properly typed, not loosely.
+  from, so the port can be properly typed rather than loosely. **But not
+  automatically the identical `ExpressionSpecification`**, as this said before
+  Phase 3 tried it: the two apps resolve two different *copies* of that package
+  (26.4.0 via `maplibre-gl`, 24.8.5 pinned by the binding), and the recursive
+  expression type from one copy is not assignable to the same type from the other.
+  A `paths` entry in `mobile/tsconfig.json` pins the native program to one copy —
+  see Phase 3.
 - **But typechecking is not running.** The binding throws `std::bad_alloc`
   converting some spec-valid expressions to native style values — see below. No JS
   error, no crash report, nothing `tsc` can catch. **An expression that typechecks
@@ -114,11 +120,11 @@ start zoom with few features on screen died just as fast.
 Bisecting isolated the trigger to **an `["all", ...]` condition inside a `case`
 that has more than one branch**:
 
-| Shape | Result |
-| --- | --- |
-| `all` condition, one branch | works |
-| simple conditions, two branches | works |
-| `match`, three branches | works |
+| Shape                                 | Result               |
+| ------------------------------------- | -------------------- |
+| `all` condition, one branch           | works                |
+| simple conditions, two branches       | works                |
+| `match`, three branches               | works                |
 | **`all` condition + a second branch** | **`std::bad_alloc`** |
 
 `all` in a *filter* is fine — the scenic layer nests `REGULAR_ONLY_FILTER` inside
@@ -312,7 +318,11 @@ by default — iOS App Transport Security, Android since 9 — so HTTPS is requi
 and you already have it. **Proven end to end in Phase 0.**
 
 One change: `getTileBaseUrl()` derives the host from `window.location`. In RN
-there is no `window`; this becomes a build-time config constant per environment.
+there is no `window.location`; this becomes a build-time config constant per
+environment. **Done in Phase 3**, and the shape it took matters: the source
+factories moved into `map/tileSources.ts` and take the host as an argument, so
+`map/index.ts` binds the web app's and `mobile/src/map/tileUrls.ts` binds the
+app's, with one copy of the URL templates between them.
 
 ---
 
@@ -426,16 +436,16 @@ filter, the region's own list where it does not).
 
 #### The shape of it
 
-| | |
-| --- | --- |
-| `src/config.ts` | `API_BASE_URL` and `TILE_BASE_URL`, both derived from one origin. Defaults to **production over HTTPS**, overridable at bundle time with `EXPO_PUBLIC_API_ORIGIN`. This is what replaces `getTileBaseUrl()`'s `window.location` |
-| `src/auth/tokenStore.ts` | the pair in `expo-secure-store`, cached in memory so the keychain is off the request path |
-| `src/api/client.ts` | bearer header, error mapping, and the refresh dance |
-| `src/auth/AuthContext.tsx` | `loading` / `signedOut` / `signedIn`, settled at cold start by `GET /auth/me` |
-| `src/region/RegionContext.tsx` | the region in `AsyncStorage`, hydrated before the first render |
-| `src/theme/ThemeContext.tsx` | Light/System/Dark via NativeWind's `colorScheme` plus `expo-system-ui` |
-| `src/ui/` | `Button`, `TextField`, `SegmentedControl`, `Screen` — a class per *role*, as `buttonStyles.ts` is on the web |
-| `app/` | `index` (the fallback route), `(auth)/login`, `(auth)/register`, `(tabs)/map`, `(tabs)/logbook`, `(tabs)/settings` |
+|                                |                                                                                                                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/config.ts`                | `API_BASE_URL` and `TILE_BASE_URL`, both derived from one origin. Defaults to **production over HTTPS**, overridable at bundle time with `EXPO_PUBLIC_API_ORIGIN`. This is what replaces `getTileBaseUrl()`'s `window.location` |
+| `src/auth/tokenStore.ts`       | the pair in `expo-secure-store`, cached in memory so the keychain is off the request path                                                                                                                                       |
+| `src/api/client.ts`            | bearer header, error mapping, and the refresh dance                                                                                                                                                                             |
+| `src/auth/AuthContext.tsx`     | `loading` / `signedOut` / `signedIn`, settled at cold start by `GET /auth/me`                                                                                                                                                   |
+| `src/region/RegionContext.tsx` | the region in `AsyncStorage`, hydrated before the first render                                                                                                                                                                  |
+| `src/theme/ThemeContext.tsx`   | Light/System/Dark via NativeWind's `colorScheme` plus `expo-system-ui`                                                                                                                                                          |
+| `src/ui/`                      | `Button`, `TextField`, `SegmentedControl`, `Screen` — a class per *role*, as `buttonStyles.ts` is on the web                                                                                                                    |
+| `app/`                         | `index` (the fallback route), `(auth)/login`, `(auth)/register`, `(tabs)/map`, `(tabs)/logbook`, `(tabs)/settings`                                                                                                              |
 
 Three decisions worth not re-deriving:
 
@@ -531,16 +541,175 @@ watch, and an edit then silently serves the old bundle — which cost a confusin
 round here), and on a physical iPhone the phone must be on the same Wi-Fi as the
 Mac, per "Getting the tooling to run".
 
-### Phase 3 — The map (2–3 weeks)
+### Phase 3 — The map — **mostly done**
 
-The big one. Basemap plus every railway layer, the visit-status colouring, the
-country and usage-type filters, station dots and labels, tap-to-inspect, the
-highlight overlays, the ridden-stretch coverage overlay. Port `style.ts` and
-`userMapLayers.ts` first — having the styling constants already correct is what
-makes this three weeks instead of five, and Phase 0 proved they are.
+The map is on screen: the basemap with all five of its transforms, the whole
+railway layer stack, visit-status colouring, the country and usage-type filters,
+station dots and labels, tap-to-inspect, and the region's numbers over one
+corner. What is left is the two **overlays** — see "Still open" below — and they
+are left deliberately, because both are driven by state that arrives with Phase
+4.
 
-Two things Phase 0 hands you working: the colour expression's shape, and the
-knowledge that the camera moves by stop rather than by `initialViewState`.
+#### The shared modules — the part that took the thinking
+
+Phase 2 chose to import the web app's `src/lib` rather than copy it, so that
+`style.ts` would stay one source of truth. Phase 3 is where that promise was
+paid, and it needed a refactor **on the web side** before any of it could be
+imported. Three things blocked it, and the fixes are now invariants (they are
+written up under "`mobile/` is a second app" in `CLAUDE.md`):
+
+- **The tile host.** `map/index.ts` computed it from `window.location` at module
+  load, which in React Native is a `window` with no `location` — so importing
+  that module at all was fatal, not merely wrong. The source factories moved to
+  `map/tileSources.ts` and **take the host as their first argument**; `index.ts`
+  re-exports them with the web's host bound in, so not one web call site
+  changed. The alternative — writing the URL templates twice — would have
+  duplicated the `selected_countries` JSON encoding, which is exactly the kind of
+  contract that drifts silently.
+- **`maplibre-gl` types.** Every shared module now imports its spec types from
+  `@maplibre/maplibre-gl-style-spec` (a types-only dependency of the web app, the
+  binding's runtime dependency), because a layer specification and a `<Layer>`'s
+  props are then literally the same type and a spec spreads into a component.
+- **The `@/*` alias.** It means `src/*` in one app and `mobile/src/*` in the
+  other, so a shared module may use **relative imports only**. This is what moved
+  `resolveMissingBasemapIcons` out of `basemap.ts` (`missingIcons.ts`, web-only:
+  it is the one piece there that needs a live `maplibregl.Map`) and what points
+  the theme imports at `theme/types.ts` rather than the `"use client"` barrel.
+
+Two pieces of logic were *lifted into* the shared set on the way, rather than
+reimplemented on the native side: `scenicOutlineFilter` / `clickBufferFilter` in
+`userMapLayers.ts` (what the layer toggles do to the filters — one decision, two
+mechanisms) and `map/routeFeature.ts` (`routeTitle`, `routeBadges`,
+`parseFrequencyTags` — what a route feature *says*, so the popup and the sheet
+render the same decisions rather than agreeing by coincidence). Both mean the web
+app changed too; `npm run lint` and `npx tsc --noEmit` at the root are what stands
+behind that.
+
+#### The native side
+
+`mobile/src/map/` is nine files, and none of them re-states a colour, a width, a
+dash pattern or a zoom range.
+
+|                         |                                                                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RailwayMap.tsx`        | the map. `<Map>`, `<Camera>`, three `<VectorSource>`s, and the shared layer specs spread into `<Layer>`                                         |
+| `useBasemapStyle.ts`    | `loadBasemapStyle` for the resolved scheme, plus `version: 8`, the glyph endpoint and the fade layer; the raster fallback when it resolves null |
+| `tileUrls.ts`           | the shared URL templates with this build's host bound in — the native half of what `index.ts` does for the web                                  |
+| `LayerPrefsContext.tsx` | the three toggles in `AsyncStorage`, held above the map because the switches live in Settings                                                   |
+| `LayerToggles.tsx`      | those switches, with the region rules (Japan renames Special, offers no scenic outline)                                                         |
+| `mapPosition.ts`        | one saved camera position per region                                                                                                            |
+| `mapFeatures.ts`        | what a press hit, read defensively off an MVT feature. `safeUrl` is `safeHref` minus the HTML escaping                                          |
+| `FeatureSheet.tsx`      | the route / station / note body as a bottom sheet                                                                                               |
+| `MapProgressBox.tsx`    | the percentage pill that expands to the numbers                                                                                                 |
+
+**Layers are children, not a baked style.** `mapStyle` carries the basemap and
+nothing of ours; our sources and layers are JSX, so a layer toggle is a
+re-render rather than a style rebuild — and children are appended above whatever
+the style already had, which is the same order `useMapLibre` assembles by hand.
+The fade layer is the exception and stays in the style, as the last of the
+basemap's own layers and therefore under every child.
+
+**A toggle is a mounted child, not a `visibility` property.** The three optional
+layers come out of the shared factories with `visibility: "none"`, because that
+is the state the web app's imperative toggles expect; here the layer is simply not
+rendered when it is off, and `shown()` undoes that default when it is on.
+
+**The click-buffer layer has no counterpart, and needs none.** A press arrives
+through each `<VectorSource>`'s own `onPress` with a 44×44pt hitbox, and the
+topmost layer within it wins — which is the note-beats-station-beats-route
+precedence the web app hand-codes with `queryRenderedFeatures`, for free. The
+whole touch-sheet apparatus (`sheetTookThisClick`, the grace window, the anchor
+arithmetic) ported to nothing, as predicted: it exists to stop a browser's
+synthesized mouse events from fighting a tap, and there are none here. A source
+handler calls `stopPropagation()` so the press that opens the sheet is not also
+the map press that dismisses it.
+
+**The camera is where Phase 0's warning earned its keep.** `initialViewState` is
+applied once from the map's first layout and cannot be revisited, so the saved
+position is read *before* the map mounts (the map renders a spinner until both it
+and the basemap style are in hand) and a region switch moves the camera with
+`cameraRef.setStop({ duration: 0 })`. `maxBounds` is a `<Camera>` prop and changes
+with the region — flat `[w, s, e, n]`, where `region.bounds` is nested.
+
+#### New traps, all found by typechecking or building rather than by running
+
+- **Two copies of `@maplibre/maplibre-gl-style-spec` do not typecheck against
+  each other.** The web app resolves 26.4.0 (via `maplibre-gl`), the binding pins
+  24.8.5, and a shared module compiled into the native program picks up the web
+  app's copy by ordinary node resolution — at which point
+  `ExpressionSpecification` from one copy is not assignable to
+  `ExpressionSpecification` from the other. The error is a wall of "not
+  assignable to itself" on a recursive type and says nothing about versions. Fixed
+  with a `paths` entry in `mobile/tsconfig.json` mapping the specifier to
+  `mobile/node_modules`, so the native program sees exactly one copy — and the one
+  the binding actually validates against.
+- **`AbortSignal.timeout` is not in React Native.** `fetchBasemapStyle` used it
+  for its 6s ceiling; it is now an `AbortController` and a `setTimeout`, which is
+  also the shape that works on the web. A fetch with no ceiling is precisely the
+  case the raster fallback exists for.
+- **React Native's `URLSearchParams` is a partial polyfill**, so `tileSources.ts`
+  builds its query strings by hand. Same output for our three parameters
+  (`encodeURIComponent` and `URLSearchParams` differ only on spaces, which a
+  country code and a JSON array of them do not contain).
+- **`unset CI` is not the same as `CI=`.** Expo's CLI reads `CI` through
+  `getenv.boolish`, which throws `GetEnv.NoBoolean: is not a boolean` on an
+  *empty* value — so exporting `CI=` to defeat the Phase 2 trap breaks the CLI
+  outright. Unset it.
+- **`Map` shadows the global of that name**, which Biome objects to; it is
+  imported as `MapLibreMap`. The component really is called `Map` in v11.
+- A `<Layer>` inside a `<VectorSource>` has its `source` prop injected by the
+  parent (`cloneReactChildrenWithProps`), so a spec's own `source` and the
+  source's `id` agreeing is belt and braces rather than load-bearing.
+
+#### What is verified, and what is not
+
+- **Web and mobile both clean** under `tsc` and Biome, at the repo root and in
+  `mobile/`. The whole web app is the regression test for the shared-module
+  refactor, and nothing in it changed behaviour.
+- **The iOS bundle proves `@shared` resolves into `../src/lib`** — a grep of the
+  Hermes bundle finds `railway_routes_scenic_outline`, `basemap_fade`, the liberty
+  style URL, carto's `#4957ad` and "Noto Sans Bold", none of which exist anywhere in
+  `mobile/`.
+- **The composed style validates against MapLibre's own validator**
+  (`validateStyleMin` from the style-spec package, run over the three sources and
+  seven layers in all four theme × heritage combinations). That checks every
+  expression in them, which is worth more here than it sounds: the spec validator is
+  what would catch a paint property or an expression shape that `tsc` accepts as a
+  tuple but MapLibre does not accept as a value.
+- **The app builds and launches on the simulator** with MapLibre linked (SPM, via the
+  config plugin) — which is the class of failure a fresh native dependency causes,
+  and it does not happen.
+- **The map itself has not been seen.** The simulator's keychain has no session, and
+  the map tab lives behind `Stack.Protected`; signing in needs credentials. So the
+  one thing Phase 0 warns cannot be typechecked — a spec-valid expression that kills
+  the process at native style conversion — rests on Phase 0 having proved these exact
+  expressions on a device, plus the validator above. **Sign in on the simulator and
+  look at it before building anything on top of this.** Watch for: the fade layer
+  landing under our lines rather than over them, the region switch actually moving the
+  camera, whether a `tiles` URL change reloads the source (a region switch changes the
+  country filter), and whether a press event carries the feature id — `track_id` is
+  the MVT feature id and `ST_AsMVT` removes it from the properties, so there is
+  nothing to fall back on if it does not.
+
+#### Still open in Phase 3
+
+Both are overlays, and both are held by state that does not exist until Phase 4 —
+there is nothing to highlight before there is a selection, and no ridden stretch
+to draw before there is a journey. Doing them now would mean inventing the state
+twice.
+
+- **The highlight overlays** (`useRouteHighlighting`): the gold planner result and
+  the orange logger selection, plus the per-set `<baseId>_partial` GeoJSON layer
+  for a route covered only in part. On native these are a `filter` prop on an
+  overlay `<Layer>` and a `<GeoJSONSource>`, so `moveLayer` becomes `beforeId`.
+- **The ridden-stretch coverage overlay** (`useCoverageOverlay`): needs a
+  `GET /coverage`-shaped endpoint, which Phase 1 did not build because nothing
+  asked for it then.
+
+Two smaller gaps, neither blocking: the **station search** box (the web map's own,
+`useStationSearch`) and **"where am I"** — the binding has `<UserLocation>` and
+`trackUserLocation` on the camera, and it wants a location-permission string in
+`app.json` for both stores anyway.
 
 ### Phase 4 — Features (1.5–2 weeks)
 
@@ -589,13 +758,13 @@ and costs nothing.
 
 ### Per platform
 
-| | iOS | Android |
-| --- | --- | --- |
-| Developer account | Apple Developer Program, **$99/year** (Phase 6 only) | Google Play, **$25 one-time** |
-| Build | locally on the Mac with Xcode; EAS Build as fallback | locally with Android Studio; EAS Build as fallback |
-| Testing | iPhone available ✓ | **no device yet** — emulator only, so fps unmeasurable |
-| Review | slower, stricter; expect a rejection round | faster, laxer |
-| Store paperwork | screenshots at several sizes, privacy manifest, privacy policy URL | data safety form, target-API-level requirements |
+|                   | iOS                                                                | Android                                                |
+| ----------------- | ------------------------------------------------------------------ | ------------------------------------------------------ |
+| Developer account | Apple Developer Program, **$99/year** (Phase 6 only)               | Google Play, **$25 one-time**                          |
+| Build             | locally on the Mac with Xcode; EAS Build as fallback               | locally with Android Studio; EAS Build as fallback     |
+| Testing           | iPhone available ✓                                                 | **no device yet** — emulator only, so fps unmeasurable |
+| Review            | slower, stricter; expect a rejection round                         | faster, laxer                                          |
+| Store paperwork   | screenshots at several sizes, privacy manifest, privacy policy URL | data safety form, target-API-level requirements        |
 
 Both stores need a privacy policy URL and an account-deletion path if the app has
 accounts — which this one does.
@@ -673,3 +842,26 @@ pick up. Keep it short — the phase sections carry the detail.
   (`className` on expo-router's `Link` is accepted and ignored) and confirmed the
   cold-start routing and dark mode; signing in against production then confirmed
   the authenticated half by hand. **Next: Phase 3**, the map.
+- **2026-08-27 — Phase 3, the map.** Added
+  `@maplibre/maplibre-react-native` 11.3.7 and its config plugin, and built the map
+  out of the web app's own layer specs rather than a port of them — which took a
+  **web-side refactor first**, because three things made `src/lib/map` unimportable
+  from React Native: a tile host read off `window.location` at module load (source
+  factories now take the host, `index.ts` binds the web's), `maplibre-gl` types (now
+  `@maplibre/maplibre-gl-style-spec`, so a layer spec and a `<Layer>`'s props are one
+  type), and the `@/*` alias (relative imports only in shared modules; this is what
+  moved `resolveMissingBasemapIcons` into `missingIcons.ts`). Lifted two more pieces
+  into the shared set on the way: the toggle filters (`scenicOutlineFilter`,
+  `clickBufferFilter`) and `map/routeFeature.ts`, so the web popup and the native
+  sheet render the same badges rather than two implementations of them. On the native
+  side: basemap with all five transforms, the whole route stack, stations and labels,
+  public notes, visit colours, the country filter, region-scoped camera with a saved
+  position per region, layer toggles in Settings, a tap-to-inspect sheet, and the
+  progress pill. Four new traps, the sharp one being that **two copies of the
+  style-spec package do not typecheck against each other** (a `paths` entry pins the
+  native program to the binding's own copy) — the Phase 0 note claiming otherwise has
+  been corrected in place. Web and mobile both clean under `tsc` and Biome, and the
+  iOS bundle proves `@shared` really resolves into `../src/lib`. **Left deliberately:
+  the highlight and coverage overlays**, both driven by selection and journey state
+  that arrives with Phase 4 — inventing that state twice was the alternative.
+  **Next: Phase 4**, and those two overlays on top of it.

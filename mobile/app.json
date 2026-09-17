@@ -27,6 +27,7 @@
     },
     "plugins": [
       "expo-router",
+      "@maplibre/maplibre-react-native",
       "expo-secure-store",
       [
         "expo-splash-screen",
@@ -35,7 +36,9 @@
           "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
-          "dark": { "backgroundColor": "#0b0f14" }
+          "dark": {
+            "backgroundColor": "#0b0f14"
+          }
         }
       ]
     ]

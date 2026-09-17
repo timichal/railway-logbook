@@ -18,6 +18,7 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
+import { LayerPrefsProvider } from "@/map/LayerPrefsContext";
 import { RegionProvider } from "@/region/RegionContext";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
 
@@ -56,7 +57,9 @@ export default function RootLayout(): ReactNode {
         <ThemeProvider>
           <AuthProvider>
             <RegionProvider>
-              <RootNavigator />
+              <LayerPrefsProvider>
+                <RootNavigator />
+              </LayerPrefsProvider>
             </RegionProvider>
           </AuthProvider>
         </ThemeProvider>

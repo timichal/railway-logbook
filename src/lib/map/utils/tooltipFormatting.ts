@@ -1,10 +1,10 @@
 import {
-  getLineClassLabel,
-  getUsageBadgeColors,
-  type LineClass,
-  type UsageType,
-} from "@/lib/constants";
-import { REGIONS, type RegionId, regionUsageLabel } from "@/lib/regions";
+  type RouteFeatureProperties,
+  type RouteTitleProperties,
+  routeBadges,
+  routeTitle,
+} from "@/lib/map/routeFeature";
+import type { RegionId } from "@/lib/regions";
 
 /**
  * Escape a value for interpolation into popup HTML (MapLibre popups are built as
@@ -76,73 +76,37 @@ export function formatRouteTitle(
   properties: { [key: string]: unknown },
   regionId: RegionId,
 ): string {
-  const endpoints = `${escapeHtml(properties.from_station)} ⟷ ${escapeHtml(properties.to_station)}`;
-  const name = REGIONS[regionId].hasRouteNames ? properties.name : null;
+  const { name, endpoints } = routeTitle(properties as RouteTitleProperties, regionId);
+  const escapedEndpoints = escapeHtml(endpoints);
 
   // Margins are set inline on both branches: `.railway-popup h3` in globals.css
   // would otherwise space the user map's heading differently from the admin's.
-  if (typeof name !== "string" || !name.trim()) {
-    return `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0 0 6px; color: var(--color-fg);">${endpoints}</h3>`;
+  if (name === null) {
+    return `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0 0 6px; color: var(--color-fg);">${escapedEndpoints}</h3>`;
   }
 
   return (
     `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0; color: var(--color-fg);">${escapeHtml(name)}</h3>` +
-    `<div style="margin: 0 0 6px; color: var(--color-fg);">${endpoints}</div>`
+    `<div style="margin: 0 0 6px; color: var(--color-fg);">${escapedEndpoints}</div>`
   );
 }
 
 /**
  * Format route metadata as color-coded badges for tooltips, as one wrapping row.
+ *
+ * Which badges and which colours is `routeBadges`' decision — shared with the
+ * native app, which draws the same list as views. All that is left here is the
+ * markup.
  */
 export function formatRouteMetadataBadges(
-  properties: {
-    usage_type: UsageType;
-    scenic?: boolean;
-    line_class?: LineClass;
-    frequency?: string;
-  },
+  properties: RouteFeatureProperties,
   /** Usage types are labelled per region — Japan calls them JR / non-JR lines. */
   regionId: RegionId,
 ): string {
-  const badges: string[] = [];
-
-  // Line class badge
-  if (properties.line_class && properties.line_class !== "branch") {
-    const lineClassLabel = getLineClassLabel(properties.line_class);
-    const isHighspeed = properties.line_class === "highspeed";
-    const lcColor = isHighspeed ? "#ffffff" : "#1e40af";
-    const lcBgColor = isHighspeed ? "#ef4444" : "#bfdbfe";
-    badges.push(
-      `<span style="${BADGE_STYLE} background-color: ${lcBgColor}; color: ${lcColor};">${lineClassLabel}</span>`,
-    );
-  }
-
-  // Usage type badge (Regular=blue, Heritage=purple, Special=teal)
-  const usageLabel = regionUsageLabel(regionId, properties.usage_type);
-  const { color: usageColor, bgColor: usageBgColor } = getUsageBadgeColors(properties.usage_type);
-  badges.push(
-    `<span style="${BADGE_STYLE} background-color: ${usageBgColor}; color: ${usageColor};">${usageLabel}</span>`,
+  const badges = routeBadges(properties, regionId).map(
+    ({ label, color, bgColor }) =>
+      `<span style="${BADGE_STYLE} background-color: ${bgColor}; color: ${color};">${escapeHtml(label)}</span>`,
   );
-
-  // Scenic badge
-  if (properties.scenic) {
-    badges.push(
-      `<span style="${BADGE_STYLE} background-color: #fbbf24; color: #78350f;">Scenic</span>`,
-    );
-  }
-
-  // Frequency badges
-  if (properties.frequency && properties.frequency !== "{}") {
-    const frequencies = properties.frequency
-      .slice(1, -1)
-      .split(",")
-      .map((f: string) => f.trim().replaceAll('"', ""));
-    for (const freq of frequencies) {
-      badges.push(
-        `<span style="${BADGE_STYLE} background-color: #dcfce7; color: #166534;">${escapeHtml(freq)}</span>`,
-      );
-    }
-  }
 
   return `<div style="${BADGE_ROW_STYLE}">${badges.join("")}</div>`;
 }

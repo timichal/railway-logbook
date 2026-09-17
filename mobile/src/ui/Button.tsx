@@ -10,11 +10,13 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text } from "react-native";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
+export type ButtonVariant = "primary" | "secondary" | "outline" | "danger" | "ghost";
 
 const CONTAINER: Record<ButtonVariant, string> = {
   primary: "bg-blue-600 active:bg-blue-700",
   secondary: "bg-gray-200 active:bg-gray-300 dark:bg-gray-700 dark:active:bg-gray-600",
+  outline:
+    "border border-gray-300 bg-transparent active:bg-gray-100 dark:border-gray-600 dark:active:bg-gray-800",
   danger: "bg-red-600 active:bg-red-700",
   ghost: "bg-transparent active:bg-gray-100 dark:active:bg-gray-800",
 };
@@ -22,6 +24,7 @@ const CONTAINER: Record<ButtonVariant, string> = {
 const LABEL: Record<ButtonVariant, string> = {
   primary: "text-white",
   secondary: "text-gray-900 dark:text-gray-100",
+  outline: "text-gray-900 dark:text-gray-100",
   danger: "text-white",
   ghost: "text-blue-600 dark:text-blue-400",
 };
@@ -29,6 +32,7 @@ const LABEL: Record<ButtonVariant, string> = {
 const SPINNER: Record<ButtonVariant, string> = {
   primary: "#ffffff",
   secondary: "#111827",
+  outline: "#111827",
   danger: "#ffffff",
   ghost: "#2563eb",
 };

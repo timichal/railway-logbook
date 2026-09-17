@@ -10,9 +10,9 @@ import {
   createOSMBackgroundSource,
   GLYPHS_URL,
   loadBasemapStyle,
-  resolveMissingBasemapIcons,
 } from "../basemap";
 import { loadMapState, saveMapState } from "../mapState";
+import { resolveMissingBasemapIcons } from "../missingIcons";
 
 // v6 ships ESM-only. Its worker does a relative import of maplibre-gl-shared.mjs
 // at runtime; Next.js emits a `new URL(...)` worker as a bare asset without that

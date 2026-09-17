@@ -1,100 +1,69 @@
 /**
- * Where the map goes in Phase 3. Until then it is the proof that the shell works
- * end to end: the region is the one the switch chose, and the numbers come from
- * `GET /progress?region=` with the bearer token attached — the same query the web
- * app's progress box runs, filtered by the same country list.
+ * The map tab: the map, filling the screen, with the region's numbers over one corner.
+ *
+ * `RailwayMap` needs two things from outside itself, and both are the same two the
+ * web app's `RailwayMap` takes: whose visit colours to draw (`user_id` on the route
+ * tile) and which countries to draw at all. The country list is `useEffectiveCountries`
+ * — the stored preference where the region allows a filter, the region's own list
+ * where it does not — and until it arrives there is nothing to draw, since a tile
+ * requested without it would answer for every country and then be replaced.
+ *
+ * The safe-area inset is deliberately not applied to the map: a map should run under
+ * the status bar. The progress box is positioned inside `RailwayMap` against the map's
+ * own bottom edge, which the tab bar already keeps clear.
  */
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
+import { useAuth } from "@/auth/AuthContext";
+import { MapProgressBox } from "@/map/MapProgressBox";
+import { RailwayMap } from "@/map/RailwayMap";
 import { useRegion } from "@/region/RegionContext";
 import { useEffectiveCountries } from "@/region/useEffectiveCountries";
-import { Screen } from "@/ui/Screen";
 
 export default function MapScreen(): ReactNode {
-  const { region, regionId } = useRegion();
+  const { user } = useAuth();
+  const { regionId } = useRegion();
   const { countries, error: countriesError } = useEffectiveCountries();
   const [progress, setProgress] = useState<api.Progress | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
     if (!countries) return;
-
-    setError(null);
     try {
       setProgress(await api.progress(regionId, countries));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load your progress.");
+    } catch {
+      // The numbers are the smaller half of this screen; a map with no percentage
+      // over it is still the map. The error is not worth covering it with.
+      setProgress(null);
     }
   }, [countries, regionId]);
 
   useEffect(() => {
-    // The previous region's numbers must not sit under the new region's heading.
+    // The previous region's numbers must not sit over the new region's map.
     setProgress(null);
     void load();
   }, [load]);
 
-  const refresh = useCallback(async (): Promise<void> => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
+  if (countriesError) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white p-6 dark:bg-gray-900">
+        <Text className="text-center text-sm text-red-600 dark:text-red-400">{countriesError}</Text>
+      </View>
+    );
+  }
+
+  if (!countries || !user) {
+    return (
+      <View className="flex-1 items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   return (
-    <Screen edges={["top"]}>
-      <ScrollView
-        contentContainerClassName="gap-6 p-6"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
-      >
-        <View className="gap-1">
-          <Text className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {region.flag} {region.label}
-          </Text>
-          <Text className="text-sm text-gray-600 dark:text-gray-400">
-            The map arrives in Phase 3. These are your numbers for this region.
-          </Text>
-        </View>
-
-        {(error ?? countriesError) ? (
-          <Text className="text-sm text-red-600 dark:text-red-400">{error ?? countriesError}</Text>
-        ) : progress ? (
-          <View className="gap-3 rounded-2xl bg-gray-100 p-5 dark:bg-gray-800">
-            <Stat
-              label="Ridden"
-              value={`${Math.round(progress.completedKm).toLocaleString()} km`}
-              detail={`of ${Math.round(progress.totalKm).toLocaleString()} km · ${progress.percentage.toFixed(1)}%`}
-            />
-            <Stat
-              label="Routes"
-              value={`${progress.completedRoutes.toLocaleString()}`}
-              detail={`of ${progress.totalRoutes.toLocaleString()} · ${progress.routePercentage.toFixed(1)}%`}
-            />
-          </View>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </ScrollView>
-    </Screen>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}): ReactNode {
-  return (
-    <View className="gap-0.5">
-      <Text className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-        {label}
-      </Text>
-      <Text className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</Text>
-      <Text className="text-sm text-gray-600 dark:text-gray-400">{detail}</Text>
+    <View className="flex-1">
+      <RailwayMap userId={user.id} countries={countries} />
+      <MapProgressBox progress={progress} />
     </View>
   );
 }
