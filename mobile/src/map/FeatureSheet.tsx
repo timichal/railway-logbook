@@ -16,6 +16,7 @@ import { routeBadges, routeTitle } from "@shared/map/routeFeature";
 import type { RegionId } from "@shared/regions";
 import type { ReactNode } from "react";
 import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { useSelection } from "@/logbook/SelectionContext";
 import type { MapFeature, RouteFeature } from "@/map/mapFeatures";
 import { Button } from "@/ui/Button";
 
@@ -66,6 +67,11 @@ function RouteBody({
 }): ReactNode {
   const { name, endpoints } = routeTitle(feature, regionId);
   const badges = routeBadges(feature, regionId);
+  const { isSelected, toggle } = useSelection();
+  // The button says what it is about to do, as the web app's touch sheet does: here
+  // the tap opens the sheet and the button is what acts, so it has to be readable
+  // before it is pressed.
+  const picked = isSelected(feature.trackId);
 
   return (
     <>
@@ -110,6 +116,12 @@ function RouteBody({
           </Text>
         </View>
       ) : null}
+
+      <Button
+        label={picked ? "Remove from selection" : "Add to selection"}
+        variant={picked ? "secondary" : "primary"}
+        onPress={() => toggle(feature)}
+      />
 
       {feature.link ? <LinkButton label="Website" url={feature.link} /> : null}
     </>

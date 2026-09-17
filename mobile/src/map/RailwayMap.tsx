@@ -42,6 +42,7 @@ import {
   VectorSource,
   type ViewStateChangeEvent,
 } from "@maplibre/maplibre-react-native";
+import { HIGHLIGHT_COLORS } from "@shared/map/highlightLayers";
 import {
   createPublicNotesLayer,
   createRailwayRoutesHeritageLayer,
@@ -62,7 +63,11 @@ import { REGIONS, type RegionId } from "@shared/regions";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { ActivityIndicator, View } from "react-native";
+import { useHighlight } from "@/logbook/HighlightContext";
+import { useLogVersion } from "@/logbook/logVersion";
+import { useSelection } from "@/logbook/SelectionContext";
 import { FeatureSheet } from "@/map/FeatureSheet";
+import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import {
   type MapFeature,
@@ -100,6 +105,11 @@ export function RailwayMap({ userId, countries }: RailwayMapProps): ReactNode {
   const { resolved: theme } = useTheme();
   const { regionId } = useRegion();
   const { showHeritage, showSpecial, showScenicOutline } = useLayerPrefs();
+  const { selected } = useSelection();
+  const highlighted = useHighlight();
+  // A journey logged anywhere in the app repaints this tile: the visit colours are
+  // rendered into it per user, so a new URL is the only way past the tile cache.
+  const logVersion = useLogVersion();
 
   const basemapStyle = useBasemapStyle(theme);
   const initialPosition = useInitialPosition(regionId);
@@ -156,8 +166,16 @@ export function RailwayMap({ userId, countries }: RailwayMapProps): ReactNode {
   );
 
   const routesUrl = useMemo(
-    () => routesTileUrl({ userId, selectedCountries: countries }),
-    [userId, countries],
+    () => routesTileUrl({ userId, selectedCountries: countries, cacheBuster: logVersion }),
+    [userId, countries, logVersion],
+  );
+
+  const selectedIds = useMemo(() => selected.map((s) => s.route.trackId), [selected]);
+  // Only while the route is still ticked partial: unticking claims the whole route,
+  // and the highlight follows — the same rule the web app's selection highlight keeps.
+  const selectedPartials = useMemo(
+    () => selected.flatMap((s) => (s.partial && s.covered ? [s.covered] : [])),
+    [selected],
   );
 
   // A press on a source stops there rather than bubbling to the map, whose own
@@ -230,7 +248,39 @@ export function RailwayMap({ userId, countries }: RailwayMapProps): ReactNode {
           {showSpecial ? (
             <Layer {...shown(createRailwayRoutesSpecialLayer(userSpecialLayerConfig))} />
           ) : null}
+          {/* What the logbook or the planner pointed the map at — gold or orange. */}
+          <HighlightLayers
+            baseId="highlighted_routes"
+            trackIds={highlighted.trackIds}
+            partials={highlighted.partials}
+            color={highlighted.color}
+            beforeId="stations"
+          />
+          {/* The Route Logger selection, in the orange the web app uses for it.
+              `beforeId` rather than mounting order: a set that appears after the map
+              has loaded is otherwise appended to the very top, over the labels. */}
+          <HighlightLayers
+            baseId="selected_routes_highlight"
+            trackIds={selectedIds}
+            partials={selectedPartials}
+            color={HIGHLIGHT_COLORS.view}
+            beforeId="stations"
+          />
         </VectorSource>
+
+        <PartialHighlightSource
+          baseId="highlighted_routes"
+          partials={highlighted.partials}
+          color={highlighted.color}
+          beforeId="stations"
+        />
+
+        <PartialHighlightSource
+          baseId="selected_routes_highlight"
+          partials={selectedPartials}
+          color={HIGHLIGHT_COLORS.view}
+          beforeId="stations"
+        />
 
         <VectorSource
           id="stations"

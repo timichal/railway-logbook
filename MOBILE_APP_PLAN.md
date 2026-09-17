@@ -23,10 +23,10 @@ and add a line to the Session log at the bottom.
 | **Phase 0**       | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware                                                                                                                                                                     |
 | **Phase 1**       | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md`                                                                                                                                                        |
 | **Phase 2**       | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android                                                                                                                                   |
-| **Phase 3**       | **Done** (2026-08-27; **seen on a device 2026-09-17**). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. The two **overlays** are deliberately left — they are driven by Phase 4 state                  |
-| **Current phase** | **Phase 4 — features**, with Phase 3's two overlays folded into it                                                                                                                                                                                                          |
+| **Phase 3**       | **Done** (2026-08-27; **seen on a device 2026-09-17**). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. Its **highlight overlay** was folded into Phase 4 and is now done; the coverage overlay is not |
+| **Current phase** | **Phase 4 — features.** Route logger, highlight overlays and the logbook list are built (2026-09-17); planner, country stats, station search and the coverage overlay are not |
 | **Blocked on**    | nothing                                                                                                                                                                                                                                                                     |
-| **Next**          | Phase 4's own list (route logger, journeys and trips, planner, country stats, station search), and then the highlight and coverage overlays on top of the state it creates. The coverage overlay needs one new endpoint — Phase 1 built nothing shaped like `GET /coverage` |
+| **Next**          | The journey planner, country stats and station search, and the coverage overlay (`GET /coverage` already exists; an earlier note here saying otherwise was wrong). Plus a pass over the UI details of what is already built |
 
 The spike that answered Phase 0 has been **deleted** — it was throwaway by design
 and everything it taught is written down below. What it proved, in one line: the
@@ -714,28 +714,91 @@ with the region — flat `[w, s, e, n]`, where `region.bounds` is nested.
 
 #### Still open in Phase 3
 
-Both are overlays, and both are held by state that does not exist until Phase 4 —
-there is nothing to highlight before there is a selection, and no ridden stretch
-to draw before there is a journey. Doing them now would mean inventing the state
-twice.
-
-- **The highlight overlays** (`useRouteHighlighting`): the gold planner result and
-  the orange logger selection, plus the per-set `<baseId>_partial` GeoJSON layer
-  for a route covered only in part. On native these are a `filter` prop on an
-  overlay `<Layer>` and a `<GeoJSONSource>`, so `moveLayer` becomes `beforeId`.
-- **The ridden-stretch coverage overlay** (`useCoverageOverlay`): needs a
-  `GET /coverage`-shaped endpoint, which Phase 1 did not build because nothing
-  asked for it then.
+- **The highlight overlays are done** — built in Phase 4 alongside the state that
+  drives them. See `HighlightOverlay.tsx` below.
+- **The ridden-stretch coverage overlay** (`useCoverageOverlay`) is still open.
+  `GET /coverage` **does exist** (Phase 1 built it after all; this file said
+  otherwise and was wrong), so nothing is blocking it but the work.
 
 Two smaller gaps, neither blocking: the **station search** box (the web map's own,
 `useStationSearch`) and **"where am I"** — the binding has `<UserLocation>` and
 `trackUserLocation` on the camera, and it wants a location-permission string in
 `app.json` for both stores anyway.
 
-### Phase 4 — Features (1.5–2 weeks)
+### Phase 4 — Features — **in progress**
 
-Route logger, journeys and trips, the journey planner (calling the server
-pathfinder), country stats, station search.
+Done: the **route logger** (map selection → a logged journey), the **highlight
+overlays** Phase 3 left behind, and the **logbook** list. Still to do: the journey
+planner, country stats, station search, and the coverage overlay.
+
+#### What is built
+
+| | |
+| --- | --- |
+| `SelectionContext.tsx` | the Route Logger's selection, cleared on a region switch. Holds the tile feature itself plus `partial` and the stretch, so the logging screen renders a route with the same `routeTitle`/`routeBadges` the map sheet does |
+| `SelectionBar.tsx` | "N routes selected" under the map, and the way into the logging screen |
+| `app/log-journey.tsx` | the form: name, date, description, an optional trip, and the per-route partial toggles. A modal over the tabs, since it exists only while there is a selection to spend |
+| `HighlightContext.tsx` | what the map is pointing at on someone else's behalf — the web's `highlightedRoutes`, gold or orange |
+| `HighlightOverlay.tsx` | both halves of a highlight set as children: the tile-filter `<Layer>`s and the `<GeoJSONSource>` of cut geometry |
+| `HighlightChip.tsx` | what the map is showing, and the way to drop it |
+| `logVersion.ts` | the store that says the user's log has changed |
+| `app/(tabs)/logbook.tsx` | the paginated, searchable list of trips and journeys, each card able to point the map at its routes |
+
+#### What the highlight overlays cost the web app
+
+The same shape as Phase 3: **a shared module first, then two mechanisms.**
+`src/lib/map/highlightLayers.ts` now holds what a highlight *is* — `highlightVariants`,
+the layer factories, the id and filter helpers, `partialHighlightData`,
+`wholeRouteIds` — and `useRouteHighlighting` is what is left over, which is only the
+live-map mechanism (`addLayer` / `setFilter` / `removeLayer`). Nothing about the web
+app's behaviour changed; `HIGHLIGHT_LAYER_IDS` is re-exported from the hook, so its
+two other callers did not move.
+
+`getUntimezonedDateStr.ts` joined the shared set at the same time, unchanged — it is
+dependency-free and the date a journey is logged against is the same decision on
+both clients.
+
+#### The one native-side decision worth writing down
+
+**`beforeId`, not mounting order.** A `<Layer>` mounted after the map has loaded is
+appended to the *top* of the style, so a highlight set that appears when a card is
+opened would draw over the station labels. Both halves therefore carry
+`beforeId="stations"`, which is what the web app's `moveLayer` is for — and since
+the binding inserts children in order, a variant's casing mounted before its own
+layer still lands underneath it.
+
+Three smaller ones:
+
+- **`GeoJSONSource`, not `ShapeSource`.** The latter is rnmapbox's name; here the
+  prop is `data`, not `shape`.
+- **A tile is cached by URL, so the log version is spent as `cacheBuster`.** Visit
+  colours are rendered into the route tile per user, so logging a journey has to
+  produce a *new* URL — `railwayRoutesTileUrl` already takes one, for exactly the
+  reason the web app's `useMapTileRefresh` needs it. `logVersion.ts` is a
+  `useSyncExternalStore` rather than a context because the write happens in a modal
+  and the readers are a tab away: the map's tile URL, the map's numbers, and the
+  logbook list.
+- **Verified the same two ways Phase 3 was**: all 12 highlight layers pass
+  MapLibre's own `validateStyleMin` (a paint value `tsc` accepts as a tuple is not
+  necessarily one MapLibre accepts), and the iOS bundle exports with
+  `selected_routes_highlight` and `highlightCasing` in it — both from
+  `src/lib/map`, neither anywhere in `mobile/`.
+
+#### Rough edges left in what is built
+
+- **The date is typed, not picked.** A native date picker is another native module
+  and so another development build; the field takes `YYYY-MM-DD` with Today and
+  Yesterday buttons beside it, which covers the case that actually happens.
+- **Editing and deleting a journey or trip** are not wired up, though the endpoints
+  are (`PATCH`/`DELETE`) and `endpoints.ts` already calls them.
+- **The UI details have not had a pass.** What is built was run on the iPhone the
+  day it was written and works; the spacing, wording and affordances are a later
+  sweep, not a rewrite.
+- **Only the `regular` highlight variant is confirmed drawing.** The heritage and
+  special ones — the dotted and dashed overlays, and the translucent casings under
+  them — sit behind layer toggles that are off by default, so a device run does not
+  reach them unless the toggles are on. They validate, and the expression shapes are
+  the base layers' own, but that is not the same as having been seen.
 
 ### Phase 5 — Offline (1.5–2 weeks)
 
@@ -903,3 +966,27 @@ pick up. Keep it short — the phase sections carry the detail.
   detour (see the new trap under "Getting the tooling to run" — `expo run:ios` cannot
   do a first device build), and the map renders, switches region, answers taps and
   draws its borders. **Next: Phase 4.**
+- **2026-09-17 — Phase 4, first half: the route logger, the highlight overlays and
+  the logbook.** Took the same shape as Phase 3 — **a shared module first, then two
+  mechanisms**: `src/lib/map/highlightLayers.ts` now holds what a highlight *is*
+  (`highlightVariants`, the layer factories, the filter and id helpers,
+  `partialHighlightData`), leaving `useRouteHighlighting` as nothing but the live-map
+  mechanism, and the native `HighlightOverlay` mounts the same specs as children. The
+  web app's behaviour is unchanged and `HIGHLIGHT_LAYER_IDS` is re-exported from the
+  hook, so its two other callers did not move; `getUntimezonedDateStr.ts` joined the
+  shared set unchanged. On the native side: a selection context cleared on a region
+  switch, an "N routes selected" bar under the map, a modal logging form (name, date,
+  description, optional trip, per-route partial toggles), a highlight context the
+  logbook points at the map, a dismissable chip saying what the map is showing, and
+  the paginated searchable logbook list. One new mechanism worth knowing: **a
+  `<Layer>` mounted after the map has loaded is appended to the top**, so both
+  highlight halves carry `beforeId="stations"` — the declarative form of the web
+  app's `moveLayer`. A `logVersion` store (`useSyncExternalStore`, no provider)
+  carries "the log changed" from the modal to the three readers a tab away, and is
+  spent on the map as the route tile's `cacheBuster`, since visit colours are baked
+  into the tile per user. Corrected one wrong claim in this file: `GET /coverage`
+  **does** exist. Verified as Phase 3 was — `tsc` and Biome clean in both apps, all 12
+  highlight layers pass `validateStyleMin`, and the iOS bundle exports with the shared
+  module's strings in it, and then **run on the iPhone**, where the logger loop works
+  end to end. **Next: the planner, country stats, station search and the coverage
+  overlay**, plus a pass over the UI details of what is already there.

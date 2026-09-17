@@ -16,6 +16,9 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { useAuth } from "@/auth/AuthContext";
+import { useLogVersion } from "@/logbook/logVersion";
+import { SelectionBar } from "@/logbook/SelectionBar";
+import { HighlightChip } from "@/map/HighlightChip";
 import { MapProgressBox } from "@/map/MapProgressBox";
 import { RailwayMap } from "@/map/RailwayMap";
 import { useRegion } from "@/region/RegionContext";
@@ -25,8 +28,10 @@ export default function MapScreen(): ReactNode {
   const { user } = useAuth();
   const { regionId } = useRegion();
   const { countries, error: countriesError } = useEffectiveCountries();
+  const logVersion = useLogVersion();
   const [progress, setProgress] = useState<api.Progress | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: logVersion is an intentional trigger — bumping it is what re-reads the numbers after a journey is logged.
   const load = useCallback(async (): Promise<void> => {
     if (!countries) return;
     try {
@@ -36,7 +41,7 @@ export default function MapScreen(): ReactNode {
       // over it is still the map. The error is not worth covering it with.
       setProgress(null);
     }
-  }, [countries, regionId]);
+  }, [countries, regionId, logVersion]);
 
   useEffect(() => {
     // The previous region's numbers must not sit over the new region's map.
@@ -62,8 +67,14 @@ export default function MapScreen(): ReactNode {
 
   return (
     <View className="flex-1">
-      <RailwayMap userId={user.id} countries={countries} />
-      <MapProgressBox progress={progress} />
+      {/* The map and its own furniture in one pane, so the selection bar below is a
+          flex sibling rather than something covering the progress box. */}
+      <View className="flex-1">
+        <RailwayMap userId={user.id} countries={countries} />
+        <MapProgressBox progress={progress} />
+        <HighlightChip />
+      </View>
+      <SelectionBar />
     </View>
   );
 }

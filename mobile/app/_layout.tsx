@@ -18,6 +18,8 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
+import { HighlightProvider } from "@/logbook/HighlightContext";
+import { SelectionProvider } from "@/logbook/SelectionContext";
 import { LayerPrefsProvider } from "@/map/LayerPrefsContext";
 import { RegionProvider } from "@/region/RegionContext";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
@@ -41,6 +43,9 @@ function RootNavigator(): ReactNode {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={status === "signedIn"}>
           <Stack.Screen name="(tabs)" />
+          {/* Not a tab: it exists only while there is a selection to spend, and it
+              ends by emptying it. */}
+          <Stack.Screen name="log-journey" options={{ presentation: "modal" }} />
         </Stack.Protected>
         <Stack.Protected guard={status === "signedOut"}>
           <Stack.Screen name="(auth)" />
@@ -58,7 +63,11 @@ export default function RootLayout(): ReactNode {
           <AuthProvider>
             <RegionProvider>
               <LayerPrefsProvider>
-                <RootNavigator />
+                <SelectionProvider>
+                  <HighlightProvider>
+                    <RootNavigator />
+                  </HighlightProvider>
+                </SelectionProvider>
               </LayerPrefsProvider>
             </RegionProvider>
           </AuthProvider>
