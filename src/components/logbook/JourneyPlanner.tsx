@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import StationSearchInput from "@/components/ui/StationSearchInput";
+import { MAX_VIA_STATIONS } from "@/lib/constants";
 import { findRoutePathBetweenStations } from "@/lib/plannerActions";
 import { useRegionId } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
@@ -449,13 +450,18 @@ export default function JourneyPlanner({
         </div>
       ))}
 
-      {/* Add Via Station Button */}
+      {/* Add Via Station Button. Stops at MAX_VIA_STATIONS, which the search
+          refuses beyond — the button says so rather than letting the form build
+          a request that comes back as an error. */}
       <button
         type="button"
         onClick={addViaStation}
-        className="w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded-md text-sm font-medium text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-800 hover:bg-gray-50 active:bg-gray-100"
+        disabled={viaStations.length >= MAX_VIA_STATIONS}
+        className="w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded-md text-sm font-medium text-gray-600 transition-colors disabled:opacity-50 not-disabled:hover:border-gray-400 not-disabled:hover:text-gray-800 not-disabled:hover:bg-gray-50 not-disabled:active:bg-gray-100"
       >
-        + Add via station
+        {viaStations.length >= MAX_VIA_STATIONS
+          ? `Maximum of ${MAX_VIA_STATIONS} via stations`
+          : "+ Add via station"}
       </button>
 
       {/* To Station */}

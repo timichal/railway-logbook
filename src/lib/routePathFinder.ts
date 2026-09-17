@@ -8,6 +8,7 @@
  * Phase 1). Nothing here touches a cookie or a request.
  */
 
+import { MAX_VIA_STATIONS } from "./constants";
 import pool from "./db";
 import {
   BACKTRACKING_THRESHOLD_DEGREES,
@@ -1084,6 +1085,16 @@ export async function findRoutePathBetweenStations(
   toStationId: number,
   viaStationIds: number[] = [],
 ): Promise<PathResult> {
+  // Refused here rather than in each caller, so the cap holds for the web action,
+  // the HTTP handler and the CLI alike (see MAX_VIA_STATIONS)
+  if (viaStationIds.length > MAX_VIA_STATIONS) {
+    return {
+      routes: [],
+      totalDistance: 0,
+      error: `A journey may have at most ${MAX_VIA_STATIONS} via stations`,
+    };
+  }
+
   try {
     // Normalized because station ids are bigint-backed: pg hands them back as
     // strings, and they are used as map keys below

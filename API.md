@@ -151,6 +151,10 @@ regular-service routes, and that message belongs next to the form.
 Station ids may be **negative** — a station whose OSM feature was an area is
 stored under a negated id (see `CLAUDE.md`), so don't validate them as positive.
 
+`viaStationIds` holds at most **10** entries (`MAX_VIA_STATIONS`), and more is a
+400. Each via station is another search over the whole route graph, and this is
+the one endpoint that takes no token.
+
 The search stays on the server for good: it needs Postgres and the in-memory
 route graph. First and last routes come back trimmed to the stretch actually
 travelled (`partial` geometry plus `travelled_length_km`), and `totalDistance`

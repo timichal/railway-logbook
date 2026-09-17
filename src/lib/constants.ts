@@ -153,3 +153,15 @@ export const SUPPORTED_COUNTRIES = [
   { code: "CH", name: "Switzerland" },
   { code: "GB", name: "United Kingdom" },
 ] as const;
+
+/**
+ * Most via stations one journey-planner search may carry.
+ *
+ * The planner needs no session (see `plannerActions.ts`), and each via station
+ * is another sequential Dijkstra run over the whole route graph — so an
+ * anonymous request must not be able to buy an unbounded number of them. Ten is
+ * well past what the form is for, and both ends hold to it: the "+ Add via
+ * station" button stops there, `findRoutePathBetweenStations` refuses beyond it
+ * whichever transport asked, and the HTTP handler turns that into its own 400.
+ */
+export const MAX_VIA_STATIONS = 10;
