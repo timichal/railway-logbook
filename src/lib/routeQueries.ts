@@ -8,7 +8,7 @@
  * is here and `userActions.ts` is one of its callers.
  */
 
-import { query } from "./db";
+import { escapeLikePattern, query } from "./db";
 import { type RegionId, regionEnvelopeSql } from "./regions";
 import type { RailwayRoute, Station } from "./types";
 
@@ -31,6 +31,8 @@ export async function searchStationsByName(
     return [];
   }
 
+  const pattern = escapeLikePattern(searchQuery);
+
   const result = await query(
     `
     SELECT id, name,
@@ -48,7 +50,7 @@ export async function searchStationsByName(
       name
     LIMIT 10
   `,
-    [`%${searchQuery}%`, `${searchQuery}%`],
+    [`%${pattern}%`, `${pattern}%`],
   );
 
   return result.rows.map((row) => ({

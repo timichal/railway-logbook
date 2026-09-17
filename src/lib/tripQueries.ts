@@ -8,7 +8,7 @@
  * which the handlers turn into a status code.
  */
 
-import pool from "./db";
+import pool, { escapeLikePattern } from "./db";
 import { type RegionId, regionEnvelopeSql } from "./regions";
 import type { Journey, Trip } from "./types";
 
@@ -362,7 +362,9 @@ export async function journeysAndTripsForUser(
     const safePage = Math.max(1, Math.floor(page));
     const safePageSize = Math.max(1, Math.min(100, Math.floor(pageSize)));
     const offset = (safePage - 1) * safePageSize;
-    const searchPattern = search.trim() ? `%${search.trim().toLowerCase()}%` : null;
+    const searchPattern = search.trim()
+      ? `%${escapeLikePattern(search.trim().toLowerCase())}%`
+      : null;
 
     // Build the union of trips + standalone journeys with effective_date for sorting.
     // The search predicate (when present) is applied per branch to keep it index-friendly.

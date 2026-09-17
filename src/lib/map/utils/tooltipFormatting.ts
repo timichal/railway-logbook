@@ -36,6 +36,60 @@ export function safeHref(value: unknown): string {
 }
 
 /**
+ * Decode a Postgres array literal (`{Daily,"Winter break"}`) into its elements.
+ *
+ * `frequency` is a `TEXT[]`, but MVT carries only scalar values, so `ST_AsMVT`
+ * hands the whole array over as its text representation and the tile property
+ * arrives as that literal. Splitting it on commas loses any tag that contains
+ * one — Postgres quotes exactly those — so the quoting is honoured here instead:
+ * inside quotes a backslash escapes the next character, and an unquoted `NULL`
+ * is a null element rather than the four letters.
+ */
+export function parsePgTextArray(literal: string): string[] {
+  const trimmed = literal.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
+
+  const body = trimmed.slice(1, -1);
+  if (!body.trim()) return [];
+
+  const values: string[] = [];
+  let current = "";
+  let quoted = false;
+  let inQuotes = false;
+
+  const flush = () => {
+    // An unquoted element is whitespace-padded at will; a quoted one is verbatim.
+    const value = quoted ? current : current.trim();
+    if (quoted || value.toUpperCase() !== "NULL") values.push(value);
+    current = "";
+    quoted = false;
+  };
+
+  for (let i = 0; i < body.length; i++) {
+    const char = body[i];
+    if (inQuotes) {
+      if (char === "\\") {
+        current += body[++i] ?? "";
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        current += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+      quoted = true;
+    } else if (char === ",") {
+      flush();
+    } else {
+      current += char;
+    }
+  }
+  flush();
+
+  return values;
+}
+
+/**
  * Shared badge chrome. `white-space: nowrap` keeps a multi-word tag ("Winter
  * break") on one line — a badge broken across lines reads as two badges.
  */
@@ -132,12 +186,8 @@ export function formatRouteMetadataBadges(
   }
 
   // Frequency badges
-  if (properties.frequency && properties.frequency !== "{}") {
-    const frequencies = properties.frequency
-      .slice(1, -1)
-      .split(",")
-      .map((f: string) => f.trim().replaceAll('"', ""));
-    for (const freq of frequencies) {
+  if (properties.frequency) {
+    for (const freq of parsePgTextArray(properties.frequency)) {
       badges.push(
         `<span style="${BADGE_STYLE} background-color: #dcfce7; color: #166534;">${escapeHtml(freq)}</span>`,
       );

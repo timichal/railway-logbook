@@ -9,41 +9,8 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-10, 13
-and 20 have since been fixed or dismissed and removed).
-
----
-
-## Bugs
-
-### 11. LIKE wildcards pass through station search
-
-`src/lib/routeQueries.ts:51` (`searchStationsByName`)
-
-```ts
-[`%${searchQuery}%`, `${searchQuery}%`]
-```
-
-A query containing `%` or `_` becomes a wildcard, so searching `%` returns
-arbitrary stations. Parameterized, so not injection — just wrong results, and an
-unindexable scan.
-
-**Fix:** escape backslash, `%` and `_` in the user's string before interpolating
-it into the pattern.
-
----
-
-### 12. Frequency tags are re-parsed from the Postgres array literal
-
-`src/lib/map/utils/tooltipFormatting.ts` (`formatRouteMetadataBadges`)
-
-The MVT property arrives as the raw `{a,b}` array literal and is picked apart by
-hand — `slice(1, -1)`, `split(",")`, strip every `"` — so a tag containing a comma
-renders as two badges and quoting is lost. Values do go through `escapeHtml`, so
-this is cosmetic only.
-
-**Fix:** emit the array properly from the tile function, or parse it correctly
-(respecting quoting) in one shared helper.
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-13 and 20
+have since been fixed or dismissed and removed).
 
 ---
 

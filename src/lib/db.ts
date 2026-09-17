@@ -15,3 +15,17 @@ export async function query(text: string, params?: unknown[]) {
 }
 
 export default pool;
+
+/**
+ * Escape the LIKE/ILIKE metacharacters in a user's search string before it is
+ * wrapped in `%…%`.
+ *
+ * The value is parameterized, so this is not about injection: an unescaped `%`
+ * or `_` simply makes the search mean something else (a lone `%` matches every
+ * row), and a leading wildcard is also what stops the pattern using an index.
+ * Backslash goes first because it is LIKE's own escape character, which is what
+ * lets the other two be escaped at all.
+ */
+export function escapeLikePattern(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
