@@ -9,29 +9,12 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-5 and 20 have
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-6 and 20 have
 since been fixed and removed).
 
 ---
 
 ## Bugs
-
-### 6. The terminal-route trim recomputes a side the search already knew
-
-`src/lib/routePathFinder.ts:845` and `:855` (`computeTravelledTrims`)
-
-It calls `connectingSide` → `findConnectionEndpoint`, i.e. the *closest* endpoint
-pairing, to decide which half of a terminal route was covered. But `SearchState`
-carried the actual `exitSide` and `SearchResult` throws it away.
-
-Inside a junction complex, several of the four pairings can sit under the 500 m
-`ENDPOINT_TOLERANCE_METERS` at once, and the closest need not be the one
-traversed — the partial stretch is then cut on the wrong side of the station.
-
-**Fix:** return the per-hop exit sides alongside `path` from `findShortestPath`
-and use them in the trim, so it is exact rather than inferred.
-
----
 
 ### 7. `duplicateRailwayRoute` clones every user's logs
 

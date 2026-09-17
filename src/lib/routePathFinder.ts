@@ -541,7 +541,14 @@ function hasRoutePathBacktracking(
 interface SearchState {
   route: number;
   path: number[];
-  exitSide: EndpointSide;
+  /**
+   * The endpoint each route in `path` is left through, aligned with it — so the
+   * last entry is the endpoint this state sits at. Carried rather than inferred
+   * afterwards: inside a junction complex several endpoint pairings can sit
+   * inside ENDPOINT_TOLERANCE_METERS at once, and the closest need not be the
+   * one travelled.
+   */
+  sides: EndpointSide[];
   cost: number;
 }
 
@@ -598,6 +605,13 @@ interface SearchOptions {
 
 interface SearchResult {
   path: number[];
+  /**
+   * The endpoint each route in `path` is left through, aligned with it. The last
+   * route is left *beyond* the destination — the journey stops at the station
+   * partway along it — so its entry side is that entry's opposite. Null where a
+   * single route serves both stations and no endpoint is involved at all.
+   */
+  sides: (EndpointSide | null)[];
   /** Weighted cost, not km — only comparable against other costs from this search. */
   cost: number;
 }
@@ -668,10 +682,15 @@ function findShortestPath(
 
   // Cheapest complete path found so far. A finish costs less than the state it
   // grows from would as an ordinary hop, so it can't simply be returned on pop.
-  const best: { path: number[] | null; cost: number } = { path: null, cost: Infinity };
-  const considerFinish = (path: number[], cost: number) => {
+  const best: { path: number[] | null; sides: (EndpointSide | null)[]; cost: number } = {
+    path: null,
+    sides: [],
+    cost: Infinity,
+  };
+  const considerFinish = (path: number[], sides: (EndpointSide | null)[], cost: number) => {
     if (cost > maxCost || cost >= best.cost) return;
     best.path = path;
+    best.sides = sides;
     best.cost = cost;
   };
 
@@ -687,7 +706,11 @@ function findShortestPath(
       const toFrac = fractions.to.get(route);
       const covered =
         fromFrac !== undefined && toFrac !== undefined ? Math.abs(toFrac - fromFrac) : 1;
-      considerFinish([route], (info.length_km ?? 0) * covered * getRouteCostMultiplier(info));
+      considerFinish(
+        [route],
+        [null],
+        (info.length_km ?? 0) * covered * getRouteCostMultiplier(info),
+      );
       continue;
     }
 
@@ -697,7 +720,7 @@ function findShortestPath(
       const prevBest = bestCost.get(key);
       if (prevBest !== undefined && cost >= prevBest) continue;
       bestCost.set(key, cost);
-      queue.push({ route, path: [route], exitSide, cost });
+      queue.push({ route, path: [route], sides: [exitSide], cost });
     }
   }
 
@@ -708,15 +731,17 @@ function findShortestPath(
     // state costs as much as the best finish, nothing left can improve on it
     if (best.path !== null && current.cost >= best.cost) break;
 
+    const currentExitSide = current.sides[current.sides.length - 1];
+
     // Stale heap entry: a cheaper way to this state was found after it was queued
-    const currentBest = bestCost.get(`${current.route}_${current.exitSide}`);
+    const currentBest = bestCost.get(`${current.route}_${currentExitSide}`);
     if (currentBest !== undefined && current.cost > currentBest) continue;
 
     if (current.cost > maxCost) continue;
 
     const currentInfo = routeInfo.get(current.route);
     if (!currentInfo) continue;
-    const exitCoord = getEndpointCoord(currentInfo, current.exitSide);
+    const exitCoord = getEndpointCoord(currentInfo, currentExitSide);
 
     for (const neighbor of graph.getNeighbors(current.route)) {
       const neighborInfo = routeInfo.get(neighbor);
@@ -733,7 +758,7 @@ function findShortestPath(
       // rather than the routes' closest endpoint pairing
       if (
         avoidBacktracking &&
-        isBacktrackingAt(currentInfo, current.exitSide, neighborInfo, oppositeSide(entry.exitSide))
+        isBacktrackingAt(currentInfo, currentExitSide, neighborInfo, oppositeSide(entry.exitSide))
       ) {
         continue;
       }
@@ -746,6 +771,7 @@ function findShortestPath(
       if (endSet.has(neighbor)) {
         considerFinish(
           [...current.path, neighbor],
+          [...current.sides, entry.exitSide],
           current.cost +
             gapCost +
             terminalCost(neighborInfo, fractions.to.get(neighbor), oppositeSide(entry.exitSide)),
@@ -767,13 +793,13 @@ function findShortestPath(
       queue.push({
         route: neighbor,
         path: [...current.path, neighbor],
-        exitSide: entry.exitSide,
+        sides: [...current.sides, entry.exitSide],
         cost: newCost,
       });
     }
   }
 
-  return best.path === null ? null : { path: best.path, cost: best.cost };
+  return best.path === null ? null : { path: best.path, sides: best.sides, cost: best.cost };
 }
 
 /**
@@ -870,7 +896,15 @@ async function locateStationsOnRoutes(
   return fractions;
 }
 
-/** Which endpoint of `trackId` faces the route it connects to. */
+/**
+ * Which endpoint of `trackId` faces the route it connects to — the routes'
+ * closest endpoint pairing.
+ *
+ * Only a fallback for the rare hop the search reports no side for (see
+ * `concatenateSegments`): inside a junction complex several of the four pairings
+ * can sit inside ENDPOINT_TOLERANCE_METERS at once, and the closest need not be
+ * the one travelled.
+ */
 function connectingSide(
   routeInfo: Map<number, RouteBearingInfo>,
   trackId: number,
@@ -892,10 +926,13 @@ function connectingSide(
  *
  * The covered side is decided by where the path continues: the first route runs
  * from the station to the endpoint it exits through, the last from the endpoint
- * it is entered at to the station.
+ * it is entered at to the station. Both sides come from `sides`, which the search
+ * reports for the hops it actually took, rather than being inferred from the
+ * routes' closest endpoint pairing.
  */
 async function computeTravelledTrims(
   path: number[],
+  sides: (EndpointSide | null)[],
   routeInfo: Map<number, RouteBearingInfo>,
   fromStationId: number,
   toStationId: number,
@@ -934,7 +971,7 @@ async function computeTravelledTrims(
     }
   } else {
     const fromFrac = fractions.get(pairKey(firstId, fromStationId));
-    const exitSide = connectingSide(routeInfo, firstId, path[1]);
+    const exitSide = sides[0] ?? connectingSide(routeInfo, firstId, path[1]);
     if (fromFrac !== undefined && exitSide) {
       specs.push(
         exitSide === "end"
@@ -944,7 +981,12 @@ async function computeTravelledTrims(
     }
 
     const toFrac = fractions.get(pairKey(lastId, toStationId));
-    const entrySide = connectingSide(routeInfo, lastId, path[path.length - 2]);
+    // The search reports the endpoint the last route is left through, which is
+    // the one beyond the destination — the journey enters at its opposite
+    const lastExitSide = sides[path.length - 1];
+    const entrySide = lastExitSide
+      ? oppositeSide(lastExitSide)
+      : connectingSide(routeInfo, lastId, path[path.length - 2]);
     if (toFrac !== undefined && entrySide) {
       specs.push(
         entrySide === "start"
@@ -1002,6 +1044,39 @@ async function computeTravelledTrims(
 }
 
 /**
+ * Join the per-segment searches into one path, dropping the duplicate route where
+ * a segment carries on from the one the previous segment ended at.
+ *
+ * The travelled sides come along. At such a joint the route's exit side is the
+ * *next* segment's — the previous segment recorded the side it would have left
+ * through had the journey not stopped at the via station — so the entry already
+ * in place is overwritten. A segment covering a single route reports no side at
+ * all (nothing was entered or left through an endpoint); that null survives here
+ * and `computeTravelledTrims` falls back to inferring it.
+ */
+function concatenateSegments(segments: SearchResult[]): {
+  path: number[];
+  sides: (EndpointSide | null)[];
+} {
+  const path: number[] = [];
+  const sides: (EndpointSide | null)[] = [];
+
+  for (const segment of segments) {
+    let startIdx = 0;
+    if (path.length > 0 && segment.path[0] === path[path.length - 1]) {
+      // A segment that begins and ends on this route reports no side and leaves
+      // the arrival side already recorded in place — it is how the journey got here
+      sides[sides.length - 1] = segment.sides[0] ?? sides[sides.length - 1];
+      startIdx = 1;
+    }
+    path.push(...segment.path.slice(startIdx));
+    sides.push(...segment.sides.slice(startIdx));
+  }
+
+  return { path, sides };
+}
+
+/**
  * Find the shortest path of routes connecting from -> via -> to stations
  */
 export async function findRoutePathBetweenStations(
@@ -1044,7 +1119,7 @@ export async function findRoutePathBetweenStations(
     }
 
     // Find path sequentially between each pair of stations
-    const allSegments: number[][] = [];
+    const allSegments: SearchResult[] = [];
     let previousEndRoute: number | null = null;
 
     for (let i = 0; i < stationSequence.length - 1; i++) {
@@ -1079,10 +1154,10 @@ export async function findRoutePathBetweenStations(
         };
       }
 
-      let segmentPath = best.path;
+      let segment = best;
 
       // Prefer an alternative of comparable cost that doesn't double back
-      if (hasRoutePathBacktracking(segmentPath, routeInfo)) {
+      if (hasRoutePathBacktracking(segment.path, routeInfo)) {
         const alternative = findShortestPath(
           graph,
           segmentFromRoutes,
@@ -1096,32 +1171,22 @@ export async function findRoutePathBetweenStations(
         );
 
         if (alternative) {
-          segmentPath = alternative.path;
+          segment = alternative;
         }
       }
 
-      allSegments.push(segmentPath);
-      previousEndRoute = segmentPath[segmentPath.length - 1];
+      allSegments.push(segment);
+      previousEndRoute = segment.path[segment.path.length - 1];
     }
 
-    // Concatenate segments, removing duplicate routes at connection points
-    const path: number[] = [];
-    for (let i = 0; i < allSegments.length; i++) {
-      const segment = allSegments[i];
-      if (i === 0) {
-        path.push(...segment);
-      } else {
-        // Skip first route if it's the same as the last route from previous segment
-        const startIdx = segment[0] === path[path.length - 1] ? 1 : 0;
-        path.push(...segment.slice(startIdx));
-      }
-    }
+    const { path, sides } = concatenateSegments(allSegments);
 
     // Get route details, then cut the terminal routes down to the stretch travelled
     const [routes, trims] = await Promise.all([
       getRouteDetails(path),
       computeTravelledTrims(
         path,
+        sides,
         routeInfo,
         stationSequence[0],
         stationSequence[stationSequence.length - 1],
