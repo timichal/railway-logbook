@@ -379,12 +379,17 @@ export default function RailwayMap({
     }
   }, [map, mapLoaded, user, updateLocalStorageFeatureStates]);
 
-  // Force map refresh when user changes (login/logout)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: user is the intentional trigger (login/logout); refreshTiles is a stable callback we don't want to re-trigger on.
+  // Force map refresh when user changes (login/logout). The mount run is skipped:
+  // useMapLibre has just built the route layers with this user's id, and a refresh
+  // would only remove and re-add them.
+  const previousUserIdRef = useRef<number | null | undefined>(undefined);
   useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    previousUserIdRef.current = userId;
+    if (previousUserId === undefined || previousUserId === userId) return;
     if (!map.current) return;
     refreshTiles();
-  }, [user, map]);
+  }, [userId, map, refreshTiles]);
 
   // Setup map interactions
   useEffect(() => {

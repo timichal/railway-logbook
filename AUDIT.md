@@ -132,20 +132,6 @@ broken while touching this file.
 
 ---
 
-### 16. Redundant layer rebuild on every mount
-
-`src/components/map/RailwayMap.tsx` — the "Force map refresh when user changes"
-effect
-
-It has `user` in its deps, so it also fires on mount. `useMapTileRefresh` then
-immediately removes and re-adds the five route layers that `useMapLibre` created
-moments earlier.
-
-**Fix:** compare against a ref holding the previous user id and skip the first
-run.
-
----
-
 ### 17. Asymmetric validation on the preferences endpoint
 
 `src/app/api/v1/preferences/route.ts`
