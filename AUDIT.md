@@ -9,31 +9,12 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-13 and 20
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-14 and 20
 have since been fixed or dismissed and removed).
 
 ---
 
 ## Refactors
-
-### 14. `saveRailwayRoute` is not transactional
-
-`src/lib/adminRouteActions.ts` (`saveRailwayRoute`, and `deleteRailwayRoute` below
-it)
-
-It takes a pooled client and issues four statements — read nearby stations,
-insert/update the route, reclassify `line_class`, refresh station proximity — each
-autocommitted. `duplicateRailwayRoute`, immediately below, does use
-`BEGIN`/`COMMIT`.
-
-A failure between the write and the reclassify leaves a route stuck at the default
-`'branch'`; between the write and the refresh, stale `near_route` flags on the
-user map.
-
-**Fix:** wrap both in `BEGIN`/`COMMIT`/`ROLLBACK`, matching
-`duplicateRailwayRoute`.
-
----
 
 ### 15. Admin BFS uses `Array.shift()` and `path.includes()` in the hot loop
 

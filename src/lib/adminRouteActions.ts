@@ -215,6 +215,11 @@ export async function saveRailwayRoute(
   const client = await pool.connect();
 
   try {
+    // The write, the line_class reclassification and the station-proximity
+    // refresh are one change: a failure between them would leave the route at
+    // the default 'branch', or the user map showing stations no route reaches.
+    await client.query("BEGIN");
+
     console.log("Saving railway route:", `${routeData.from_station} ⟷ ${routeData.to_station}`);
     console.log("Path segments:", pathResult.partIds.length);
     console.log("Start coordinate:", startCoordinate);
@@ -398,8 +403,12 @@ export async function saveRailwayRoute(
       lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : "N/A",
     );
     console.log("Stored coordinates:", startCoordinate, "to", endCoordinate);
+
+    await client.query("COMMIT");
+
     return savedTrackId as number;
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error saving railway route:", error);
     throw new Error(
       `Failed to save route: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -572,6 +581,10 @@ export async function deleteRailwayRoute(trackId: number): Promise<void> {
   const client = await pool.connect();
 
   try {
+    // As in saveRailwayRoute: the delete and the proximity refresh are one
+    // change, and the stations it needs can no longer be found afterwards.
+    await client.query("BEGIN");
+
     console.log("Deleting railway route with track_id:", trackId);
 
     // Collected before the delete — afterwards the geometry is gone and there is
@@ -588,8 +601,11 @@ export async function deleteRailwayRoute(trackId: number): Promise<void> {
 
     await refreshStationProximityFor(client, { stationIds: affectedStations });
 
+    await client.query("COMMIT");
+
     console.log("Successfully deleted railway route:", trackId);
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error deleting railway route:", error);
     throw new Error(
       `Failed to delete route: ${error instanceof Error ? error.message : "Unknown error"}`,
