@@ -10,9 +10,10 @@
  *
  * Our own sources and layers are *not* baked in. They are declared as `<VectorSource>`
  * / `<Layer>` children of the map, so a layer toggle is a re-render rather than a
- * style rebuild. What is baked in is the fade layer, last of the basemap's own layers
- * and therefore under every child: the children are appended above whatever the style
- * already had, which is the same order the web app builds by hand.
+ * style rebuild. What is baked in is the fade layer and the country borders above it,
+ * last of the basemap's own layers and therefore under every child: the children are
+ * appended above whatever the style already had, which is the same order the web app
+ * builds by hand.
  *
  * Returns null while the fetch is in flight. The map is not mounted until it
  * resolves — MapLibre takes one style object at construction, and a `mapStyle` that
@@ -23,6 +24,7 @@
 import type { StyleSpecification } from "@maplibre/maplibre-react-native";
 import {
   createBasemapFadeLayer,
+  createCountryBordersLayer,
   createOSMBackgroundGroundLayer,
   createOSMBackgroundLayer,
   GLYPHS_URL,
@@ -76,7 +78,14 @@ export function useBasemapStyle(theme: ResolvedTheme): StyleSpecification | null
         // Only the vector basemap's own icon layers use the sprite.
         sprite: basemap.sprite,
         sources: basemap.sources,
-        layers: [...basemap.layers, createBasemapFadeLayer(theme)],
+        // The borders go above the fade and below our children, exactly as the web
+        // app's `useMapLibre` stacks them: one layer reads either style, since both are
+        // OpenMapTiles. The raster fallback has no vector source and so gets none.
+        layers: [
+          ...basemap.layers,
+          createBasemapFadeLayer(theme),
+          createCountryBordersLayer(theme),
+        ],
       });
     });
 

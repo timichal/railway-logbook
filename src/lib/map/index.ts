@@ -23,6 +23,7 @@ export {
   BASEMAP_FONT_BOLD,
   BASEMAP_STYLE_URLS,
   createBasemapFadeLayer,
+  createCountryBordersLayer,
   createOSMBackgroundGroundLayer,
   createOSMBackgroundLayer,
   createOSMBackgroundSource,

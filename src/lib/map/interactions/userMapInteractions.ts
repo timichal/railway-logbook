@@ -220,7 +220,7 @@ export function setupUserMapInteractions(
 
     const content = document.createElement("div");
     content.className = className;
-    content.style.color = "black";
+    content.style.color = "var(--color-fg)";
     content.innerHTML = body;
 
     let primaryButton: HTMLButtonElement | null = null;
