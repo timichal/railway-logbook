@@ -9,8 +9,8 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-7, 13 and 20
-have since been fixed or dismissed and removed).
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-7, 10, 13 and
+20 have since been fixed or dismissed and removed).
 
 ---
 
@@ -45,21 +45,6 @@ over the route graph.
 
 **Fix:** cap vias at something the UI can actually produce (10 or so), with its
 own 400. Leaving the endpoint public is fine.
-
----
-
-### 10. First-read race on user preferences
-
-`src/lib/preferencesQueries.ts:32` (`selectedCountriesForUser`)
-
-Bare `SELECT` then `INSERT`. Two concurrent first reads for the same user race on
-the primary key; the loser's unique violation is swallowed by the catch and
-re-thrown as `"Failed to fetch user preferences"`, which the page surfaces as a
-hard failure.
-
-**Fix:** `ON CONFLICT (user_id) DO NOTHING` followed by a re-select — or model it
-on `getPublicMapSettings` in `publicMapActions.ts`, which already does the whole
-thing as one upsert with `RETURNING`.
 
 ---
 
