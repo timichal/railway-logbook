@@ -23,7 +23,7 @@ and add a line to the Session log at the bottom.
 | **Phase 0**       | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware                                                                                                                                                                     |
 | **Phase 1**       | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md`                                                                                                                                                        |
 | **Phase 2**       | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android                                                                                                                                   |
-| **Phase 3**       | **Mostly done** (2026-08-27). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. The two **overlays** are deliberately left — they are driven by Phase 4 state                                           |
+| **Phase 3**       | **Done** (2026-08-27; **seen on a device 2026-09-17**). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. The two **overlays** are deliberately left — they are driven by Phase 4 state                  |
 | **Current phase** | **Phase 4 — features**, with Phase 3's two overlays folded into it                                                                                                                                                                                                          |
 | **Blocked on**    | nothing                                                                                                                                                                                                                                                                     |
 | **Next**          | Phase 4's own list (route logger, journeys and trips, planner, country stats, station search), and then the highlight and coverage overlays on top of the state it creates. The coverage overlay needs one new endpoint — Phase 1 built nothing shaped like `GET /coverage` |
@@ -199,6 +199,26 @@ project, so it is recorded here rather than in the deleted spike.
    emulates and is unusable). Boot it, then `npx expo run:android`.
 
 **Traps that cost real time:**
+
+- **The first *device* build cannot be done by `expo run:ios`.** A simulator build
+  needs no provisioning profile, so a project that has only ever run on the simulator
+  has none — and Xcode will not create one, or register the phone with the team,
+  unless xcodebuild is passed `-allowProvisioningUpdates`, which the Expo CLI has no
+  flag to forward (`--scheme`, `--configuration`, `--device`, `--binary`, and nothing
+  else). It fails at "Planning build" with `No profiles for '<bundle id>' were found`,
+  which reads like a certificate problem and is not — `security find-identity` will
+  show a perfectly good one. Do the first device build **from Xcode** (open
+  `ios/*.xcworkspace`, ⌘R, starting Metro yourself in `mobile/` since Xcode will not),
+  or once from the CLI with the flag:
+
+  ```bash
+  xcodebuild -workspace RailwayLogbook.xcworkspace -scheme RailwayLogbook \
+    -configuration Debug -destination "id=<device udid>" -allowProvisioningUpdates
+  ```
+
+  `npm run ios` works normally afterwards. One reading trap on the way: the team id in
+  `security find-identity`'s output is the **OU** of the certificate, not the
+  parenthesised id in its common name — the latter looks like a team id and is not one.
 
 - **iOS fetches the JS bundle over Wi-Fi even when the phone is cabled.** USB
   carries the install and the debugger, not Metro, and there is no `adb reverse`
@@ -679,17 +699,18 @@ with the region — flat `[w, s, e, n]`, where `region.bounds` is nested.
 - **The app builds and launches on the simulator** with MapLibre linked (SPM, via the
   config plugin) — which is the class of failure a fresh native dependency causes,
   and it does not happen.
-- **The map itself has not been seen.** The simulator's keychain has no session, and
-  the map tab lives behind `Stack.Protected`; signing in needs credentials. So the
-  one thing Phase 0 warns cannot be typechecked — a spec-valid expression that kills
-  the process at native style conversion — rests on Phase 0 having proved these exact
-  expressions on a device, plus the validator above. **Sign in on the simulator and
-  look at it before building anything on top of this.** Watch for: the fade layer
-  landing under our lines rather than over them, the region switch actually moving the
-  camera, whether a `tiles` URL change reloads the source (a region switch changes the
-  country filter), and whether a press event carries the feature id — `track_id` is
-  the MVT feature id and `ST_AsMVT` removes it from the properties, so there is
-  nothing to fall back on if it does not.
+- **The map has been seen on a device** (2026-09-17, iPhone, iOS 27). It renders, the
+  **region switch works** (so `cameraRef.setStop` moves the camera, and the tile URL's
+  new country filter reloads the source rather than leaving the old region's routes
+  behind), **tapping a route works** — which is the answer to the open question about
+  the feature id, since `track_id` is the MVT feature id that `ST_AsMVT` strips from
+  the properties and the sheet has nothing else to identify a route by — and the
+  **country borders** draw where they should. Phase 0's unverifiable risk, a spec-valid
+  expression that kills the process at native style conversion, is therefore closed for
+  the expressions currently on the map: they run.
+
+  What that run did *not* exercise, because it needs state Phase 4 builds: everything
+  below.
 
 #### Still open in Phase 3
 
@@ -865,3 +886,20 @@ pick up. Keep it short — the phase sections carry the detail.
   the highlight and coverage overlays**, both driven by selection and journey state
   that arrives with Phase 4 — inventing that state twice was the alternative.
   **Next: Phase 4**, and those two overlays on top of it.
+- **2026-09-17 — merged `main` into the branch, and ran Phase 3 on a device.** Phase 3
+  was committed, then eight commits from `main` merged in (docker updates, map tweaks,
+  **country borders**, dependency bumps). Three conflicts, all one shape: `main` had
+  gone on writing `src/lib/map` the web way while this branch made it importable from
+  React Native. Resolved by keeping the shared shape and taking the feature into it —
+  `createCountryBordersLayer` now types against `@maplibre/maplibre-gl-style-spec` and
+  `main`'s copy of `resolveMissingBasemapIcons` was dropped, this branch having moved
+  it to `missingIcons.ts` (the one piece needing a live `maplibregl.Map`). The lockfile
+  needed no network: `@maplibre/maplibre-gl-style-spec` was already in the tree at
+  26.4.2 under `maplibre-gl`, so promoting it to a direct devDependency was the whole
+  change. **The merge also exposed the first cost of the shared set**: the borders
+  layer was written for one consumer and there are now two, so the native map would
+  have silently lacked them — `useBasemapStyle` now bakes them in, stacked as
+  `useMapLibre` stacks them. Then **built and ran on the iPhone**: signing needed a
+  detour (see the new trap under "Getting the tooling to run" — `expo run:ios` cannot
+  do a first device build), and the map renders, switches region, answers taps and
+  draws its borders. **Next: Phase 4.**
