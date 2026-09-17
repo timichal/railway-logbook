@@ -9,31 +9,12 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-4 and 20 have
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-5 and 20 have
 since been fixed and removed).
 
 ---
 
 ## Bugs
-
-### 5. The journey planner charges the last route but not the first
-
-`src/lib/routePathFinder.ts:615` (`findShortestPath`)
-
-Start states are seeded at `cost: 0`, and route length is only added when
-*entering* a neighbour. So the first route of a plan is free while the end
-route's full length is charged.
-
-Where a station is served by several routes — a 4 km connector and a 300 km
-trunk — both look free to the search, so it can pick a path that starts by
-running the trunk. `computeTravelledTrims` trims the terminal routes afterwards,
-so the **reported** km are right and the **chosen path** may not be.
-
-**Fix:** seed with `length_km × getRouteCostMultiplier(info)`, or trim the
-terminal routes before costing. Check with `npm run inspectPath` on a few known
-journeys before and after — this changes which paths are selected.
-
----
 
 ### 6. The terminal-route trim recomputes a side the search already knew
 
