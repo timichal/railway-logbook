@@ -9,29 +9,12 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-7, 10, 13 and
-20 have since been fixed or dismissed and removed).
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-8, 10, 13
+and 20 have since been fixed or dismissed and removed).
 
 ---
 
 ## Bugs
-
-### 8. Login is a user-enumeration oracle, and unthrottled
-
-`src/lib/authQueries.ts:33` (`authenticateUser`)
-
-An unknown email returns before `bcrypt.compare` runs; a known one spends ~250 ms
-in it (cost 12). That timing difference enumerates registered addresses.
-
-Neither `/api/v1/auth/login` nor `/api/v1/auth/register` has rate limiting, so the
-same bcrypt cost is also a cheap CPU-exhaustion lever against an unauthenticated
-endpoint.
-
-**Fix:** compare against a fixed dummy hash on the miss path so both branches pay
-the same cost. Rate limiting is a separate, larger decision — note it and move on
-if it is out of scope.
-
----
 
 ### 9. `POST /api/v1/planner` is the only unauthenticated handler
 

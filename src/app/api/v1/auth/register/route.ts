@@ -2,6 +2,7 @@ import { issueTokens } from "@/lib/api/auth";
 import { optionalString, readJsonBody, requireString } from "@/lib/api/params";
 import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { registerUser } from "@/lib/authQueries";
+import { enforceRegisterRateLimit } from "@/lib/rateLimit";
 
 /**
  * POST /api/v1/auth/register — { email, password, confirmPassword, name? }.
@@ -11,6 +12,10 @@ import { registerUser } from "@/lib/authQueries";
  */
 export async function POST(request: Request): Promise<Response> {
   return apiHandler(async () => {
+    // Capped per client (rateLimit.ts): registering costs a bcrypt *hash*, and
+    // nothing else here asks who is calling.
+    enforceRegisterRateLimit(request.headers);
+
     const body = await readJsonBody(request);
 
     const user = await registerUser({

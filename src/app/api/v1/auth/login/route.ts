@@ -3,16 +3,23 @@ import { readJsonBody, requireString } from "@/lib/api/params";
 import { ApiError, apiHandler, jsonResponse } from "@/lib/api/response";
 import { authenticateUser } from "@/lib/authQueries";
 import { ValidationError } from "@/lib/errors";
+import { clearLoginRateLimit, enforceLoginRateLimit } from "@/lib/rateLimit";
 
 /** POST /api/v1/auth/login — { email, password } → the token pair. */
 export async function POST(request: Request): Promise<Response> {
   return apiHandler(async () => {
+    // Before the body is even read: the point of the limit is to cap how much
+    // bcrypt an anonymous caller can buy (see rateLimit.ts). A `RateLimitError`
+    // leaves here as a 429 with `Retry-After`.
+    enforceLoginRateLimit(request.headers);
+
     const body = await readJsonBody(request);
     const email = requireString(body, "email");
     const password = requireString(body, "password");
 
     try {
       const user = await authenticateUser(email, password);
+      clearLoginRateLimit(request.headers);
       return jsonResponse(await issueTokens(user));
     } catch (error) {
       // Rejected credentials are a 401, not the 400 a validation message gets.

@@ -14,3 +14,20 @@ export class ValidationError extends Error {
     this.name = "ValidationError";
   }
 }
+
+/**
+ * A refusal to even try, because the caller has asked too often — see
+ * `rateLimit.ts`. Separate from `ValidationError` because it is not a complaint
+ * about the input: the HTTP API owes it a 429 and a `Retry-After`, which is the
+ * only thing a native client can act on, while the web forms render its message
+ * like any other.
+ */
+export class RateLimitError extends Error {
+  constructor(
+    readonly retryAfterSeconds: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "RateLimitError";
+  }
+}

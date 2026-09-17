@@ -8,7 +8,7 @@
  * is not.
  */
 
-import { ValidationError } from "../errors";
+import { RateLimitError, ValidationError } from "../errors";
 
 /** An error whose status code the client is meant to see. */
 export class ApiError extends Error {
@@ -25,8 +25,8 @@ export function jsonResponse(data: unknown, status = 200): Response {
   return Response.json(data, { status });
 }
 
-export function errorResponse(status: number, message: string): Response {
-  return Response.json({ error: message }, { status });
+export function errorResponse(status: number, message: string, headers?: HeadersInit): Response {
+  return Response.json({ error: message }, { status, headers });
 }
 
 /**
@@ -57,9 +57,10 @@ export function assertOk(result: { error?: string }): void {
  * Run a handler body, mapping thrown errors to responses.
  *
  * `ApiError` carries its own status and `ValidationError` is a 400 — those two
- * messages are written for whoever asked. Anything else is a bug: logged in
- * full, returned as an opaque 500, because a Postgres error text is not advice
- * to hand a client.
+ * messages are written for whoever asked. A `RateLimitError` is the 429 its own
+ * name says, and carries the `Retry-After` the client is meant to obey.
+ * Anything else is a bug: logged in full, returned as an opaque 500, because a
+ * Postgres error text is not advice to hand a client.
  */
 export async function apiHandler(fn: () => Promise<Response>): Promise<Response> {
   try {
@@ -67,6 +68,11 @@ export async function apiHandler(fn: () => Promise<Response>): Promise<Response>
   } catch (error) {
     if (error instanceof ApiError) {
       return errorResponse(error.status, error.message);
+    }
+    if (error instanceof RateLimitError) {
+      return errorResponse(429, error.message, {
+        "Retry-After": String(error.retryAfterSeconds),
+      });
     }
     if (error instanceof ValidationError) {
       return errorResponse(400, error.message);

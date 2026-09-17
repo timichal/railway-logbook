@@ -21,6 +21,17 @@ import { ValidationError } from "./errors";
 /** Bcrypt cost. Unchanged from the original inline value. */
 const SALT_ROUNDS = 12;
 
+/**
+ * A real hash at `SALT_ROUNDS`, of a password no account has.
+ *
+ * An unknown email used to return before any bcrypt ran, so a miss answered in
+ * a millisecond and a hit took the ~250ms a cost-12 compare takes — which is a
+ * remote test for whether an address is registered. Comparing against this
+ * makes both paths pay the same, and it is a constant rather than a hash
+ * computed at startup so the cost is not also paid on boot.
+ */
+const ABSENT_USER_HASH = "$2b$12$prcCwRuupfHvFFvT0nLEN.wp/pis0IEYblQpBUnOW061kZjKRk7H2";
+
 export async function authenticateUser(email: string, password: string): Promise<User> {
   if (!email || !password) {
     throw new ValidationError("Email and password are required");
@@ -30,14 +41,12 @@ export async function authenticateUser(email: string, password: string): Promise
     email,
   ]);
 
-  if (result.rows.length === 0) {
-    throw new ValidationError("Invalid email or password");
-  }
-
   const user = result.rows[0];
 
-  const isValid = await bcrypt.compare(password, user.password || "");
-  if (!isValid) {
+  // Always compared, and against a well-formed hash either way, so that neither
+  // a missing row nor a row with no password answers faster than a real one.
+  const isValid = await bcrypt.compare(password, user?.password || ABSENT_USER_HASH);
+  if (!user || !isValid) {
     throw new ValidationError("Invalid email or password");
   }
 

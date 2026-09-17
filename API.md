@@ -28,6 +28,7 @@ for the other continent, so it is a 400. Values: `europe`, `japan`.
 | 400 | the request is malformed, or a value was rejected (`name is required`) |
 | 401 | no token, an expired one, or credentials that don't check out |
 | 404 | the row isn't there, or isn't the caller's |
+| 429 | too many auth attempts from this client. Carries `Retry-After`, in seconds |
 | 500 | a bug or a database failure. The message is opaque by design; the detail is in the server log |
 
 A 404 rather than a 403 for someone else's journey: every query is scoped by
@@ -55,6 +56,14 @@ never runs its window down.
 Tokens are stateless: there is no server-side revocation and **no logout
 endpoint**. Logging out is the client deleting both tokens, which is why they
 belong in `expo-secure-store` and not in plain storage.
+
+**Login and register are rate-limited per client** — 10 sign-ins per 5 minutes,
+5 registrations per hour, counted in memory against the address the proxy
+reports (`src/lib/rateLimit.ts`). A successful login clears its count, so only a
+run of failures ever trips it. Over the limit is a **429** with `Retry-After` in
+seconds and a message fit to show; a client should wait that long rather than
+retry, and must not treat it as bad credentials. Nothing else in the API is
+limited — everything else costs a query, while a password costs a bcrypt.
 
 ## Public reads
 

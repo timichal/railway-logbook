@@ -7,12 +7,18 @@
  * `authTokens.ts`, because the mobile API needs both without a cookie in sight
  * (see MOBILE_APP_PLAN.md, Phase 1). What is left here is exactly the part that
  * is browser-specific — reading and writing `railway-auth`.
+ *
+ * The rate limits are here as well as in the API handlers, and for the same
+ * reason they exist at all: a server action is an ordinary POST to the page, so
+ * limiting only `/api/v1/auth` would leave the same bcrypt a request away (see
+ * `rateLimit.ts`).
  */
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authenticateUser, registerUser } from "./authQueries";
 import { COOKIE_NAME, createToken, type User, verifyToken } from "./authTokens";
+import { clearLoginRateLimit, enforceLoginRateLimit, enforceRegisterRateLimit } from "./rateLimit";
 
 export type { User };
 
@@ -41,16 +47,22 @@ export async function getUser(): Promise<User | null> {
 }
 
 export async function login(formData: FormData) {
+  const requestHeaders = await headers();
+  enforceLoginRateLimit(requestHeaders);
+
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
   const user = await authenticateUser(email, password);
+  clearLoginRateLimit(requestHeaders);
   await setSessionCookie(user);
 
   return { success: true, user };
 }
 
 export async function register(formData: FormData, localPreferences?: string[]) {
+  enforceRegisterRateLimit(await headers());
+
   const user = await registerUser(
     {
       name: formData.get("name") as string,
