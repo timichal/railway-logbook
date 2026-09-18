@@ -87,7 +87,7 @@ Bearer token required.
 | `GET /progress/countries?region=` | `{ byCountry, total }` — one row per country the region declares, ridden or not |
 | `GET /coverage` | `{ stretches }` — ridden stretches of routes not yet finished |
 | `GET /preferences` | `{ selectedCountries }`, defaulted to every supported country on first read |
-| `PUT /preferences` | `{ selectedCountries }` — a whole-list replacement, empty list allowed |
+| `PUT /preferences` | `{ selectedCountries }` — a whole-list replacement, empty list allowed. Codes are upper-cased and deduplicated, anything that is not ISO 3166-1 alpha-2 is dropped, and the response echoes the list as stored |
 
 ## Journeys
 

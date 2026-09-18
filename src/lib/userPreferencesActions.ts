@@ -27,5 +27,5 @@ export async function updateUserPreferences(selectedCountries: string[]): Promis
     throw new Error("User not authenticated");
   }
 
-  return updateSelectedCountriesForUser(user.id, selectedCountries);
+  await updateSelectedCountriesForUser(user.id, selectedCountries);
 }

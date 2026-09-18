@@ -4,6 +4,7 @@
  * not a default.
  */
 
+import { normalizeCountryCodes } from "../constants";
 import type { LoggedRange } from "../journeyQueries";
 import { isRegionId, type RegionId } from "../regions";
 import type { CoveredRange } from "../types";
@@ -43,10 +44,7 @@ export function optionalCountries(url: URL): string[] | undefined {
   if (raw === null) return undefined;
   if (raw.trim() === "") return [];
 
-  return raw
-    .split(",")
-    .map((code) => code.trim().toUpperCase())
-    .filter((code) => /^[A-Z]{2}$/.test(code));
+  return normalizeCountryCodes(raw.split(","));
 }
 
 export function optionalInt(url: URL, name: string, fallback: number): number {

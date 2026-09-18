@@ -16,6 +16,11 @@ export async function GET(request: Request): Promise<Response> {
  *
  * A whole-list replacement rather than a patch: that is what the Countries tab
  * does (Select All / None included), and an empty list is a legitimate value.
+ *
+ * The response echoes the list as stored, not as sent: the codes are
+ * normalized on the way in (see `updateSelectedCountriesForUser`), so a client
+ * that sent something the filter cannot hold sees it missing from the reply
+ * rather than discovering it on the next read.
  */
 export async function PUT(request: Request): Promise<Response> {
   return apiHandler(async () => {
@@ -23,7 +28,7 @@ export async function PUT(request: Request): Promise<Response> {
     const body = await readJsonBody(request);
     const selectedCountries = requireStringArray(body, "selectedCountries");
 
-    await updateSelectedCountriesForUser(user.id, selectedCountries);
-    return jsonResponse({ selectedCountries });
+    const stored = await updateSelectedCountriesForUser(user.id, selectedCountries);
+    return jsonResponse({ selectedCountries: stored });
   });
 }

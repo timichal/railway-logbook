@@ -8,7 +8,7 @@
  * calls the same functions.
  */
 
-import { SUPPORTED_COUNTRIES } from "./constants";
+import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./constants";
 import { query } from "./db";
 
 /**
@@ -42,18 +42,36 @@ export async function selectedCountriesForUser(userId: number): Promise<string[]
   }
 }
 
+/**
+ * Replace the user's country filter, returning the list as it was stored.
+ *
+ * The codes are normalized here rather than at either caller, because both
+ * transports write through this one function and the column would otherwise
+ * hold whatever each of them happened to check: the HTTP handler shape-checks a
+ * JSON array and the server action is an ordinary POST that takes its argument
+ * as given. Same treatment the filter already gets when it is read off a query
+ * string (`optionalCountries`), so a code that survives a write is one a read
+ * would have kept. Dropping the malformed rather than refusing the call also
+ * bounds the array: two-letter codes, deduplicated, cannot exceed 676 entries.
+ *
+ * The stored list is returned so a caller can echo what it actually saved
+ * instead of what it was handed.
+ */
 export async function updateSelectedCountriesForUser(
   userId: number,
   selectedCountries: string[],
-): Promise<void> {
+): Promise<string[]> {
+  const codes = normalizeCountryCodes(selectedCountries);
+
   try {
     await query(
       `INSERT INTO user_preferences (user_id, selected_countries, updated_at)
        VALUES ($1, $2, NOW())
        ON CONFLICT (user_id)
        DO UPDATE SET selected_countries = $2, updated_at = NOW()`,
-      [userId, selectedCountries],
+      [userId, codes],
     );
+    return codes;
   } catch (error) {
     console.error("Error updating user preferences:", error);
     throw new Error("Failed to update user preferences");

@@ -154,6 +154,33 @@ export const SUPPORTED_COUNTRIES = [
   { code: "GB", name: "United Kingdom" },
 ] as const;
 
+/** ISO 3166-1 alpha-2 — the shape of every code the country filter holds. */
+const COUNTRY_CODE = /^[A-Z]{2}$/;
+
+/**
+ * The country filter as it is stored: upper-cased, deduplicated, and stripped
+ * of anything that is not a two-letter code.
+ *
+ * One definition for both directions — the codes arrive from a query string on
+ * a read and from a JSON body on a write, and the columns they are matched
+ * against (`start_country`/`end_country`) hold nothing else, so a list that
+ * reaches the database unchecked is a filter that silently matches no route.
+ *
+ * Deliberately not narrowed to `SUPPORTED_COUNTRIES`: a stored code outside
+ * that list matches nothing and costs nothing, while pruning against it on
+ * every write would quietly edit a user's selection whenever the list changed.
+ */
+export function normalizeCountryCodes(codes: string[]): string[] {
+  const seen = new Set<string>();
+
+  for (const raw of codes) {
+    if (typeof raw !== "string") continue;
+    const code = raw.trim().toUpperCase();
+    if (COUNTRY_CODE.test(code)) seen.add(code);
+  }
+  return [...seen];
+}
+
 /**
  * Most via stations one journey-planner search may carry.
  *

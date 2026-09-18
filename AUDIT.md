@@ -9,35 +9,12 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-15 and 20
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-18 and 20
 have since been fixed or dismissed and removed).
 
 ---
 
-## Refactors
-
-### 17. Asymmetric validation on the preferences endpoint
-
-`src/app/api/v1/preferences/route.ts`
-
-`GET` filters country codes through `/^[A-Z]{2}$/` (`optionalCountries` in
-`src/lib/api/params.ts`); `PUT` accepts up to 2000 arbitrary strings of any length
-via `requireStringArray` and stores them in `selected_countries`. Same list, two
-standards.
-
-**Fix:** validate on write with the same regex.
-
----
-
 ## Documentation nits
-
-### 18. Stale country count in CLAUDE.md
-
-`CLAUDE.md`, the `user_preferences` bullet, says the default is "(20 codes)". It
-is 21, in both `src/lib/constants.ts` (`SUPPORTED_COUNTRIES`) and
-`database/init/01-schema.sql`.
-
----
 
 ### 19. Comment contradicts the code on the backtracking allowance
 
