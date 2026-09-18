@@ -174,7 +174,8 @@ export class RailwayPathFinder {
 
     // Step 3: Search for non-backtracking alternative
     const firstDistance = this.calculatePathDistance(firstPath);
-    // Allow searching for paths up to 10% longer or +5km (non-backtracking paths are often slightly longer)
+    // Non-backtracking paths are often slightly longer, so allow some slack: 10% or
+    // 5km, whichever is smaller (the percentage rules on long paths, the +5km on short ones).
     const searchDistance = Math.min(firstDistance * 1.1, firstDistance + 5000);
     this.log(
       `  Searching for non-backtracking alternatives (max ${(searchDistance / 1000).toFixed(1)}km)...`,
@@ -192,6 +193,7 @@ export class RailwayPathFinder {
 
     // Step 4: Compare by distance
     const altDistance = this.calculatePathDistance(bestAlternative);
+    // Same allowance as the search above: 10% or 5km longer, whichever is smaller.
     const maxAcceptable = Math.min(firstDistance * 1.1, firstDistance + 5000);
 
     if (altDistance <= maxAcceptable) {

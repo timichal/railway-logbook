@@ -1177,6 +1177,7 @@ export async function findRoutePathBetweenStations(
           segmentFractions,
           {
             avoidBacktracking: true,
+            // Twice the cost or +20, whichever is smaller.
             maxCost: Math.min(best.cost * 2, best.cost + 20),
           },
         );
