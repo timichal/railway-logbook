@@ -9,29 +9,12 @@ once it is done**; when the file is empty, delete the file. If an item turns out
 to be wrong or deliberate, delete it too and (if the reasoning is worth keeping)
 move a sentence into `CLAUDE.md` instead.
 
-Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-14 and 20
+Baseline: `npx tsc --noEmit` and `npm run lint` are clean (items 1-15 and 20
 have since been fixed or dismissed and removed).
 
 ---
 
 ## Refactors
-
-### 15. Admin BFS uses `Array.shift()` and `path.includes()` in the hot loop
-
-`src/scripts/lib/railwayPathFinder.ts` (`findShortestPath`,
-`findPathWithoutBacktracking`)
-
-`queue.shift()` is O(n) per pop, and `current.path.includes(connectedId)` is
-O(path) inside the inner loop. At the 222 km fallback buffer that is a lot of
-parts, and `RECALC_PERFORMANCE.md` says recalculation dominates the import.
-
-**Fix:** a head index instead of `shift`, and a `Set` carried alongside each path.
-Neither changes the algorithm or the paths it returns.
-
-**Read `RECALC_PERFORMANCE.md` first** — it lists constraints that must not be
-broken while touching this file.
-
----
 
 ### 17. Asymmetric validation on the preferences endpoint
 

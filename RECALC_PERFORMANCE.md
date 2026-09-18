@@ -37,6 +37,20 @@ pulling the next route off a shared index and writing its own `UPDATE`:
   escaping `recalculateAndStoreRoute` means the database is unhappy — the worker
   sets `aborted`, the others stop taking new routes, and it propagates. Marking a
   route invalid over a transient fault would be worse than failing loudly.
+- **Both BFS queues are popped through a head index, not `shift()`.** `shift()`
+  reindexes the whole queue on every pop, and at the 222 km buffer the queue
+  holds tens of thousands of entries; the consumed slot is cleared so its path
+  can be collected. The pop order is unchanged, so the search is the same search.
+  Measured against the previous form on synthetic networks: 80k parts,
+  325ms vs 374ms (`findShortestPath`) and 2.37s vs 2.46s
+  (`findPathWithoutBacktracking`); a wash on small ones.
+- **The cycle check stays `path.includes()`.** Carrying a `Set` of the path's ids
+  alongside each queue entry — the obvious fix for an O(path) scan in an inner
+  loop — is *slower here*, because a railway graph's parts have degree 2-3: the
+  scan runs about as often as the per-push `Set` copy would, at a much lower
+  constant. Measured on a 3000-part corridor, the `Set` cost 1.00s against 0.78s.
+  It would pay off only where nodes have many neighbours, which this graph does
+  not.
 - **`RailwayPathFinder` takes `{quiet: true}`** instead of having its output
   silenced from outside. The old code swapped out the global `console.log` around
   each search and restored it in a `finally`; that is safe only while calls are
@@ -135,7 +149,31 @@ SELECT track_id, is_valid, ROUND(length_km::numeric, 3) FROM railway_routes ORDE
 
 Run it again afterwards and diff. Length may shift in the last decimal from
 floating-point ordering, but `is_valid` must not change for any route, and no
-route should gain or lose an `error_message`. The changes recorded above were
-verified this way: over all 5531 routes, `is_valid`, `error_message` presence and
-`length_km` to three decimals came out byte-identical, at every concurrency
-tried.
+route should gain or lose an `error_message`.
+
+The head-index change above was verified this way over all 6874 routes, and the
+diff was taken on **`md5(ST_AsBinary(geometry))` as well** — stricter than the
+rounded length, and the thing actually worth holding constant. Both runs started
+from the same input: the table was copied to a scratch table first, the new code
+run, the results snapshotted, the table restored from the copy, and the previous
+`railwayPathFinder.ts` (out of git) run against that identical starting state.
+`is_valid`, `error_message`, `length_km` to three decimals, `has_backtracking`
+and the geometry hash came out identical for every one of the 6874 routes.
+
+Restoring between the runs is what makes them comparable: recalculation writes
+`length_km`, and the length check compares against the stored value, so a second
+run over the first run's output is not the same experiment. Station proximity is
+derived from route geometry, so a restore has to be followed by
+`refreshAllStationProximity` to leave the database consistent.
+
+Cheaper than a full pair of runs, and enough for most changes: pull the previous
+finder out of git and run both through `findPathFromCoordinates` over a sample,
+comparing `partIds`, `coordinates`, `hasBacktracking` and `backtrackingAt` in
+memory, with no writes at all. Sample the routes that reach the code being
+changed — for this one, all 41 with `has_backtracking` (the only routes that
+enter `findPathWithoutBacktracking`) plus the longest few, which are the routes
+whose buffer escalates and whose queues get large.
+
+The earlier changes recorded above were verified the first way: over all 5531
+routes, `is_valid`, `error_message` presence and `length_km` to three decimals
+came out byte-identical, at every concurrency tried.

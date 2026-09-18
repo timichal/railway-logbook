@@ -40,7 +40,7 @@ berlin sbahn: https://sbahn.berlin/liniennetz/
 ŠVÝCARSKO
 traťová mapa https://maps.trafimage.ch/ch.sbb.infrastruktur?display_srs=EPSG%3A2056&lang=en&layers=ch.sbb.infrastruktur.uebrigebahnen.group,ch.sbb.infrastruktur.tochtergesellschaften.group,ch.sbb.infrastruktur.gewaesser.group&baselayers=ch.sbb.infrastruktur
 
-ITÁLIEu
+ITÁLIE
 traťová mapa https://www.rfi.it/it/rete/la-rete-oggi.html
 
 SLOVINSKO

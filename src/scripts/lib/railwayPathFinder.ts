@@ -297,11 +297,20 @@ export class RailwayPathFinder {
    * Find shortest path using standard BFS with global visited set
    */
   private findShortestPath(startId: string, endId: string): string[] | null {
-    const queue: { id: string; path: string[] }[] = [{ id: startId, path: [startId] }];
+    // A head index rather than `shift()`, which reindexes the whole queue on
+    // every pop. The pop order is unchanged, so the search is the same search.
+    // Consumed slots are cleared so their paths can be collected — at the 222km
+    // buffer the queue holds tens of thousands of entries.
+    const queue: ({ id: string; path: string[] } | undefined)[] = [
+      { id: startId, path: [startId] },
+    ];
+    let head = 0;
     const visited = new Set<string>([startId]);
 
-    while (queue.length > 0) {
-      const current = queue.shift()!;
+    while (head < queue.length) {
+      const current = queue[head]!;
+      queue[head] = undefined;
+      head++;
       const connected = this.getConnectedPartIds(current.id);
 
       for (const connectedId of connected) {
@@ -334,13 +343,15 @@ export class RailwayPathFinder {
     maxDistance: number,
     forcedFirstHop?: string,
   ): string[] | null {
-    const queue: { id: string; path: string[]; distance: number }[] = [
+    // Head index rather than `shift()`, as in `findShortestPath`.
+    const queue: ({ id: string; path: string[]; distance: number } | undefined)[] = [
       {
         id: startId,
         path: [startId],
         distance: 0,
       },
     ];
+    let head = 0;
 
     const bestDistance = new Map<string, number>();
     bestDistance.set(startId, 0);
@@ -348,8 +359,10 @@ export class RailwayPathFinder {
     let shortestPath: string[] | null = null;
     let shortestPathDistance = Infinity;
 
-    while (queue.length > 0) {
-      const current = queue.shift()!;
+    while (head < queue.length) {
+      const current = queue[head]!;
+      queue[head] = undefined;
+      head++;
 
       // Skip if we already found a better path to this node
       const currentBest = bestDistance.get(current.id);
