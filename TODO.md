@@ -35,9 +35,9 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       including the `Works`/`Todo`/`UsageInternal` drafts that `public_notes_tile`
       exists to hide. It is served from the same Martin instance under the same
       `/tiles` prefix the admin map fetches from the browser, and Martin's
-      `/catalog` lists every source. The nginx config is not in the repo, so check
+      `/catalog` lists every source. The Caddyfile is not in the repo, so check
       it, but nothing here gates the path. **Fix:** put the admin sources behind
-      an auth check (an nginx `auth_request` to an admin-check endpoint, or a Next
+      an auth check (Caddy's `forward_auth` to an admin-check endpoint, or a Next
       proxy route), or run them from a second Martin instance that is not publicly
       routed.
 
@@ -67,9 +67,22 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       which `clientAddress` trusts first (`src/lib/rateLimit.ts:116-127`), so
       sending a random value per request gets a fresh budget each time and the
       sign-in and registration caps go away. **Fix:** bind both as
-      `127.0.0.1:…`. Also confirm that nginx sets
-      `proxy_set_header X-Real-IP $remote_addr` rather than passing the client's
-      header through.
+      `127.0.0.1:…`.
+
+- [ ] **Behind Caddy, `X-Real-IP` is client-controlled, so the rate limit is
+      bypassable even through the proxy.** `src/lib/rateLimit.ts:116-127`.
+      `clientAddress` prefers `X-Real-IP`, assuming the proxy sets it. That held
+      for nginx with `proxy_set_header X-Real-IP $remote_addr`. Caddy's
+      `reverse_proxy` never sets `X-Real-IP` and passes a client's own copy
+      through unchanged, so `X-Real-IP: <random>` on each request gets a fresh
+      budget. `X-Forwarded-For` is safe: with no `trusted_proxies` configured,
+      Caddy discards the incoming value and sets it to the peer address, so the
+      rightmost-hop logic still gives the real client. **Fix:** drop the
+      `X-Real-IP` branch and read only `X-Forwarded-For`, which also fixes the
+      doc comment above `clientAddress`. Alternatively, have the Caddyfile
+      overwrite the header with `header_up X-Real-IP {remote_host}`. That keeps
+      the code as is, but makes its safety depend on a file that isn't in the
+      repo.
 
 - [ ] **Any account holder can bypass the login rate limit.**
       `src/lib/rateLimit.ts:149-151`. A successful login clears the whole

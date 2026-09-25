@@ -304,7 +304,7 @@ token. `API.md` is the endpoint reference; the web app is unchanged.
 
 ### Tiles are already fine
 
-Production serves Martin through nginx at `/tiles` over HTTPS
+Production serves Martin through Caddy at `/tiles` over HTTPS
 (`docker-compose.yml` exposes Martin on 3001; `getTileBaseUrl()` in
 `src/lib/map/index.ts` builds the public URL). Both platforms block cleartext HTTP
 by default — iOS App Transport Security, Android since 9 — so HTTPS is required,

@@ -31,7 +31,7 @@ export { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
 // The initial view and the panning limits are per-region; see src/lib/regions.ts.
 export const TILE_SERVER_PORT = 3001;
 
-// Use /tiles/ path in production (proxied through nginx), direct port in development
+// Use /tiles/ path in production (proxied through Caddy), direct port in development
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const getTileBaseUrl = () => {
   if (typeof window === "undefined") {

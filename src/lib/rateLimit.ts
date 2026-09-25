@@ -103,10 +103,11 @@ function describeWait(seconds: number): string {
 /**
  * The client an attempt came from.
  *
- * Production runs behind nginx (`MOBILE_APP_PLAN.md`), so the address arrives in
- * a header. `X-Forwarded-For` is read from the **right**: nginx appends the peer
- * it actually accepted the connection from, so anything a client invented sits
- * to the left of it and is ignored. `X-Real-IP` is a single value set by the
+ * Production runs behind Caddy (`MOBILE_APP_PLAN.md`), so the address arrives in
+ * a header. `X-Forwarded-For` is read from the **right**: with no
+ * `trusted_proxies` configured, Caddy replaces the header with the peer it
+ * actually accepted the connection from, and a proxy that appends instead still
+ * leaves anything a client invented to the left of it, where it is ignored. `X-Real-IP` is a single value set by the
  * proxy and is preferred where it exists.
  *
  * Everything arriving without either header shares one bucket — in this
