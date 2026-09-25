@@ -23,10 +23,11 @@ import type { Station } from "@/lib/types";
 import { optionRow } from "@/lib/ui/buttonStyles";
 
 interface PublicRailwayMapProps {
-  /** Sharing token from the URL — stands in for a session on every data call. */
+  /**
+   * Sharing token from the URL — stands in for a session on every data call,
+   * the route tiles included: they are coloured by the owner whose token it is.
+   */
   token: string;
-  /** The owner whose rides colour the routes. Only used for the tile query. */
-  ownerId: number;
   /** The owner's country filter, shown exactly as they set it. */
   selectedCountries: string[];
   isMobile: boolean;
@@ -36,14 +37,16 @@ interface PublicRailwayMapProps {
  * The read-only map behind a share link.
  *
  * Same sources, layers and styling as the interactive map (both build them from
- * `userMapLayers`), coloured by the *owner's* rides via the tile's `user_id`
- * parameter. What is missing is everything that writes or picks: no sidebar, no
- * route selection, no journey planner, no country controls. Hover popups and the
- * layer toggles stay — they only change what the visitor is looking at.
+ * `userMapLayers`), coloured by the *owner's* rides: the route tile is asked for
+ * with the share token, which the tile handler resolves to its owner on every
+ * tile — so switching sharing off stops the tiles too, not just the numbers: an
+ * open map stops drawing routes (404s) rather than showing them all unridden.
+ * What is missing is everything that writes or picks: no sidebar, no route
+ * selection, no journey planner, no country controls. Hover popups and the layer
+ * toggles stay — they only change what the visitor is looking at.
  */
 export default function PublicRailwayMap({
   token,
-  ownerId,
   selectedCountries,
   isMobile,
 }: PublicRailwayMapProps) {
@@ -71,7 +74,7 @@ export default function PublicRailwayMap({
       region: region.id,
       sources: {
         railway_routes: createRailwayRoutesSource({
-          userId: ownerId,
+          rides: { shareToken: token },
           selectedCountries: effectiveCountries,
         }),
         stations: createPublicStationsSource(),
@@ -79,7 +82,7 @@ export default function PublicRailwayMap({
       },
       layers: createUserMapLayers(theme),
     },
-    [ownerId, effectiveCountries, region.id],
+    [token, effectiveCountries, region.id],
   );
 
   // Progress figures and the heritage/special toggles. Nothing here logs a

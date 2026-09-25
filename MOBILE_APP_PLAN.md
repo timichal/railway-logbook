@@ -313,6 +313,13 @@ and you already have it. **Proven end to end in Phase 0.**
 One change: `getTileBaseUrl()` derives the host from `window.location`. In RN
 there is no `window`; this becomes a build-time config constant per environment.
 
+The **route tile coloured by the user's rides is not Martin's**: Martin answers
+anyone, so it no longer takes a `user_id`, and the per-user tile is
+`/api/tiles/railway_routes/{z}/{x}/{y}` on the app's own origin, authenticated
+with the same bearer access token as `/api/v1` (`API.md`, "Route tiles"). The
+native map therefore needs a request transform that attaches `Authorization` to
+that one source.
+
 ---
 
 ## Phases

@@ -164,7 +164,7 @@ export default function RailwayMap({
       region: region.id,
       sources: {
         railway_routes: createRailwayRoutesSource({
-          userId: userId || undefined,
+          rides: userId ? "session" : undefined,
           selectedCountries: effectiveCountries,
         }),
         stations: createPublicStationsSource(),

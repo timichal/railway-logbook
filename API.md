@@ -160,6 +160,18 @@ route graph. First and last routes come back trimmed to the stretch actually
 travelled (`partial` geometry plus `travelled_length_km`), and `totalDistance`
 counts only that.
 
+## Route tiles
+
+Not under `/api/v1`, but the app needs it: the route tile coloured by the user's
+rides is `GET /api/tiles/railway_routes/{z}/{x}/{y}`, sent with the same
+`Authorization: Bearer <accessToken>`, which the native map has to attach
+to that one source. `?selected_countries=["CZ","SK"]` filters as on the web. The answer
+is an MVT (`application/x-protobuf`), a 204 for an empty tile, and a bare 401
+for a missing or expired token — never an uncoloured tile, which would pass for a
+map with nothing ridden. Martin's `/tiles/railway_routes_tile` is the same tile
+with no user, and no longer takes a `user_id` at all; see "Vector tiles" in
+`CLAUDE.md`.
+
 ## Not here
 
 - **Admin** — route creation, geometry editing and notes stay web-only. It is a

@@ -164,34 +164,35 @@ $$ LANGUAGE sql
 STABLE
 PARALLEL SAFE;
 
--- Function: railway_routes_tile
+-- Function: railway_routes_mvt
 -- Serves railway routes (combined lines with metadata) as vector tiles
 -- Includes user-specific journey data for styling (most recent journey's date/name/partial)
 -- Uses "most permissive wins" logic: route is complete if it's complete in ANY
 -- journey, or if its partial stretches union to the whole route (see
 -- user_fully_ridden_routes above)
--- Supports country filtering via query params
-CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
+-- Country filter: NULL shows every route, otherwise both endpoints must be listed.
+--
+-- **Not a Martin source, and it must never become one.** A user's ride history is
+-- private, and anything Martin publishes answers anyone who asks: it used to take
+-- user_id from the query string, so /tiles/railway_routes_tile/6/34/21?user_id=7
+-- served user 7's logbook to whoever typed it. The per-user tile is now served by
+-- the Next route handler under src/app/api/tiles, which resolves the session,
+-- bearer or share token first and calls this function itself. Martin publishes
+-- only railway_routes_tile below, which passes no user.
+CREATE OR REPLACE FUNCTION railway_routes_mvt(
+    z integer,
+    x integer,
+    y integer,
+    user_id_param integer,
+    selected_countries_param text[]
+)
 RETURNS bytea AS $$
 DECLARE
     result bytea;
     tile_envelope geometry;
-    user_id_param integer;
-    selected_countries_param text[];
 BEGIN
     -- Get the tile envelope in Web Mercator
     tile_envelope := ST_TileEnvelope(z, x, y);
-
-    -- Extract user_id from query params (for user-specific styling)
-    user_id_param := (query_params->>'user_id')::integer;
-
-    -- Extract selected_countries from query params (for country filtering)
-    -- Parse JSON array string to PostgreSQL array
-    selected_countries_param := CASE
-        WHEN query_params->>'selected_countries' IS NOT NULL
-        THEN ARRAY(SELECT json_array_elements_text((query_params->>'selected_countries')::json))
-        ELSE NULL
-    END;
 
     -- Generate MVT tile
     -- Use 'track_id' as feature ID for MapLibre feature-state support
@@ -271,7 +272,28 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql
-IMMUTABLE
+-- STABLE, not IMMUTABLE: it reads tables. And not STRICT, which would turn the
+-- NULL user of an anonymous tile into a NULL tile.
+STABLE
+PARALLEL SAFE;
+
+-- Function: railway_routes_tile
+-- The Martin source: the route tile with no user, so every route reads as
+-- unvisited (the admin map, the anonymous map — whose colours come from
+-- localStorage via feature state). Takes selected_countries from the query
+-- string and nothing else; a user_id in the query string is ignored.
+CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
+RETURNS bytea AS $$
+    SELECT railway_routes_mvt(
+        z, x, y,
+        NULL,
+        CASE
+            WHEN query_params->>'selected_countries' IS NOT NULL
+            THEN ARRAY(SELECT json_array_elements_text((query_params->>'selected_countries')::json))
+        END
+    );
+$$ LANGUAGE sql
+STABLE
 STRICT
 PARALLEL SAFE;
 

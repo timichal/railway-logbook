@@ -3,6 +3,7 @@ import type { ResolvedTheme } from "@/lib/theme";
 import { getNoteTypeColor, noteTypeOptions } from "../constants";
 import { BASEMAP_FONT_BOLD } from "./basemap";
 import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES } from "./style";
+import { ZOOM_RANGES } from "./zoomRanges";
 
 // The basemap (vector, latin labels) and its raster fallback live in basemap.ts.
 export {
@@ -23,6 +24,7 @@ export {
 } from "./basemap";
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
 export { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
+export { ZOOM_RANGES } from "./zoomRanges";
 
 // ============================================================================
 // CONSTANTS
@@ -45,20 +47,22 @@ const getTileBaseUrl = () => {
 };
 const TILE_BASE_URL = getTileBaseUrl();
 
-export const ZOOM_RANGES = {
-  railwayRoutes: { min: 4, max: 18 }, // Matches Martin configuration
-  railwayParts: { min: 4, max: 18 }, // Matches Martin configuration
-  stations: { min: 9, max: 18 }, // Matches Martin configuration
-  adminNotes: { min: 4, max: 18 }, // Admin notes visible at all zooms
-  publicNotes: { min: 7, max: 18 }, // Public Usage notes on the user map (from moderate zoom)
-} as const;
+/** The app's own origin, for the per-user route tile served by Next. */
+const routeTileOrigin = () => (typeof window === "undefined" ? "" : window.location.origin);
 
 // ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
 
+/**
+ * Whose rides colour the route tile: the signed-in visitor's own (`"session"`),
+ * or a shared map's owner, named by its share token.
+ */
+export type RouteTileRides = "session" | { shareToken: string };
+
 export interface RailwayRoutesSourceOptions {
-  userId?: number;
+  /** Omitted: the plain Martin tile, every route unvisited (admin, anonymous map). */
+  rides?: RouteTileRides;
   cacheBuster?: number;
   selectedCountries?: string[];
 }
@@ -103,11 +107,18 @@ export function lineClassColorExpression(colors: {
 export function createRailwayRoutesSource(
   options: RailwayRoutesSourceOptions = {},
 ): maplibregl.VectorSourceSpecification {
-  const { userId, cacheBuster, selectedCountries } = options;
-  const baseUrl = `${TILE_BASE_URL}/railway_routes_tile/{z}/{x}/{y}`;
+  const { rides, cacheBuster, selectedCountries } = options;
+  // A tile coloured by someone's rides never comes from Martin, which answers
+  // anyone: it comes from our own handler (src/app/api/tiles), which works out
+  // whose rides to show from the session cookie or the share token — the client
+  // never names a user. Same origin, so the cookie goes with it; absolute,
+  // because MapLibre fetches tiles from a worker whose base URL is not the page's.
+  const baseUrl = rides
+    ? `${routeTileOrigin()}/api/tiles/railway_routes/{z}/{x}/{y}`
+    : `${TILE_BASE_URL}/railway_routes_tile/{z}/{x}/{y}`;
   const params = new URLSearchParams();
 
-  if (userId !== undefined) params.append("user_id", userId.toString());
+  if (rides && rides !== "session") params.append("share", rides.shareToken);
   if (cacheBuster !== undefined) params.append("v", cacheBuster.toString());
   if (selectedCountries !== undefined) {
     params.append("selected_countries", JSON.stringify(selectedCountries));

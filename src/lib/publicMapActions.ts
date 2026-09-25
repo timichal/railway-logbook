@@ -11,7 +11,8 @@
  * The token and the switch are deliberately separate. The token is minted once
  * and kept, so a link already copied or bookmarked keeps working across
  * enable/disable cycles; the switch is the only thing that grants access, and
- * every read below joins on `public_map_enabled = TRUE`. Turning sharing off
+ * every read below goes through `publicMapOwner` (`publicMapQueries.ts`),
+ * which joins on `public_map_enabled = TRUE`. Turning sharing off
  * therefore breaks the link immediately without invalidating it.
  */
 
@@ -26,6 +27,7 @@ import {
   progressForUser,
   type UserProgress,
 } from "./progressQueries";
+import { publicMapOwner } from "./publicMapQueries";
 import type { RegionId } from "./regions";
 import type { CoveredStretch } from "./types";
 
@@ -33,15 +35,6 @@ export interface PublicMapSettings {
   enabled: boolean;
   /** URL slug for /shared/<token>. Stable once minted. */
   token: string;
-}
-
-/** The owner of a shared map, as resolved from a token. */
-export interface PublicMapOwner {
-  userId: number;
-  /** Display name, falling back to the part of the email before the @. */
-  displayName: string;
-  /** The owner's country filter — the public view is shown exactly as they see it. */
-  selectedCountries: string[];
 }
 
 /** 16 bytes of base64url: unguessable, and short enough to paste into a chat. */
@@ -97,40 +90,13 @@ export async function setPublicMapEnabled(enabled: boolean): Promise<PublicMapSe
   return { ...settings, enabled };
 }
 
-/**
- * The owner of a shared map, or null if the token is unknown or sharing is off.
- *
- * Every other public action goes through this, so "sharing switched off" is
- * checked in exactly one place.
- */
-export async function getPublicMapOwner(token: string): Promise<PublicMapOwner | null> {
-  if (!token || token.length > 64) return null;
-
-  const result = await query(
-    `SELECT up.user_id, up.selected_countries, u.name, u.email
-     FROM user_preferences up
-     JOIN users u ON u.id = up.user_id
-     WHERE up.public_map_token = $1 AND up.public_map_enabled = TRUE`,
-    [token],
-  );
-
-  if (result.rows.length === 0) return null;
-
-  const row = result.rows[0];
-  return {
-    userId: row.user_id,
-    displayName: row.name || String(row.email).split("@")[0],
-    selectedCountries: row.selected_countries,
-  };
-}
-
 /** Progress figures for a shared map. Empty-ish zeros if the link is dead. */
 export async function getPublicProgress(
   token: string,
   region: RegionId,
   selectedCountries?: string[],
 ): Promise<UserProgress> {
-  const owner = await getPublicMapOwner(token);
+  const owner = await publicMapOwner(token);
   if (!owner) {
     return {
       totalKm: 0,
@@ -150,7 +116,7 @@ export async function getPublicProgressByCountry(
   token: string,
   region: RegionId,
 ): Promise<ProgressByCountry> {
-  const owner = await getPublicMapOwner(token);
+  const owner = await publicMapOwner(token);
   if (!owner) {
     return { byCountry: [], total: { totalKm: 0, completedKm: 0 } };
   }
@@ -160,7 +126,7 @@ export async function getPublicProgressByCountry(
 
 /** Ridden stretches of unfinished routes, for the shared map's overlay. */
 export async function getPublicCoveredStretches(token: string): Promise<CoveredStretch[]> {
-  const owner = await getPublicMapOwner(token);
+  const owner = await publicMapOwner(token);
   if (!owner) return [];
 
   return coveredStretchesForUser(owner.userId);

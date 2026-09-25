@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import PublicMapLayout from "@/components/sharing/PublicMapLayout";
-import { getPublicMapOwner } from "@/lib/publicMapActions";
+import { publicMapOwner } from "@/lib/publicMapQueries";
 import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/regions";
 import { btn } from "@/lib/ui/buttonStyles";
 
@@ -23,7 +23,7 @@ export default async function SharedMapPage({
 }) {
   const { token } = await params;
   const { view } = await searchParams;
-  const owner = await getPublicMapOwner(token);
+  const owner = await publicMapOwner(token);
 
   // `?view=` is what the sharer was looking at when they copied the link, so it
   // wins: a shared map is shared as a view of something, and the visitor's own
@@ -55,7 +55,6 @@ export default async function SharedMapPage({
     <div className="h-dvh flex flex-col bg-surface safe-area">
       <PublicMapLayout
         token={token}
-        ownerId={owner.userId}
         ownerName={owner.displayName}
         selectedCountries={owner.selectedCountries}
         initialRegion={initialRegion}

@@ -22,16 +22,18 @@ postgres:
       maxzoom: 18
       # This function accepts z, x, y parameters
 
-    # Railway routes (combined lines with metadata)
+    # Railway routes (combined lines with metadata), with no user: every route
+    # reads as unvisited. Accepts z, x, y, and query_params (selected_countries).
+    #
+    # Everything published here answers anyone who asks, so nothing user-specific
+    # may be. The tile coloured by a user's rides is railway_routes_mvt, served by
+    # the Next route handler under src/app/api/tiles once it has resolved the
+    # session or share token — never add that function here.
     railway_routes_tile:
       schema: public
       function: railway_routes_tile
       minzoom: 4
       maxzoom: 18
-      # This function accepts z, x, y, and query_params (for user_id)
-      # Explicitly declare query parameters that Martin should accept
-      query_params:
-        - user_id
 
     # Stations (point features) — all of them, admin map
     stations_tile:

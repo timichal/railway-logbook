@@ -21,7 +21,6 @@ const PublicRailwayMap = dynamic(() => import("@/components/sharing/PublicRailwa
 
 interface PublicMapLayoutProps {
   token: string;
-  ownerId: number;
   ownerName: string;
   selectedCountries: string[];
   initialRegion: RegionId;
@@ -34,7 +33,6 @@ interface PublicMapLayoutProps {
  */
 export default function PublicMapLayout({
   token,
-  ownerId,
   ownerName,
   selectedCountries,
   initialRegion,
@@ -75,7 +73,6 @@ export default function PublicMapLayout({
         <main className="flex-1 overflow-hidden">
           <PublicRailwayMap
             token={token}
-            ownerId={ownerId}
             selectedCountries={selectedCountries}
             isMobile={isMobile}
           />

@@ -68,7 +68,7 @@ export function useMapTileRefresh({
     if (m.getSource("railway_routes")) m.removeSource("railway_routes");
 
     const sourceOptions: RailwayRoutesSourceOptions = {
-      userId: userId || undefined,
+      rides: "session",
       cacheBuster,
       selectedCountries,
     };

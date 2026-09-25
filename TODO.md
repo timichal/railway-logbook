@@ -12,24 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Security (do these first)
 
-- [ ] **The route tile serves any user's ride history to anyone.**
-      `database/init/02-vector-tiles.sql:186`, `:238-253`;
-      `martin/configuration.yml:27-34`; `src/lib/map/index.ts:110`.
-      `railway_routes_tile` takes `user_id` straight from the query string and
-      returns that user's `journey_name`, `date`, `partial` and `has_complete_trip`
-      on every route. Martin is reached directly through `/tiles`, with no session
-      involved, and ids are SERIAL, so
-      `GET /tiles/railway_routes_tile/6/34/21?user_id=7` shows user 7's logbook
-      whether or not they ever shared it. The shared page also hands every visitor
-      the `ownerId`, so switching sharing off does not stop someone who has
-      already opened the link. This contradicts CLAUDE.md ("`public_map_enabled`
-      is the only thing that grants access", "turning sharing off kills the link
-      immediately"). **Fix:** stop accepting a raw id. Either proxy the per-user
-      tile through a Next route handler that resolves the session or share token
-      and injects the id, or pass an opaque value the SQL resolves itself (the
-      share token joined on `public_map_enabled`, plus a short-lived signed token
-      for the owner's own map).
-
 - [ ] **The admin tile sources are public.** `martin/configuration.yml:17-65`;
       `02-vector-tiles.sql:437-477`. `admin_notes_tile` returns every note,
       including the `Works`/`Todo`/`UsageInternal` drafts that `public_notes_tile`
