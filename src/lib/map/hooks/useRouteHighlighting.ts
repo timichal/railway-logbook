@@ -1,80 +1,38 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
-import { COLORS, DASHES, OPACITIES, WIDTHS } from "@/lib/map";
-import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/types";
+import { COLORS } from "@/lib/map";
 import {
-  getUserRouteHeritageWidthExpression,
-  getUserRouteWidthExpression,
-} from "../utils/userRouteStyling";
+  createHighlightCasingLayer,
+  createHighlightLayer,
+  createPartialHighlightLayer,
+  highlightCasingLayerId,
+  highlightFilter,
+  highlightLayerId,
+  highlightVariants,
+  partialHighlightData,
+  partialHighlightLayerId,
+  partialHighlightSourceId,
+  wholeRouteIds,
+} from "@/lib/map/highlightLayers";
+import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/types";
 
 /**
- * Each highlight set is drawn as one overlay sublayer per usage type, so the
- * highlight matches the route's own style instead of painting a solid bar over
- * it: Regular gets a fat solid line, Heritage a dotted line, Special a dashed
- * line. The dotted/dashed overlays reuse the exact width + dash of the base
- * route layers (dasharray is in line-width multiples, so matching the width
- * makes the highlight dots/dashes line up with the route's) — and each carries a
- * translucent solid casing underneath to make up for how little of the line a
- * dashed highlight actually covers (see syncHighlightOverlay). The two base ids
- * are `highlighted_routes` (planner/view) and `selected_routes_highlight`
- * (Route Logger selection).
- */
-const HIGHLIGHT_BASE_IDS = ["highlighted_routes", "selected_routes_highlight"] as const;
-
-type HighlightVariant = {
-  suffix: "regular" | "heritage" | "special";
-  usageType: number;
-  width: maplibregl.ExpressionSpecification | number;
-  dash?: number[];
-  roundCap?: boolean;
-  /** Draw a translucent solid line of the highlight colour underneath (see below). */
-  casing?: boolean;
-};
-
-function highlightVariants(): HighlightVariant[] {
-  return [
-    // Regular: fat solid line (solid, so no dash alignment to worry about).
-    { suffix: "regular", usageType: 0, width: WIDTHS.selectedRoute },
-    // Heritage: dotted, matching the base heritage layer's width + dash so dots align.
-    {
-      suffix: "heritage",
-      usageType: 1,
-      width: getUserRouteHeritageWidthExpression(),
-      dash: [...DASHES.heritage],
-      roundCap: true,
-      casing: true,
-    },
-    // Special: dashed, matching the base special layer's width + dash.
-    {
-      suffix: "special",
-      usageType: 2,
-      width: getUserRouteWidthExpression(),
-      dash: [...DASHES.special],
-      casing: true,
-    },
-  ];
-}
-
-/** All overlay layer ids managed here — used elsewhere to remove them before a
- * source rebuild and to include them in route hit-testing. The casings are wide
- * and solid, which also gives Heritage and Special routes the generous hit area
- * that railway_routes_click provides for Regular ones. */
-export const HIGHLIGHT_LAYER_IDS = HIGHLIGHT_BASE_IDS.flatMap((base) =>
-  highlightVariants().flatMap((v) =>
-    v.casing ? [`${base}_${v.suffix}_casing`, `${base}_${v.suffix}`] : [`${base}_${v.suffix}`],
-  ),
-);
-
-/**
- * Add/update/remove the three overlay sublayers for one highlight set.
+ * The web app's half of the highlight overlays: add, update and remove the layers
+ * that `highlightLayers.ts` describes.
  *
- * Heritage and Special get a fourth-and-fifth layer between them: a wide,
- * translucent, *solid* casing under the dashed/dotted overlay. Matching the
- * route's own dash and width is what keeps the type readable, but it also means
- * the highlight covers as little of the map as the route does — a thin dashed
- * orange line over a thin dashed red one, which is barely a difference at all.
- * The casing restores the "this one is selected" reading along the whole length
- * while the dashes on top, at full opacity, still say which type it is.
+ * What a highlight *looks like* — which sublayers, which widths, dashes and
+ * casings — is shared with the native app and lives in that module. This file is
+ * only the mechanism: a live `maplibregl.Map` mutated in place, where the native
+ * app mounts and unmounts the same specs as children.
+ */
+
+export { HIGHLIGHT_LAYER_IDS } from "@/lib/map/highlightLayers";
+
+/**
+ * Add/update/remove the overlay sublayers for one highlight set.
+ *
+ * A casing, where the variant asks for one, is added *before* its own layer so it
+ * ends up underneath (`addLayer` appends).
  */
 function syncHighlightOverlay(
   m: maplibregl.Map,
@@ -83,8 +41,8 @@ function syncHighlightOverlay(
   color: string,
 ): void {
   for (const v of highlightVariants()) {
-    const layerId = `${baseId}_${v.suffix}`;
-    const casingId = `${layerId}_casing`;
+    const layerId = highlightLayerId(baseId, v);
+    const casingId = highlightCasingLayerId(baseId, v);
 
     if (ids.length === 0) {
       // Casing first: removing the dash layer first would leave it briefly alone
@@ -93,11 +51,7 @@ function syncHighlightOverlay(
       continue;
     }
 
-    const filter: maplibregl.FilterSpecification = [
-      "all",
-      ["in", ["id"], ["literal", ids]],
-      ["==", ["get", "usage_type"], v.usageType],
-    ];
+    const filter = highlightFilter(ids, v.usageType) as maplibregl.FilterSpecification;
 
     if (m.getLayer(layerId)) {
       if (m.getLayer(casingId)) {
@@ -109,52 +63,18 @@ function syncHighlightOverlay(
       continue;
     }
 
-    // Added before the dash layer so it ends up underneath it (addLayer appends).
     if (v.casing) {
-      m.addLayer({
-        id: casingId,
-        type: "line",
-        source: "railway_routes",
-        "source-layer": "railway_routes",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": color,
-          "line-width": WIDTHS.highlightCasing,
-          "line-opacity": OPACITIES.highlightCasing,
-        },
-        filter,
-      });
+      m.addLayer(
+        createHighlightCasingLayer(baseId, v, color, ids) as maplibregl.LayerSpecification,
+      );
     }
-
-    m.addLayer({
-      id: layerId,
-      type: "line",
-      source: "railway_routes",
-      "source-layer": "railway_routes",
-      layout: v.roundCap ? { "line-cap": "round" } : {},
-      paint: {
-        "line-color": color,
-        "line-width": v.width,
-        "line-opacity": OPACITIES.highlight,
-        ...(v.dash ? { "line-dasharray": v.dash } : {}),
-      },
-      filter,
-    });
+    m.addLayer(createHighlightLayer(baseId, v, color, ids) as maplibregl.LayerSpecification);
   }
 }
 
 /**
- * Draw the covered stretch of partially-travelled routes from its own geometry.
- *
- * The tile-filter overlays above can only light up whole routes, so a route
- * covered only in part — a journey plan joining it at a station between its
- * endpoints, or that same route sitting in the Route Logger selection — is
- * excluded from them and drawn here instead, in the same colour and width.
- *
- * Each highlight set gets its own source/layer pair off `baseId`, so the gold
- * planner stretch and the orange selection stretch don't overwrite each other.
- * The coordinates are the route's own vertices, unsimplified: anything less and
- * the overlay visibly cuts corners off the line underneath.
+ * Draw the covered stretch of partially-travelled routes from its own geometry —
+ * see `createPartialHighlightLayer` for why a stretch cannot come from the tile.
  */
 function syncPartialOverlay(
   m: maplibregl.Map,
@@ -162,8 +82,8 @@ function syncPartialOverlay(
   partials: PartialRouteGeometry[],
   color: string,
 ): void {
-  const sourceId = `${baseId}_partial`;
-  const layerId = `${baseId}_partial_line`;
+  const sourceId = partialHighlightSourceId(baseId);
+  const layerId = partialHighlightLayerId(baseId);
 
   if (partials.length === 0) {
     if (m.getLayer(layerId)) m.removeLayer(layerId);
@@ -171,15 +91,7 @@ function syncPartialOverlay(
     return;
   }
 
-  const data: GeoJSON.FeatureCollection = {
-    type: "FeatureCollection",
-    features: partials.map((p) => ({
-      type: "Feature",
-      id: p.track_id,
-      properties: { track_id: p.track_id },
-      geometry: { type: "LineString", coordinates: p.coordinates },
-    })),
-  };
+  const data = partialHighlightData(partials) as GeoJSON.FeatureCollection;
 
   const source = m.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
   if (source) {
@@ -195,23 +107,7 @@ function syncPartialOverlay(
     return;
   }
 
-  m.addLayer({
-    id: layerId,
-    type: "line",
-    source: sourceId,
-    layout: { "line-cap": "butt" },
-    paint: {
-      "line-color": color,
-      "line-width": WIDTHS.selectedRoute,
-      "line-opacity": OPACITIES.highlight,
-    },
-  });
-}
-
-/** The ids of a highlight set that are covered whole, i.e. not drawn as a stretch. */
-function wholeRouteIds(ids: number[], partials: PartialRouteGeometry[]): number[] {
-  const partialIds = new Set(partials.map((p) => p.track_id));
-  return ids.filter((id) => !partialIds.has(id));
+  m.addLayer(createPartialHighlightLayer(baseId, color) as maplibregl.LayerSpecification);
 }
 
 /**

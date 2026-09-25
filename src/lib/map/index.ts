@@ -1,9 +1,21 @@
-import type * as maplibregl from "maplibre-gl";
-import type { ResolvedTheme } from "@/lib/theme";
-import { getNoteTypeColor, noteTypeOptions } from "../constants";
-import { BASEMAP_FONT_BOLD } from "./basemap";
-import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES } from "./style";
-import { ZOOM_RANGES } from "./zoomRanges";
+import * as sources from "./tileSources";
+
+/**
+ * The web app's map entry point.
+ *
+ * Everything here is a re-export, and the one thing this module *does* is bind the
+ * web app's tile hosts to the source factories in `tileSources.ts`, which take them
+ * as arguments so the native app can pass its own (see that file's header). So a web
+ * call site still writes `createRailwayRoutesSource({ rides: "session" })` and never
+ * mentions a URL.
+ *
+ * **The native app must not import this module.** `getTileBaseUrl()` runs at module
+ * load and reads `window.location`, which in React Native is a `window` with no
+ * `location` on it; and `mapState` below reaches localStorage. The app imports
+ * `@shared/map/style`, `@shared/map/layers`, `@shared/map/tileSources` and
+ * `@shared/map/basemap` directly instead — those four carry no DOM dependency, and
+ * keeping it that way is what keeps one set of layer specs serving both renderers.
+ */
 
 // The basemap (vector, latin labels) and its raster fallback live in basemap.ts.
 export {
@@ -16,18 +28,36 @@ export {
   createOSMBackgroundLayer,
   createOSMBackgroundSource,
   dropPoiLayers,
+  filterPointsFromParkOutlines,
   flattenBuildings,
   GLYPHS_URL,
+  latinizeLabels,
   loadBasemapStyle,
   OSM_TILES_URL,
-  resolveMissingBasemapIcons,
 } from "./basemap";
+// Layer specs — shared with the native app, hence their own module.
+export {
+  createAdminNotesLayer,
+  createPublicNotesLayer,
+  createRailwayPartsLayer,
+  createRailwayRoutesClickLayer,
+  createRailwayRoutesHeritageLayer,
+  createRailwayRoutesLayer,
+  createRailwayRoutesSpecialLayer,
+  createScenicRoutesOutlineLayer,
+  createStationLabelsLayer,
+  createStationsLayer,
+  lineClassColorExpression,
+  type RailwayRoutesPaintConfig,
+} from "./layers";
+export { resolveMissingBasemapIcons } from "./missingIcons";
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
 export { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
+export type { RailwayRoutesSourceOptions, RouteTileRides } from "./tileSources";
 export { ZOOM_RANGES } from "./zoomRanges";
 
 // ============================================================================
-// CONSTANTS
+// TILE SOURCES, BOUND TO THIS APP'S TILE HOST
 // ============================================================================
 
 // The initial view and the panning limits are per-region; see src/lib/regions.ts.
@@ -36,7 +66,7 @@ export const TILE_SERVER_PORT = 3001;
 // Use /tiles/ path in production (proxied through Caddy), direct port in development
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const getTileBaseUrl = () => {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !window.location) {
     // Server-side rendering
     return IS_PRODUCTION ? "https://localhost/tiles" : "http://localhost:3001";
   }
@@ -47,512 +77,26 @@ const getTileBaseUrl = () => {
 };
 const TILE_BASE_URL = getTileBaseUrl();
 
-/** The app's own origin, for the per-user route tile served by Next. */
-const routeTileOrigin = () => (typeof window === "undefined" ? "" : window.location.origin);
-
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
 /**
- * Whose rides colour the route tile: the signed-in visitor's own (`"session"`),
- * or a shared map's owner, named by its share token.
+ * The app's own origin, for the per-user route tile served by Next. Absolute,
+ * because MapLibre fetches tiles from a worker whose base URL is not the page's.
  */
-export type RouteTileRides = "session" | { shareToken: string };
+const APP_ORIGIN = typeof window === "undefined" || !window.location ? "" : window.location.origin;
 
-export interface RailwayRoutesSourceOptions {
-  /** Omitted: the plain Martin tile, every route unvisited (admin, anonymous map). */
-  rides?: RouteTileRides;
-  cacheBuster?: number;
-  selectedCountries?: string[];
-}
+export const createRailwayRoutesSource = (options: sources.RailwayRoutesSourceOptions = {}) =>
+  sources.createRailwayRoutesSource({ tileBaseUrl: TILE_BASE_URL, appOrigin: APP_ORIGIN }, options);
 
-export interface RailwayRoutesPaintConfig {
-  colorExpression?: maplibregl.ExpressionSpecification;
-  widthExpression?: maplibregl.ExpressionSpecification;
-  opacityExpression?: maplibregl.ExpressionSpecification;
-  defaultWidth?: number;
-  defaultOpacity?: number;
-  filter?: maplibregl.FilterSpecification | null;
-}
+export const createStationsSource = () => sources.createStationsSource(TILE_BASE_URL);
 
-/**
- * Helper: returns a MapLibre expression that picks a color based on line_class
- *
- * A `match` rather than a chain of `["==", ["get", "line_class"], ...]` cases:
- * one property read instead of three, and it is a shape MapLibre Native's
- * binding converts without trouble. See "Route colours" in CLAUDE.md for why
- * that second point matters here.
- */
-export function lineClassColorExpression(colors: {
-  branch: string;
-  main: string;
-  highspeed: string;
-}): maplibregl.ExpressionSpecification {
-  return [
-    "match",
-    ["get", "line_class"],
-    "highspeed",
-    colors.highspeed,
-    "main",
-    colors.main,
-    colors.branch,
-  ] as maplibregl.ExpressionSpecification;
-}
+export const createPublicStationsSource = () => sources.createPublicStationsSource(TILE_BASE_URL);
 
-// ============================================================================
-// LAYER CONFIGURATION FACTORIES
-// ============================================================================
+export const createRailwayPartsSource = () => sources.createRailwayPartsSource(TILE_BASE_URL);
 
-export function createRailwayRoutesSource(
-  options: RailwayRoutesSourceOptions = {},
-): maplibregl.VectorSourceSpecification {
-  const { rides, cacheBuster, selectedCountries } = options;
-  // A tile coloured by someone's rides never comes from Martin, which answers
-  // anyone: it comes from our own handler (src/app/api/tiles), which works out
-  // whose rides to show from the session cookie or the share token — the client
-  // never names a user. Same origin, so the cookie goes with it; absolute,
-  // because MapLibre fetches tiles from a worker whose base URL is not the page's.
-  const baseUrl = rides
-    ? `${routeTileOrigin()}/api/tiles/railway_routes/{z}/{x}/{y}`
-    : `${TILE_BASE_URL}/railway_routes_tile/{z}/{x}/{y}`;
-  const params = new URLSearchParams();
+export const createAdminNotesSource = (cacheBuster?: number) =>
+  sources.createAdminNotesSource(TILE_BASE_URL, cacheBuster);
 
-  if (rides && rides !== "session") params.append("share", rides.shareToken);
-  if (cacheBuster !== undefined) params.append("v", cacheBuster.toString());
-  if (selectedCountries !== undefined) {
-    params.append("selected_countries", JSON.stringify(selectedCountries));
-  }
-
-  const queryString = params.toString();
-  const tilesUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
-
-  return {
-    type: "vector",
-    tiles: [tilesUrl],
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    maxzoom: ZOOM_RANGES.railwayRoutes.max,
-  };
-}
-
-export function createRailwayRoutesLayer(
-  config: RailwayRoutesPaintConfig = {},
-): maplibregl.LineLayerSpecification {
-  const {
-    colorExpression,
-    widthExpression,
-    opacityExpression,
-    defaultWidth = 3,
-    defaultOpacity = OPACITIES.defaultRoute,
-    filter,
-  } = config;
-
-  const layer: maplibregl.LineLayerSpecification = {
-    id: "railway_routes",
-    type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: {
-      visibility: "visible",
-    },
-    paint: {
-      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
-      "line-width": widthExpression || defaultWidth,
-      "line-opacity": opacityExpression || defaultOpacity,
-    },
-  };
-
-  // Add filter if provided
-  if (filter !== undefined) {
-    layer.filter = filter as maplibregl.FilterSpecification;
-  }
-
-  return layer;
-}
-
-/**
- * Invisible wide line layer used as a click/hover hit area for routes.
- * Sits underneath the visible railway_routes layer; queryRenderedFeatures
- * picks it up so thin visible lines stay easy to tap on touch screens.
- */
-export function createRailwayRoutesClickLayer(
-  config: RailwayRoutesPaintConfig = {},
-): maplibregl.LineLayerSpecification {
-  const { widthExpression, defaultWidth = 16, filter } = config;
-
-  const layer: maplibregl.LineLayerSpecification = {
-    id: "railway_routes_click",
-    type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: { visibility: "visible" },
-    paint: {
-      "line-color": "#000000",
-      "line-width": widthExpression || defaultWidth,
-      "line-opacity": 0,
-    },
-  };
-
-  if (filter !== undefined) {
-    layer.filter = filter as maplibregl.FilterSpecification;
-  }
-
-  return layer;
-}
-
-/**
- * Dashed line layer for Special routes (usage_type=2). Drawn as its own layer
- * because line-dasharray can't be data-driven, and because the solid base
- * railway_routes layer must NOT also draw these (a solid line under the dashes
- * would fill the gaps). Hidden by default; revealed by the "Show special services"
- * toggle (useLayerFilters). Shares the route source so feature-state visit
- * colors apply identically.
- */
-export function createRailwayRoutesSpecialLayer(
-  config: RailwayRoutesPaintConfig = {},
-): maplibregl.LineLayerSpecification {
-  const {
-    colorExpression,
-    widthExpression,
-    opacityExpression,
-    defaultWidth = 3,
-    defaultOpacity = OPACITIES.defaultRoute,
-  } = config;
-
-  return {
-    id: "railway_routes_special",
-    type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: {
-      visibility: "none", // controlled by "Show special services" checkbox
-    },
-    paint: {
-      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
-      "line-width": widthExpression || defaultWidth,
-      "line-opacity": opacityExpression || defaultOpacity,
-      "line-dasharray": [...DASHES.special],
-    },
-    filter: ["==", ["get", "usage_type"], 2] as maplibregl.FilterSpecification,
-  };
-}
-
-/**
- * Dotted line layer for Heritage routes (usage_type=1). Like the Special layer,
- * it must be its own layer because line-dasharray can't be data-driven, and a
- * solid base railway_routes line underneath would fill the dot gaps. Drawn with
- * round line-caps so the zero-length dashes render as dots. Hidden by default on
- * the user map (revealed by the "Show heritage & tourist lines" toggle, useLayerFilters);
- * the admin map makes it visible. Shares the route source so feature-state visit
- * colors apply identically.
- */
-export function createRailwayRoutesHeritageLayer(
-  config: RailwayRoutesPaintConfig = {},
-): maplibregl.LineLayerSpecification {
-  const {
-    colorExpression,
-    widthExpression,
-    opacityExpression,
-    defaultWidth = 3,
-    defaultOpacity = OPACITIES.defaultRoute,
-  } = config;
-
-  return {
-    id: "railway_routes_heritage",
-    type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: {
-      visibility: "none", // controlled by "Show heritage & tourist lines" checkbox (user map)
-      "line-cap": "round", // makes the zero-length dashes render as dots
-    },
-    paint: {
-      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
-      "line-width": widthExpression || defaultWidth,
-      "line-opacity": opacityExpression || defaultOpacity,
-      "line-dasharray": [...DASHES.heritage],
-    },
-    filter: ["==", ["get", "usage_type"], 1] as maplibregl.FilterSpecification,
-  };
-}
-
-const SCENIC_OUTLINE_DEFAULT_OFFSET = 6; // px added to the visible width when no widthExpression is supplied
-
-export function createScenicRoutesOutlineLayer(
-  config: RailwayRoutesPaintConfig = {},
-): maplibregl.LineLayerSpecification {
-  const { widthExpression, defaultWidth = 3, filter } = config;
-
-  // MapLibre forbids wrapping a zoom-interpolate inside another expression like
-  // ['+', expr, 6], so the caller must supply a fully-formed width expression
-  // (typically getUserRouteScenicOutlineWidthExpression).
-  const outlineWidth: maplibregl.ExpressionSpecification | number =
-    widthExpression ?? defaultWidth + SCENIC_OUTLINE_DEFAULT_OFFSET;
-
-  const layer: maplibregl.LineLayerSpecification = {
-    id: "railway_routes_scenic_outline",
-    type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: {
-      visibility: "none", // Default to hidden, controlled by "Highlight scenic lines" checkbox
-    },
-    paint: {
-      "line-color": COLORS.scenicOutline,
-      "line-width": outlineWidth,
-      "line-opacity": OPACITIES.scenicOutline,
-    },
-    filter: [
-      "all",
-      ["==", ["get", "scenic"], true],
-      ...(filter ? [filter] : []),
-    ] as maplibregl.FilterSpecification,
-  };
-
-  return layer;
-}
-
-export function createStationsSource(): maplibregl.VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [`${TILE_BASE_URL}/stations_tile/{z}/{x}/{y}`],
-    minzoom: ZOOM_RANGES.stations.min,
-    maxzoom: ZOOM_RANGES.stations.max,
-  };
-}
-
-/**
- * Stations for the user map: only those within 250m of a railway part.
- * Serves the same "stations" MVT layer name as createStationsSource, so
- * createStationsLayer works with either source.
- */
-export function createPublicStationsSource(): maplibregl.VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [`${TILE_BASE_URL}/public_stations_tile/{z}/{x}/{y}`],
-    minzoom: ZOOM_RANGES.stations.min,
-    maxzoom: ZOOM_RANGES.stations.max,
-  };
-}
-
-/**
- * The dots and their names are the only two of our layers whose colours depend on
- * the basemap under them rather than on the data in them, so they are the only two
- * that take the scheme. Everything else (routes, notes, admin markers) is drawn in
- * a saturated colour that carries on either ground.
- */
-function stationColors(theme: ResolvedTheme) {
-  return theme === "dark" ? COLORS.stationsDark : COLORS.stations;
-}
-
-export function createStationsLayer(
-  theme: ResolvedTheme = "light",
-): maplibregl.CircleLayerSpecification {
-  const colors = stationColors(theme);
-  return {
-    id: "stations",
-    type: "circle",
-    source: "stations",
-    "source-layer": "stations",
-    minzoom: ZOOM_RANGES.stations.min,
-    paint: {
-      "circle-radius": CIRCLES.station.radius,
-      "circle-color": colors.fill,
-      "circle-stroke-color": colors.stroke,
-      "circle-stroke-width": CIRCLES.station.strokeWidth,
-      "circle-opacity": OPACITIES.stations,
-    },
-  };
-}
-
-/**
- * Station names, drawn from the same tile as the dots (see LABELS in style.ts).
- *
- * Styled after openstreetmap-carto's station labels - see LABELS.station in
- * style.ts for the carto rule each value comes from.
- */
-export function createStationLabelsLayer(
-  theme: ResolvedTheme = "light",
-): maplibregl.SymbolLayerSpecification {
-  const colors = stationColors(theme);
-  return {
-    id: "station_labels",
-    type: "symbol",
-    source: "stations",
-    "source-layer": "stations",
-    minzoom: LABELS.station.minZoom,
-    layout: {
-      "text-field": ["get", "name"],
-      // Carto's `@bold-fonts`, whose first entry is this. It must be the *only*
-      // entry: MapLibre joins a text-font array with commas into one
-      // `{fontstack}` path segment, so naming a fallback asks the glyph server
-      // for "Noto Sans Bold,Noto Sans Regular" - a composite range OpenFreeMap
-      // 404s, and a failed range means MapLibre draws the text with a local
-      // system font instead. Which is exactly what a two-font stack here looked
-      // like: not bold Noto at all.
-      "text-font": [BASEMAP_FONT_BOLD],
-      "text-size": [
-        "step",
-        ["zoom"],
-        LABELS.station.size.base,
-        LABELS.station.largeZoom,
-        LABELS.station.size.large,
-      ],
-      "text-anchor": "top",
-      "text-offset": [0, LABELS.station.offsetEm],
-      "text-max-width": LABELS.station.maxWidthEm,
-      "text-line-height": LABELS.station.lineHeight,
-      // Drop labels that would collide rather than stacking them - a junction
-      // complex has more station points than there is room for names.
-      "text-allow-overlap": false,
-      "text-padding": 2,
-    },
-    paint: {
-      "text-color": colors.label,
-      "text-halo-color": colors.labelHalo,
-      "text-halo-width": LABELS.station.haloWidth,
-    },
-  };
-}
-
-export function createRailwayPartsSource(): maplibregl.VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [`${TILE_BASE_URL}/railway_parts_tile/{z}/{x}/{y}`],
-    minzoom: ZOOM_RANGES.railwayParts.min,
-    maxzoom: ZOOM_RANGES.railwayParts.max,
-  };
-}
-
-export function createRailwayPartsLayer(): maplibregl.LineLayerSpecification {
-  return {
-    id: "railway_parts",
-    type: "line",
-    source: "railway_parts",
-    "source-layer": "railway_parts",
-    minzoom: ZOOM_RANGES.railwayParts.min,
-    layout: {
-      visibility: "visible",
-    },
-    paint: {
-      "line-color": [
-        "case",
-        ["boolean", ["feature-state", "hover"], false],
-        COLORS.railwayParts.hover,
-        COLORS.railwayParts.default,
-      ],
-      "line-width": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        4,
-        0.8,
-        7,
-        ["case", ["boolean", ["feature-state", "hover"], false], 5, 3],
-      ],
-      "line-opacity": OPACITIES.railwayParts,
-    },
-  };
-}
-
-export function createAdminNotesSource(cacheBuster?: number): maplibregl.VectorSourceSpecification {
-  const baseUrl = `${TILE_BASE_URL}/admin_notes_tile/{z}/{x}/{y}`;
-  const tilesUrl = cacheBuster !== undefined ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
-
-  return {
-    type: "vector",
-    tiles: [tilesUrl],
-    minzoom: ZOOM_RANGES.adminNotes.min,
-    maxzoom: ZOOM_RANGES.adminNotes.max,
-  };
-}
-
-export function createAdminNotesLayer(): maplibregl.CircleLayerSpecification {
-  // Color by note_type, derived straight from noteTypeOptions so the map can
-  // never drift from the badge colors used in the sidebar.
-  // The tuple assertion is what lets this spread into a `match` expression:
-  // noteTypeOptions is a non-empty const tuple, so there is always at least one
-  // label/color pair, but TS can't infer that through flatMap.
-  const labelColorPairs = noteTypeOptions.flatMap((opt) => [opt.id, opt.color]) as [
-    string,
-    string,
-    ...string[],
-  ];
-
-  const colorByType: maplibregl.ExpressionSpecification = [
-    "match",
-    ["get", "note_type"],
-    ...labelColorPairs,
-    COLORS.adminNotes.fill, // `match` requires a fallback; no note should reach it
-  ];
-
-  return {
-    id: "admin_notes",
-    type: "circle",
-    source: "admin_notes",
-    "source-layer": "admin_notes",
-    minzoom: ZOOM_RANGES.adminNotes.min,
-    paint: {
-      "circle-radius": [
-        "case",
-        ["boolean", ["feature-state", "hover"], false],
-        CIRCLES.adminNote.hoverRadius,
-        CIRCLES.adminNote.radius,
-      ],
-      "circle-color": [
-        "case",
-        ["boolean", ["feature-state", "hover"], false],
-        COLORS.adminNotes.hover,
-        colorByType,
-      ],
-      "circle-stroke-color": COLORS.adminNotes.stroke,
-      "circle-stroke-width": CIRCLES.adminNote.strokeWidth,
-      "circle-opacity": OPACITIES.adminNotes,
-    },
-  };
-}
-
-/**
- * Public notes source (note_type='Usage' only) for the user map.
- * Served by the `public_notes_tile` function, which exposes only published
- * Usage notes and only the popup fields (text + source).
- */
-export function createPublicNotesSource(
-  cacheBuster?: number,
-): maplibregl.VectorSourceSpecification {
-  const baseUrl = `${TILE_BASE_URL}/public_notes_tile/{z}/{x}/{y}`;
-  const tilesUrl = cacheBuster !== undefined ? `${baseUrl}?v=${cacheBuster}` : baseUrl;
-
-  return {
-    type: "vector",
-    tiles: [tilesUrl],
-    minzoom: ZOOM_RANGES.publicNotes.min,
-    maxzoom: ZOOM_RANGES.publicNotes.max,
-  };
-}
-
-export function createPublicNotesLayer(): maplibregl.CircleLayerSpecification {
-  return {
-    id: "public_notes",
-    type: "circle",
-    source: "public_notes",
-    "source-layer": "public_notes",
-    minzoom: ZOOM_RANGES.publicNotes.min,
-    paint: {
-      "circle-radius": CIRCLES.adminNote.radius,
-      // These are all note_type='Usage' by definition, so paint them the Usage color.
-      "circle-color": getNoteTypeColor("Usage"),
-      "circle-stroke-color": COLORS.adminNotes.stroke, // same dark stroke as the admin map
-      "circle-stroke-width": CIRCLES.adminNote.strokeWidth,
-      "circle-opacity": OPACITIES.adminNotes,
-    },
-  };
-}
+export const createPublicNotesSource = (cacheBuster?: number) =>
+  sources.createPublicNotesSource(TILE_BASE_URL, cacheBuster);
 
 // ============================================================================
 // MAP STATE PERSISTENCE

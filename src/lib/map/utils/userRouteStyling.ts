@@ -1,5 +1,6 @@
-import type * as maplibregl from "maplibre-gl";
-import { COLORS, lineClassColorExpression, WIDTHS } from "@/lib/map";
+import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
+import { lineClassColorExpression } from "../layers";
+import { COLORS, WIDTHS } from "../style";
 
 /**
  * Get color expression for user railway routes based on visit status AND line class
@@ -25,7 +26,7 @@ import { COLORS, lineClassColorExpression, WIDTHS } from "@/lib/map";
  * before: a logged-in user's `date` decides it outright and the localStorage
  * path is only consulted when there is none.
  */
-export function getUserRouteColorExpression(): maplibregl.ExpressionSpecification {
+export function getUserRouteColorExpression(): ExpressionSpecification {
   return [
     "case",
     // Logged users: the tile carries this user's trips.
@@ -51,7 +52,7 @@ export function getUserRouteColorExpression(): maplibregl.ExpressionSpecificatio
       // No trips → red shades
       lineClassColorExpression(COLORS.railwayRoutes.unvisited),
     ],
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 type WidthStop = { branch: number; main: number; highspeed: number };
@@ -61,7 +62,7 @@ type WidthStop = { branch: number; main: number; highspeed: number };
  * non-regular usage_type: Heritage or Special) are rendered slightly thinner
  * than branch via WIDTHS.specialUsageMultiplier.
  */
-function widthByClass(stop: WidthStop): maplibregl.ExpressionSpecification {
+function widthByClass(stop: WidthStop): ExpressionSpecification {
   return [
     "case",
     ["!=", ["get", "usage_type"], 0],
@@ -71,7 +72,7 @@ function widthByClass(stop: WidthStop): maplibregl.ExpressionSpecification {
     ["==", ["get", "line_class"], "highspeed"],
     stop.highspeed,
     stop.main,
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 /**
@@ -79,7 +80,7 @@ function widthByClass(stop: WidthStop): maplibregl.ExpressionSpecification {
  * (MapLibre only allows one zoom expression per property). All line classes
  * are visible at every zoom; widths just shrink when zoomed out.
  */
-export function getUserRouteWidthExpression(): maplibregl.ExpressionSpecification {
+export function getUserRouteWidthExpression(): ExpressionSpecification {
   const s = WIDTHS.userRoute;
   return [
     "interpolate",
@@ -89,7 +90,7 @@ export function getUserRouteWidthExpression(): maplibregl.ExpressionSpecificatio
     widthByClass(s.z4),
     7,
     widthByClass(s.z7),
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 /**
@@ -99,7 +100,7 @@ export function getUserRouteWidthExpression(): maplibregl.ExpressionSpecificatio
  * contains heritage routes, so a single branch-based width per zoom is enough
  * (no line_class branching).
  */
-export function getUserRouteHeritageWidthExpression(): maplibregl.ExpressionSpecification {
+export function getUserRouteHeritageWidthExpression(): ExpressionSpecification {
   const s = WIDTHS.userRoute;
   const dotWidth = (stop: WidthStop) => stop.branch * WIDTHS.heritageDotMultiplier;
   return [
@@ -110,14 +111,14 @@ export function getUserRouteHeritageWidthExpression(): maplibregl.ExpressionSpec
     dotWidth(s.z4),
     7,
     dotWidth(s.z7),
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 /**
  * Wide transparent line used purely as a click/hover hit area so the visible
  * railway line can stay thin without becoming hard to tap on touch devices.
  */
-export function getUserRouteClickBufferWidthExpression(): maplibregl.ExpressionSpecification {
+export function getUserRouteClickBufferWidthExpression(): ExpressionSpecification {
   const s = WIDTHS.clickBuffer;
   return [
     "interpolate",
@@ -127,7 +128,7 @@ export function getUserRouteClickBufferWidthExpression(): maplibregl.ExpressionS
     widthByClass(s.z4),
     12,
     widthByClass(s.z12),
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 /**
@@ -135,16 +136,16 @@ export function getUserRouteClickBufferWidthExpression(): maplibregl.ExpressionS
  * track_id renders at WIDTHS.selectedRoute, everything else at `normal`.
  */
 function withAdminSelection(
-  normal: maplibregl.ExpressionSpecification | number,
+  normal: ExpressionSpecification | number,
   selectedTrackId: number | null,
-): maplibregl.ExpressionSpecification | number {
+): ExpressionSpecification | number {
   if (selectedTrackId === null) return normal;
   return [
     "case",
     ["==", ["id"], selectedTrackId],
     WIDTHS.selectedRoute,
     normal,
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 /**
@@ -155,7 +156,7 @@ function withAdminSelection(
  */
 export function getAdminRouteWidthExpression(
   selectedTrackId: number | null,
-): maplibregl.ExpressionSpecification | number {
+): ExpressionSpecification | number {
   return withAdminSelection(widthByClass(WIDTHS.adminRoute), selectedTrackId);
 }
 
@@ -166,7 +167,7 @@ export function getAdminRouteWidthExpression(
  */
 export function getAdminRouteHeritageWidthExpression(
   selectedTrackId: number | null,
-): maplibregl.ExpressionSpecification | number {
+): ExpressionSpecification | number {
   return withAdminSelection(
     WIDTHS.adminRoute.branch * WIDTHS.heritageDotMultiplier,
     selectedTrackId,
@@ -179,7 +180,7 @@ export function getAdminRouteHeritageWidthExpression(
  * because MapLibre disallows wrapping a zoom-interpolate inside another
  * expression like ['+', ...].
  */
-export function getUserRouteScenicOutlineWidthExpression(): maplibregl.ExpressionSpecification {
+export function getUserRouteScenicOutlineWidthExpression(): ExpressionSpecification {
   const s = WIDTHS.scenicOutline;
   return [
     "interpolate",
@@ -189,5 +190,5 @@ export function getUserRouteScenicOutlineWidthExpression(): maplibregl.Expressio
     widthByClass(s.z4),
     7,
     widthByClass(s.z7),
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }

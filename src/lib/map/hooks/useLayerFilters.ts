@@ -1,6 +1,6 @@
 import type * as maplibregl from "maplibre-gl";
-import type { FilterSpecification } from "maplibre-gl";
 import { useEffect } from "react";
+import { clickBufferFilter, scenicOutlineFilter } from "@/lib/map/userMapLayers";
 
 /**
  * Manages filter and visibility toggles for user map layers:
@@ -56,22 +56,12 @@ export function useLayerFilters(
 
     // Click/hit buffer: every currently-visible usage type should be clickable.
     if (m.getLayer("railway_routes_click")) {
-      const clickable = [0]; // Regular always
-      if (showHeritage) clickable.push(1);
-      if (showSpecial) clickable.push(2);
-      const clickFilter: FilterSpecification | null =
-        clickable.length === 3
-          ? null
-          : (["match", ["get", "usage_type"], clickable, true, false] as FilterSpecification);
-      m.setFilter("railway_routes_click", clickFilter);
+      m.setFilter("railway_routes_click", clickBufferFilter(showHeritage, showSpecial));
     }
 
     // Scenic outline: mirror the visible solid line (never Special routes).
     if (m.getLayer("railway_routes_scenic_outline")) {
-      const scenicFilter: FilterSpecification = showHeritage
-        ? ["all", ["==", ["get", "scenic"], true], ["!=", ["get", "usage_type"], 2]]
-        : ["all", ["==", ["get", "scenic"], true], ["==", ["get", "usage_type"], 0]];
-      m.setFilter("railway_routes_scenic_outline", scenicFilter);
+      m.setFilter("railway_routes_scenic_outline", scenicOutlineFilter(showHeritage));
     }
   }, [map, showHeritage, showSpecial, mapLoaded, cacheBuster]);
 

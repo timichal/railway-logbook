@@ -22,6 +22,13 @@ import sharp from "sharp";
  *   fits that circle, which is what "safe zone" means for a landscape image; a
  *   maskable icon must also be edge-to-edge opaque, since whatever it does keep
  *   is all there is.
+ * - **`mobile/assets/*`** — the native app (`MOBILE_APP_PLAN.md`) wants the same
+ *   three framings under different names: `icon.png` is the uncropped one, at the
+ *   1024px both stores ask for; `adaptive-icon.png` is Android's foreground layer
+ *   and is the maskable framing again, since the launcher crops it the same way;
+ *   `splash-icon.png` is drawn small on a plain ground, so it is the art at its
+ *   native size. They are generated here rather than by a second script because
+ *   the master is the master — the native app has no artwork of its own.
  *
  * The master is 180px, so the 512s are an upscale. Lanczos on flat vector-style
  * artwork holds up; if the art is ever redrawn, redraw it large and this script
@@ -38,9 +45,12 @@ const MASKABLE_SAFE_ZONE = 0.8;
 /** How much of the canvas the art spans on the icons shown uncropped. */
 const PLAIN_ART_WIDTH = 0.9;
 
-type Target = { path: string; canvas: number; artWidth: number };
+const TRANSPARENT = { r: 255, g: 255, b: 255, alpha: 0 };
 
-async function render({ path, canvas, artWidth }: Target): Promise<void> {
+type Rgba = { r: number; g: number; b: number; alpha: number };
+type Target = { path: string; canvas: number; artWidth: number; background?: Rgba };
+
+async function render({ path, canvas, artWidth, background = WHITE }: Target): Promise<void> {
   const art = await sharp(MASTER)
     // The master's transparent top and bottom bands are padding, not artwork, and
     // would otherwise be measured as part of it.
@@ -49,7 +59,7 @@ async function render({ path, canvas, artWidth }: Target): Promise<void> {
     .toBuffer();
 
   await sharp({
-    create: { width: canvas, height: canvas, channels: 4, background: WHITE },
+    create: { width: canvas, height: canvas, channels: 4, background },
   })
     .composite([{ input: art, gravity: "centre" }])
     .png()
@@ -79,6 +89,19 @@ async function main(): Promise<void> {
     { path: "public/icon-192.png", canvas: 192, artWidth: Math.round(192 * PLAIN_ART_WIDTH) },
     { path: "public/icon-512.png", canvas: 512, artWidth: Math.round(512 * PLAIN_ART_WIDTH) },
     { path: "public/icon-maskable-512.png", canvas: 512, artWidth: maskableArtWidth(512, aspect) },
+    {
+      path: "mobile/assets/icon.png",
+      canvas: 1024,
+      artWidth: Math.round(1024 * PLAIN_ART_WIDTH),
+    },
+    {
+      path: "mobile/assets/adaptive-icon.png",
+      canvas: 1024,
+      artWidth: maskableArtWidth(1024, aspect),
+    },
+    // The splash art is composited by Expo onto a background colour that differs
+    // between light and dark, so this one keeps the master's transparency.
+    { path: "mobile/assets/splash-icon.png", canvas: 360, artWidth: 324, background: TRANSPARENT },
   ];
 
   for (const target of targets) await render(target);
