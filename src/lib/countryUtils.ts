@@ -125,14 +125,3 @@ export function getRouteCountries(geometry: RouteGeometry): {
 
   return { startCountry, endCountry };
 }
-
-/**
- * Converts a country code to flag emoji using Unicode regional indicators
- * @param countryCode - ISO 3166-1 alpha-2 country code (e.g., "CZ", "IT")
- * @returns Flag emoji (e.g., "🇨🇿", "🇮🇹")
- */
-export function getCountryFlag(countryCode: string): string {
-  return countryCode
-    .toUpperCase()
-    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
-}

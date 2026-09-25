@@ -10,7 +10,14 @@
  * over; see `@shared` in `tsconfig.json`.
  */
 import type { RegionId } from "@shared/regions";
-import type { Journey, RailwayRoute, Trip } from "@shared/types";
+import type {
+  CoveredStretch,
+  Journey,
+  PlannerRoute,
+  RailwayRoute,
+  Station,
+  Trip,
+} from "@shared/types";
 import { type AuthResponse, request } from "./client";
 
 export interface ApiUser {
@@ -50,6 +57,65 @@ export async function me(): Promise<ApiUser> {
   return user;
 }
 
+// ============================================================================
+// Public reads — no token; this is the same data the tiles serve to anyone
+// ============================================================================
+
+/**
+ * Station-name autocomplete, region-scoped and `near_route` only — the same set the
+ * map draws, so nothing searchable is invisible. Under two characters the server
+ * answers with none rather than with the world.
+ */
+export async function stations(
+  region: RegionId,
+  q: string,
+  signal?: AbortSignal,
+): Promise<Station[]> {
+  const { stations: found } = await request<{ stations: Station[] }>("/stations", {
+    query: { region, q },
+    auth: false,
+    signal,
+  });
+  return found;
+}
+
+/**
+ * The route rows behind a set of track ids, geometry excluded.
+ *
+ * A POST for a read because the id list is the argument. What it is for here is the
+ * planner: its result identifies routes by id and endpoint name, and the selection
+ * holds whole route features — so the ids are exchanged for the same properties the
+ * tile would have carried, and a planned route is described exactly as a tapped one.
+ */
+export async function routeMetadata(trackIds: number[]): Promise<RailwayRoute[]> {
+  const { routes } = await request<{ routes: RailwayRoute[] }>("/routes/metadata", {
+    method: "POST",
+    body: { trackIds },
+    auth: false,
+  });
+  return routes;
+}
+
+/**
+ * The journey planner. **"No path found" is a 200 with an `error` string**, not a
+ * failure: the request was fine, the network simply doesn't connect those two
+ * stations by regular-service routes, and that belongs next to the form rather than
+ * in a catch block.
+ */
+export function plan(input: {
+  fromStationId: number;
+  toStationId: number;
+  viaStationIds?: number[];
+}): Promise<PlannerResult> {
+  return request<PlannerResult>("/planner", { method: "POST", body: input, auth: false });
+}
+
+export interface PlannerResult {
+  routes: PlannerRoute[];
+  totalDistance: number;
+  error?: string;
+}
+
 export function progress(region: RegionId, countries?: string[]): Promise<Progress> {
   // `countries` absent means no filter; an empty string means "filter everything
   // out", which is a real state and answers zeros. So an empty list must still be
@@ -57,6 +123,38 @@ export function progress(region: RegionId, countries?: string[]): Promise<Progre
   return request<Progress>("/progress", {
     query: { region, countries: countries === undefined ? undefined : countries.join(",") },
   });
+}
+
+/** One country's share of the region, ridden against total. */
+export interface CountryProgress {
+  countryCode: string;
+  countryName: string;
+  totalKm: number;
+  completedKm: number;
+}
+
+export interface ProgressByCountry {
+  byCountry: CountryProgress[];
+  total: { totalKm: number; completedKm: number };
+}
+
+/**
+ * Per-country km plus the grand total — one row per country the region declares,
+ * ridden or not, so the list is the region's countries and not just the visited ones.
+ * Unfiltered by the user's own selection: this is what the selection is *made* from.
+ */
+export function progressByCountry(region: RegionId): Promise<ProgressByCountry> {
+  return request<ProgressByCountry>("/progress/countries", { query: { region } });
+}
+
+/**
+ * The stretches the user has ridden on routes they haven't finished, as drawable
+ * geometry for the map's coverage overlay. Cut from the stored fraction ranges by the
+ * server, because a tile carries one feature per route and this is a piece of one.
+ */
+export async function coverage(signal?: AbortSignal): Promise<CoveredStretch[]> {
+  const { stretches } = await request<{ stretches: CoveredStretch[] }>("/coverage", { signal });
+  return stretches;
 }
 
 export async function preferences(): Promise<string[]> {

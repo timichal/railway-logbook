@@ -1,22 +1,22 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
 import type { DataAccess } from "@/lib/dataAccess";
-import { COLORS, lineClassColorExpression, OPACITIES } from "@/lib/map";
+import {
+  COVERAGE_LAYER_ID,
+  COVERAGE_SOURCE_ID,
+  coverageData,
+  coverageFilter,
+  createCoverageLayer,
+} from "@/lib/map/coverageLayer";
 import type { CoveredStretch } from "@/lib/types";
-import { getUserRouteWidthExpression } from "../utils/userRouteStyling";
-
-const COVERAGE_SOURCE_ID = "logged_coverage";
-const COVERAGE_LAYER_ID = "logged_coverage_line";
 
 /**
  * The stretches of unfinished routes the user has actually ridden, drawn in the
  * visited colour on top of the route's own (partial-orange) line — so a route
  * ridden halfway reads as half done instead of all-orange.
  *
- * These can't come from the route tiles: a tile carries one feature per route,
- * and this needs a piece of one. They are cut from the stored fraction ranges on
- * read (`getCoveredStretches`) and drawn as GeoJSON, which also means the same
- * code path serves logged-in users and localStorage journeys.
+ * What the overlay looks like is `map/coverageLayer.ts`, shared with the native app.
+ * This hook is the live-map mechanism: add, update, restack, remove.
  */
 function syncCoverageOverlay(
   m: maplibregl.Map,
@@ -29,33 +29,7 @@ function syncCoverageOverlay(
     return;
   }
 
-  const data: GeoJSON.FeatureCollection = {
-    type: "FeatureCollection",
-    features: stretches.map((s) => ({
-      type: "Feature",
-      // line_class and usage_type drive the same colour/width expressions the
-      // base route layer uses, so the overlay lines up with the line underneath;
-      // the countries drive the same filter
-      properties: {
-        track_id: s.track_id,
-        line_class: s.line_class,
-        usage_type: s.usage_type,
-        start_country: s.start_country,
-        end_country: s.end_country,
-      },
-      geometry: { type: "LineString", coordinates: s.coordinates },
-    })),
-  };
-
-  // Match the route layer this is drawn over: Regular-usage only, and both
-  // endpoints inside the selected countries. Without this the overlay would keep
-  // painting stretches of routes the map is currently filtering out.
-  const filter: maplibregl.FilterSpecification = [
-    "all",
-    ["==", ["get", "usage_type"], 0],
-    ["in", ["get", "start_country"], ["literal", selectedCountries]],
-    ["in", ["get", "end_country"], ["literal", selectedCountries]],
-  ];
+  const data = coverageData(stretches);
 
   const source = m.getSource(COVERAGE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (source) {
@@ -65,19 +39,9 @@ function syncCoverageOverlay(
   }
 
   if (m.getLayer(COVERAGE_LAYER_ID)) {
-    m.setFilter(COVERAGE_LAYER_ID, filter);
+    m.setFilter(COVERAGE_LAYER_ID, coverageFilter(selectedCountries));
   } else {
-    m.addLayer({
-      id: COVERAGE_LAYER_ID,
-      type: "line",
-      source: COVERAGE_SOURCE_ID,
-      paint: {
-        "line-color": lineClassColorExpression(COLORS.railwayRoutes.visited),
-        "line-width": getUserRouteWidthExpression(),
-        "line-opacity": OPACITIES.defaultRoute,
-      },
-      filter,
-    });
+    m.addLayer(createCoverageLayer(selectedCountries) as maplibregl.LayerSpecification);
   }
 
   // Sit above the route lines but below the stations — and therefore below the

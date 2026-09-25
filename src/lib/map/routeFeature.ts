@@ -45,8 +45,15 @@ export interface RouteFeatureProperties extends RouteTitleProperties {
   usage_type: UsageType;
   scenic?: boolean;
   line_class?: LineClass;
-  /** A Postgres `TEXT[]` as the tile serialises it: `{Daily,"Winter break"}`. */
-  frequency?: string;
+  /**
+   * The frequency tags. A tile serialises a Postgres `TEXT[]` as
+   * `{Daily,"Winter break"}`; the HTTP API sends the same column as a JSON array, and
+   * a route feature built from `POST /routes/metadata` rather than from a tile
+   * carries that. Both are accepted so neither client has to re-serialise one into
+   * the other — a round trip that a tag containing a comma or a quote would not
+   * survive.
+   */
+  frequency?: string | string[];
 }
 
 /**
@@ -72,8 +79,12 @@ export function routeTitle(
  * A Postgres `TEXT[]` as the tile serialises it — `{}` for empty, otherwise
  * `{Daily,"Winter break"}`. Quoting is only ever a plain pair around a value
  * containing a space, which is all a frequency tag can carry.
+ *
+ * An array is already the answer and is passed through: that is the shape the HTTP
+ * API sends the same column in (see `RouteFeatureProperties.frequency`).
  */
-export function parseFrequencyTags(value: string | undefined): string[] {
+export function parseFrequencyTags(value: string | string[] | undefined): string[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
   if (!value || value === "{}") return [];
   return value
     .slice(1, -1)

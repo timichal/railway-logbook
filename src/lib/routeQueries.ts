@@ -114,6 +114,7 @@ export async function routeMetadataByIds(trackIds: number[]): Promise<RailwayRou
     `
     SELECT
       track_id,
+      name,
       from_station,
       to_station,
       description,

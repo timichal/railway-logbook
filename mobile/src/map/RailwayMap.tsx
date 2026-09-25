@@ -60,15 +60,19 @@ import {
   userSpecialLayerConfig,
 } from "@shared/map/userMapLayers";
 import { REGIONS, type RegionId } from "@shared/regions";
+import type { Station } from "@shared/types";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { ActivityIndicator, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useLogVersion } from "@/logbook/logVersion";
 import { useSelection } from "@/logbook/SelectionContext";
+import { CoverageOverlay } from "@/map/CoverageOverlay";
 import { FeatureSheet } from "@/map/FeatureSheet";
 import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
+import { MapStationSearch } from "@/map/MapStationSearch";
 import {
   type MapFeature,
   toNoteFeature,
@@ -87,6 +91,10 @@ const MAX_ZOOM = 18;
 
 /** How long a settled camera waits before its position is written down. */
 const SAVE_DEBOUNCE_MS = 500;
+
+/** Where a station picked out of the search box lands, as on the web. */
+const STATION_ZOOM = 14;
+const STATION_FLY_MS = 1200;
 
 interface RailwayMapProps {
   /** Whose visit colours the routes carry — the tile's `user_id` parameter. */
@@ -116,6 +124,18 @@ export function RailwayMap({ userId, countries }: RailwayMapProps): ReactNode {
 
   const cameraRef = useRef<CameraRef>(null);
   const [feature, setFeature] = useState<MapFeature | null>(null);
+  const insets = useSafeAreaInsets();
+
+  // A map runs under the status bar, so the furniture over it has to stand clear of
+  // one — which is the whole of why the map pane takes no safe-area inset itself.
+  const flyToStation = useCallback((station: Station) => {
+    const [lon, lat] = station.coordinates;
+    cameraRef.current?.setStop({
+      center: [lon, lat],
+      zoom: STATION_ZOOM,
+      duration: STATION_FLY_MS,
+    });
+  }, []);
 
   /**
    * Where the camera is *now*, as opposed to where it started.
@@ -268,6 +288,11 @@ export function RailwayMap({ userId, countries }: RailwayMapProps): ReactNode {
           />
         </VectorSource>
 
+        {/* The stretches already ridden of routes not yet finished, in the visited
+            green over their own partial-orange line. Mounted here, with the map, so
+            it settles below every highlight set — see `CoverageOverlay`. */}
+        <CoverageOverlay countries={countries} />
+
         <PartialHighlightSource
           baseId="highlighted_routes"
           partials={highlighted.partials}
@@ -303,6 +328,12 @@ export function RailwayMap({ userId, countries }: RailwayMapProps): ReactNode {
           <Layer {...createPublicNotesLayer()} />
         </VectorSource>
       </MapLibreMap>
+
+      {/* `box-none` so the strip the search sits in does not swallow the taps meant
+          for the map underneath it — only the button and the open panel take one. */}
+      <View pointerEvents="box-none" className="absolute inset-x-2" style={{ top: insets.top + 8 }}>
+        <MapStationSearch onSelect={flyToStation} />
+      </View>
 
       {feature ? (
         <FeatureSheet feature={feature} regionId={regionId} onClose={() => setFeature(null)} />

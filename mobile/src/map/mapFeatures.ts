@@ -11,6 +11,7 @@
 
 import type { UsageType } from "@shared/constants";
 import type { RouteFeatureProperties } from "@shared/map/routeFeature";
+import type { RailwayRoute } from "@shared/types";
 
 export interface RouteFeature extends RouteFeatureProperties {
   kind: "route";
@@ -92,4 +93,36 @@ export function toNoteFeature(properties: Properties): NoteFeature | null {
   const body = text(properties?.text);
   if (!body) return null;
   return { kind: "note", text: body, source: safeUrl(properties?.source) };
+}
+
+/**
+ * A route feature built from the HTTP API's route row rather than from a tile.
+ *
+ * The journey planner identifies its routes by id and endpoint name, and the
+ * selection holds whole features — so the ids are exchanged for the route rows
+ * (`POST /routes/metadata`) and each row becomes the feature the map would have
+ * handed over for a tap. A planned route is then described by exactly the same
+ * `routeTitle` and `routeBadges` as a tapped one, rather than by a second, thinner
+ * account of the same route.
+ *
+ * `lastJourney` is the one thing a row cannot answer: it is a per-user join the tile
+ * carries and this endpoint, being public, does not. Nothing reading a planner result
+ * asks for it — a plan is about where you are going, not where you have been.
+ */
+export function routeFeatureFromMetadata(route: RailwayRoute): RouteFeature {
+  return {
+    kind: "route",
+    trackId: route.track_id,
+    from_station: route.from_station,
+    to_station: route.to_station,
+    name: route.name,
+    usage_type: route.usage_type,
+    scenic: route.scenic === true,
+    line_class: route.line_class ?? undefined,
+    frequency: route.frequency,
+    description: text(route.description),
+    link: safeUrl(route.link),
+    lengthKm: route.length_km ?? 0,
+    lastJourney: null,
+  };
 }

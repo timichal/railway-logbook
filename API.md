@@ -65,7 +65,7 @@ No token. These are the same data the tiles already serve to anyone.
 | `GET /stations?region=&q=` | `{ stations }` — at most 10, `near_route` only, diacritic-insensitive. Under two characters returns none |
 | `GET /routes?region=` | `{ routes }` — every route with geometry. Large: ~5500 for Europe, ~1300 for Japan |
 | `GET /routes/track-ids?region=` | `{ trackIds }` — a few thousand integers, for telling which locally-held journeys belong to the region on screen |
-| `POST /routes/metadata` | `{ trackIds }` → `{ routes }` without geometry. A POST for a read because the id list is the argument |
+| `POST /routes/metadata` | `{ trackIds }` → `{ routes }` without geometry, `name` included. A POST for a read because the id list is the argument |
 | `POST /coverage/stretches` | `{ ranges: [{ track_id, covered_start, covered_end }] }` → `{ stretches }` — fraction ranges cut into drawable geometry, for journeys held on the device. Validated and capped at 2000 |
 
 ## The user's own data
@@ -85,7 +85,7 @@ Bearer token required.
 | | |
 | --- | --- |
 | `POST /journeys` | `{ name, date, description?, tripId?, routes }` → 201 `{ journey }`. Journey and logged parts commit together |
-| `GET /journeys/:id` | `{ journey, routes }` — the routes carry `partial`, `covered_start`, `covered_end` |
+| `GET /journeys/:id` | `{ journey, routes }` — the routes carry the line `name` (where the region has one) plus `partial`, `covered_start`, `covered_end` |
 | `PATCH /journeys/:id` | `{ name, date, description? }` → `{ journey }` |
 | `DELETE /journeys/:id` | `{ success: true }`, logged parts included |
 | `POST /journeys/:id/routes` | `{ routes }` — a route already logged has its flag and stretch overwritten, not duplicated |

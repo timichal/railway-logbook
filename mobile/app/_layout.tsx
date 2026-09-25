@@ -21,6 +21,7 @@ import { AuthProvider, useAuth } from "@/auth/AuthContext";
 import { HighlightProvider } from "@/logbook/HighlightContext";
 import { SelectionProvider } from "@/logbook/SelectionContext";
 import { LayerPrefsProvider } from "@/map/LayerPrefsContext";
+import { CountryPrefsProvider } from "@/region/CountryPrefsContext";
 import { RegionProvider } from "@/region/RegionContext";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
 
@@ -46,6 +47,12 @@ function RootNavigator(): ReactNode {
           {/* Not a tab: it exists only while there is a selection to spend, and it
               ends by emptying it. */}
           <Stack.Screen name="log-journey" options={{ presentation: "modal" }} />
+          {/* Likewise: opened, spent, closed — what it produces is a gold path on the
+              map behind it and routes in the selection. */}
+          <Stack.Screen name="plan-journey" options={{ presentation: "modal" }} />
+          {/* Pushed, not modal: a settings page is left by going back, not by being
+              spent. */}
+          <Stack.Screen name="countries" />
         </Stack.Protected>
         <Stack.Protected guard={status === "signedOut"}>
           <Stack.Screen name="(auth)" />
@@ -62,13 +69,15 @@ export default function RootLayout(): ReactNode {
         <ThemeProvider>
           <AuthProvider>
             <RegionProvider>
-              <LayerPrefsProvider>
-                <SelectionProvider>
-                  <HighlightProvider>
-                    <RootNavigator />
-                  </HighlightProvider>
-                </SelectionProvider>
-              </LayerPrefsProvider>
+              <CountryPrefsProvider>
+                <LayerPrefsProvider>
+                  <SelectionProvider>
+                    <HighlightProvider>
+                      <RootNavigator />
+                    </HighlightProvider>
+                  </SelectionProvider>
+                </LayerPrefsProvider>
+              </CountryPrefsProvider>
             </RegionProvider>
           </AuthProvider>
         </ThemeProvider>

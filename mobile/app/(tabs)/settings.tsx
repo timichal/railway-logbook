@@ -5,6 +5,7 @@
  */
 
 import { REGIONS, type RegionId } from "@shared/regions";
+import { useRouter } from "expo-router";
 import { type ReactNode, useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useAuth } from "@/auth/AuthContext";
@@ -23,15 +24,16 @@ const THEME_OPTIONS = [
 ] as const satisfies readonly { value: ThemePreference; label: string }[];
 
 export default function SettingsScreen(): ReactNode {
+  const router = useRouter();
   const { user, signOut } = useAuth();
-  const { regionId, setRegion } = useRegion();
+  const { region, regionId, setRegion } = useRegion();
   const { preference, setPreference } = useTheme();
 
   const regionOptions = useMemo(
     () =>
-      Object.values(REGIONS).map((region) => ({
-        value: region.id,
-        label: `${region.flag} ${region.label}`,
+      Object.values(REGIONS).map((entry) => ({
+        value: entry.id,
+        label: `${entry.flag} ${entry.label}`,
       })),
     [],
   );
@@ -53,6 +55,19 @@ export default function SettingsScreen(): ReactNode {
             onChange={setRegion}
           />
         </Section>
+
+        {/* Only where there is something to tick: a single-country region pins its
+            filter to itself, and the screen would be one row that cannot be turned
+            off. */}
+        {region.hasCountryFilter ? (
+          <Section title="Countries" hint="Which of them to count, and how far you are in each.">
+            <Button
+              label="Countries & statistics"
+              variant="outline"
+              onPress={() => router.push("/countries")}
+            />
+          </Section>
+        ) : null}
 
         <Section title="Map layers" hint="Which lines the map draws beyond the regular network.">
           <LayerToggles />

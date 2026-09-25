@@ -20,6 +20,7 @@ import { useLogVersion } from "@/logbook/logVersion";
 import { SelectionBar } from "@/logbook/SelectionBar";
 import { HighlightChip } from "@/map/HighlightChip";
 import { MapProgressBox } from "@/map/MapProgressBox";
+import { PlannerButton } from "@/map/PlannerButton";
 import { RailwayMap } from "@/map/RailwayMap";
 import { useRegion } from "@/region/RegionContext";
 import { useEffectiveCountries } from "@/region/useEffectiveCountries";
@@ -73,6 +74,7 @@ export default function MapScreen(): ReactNode {
         <RailwayMap userId={user.id} countries={countries} />
         <MapProgressBox progress={progress} />
         <HighlightChip />
+        <PlannerButton />
       </View>
       <SelectionBar />
     </View>

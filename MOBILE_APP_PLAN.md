@@ -23,10 +23,10 @@ and add a line to the Session log at the bottom.
 | **Phase 0**       | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware                                                                                                                                                                     |
 | **Phase 1**       | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md`                                                                                                                                                        |
 | **Phase 2**       | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android                                                                                                                                   |
-| **Phase 3**       | **Done** (2026-08-27; **seen on a device 2026-09-17**). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. Its **highlight overlay** was folded into Phase 4 and is now done; the coverage overlay is not |
-| **Current phase** | **Phase 4 — features.** Route logger, highlight overlays and the logbook list are built (2026-09-17); planner, country stats, station search and the coverage overlay are not |
+| **Phase 3**       | **Done** (2026-08-27; **seen on a device 2026-09-17**). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. Its two overlays were folded into Phase 4 and both are now built |
+| **Current phase** | **Phase 4 — features.** Everything on its list is built (2026-09-17): route logger, highlight overlays, logbook, coverage overlay, station search, journey planner, countries & statistics. **None of the second half has been run on a device yet** |
 | **Blocked on**    | nothing                                                                                                                                                                                                                                                                     |
-| **Next**          | The journey planner, country stats and station search, and the coverage overlay (`GET /coverage` already exists; an earlier note here saying otherwise was wrong). Plus a pass over the UI details of what is already built |
+| **Next**          | Run the second half on the iPhone — the coverage overlay's stacking, the planner loop and the country filter are the three things a build proves nothing about. Then a pass over the UI details of the whole app, editing and deleting journeys and trips, and Phase 5 |
 
 The spike that answered Phase 0 has been **deleted** — it was throwaway by design
 and everything it taught is written down below. What it proved, in one line: the
@@ -714,22 +714,22 @@ with the region — flat `[w, s, e, n]`, where `region.bounds` is nested.
 
 #### Still open in Phase 3
 
-- **The highlight overlays are done** — built in Phase 4 alongside the state that
-  drives them. See `HighlightOverlay.tsx` below.
-- **The ridden-stretch coverage overlay** (`useCoverageOverlay`) is still open.
-  `GET /coverage` **does exist** (Phase 1 built it after all; this file said
-  otherwise and was wrong), so nothing is blocking it but the work.
+**Both overlays are done**, built in Phase 4 alongside the state that drives them —
+`HighlightOverlay.tsx` and `CoverageOverlay.tsx` below. So is the **station search**
+box, which is `MapStationSearch.tsx`.
 
-Two smaller gaps, neither blocking: the **station search** box (the web map's own,
-`useStationSearch`) and **"where am I"** — the binding has `<UserLocation>` and
-`trackUserLocation` on the camera, and it wants a location-permission string in
-`app.json` for both stores anyway.
+One gap is left, and it is not blocking: **"where am I"** — the binding has
+`<UserLocation>` and `trackUserLocation` on the camera, and it wants a
+location-permission string in `app.json` for both stores anyway.
 
-### Phase 4 — Features — **in progress**
+### Phase 4 — Features — **built, not yet run on a device**
 
-Done: the **route logger** (map selection → a logged journey), the **highlight
-overlays** Phase 3 left behind, and the **logbook** list. Still to do: the journey
-planner, country stats, station search, and the coverage overlay.
+Everything on the list is written: the **route logger** (map selection → a logged
+journey), the two **overlays** Phase 3 left behind, the **logbook** list, the **station
+search**, the **journey planner** and **countries & statistics**. The first three were
+run on the iPhone the day they were written; **the rest have only been built, typed,
+validated and bundled**, which is exactly the set of checks Phase 0 warned is not the
+same as having been seen.
 
 #### What is built
 
@@ -743,6 +743,15 @@ planner, country stats, station search, and the coverage overlay.
 | `HighlightChip.tsx` | what the map is showing, and the way to drop it |
 | `logVersion.ts` | the store that says the user's log has changed |
 | `app/(tabs)/logbook.tsx` | the paginated, searchable list of trips and journeys, each card able to point the map at its routes |
+| `CoverageOverlay.tsx` | the stretches already ridden of routes not yet finished, from `GET /coverage`. Mounted with the map even when empty — see below |
+| `useStationSearch.ts` | the debounced, region-scoped station autocomplete both the map and the planner ask |
+| `StationResults.tsx` | the list under a station field, shared by those two |
+| `MapStationSearch.tsx` | the map's own search: a button that becomes a field, and flies the camera to what is picked |
+| `StationField.tsx` | one station slot of the planner form — a field until something is picked, the name and a clear button after |
+| `app/plan-journey.tsx` | the journey planner: from, any number of vias, to, the legs it found, and the way into the selection |
+| `PlannerButton.tsx` | the way in, over the map's other top corner |
+| `CountryPrefsContext.tsx` | the country filter, held once: the map reads it, the Countries screen writes it |
+| `app/countries.tsx` | countries & statistics — which countries count, and how far each one is |
 
 #### What the highlight overlays cost the web app
 
@@ -784,6 +793,71 @@ Three smaller ones:
   `selected_routes_highlight` and `highlightCasing` in it — both from
   `src/lib/map`, neither anywhere in `mobile/`.
 
+#### What the second half cost the web app
+
+Three more pieces moved into the shared set, on the same terms as the highlights —
+**a shared module first, then two mechanisms** — and one query gained a column.
+
+- **`src/lib/map/coverageLayer.ts`** is what the ridden-stretch overlay *is*: the
+  GeoJSON the stretches are drawn from, the Regular-only + selected-countries filter it
+  repeats off the route layer, and the layer itself. `useCoverageOverlay` is what is
+  left over, which is the live-map mechanism only (add the source, set its data,
+  re-stack it, remove it when there is nothing).
+- **`src/lib/countryFlag.ts`** — `getCountryFlag`, moved out of `countryUtils.ts`. Not
+  a tidy-up: `countryUtils` imports `@rapideditor/country-coder` to resolve a
+  coordinate to a country, and a module the native app imports may not reach for a
+  dependency the native app does not have. The flag needs nothing.
+- **`routeFeature.ts`'s `frequency` accepts an array as well as the tile's
+  `{Daily,"Winter break"}` string.** The planner's routes are described by
+  `POST /routes/metadata`, which sends that column as JSON, and the alternative was to
+  re-serialise a JSON array into Postgres array syntax — a round trip that a tag with a
+  comma or a quote in it would not survive.
+- **`routeMetadataByIds` now selects `name`**, as does the journey's route query. In a
+  region that names its lines the name *is* the route's identity, so a route described
+  from either query was missing the half that identifies it. `API.md` says so now.
+
+#### The native-side decisions worth writing down
+
+- **The coverage overlay is mounted with the map and holds an empty collection when
+  there is nothing to draw**, rather than appearing when its fetch resolves. Both it
+  and a highlight set ask to be inserted `beforeId="stations"`, so whichever inserts
+  *later* lands on top of the other — and a highlight already on screen does not
+  re-insert itself when a later layer slips above it. Inserting the coverage layer
+  during the map's own build settles the order once: every highlight set mounts
+  afterwards, and therefore above, which is the order the web app re-asserts with
+  `moveLayer` on every run.
+- **The planner's result is exchanged for route rows before it reaches the
+  selection.** A plan names its routes by id and endpoint; the selection holds whole
+  tile features, and the logging screen renders them with `routeTitle` /
+  `routeBadges`. So `POST /routes/metadata` turns the ids into the properties the tile
+  would have carried (`routeFeatureFromMetadata`), and a planned route is described
+  exactly as a tapped one rather than by a second, thinner account of the same route.
+- **A found path highlights the map before anything is added to the selection.** On
+  the web the planner is a sidebar beside the map and the gold line appears in the same
+  glance; here the planner is a modal *over* the map, so the highlight is waiting
+  underneath when it is dismissed and the map's chip says what it is showing. Adding
+  the routes hands them to the orange selection highlight and drops the gold one —
+  two colours claiming to be the answer is one too many.
+- **The country filter is a context, not a fetch per screen.** The map turns it into
+  the tile's `selected_countries` and into the numbers over the corner; the Countries
+  screen is a tab away changing it, and two hooks fetching on mount would leave the map
+  filtered by the old list until something remounted it. It is **keyed on the session**
+  rather than on mount, because the provider sits above the auth guard — otherwise the
+  first account's list would be the second account's filter. The write is optimistic,
+  with the previous list put back if the server refuses it.
+- **A station field is two states, not one.** The web app keeps a single input
+  throughout and says "chosen" with a border colour, which works because its results
+  are a dropdown that closes itself. Here the results are part of the layout, so a
+  field still looking searchable while holding an answer would keep its list open under
+  every other row. And the whole apparatus that keeps the web dropdown alive — the
+  `preventDefault` on pointerdown, the blur timer — ports to nothing: a press on a row
+  is delivered to that row, and focus has nothing to do with it.
+- **Verified the same three ways the first half was**: `tsc` and Biome clean in both
+  apps, the coverage layer passes MapLibre's own `validateStyleMin` against the
+  binding's copy of the spec, and the iOS bundle exports with `logged_coverage` and
+  `logged_coverage_line` in it — strings that exist only in `src/lib/map`, which is
+  what proves the new shared module resolves through `@shared`.
+
 #### Rough edges left in what is built
 
 - **The date is typed, not picked.** A native date picker is another native module
@@ -791,7 +865,7 @@ Three smaller ones:
   Yesterday buttons beside it, which covers the case that actually happens.
 - **Editing and deleting a journey or trip** are not wired up, though the endpoints
   are (`PATCH`/`DELETE`) and `endpoints.ts` already calls them.
-- **The UI details have not had a pass.** What is built was run on the iPhone the
+- **The UI details have not had a pass.** The first half was run on the iPhone the
   day it was written and works; the spacing, wording and affordances are a later
   sweep, not a rewrite.
 - **Only the `regular` highlight variant is confirmed drawing.** The heritage and
@@ -799,6 +873,15 @@ Three smaller ones:
   them — sit behind layer toggles that are off by default, so a device run does not
   reach them unless the toggles are on. They validate, and the expression shapes are
   the base layers' own, but that is not the same as having been seen.
+- **The map's top furniture is three separate pieces in three corners** — the search
+  button at the left, the highlight chip in the middle, the planner button at the
+  right — each positioned against the safe-area inset on its own. They do not overlap
+  at any width this app will meet, but nothing enforces that, and a wider chip would
+  be the first thing to find out.
+- **The planner's result survives nothing.** Closing the modal keeps the gold
+  highlight on the map but throws away the legs and the form, so looking at the path
+  and then adding it to the selection means planning it twice. The highlight chip is
+  what says the plan is still there.
 
 ### Phase 5 — Offline (1.5–2 weeks)
 
@@ -990,3 +1073,25 @@ pick up. Keep it short — the phase sections carry the detail.
   module's strings in it, and then **run on the iPhone**, where the logger loop works
   end to end. **Next: the planner, country stats, station search and the coverage
   overlay**, plus a pass over the UI details of what is already there.
+- **2026-09-17 — Phase 4, second half: the coverage overlay, station search, the
+  journey planner and countries & statistics.** Same shape again — three more pieces
+  lifted into the shared set before either app was touched: `map/coverageLayer.ts`
+  (what the ridden-stretch overlay *is*, leaving `useCoverageOverlay` as the live-map
+  mechanism only), `countryFlag.ts` (out of `countryUtils.ts`, which reaches for
+  `@rapideditor/country-coder` and so cannot be imported from React Native), and
+  `routeFeature.ts`'s `frequency`, widened to accept the HTTP API's JSON array beside
+  the tile's Postgres-array string. Two queries gained `name`: a route described from
+  `POST /routes/metadata` or from a journey was missing the half that identifies it in
+  a naming region. On the native side: a coverage overlay mounted with the map (empty
+  until its fetch lands — **inserting it during the build is what settles the order**
+  against the highlight sets, which both ask to go below `stations` and would
+  otherwise win by arriving later), a station search that turns a button into a field
+  and flies the camera, a planner modal whose result highlights the map in gold and
+  whose routes are exchanged for real route rows before they reach the selection, and
+  a countries screen backed by a `CountryPrefsContext` held once for the whole app and
+  keyed on the session. Verified as before — `tsc` and Biome clean in both apps, the
+  coverage layer passes `validateStyleMin` against the binding's own copy of the spec,
+  and the iOS bundle exports with `logged_coverage` in it. **Not yet run on a device:
+  that is the next session's first job**, and the three things to look at are the
+  coverage overlay's stacking under the highlights, the planner loop end to end, and
+  the country filter reaching the map's tiles.
