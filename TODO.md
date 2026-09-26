@@ -12,16 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Security (do these first)
 
-- [ ] **A missing `JWT_SECRET` silently falls back to a published constant.**
-      `src/lib/authTokens.ts:16-18`. The code reads
-      `process.env.JWT_SECRET || "your-secret-key-change-in-production"`, and
-      `docker-compose.yml` passes `JWT_SECRET=${JWT_SECRET}`, which is an empty
-      string when the host variable is unset. dotenv does not override a key that
-      already exists, even an empty one. Anyone who has read the repo can then
-      forge `{ userId: 1 }`, which is admin, over the cookie and bearer paths
-      alike. **Fix:** in production, throw at startup if the secret is unset or
-      shorter than about 32 bytes.
-
 - [ ] **The frontend and Martin ports are published on every interface.**
       `docker-compose.yml:21` (`3001:3000`) and `:32` (`3000:3000`); only `db` is
       bound to `127.0.0.1`. Docker-published ports bypass ufw/iptables INPUT

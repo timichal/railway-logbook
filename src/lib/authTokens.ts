@@ -13,9 +13,48 @@
 
 import { jwtVerify, SignJWT } from "jose";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "your-secret-key-change-in-production",
-);
+/**
+ * Development only. It is in the repo, so a server signing with it lets anyone
+ * who has read the repo forge `{ userId: 1 }`, i.e. admin.
+ */
+const DEV_FALLBACK_SECRET = "dev-only-jwt-secret-never-used-in-production";
+/** HS256 wants a key at least as long as its 256-bit output. */
+const MIN_SECRET_BYTES = 32;
+
+/**
+ * The signing key, or a throw in production when it is missing or short.
+ *
+ * `docker-compose.yml` passes `JWT_SECRET=${JWT_SECRET}`, which is an empty
+ * string when the host variable is unset — so "unset" has to include empty.
+ * Resolved on first use rather than at module load, because `next build` runs
+ * with NODE_ENV=production and no secret, and may load this module to
+ * prerender; `instrumentation.ts` calls it at server start instead, so a
+ * misconfigured container dies on boot rather than on its first login.
+ */
+export function resolveJwtSecret(): Uint8Array {
+  const raw = process.env.JWT_SECRET ?? "";
+
+  if (process.env.NODE_ENV === "production") {
+    const bytes = new TextEncoder().encode(raw);
+    if (bytes.length < MIN_SECRET_BYTES) {
+      throw new Error(
+        raw
+          ? `JWT_SECRET is ${bytes.length} bytes; at least ${MIN_SECRET_BYTES} are required`
+          : "JWT_SECRET is not set",
+      );
+    }
+    return bytes;
+  }
+
+  return new TextEncoder().encode(raw || DEV_FALLBACK_SECRET);
+}
+
+let jwtSecret: Uint8Array | undefined;
+
+function getJwtSecret(): Uint8Array {
+  jwtSecret ??= resolveJwtSecret();
+  return jwtSecret;
+}
 
 export const COOKIE_NAME = "railway-auth";
 
@@ -57,7 +96,7 @@ function sign(user: User, kind: TokenKind, ttl: string): Promise<string> {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(ttl)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 /** The web app's cookie token. */
@@ -85,8 +124,11 @@ export async function verifyToken(
   token: string,
   expect: "session" | "access" | "refresh" = "session",
 ): Promise<User | null> {
+  // Outside the try: a missing secret is a server fault, not a bad token, and
+  // must not pass for "logged out".
+  const secret = getJwtSecret();
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, secret);
     const kind = (payload.typ as TokenKind | undefined) ?? "session";
 
     if (expect === "refresh") {

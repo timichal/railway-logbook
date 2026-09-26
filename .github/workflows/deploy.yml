@@ -29,6 +29,18 @@ jobs:
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
     
     steps:
+      # The server refuses to start with a shorter one (resolveJwtSecret in
+      # src/lib/authTokens.ts), so fail here, before the running container is
+      # replaced by one that exits on boot.
+      - name: Check JWT secret
+        run: |
+          bytes=$(printf '%s' "$JWT_SECRET" | wc -c)
+          if [ "$bytes" -lt 32 ]; then
+            echo "::error::JWT_SECRET is $bytes bytes; at least 32 are required"
+            exit 1
+          fi
+        shell: bash
+
       - name: Checkout code
         uses: actions/checkout@v6
 
