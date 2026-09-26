@@ -1,0 +1,63 @@
+# The OSM data on the server: the date each Geofabrik extract was cut.
+# Written by deploy.sh after a successful map data deploy.
+# Deployed 2026-09-26 20:34 UTC
+
+# europe
+albania: 2026-09-25
+andorra: 2026-09-25
+austria: 2026-09-25
+azores: 2026-09-25
+belarus: 2026-09-25
+belgium: 2026-09-25
+bosnia-herzegovina: 2026-09-25
+bulgaria: 2026-09-25
+croatia: 2026-09-25
+cyprus: 2026-09-25
+czech-republic: 2026-09-25
+denmark: 2026-09-25
+estonia: 2026-09-25
+faroe-islands: 2026-09-25
+finland: 2026-09-25
+france: 2026-09-25
+georgia: 2026-09-25
+germany: 2026-09-25
+greece: 2026-09-25
+guernsey-jersey: 2026-09-25
+hungary: 2026-09-25
+iceland: 2026-09-25
+ireland-and-northern-ireland: 2026-09-25
+isle-of-man: 2026-09-25
+italy: 2026-09-25
+kosovo: 2026-09-25
+latvia: 2026-09-25
+liechtenstein: 2026-09-25
+lithuania: 2026-09-25
+luxembourg: 2026-09-25
+macedonia: 2026-09-25
+malta: 2026-09-25
+moldova: 2026-09-25
+monaco: 2026-09-25
+montenegro: 2026-09-25
+netherlands: 2026-09-25
+norway: 2026-09-25
+poland: 2026-09-25
+portugal: 2026-09-25
+romania: 2026-09-25
+serbia: 2026-09-25
+slovakia: 2026-09-25
+slovenia: 2026-09-25
+spain: 2026-09-25
+sweden: 2026-09-25
+switzerland: 2026-09-25
+turkey: 2026-09-25
+ukraine: 2026-09-25
+united-kingdom: 2026-09-25
+kaliningrad: 2026-09-25
+northwestern-fed-district: 2026-09-25
+central-fed-district: 2026-09-25
+south-fed-district: 2026-09-25
+north-caucasus-fed-district: 2026-09-25
+volga-fed-district: 2026-09-25
+
+# japan
+japan: 2026-09-25

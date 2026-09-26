@@ -160,8 +160,7 @@ case "${STATE}" in
     remote 'cat data/deployed-extracts.txt' > "${RECORD_FILE}.part"
     mv "${RECORD_FILE}.part" "${RECORD_FILE}"
     echo "=== Deploy complete ==="
-    echo "Updated ${RECORD_FILE} - commit it:"
-    grep -v '^#' "${RECORD_FILE}" | grep . | sed 's/^/  /'
+    echo "Updated ${RECORD_FILE} - commit it."
     ;;
   143)
     echo "The deploy was stopped."
