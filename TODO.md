@@ -74,34 +74,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Bugs that lose or corrupt data
 
-- [ ] **`importRouteData` wipes every other user's logged rides.**
-      `src/scripts/exportRoutes.ts:211-214`. The dump runs
-      `DELETE FROM public.railway_routes;` *before*
-      `SET session_replication_role = replica`, so the delete cascades through
-      `user_logged_parts.track_id … ON DELETE CASCADE` for **all** users. The dump
-      then restores only user 1's parts, which leaves everyone else's journeys
-      empty. **Fix:** at minimum, move the `SET` above the `DELETE`. Better:
-      restore only the admin's rows and upsert routes by `track_id`. Either way,
-      back up `user_logged_parts` first.
-
-- [ ] **`importRouteData` is not atomic and reports success when SQL fails.**
-      `src/scripts/importRoutes.ts:78-99`. psql runs without
-      `-v ON_ERROR_STOP=1` or `--single-transaction`, and psql exits 0 when
-      individual statements fail. A dump taken after a schema change can therefore
-      commit the DELETE, fail every INSERT, and still print "SQL dump executed
-      successfully". The dump's `setval('user_trips_id_seq', …)` lines always
-      fail, because pg_dump clears `search_path` and these names are unqualified;
-      that is why the later sequence resync is needed. **Fix:** add both psql
-      flags and schema-qualify the generated statements.
-
-- [ ] **Export shifts journey dates and timestamps on a non-UTC host.**
-      `src/scripts/exportRoutes.ts:72-73`, `:106-108`, `:146`. node-pg parses
-      `DATE` as local midnight, so `toISOString().split("T")[0]` gives the
-      previous day in CET/CEST. `created_at.toISOString()` appends a `Z` that a
-      `TIMESTAMP` column ignores. Each round trip on a Prague machine moves every
-      journey back a day. **Fix:** select `date::text` and `created_at::text`, or
-      see the pg type-parser item under "Bugs — user-facing".
-
 - [ ] **A transient DB fault during recalculation marks a route invalid, and
       `--valid-only` never rechecks it.** `src/scripts/verifyRouteData.ts:67-88`.
       The try/catch wraps the whole of `findPathFromCoordinates`, including the
