@@ -32,7 +32,7 @@ async function loadGeoJSONData(): Promise<void> {
         "Usage: npm run importMapData <filepath> [<filepath> ...] [--valid-only] [--concurrency=N]",
       );
       console.error(
-        "Example: npm run importMapData ./data/europe-pruned-251027.geojson ./data/japan-pruned-251027.geojson",
+        "Example: npm run importMapData ./data/europe-pruned.geojson ./data/japan-pruned.geojson",
       );
     };
 

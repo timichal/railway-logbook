@@ -26,7 +26,7 @@ docker compose up -d db tiles
 2. **Process data**
 ```bash
 npm run prepareMapData              # Downloads and transforms OSM data
-npm run importMapData               # Loads data and recalculates routes (if any exist)
+npm run importMapData -- data/europe-pruned.geojson data/japan-pruned.geojson   # Loads data, recalculates routes
 ```
 
 3. **Run application**

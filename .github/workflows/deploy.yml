@@ -5,8 +5,12 @@ on:
     branches: [main]
     # Nothing under these reaches the web image or the server. A push that also
     # touches anything else still deploys; workflow_dispatch forces one.
+    # osmium-scripts/ is the map data pipeline, which runs from the server's own
+    # checkout (deployMapData) - and every map deploy ends in a commit of
+    # osmium-scripts/deployed-extracts.txt, which must not rebuild the app.
     paths-ignore:
       - "mobile/**"
+      - "osmium-scripts/**"
       - "**.md"
   workflow_dispatch:
 
