@@ -59,8 +59,9 @@ belong in `expo-secure-store` and not in plain storage.
 
 **Login and register are rate-limited per client** — 10 sign-ins per 5 minutes,
 5 registrations per hour, counted in memory against the address the proxy
-reports (`src/lib/rateLimit.ts`). A successful login clears its count, so only a
-run of failures ever trips it. Over the limit is a **429** with `Retry-After` in
+reports (`src/lib/rateLimit.ts`; an IPv6 client by its /64). **Every** sign-in
+counts, a successful one too, so a client should log in once and then live on
+refreshes rather than re-sending the password. Over the limit is a **429** with `Retry-After` in
 seconds and a message fit to show; a client should wait that long rather than
 retry, and must not treat it as bad credentials. Nothing else in the API is
 limited — everything else costs a query, while a password costs a bcrypt.

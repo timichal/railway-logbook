@@ -12,38 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Security (do these first)
 
-- [ ] **The frontend and Martin ports are published on every interface.**
-      `docker-compose.yml:21` (`3001:3000`) and `:32` (`3000:3000`); only `db` is
-      bound to `127.0.0.1`. Docker-published ports bypass ufw/iptables INPUT
-      rules. A client that reaches `host:3000` directly controls `X-Real-IP`,
-      which `clientAddress` trusts first (`src/lib/rateLimit.ts:116-127`), so
-      sending a random value per request gets a fresh budget each time and the
-      sign-in and registration caps go away. **Fix:** bind both as
-      `127.0.0.1:…`.
-
-- [ ] **Behind Caddy, `X-Real-IP` is client-controlled, so the rate limit is
-      bypassable even through the proxy.** `src/lib/rateLimit.ts:116-127`.
-      `clientAddress` prefers `X-Real-IP`, assuming the proxy sets it. That held
-      for nginx with `proxy_set_header X-Real-IP $remote_addr`. Caddy's
-      `reverse_proxy` never sets `X-Real-IP` and passes a client's own copy
-      through unchanged, so `X-Real-IP: <random>` on each request gets a fresh
-      budget. `X-Forwarded-For` is safe: with no `trusted_proxies` configured,
-      Caddy discards the incoming value and sets it to the peer address, so the
-      rightmost-hop logic still gives the real client. **Fix:** drop the
-      `X-Real-IP` branch and read only `X-Forwarded-For`, which also fixes the
-      doc comment above `clientAddress`. Alternatively, have the Caddyfile
-      overwrite the header with `header_up X-Real-IP {remote_host}`. That keeps
-      the code as is, but makes its safety depend on a file that isn't in the
-      repo.
-
-- [ ] **Any account holder can bypass the login rate limit.**
-      `src/lib/rateLimit.ts:149-151`. A successful login clears the whole
-      per-address counter. The loop is: register one account, then repeat nine
-      wrong guesses against a victim and one correct login to your own account.
-      The counter never reaches 10. **Fix:** on success, clear only the failures
-      charged to that email (count per address+email as well as per address), or
-      stop clearing on success and raise the cap instead.
-
 - [ ] **`createJourney` files a journey under someone else's trip.**
       `src/lib/journeyQueries.ts:123-128`, reachable from `journeyActions` and
       `POST /api/v1/journeys` through `tripId`. `trip_id` is inserted without an

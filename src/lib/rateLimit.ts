@@ -17,7 +17,8 @@
  * the better fit for credential stuffing, and it also hands anyone a way to
  * lock a named account out by burning its budget on purpose — a real harm
  * traded against an attack (many addresses, one account) that a personal
- * logbook is not the target of.
+ * logbook is not the target of. The price of an address key is that everyone
+ * behind one address shares a budget, a mobile carrier's NAT included.
  */
 
 import { RateLimitError } from "./errors";
@@ -31,10 +32,13 @@ interface Policy {
 }
 
 /**
- * Ten sign-ins per five minutes, and a success clears the count (see
- * `clearLoginRateLimit`), so only a run of *failures* ever trips it — a
- * household or an office behind one address never notices. Ten failures buys an
- * attacker ~2.5s of bcrypt per five minutes.
+ * Ten sign-ins per five minutes, **successes included**. The limit caps how much
+ * bcrypt an address can buy, and a correct password costs exactly as much as a
+ * wrong one — refunding successes let anyone with an account run bcrypt without
+ * end by logging into it in a loop, and clearing the count on success (as this
+ * once did) also let them reset it between guesses at someone else's password.
+ * Ten buys ~2.5s of bcrypt per five minutes, and is still far more sign-ins than
+ * anyone makes by hand: the web session and the native app's tokens both last.
  */
 const LOGIN_POLICY: Policy = { limit: 10, windowMs: 5 * 60_000, what: "sign-in attempts" };
 
@@ -107,25 +111,60 @@ function describeWait(seconds: number): string {
  * a header. `X-Forwarded-For` is read from the **right**: with no
  * `trusted_proxies` configured, Caddy replaces the header with the peer it
  * actually accepted the connection from, and a proxy that appends instead still
- * leaves anything a client invented to the left of it, where it is ignored. `X-Real-IP` is a single value set by the
- * proxy and is preferred where it exists.
+ * leaves anything a client invented to the left of it, where it is ignored.
  *
- * Everything arriving without either header shares one bucket — in this
- * deployment that is `npm run dev`, or something reaching the container past the
- * proxy, and sharing a budget is the safe way to be wrong.
+ * `X-Real-IP` is deliberately not read. Caddy's `reverse_proxy` never sets it and
+ * passes a client's own copy through untouched, so trusting it would let a caller
+ * name a fresh address on every request; its safety would rest on a
+ * `header_up` line in a Caddyfile that is not in this repo.
+ *
+ * Without a proxy the header is still there: Next fills it in from the socket's
+ * peer address when a request arrives without one (`base-server.js`), so
+ * `npm run dev` is keyed on localhost. The `"unknown"` bucket is only a backstop.
  */
 function clientAddress(headers: Headers): string {
-  const realIp = headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
-
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
     const hops = forwarded.split(",");
     const peer = hops[hops.length - 1]?.trim();
-    if (peer) return peer;
+    if (peer) return clientBucket(peer);
   }
 
   return "unknown";
+}
+
+/**
+ * The budget an address draws on: an IPv4 address is its own, an IPv6 address
+ * shares one with the rest of its /64 block.
+ *
+ * A /64 is the smallest block an ISP hands a subscriber, and every address in it
+ * is theirs to send from — keyed on the full address, an IPv6 client could take a
+ * fresh budget per request just by rotating the low 64 bits. An IPv4 address
+ * written in IPv6 form (`::ffff:1.2.3.4`, as Node reports an IPv4 peer on a
+ * dual-stack socket) is keyed as the IPv4 address it is. Anything that does not
+ * parse is keyed verbatim.
+ */
+function clientBucket(address: string): string {
+  // A zone index (`fe80::1%eth0`) names an interface, not a host.
+  const bare = address.split("%")[0].toLowerCase();
+  if (!bare.includes(":")) return bare;
+
+  const embeddedIpv4 = bare.lastIndexOf(":");
+  if (bare.includes(".", embeddedIpv4)) return bare.slice(embeddedIpv4 + 1);
+
+  const halves = bare.split("::");
+  if (halves.length > 2) return bare;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return bare;
+
+  const groups = [...head, ...Array<string>(missing).fill("0"), ...tail];
+  if (!groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) return bare;
+  return `${groups
+    .slice(0, 4)
+    .map((group) => Number.parseInt(group, 16).toString(16))
+    .join(":")}::/64`;
 }
 
 function enforce(headers: Headers, prefix: string, policy: Policy): void {
@@ -141,14 +180,6 @@ function enforce(headers: Headers, prefix: string, policy: Policy): void {
 /** Charge a sign-in attempt to its client, or throw a `RateLimitError`. */
 export function enforceLoginRateLimit(headers: Headers): void {
   enforce(headers, "login", LOGIN_POLICY);
-}
-
-/**
- * Forget a client's failed sign-ins, called once the credentials check out.
- * Whoever just proved who they are is not who the limit is for.
- */
-export function clearLoginRateLimit(headers: Headers): void {
-  counters.delete(`login:${clientAddress(headers)}`);
 }
 
 /** Charge a registration attempt to its client, or throw a `RateLimitError`. */

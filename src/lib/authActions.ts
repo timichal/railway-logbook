@@ -18,7 +18,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authenticateUser, registerUser } from "./authQueries";
 import { COOKIE_NAME, createToken, type User, verifyToken } from "./authTokens";
-import { clearLoginRateLimit, enforceLoginRateLimit, enforceRegisterRateLimit } from "./rateLimit";
+import { enforceLoginRateLimit, enforceRegisterRateLimit } from "./rateLimit";
 
 export type { User };
 
@@ -47,14 +47,12 @@ export async function getUser(): Promise<User | null> {
 }
 
 export async function login(formData: FormData) {
-  const requestHeaders = await headers();
-  enforceLoginRateLimit(requestHeaders);
+  enforceLoginRateLimit(await headers());
 
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
   const user = await authenticateUser(email, password);
-  clearLoginRateLimit(requestHeaders);
   await setSessionCookie(user);
 
   return { success: true, user };

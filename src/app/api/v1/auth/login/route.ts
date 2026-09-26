@@ -3,7 +3,7 @@ import { readJsonBody, requireString } from "@/lib/api/params";
 import { ApiError, apiHandler, jsonResponse } from "@/lib/api/response";
 import { authenticateUser } from "@/lib/authQueries";
 import { ValidationError } from "@/lib/errors";
-import { clearLoginRateLimit, enforceLoginRateLimit } from "@/lib/rateLimit";
+import { enforceLoginRateLimit } from "@/lib/rateLimit";
 
 /** POST /api/v1/auth/login — { email, password } → the token pair. */
 export async function POST(request: Request): Promise<Response> {
@@ -19,7 +19,6 @@ export async function POST(request: Request): Promise<Response> {
 
     try {
       const user = await authenticateUser(email, password);
-      clearLoginRateLimit(request.headers);
       return jsonResponse(await issueTokens(user));
     } catch (error) {
       // Rejected credentials are a 401, not the 400 a validation message gets.
