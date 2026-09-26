@@ -8,44 +8,78 @@
 # files. Neighbouring extracts overlap at the border, and the merge keeps one
 # copy of every object - the newest, if the two extracts are a day apart.
 #
-# The list is the countries on the map, plus the ones routes run through
-# without stopping: a route that crosses a country left out here loses its
-# track and goes invalid on the next import. Liechtenstein carries
-# Buchs - Feldkirch, Monaco the coast line from Nice to Menton. A country can
-# also be here ahead of the map: Portugal, Hungary, Romania, Bulgaria and
-# Croatia are downloaded so their track shows on the admin map, and join
-# SUPPORTED_COUNTRIES (src/lib/shared/constants.ts) once routes are defined.
+# Europe's list is every region Geofabrik's Europe page lists
+# (download.geofabrik.de/europe.html), so the data is the same as the whole
+# continent's extract: track everywhere on the admin map, whether or not the
+# country is on the user map (SUPPORTED_COUNTRIES in
+# src/lib/shared/constants.ts) or has routes yet. Two adjustments:
 #
-# Adding a country: add its line (the name as it appears on Geofabrik's region
-# page), commit, push, deploy.
+# - "Russian Federation" links to Geofabrik's Russia, which covers all of it.
+#   The continent's extract reaches only as far as 46.8E, so it is taken as the
+#   federal districts inside that line. The Volga and Northwestern districts
+#   run on further east, and that extra is harmless: the Europe region is cut
+#   at 40E (src/lib/shared/regions.ts), so it is never drawn. Crimea's
+#   district is left out, Geofabrik's Ukraine including Crimea already.
+# - The page's "special sub regions" (Alps, DACH, Britain and Ireland, Great
+#   Britain) are left out: each is only a combination of countries listed here.
+#
+# Adding a region: add its line (the path of its -latest.osm.pbf on Geofabrik,
+# without the suffix), commit, push, deploy.
 
+europe europe/albania
+europe europe/andorra
 europe europe/austria
+europe europe/azores
+europe europe/belarus
 europe europe/belgium
+europe europe/bosnia-herzegovina
 europe europe/bulgaria
 europe europe/croatia
+europe europe/cyprus
 europe europe/czech-republic
 europe europe/denmark
 europe europe/estonia
+europe europe/faroe-islands
 europe europe/finland
 europe europe/france
+europe europe/georgia
 europe europe/germany
+europe europe/greece
+europe europe/guernsey-jersey
 europe europe/hungary
+europe europe/iceland
+europe europe/ireland-and-northern-ireland
+europe europe/isle-of-man
 europe europe/italy
+europe europe/kosovo
 europe europe/latvia
 europe europe/liechtenstein
 europe europe/lithuania
 europe europe/luxembourg
+europe europe/macedonia
+europe europe/malta
+europe europe/moldova
 europe europe/monaco
+europe europe/montenegro
 europe europe/netherlands
 europe europe/norway
 europe europe/poland
 europe europe/portugal
 europe europe/romania
+europe europe/serbia
 europe europe/slovakia
 europe europe/slovenia
 europe europe/spain
 europe europe/sweden
 europe europe/switzerland
+europe europe/turkey
+europe europe/ukraine
 europe europe/united-kingdom
+europe russia/kaliningrad
+europe russia/northwestern-fed-district
+europe russia/central-fed-district
+europe russia/south-fed-district
+europe russia/north-caucasus-fed-district
+europe russia/volga-fed-district
 
 japan asia/japan

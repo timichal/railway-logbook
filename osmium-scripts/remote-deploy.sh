@@ -1,11 +1,27 @@
 #!/bin/bash
 
 # The server half of deploy.sh: prepare every region's map data here, import
-# it, and record which data went in. deploy.sh starts this detached from the
-# SSH session (nohup, output to data/deploy.log), so a dropped connection does
-# not kill a run that spends most of an hour downloading. Not meant to be run
-# by hand, though nothing stops it - run it from anywhere, it works from the
-# repository root.
+# it, and record which data went in. deploy.sh drives it through four modes:
+#
+#   --start [flags]  start a deploy, then follow it (as --follow)
+#   --follow         print the log of the deploy in progress as it grows, or
+#                    the last one's log if none is running
+#   --state          print none | running | killed | <exit status of the last>
+#   --run [flags]    the deploy itself; --start runs this in the background
+#
+# Ending the follow stops the deploy, however it ends: a SIGINT (a Ctrl+C that
+# reached the pty), or the hangup when the connection goes - which is what a
+# local Ctrl+C actually produces, since Windows plink takes Ctrl+C as a signal
+# to quit rather than sending it on as a keystroke, even with -t. Stopping on
+# the hangup is the one reading of "Ctrl+C stops it" that does not depend on
+# how the local console delivers the key; the price is that a dropped
+# connection stops the deploy too, and a rerun resumes from what it finished
+# (filtered extracts, downloads, pruned regions).
+#
+# The job itself runs in a session of its own (setsid), so the stop is always
+# this script's decision rather than a side effect of the hangup, and the job's
+# pid is its process group id - which is what lets one kill reach curl, osmium,
+# npm and node together.
 #
 # Flags: --valid-only and --concurrency=N go to importMapData. --fresh throws
 # away whatever an earlier failed run left behind and starts from scratch.
@@ -18,16 +34,133 @@
 
 set -e
 
-cd "$(dirname "$0")/.."
+SCRIPT="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+cd "$(dirname "$SCRIPT")/.."
 
 DATA_DIR="data"
 RECORD_FILE="${DATA_DIR}/deployed-extracts.txt"
 STATUS_FILE="${DATA_DIR}/deploy.status"
+LOG_FILE="${DATA_DIR}/deploy.log"
+PID_FILE="${DATA_DIR}/deploy.pid"
+
+# The exit status of a stopped deploy, as its TERM trap and stop_deploy record it.
+STOPPED_STATUS=143
+
+# The pid file outlives its process, and a pid is eventually handed to
+# something else, so the process must also still be this script - a bare
+# kill -0 would one day block every deploy on an unrelated process.
+is_running() {
+  [ -f "${PID_FILE}" ] && grep -qs remote-deploy.sh "/proc/$(cat "${PID_FILE}")/cmdline"
+}
+
+# The job being followed, set before anything can interrupt the follow, and
+# the tail showing its log.
+JOB_PID=""
+TAIL_PID=""
+
+# Runs on SIGINT, SIGHUP or SIGTERM to the follower. Nothing here may stop it
+# halfway: after a hangup the terminal is gone and every echo fails, so set -e
+# is off and the messages are best effort.
+stop_deploy() {
+  set +e
+  trap '' INT HUP TERM
+  # $! covers a signal landing between --start's fork and the assignment.
+  local pid="${JOB_PID:-$!}"
+  if [ -z "${pid}" ]; then
+    exit 130
+  fi
+  echo "" 2> /dev/null
+  echo "=== Interrupted - stopping the deploy on the server ===" 2> /dev/null
+  kill -TERM -- "-${pid}" 2> /dev/null
+  # The whole group, not just its leader: the script can be gone while a node
+  # or osmium it started is still winding down, and that one gets the KILL too.
+  for _ in $(seq 20); do
+    kill -0 -- "-${pid}" 2> /dev/null || break
+    sleep 0.5
+  done
+  if kill -0 -- "-${pid}" 2> /dev/null; then
+    # A KILLed script writes no status, which --state would read as having
+    # died on its own (out of memory); this was a stop.
+    [ -f "${STATUS_FILE}" ] || echo "${STOPPED_STATUS}" > "${STATUS_FILE}"
+    kill -KILL -- "-${pid}" 2> /dev/null
+  fi
+  echo "Stopped. Rerun to continue; finished extracts and downloads are kept." 2> /dev/null
+  [ -z "${TAIL_PID}" ] || kill "${TAIL_PID}" 2> /dev/null
+  exit 130
+}
+
+follow() {
+  if ! is_running; then
+    cat "${LOG_FILE}" 2> /dev/null || true
+    return 0
+  fi
+  JOB_PID="$(cat "${PID_FILE}")"
+  # tail runs in the background while this shell waits for it, because bash
+  # holds a trap back until a foreground command finishes, and a wait is the
+  # one thing a trapped signal cuts short. A foreground tail left the stop
+  # pending for as long as tail ran - and after a hangup tail need not stop at
+  # all: the signal goes to the session leader, and tail carries on past the
+  # failed writes to the dead terminal.
+  tail -n +1 -f --pid="${JOB_PID}" "${LOG_FILE}" &
+  TAIL_PID=$!
+  wait "${TAIL_PID}" || true
+}
+
+MODE="$1"
+shift || true
+case "${MODE}" in
+  --start)
+    # Before the fork, so there is no moment in which an interrupt would end
+    # this script and leave the job it just started running unwatched.
+    trap stop_deploy INT HUP TERM
+    if is_running; then
+      echo "ERROR: a deploy is already running (pid $(cat "${PID_FILE}"))"
+      exit 1
+    fi
+    mkdir -p "${DATA_DIR}"
+    rm -f "${STATUS_FILE}"
+    # Emptied here rather than by the job's redirection, which happens in the
+    # child: tail could otherwise open the log first and print the previous
+    # deploy's (or, on a first deploy, find no file and give up).
+    : > "${LOG_FILE}"
+    setsid bash "${SCRIPT}" --run "$@" >> "${LOG_FILE}" 2>&1 < /dev/null &
+    JOB_PID=$!
+    echo "${JOB_PID}" > "${PID_FILE}"
+    follow
+    exit 0
+    ;;
+  --follow)
+    trap stop_deploy INT HUP TERM
+    follow
+    exit 0
+    ;;
+  --state)
+    if [ ! -f "${PID_FILE}" ]; then
+      echo none
+    elif is_running; then
+      echo running
+    elif [ -f "${STATUS_FILE}" ]; then
+      cat "${STATUS_FILE}"
+    else
+      echo killed
+    fi
+    exit 0
+    ;;
+  --run) ;;
+  *)
+    echo "Usage: remote-deploy.sh --start [flags] | --follow | --state | --run [flags]"
+    exit 1
+    ;;
+esac
+
+# From here on: the deploy itself (--run). It sits in a session of its own
+# with no terminal, so the only signal it gets is stop_deploy's TERM.
 
 # deploy.sh reads the exit status from here once the process is gone; a missing
-# file then means the run was killed outright (out of memory, most likely).
-rm -f "${STATUS_FILE}"
+# file then means the run was killed outright (out of memory, most likely). The
+# TERM trap turns a stop into an ordinary exit, so it is recorded too.
 trap 'echo $? > "${STATUS_FILE}"' EXIT
+trap 'exit ${STOPPED_STATUS}' TERM
 
 FRESH=""
 IMPORT_FLAGS=""
