@@ -78,7 +78,8 @@ const getTileBaseUrl = () => {
 const TILE_BASE_URL = getTileBaseUrl();
 
 /**
- * The app's own origin, for the per-user route tile served by Next. Absolute,
+ * The app's own origin, for the tiles served by Next (the per-user route tile, the
+ * admin notes). Absolute,
  * because MapLibre fetches tiles from a worker whose base URL is not the page's.
  */
 const APP_ORIGIN = typeof window === "undefined" || !window.location ? "" : window.location.origin;
@@ -93,7 +94,7 @@ export const createPublicStationsSource = () => sources.createPublicStationsSour
 export const createRailwayPartsSource = () => sources.createRailwayPartsSource(TILE_BASE_URL);
 
 export const createAdminNotesSource = (cacheBuster?: number) =>
-  sources.createAdminNotesSource(TILE_BASE_URL, cacheBuster);
+  sources.createAdminNotesSource(APP_ORIGIN, cacheBuster);
 
 export const createPublicNotesSource = (cacheBuster?: number) =>
   sources.createPublicNotesSource(TILE_BASE_URL, cacheBuster);

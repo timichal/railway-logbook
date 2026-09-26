@@ -88,7 +88,10 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql
-IMMUTABLE
+-- STABLE, not IMMUTABLE, here and in every tile function below: they read tables,
+-- and IMMUTABLE lets the planner fold a call with constant arguments into its
+-- result once and reuse it after the data has changed.
+STABLE
 STRICT
 PARALLEL SAFE;
 
@@ -336,7 +339,7 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql
-IMMUTABLE
+STABLE
 STRICT
 PARALLEL SAFE;
 
@@ -385,7 +388,7 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql
-IMMUTABLE
+STABLE
 STRICT
 PARALLEL SAFE;
 
@@ -454,8 +457,9 @@ BEGIN
 END $$;
 
 -- Function: admin_notes_tile
--- Serves admin notes as vector tiles (admin-only)
--- Shows all notes at all zoom levels
+-- Serves admin notes as vector tiles (admin-only), all notes at all zoom levels.
+-- Not a Martin source, since Martin answers anyone: the Next handler under
+-- src/app/api/tiles/admin_notes checks for the admin first and calls this itself.
 CREATE OR REPLACE FUNCTION admin_notes_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
 DECLARE
@@ -494,7 +498,7 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql
-IMMUTABLE
+STABLE
 STRICT
 PARALLEL SAFE;
 
@@ -535,7 +539,7 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql
-IMMUTABLE
+STABLE
 STRICT
 PARALLEL SAFE;
 

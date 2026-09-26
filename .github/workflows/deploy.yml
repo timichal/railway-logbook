@@ -48,6 +48,11 @@ jobs:
       - name: Upload martin configuration
         run: scp -i $SSH_KEY_PATH -r martin $SERVER_USERNAME@$SERVER_IP:/home/$SERVER_USERNAME/
 
+      # Martin reads its configuration once, at start, and `up -d` leaves a running
+      # container alone when only the mounted file changed — so it is restarted
+      # whenever martin/ differs from what it was last started with, or a source
+      # dropped from the config stays published. A checksum rather than every
+      # deploy, since a restart leaves every open map without tiles for a moment.
       - name: Reload container
         run: |
           ssh -i $SSH_KEY_PATH $SERVER_USERNAME@$SERVER_IP "
@@ -55,5 +60,10 @@ jobs:
             export DB_PASSWORD='$DB_PASSWORD'
             export POSTGRES_DB='$POSTGRES_DB'
             export JWT_SECRET='$JWT_SECRET'
-            docker compose -f $DOCKER_TAG.yml up -d && docker image prune --force
+            docker compose -f $DOCKER_TAG.yml up -d &&
+            if ! sha256sum --check --status martin.sha256 2>/dev/null; then
+              docker compose -f $DOCKER_TAG.yml restart tiles &&
+              sha256sum martin/* > martin.sha256
+            fi &&
+            docker image prune --force
           "

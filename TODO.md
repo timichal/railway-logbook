@@ -12,17 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Security (do these first)
 
-- [ ] **The admin tile sources are public.** `martin/configuration.yml:17-65`;
-      `02-vector-tiles.sql:437-477`. `admin_notes_tile` returns every note,
-      including the `Works`/`Todo`/`UsageInternal` drafts that `public_notes_tile`
-      exists to hide. It is served from the same Martin instance under the same
-      `/tiles` prefix the admin map fetches from the browser, and Martin's
-      `/catalog` lists every source. The Caddyfile is not in the repo, so check
-      it, but nothing here gates the path. **Fix:** put the admin sources behind
-      an auth check (Caddy's `forward_auth` to an admin-check endpoint, or a Next
-      proxy route), or run them from a second Martin instance that is not publicly
-      routed.
-
 - [ ] **A missing `JWT_SECRET` silently falls back to a published constant.**
       `src/lib/authTokens.ts:16-18`. The code reads
       `process.env.JWT_SECRET || "your-secret-key-change-in-production"`, and

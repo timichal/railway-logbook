@@ -1,6 +1,5 @@
-import { cookies } from "next/headers";
 import { userFromRequest } from "@/lib/api/auth";
-import { COOKIE_NAME, verifyToken } from "@/lib/authTokens";
+import { mvtResponse, parseTile, sessionUser } from "@/lib/api/tiles";
 import { type RouteTileRidesOf, routeTile } from "@/lib/routeTileQueries";
 import { normalizeCountryCodes } from "@/lib/shared/constants";
 import { ZOOM_RANGES } from "@/lib/shared/map/zoomRanges";
@@ -33,7 +32,7 @@ type Context = { params: Promise<{ z: string; x: string; y: string }> };
  * user is still Martin's; see `createRailwayRoutesSource`.
  */
 export async function GET(request: Request, context: Context): Promise<Response> {
-  const tile = parseTile(await context.params);
+  const tile = parseTile(await context.params, ZOOM_RANGES.railwayRoutes);
   if (!tile) return new Response("Invalid tile coordinates", { status: 400 });
 
   const url = new URL(request.url);
@@ -50,17 +49,7 @@ export async function GET(request: Request, context: Context): Promise<Response>
     // A dead share link: unknown token, or sharing switched off since the page loaded.
     if (body === null) return new Response(null, { status: 404 });
 
-    // The same URL answers differently per session, so no shared cache may keep it.
-    const headers = { "Cache-Control": "private, no-store" };
-    if (body.length === 0) return new Response(null, { status: 204, headers });
-
-    // A view over the Buffer's own bytes rather than `new Uint8Array(body)`, which
-    // would copy a tile of up to a few hundred KB on every request. The cast only
-    // narrows `ArrayBufferLike`: pg allocates a plain ArrayBuffer, never a shared one.
-    const bytes = new Uint8Array(body.buffer as ArrayBuffer, body.byteOffset, body.byteLength);
-    return new Response(bytes, {
-      headers: { ...headers, "Content-Type": "application/x-protobuf" },
-    });
+    return mvtResponse(body);
   } catch (error) {
     console.error("Route tile failed:", error);
     return new Response(null, { status: 500 });
@@ -84,21 +73,8 @@ async function resolveRides(
     return user ? { userId: user.id } : { status: 401 };
   }
 
-  const session = (await cookies()).get(COOKIE_NAME)?.value;
-  const user = session ? await verifyToken(session) : null;
+  const user = await sessionUser();
   return user ? { userId: user.id } : { status: 401 };
-}
-
-function parseTile(params: { z: string; x: string; y: string }) {
-  const [z, x, y] = [params.z, params.x, params.y].map((value) =>
-    /^\d{1,6}$/.test(value) ? Number(value) : Number.NaN,
-  );
-  const { min, max } = ZOOM_RANGES.railwayRoutes;
-  if (!(z >= min && z <= max)) return null;
-
-  const span = 2 ** z;
-  if (!(x < span && y < span)) return null;
-  return { z, x, y };
 }
 
 /** Absent: every route (null). Malformed: undefined, which is a 400. */

@@ -3,7 +3,7 @@ import { ZOOM_RANGES } from "./zoomRanges";
 
 /**
  * The tile sources, as MapLibre source specifications — Martin's, plus the
- * per-user route tile the app serves itself.
+ * per-user route tile and the admin notes tile, which the app serves itself.
  *
  * **Every factory here takes the tile server's base URL (and, for the route tile,
  * the app's origin) rather than reading it from the environment**, and that is
@@ -135,15 +135,21 @@ export function createRailwayPartsSource(tileBaseUrl: string): VectorSourceSpeci
   };
 }
 
+/**
+ * Every admin note, drafts included — so, like a ride-coloured route tile, it is
+ * served by the app's own handler (`src/app/api/tiles/admin_notes`), which checks
+ * the session for the admin, and never by Martin, which answers anyone. Takes the
+ * app's origin rather than Martin's base URL for that reason.
+ */
 export function createAdminNotesSource(
-  tileBaseUrl: string,
+  appOrigin: string,
   cacheBuster?: number,
 ): VectorSourceSpecification {
   const params: [string, string][] =
     cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];
   return {
     type: "vector",
-    tiles: [`${tileBaseUrl}/admin_notes_tile/{z}/{x}/{y}${queryString(params)}`],
+    tiles: [`${appOrigin}/api/tiles/admin_notes/{z}/{x}/{y}${queryString(params)}`],
     minzoom: ZOOM_RANGES.adminNotes.min,
     maxzoom: ZOOM_RANGES.adminNotes.max,
   };

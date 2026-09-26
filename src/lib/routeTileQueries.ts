@@ -20,9 +20,10 @@ import { isPlausibleShareToken, sharedMapOwnerIdSql } from "./publicMapQueries";
  * and a low-zoom tile takes a few hundred milliseconds. On the app's shared pool
  * (10 connections) one pan would queue every server action behind it — the
  * logging, the planner, the progress box. Martin, which used to serve these, had
- * its own 20.
+ * its own 20. Exported for the app's other tile, the admin notes
+ * (`adminNotesTileQueries.ts`), for the same reason.
  */
-const tilePool = new Pool({ ...dbConfig, max: 10 });
+export const tilePool = new Pool({ ...dbConfig, max: 10 });
 
 // An idle connection that dies (Postgres restarted, an idle timeout) is reported
 // as an 'error' on the pool. Unlistened, that is an uncaught exception, and it

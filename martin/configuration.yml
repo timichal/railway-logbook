@@ -51,13 +51,9 @@ postgres:
       maxzoom: 18
       # This function accepts z, x, y parameters
 
-    # Admin notes (admin-only annotations)
-    admin_notes_tile:
-      schema: public
-      function: admin_notes_tile
-      minzoom: 4
-      maxzoom: 18
-      # This function accepts z, x, y parameters
+    # No admin_notes_tile: it carries every note, drafts included, and Martin
+    # answers anyone. The admin map gets it from the Next handler under
+    # src/app/api/tiles/admin_notes, which checks for the admin — never add it here.
 
     # Public notes (note_type='Usage' only) shown on the user map
     public_notes_tile:
