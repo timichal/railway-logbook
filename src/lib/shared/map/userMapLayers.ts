@@ -24,8 +24,7 @@ import {
  * shared view (`/shared/<token>`).
  *
  * The route configs below are module-level constants rather than per-component
- * memos: none of them depends on anything, and a single stable reference is what `useMapTileRefresh` wants
- * anyway. Both maps must draw the same lines in the same colours — a shared map
+ * memos: none of them depends on anything. Both maps must draw the same lines in the same colours — a shared map
  * that styled its routes differently from the owner's own would be a bug that
  * only shows up once someone opens the link.
  */

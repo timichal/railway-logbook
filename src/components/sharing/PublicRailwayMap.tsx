@@ -86,10 +86,10 @@ export default function PublicRailwayMap({
   );
 
   // Progress figures and the heritage/special toggles. Nothing here logs a
-  // journey, so there is no tile refresh to drive and no cache buster to pass.
+  // journey, so there is no tile refresh to drive.
   const routeEditor = useRouteEditor(dataAccess, effectiveCountries);
 
-  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, 0, 0);
+  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, 0);
   useLayerFilters(
     map,
     layerPrefs.showHeritage,

@@ -17,13 +17,13 @@ import {
 import { isSpecialUsage } from "./shared/constants";
 import { REGIONS, type RegionId } from "./shared/regions";
 import { isRouteFullyRidden } from "./shared/routeCoverage";
-import type { CoveredRange, CoveredStretch, LocalLoggedPart, RailwayRoute } from "./shared/types";
+import type { CoveredRange, CoveredStretch, LocalLoggedPart, RouteSummary } from "./shared/types";
 import {
   getCoveredStretches as dbGetCoveredStretches,
   getProgressByCountry as dbGetProgressByCountry,
   getUserProgress as dbGetUserProgress,
-  getAllRoutes,
   getCoveredStretchesFor,
+  getRouteSummaries,
 } from "./userActions";
 import {
   getUserPreferences as dbGetUserPreferences,
@@ -131,14 +131,19 @@ function createDatabaseDataAccess(region: RegionId): DataAccess {
  * Note: Unlogged users still use the old localStorage trip system
  */
 function createLocalStorageDataAccess(region: RegionId): DataAccess {
-  // Cache of this region's routes (used for progress calculation)
-  let routesCache: RailwayRoute[] | null = null;
+  // This region's routes (used for progress calculation). The promise is what is
+  // cached, not its result: progress, the map colouring and the ridden stretches
+  // all ask on mount, and caching the result let each of them start a fetch of
+  // its own before the first one landed. A failure is forgotten so the next
+  // caller retries.
+  let routesPromise: Promise<RouteSummary[]> | null = null;
 
-  const ensureRoutes = async (): Promise<RailwayRoute[]> => {
-    if (!routesCache) {
-      routesCache = await getAllRoutes(region);
-    }
-    return routesCache || [];
+  const ensureRoutes = (): Promise<RouteSummary[]> => {
+    routesPromise ??= getRouteSummaries(region).catch((error) => {
+      routesPromise = null;
+      throw error;
+    });
+    return routesPromise;
   };
 
   /**
@@ -147,7 +152,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
    * of the same rule is the SQL function `user_fully_ridden_routes`). Route lengths
    * come from the route list, since the tolerance is in kilometres.
    */
-  const fullyRiddenTrackIds = (routes: RailwayRoute[]): Set<number> => {
+  const fullyRiddenTrackIds = (routes: RouteSummary[]): Set<number> => {
     const partsByTrack = new Map<number, LocalLoggedPart[]>();
     for (const part of localStore.getLoggedParts()) {
       const parts = partsByTrack.get(part.track_id);

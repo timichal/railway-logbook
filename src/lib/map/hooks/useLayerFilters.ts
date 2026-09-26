@@ -27,11 +27,9 @@ export function useLayerFilters(
   showScenicOutline: boolean,
   /** Apply persisted preferences once the map's layers exist. */
   mapLoaded: boolean,
-  /** Re-apply filters/visibility after a tile refresh re-adds the route layers. */
-  cacheBuster?: number,
 ) {
   // Usage-type filters
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded and cacheBuster are intentional re-run triggers (apply prefs once layers exist / re-apply after a tile refresh re-adds layers), not values read inside the effect.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger (apply prefs once layers exist), not a value read inside the effect.
   useEffect(() => {
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
@@ -63,10 +61,10 @@ export function useLayerFilters(
     if (m.getLayer("railway_routes_scenic_outline")) {
       m.setFilter("railway_routes_scenic_outline", scenicOutlineFilter(showHeritage));
     }
-  }, [map, showHeritage, showSpecial, mapLoaded, cacheBuster]);
+  }, [map, showHeritage, showSpecial, mapLoaded]);
 
   // Scenic outline visibility
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded and cacheBuster are intentional re-run triggers (apply prefs once layers exist / re-apply after a tile refresh re-adds layers), not values read inside the effect.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger (apply prefs once layers exist), not a value read inside the effect.
   useEffect(() => {
     if (!map.current?.getLayer("railway_routes_scenic_outline")) return;
 
@@ -75,5 +73,5 @@ export function useLayerFilters(
       "visibility",
       showScenicOutline ? "visible" : "none",
     );
-  }, [map, showScenicOutline, mapLoaded, cacheBuster]);
+  }, [map, showScenicOutline, mapLoaded]);
 }

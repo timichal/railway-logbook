@@ -102,7 +102,7 @@ function syncPartialOverlay(
 
   if (m.getLayer(layerId)) {
     m.setPaintProperty(layerId, "line-color", color);
-    // A tile refresh re-adds the route layers on top; keep the overlay above them
+    // Keep the overlay above anything added since it was
     m.moveLayer(layerId);
     return;
   }
@@ -117,11 +117,11 @@ function syncPartialOverlay(
  */
 export function useRouteHighlighting(
   map: React.MutableRefObject<maplibregl.Map | null>,
+  /** Re-applies the highlights to a freshly built map (region or scheme change). */
+  mapLoaded: boolean,
   highlightedRoutes: number[],
   highlightKind: HighlightKind,
   selectedRoutes: SelectedRoute[],
-  /** Bumped when the railway_routes source/layer is recreated so highlights re-apply. */
-  tileRefreshKey?: number,
   /** Routes to highlight only along part of their length (see HighlightRoutesFn). */
   partialHighlights: PartialRouteGeometry[] = [],
 ) {
@@ -130,7 +130,7 @@ export function useRouteHighlighting(
   const highlightColor =
     highlightKind === "planner" ? COLORS.highlight.planner : COLORS.highlight.view;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tileRefreshKey is an intentional trigger — bumping it re-applies highlights after the railway_routes source/layer is recreated.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger — a rebuilt map starts without the overlays.
   useEffect(() => {
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
@@ -139,7 +139,7 @@ export function useRouteHighlighting(
     const wholeIds = wholeRouteIds(highlightedRoutes, partialHighlights);
     syncHighlightOverlay(m, "highlighted_routes", wholeIds, highlightColor);
     syncPartialOverlay(m, "highlighted_routes", partialHighlights, highlightColor);
-  }, [map, highlightedRoutes, highlightColor, partialHighlights, tileRefreshKey]);
+  }, [map, mapLoaded, highlightedRoutes, highlightColor, partialHighlights]);
 
   // Route Logger selection highlights — match the admin map's selected-route style
   // (orange #ff6b35, full opacity), but per usage type so dotted/dashed routes stay so.
@@ -147,7 +147,7 @@ export function useRouteHighlighting(
   // A route the Journey Planner only partly covers is highlighted along that
   // stretch alone: it is the stretch that will be logged, so lighting up the
   // whole route would claim more than the selection holds.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tileRefreshKey is an intentional trigger — bumping it re-applies the selection highlight after the railway_routes source/layer is recreated.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger — a rebuilt map starts without the overlays.
   useEffect(() => {
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
@@ -162,5 +162,5 @@ export function useRouteHighlighting(
     const wholeIds = wholeRouteIds(selectedTrackIds, selectedPartials);
     syncHighlightOverlay(m, "selected_routes_highlight", wholeIds, COLORS.highlight.view);
     syncPartialOverlay(m, "selected_routes_highlight", selectedPartials, COLORS.highlight.view);
-  }, [map, selectedRoutes, tileRefreshKey]);
+  }, [map, mapLoaded, selectedRoutes]);
 }

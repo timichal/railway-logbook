@@ -22,12 +22,18 @@ import {
 } from "./progressQueries";
 import {
   routeMetadataByIds,
-  routesInRegion,
+  routeSummariesInRegion,
   searchStationsByName,
   trackIdsInRegion,
 } from "./routeQueries";
 import type { RegionId } from "./shared/regions";
-import type { CoveredRange, CoveredStretch, RailwayRoute, Station } from "./shared/types";
+import type {
+  CoveredRange,
+  CoveredStretch,
+  RailwayRoute,
+  RouteSummary,
+  Station,
+} from "./shared/types";
 
 /** Station name search for the map search box and the Journey Planner. */
 export async function searchStations(searchQuery: string, region: RegionId): Promise<Station[]> {
@@ -39,9 +45,9 @@ export async function getRegionTrackIds(region: RegionId): Promise<number[]> {
   return trackIdsInRegion(region);
 }
 
-/** Every route in a region, geometry included. No authentication required. */
-export async function getAllRoutes(region: RegionId): Promise<RailwayRoute[]> {
-  return routesInRegion(region);
+/** Every route in a region, without geometry (see RouteSummary). No authentication required. */
+export async function getRouteSummaries(region: RegionId): Promise<RouteSummary[]> {
+  return routeSummariesInRegion(region);
 }
 
 /** Metadata for a set of routes. No authentication required — route data is public. */

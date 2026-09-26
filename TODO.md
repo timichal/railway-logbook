@@ -111,23 +111,13 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       it, and `/api/v1/routes?region=toString` returns a 500 instead of a 400.
       **Fix:** `Object.hasOwn(REGIONS, value)`.
 
-- [ ] **The ridden-stretch overlay is dropped if its data lands while tiles load.**
-      `src/lib/map/hooks/useCoverageOverlay.ts:117-122`. `isStyleLoaded()` is
-      false whenever any source is still fetching tiles, not just while the style
-      loads (maplibre `style.ts:615-627`), and the fallback is `once("load")`,
-      which fires once per map lifetime. Logging a journey refreshes the route
-      source at the same moment it bumps `coverageVersion`, so a newly logged
-      partial ride often does not appear. **Fix:** capture `map.current` at effect
-      start, bail on mismatch, and call `syncCoverageOverlay` directly:
-      `mapLoaded` already guarantees the style is loaded.
-
-- [ ] **Selection and planner highlights vanish after a map rebuild.**
-      `src/lib/map/hooks/useRouteHighlighting.ts:238-269`. Neither effect depends
-      on `mapLoaded`, and `useMapLibre` rebuilds the map on a colour-scheme change,
-      including an unprompted OS flip under "System". The sidebar still lists the
-      selection, but the orange/gold overlay is gone. A country toggle makes this
-      a race. **Fix:** pass `mapLoaded` in and add it to both deps arrays, as the
-      sibling hooks already do.
+- [ ] **A failed country-filter save is silent, and rapid toggles can save an
+      older list.** `src/components/map/RailwayMap.tsx`, `handleCountriesChange`.
+      The map and stats switch to the new list at once, but a failed
+      `updateUserPreferences` (network, expired session) is only logged, so the
+      next load quietly reverts it. Toggling fast sends concurrent saves that can
+      land out of order. **Fix:** toast on failure; serialise the saves (or send
+      only the latest after the previous one settles).
 
 - [ ] **Out-of-order async responses overwrite newer ones.** The same missing
       request-id guard appears in four places:
@@ -234,13 +224,18 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       `showRoutesLayer`. After any save, each selection or toggle removes and
       re-adds five layers with a fresh cache buster, so the whole network
       flickers and re-downloads. **Fix:** make `refreshTrigger` the only trigger
-      and read the other two through refs.
+      and read the other two through refs, and refresh with
+      `source.setTiles([railwayRoutesTileUrl(...)])` as the user map's
+      `useMapTileRefresh` now does: the layers, their order, paint and visibility
+      then stay put, which also fixes the next item and removes the hand-written
+      re-adding.
 
 - [ ] **That same refresh buries the station dots under the lines.**
       `AdminMap.tsx:267-271`. Routes are re-added with
       `beforeId: "station_labels"`, which puts them above the `stations` circles.
-      **Fix:** use `"stations"`, as `useMapTileRefresh` does, and update the
-      matching sentence in CLAUDE.md.
+      **Fix:** falls out of the `setTiles` change above (no layers are re-added).
+      Update the matching sentence in CLAUDE.md ("the admin map's route refresh
+      re-adds its line layers with `beforeId: "station_labels"`") either way.
 
 - [ ] **Admin layer toggles fall out of sync.** Unticking Stations hides the dots
       but not `station_labels` (`src/lib/map/hooks/useAdminLayerVisibility.ts:69`).
@@ -314,23 +309,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Performance
 
-- [ ] **A country toggle, login or logout rebuilds the whole map, then refreshes
-      tiles twice more.** `src/components/map/RailwayMap.tsx:161-176` (deps
-      `[userId, effectiveCountries, region.id]`), `:385-392`, `:447-455`. Every
-      checkbox in the Countries tab destroys the WebGL context and basemap.
-      `handleCountriesChange` and the user-change effect then call `refreshTiles`
-      anyway, racing the new map's load. This race is what makes the highlight
-      bug above intermittent. **Fix:** drop both from the `useMapLibre` deps, let
-      `refreshTiles` rebuild only `railway_routes` (lift its `!userId` gate), and
-      delete the user-change effect.
-
-- [ ] **Anonymous visitors download every route's full geometry two or three
-      times per load.** `src/lib/dataAccess.ts:137-142`. `ensureRoutes` caches
-      the resolved array, not the promise, so three mount-time callers each start
-      `getAllRoutes(region)`, which returns `ST_AsGeoJSON` for every route. The
-      progress calculation needs only id, length, usage and countries. **Fix:**
-      `routesPromise ??= …`, plus a geometry-free query for this caller.
-
 - [ ] **Recalculation grows the buffer when the click point is off the network.**
       `src/scripts/lib/railwayPathFinder.ts:262-270`. If no part is within 1 m at
       the 50 km buffer, none will be at 100 km or 222 km either, yet the loop
@@ -366,6 +344,15 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       `src/lib/routeQueries.ts:36-53`. `unaccent(name) ILIKE '%…%'` on every
       keystroke. Measure it; if it is slow, add a pg_trgm GIN index on an
       IMMUTABLE `unaccent` wrapper.
+
+- [ ] **The user map's construction specs are rebuilt on every render.**
+      `src/components/map/RailwayMap.tsx`, the `useMapLibre` call. Its sources
+      (`createRailwayRoutesSource` JSON-encodes the country list) and
+      `createUserMapLayers(theme)` are built on every render — each selection,
+      highlight, tab change and sheet drag — but read only when the map is built
+      (deps `[region.id]` plus the scheme). **Fix:** `useMemo` them on
+      `[theme, region.id]`, or have `useMapLibre` take a factory it calls at
+      construction. Same shape in `PublicRailwayMap.tsx`.
 
 ## Database design
 
@@ -576,6 +563,13 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Possible, needs checking
 
+- [ ] A map rebuilt for a region or scheme change builds its route source with
+      no `v`, although `useMapTileRefresh` may have moved on to a later one: the
+      initial `appliedRef` claims construction stands for the current refresh.
+      Harmless while the route tile handler answers `private, no-store` and
+      `sw.js` never caches tiles; stale colours the moment either changes.
+      **Fix, if needed:** reset `appliedRef` when the map instance changes (one
+      extra reload per rebuild), or thread the cache buster into construction.
 - [ ] `CountriesStatsTab.tsx:29-43` reloads `getProgressByCountry()` on every
       checkbox toggle, although the result doesn't depend on the selection.
 - [ ] `localStorage.ts:55-56`, `:218-219` parse inside try/catch but don't check

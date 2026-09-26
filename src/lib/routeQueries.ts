@@ -10,7 +10,7 @@
 
 import { escapeLikePattern, query } from "./db";
 import { type RegionId, regionEnvelopeSql } from "./shared/regions";
-import type { RailwayRoute, Station } from "./shared/types";
+import type { RailwayRoute, RouteSummary, Station } from "./shared/types";
 
 /**
  * Station name search for the user map search box and the Journey Planner.
@@ -103,6 +103,23 @@ export async function routesInRegion(region: RegionId): Promise<RailwayRoute[]> 
   `);
 
   return result.rows as RailwayRoute[];
+}
+
+/**
+ * Every route in a region, reduced to what progress needs (`RouteSummary`). The
+ * logged-out map works out its progress and colouring from this client-side, and
+ * waits for it to do so: with geometry (`routesInRegion`) the list is ~50MB for
+ * Europe, which held the local rides off the map for seconds on every load.
+ */
+export async function routeSummariesInRegion(region: RegionId): Promise<RouteSummary[]> {
+  const result = await query(`
+    SELECT track_id, usage_type, length_km, start_country, end_country
+    FROM railway_routes
+    WHERE geometry && ${regionEnvelopeSql(region)}
+    ORDER BY track_id
+  `);
+
+  return result.rows as RouteSummary[];
 }
 
 /**

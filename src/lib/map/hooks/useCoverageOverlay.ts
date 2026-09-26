@@ -45,9 +45,7 @@ function syncCoverageOverlay(
   }
 
   // Sit above the route lines but below the stations — and therefore below the
-  // selection/planner highlights, which are added on top of everything. A tile
-  // refresh re-inserts the route layers before "stations", so this has to be
-  // re-asserted rather than set once.
+  // selection/planner highlights, which are added on top of everything.
   if (m.getLayer("stations")) m.moveLayer(COVERAGE_LAYER_ID, "stations");
 }
 
@@ -61,30 +59,24 @@ export function useCoverageOverlay(
   selectedCountries: string[],
   /** Bumped when journeys change, so the overlay refetches. */
   coverageVersion: number,
-  /** Bumped when the route layers are recreated, so the overlay is re-stacked. */
-  tileRefreshKey: number,
 ) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tileRefreshKey is an intentional trigger — it re-runs the effect so the overlay is moved back above the recreated route layers.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: coverageVersion is an intentional trigger — it refetches the stretches after journeys change.
   useEffect(() => {
-    if (!mapLoaded) return;
+    const m = map.current;
+    if (!mapLoaded || !m) return;
 
     let cancelled = false;
     dataAccess
       .getCoveredStretches()
       .then((stretches) => {
-        const m = map.current;
-        if (cancelled || !m) return;
-
-        // Changing the country selection tears the map down and builds a new one
-        // (useMapLibre keys on it), so by the time this resolves the style may be
-        // mid-load — adding a source to it then throws.
-        if (m.isStyleLoaded()) {
-          syncCoverageOverlay(m, stretches, selectedCountries);
-        } else {
-          m.once("load", () => {
-            if (!cancelled) syncCoverageOverlay(m, stretches, selectedCountries);
-          });
-        }
+        // A rebuild (region or scheme) while the fetch ran: the new map runs this
+        // effect again for itself.
+        if (cancelled || map.current !== m) return;
+        // Straight in, with no isStyleLoaded() check: mapLoaded already means the
+        // style is loaded, and isStyleLoaded() is false for as long as any source
+        // is still fetching tiles — which is exactly when this lands after a tile
+        // refresh. Its fallback, once("load"), fires once per map and so never did.
+        syncCoverageOverlay(m, stretches, selectedCountries);
       })
       .catch((error) => {
         console.error("Error loading ridden stretches:", error);
@@ -93,5 +85,5 @@ export function useCoverageOverlay(
     return () => {
       cancelled = true;
     };
-  }, [map, mapLoaded, dataAccess, selectedCountries, coverageVersion, tileRefreshKey]);
+  }, [map, mapLoaded, dataAccess, selectedCountries, coverageVersion]);
 }

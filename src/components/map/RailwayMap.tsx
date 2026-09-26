@@ -21,14 +21,7 @@ import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
 import { setupUserMapInteractions } from "@/lib/map/interactions/userMapInteractions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
-import {
-  createUserMapLayers,
-  userClickBufferLayerConfig,
-  userHeritageLayerConfig,
-  userRouteLayerConfig,
-  userScenicLayerConfig,
-  userSpecialLayerConfig,
-} from "@/lib/shared/map/userMapLayers";
+import { createUserMapLayers } from "@/lib/shared/map/userMapLayers";
 import { regionCountryCodes } from "@/lib/shared/regions";
 import type {
   HighlightKind,
@@ -156,6 +149,11 @@ export default function RailwayMap({
   // Initialize map
   // The station dots and their labels are picked against the basemap under them, so
   // they follow the scheme. useMapLibre rebuilds the map when it changes.
+  //
+  // The user and the country filter are deliberately not deps: they only change the
+  // railway_routes source, and rebuilding the map for them threw away the WebGL
+  // context and the basemap on every country checkbox. The sources below are read
+  // once, at construction; a later change reaches the map through refreshTiles.
   const theme = useResolvedTheme();
 
   const { map, mapLoaded } = useMapLibre(
@@ -172,11 +170,18 @@ export default function RailwayMap({
       },
       layers: createUserMapLayers(theme),
     },
-    [userId, effectiveCountries, region.id],
+    [region.id],
   );
 
   // Track which routes have feature states applied (for cleanup)
   const featureStateTrackIdsRef = useRef<Set<number>>(new Set());
+  // Read after an await, where the closure's `user` may already be stale. Written
+  // in an effect, not during render: a render React throws away would otherwise
+  // leave a user here that was never committed.
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Update map feature states for localStorage trips (unlogged users only).
   // The tiles carry no visit status for an unauthenticated visitor, so which
@@ -186,9 +191,11 @@ export default function RailwayMap({
     if (!map.current || user) return;
 
     const statuses = await dataAccess.getLocalRouteStatuses();
-    // Re-read after the await: the map may have gone away while it ran
+    // Re-read after the await: the map may have gone away while it ran, or the
+    // visitor logged in — and feature state outlives a tile refresh, so states
+    // laid on now would stay on the logged-in map
     const target = map.current;
-    if (!target) return;
+    if (!target || userRef.current) return;
 
     const newTrackIds = new Set<number>();
     for (const status of statuses) {
@@ -219,34 +226,28 @@ export default function RailwayMap({
   // Route editor hook
   const routeEditor = useRouteEditor(dataAccess, effectiveCountries);
 
-  // Tile refresh hook (for logged-in user route logging)
-  const { refreshTiles, cacheBuster } = useMapTileRefresh({
+  // Tile refresh hook: a logged route, a new user or a new country filter
+  const { refreshTiles } = useMapTileRefresh({
     map,
     mapLoaded,
     userId,
     selectedCountries: effectiveCountries,
-    routeLayerConfig: userRouteLayerConfig,
-    scenicLayerConfig: userScenicLayerConfig,
-    clickBufferLayerConfig: userClickBufferLayerConfig,
-    specialLayerConfig: userSpecialLayerConfig,
-    heritageLayerConfig: userHeritageLayerConfig,
   });
 
-  // Route highlighting hooks (cacheBuster forces re-run after tile refresh drops the layer)
+  // Route highlighting hooks
   useRouteHighlighting(
     map,
+    mapLoaded,
     highlightedRoutes,
     highlightKind,
     selectedRoutes,
-    cacheBuster,
     partialHighlights,
   );
 
   // Ridden stretches of routes not yet finished, drawn over the route line
-  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, coverageVersion, cacheBuster);
+  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, coverageVersion);
 
-  // Layer filter hooks. mapLoaded applies persisted prefs once layers exist;
-  // cacheBuster re-applies filters after a tile refresh re-adds layers.
+  // Layer filter hooks. mapLoaded applies persisted prefs once layers exist.
   useLayerFilters(
     map,
     layerPrefs.showHeritage,
@@ -255,7 +256,6 @@ export default function RailwayMap({
     // outline keeps it off regardless of what the other region left switched on.
     layerPrefs.showScenicOutline && region.hasScenicHighlight,
     mapLoaded,
-    cacheBuster,
   );
 
   // Route click handler
@@ -364,32 +364,61 @@ export default function RailwayMap({
     setCoverageVersion((v) => v + 1);
   }, [user, refreshTiles, updateLocalStorageFeatureStates, routeEditor.refreshProgress]);
 
-  // Set up localStorage feature states when map loads (for unlogged users)
+  // Set up localStorage feature states when map loads (for unlogged users). They
+  // live on the route source, which a tile refresh keeps, so they outlast it — and
+  // outlast a login too, which is why logging in clears them: the logged-in tile
+  // leaves a route it has no ride for to the feature-state branch of the colour,
+  // and the local log would paint it ridden.
   useEffect(() => {
-    if (!map.current || !mapLoaded || user) return;
+    const m = map.current;
+    if (!m || !mapLoaded) return;
+
+    if (user) {
+      for (const trackId of featureStateTrackIdsRef.current) {
+        m.removeFeatureState({
+          source: "railway_routes",
+          sourceLayer: "railway_routes",
+          id: trackId,
+        });
+      }
+      featureStateTrackIdsRef.current = new Set();
+      return;
+    }
 
     const applyStates = () => {
       updateLocalStorageFeatureStates();
     };
 
-    if (map.current.isMoving()) {
-      map.current.once("idle", applyStates);
-    } else {
-      applyStates();
+    if (m.isMoving()) {
+      m.once("idle", applyStates);
+      return () => {
+        m.off("idle", applyStates);
+      };
     }
+    applyStates();
   }, [map, mapLoaded, user, updateLocalStorageFeatureStates]);
 
-  // Force map refresh when user changes (login/logout). The mount run is skipped:
-  // useMapLibre has just built the route layers with this user's id, and a refresh
-  // would only remove and re-add them.
+  // Refresh the route tiles when the user changes (login/logout): the map outlives
+  // it, and the tiles must switch between this user's rides and none. The mount
+  // run is skipped: useMapLibre has just built the route source for this user.
+  // Deliberately not gated on the map existing — a map still being built took its
+  // source from before the change, and useMapTileRefresh applies a refresh asked
+  // for before load once the map has loaded.
+  //
+  // The country list is taken over from the server along with the user. The state
+  // only reads its prop on mount, so it kept the visitor's list across a login —
+  // and the next checkbox then saved that list over the account's own. The server
+  // render that brings the new user brings the new list with it, and setting the
+  // two together means the refresh runs with the right countries.
   const previousUserIdRef = useRef<number | null | undefined>(undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the user is the trigger; initialSelectedCountries arrives with it and must not re-run this on its own, or a server refresh would undo an unsaved country toggle.
   useEffect(() => {
     const previousUserId = previousUserIdRef.current;
     previousUserIdRef.current = userId;
     if (previousUserId === undefined || previousUserId === userId) return;
-    if (!map.current) return;
+    setSelectedCountries(initialSelectedCountries);
     refreshTiles();
-  }, [userId, map, refreshTiles]);
+  }, [userId, refreshTiles]);
 
   // Setup map interactions
   useEffect(() => {
@@ -443,12 +472,14 @@ export default function RailwayMap({
     if (mapLoaded) routeEditor.refreshProgress();
   }, [mapLoaded, routeEditor.refreshProgress]);
 
-  // Country filter handler
+  // Country filter handler. The tiles take the filter from their URL, not from the
+  // saved preference, so the refresh need not wait for the save; batched with the
+  // state update, it runs with the new list.
   const handleCountriesChange = async (countries: string[]) => {
     try {
       setSelectedCountries(countries);
-      await dataAccess.updateUserPreferences(countries);
       refreshTiles();
+      await dataAccess.updateUserPreferences(countries);
     } catch (error) {
       console.error("Error updating country preferences:", error);
     }

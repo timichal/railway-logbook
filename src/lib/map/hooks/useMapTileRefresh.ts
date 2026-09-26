@@ -1,88 +1,70 @@
 import type * as maplibregl from "maplibre-gl";
-import { useCallback, useEffect, useState } from "react";
-import {
-  createRailwayRoutesClickLayer,
-  createRailwayRoutesHeritageLayer,
-  createRailwayRoutesLayer,
-  createRailwayRoutesSource,
-  createRailwayRoutesSpecialLayer,
-  createScenicRoutesOutlineLayer,
-  type RailwayRoutesPaintConfig,
-  type RailwayRoutesSourceOptions,
-} from "../index";
-import { HIGHLIGHT_LAYER_IDS } from "./useRouteHighlighting";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { railwayRoutesTileUrl } from "../index";
 
 interface UseMapTileRefreshOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
-  /** Logged-in user ID (null for unlogged users) */
+  /** Logged-in user ID (null for unlogged users, whose tiles carry no rides) */
   userId: number | null;
   selectedCountries: string[];
-  /** Paint/filter config for route layers */
-  routeLayerConfig: RailwayRoutesPaintConfig;
-  /** Paint/filter config for scenic outline layer */
-  scenicLayerConfig: RailwayRoutesPaintConfig;
-  /** Paint/filter config for invisible click-buffer layer */
-  clickBufferLayerConfig: RailwayRoutesPaintConfig;
-  /** Paint config for the dashed Special layer */
-  specialLayerConfig: RailwayRoutesPaintConfig;
-  /** Paint config for the dotted Heritage layer */
-  heritageLayerConfig: RailwayRoutesPaintConfig;
 }
 
 /**
- * Manages railway routes tile refresh (cache busting).
- * Returns `refreshTiles()` to trigger a tile reload and `cacheBuster` state.
+ * Reloads the railway_routes tiles on request. Returns `refreshTiles()`.
+ *
+ * This is how the route source picks up a logged ride, a new user or a new country
+ * filter: the map itself is built once per region (and scheme), and rebuilding it
+ * for any of these would throw away the WebGL context and the basemap to change
+ * one source. So the refresh reads `userId` and `selectedCountries` as they are
+ * when it runs, and serves logged-out visitors too — their tile is Martin's,
+ * uncoloured, and the visit states are laid on it as feature state by the caller.
+ *
+ * **It points the existing source at a new URL (`setTiles`) rather than replacing
+ * the source.** MapLibre then reloads the tiles in view while still drawing the
+ * old ones, and everything attached to the source survives: the layers and their
+ * order, the highlight overlays, the layer filters, the feature state. Removing
+ * and re-adding the source dropped all of that, and every overlay had to watch
+ * for the refresh and put itself back.
  */
 export function useMapTileRefresh({
   map,
   mapLoaded,
   userId,
   selectedCountries,
-  routeLayerConfig,
-  scenicLayerConfig,
-  clickBufferLayerConfig,
-  specialLayerConfig,
-  heritageLayerConfig,
 }: UseMapTileRefreshOptions) {
-  const [cacheBuster, setCacheBuster] = useState<number>(Date.now());
+  // Doubles as the tile URL's `v`, so it must not repeat across page loads (a
+  // plain counter would) nor within one (two refreshes in one millisecond would
+  // collapse into one).
+  const [cacheBuster, setCacheBuster] = useState(() => Date.now());
+  // The refresh the source currently stands for. A refresh asked for while the map
+  // is still loading cannot be applied yet, and the map under construction took its
+  // sources from a render before it — so it is applied on load instead of dropped.
+  // The initial value is what the map's own construction already stands for.
+  const appliedRef = useRef(cacheBuster);
 
-  // Reload railway_routes tiles when cacheBuster changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: cacheBuster is the sole intentional trigger — this rebuilds the source/layers only on an explicit refresh. The other values are read at rebuild time but must not trigger their own rebuild.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cacheBuster is the intentional trigger, and mapLoaded only catches up on one that arrived before the map could take it. userId and selectedCountries are read at refresh time but must not trigger a refresh of their own.
   useEffect(() => {
-    if (!map.current || !mapLoaded || !userId) return;
+    const source = mapLoaded
+      ? map.current?.getSource<maplibregl.VectorTileSource>("railway_routes")
+      : undefined;
+    if (!source || appliedRef.current === cacheBuster) return;
+    appliedRef.current = cacheBuster;
 
-    const m = map.current;
-    const layersToRemove = [
-      ...HIGHLIGHT_LAYER_IDS,
-      "railway_routes_click",
-      "railway_routes_special",
-      "railway_routes_heritage",
-      "railway_routes",
-      "railway_routes_scenic_outline",
-    ];
-    layersToRemove.forEach((layerId) => {
-      if (m.getLayer(layerId)) m.removeLayer(layerId);
-    });
-
-    if (m.getSource("railway_routes")) m.removeSource("railway_routes");
-
-    const sourceOptions: RailwayRoutesSourceOptions = {
-      rides: "session",
-      cacheBuster,
-      selectedCountries,
-    };
-
-    m.addSource("railway_routes", createRailwayRoutesSource(sourceOptions));
-    m.addLayer(createScenicRoutesOutlineLayer(scenicLayerConfig), "stations");
-    m.addLayer(createRailwayRoutesLayer(routeLayerConfig), "stations");
-    m.addLayer(createRailwayRoutesHeritageLayer(heritageLayerConfig), "stations");
-    m.addLayer(createRailwayRoutesSpecialLayer(specialLayerConfig), "stations");
-    m.addLayer(createRailwayRoutesClickLayer(clickBufferLayerConfig), "stations");
-  }, [cacheBuster]);
+    source.setTiles([
+      railwayRoutesTileUrl({
+        rides: userId ? "session" : undefined,
+        cacheBuster,
+        selectedCountries,
+      }),
+    ]);
+  }, [cacheBuster, mapLoaded]);
 
   // Stable identity: consumers list it in effect/callback dependency arrays.
-  const refreshTiles = useCallback(() => setCacheBuster(Date.now()), []);
+  const refreshTiles = useCallback(
+    () => setCacheBuster((previous) => Math.max(Date.now(), previous + 1)),
+    [],
+  );
 
-  return { cacheBuster, refreshTiles };
+  return { refreshTiles };
 }

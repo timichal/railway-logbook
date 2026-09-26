@@ -109,6 +109,16 @@ export type RailwayRoute = {
   partial?: boolean | null; // From most recent journey
 };
 
+/**
+ * What a logged-out visitor's progress and map colouring need of a route, and no
+ * more: the full route list with geometry runs to tens of megabytes. Served by
+ * `routeSummariesInRegion` (`getRouteSummaries` on the web).
+ */
+export type RouteSummary = Pick<
+  RailwayRoute,
+  "track_id" | "usage_type" | "length_km" | "start_country" | "end_country"
+>;
+
 // User trip from database (groups of journeys)
 export type Trip = {
   id: number;

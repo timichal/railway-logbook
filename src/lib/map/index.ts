@@ -84,8 +84,13 @@ const TILE_BASE_URL = getTileBaseUrl();
  */
 const APP_ORIGIN = typeof window === "undefined" || !window.location ? "" : window.location.origin;
 
+const ROUTE_TILE_HOSTS = { tileBaseUrl: TILE_BASE_URL, appOrigin: APP_ORIGIN };
+
 export const createRailwayRoutesSource = (options: sources.RailwayRoutesSourceOptions = {}) =>
-  sources.createRailwayRoutesSource({ tileBaseUrl: TILE_BASE_URL, appOrigin: APP_ORIGIN }, options);
+  sources.createRailwayRoutesSource(ROUTE_TILE_HOSTS, options);
+
+export const railwayRoutesTileUrl = (options: sources.RailwayRoutesSourceOptions = {}) =>
+  sources.railwayRoutesTileUrl(ROUTE_TILE_HOSTS, options);
 
 export const createStationsSource = () => sources.createStationsSource(TILE_BASE_URL);
 
