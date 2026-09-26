@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getCountryFlag } from "@/lib/countryFlag";
 import type { DataAccess } from "@/lib/dataAccess";
 import type { ProgressByCountry } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
+import { getCountryFlag } from "@/lib/shared/countryFlag";
 import { btn } from "@/lib/ui/buttonStyles";
 
 interface CountriesStatsTabProps {

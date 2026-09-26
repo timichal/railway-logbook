@@ -9,8 +9,8 @@ import {
   POPUP_ROW_STYLE,
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
-import type { RegionId } from "@/lib/regions";
-import type { SelectedRoute, Station } from "@/lib/types";
+import type { RegionId } from "@/lib/shared/regions";
+import type { SelectedRoute, Station } from "@/lib/shared/types";
 import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
 
 /** Straight off an MVT feature, so every field is loosely typed. */

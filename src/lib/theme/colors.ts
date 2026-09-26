@@ -1,4 +1,4 @@
-import type { ResolvedTheme } from "./types";
+import type { ResolvedTheme } from "../shared/theme/types";
 
 /**
  * The colour the browser paints its own chrome with — Android's status bar, and the

@@ -7,7 +7,6 @@
  */
 
 import type { User } from "./authActions";
-import { isSpecialUsage } from "./constants";
 import * as localStore from "./localStorage";
 import type { ProgressByCountry, UserProgress } from "./progressQueries";
 import {
@@ -15,9 +14,10 @@ import {
   getPublicProgress,
   getPublicProgressByCountry,
 } from "./publicMapActions";
-import { REGIONS, type RegionId } from "./regions";
-import { isRouteFullyRidden } from "./routeCoverage";
-import type { CoveredRange, CoveredStretch, LocalLoggedPart, RailwayRoute } from "./types";
+import { isSpecialUsage } from "./shared/constants";
+import { REGIONS, type RegionId } from "./shared/regions";
+import { isRouteFullyRidden } from "./shared/routeCoverage";
+import type { CoveredRange, CoveredStretch, LocalLoggedPart, RailwayRoute } from "./shared/types";
 import {
   getCoveredStretches as dbGetCoveredStretches,
   getProgressByCountry as dbGetProgressByCountry,

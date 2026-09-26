@@ -1,13 +1,13 @@
 "use server";
 
 import { requireAdmin } from "./authHelpers";
-import type { LineClass, UsageType } from "./constants";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool, { query } from "./db";
-import { type RegionId, regionEnvelopeSql } from "./regions";
+import type { LineClass, UsageType } from "./shared/constants";
+import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./shared/types";
 import { getStationsNearRoute, refreshStationProximityFor } from "./stationProximity";
-import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./types";
 
 /**
  * Interface for route metadata used during creation

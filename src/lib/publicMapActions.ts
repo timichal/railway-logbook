@@ -18,7 +18,6 @@
 
 import { randomBytes } from "node:crypto";
 import { getUser } from "./authActions";
-import { SUPPORTED_COUNTRIES } from "./constants";
 import { query } from "./db";
 import {
   coveredStretchesForUser,
@@ -28,8 +27,9 @@ import {
   type UserProgress,
 } from "./progressQueries";
 import { publicMapOwner } from "./publicMapQueries";
-import type { RegionId } from "./regions";
-import type { CoveredStretch } from "./types";
+import { SUPPORTED_COUNTRIES } from "./shared/constants";
+import type { RegionId } from "./shared/regions";
+import type { CoveredStretch } from "./shared/types";
 
 export interface PublicMapSettings {
   enabled: boolean;

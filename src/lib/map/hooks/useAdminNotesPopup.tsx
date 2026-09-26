@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import NotesPopup from "@/components/admin/NotesPopup";
 import { getAdminNote } from "@/lib/adminNotesActions";
-import type { NoteType } from "@/lib/constants";
+import type { NoteType } from "@/lib/shared/constants";
 import { createAdminNotesLayer, createAdminNotesSource } from "../index";
 
 interface UseAdminNotesPopupOptions {

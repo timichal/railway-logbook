@@ -2,7 +2,7 @@
  * Utilities for persisting map state across page navigations
  */
 
-import type { RegionId } from "@/lib/regions";
+import type { RegionId } from "@/lib/shared/regions";
 
 export interface MapState {
   center: [number, number];

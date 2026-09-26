@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useState } from "react";
-import { getCountryFlag } from "@/lib/countryFlag";
+import { getCountryFlag } from "@/lib/shared/countryFlag";
 
 interface CollapsibleSectionProps {
   countryCode: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRegionContext } from "@/lib/regionContext";
-import { REGION_IDS, REGIONS } from "@/lib/regions";
+import { REGION_IDS, REGIONS } from "@/lib/shared/regions";
 
 interface RegionSwitchProps {
   /** Flag-only buttons, for a cramped navbar. */

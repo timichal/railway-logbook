@@ -9,11 +9,11 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
 import { logout } from "@/lib/authActions";
-import type { UsageType } from "@/lib/constants";
 import { RegionProvider, useRegionId } from "@/lib/regionContext";
-import type { RegionId } from "@/lib/regions";
+import type { UsageType } from "@/lib/shared/constants";
+import type { RegionId } from "@/lib/shared/regions";
+import type { RailwayPart } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { RailwayPart } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
 
 // Dynamically import the map component to avoid SSR issues with MapLibre

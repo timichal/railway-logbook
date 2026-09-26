@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The region the whole page is looking at (see src/lib/regions.ts).
+ * The region the whole page is looking at (see src/lib/shared/regions.ts).
  *
  * A context rather than props: the region reaches the map, the sidebar tabs, the
  * journey planner and the admin lists alike, and threading it through every
@@ -13,7 +13,13 @@
  */
 
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
-import { DEFAULT_REGION, REGION_COOKIE, REGIONS, type Region, type RegionId } from "./regions";
+import {
+  DEFAULT_REGION,
+  REGION_COOKIE,
+  REGIONS,
+  type Region,
+  type RegionId,
+} from "./shared/regions";
 
 interface RegionContextValue {
   region: Region;

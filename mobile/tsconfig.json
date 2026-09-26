@@ -7,7 +7,7 @@
         "./src/*"
       ],
       "@shared/*": [
-        "../src/lib/*"
+        "../src/lib/shared/*"
       ],
       "@maplibre/maplibre-gl-style-spec": [
         "./node_modules/@maplibre/maplibre-gl-style-spec"

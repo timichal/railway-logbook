@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { useRegionId } from "@/lib/regionContext";
+import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import type { JourneyInTrip, TripWithStats } from "@/lib/tripActions";
 import {
@@ -12,7 +13,6 @@ import {
   getUnassignedJourneys,
   updateTrip,
 } from "@/lib/tripActions";
-import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/types";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 
 interface TripCardProps {

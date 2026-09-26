@@ -1,4 +1,4 @@
-import * as sources from "./tileSources";
+import * as sources from "../shared/map/tileSources";
 
 /**
  * The web app's map entry point.
@@ -34,7 +34,7 @@ export {
   latinizeLabels,
   loadBasemapStyle,
   OSM_TILES_URL,
-} from "./basemap";
+} from "../shared/map/basemap";
 // Layer specs — shared with the native app, hence their own module.
 export {
   createAdminNotesLayer,
@@ -49,18 +49,18 @@ export {
   createStationsLayer,
   lineClassColorExpression,
   type RailwayRoutesPaintConfig,
-} from "./layers";
-export { resolveMissingBasemapIcons } from "./missingIcons";
+} from "../shared/map/layers";
 // Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
-export { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
-export type { RailwayRoutesSourceOptions, RouteTileRides } from "./tileSources";
-export { ZOOM_RANGES } from "./zoomRanges";
+export { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "../shared/map/style";
+export type { RailwayRoutesSourceOptions, RouteTileRides } from "../shared/map/tileSources";
+export { ZOOM_RANGES } from "../shared/map/zoomRanges";
+export { resolveMissingBasemapIcons } from "./missingIcons";
 
 // ============================================================================
 // TILE SOURCES, BOUND TO THIS APP'S TILE HOST
 // ============================================================================
 
-// The initial view and the panning limits are per-region; see src/lib/regions.ts.
+// The initial view and the panning limits are per-region; see src/lib/shared/regions.ts.
 export const TILE_SERVER_PORT = 3001;
 
 // Use /tiles/ path in production (proxied through Caddy), direct port in development

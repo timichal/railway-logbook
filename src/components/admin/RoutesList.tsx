@@ -1,6 +1,6 @@
 "use client";
 
-import type { RailwayRoute } from "@/lib/types";
+import type { RailwayRoute } from "@/lib/shared/types";
 import { btn, optionRow } from "@/lib/ui/buttonStyles";
 
 interface RoutesListProps {

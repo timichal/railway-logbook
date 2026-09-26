@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import PublicMapLayout from "@/components/sharing/PublicMapLayout";
 import { publicMapOwner } from "@/lib/publicMapQueries";
-import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/regions";
+import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/shared/regions";
 import { btn } from "@/lib/ui/buttonStyles";
 
 /**

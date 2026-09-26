@@ -15,11 +15,11 @@ import { useRouteEditor } from "@/lib/map/hooks/useRouteEditor";
 import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
 import { setupUserMapInteractions } from "@/lib/map/interactions/userMapInteractions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
-import { createUserMapLayers } from "@/lib/map/userMapLayers";
 import { useRegion } from "@/lib/regionContext";
-import { regionCountryCodes } from "@/lib/regions";
+import { createUserMapLayers } from "@/lib/shared/map/userMapLayers";
+import { regionCountryCodes } from "@/lib/shared/regions";
+import type { Station } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
-import type { Station } from "@/lib/types";
 import { optionRow } from "@/lib/ui/buttonStyles";
 
 interface PublicRailwayMapProps {

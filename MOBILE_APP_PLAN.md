@@ -276,16 +276,21 @@ The split is sharper than it looks, and it is favourable. Phase 0 confirmed the
 
 ### Ports nearly verbatim
 
-Plain data, style objects, or pure logic — no DOM, no browser:
+Plain data, style objects, or pure logic — no DOM, no browser. What ported now
+lives in `src/lib/shared/`, the only part of the web app `@shared/*` reaches:
 
-- `src/lib/map/style.ts` — `COLORS`, `WIDTHS`, `CIRCLES`, `LABELS`, `OPACITIES`.
+- `src/lib/shared/map/style.ts` — `COLORS`, `WIDTHS`, `CIRCLES`, `LABELS`, `OPACITIES`.
   The single source of truth stays the single source of truth.
-- `src/lib/map/userMapLayers.ts` — the layer stack and paint configs. Same JSON
+- `src/lib/shared/map/userMapLayers.ts` — the layer stack and paint configs. Same JSON
   and the same *types* on native (see the binding facts above).
-- `src/lib/map/utils/userRouteStyling.ts`, `src/lib/map/utils/distance.ts`.
-- `src/lib/regions.ts`, `routeCoverage.ts`, `constants.ts`, `types.ts`,
-  `countryUtils.ts`, `coordinateUtils.ts`. One trap in `regions.ts`: the
-  binding's `LngLatBounds` is flat, so `bounds` needs converting.
+- `src/lib/shared/map/utils/userRouteStyling.ts`.
+- `src/lib/shared/regions.ts`, `routeCoverage.ts`, `constants.ts`, `types.ts`. One
+  trap in `regions.ts`: the binding's `LngLatBounds` is flat, so `bounds` needs
+  converting.
+- Planned here but left web-only: `src/lib/map/utils/distance.ts` and
+  `src/lib/coordinateUtils.ts` (the native app never needed them), and
+  `src/lib/countryUtils.ts`, which pulls in country-coder — the native app got
+  `getCountryFlag` by splitting it out into `shared/countryFlag.ts` instead.
 - `src/lib/routePathFinder.ts` stays **server-side** and is reached over HTTP —
   it needs Postgres and the in-memory graph cache, neither of which belongs on a
   phone.
@@ -767,7 +772,7 @@ same as having been seen.
 #### What the highlight overlays cost the web app
 
 The same shape as Phase 3: **a shared module first, then two mechanisms.**
-`src/lib/map/highlightLayers.ts` now holds what a highlight *is* — `highlightVariants`,
+`src/lib/shared/map/highlightLayers.ts` now holds what a highlight *is* — `highlightVariants`,
 the layer factories, the id and filter helpers, `partialHighlightData`,
 `wholeRouteIds` — and `useRouteHighlighting` is what is left over, which is only the
 live-map mechanism (`addLayer` / `setFilter` / `removeLayer`). Nothing about the web
@@ -809,12 +814,12 @@ Three smaller ones:
 Three more pieces moved into the shared set, on the same terms as the highlights —
 **a shared module first, then two mechanisms** — and one query gained a column.
 
-- **`src/lib/map/coverageLayer.ts`** is what the ridden-stretch overlay *is*: the
+- **`src/lib/shared/map/coverageLayer.ts`** is what the ridden-stretch overlay *is*: the
   GeoJSON the stretches are drawn from, the Regular-only + selected-countries filter it
   repeats off the route layer, and the layer itself. `useCoverageOverlay` is what is
   left over, which is the live-map mechanism only (add the source, set its data,
   re-stack it, remove it when there is nothing).
-- **`src/lib/countryFlag.ts`** — `getCountryFlag`, moved out of `countryUtils.ts`. Not
+- **`src/lib/shared/countryFlag.ts`** — `getCountryFlag`, moved out of `countryUtils.ts`. Not
   a tidy-up: `countryUtils` imports `@rapideditor/country-coder` to resolve a
   coordinate to a country, and a module the native app imports may not reach for a
   dependency the native app does not have. The flag needs nothing.
@@ -1062,7 +1067,7 @@ pick up. Keep it short — the phase sections carry the detail.
   draws its borders. **Next: Phase 4.**
 - **2026-09-17 — Phase 4, first half: the route logger, the highlight overlays and
   the logbook.** Took the same shape as Phase 3 — **a shared module first, then two
-  mechanisms**: `src/lib/map/highlightLayers.ts` now holds what a highlight *is*
+  mechanisms**: `src/lib/shared/map/highlightLayers.ts` now holds what a highlight *is*
   (`highlightVariants`, the layer factories, the filter and id helpers,
   `partialHighlightData`), leaving `useRouteHighlighting` as nothing but the live-map
   mechanism, and the native `HighlightOverlay` mounts the same specs as children. The

@@ -132,7 +132,7 @@ DROP FUNCTION IF EXISTS route_is_fully_ridden(integer, integer, numeric);
 -- index-only scan of the user's own logged rows.
 --
 -- The same rule is implemented in TypeScript for the unauthenticated map's
--- localStorage log (isRouteFullyRidden in src/lib/routeCoverage.ts, which owns
+-- localStorage log (isRouteFullyRidden in src/lib/shared/routeCoverage.ts, which owns
 -- the two tolerances above). Keep the two in step.
 CREATE OR REPLACE FUNCTION user_fully_ridden_routes(p_user_id integer)
 RETURNS TABLE (track_id integer) AS $$

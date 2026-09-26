@@ -18,7 +18,7 @@ import {
   updateJourneyForUser,
   updateLoggedPartPartialForUser,
 } from "./journeyQueries";
-import type { Journey, RailwayRoute } from "./types";
+import type { Journey, RailwayRoute } from "./shared/types";
 
 /** Get a single journey with all its logged routes. */
 export async function getJourney(journeyId: number): Promise<{

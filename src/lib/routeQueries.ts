@@ -9,8 +9,8 @@
  */
 
 import { escapeLikePattern, query } from "./db";
-import { type RegionId, regionEnvelopeSql } from "./regions";
-import type { RailwayRoute, Station } from "./types";
+import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import type { RailwayRoute, Station } from "./shared/types";
 
 /**
  * Station name search for the user map search box and the Journey Planner.

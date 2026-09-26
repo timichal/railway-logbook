@@ -1,7 +1,6 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import type { MutableRefObject } from "react";
-import { getNoteTypeLabel } from "@/lib/constants";
 import {
   escapeHtml,
   formatRouteMetadataBadges,
@@ -9,7 +8,8 @@ import {
   POPUP_ROW_STYLE,
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
-import type { RegionId } from "@/lib/regions";
+import { getNoteTypeLabel } from "@/lib/shared/constants";
+import type { RegionId } from "@/lib/shared/regions";
 
 interface AdminMapCallbacks {
   onCoordinateClickRef: MutableRefObject<((coordinate: [number, number]) => void) | undefined>;

@@ -3,6 +3,11 @@ name: Build and Deploy
 on:
   push:
     branches: [main]
+    # Nothing under these reaches the web image or the server. A push that also
+    # touches anything else still deploys; workflow_dispatch forces one.
+    paths-ignore:
+      - "mobile/**"
+      - "**.md"
   workflow_dispatch:
 
 jobs:
@@ -22,14 +27,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-
-      - name: Create .env file
-        run: |
-          cat > .env << EOF
-          DB_USER=$DB_USER
-          DB_PASSWORD=$DB_PASSWORD
-          JWT_SECRET=$JWT_SECRET
-          EOF
 
       - name: Build the Docker image
         run: docker build . --file Dockerfile --no-cache --tag $DOCKER_TAG

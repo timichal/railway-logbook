@@ -11,10 +11,10 @@ import {
   setRouteUnderRepair,
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
-import type { LineClass, UsageType } from "@/lib/constants";
 import { useRegion } from "@/lib/regionContext";
+import type { LineClass, UsageType } from "@/lib/shared/constants";
+import type { RailwayRoute } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
-import type { RailwayRoute } from "@/lib/types";
 
 interface AdminRoutesTabProps {
   selectedRouteId?: number | null;

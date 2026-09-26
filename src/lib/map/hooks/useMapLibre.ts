@@ -1,7 +1,7 @@
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { DEFAULT_REGION, REGIONS, type RegionId } from "@/lib/regions";
+import { DEFAULT_REGION, REGIONS, type RegionId } from "@/lib/shared/regions";
 import { useResolvedTheme } from "@/lib/theme";
 import {
   createBasemapFadeLayer,
@@ -11,7 +11,7 @@ import {
   createOSMBackgroundSource,
   GLYPHS_URL,
   loadBasemapStyle,
-} from "../basemap";
+} from "../../shared/map/basemap";
 import { loadMapState, saveMapState } from "../mapState";
 import { resolveMissingBasemapIcons } from "../missingIcons";
 

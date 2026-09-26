@@ -4,14 +4,15 @@ const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 
 const projectRoot = __dirname;
-/** The Next.js app one level up. Its `src/lib` is shared source; its `node_modules` is not. */
+/** The Next.js app one level up. Its `src/lib/shared` is shared source; its `node_modules` is not. */
 const webRoot = path.resolve(projectRoot, "..");
 
 const config = getDefaultConfig(projectRoot);
 
-// The web app's `src/lib` is imported directly (see `@shared/*` in tsconfig.json), so
-// Metro has to watch and resolve files outside the project root.
-config.watchFolders = [path.resolve(webRoot, "src/lib")];
+// The web app's `src/lib/shared` is imported directly (see `@shared/*` in tsconfig.json),
+// so Metro has to watch and resolve files outside the project root. Only that folder:
+// the rest of `src/lib` is the web app's, and much of it reaches `pg` or `window`.
+config.watchFolders = [path.resolve(webRoot, "src/lib/shared")];
 
 // Metro resolves a missing module by walking *up* the directory tree, which from here
 // reaches the Next.js app's `node_modules` and its different React. Block that one

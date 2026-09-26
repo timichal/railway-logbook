@@ -20,6 +20,7 @@ import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
 import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
 import { setupUserMapInteractions } from "@/lib/map/interactions/userMapInteractions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
+import { useRegion } from "@/lib/regionContext";
 import {
   createUserMapLayers,
   userClickBufferLayerConfig,
@@ -27,10 +28,8 @@ import {
   userRouteLayerConfig,
   userScenicLayerConfig,
   userSpecialLayerConfig,
-} from "@/lib/map/userMapLayers";
-import { useRegion } from "@/lib/regionContext";
-import { regionCountryCodes } from "@/lib/regions";
-import { useResolvedTheme } from "@/lib/theme";
+} from "@/lib/shared/map/userMapLayers";
+import { regionCountryCodes } from "@/lib/shared/regions";
 import type {
   HighlightKind,
   HighlightRoutesFn,
@@ -39,7 +38,8 @@ import type {
   PlannerRoute,
   SelectedRoute,
   Station,
-} from "@/lib/types";
+} from "@/lib/shared/types";
+import { useResolvedTheme } from "@/lib/theme";
 import { optionRow } from "@/lib/ui/buttonStyles";
 
 interface RailwayMapProps {

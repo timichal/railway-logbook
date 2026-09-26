@@ -7,8 +7,8 @@ import {
   coverageData,
   coverageFilter,
   createCoverageLayer,
-} from "@/lib/map/coverageLayer";
-import type { CoveredStretch } from "@/lib/types";
+} from "@/lib/shared/map/coverageLayer";
+import type { CoveredStretch } from "@/lib/shared/types";
 
 /**
  * The stretches of unfinished routes the user has actually ridden, drawn in the

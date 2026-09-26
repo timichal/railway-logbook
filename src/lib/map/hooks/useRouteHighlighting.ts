@@ -13,8 +13,8 @@ import {
   partialHighlightLayerId,
   partialHighlightSourceId,
   wholeRouteIds,
-} from "@/lib/map/highlightLayers";
-import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/types";
+} from "@/lib/shared/map/highlightLayers";
+import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/shared/types";
 
 /**
  * The web app's half of the highlight overlays: add, update and remove the layers
@@ -26,7 +26,7 @@ import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/t
  * app mounts and unmounts the same specs as children.
  */
 
-export { HIGHLIGHT_LAYER_IDS } from "@/lib/map/highlightLayers";
+export { HIGHLIGHT_LAYER_IDS } from "@/lib/shared/map/highlightLayers";
 
 /**
  * Add/update/remove the overlay sublayers for one highlight set.

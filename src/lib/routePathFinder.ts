@@ -8,7 +8,6 @@
  * Phase 1). Nothing here touches a cookie or a request.
  */
 
-import { MAX_VIA_STATIONS } from "./constants";
 import pool from "./db";
 import {
   BACKTRACKING_THRESHOLD_DEGREES,
@@ -16,8 +15,9 @@ import {
   haversineDistance,
   normalizeBearingDifference,
 } from "./geoUtils";
-import { UNTRAVELLED_NOISE_KM } from "./routeCoverage";
-import type { PartialRouteGeometry, PlannerRoute } from "./types";
+import { MAX_VIA_STATIONS } from "./shared/constants";
+import { UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
+import type { PartialRouteGeometry, PlannerRoute } from "./shared/types";
 
 export interface PathResult {
   routes: PlannerRoute[];

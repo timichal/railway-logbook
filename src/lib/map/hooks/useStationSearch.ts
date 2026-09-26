@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RegionId } from "@/lib/regions";
-import type { Station } from "@/lib/types";
+import type { RegionId } from "@/lib/shared/regions";
+import type { Station } from "@/lib/shared/types";
 import { searchStations } from "@/lib/userActions";
 
 /**

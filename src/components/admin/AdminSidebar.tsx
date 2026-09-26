@@ -5,9 +5,9 @@ import AdminCreateRouteTab from "@/components/admin/AdminCreateRouteTab";
 import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
 import { getFrequencyTags } from "@/lib/adminRouteActions";
-import type { UsageType } from "@/lib/constants";
+import type { UsageType } from "@/lib/shared/constants";
+import type { RailwayPart } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { RailwayPart } from "@/lib/types";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
 interface AdminSidebarProps {

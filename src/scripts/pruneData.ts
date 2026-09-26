@@ -1,7 +1,7 @@
 import { once } from "node:events";
 import { createWriteStream, renameSync, rmSync } from "node:fs";
 import { transliterate } from "transliteration";
-import type { Feature } from "../lib/types";
+import type { Feature } from "../lib/shared/types";
 import {
   createFeatureStreamStats,
   describeFeatureStream,

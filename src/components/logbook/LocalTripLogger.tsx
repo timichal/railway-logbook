@@ -3,8 +3,8 @@
 import { useState } from "react";
 import JourneyPlanner from "@/components/logbook/JourneyPlanner";
 import * as localStore from "@/lib/localStorage";
+import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/types";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
 
 interface LocalTripLoggerProps {

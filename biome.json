@@ -46,5 +46,194 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/lib/shared/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noNodejsModules": "error"
+          },
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "pg": "Shared code is bundled into the native app, which has no Postgres driver.",
+                  "maplibre-gl": "The native app has no maplibre-gl; take spec types from @maplibre/maplibre-gl-style-spec.",
+                  "react-dom": "Shared code also runs under React Native.",
+                  "next": "Shared code also runs under React Native.",
+                  "@rapideditor/country-coder": "Not a dependency of the native app; see countryUtils.ts (web-only)."
+                },
+                "patterns": [
+                  {
+                    "group": ["pg/**"],
+                    "message": "Shared code is bundled into the native app, which has no Postgres driver."
+                  },
+                  {
+                    "group": ["maplibre-gl/**"],
+                    "message": "The native app has no maplibre-gl; take spec types from @maplibre/maplibre-gl-style-spec."
+                  },
+                  {
+                    "group": ["react-dom/**", "next/**"],
+                    "message": "Shared code also runs under React Native."
+                  },
+                  {
+                    "group": ["@rapideditor/country-coder/**"],
+                    "message": "Not a dependency of the native app; see countryUtils.ts (web-only)."
+                  },
+                  {
+                    "group": ["@/**"],
+                    "message": "Use a relative import: '@/*' means src/* in the web app and mobile/src/* in the native one."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/lib/shared/*"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "pg": "Shared code is bundled into the native app, which has no Postgres driver.",
+                  "maplibre-gl": "The native app has no maplibre-gl; take spec types from @maplibre/maplibre-gl-style-spec.",
+                  "react-dom": "Shared code also runs under React Native.",
+                  "next": "Shared code also runs under React Native.",
+                  "@rapideditor/country-coder": "Not a dependency of the native app; see countryUtils.ts (web-only)."
+                },
+                "patterns": [
+                  {
+                    "group": ["pg/**"],
+                    "message": "Shared code is bundled into the native app, which has no Postgres driver."
+                  },
+                  {
+                    "group": ["maplibre-gl/**"],
+                    "message": "The native app has no maplibre-gl; take spec types from @maplibre/maplibre-gl-style-spec."
+                  },
+                  {
+                    "group": ["react-dom/**", "next/**"],
+                    "message": "Shared code also runs under React Native."
+                  },
+                  {
+                    "group": ["@rapideditor/country-coder/**"],
+                    "message": "Not a dependency of the native app; see countryUtils.ts (web-only)."
+                  },
+                  {
+                    "group": ["@/**"],
+                    "message": "Use a relative import: '@/*' means src/* in the web app and mobile/src/* in the native one."
+                  },
+                  {
+                    "group": ["../**"],
+                    "message": "src/lib/shared/ is also compiled into the native app (mobile/), which can only see this folder. Move what you need in here, or keep it out of shared code."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/lib/shared/*/*"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "pg": "Shared code is bundled into the native app, which has no Postgres driver.",
+                  "maplibre-gl": "The native app has no maplibre-gl; take spec types from @maplibre/maplibre-gl-style-spec.",
+                  "react-dom": "Shared code also runs under React Native.",
+                  "next": "Shared code also runs under React Native.",
+                  "@rapideditor/country-coder": "Not a dependency of the native app; see countryUtils.ts (web-only)."
+                },
+                "patterns": [
+                  {
+                    "group": ["pg/**"],
+                    "message": "Shared code is bundled into the native app, which has no Postgres driver."
+                  },
+                  {
+                    "group": ["maplibre-gl/**"],
+                    "message": "The native app has no maplibre-gl; take spec types from @maplibre/maplibre-gl-style-spec."
+                  },
+                  {
+                    "group": ["react-dom/**", "next/**"],
+                    "message": "Shared code also runs under React Native."
+                  },
+                  {
+                    "group": ["@rapideditor/country-coder/**"],
+                    "message": "Not a dependency of the native app; see countryUtils.ts (web-only)."
+                  },
+                  {
+                    "group": ["@/**"],
+                    "message": "Use a relative import: '@/*' means src/* in the web app and mobile/src/* in the native one."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "src/lib/shared/ is also compiled into the native app (mobile/), which can only see this folder. Move what you need in here, or keep it out of shared code."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/lib/shared/*/*/*"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "pg": "Shared code is bundled into the native app, which has no Postgres driver.",
+                  "maplibre-gl": "The native app has no maplibre-gl; take spec types from @maplibre/maplibre-gl-style-spec.",
+                  "react-dom": "Shared code also runs under React Native.",
+                  "next": "Shared code also runs under React Native.",
+                  "@rapideditor/country-coder": "Not a dependency of the native app; see countryUtils.ts (web-only)."
+                },
+                "patterns": [
+                  {
+                    "group": ["pg/**"],
+                    "message": "Shared code is bundled into the native app, which has no Postgres driver."
+                  },
+                  {
+                    "group": ["maplibre-gl/**"],
+                    "message": "The native app has no maplibre-gl; take spec types from @maplibre/maplibre-gl-style-spec."
+                  },
+                  {
+                    "group": ["react-dom/**", "next/**"],
+                    "message": "Shared code also runs under React Native."
+                  },
+                  {
+                    "group": ["@rapideditor/country-coder/**"],
+                    "message": "Not a dependency of the native app; see countryUtils.ts (web-only)."
+                  },
+                  {
+                    "group": ["@/**"],
+                    "message": "Use a relative import: '@/*' means src/* in the web app and mobile/src/* in the native one."
+                  },
+                  {
+                    "group": ["../../../**"],
+                    "message": "src/lib/shared/ is also compiled into the native app (mobile/), which can only see this folder. Move what you need in here, or keep it out of shared code."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

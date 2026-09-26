@@ -1,9 +1,9 @@
 import { cookies } from "next/headers";
 import { userFromRequest } from "@/lib/api/auth";
 import { COOKIE_NAME, verifyToken } from "@/lib/authTokens";
-import { normalizeCountryCodes } from "@/lib/constants";
-import { ZOOM_RANGES } from "@/lib/map/zoomRanges";
 import { type RouteTileRidesOf, routeTile } from "@/lib/routeTileQueries";
+import { normalizeCountryCodes } from "@/lib/shared/constants";
+import { ZOOM_RANGES } from "@/lib/shared/map/zoomRanges";
 
 type Context = { params: Promise<{ z: string; x: string; y: string }> };
 

@@ -6,7 +6,7 @@ import {
   haversineDistance,
   normalizeBearingDifference,
 } from "../../lib/geoUtils";
-import type { BacktrackingPoint, PathResult } from "../../lib/types";
+import type { BacktrackingPoint, PathResult } from "../../lib/shared/types";
 
 export type { BacktrackingPoint, PathResult };
 

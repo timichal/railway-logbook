@@ -1,6 +1,6 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
-import { clickBufferFilter, scenicOutlineFilter } from "@/lib/map/userMapLayers";
+import { clickBufferFilter, scenicOutlineFilter } from "@/lib/shared/map/userMapLayers";
 
 /**
  * Manages filter and visibility toggles for user map layers:

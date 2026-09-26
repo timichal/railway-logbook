@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import MainLayout from "@/components/layout/MainLayout";
 import { getUser, logout } from "@/lib/authActions";
-import { SUPPORTED_COUNTRIES } from "@/lib/constants";
-import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/regions";
+import { SUPPORTED_COUNTRIES } from "@/lib/shared/constants";
+import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/shared/regions";
 import { getUserPreferences } from "@/lib/userPreferencesActions";
 
 export default async function Home() {

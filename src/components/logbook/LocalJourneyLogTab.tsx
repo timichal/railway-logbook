@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getUntimezonedDateStr } from "@/lib/getUntimezonedDateStr";
 import * as localStore from "@/lib/localStorage";
 import { useRegionId } from "@/lib/regionContext";
-import { useToast } from "@/lib/toast";
+import { getUntimezonedDateStr } from "@/lib/shared/getUntimezonedDateStr";
 import type {
   HighlightRoutesFn,
   JourneyEditStartFn,
@@ -12,7 +11,8 @@ import type {
   LocalLoggedPart,
   RailwayRoute,
   SelectedRoute,
-} from "@/lib/types";
+} from "@/lib/shared/types";
+import { useToast } from "@/lib/toast";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 import { getRegionTrackIds, getRoutesByIds } from "@/lib/userActions";
 

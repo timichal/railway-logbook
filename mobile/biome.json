@@ -21,7 +21,18 @@
     "rules": {
       "preset": "recommended",
       "style": {
-        "noNonNullAssertion": "off"
+        "noNonNullAssertion": "off",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["**/src/lib/**", "@shared/../**", "@shared/**/../**"],
+                "message": "Import the web app's shared code as @shared/*, which reaches src/lib/shared/ and nothing else \u2014 the rest of src/lib is web-only, and Metro does not watch it."
+              }
+            ]
+          }
+        }
       }
     },
     "domains": {

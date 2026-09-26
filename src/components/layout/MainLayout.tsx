@@ -10,7 +10,7 @@ import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import type { User } from "@/lib/authActions";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
-import type { RegionId } from "@/lib/regions";
+import type { RegionId } from "@/lib/shared/regions";
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
 const RailwayMap = dynamic(() => import("@/components/map/RailwayMap"), {

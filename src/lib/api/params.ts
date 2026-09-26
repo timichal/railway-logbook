@@ -4,10 +4,10 @@
  * not a default.
  */
 
-import { normalizeCountryCodes } from "../constants";
 import type { LoggedRange } from "../journeyQueries";
-import { isRegionId, type RegionId } from "../regions";
-import type { CoveredRange } from "../types";
+import { normalizeCountryCodes } from "../shared/constants";
+import { isRegionId, type RegionId } from "../shared/regions";
+import type { CoveredRange } from "../shared/types";
 import { ApiError } from "./response";
 
 /**

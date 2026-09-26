@@ -12,7 +12,7 @@
  */
 
 import pool from "./db";
-import type { Journey, LoggedPart, RailwayRoute } from "./types";
+import type { Journey, LoggedPart, RailwayRoute } from "./shared/types";
 
 /** Fraction range along a route's geometry — see user_logged_parts.covered_start. */
 export interface LoggedRange {

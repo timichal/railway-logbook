@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getRailwayRoute } from "@/lib/adminRouteActions";
-import type { RailwayPart } from "@/lib/types";
+import type { RailwayPart } from "@/lib/shared/types";
 import { calculateDistance } from "../utils/distance";
 
 interface PreviewRoute {

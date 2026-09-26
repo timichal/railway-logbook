@@ -3,7 +3,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { createAdminNote, deleteAdminNote, updateAdminNote } from "@/lib/adminNotesActions";
-import { type NoteType, noteTypeOptions } from "@/lib/constants";
+import { type NoteType, noteTypeOptions } from "@/lib/shared/constants";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 
 interface NotesPopupProps {

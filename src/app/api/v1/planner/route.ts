@@ -1,7 +1,7 @@
 import { readJsonBody, requireInt, requireIntArray } from "@/lib/api/params";
 import { ApiError, apiHandler, jsonResponse } from "@/lib/api/response";
-import { MAX_VIA_STATIONS } from "@/lib/constants";
 import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
+import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
 
 /**
  * POST /api/v1/planner — { fromStationId, toStationId, viaStationIds? }.

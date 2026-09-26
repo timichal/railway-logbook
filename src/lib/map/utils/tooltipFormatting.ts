@@ -3,8 +3,8 @@ import {
   type RouteTitleProperties,
   routeBadges,
   routeTitle,
-} from "@/lib/map/routeFeature";
-import type { RegionId } from "@/lib/regions";
+} from "@/lib/shared/map/routeFeature";
+import type { RegionId } from "@/lib/shared/regions";
 
 /**
  * Escape a value for interpolation into popup HTML (MapLibre popups are built as

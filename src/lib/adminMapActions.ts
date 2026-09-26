@@ -3,7 +3,7 @@
 import { RailwayPathFinder } from "../scripts/lib/railwayPathFinder";
 import { requireAdmin } from "./authHelpers";
 import pool from "./db";
-import type { PathResult, RailwayPart } from "./types";
+import type { PathResult, RailwayPart } from "./shared/types";
 
 /**
  * Find a path between two coordinates using BFS pathfinding

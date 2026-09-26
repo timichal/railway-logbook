@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import TagInput from "@/components/ui/TagInput";
 import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
-import type { UsageType } from "@/lib/constants";
 import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 import { useRegion } from "@/lib/regionContext";
-import { regionUsageOptions } from "@/lib/regions";
+import type { UsageType } from "@/lib/shared/constants";
+import { regionUsageOptions } from "@/lib/shared/regions";
+import type { RailwayPart } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { RailwayPart } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
 
 interface AdminCreateRouteTabProps {

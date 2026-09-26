@@ -1,0 +1,18 @@
+# Build context for the web image. The builder stage runs `COPY . .`, so anything
+# not listed here is sent to the daemon and lands in /app before `npm run build`.
+
+# Secrets. Next's standalone output copies a `.env` it finds into .next/standalone,
+# which the runner stage ships — compose injects the environment at runtime instead.
+.env*
+
+# Rebuilt inside the image (deps stage, `npm run build`).
+node_modules
+.next
+*.tsbuildinfo
+
+# Not part of the web app: multi-GB OSM extracts, and the native app (its own
+# node_modules included), which the web tsconfig excludes anyway.
+data
+mobile
+
+.git

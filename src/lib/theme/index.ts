@@ -16,11 +16,11 @@
  */
 
 import { useSyncExternalStore } from "react";
+import type { ResolvedTheme, ThemePreference } from "../shared/theme/types";
 import { THEME_COLORS } from "./colors";
-import type { ResolvedTheme, ThemePreference } from "./types";
 
+export type { ResolvedTheme, ThemePreference } from "../shared/theme/types";
 export { THEME_COLORS } from "./colors";
-export type { ResolvedTheme, ThemePreference } from "./types";
 
 export const THEME_STORAGE_KEY = "railway-logbook-theme";
 

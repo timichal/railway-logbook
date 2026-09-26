@@ -29,13 +29,13 @@ import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useRouteLength } from "@/lib/map/hooks/useRouteLength";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
+import { useRegionId } from "@/lib/regionContext";
 import {
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
-} from "@/lib/map/utils/userRouteStyling";
-import { useRegionId } from "@/lib/regionContext";
+} from "@/lib/shared/map/utils/userRouteStyling";
+import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
-import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/types";
 
 // The base layer draws Regular routes solid; Heritage (dotted) and Special
 // (dashed) get their own layers so the dash/dot gaps aren't filled by a solid

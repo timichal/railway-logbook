@@ -20,14 +20,14 @@ import {
   progressForUser,
   type UserProgress,
 } from "./progressQueries";
-import type { RegionId } from "./regions";
 import {
   routeMetadataByIds,
   routesInRegion,
   searchStationsByName,
   trackIdsInRegion,
 } from "./routeQueries";
-import type { CoveredRange, CoveredStretch, RailwayRoute, Station } from "./types";
+import type { RegionId } from "./shared/regions";
+import type { CoveredRange, CoveredStretch, RailwayRoute, Station } from "./shared/types";
 
 /** Station name search for the map search box and the Journey Planner. */
 export async function searchStations(searchQuery: string, region: RegionId): Promise<Station[]> {

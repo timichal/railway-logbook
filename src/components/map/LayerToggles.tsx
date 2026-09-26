@@ -2,7 +2,7 @@
 
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import type { LayerPrefs } from "@/lib/map/layerPrefs";
-import { type Region, regionUsagePluralLabel } from "@/lib/regions";
+import { type Region, regionUsagePluralLabel } from "@/lib/shared/regions";
 
 /**
  * The user map's three layer switches, in whichever container asks for them: the

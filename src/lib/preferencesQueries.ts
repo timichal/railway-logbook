@@ -8,8 +8,8 @@
  * calls the same functions.
  */
 
-import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./constants";
 import { query } from "./db";
+import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
 
 /**
  * The user's country filter, creating the default row on first read.

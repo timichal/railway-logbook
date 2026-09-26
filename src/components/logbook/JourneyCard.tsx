@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getUntimezonedDateStr } from "@/lib/getUntimezonedDateStr";
 import {
   addRoutesToJourney,
   deleteJourney,
@@ -10,16 +9,17 @@ import {
   updateJourney,
   updateLoggedPartPartial,
 } from "@/lib/journeyActions";
-import { useToast } from "@/lib/toast";
-import type { TripWithStats } from "@/lib/tripActions";
-import { assignJourneyToTrip, unassignJourneyFromTrip } from "@/lib/tripActions";
+import { getUntimezonedDateStr } from "@/lib/shared/getUntimezonedDateStr";
 import type {
   HighlightRoutesFn,
   Journey,
   JourneyEditStartFn,
   RailwayRoute,
   SelectedRoute,
-} from "@/lib/types";
+} from "@/lib/shared/types";
+import { useToast } from "@/lib/toast";
+import type { TripWithStats } from "@/lib/tripActions";
+import { assignJourneyToTrip, unassignJourneyFromTrip } from "@/lib/tripActions";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {

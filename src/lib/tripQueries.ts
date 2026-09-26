@@ -9,8 +9,8 @@
  */
 
 import pool, { escapeLikePattern } from "./db";
-import { type RegionId, regionEnvelopeSql } from "./regions";
-import type { Journey, Trip } from "./types";
+import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import type { Journey, Trip } from "./shared/types";
 
 /**
  * Region predicates for the browsing list.

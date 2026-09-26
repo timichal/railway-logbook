@@ -6,7 +6,7 @@ import RegionSwitch from "@/components/ui/RegionSwitch";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
-import type { RegionId } from "@/lib/regions";
+import type { RegionId } from "@/lib/shared/regions";
 import { btn } from "@/lib/ui/buttonStyles";
 
 // Same reason as the interactive map: MapLibre can't be server-rendered.

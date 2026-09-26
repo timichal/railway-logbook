@@ -6,8 +6,8 @@
  * (`import * as localStore from "@/lib/localStorage"`).
  */
 
-import { SUPPORTED_COUNTRIES } from "./constants";
-import type { LocalJourney, LocalLoggedPart } from "./types";
+import { SUPPORTED_COUNTRIES } from "./shared/constants";
+import type { LocalJourney, LocalLoggedPart } from "./shared/types";
 
 interface LocalJourneysData {
   version: number;

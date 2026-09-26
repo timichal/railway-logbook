@@ -1,10 +1,10 @@
 "use server";
 
 import { requireAdmin } from "./authHelpers";
-import type { NoteType } from "./constants";
 import pool from "./db";
-import { type RegionId, regionEnvelopeSql } from "./regions";
-import type { AdminNote } from "./types";
+import type { NoteType } from "./shared/constants";
+import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import type { AdminNote } from "./shared/types";
 
 type AdminNoteRow = {
   id: number;

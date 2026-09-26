@@ -10,8 +10,8 @@
  */
 
 import { query } from "./db";
-import { REGIONS, type RegionId, regionEnvelopeSql } from "./regions";
-import type { CoveredRange, CoveredStretch } from "./types";
+import { REGIONS, type RegionId, regionEnvelopeSql } from "./shared/regions";
+import type { CoveredRange, CoveredStretch } from "./shared/types";
 
 /**
  * The user's routes that count as ridden whole, as a subquery on `$1` = user id.

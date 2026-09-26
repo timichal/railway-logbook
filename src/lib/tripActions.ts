@@ -8,7 +8,8 @@
  */
 
 import { getUser } from "./authActions";
-import type { RegionId } from "./regions";
+import type { RegionId } from "./shared/regions";
+import type { Trip } from "./shared/types";
 import {
   assignJourneyToTripForUser,
   createTripForUser,
@@ -24,7 +25,6 @@ import {
   unassignJourneyFromTripForUser,
   updateTripForUser,
 } from "./tripQueries";
-import type { Trip } from "./types";
 
 export type { JourneyInTrip, StandaloneJourneyWithStats, TripsAndJourneysItem, TripWithStats };
 

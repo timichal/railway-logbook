@@ -3,7 +3,7 @@
 # OSM Railway Data Processing Pipeline
 # This script downloads, filters, and converts OSM data for railway tracking.
 #
-# The app covers two regions (see src/lib/regions.ts). They are fetched as
+# The app covers two regions (see src/lib/shared/regions.ts). They are fetched as
 # separate Geofabrik extracts and pruned into one file each; importMapData then
 # loads them together into the shared tables.
 #

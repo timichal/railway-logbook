@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import TripCard from "@/components/logbook/TripCard";
 import { useRegionId } from "@/lib/regionContext";
+import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
 import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
-import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
 
 const PAGE_SIZE = 10;

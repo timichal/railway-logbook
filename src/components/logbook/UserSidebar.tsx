@@ -15,7 +15,7 @@ import type {
   PlannerRoute,
   SelectedRoute,
   Station,
-} from "@/lib/types";
+} from "@/lib/shared/types";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
 /**

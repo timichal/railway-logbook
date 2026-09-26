@@ -33,15 +33,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       alike. **Fix:** in production, throw at startup if the secret is unset or
       shorter than about 32 bytes.
 
-- [ ] **Secrets are baked into the Docker image.** `Dockerfile:18` (`COPY . .`);
-      `.github/workflows/deploy.yml:26-33`. CI writes `.env` with `DB_PASSWORD`
-      and `JWT_SECRET`, and there is no `.dockerignore`. Next's standalone build
-      copies `.env` into `.next/standalone`
-      (`node_modules/next/dist/build/index.js:326-333`), so the runner image ships
-      `/app/.env`. **Fix:** add a `.dockerignore` excluding `.env*`, `data/`,
-      `node_modules` and `.next`, and drop the CI step that creates `.env`, since
-      compose injects the environment anyway.
-
 - [ ] **The frontend and Martin ports are published on every interface.**
       `docker-compose.yml:21` (`3001:3000`) and `:32` (`3000:3000`); only `db` is
       bound to `127.0.0.1`. Docker-published ports bypass ufw/iptables INPUT
@@ -195,7 +186,7 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       Japan the form prefills yesterday. **Fix:** use
       `getUntimezonedDateStr(new Date())`, computed when the form resets.
 
-- [ ] **`isRegionId("constructor")` is true.** `src/lib/regions.ts:132` uses
+- [ ] **`isRegionId("constructor")` is true.** `src/lib/shared/regions.ts:132` uses
       `value in REGIONS`, which walks the prototype chain.
       `/shared/<token>?view=constructor` crashes the shared page for whoever opens
       it, and `/api/v1/routes?region=toString` returns a 500 instead of a 400.
@@ -661,7 +652,7 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 ## Docs
 
 - [ ] **CLAUDE.md's station label sizes are stale.** CLAUDE.md says "size 10
-      stepping to 11 at z16". `LABELS.station.size` in `src/lib/map/style.ts` is
+      stepping to 11 at z16". `LABELS.station.size` in `src/lib/shared/map/style.ts` is
       13/14.
 
 ## Possible, needs checking

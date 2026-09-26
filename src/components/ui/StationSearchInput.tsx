@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import type { Station } from "@/lib/types";
+import type { Station } from "@/lib/shared/types";
 import { iconBtn, optionRow } from "@/lib/ui/buttonStyles";
 
 interface StationSearchInputProps {

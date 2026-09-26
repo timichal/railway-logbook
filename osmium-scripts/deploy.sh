@@ -7,7 +7,7 @@
 # once (see RECALC_PERFORMANCE.md); the remote default is used when omitted.
 # Example: ./deploy.sh 260523, ./deploy.sh --valid-only, ./deploy.sh 260523 --concurrency=8
 #
-# Both regions (see src/lib/regions.ts) travel together: they share the stations
+# Both regions (see src/lib/shared/regions.ts) travel together: they share the stations
 # and railway_parts tables, and the remote import clears those before loading, so
 # a partial deploy would wipe the region it doesn't carry.
 #

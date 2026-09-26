@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAllAdminNotes, updateAdminNote } from "@/lib/adminNotesActions";
-import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/constants";
 import { useRegionId } from "@/lib/regionContext";
+import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/shared/constants";
+import type { AdminNote } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { AdminNote } from "@/lib/types";
 import { btn } from "@/lib/ui/buttonStyles";
 
 type TypeFilter = NoteType | "all";

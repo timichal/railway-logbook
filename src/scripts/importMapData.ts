@@ -19,7 +19,7 @@ async function loadGeoJSONData(): Promise<void> {
 
   try {
     // Parse CLI args: every non-flag positional is a data file path. One file
-    // per region (see src/lib/regions.ts) - they load into the same tables, and
+    // per region (see src/lib/shared/regions.ts) - they load into the same tables, and
     // the tables are cleared once before the first file, so all regions must be
     // passed to a single run.
     const args = process.argv.slice(2);
