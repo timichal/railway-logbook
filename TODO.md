@@ -10,19 +10,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ---
 
-## Bugs — user-facing
-
-- [ ] **A via station pins the next leg to the route that arrived there.**
-      `src/lib/routePathFinder.ts:1134-1143`. `previousEndRoute` is always one
-      of `routeSequence[i]`, so the "if possible" `includes` test is always true
-      and every leg after a via is seeded only from the arriving route. At a via
-      where line 1 and line 2 cross mid-route, the second leg must leave line 1
-      through an endpoint, which gives a detour or "No path found for segment 2"
-      even though line 2 serves the via directly. That route is also reported
-      whole although it was only partly ridden. **Fix:** seed from every route
-      near the via, and let `computeTravelledTrims` trim routes entered or left
-      mid-way at a via, not only the first and last.
-
 ## Rare correctness issues
 
 - [ ] **A failed `ROLLBACK` hides the error that caused it.**

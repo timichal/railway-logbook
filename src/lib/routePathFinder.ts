@@ -69,6 +69,20 @@ const ENDPOINT_TOLERANCE_METERS = 500;
  */
 const GAP_PENALTY_PER_KM = 25;
 
+/**
+ * Cost, in km of main line, of changing to another route at a via station
+ * rather than carrying on along the one the journey arrived on — on top of the
+ * gap between the two, charged at GAP_PENALTY_PER_KM like any other.
+ *
+ * The gap alone leaves a change free wherever two routes run on top of each
+ * other: a parallel line, or a route duplicated and not yet split. There a
+ * journey that merely passed through the via would come out as two partial
+ * routes instead of one whole one. A few km is enough to settle those ties for
+ * the arriving route, and nothing next to the detour it takes to stay on a line
+ * that doesn't go where the journey is headed.
+ */
+const VIA_CHANGE_PENALTY = 5;
+
 type EndpointSide = "start" | "end";
 
 const ENDPOINT_SIDES: EndpointSide[] = ["start", "end"];
@@ -116,6 +130,8 @@ interface StationRouteMatches {
   routes: Map<number, number[]>;
   /** Fraction along each route where the station sits, keyed by `pairKey`. */
   fractions: Map<string, number>;
+  /** The point on each route closest to the station, keyed by `pairKey`. */
+  points: Map<string, [number, number]>;
 }
 
 /**
@@ -133,12 +149,15 @@ interface StationRouteMatches {
  * Each match also carries where the station falls along that route, as a 0..1
  * fraction of its geometry: a station is regularly mid-route, and the search
  * charges a terminal route for the stretch between the station and the endpoint
- * it leaves through rather than for the whole line.
+ * it leaves through rather than for the whole line. And the point on the route
+ * nearest the station, which is where a journey changing lines at a via gets on
+ * or off it (see `changeCosts`).
  */
 async function findRoutesNearStations(stationIds: number[]): Promise<StationRouteMatches> {
   const routes = new Map<number, number[]>();
   const fractions = new Map<string, number>();
-  if (stationIds.length === 0) return { routes, fractions };
+  const points = new Map<string, [number, number]>();
+  if (stationIds.length === 0) return { routes, fractions, points };
 
   const maxTolerance = STATION_TOLERANCES[STATION_TOLERANCES.length - 1];
   const client = await pool.connect();
@@ -151,6 +170,8 @@ async function findRoutesNearStations(stationIds: number[]): Promise<StationRout
       track_id: number;
       distance_m: string | number;
       frac: string | number;
+      lon: number;
+      lat: number;
     }>(
       `
       WITH s AS (
@@ -162,7 +183,9 @@ async function findRoutesNearStations(stationIds: number[]): Promise<StationRout
         s.id AS station_id,
         r.track_id,
         ST_Distance(r.geometry::geography, s.coordinates::geography) AS distance_m,
-        ST_LineLocatePoint(r.geometry, s.coordinates) AS frac
+        ST_LineLocatePoint(r.geometry, s.coordinates) AS frac,
+        ST_X(ST_ClosestPoint(r.geometry, s.coordinates)) AS lon,
+        ST_Y(ST_ClosestPoint(r.geometry, s.coordinates)) AS lat
       FROM s
       JOIN railway_routes r
         ON r.usage_type = 0
@@ -184,10 +207,9 @@ async function findRoutesNearStations(stationIds: number[]): Promise<StationRout
       if (distance > maxTolerance) continue;
       if (!byStation.has(stationId)) byStation.set(stationId, []);
       byStation.get(stationId)!.push({ track_id: row.track_id, distance });
-      fractions.set(
-        pairKey(row.track_id, stationId),
-        typeof row.frac === "string" ? parseFloat(row.frac) : row.frac,
-      );
+      const key = pairKey(row.track_id, stationId);
+      fractions.set(key, typeof row.frac === "string" ? parseFloat(row.frac) : row.frac);
+      points.set(key, [Number(row.lon), Number(row.lat)]);
     }
 
     for (const stationId of stationIds) {
@@ -204,7 +226,7 @@ async function findRoutesNearStations(stationIds: number[]): Promise<StationRout
       routes.set(stationId, matched);
     }
 
-    return { routes, fractions };
+    return { routes, fractions, points };
   } finally {
     client.release();
   }
@@ -602,6 +624,8 @@ interface SearchOptions {
   avoidBacktracking?: boolean;
   /** Give up on paths whose weighted cost exceeds this. */
   maxCost?: number;
+  /** Extra cost of starting on each route, by track id (see `changeCosts`). */
+  startCosts?: Map<number, number>;
 }
 
 interface SearchResult {
@@ -676,7 +700,7 @@ function findShortestPath(
     return null;
   }
 
-  const { avoidBacktracking = false, maxCost = Infinity } = options;
+  const { avoidBacktracking = false, maxCost = Infinity, startCosts } = options;
   const endSet = new Set(endRoutes);
   const queue = new SearchQueue();
   const bestCost = new Map<string, number>();
@@ -700,6 +724,7 @@ function findShortestPath(
     const info = routeInfo.get(route);
     if (!info) continue;
     const fromFrac = fractions.from.get(route);
+    const startCost = startCosts?.get(route) ?? 0;
 
     // Both stations on one route: the journey is the stretch between them, and
     // there is nothing to search — an end route is never travelled through
@@ -710,14 +735,14 @@ function findShortestPath(
       considerFinish(
         [route],
         [null],
-        (info.length_km ?? 0) * covered * getRouteCostMultiplier(info),
+        startCost + (info.length_km ?? 0) * covered * getRouteCostMultiplier(info),
       );
       continue;
     }
 
     for (const exitSide of ENDPOINT_SIDES) {
       const key = `${route}_${exitSide}`;
-      const cost = terminalCost(info, fromFrac, exitSide);
+      const cost = startCost + terminalCost(info, fromFrac, exitSide);
       const prevBest = bestCost.get(key);
       if (prevBest !== undefined && cost >= prevBest) continue;
       bestCost.set(key, cost);
@@ -872,111 +897,116 @@ function pairKey(trackId: number, stationId: number): string {
 }
 
 /**
- * Which endpoint of `trackId` faces the route it connects to — the routes'
- * closest endpoint pairing.
- *
- * Only a fallback for the rare hop the search reports no side for (see
- * `concatenateSegments`): inside a junction complex several of the four pairings
- * can sit inside ENDPOINT_TOLERANCE_METERS at once, and the closest need not be
- * the one travelled.
+ * One unbroken stay on a route, with every point the journey touches on it — an
+ * endpoint (0 or 1) or a stop (its fraction along the route; undefined if it
+ * could not be located there). The covered stretch is the span of those points:
+ * an intermediate route touches both endpoints and is whole, a route joined at a
+ * stop runs from that stop to the endpoint it is left through, and an
+ * out-and-back that turns at a via covers the endpoint (or stop) it came from up
+ * to the via.
  */
-function connectingSide(
-  routeInfo: Map<number, RouteBearingInfo>,
-  trackId: number,
-  neighborId: number,
-): EndpointSide | null {
-  const info = routeInfo.get(trackId);
-  const neighbor = routeInfo.get(neighborId);
-  if (!info || !neighbor) return null;
-  return findConnectionEndpoint(info, neighbor)?.sideA ?? null;
+interface RouteVisit {
+  trackId: number;
+  fracs: (number | undefined)[];
 }
 
 /**
- * Cut the terminal routes of a path down to the stretch the journey covers.
+ * Turn the per-segment searches into route visits, merging the visit a segment
+ * ends with into the one the next segment starts with when both are on the same
+ * route — the journey passed through the via station without leaving it.
  *
- * Intermediate routes are always covered end to end — the search enters a route
- * at one endpoint and leaves at the other — but the first and last route are
- * joined mid-way whenever the from/to station sits between their endpoints
- * (e.g. Nový Bor, halfway along Jedlová ⟷ Česká Lípa).
+ * Within a segment, the first route is joined at the segment's from-station and
+ * the last left at its to-station; every other point is an endpoint, as the
+ * search reports it (`SearchResult.sides`). The last route's reported side is
+ * the one beyond the destination, so it is entered through the opposite one. A
+ * segment on a single route reports no side and touches only its two stations.
  *
- * The covered side is decided by where the path continues: the first route runs
- * from the station to the endpoint it exits through, the last from the endpoint
- * it is entered at to the station. Both sides come from `sides`, which the search
- * reports for the hops it actually took, rather than being inferred from the
- * routes' closest endpoint pairing.
+ * Every stop is therefore a point on the route the journey is on when it gets
+ * there — a via included, whichever route it arrived on and whichever it leaves
+ * on — so a route joined or left mid-way at a via is trimmed exactly as the
+ * first and last route of the plan are.
  *
- * `fractions` is `findRoutesNearStations`' own: the terminal routes were picked
- * from the routes it matched to the from and to stations, so where each station
- * sits along them is already known.
+ * `fractions` is `findRoutesNearStations`' own: every route a stop is a point on
+ * was picked from the routes it matched to that stop, so where the stop sits
+ * along it is already known.
+ */
+function planVisits(
+  segments: SearchResult[],
+  stationSequence: number[],
+  fractions: Map<string, number>,
+): RouteVisit[] {
+  const visits: RouteVisit[] = [];
+  const endpointFrac = (side: EndpointSide) => (side === "start" ? 0 : 1);
+
+  segments.forEach((segment, i) => {
+    const fromStation = stationSequence[i];
+    const toStation = stationSequence[i + 1];
+    const last = segment.path.length - 1;
+
+    segment.path.forEach((trackId, j) => {
+      // Null only on a single-route segment, whose one route is both first and last
+      const side = segment.sides[j];
+      const fracs = [
+        j === 0 || !side
+          ? fractions.get(pairKey(trackId, fromStation))
+          : endpointFrac(oppositeSide(side)),
+        j === last || !side ? fractions.get(pairKey(trackId, toStation)) : endpointFrac(side),
+      ];
+
+      const previous = visits[visits.length - 1];
+      if (j === 0 && previous?.trackId === trackId) {
+        previous.fracs.push(...fracs);
+      } else {
+        visits.push({ trackId, fracs });
+      }
+    });
+  });
+
+  return visits;
+}
+
+/**
+ * Cut every route visit down to the stretch the journey covers.
+ *
+ * Intermediate routes come out whole — the search enters a route at one endpoint
+ * and leaves at the other — but a route joined or left at a stop is covered only
+ * from that stop (e.g. Nový Bor, halfway along Jedlová ⟷ Česká Lípa). Which
+ * endpoints are touched comes from `sides`, which the search reports for the hops
+ * it actually took, rather than being inferred from the routes' closest endpoint
+ * pairing (see `planVisits`).
  *
  * A plan on a single route covers the span of every stop along it, vias
  * included, so an out-and-back (A via B to A) covers A–B rather than nothing.
  *
- * A terminal route the journey barely enters — its station within
- * MIN_UNTRAVELLED_KM of the endpoint the journey leaves through — comes back in
- * `untravelled` rather than as a trim: the station projecting a few metres inside
- * the route is the same noise that tolerance absorbs elsewhere, and dropping a
- * zero-width trim as "leaves nothing out" would count the route at full length.
- * A single-route plan is only untravelled when every stop sits on one point.
+ * A route the journey barely touches — its stop within MIN_UNTRAVELLED_KM of the
+ * endpoint the journey enters or leaves through — comes back in `untravelled`
+ * rather than as a trim: the station projecting a few metres inside the route is
+ * the same noise that tolerance absorbs elsewhere, and dropping a zero-width trim
+ * as "leaves nothing out" would count the route at full length. A single-route
+ * plan is only untravelled when every stop sits on one point.
  */
 async function computeTravelledTrims(
-  path: number[],
-  sides: (EndpointSide | null)[],
+  visits: RouteVisit[],
   routeInfo: Map<number, RouteBearingInfo>,
-  fractions: Map<string, number>,
-  stationSequence: number[],
 ): Promise<{
   trimmed: Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>;
   untravelled: Set<number>;
 }> {
   const trimmed = new Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>();
   const untravelled = new Set<number>();
-  if (path.length === 0) return { trimmed, untravelled };
 
-  const firstId = path[0];
-  const lastId = path[path.length - 1];
-  // A route reached twice (possible across via segments) has no single covered
+  // A route visited twice (possible across via segments) has no single covered
   // stretch, so leave it whole rather than guess.
-  const occursOnce = (id: number) => path.filter((x) => x === id).length === 1;
+  const visitCounts = new Map<number, number>();
+  for (const { trackId } of visits) {
+    visitCounts.set(trackId, (visitCounts.get(trackId) ?? 0) + 1);
+  }
 
   const specs: TrimSpec[] = [];
-
-  const fromStationId = stationSequence[0];
-  const toStationId = stationSequence[stationSequence.length - 1];
-
-  if (path.length === 1) {
-    // Every stop on one route: the covered stretch spans all of them
-    const stopFracs = stationSequence.map((id) => fractions.get(pairKey(firstId, id)));
-    if (stopFracs.every((frac): frac is number => frac !== undefined)) {
-      specs.push({ trackId: firstId, lo: Math.min(...stopFracs), hi: Math.max(...stopFracs) });
-    }
-  } else {
-    const fromFrac = occursOnce(firstId)
-      ? fractions.get(pairKey(firstId, fromStationId))
-      : undefined;
-    const exitSide = sides[0] ?? connectingSide(routeInfo, firstId, path[1]);
-    if (fromFrac !== undefined && exitSide) {
-      specs.push(
-        exitSide === "end"
-          ? { trackId: firstId, lo: fromFrac, hi: 1 }
-          : { trackId: firstId, lo: 0, hi: fromFrac },
-      );
-    }
-
-    const toFrac = occursOnce(lastId) ? fractions.get(pairKey(lastId, toStationId)) : undefined;
-    // The search reports the endpoint the last route is left through, which is
-    // the one beyond the destination — the journey enters at its opposite
-    const lastExitSide = sides[path.length - 1];
-    const entrySide = lastExitSide
-      ? oppositeSide(lastExitSide)
-      : connectingSide(routeInfo, lastId, path[path.length - 2]);
-    if (toFrac !== undefined && entrySide) {
-      specs.push(
-        entrySide === "start"
-          ? { trackId: lastId, lo: 0, hi: toFrac }
-          : { trackId: lastId, lo: toFrac, hi: 1 },
-      );
-    }
+  for (const { trackId, fracs } of visits) {
+    if (visitCounts.get(trackId) !== 1) continue;
+    if (!fracs.every((frac): frac is number => frac !== undefined)) continue;
+    specs.push({ trackId, lo: Math.min(...fracs), hi: Math.max(...fracs) });
   }
 
   // Set aside the ones that cover nothing, and drop those that leave nothing out
@@ -984,7 +1014,7 @@ async function computeTravelledTrims(
     const fullKm = routeInfo.get(spec.trackId)?.length_km ?? 0;
     const width = spec.hi - spec.lo;
     // A route with no length yet can't be measured, so only a zero width drops it
-    const barelyEntered = path.length > 1 && fullKm > 0 && fullKm * width < MIN_UNTRAVELLED_KM;
+    const barelyEntered = visits.length > 1 && fullKm > 0 && fullKm * width < MIN_UNTRAVELLED_KM;
     if (width <= 0 || barelyEntered) {
       untravelled.add(spec.trackId);
       return false;
@@ -1033,36 +1063,34 @@ async function computeTravelledTrims(
 }
 
 /**
- * Join the per-segment searches into one path, dropping the duplicate route where
- * a segment carries on from the one the previous segment ended at.
+ * What starting the segment after a via on each of the via's routes costs, given
+ * the route the journey arrived on: nothing to carry on along it, and for any
+ * other the gap between the two where they pass the station — charged at
+ * GAP_PENALTY_PER_KM, exactly as a gap between two routes inside a segment is —
+ * plus VIA_CHANGE_PENALTY.
  *
- * The travelled sides come along. At such a joint the route's exit side is the
- * *next* segment's — the previous segment recorded the side it would have left
- * through had the journey not stopped at the via station — so the entry already
- * in place is overwritten. A segment covering a single route reports no side at
- * all (nothing was entered or left through an endpoint); that null survives here
- * and `computeTravelledTrims` falls back to inferring it.
+ * Without the gap, a via would be a free jump between any two routes matched to
+ * it: the progressive tolerance in `findRoutesNearStations` can take in a route
+ * hundreds of metres off, or kilometres where nothing is closer, and a change
+ * there would join two lines at a place they never meet. A route with no known
+ * point near the via (none should be) is charged as if it were a tolerance away.
  */
-function concatenateSegments(segments: SearchResult[]): {
-  path: number[];
-  sides: (EndpointSide | null)[];
-} {
-  const path: number[] = [];
-  const sides: (EndpointSide | null)[] = [];
-
-  for (const segment of segments) {
-    let startIdx = 0;
-    if (path.length > 0 && segment.path[0] === path[path.length - 1]) {
-      // A segment that begins and ends on this route reports no side and leaves
-      // the arrival side already recorded in place — it is how the journey got here
-      sides[sides.length - 1] = segment.sides[0] ?? sides[sides.length - 1];
-      startIdx = 1;
-    }
-    path.push(...segment.path.slice(startIdx));
-    sides.push(...segment.sides.slice(startIdx));
-  }
-
-  return { path, sides };
+function changeCosts(
+  arrivedOn: number,
+  viaStationId: number,
+  viaRoutes: number[],
+  points: Map<string, [number, number]>,
+): Map<number, number> {
+  const arrivalPoint = points.get(pairKey(arrivedOn, viaStationId));
+  return new Map(
+    viaRoutes.map((trackId) => {
+      if (trackId === arrivedOn) return [trackId, 0];
+      const point = points.get(pairKey(trackId, viaStationId));
+      const gapMeters =
+        arrivalPoint && point ? haversineDistance(arrivalPoint, point) : ENDPOINT_TOLERANCE_METERS;
+      return [trackId, VIA_CHANGE_PENALTY + (gapMeters / 1000) * GAP_PENALTY_PER_KM];
+    }),
+  );
 }
 
 /**
@@ -1129,18 +1157,28 @@ export async function findRoutePathBetweenStations(
       }
     }
 
-    // Find path sequentially between each pair of stations
+    // Find path sequentially between each pair of stations. A segment after a
+    // via is seeded from every route serving the via, not only the one the
+    // previous segment arrived on: where two lines cross mid-route, pinning the
+    // second segment to the arriving line forced it out through an endpoint —
+    // a detour, or no path at all — although the other line serves the via
+    // directly. Carrying on along the arriving line is still one of the seeds,
+    // and `planVisits` merges the two visits back into one when it is taken;
+    // changing to another costs what `changeCosts` says.
     const allSegments: SearchResult[] = [];
-    let previousEndRoute: number | null = null;
 
     for (let i = 0; i < stationSequence.length - 1; i++) {
-      let segmentFromRoutes = routeSequence[i];
+      const segmentFromRoutes = routeSequence[i];
       const segmentToRoutes = routeSequence[i + 1];
-
-      // Continue from the previous segment's end route if possible
-      if (previousEndRoute !== null && segmentFromRoutes.includes(previousEndRoute)) {
-        segmentFromRoutes = [previousEndRoute];
-      }
+      const previous = allSegments[allSegments.length - 1];
+      const startCosts = previous
+        ? changeCosts(
+            previous.path[previous.path.length - 1],
+            stationSequence[i],
+            segmentFromRoutes,
+            stationMatches.points,
+          )
+        : undefined;
 
       // Each segment is costed from its own pair of stations, so a via station
       // partway along a route splits that route's cost between the two segments
@@ -1155,6 +1193,7 @@ export async function findRoutePathBetweenStations(
         segmentToRoutes,
         routeInfo,
         segmentFractions,
+        { startCosts },
       );
 
       if (!best) {
@@ -1179,6 +1218,7 @@ export async function findRoutePathBetweenStations(
             avoidBacktracking: true,
             // Twice the cost or +20, whichever is smaller.
             maxCost: Math.min(best.cost * 2, best.cost + 20),
+            startCosts,
           },
         );
 
@@ -1188,18 +1228,17 @@ export async function findRoutePathBetweenStations(
       }
 
       allSegments.push(segment);
-      previousEndRoute = segment.path[segment.path.length - 1];
     }
 
-    const { path, sides } = concatenateSegments(allSegments);
+    const visits = planVisits(allSegments, stationSequence, stationMatches.fractions);
 
-    // Get route details, then cut the terminal routes down to the stretch travelled
+    // Get route details, then cut each route down to the stretch travelled
     const [pathRoutes, { trimmed: trims, untravelled }] = await Promise.all([
-      getRouteDetails(path),
-      computeTravelledTrims(path, sides, routeInfo, stationMatches.fractions, stationSequence),
+      getRouteDetails(visits.map((visit) => visit.trackId)),
+      computeTravelledTrims(visits, routeInfo),
     ]);
 
-    // A terminal route the journey barely enters is not part of it
+    // A route the journey barely enters is not part of it
     const routes = pathRoutes.filter((route) => !untravelled.has(route.track_id));
     if (routes.length === 0) {
       return {

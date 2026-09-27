@@ -58,6 +58,9 @@ async function main() {
     return;
   }
 
+  // Gaps are measured between the stretches travelled, not the whole routes: two
+  // lines crossing at a via meet there, mid-route, rather than at their endpoints.
+  // Only a route travelled whole needs its endpoints looked up.
   const geom = await pool.query<{
     track_id: number;
     sx: number;
@@ -69,14 +72,18 @@ async function main() {
        ST_X(ST_PointN(geometry, 1)) sx, ST_Y(ST_PointN(geometry, 1)) sy,
        ST_X(ST_PointN(geometry, ST_NPoints(geometry))) ex, ST_Y(ST_PointN(geometry, ST_NPoints(geometry))) ey
      FROM railway_routes WHERE track_id = ANY($1)`,
-    [res.routes.map((r) => r.track_id)],
+    [res.routes.filter((r) => !r.partial).map((r) => r.track_id)],
   );
-  const ends = new Map(
+  const wholeEnds = new Map(
     geom.rows.map((r) => [
       r.track_id,
       { s: [r.sx, r.sy] as [number, number], e: [r.ex, r.ey] as [number, number] },
     ]),
   );
+  const ends = res.routes.map((r) => {
+    const coords = r.partial?.coordinates;
+    return coords ? { s: coords[0], e: coords[coords.length - 1] } : wholeEnds.get(r.track_id);
+  });
 
   let worstGap = 0;
   for (let i = 0; i < res.routes.length; i++) {
@@ -88,8 +95,8 @@ async function main() {
       `  ${String(route.track_id).padStart(5)}  ${route.travelled_length_km.toFixed(2).padStart(7)} km  ${route.from_station} <-> ${route.to_station}${partial}`,
     );
 
-    const a = ends.get(route.track_id);
-    const b = i + 1 < res.routes.length ? ends.get(res.routes[i + 1].track_id) : undefined;
+    const a = ends[i];
+    const b = ends[i + 1];
     if (!a || !b) continue;
 
     const gap = Math.min(
