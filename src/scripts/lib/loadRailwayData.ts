@@ -169,7 +169,9 @@ export async function loadStationsAndParts(
 
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    // A lost connection rolls back on its own; don't let the failed ROLLBACK
+    // replace the error that explains why
+    await client.query("ROLLBACK").catch(() => {});
     console.error("Load failed — rolled back, the previous map data is still in place.");
     throw error;
   }
@@ -241,10 +243,10 @@ async function loadOneFile(client: ClientBase, geojsonPath: string): Promise<Loa
 
   console.log(`\n${describeFeatureStream(stats)}`);
 
-  // A file that ends mid-feature has already lost data; the transaction is
+  // A file that ends before its features array closes has lost data; the transaction is
   // rolled back rather than committing a partial map.
   if (stats.truncated) {
-    throw new Error(`${geojsonPath} ends mid-feature — the file is truncated`);
+    throw new Error(`${geojsonPath} ends before its features array closes — the file is truncated`);
   }
   if (stats.malformed > 0) {
     throw new Error(`${geojsonPath} contains ${stats.malformed} feature(s) that failed to parse`);

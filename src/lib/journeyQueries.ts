@@ -186,6 +186,7 @@ export async function createJourneyForUser(
   coveredRanges?: (LoggedRange | null)[],
 ): Promise<{ journey: Journey | null; error?: string }> {
   const client = await pool.connect();
+  let brokenConnection: Error | undefined;
 
   try {
     const metaError = journeyMetaError(name, date);
@@ -240,13 +241,17 @@ export async function createJourneyForUser(
 
     return { journey };
   } catch (error) {
-    await client.query("ROLLBACK");
+    // A failed ROLLBACK means the connection itself is gone: keep the original
+    // error, and have the pool discard the client (see migrationActions)
+    await client.query("ROLLBACK").catch((rollbackError: Error) => {
+      brokenConnection = rollbackError;
+    });
     const missing = missingRowMessage(error);
     if (missing) return { journey: null, error: missing };
     console.error("Error creating journey:", error);
     return { journey: null, error: "Failed to create journey" };
   } finally {
-    client.release();
+    client.release(brokenConnection);
   }
 }
 
@@ -321,6 +326,7 @@ export async function addRoutesToJourneyForUser(
   coveredRanges?: (LoggedRange | null)[],
 ): Promise<{ success: boolean; error?: string }> {
   const client = await pool.connect();
+  let brokenConnection: Error | undefined;
 
   try {
     if (trackIds.length !== partialFlags.length) {
@@ -356,13 +362,17 @@ export async function addRoutesToJourneyForUser(
 
     return { success: true };
   } catch (error) {
-    await client.query("ROLLBACK");
+    // A failed ROLLBACK means the connection itself is gone: keep the original
+    // error, and have the pool discard the client (see migrationActions)
+    await client.query("ROLLBACK").catch((rollbackError: Error) => {
+      brokenConnection = rollbackError;
+    });
     const missing = missingRowMessage(error);
     if (missing) return { success: false, error: missing };
     console.error("Error adding routes to journey:", error);
     return { success: false, error: "Failed to add routes to journey" };
   } finally {
-    client.release();
+    client.release(brokenConnection);
   }
 }
 
@@ -475,6 +485,7 @@ export async function saveJourneyEditsForUser(
   }
 
   const client = await pool.connect();
+  let brokenConnection: Error | undefined;
   try {
     await client.query("BEGIN");
 
@@ -540,12 +551,16 @@ export async function saveJourneyEditsForUser(
     await client.query("COMMIT");
     return { success: true };
   } catch (error) {
-    await client.query("ROLLBACK");
+    // A failed ROLLBACK means the connection itself is gone: keep the original
+    // error, and have the pool discard the client (see migrationActions)
+    await client.query("ROLLBACK").catch((rollbackError: Error) => {
+      brokenConnection = rollbackError;
+    });
     const missing = missingRowMessage(error);
     if (missing) return { success: false, error: missing };
     console.error("Error saving journey:", error);
     return { success: false, error: "Failed to save journey" };
   } finally {
-    client.release();
+    client.release(brokenConnection);
   }
 }

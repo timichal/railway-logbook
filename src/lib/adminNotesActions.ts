@@ -4,7 +4,7 @@ import type { ActionResult } from "./actionResult";
 import { asAdmin } from "./authHelpers";
 import pool from "./db";
 import { ValidationError } from "./errors";
-import type { NoteType } from "./shared/constants";
+import { type NoteType, noteTypeOptions } from "./shared/constants";
 import { type RegionId, regionEnvelopeSql } from "./shared/regions";
 import type { AdminNote } from "./shared/types";
 
@@ -28,6 +28,27 @@ function rowToNote(row: AdminNoteRow): AdminNote {
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
+}
+
+/**
+ * The popup trims and validates before it calls, but every export here is an
+ * endpoint, and a constraint violation would reach the admin as the generic
+ * production error — so the checks are repeated where they are answerable.
+ */
+function validNoteFields(
+  text: string,
+  noteType: NoteType,
+  source: string | null,
+): { text: string; noteType: NoteType; source: string | null } {
+  const trimmedText = typeof text === "string" ? text.trim() : "";
+  if (!trimmedText) {
+    throw new ValidationError("Note text is required");
+  }
+  if (!noteTypeOptions.some((option) => option.id === noteType)) {
+    throw new ValidationError(`Unknown note type: ${String(noteType)}`);
+  }
+  const trimmedSource = typeof source === "string" ? source.trim() : "";
+  return { text: trimmedText, noteType, source: trimmedSource || null };
 }
 
 /**
@@ -96,6 +117,7 @@ export async function createAdminNote(
 ): Promise<ActionResult<AdminNote>> {
   return asAdmin(async () => {
     const [lng, lat] = coordinate;
+    const fields = validNoteFields(text, noteType, source);
 
     const result = await pool.query<AdminNoteRow>(
       `
@@ -110,7 +132,7 @@ export async function createAdminNote(
       created_at,
       updated_at
   `,
-      [lng, lat, text, noteType, source],
+      [lng, lat, fields.text, fields.noteType, fields.source],
     );
 
     return rowToNote(result.rows[0]);
@@ -128,6 +150,7 @@ export async function updateAdminNote(
   source: string | null = null,
 ): Promise<ActionResult<AdminNote>> {
   return asAdmin(async () => {
+    const fields = validNoteFields(text, noteType, source);
     const result = await pool.query<AdminNoteRow>(
       `
     UPDATE admin_notes
@@ -142,7 +165,7 @@ export async function updateAdminNote(
       created_at,
       updated_at
   `,
-      [text, noteType, source, id],
+      [fields.text, fields.noteType, fields.source, id],
     );
 
     if (result.rows.length === 0) {

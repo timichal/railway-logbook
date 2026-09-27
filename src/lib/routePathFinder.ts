@@ -429,38 +429,6 @@ async function getRouteGraph(): Promise<GraphWithBearingInfo> {
 // BACKTRACKING DETECTION
 // ============================================================================
 
-interface EndpointMatch {
-  sideA: EndpointSide;
-  sideB: EndpointSide;
-  gapMeters: number;
-}
-
-/**
- * Find which endpoints connect two routes: the closest endpoint pairing within
- * tolerance, or null if they don't connect. Taking the closest rather than the
- * first pairing under tolerance matters inside junction complexes, where several
- * of the four pairings can be under tolerance at once.
- */
-function findConnectionEndpoint(
-  infoA: RouteBearingInfo,
-  infoB: RouteBearingInfo,
-): EndpointMatch | null {
-  let best: EndpointMatch | null = null;
-
-  for (const sideA of ENDPOINT_SIDES) {
-    for (const sideB of ENDPOINT_SIDES) {
-      const gapMeters = haversineDistance(
-        getEndpointCoord(infoA, sideA),
-        getEndpointCoord(infoB, sideB),
-      );
-      if (gapMeters > ENDPOINT_TOLERANCE_METERS) continue;
-      if (!best || gapMeters < best.gapMeters) best = { sideA, sideB, gapMeters };
-    }
-  }
-
-  return best;
-}
-
 /**
  * Work out how a route is entered when arriving at a given coordinate: the
  * nearer of its two endpoints, with the exit side being the other one.
@@ -525,34 +493,25 @@ function isBacktrackingAt(
 }
 
 /**
- * Check if transitioning from routeA to routeB constitutes backtracking, without
- * knowing which way either route is being travelled — the junction is taken to be
- * their closest endpoint pairing.
- */
-function isBacktrackingTransition(infoA: RouteBearingInfo, infoB: RouteBearingInfo): boolean {
-  const connection = findConnectionEndpoint(infoA, infoB);
-  if (!connection) return false;
-
-  return isBacktrackingAt(infoA, connection.sideA, infoB, connection.sideB);
-}
-
-/**
- * Check if a route path has any backtracking transitions between consecutive routes.
+ * Check if a found path has any backtracking transitions between consecutive
+ * routes. Each junction is checked at the endpoints the search reports it
+ * travelled (`sides`), not at the routes' closest endpoint pairing — inside a
+ * junction complex the two can differ, and a guessed junction that happens not
+ * to double back would skip the `avoidBacktracking` re-search. A side is null
+ * only on a single-route path, which has no junction to check.
  */
 function hasRoutePathBacktracking(
-  path: number[],
+  { path, sides }: Pick<SearchResult, "path" | "sides">,
   routeInfo: Map<number, RouteBearingInfo>,
 ): boolean {
-  if (path.length < 2) return false;
-
   for (let i = 0; i < path.length - 1; i++) {
     const infoA = routeInfo.get(path[i]);
     const infoB = routeInfo.get(path[i + 1]);
-    if (!infoA || !infoB) continue;
+    const exitSideA = sides[i];
+    const exitSideB = sides[i + 1];
+    if (!infoA || !infoB || !exitSideA || !exitSideB) continue;
 
-    if (isBacktrackingTransition(infoA, infoB)) {
-      return true;
-    }
+    if (isBacktrackingAt(infoA, exitSideA, infoB, oppositeSide(exitSideB))) return true;
   }
   return false;
 }
@@ -1207,7 +1166,7 @@ export async function findRoutePathBetweenStations(
       let segment = best;
 
       // Prefer an alternative of comparable cost that doesn't double back
-      if (hasRoutePathBacktracking(segment.path, routeInfo)) {
+      if (hasRoutePathBacktracking(segment, routeInfo)) {
         const alternative = findShortestPath(
           graph,
           segmentFromRoutes,

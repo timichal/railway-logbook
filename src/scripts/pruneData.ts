@@ -395,7 +395,7 @@ async function writeFeatures(writeStream: ReturnType<typeof createWriteStream>) 
         reject(
           new Error(
             stats.truncated
-              ? "Input ended mid-feature - the osmium export is incomplete"
+              ? "Input ended before the features array closed - the osmium export is incomplete"
               : `${stats.malformed} feature(s) failed to parse`,
           ),
         );

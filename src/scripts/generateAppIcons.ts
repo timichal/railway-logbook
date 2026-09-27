@@ -78,7 +78,11 @@ function maskableArtWidth(canvas: number, aspect: number): number {
 }
 
 async function main(): Promise<void> {
-  const { width, height } = await sharp(MASTER).trim({ threshold: 1 }).metadata();
+  // The trimmed size comes from the output info: `metadata()` after `trim()`
+  // describes the input file's header, i.e. the untrimmed master.
+  const {
+    info: { width, height },
+  } = await sharp(MASTER).trim({ threshold: 1 }).toBuffer({ resolveWithObject: true });
   if (!width || !height) throw new Error(`Could not read ${MASTER}`);
   const aspect = height / width;
 

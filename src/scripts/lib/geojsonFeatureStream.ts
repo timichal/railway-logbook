@@ -19,7 +19,10 @@ export interface FeatureStreamStats {
   total: number;
   /** Features whose text did not parse as JSON. Expected to stay 0. */
   malformed: number;
-  /** The stream ended inside a feature — the input is truncated. */
+  /**
+   * The stream ended before the `]` closing the features array — inside a
+   * feature, or cleanly between two, which is just as truncated.
+   */
   truncated: boolean;
 }
 
@@ -83,8 +86,11 @@ export async function* streamFeatures<T>(
 ): AsyncGenerator<T> {
   let buffer = "";
   let inFeatures = false;
+  let featuresClosed = false;
 
   for await (const chunk of source) {
+    // Only the collection's closing brace and whitespace follow the array
+    if (featuresClosed) continue;
     buffer += chunk;
 
     // Skip the collection header, which may straddle a chunk boundary.
@@ -106,10 +112,24 @@ export async function* streamFeatures<T>(
     // Trimming once per chunk rather than once per feature keeps this linear.
     let consumed = 0;
     while (true) {
-      const open = buffer.indexOf("{", consumed);
-      if (open === -1) {
+      // Between features there is only a comma and whitespace; the array's `]`
+      // is what says the input is complete, since a stream cut right after a
+      // feature's `},` otherwise reads exactly like a finished one.
+      let open = consumed;
+      while (open < buffer.length && /[\s,]/.test(buffer[open])) open++;
+      if (open === buffer.length) {
+        consumed = open;
+        break;
+      }
+      if (buffer[open] === "]") {
+        featuresClosed = true;
         consumed = buffer.length;
         break;
+      }
+      if (buffer[open] !== "{") {
+        throw new Error(
+          `Unexpected ${JSON.stringify(buffer.slice(open, open + 20))} between features — not a GeoJSON FeatureCollection?`,
+        );
       }
 
       const close = findObjectEnd(buffer, open);
@@ -141,8 +161,7 @@ export async function* streamFeatures<T>(
     );
   }
 
-  // Anything left that starts an object is a feature the stream cut short.
-  stats.truncated = buffer.trimStart().startsWith("{");
+  stats.truncated = !featuresClosed;
 }
 
 /** One line summarising a finished stream, for the end of a script's output. */

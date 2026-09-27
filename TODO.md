@@ -12,46 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Rare correctness issues
 
-- [ ] **A failed `ROLLBACK` hides the error that caused it.**
-      `saveRailwayRoute`, `duplicateRailwayRoute` and `deleteRailwayRoute` in
-      `src/lib/adminRouteActions.ts` `await client.query("ROLLBACK")` in their
-      catch. If the connection has died, that rejects and replaces the original
-      error, a `ValidationError` meant for the admin included. The client is
-      then released to the pool as healthy. **Fix:** catch the rollback's own
-      failure, rethrow the original, and `client.release(err)` so the pool
-      destroys the connection.
-
-- [ ] **`mergeLinearChain` can build a route backwards.**
-      `src/lib/coordinateUtils.ts:57-82` with
-      `src/scripts/lib/railwayPathFinder.ts:896-913`. The start sublist is chosen
-      by endpoint frequency, not path order. When the start coordinate is exactly
-      a shared node, the first part truncates to `[N, N]`, no endpoint of the
-      first two sublists is unique, and the merge starts from the far end. The
-      stored geometry is then reversed: countries swap, and a recalculation that
-      flips direction mirrors every user's `covered_*` fractions. This probably
-      needs a click point snapped to a vertex, such as an existing endpoint dot.
-      **Fix:** callers already pass sublists in path order, so start at index 0
-      and drop zero-length truncated parts.
-
-- [ ] **Planner backtracking detection uses guessed junctions.**
-      `src/lib/routePathFinder.ts:510-536`, `:1171`. `hasRoutePathBacktracking`
-      goes through `isBacktrackingTransition` (closest pairing) instead of the
-      `SearchResult.sides` the search reports. A false negative skips the
-      `avoidBacktracking` re-search. **Fix:** check each hop with the reported
-      sides, keeping the pairing only as the fallback for null sides.
-
-- [ ] **The GeoJSON stream reader misses truncation at a feature boundary.**
-      `src/scripts/lib/geojsonFeatureStream.ts:144-145`. `truncated` is only set
-      when the leftover buffer starts with `{`, so input cut right after `},`
-      reads as complete. `loadRailwayData`'s `]}` tail check covers the import,
-      but `pruneData` (stdin) does not have that check. **Fix:** require the
-      depth-0 `]` that closes `features`.
-
-- [ ] **The maskable icon's art is about 20% too small.**
-      `src/scripts/generateAppIcons.ts:74`. `sharp(...).trim().metadata()` reports
-      the input header, not the trimmed output, so `aspect` comes out as 1.
-      **Fix:** `toBuffer({ resolveWithObject: true })` and read `info`.
-
 - [ ] **The service worker's static cache grows forever.** `public/sw.js:68-77`.
       Every deploy's hashed chunks accumulate until `CACHE_VERSION` is bumped by
       hand. Eviction under storage pressure is per origin, so it can take the
@@ -69,14 +29,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       `routePathFinder.ts:641`, `:785` cost them `?? 0`, so the search can route
       over them until a recalculation backfills the length. This goes away with
       the NOT NULL item under "Database design".
-
-- [ ] **Admin note writes are validated only in the popup.**
-      `createAdminNote`/`updateAdminNote` (`src/lib/adminNotesActions.ts`) pass
-      text and type straight to Postgres, and every export of a `"use server"`
-      module is an endpoint. A blank text or an unknown `noteType` fails on a
-      constraint and reaches the admin as the generic production error.
-      **Fix:** throw `ValidationError` for a blank text or a type outside
-      `noteTypeOptions`.
 
 ## Database design
 
@@ -226,8 +178,10 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       - `routeCoverage.ts`: `isRouteFullyRidden` must agree with the SQL
         function.
       - `parsePgTextArray`.
-      - `mergeLinearChain`: see the reversal item above.
-      - `geojsonFeatureStream`: see the truncation item above.
+      - `mergeLinearChain`: a start click on a shared node must not reverse the
+        chain.
+      - `geojsonFeatureStream`: input cut right after a feature's `},` must
+        read as truncated.
       - `normalizeCountryCodes`.
       - The planner's search on a synthetic network, once it is split out.
 

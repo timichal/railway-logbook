@@ -60,9 +60,8 @@ pulling the next route off a shared index and writing its own `UPDATE`:
   each search and restored it in a `finally`; that is safe only while calls are
   strictly serial. With two in flight the first to finish un-silences the rest,
   and a call that starts while the patch is in place captures the no-op as its
-  "original" and silences logging permanently. `mergeLinearChain` takes the same
-  logger for the same reason — it was previously silenced by that global patch as
-  a side effect, and would otherwise bury the progress line.
+  "original" and silences logging permanently. (`mergeLinearChain` used to take
+  the same logger for the same reason; it no longer logs anything.)
 - **The route list query selects only what recalculation reads.** It used to
   fetch `starting_part_id`, `ending_part_id` and `ST_AsGeoJSON(geometry)`, none
   of which anything read — the geometry is replaced wholesale. That was ~16 MB of

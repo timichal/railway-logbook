@@ -13,109 +13,81 @@ export function coordinateToKey(coord: Coord): string {
   return `${coord[0].toFixed(7)},${coord[1].toFixed(7)}`;
 }
 
+/** Whether every point of a sublist is the same point, i.e. it has no length. */
+function isZeroLength(sublist: Coord[]): boolean {
+  const firstKey = coordinateToKey(sublist[0]);
+  return sublist.every((coord) => coordinateToKey(coord) === firstKey);
+}
+
 /**
- * Merges a list of coordinate sublists into a single linear chain.
- * This algorithm properly orders and connects coordinate arrays from multiple railway parts
- * by finding the starting point and building the chain incrementally.
+ * Merges coordinate sublists, given in path order, into a single linear chain.
  *
- * Algorithm:
- * 1. Find coordinate frequencies to identify potential endpoints (frequency = 1)
- * 2. If no clear endpoint, use the first sublist as starting point
- * 3. Build the chain by finding connecting sublists and adding them in order
+ * The first sublist sets the direction: it runs from the route's start toward
+ * the second (reversed only if it plainly faces the other way). Each following
+ * sublist is then oriented so it continues from the chain's tail.
  *
- * All coordinate comparisons go through {@link coordinateToKey}, so endpoint
- * detection and chain building agree on what counts as "the same point".
+ * The order is taken from the caller rather than worked out from which
+ * endpoints occur once: a start click exactly on a shared node truncates the
+ * first part to a single point, which leaves no endpoint unique at the start,
+ * and the chain used to be built from the far end — a route stored backwards.
+ * Zero-length sublists are skipped for the same reason; they add no track.
  *
- * @param sublists - Array of coordinate arrays to merge
- * @param log - Where to report an ambiguous chain. A bulk recalculation runs
- *   thousands of merges and passes a no-op, so the note does not bury the
- *   progress line; it used to be swallowed by the global `console.log` the
- *   recalculation patched out around each search.
- * @returns A single merged coordinate array in the correct order
+ * All coordinate comparisons go through {@link coordinateToKey}, so matching
+ * agrees on what counts as "the same point".
+ *
+ * @param sublists - Coordinate arrays in the order the path travels them
+ * @returns A single merged coordinate array, from the path's start to its end
  * @throws Error if the chain is broken
  */
-export function mergeLinearChain(
-  sublists: Coord[][],
-  log: (message: string) => void = console.log,
-): Coord[] {
-  if (sublists.length === 0) return [];
-  if (sublists.length === 1) return sublists[0];
+export function mergeLinearChain(sublists: Coord[][]): Coord[] {
+  const nonEmpty = sublists.filter((sublist) => sublist.length > 0);
+  if (nonEmpty.length === 0) return [];
+  if (nonEmpty.length === 1) return nonEmpty[0];
 
-  // Make a copy to avoid mutating the original
-  const remainingSublists = sublists.map((s) => [...s]);
+  const [first, ...rest] = nonEmpty;
+  const next = rest[0];
+  const touchesNext = (coord: Coord) => {
+    const key = coordinateToKey(coord);
+    return key === coordinateToKey(next[0]) || key === coordinateToKey(next[next.length - 1]);
+  };
 
-  // Step 1: Create a map of coordinate frequencies
-  const coordCount = new Map<string, number>();
-  remainingSublists.forEach((sublist) => {
-    const firstKey = coordinateToKey(sublist[0]);
-    const lastKey = coordinateToKey(sublist[sublist.length - 1]);
-    coordCount.set(firstKey, (coordCount.get(firstKey) || 0) + 1);
-    coordCount.set(lastKey, (coordCount.get(lastKey) || 0) + 1);
-  });
-
-  // Step 2: Find the starting sublist (prefer one with an endpoint that appears only once)
-  let startingSublistIndex = remainingSublists.findIndex((sublist) => {
-    const firstCoord = coordinateToKey(sublist[0]);
-    const lastCoord = coordinateToKey(sublist[sublist.length - 1]);
-    return coordCount.get(firstCoord) === 1 || coordCount.get(lastCoord) === 1;
-  });
-
-  // If no clear endpoint found (e.g., circular routes or complex junctions), use first sublist
-  if (startingSublistIndex === -1) {
-    log("[mergeLinearChain] No clear endpoint found, using first sublist as starting point");
-    startingSublistIndex = 0;
+  // A zero-length first part is just the start point; otherwise it should end
+  // where the second part begins
+  let mergedChain: Coord[];
+  if (isZeroLength(first)) {
+    mergedChain = [first[0]];
+  } else if (touchesNext(first[first.length - 1])) {
+    mergedChain = [...first];
+  } else if (touchesNext(first[0])) {
+    mergedChain = [...first].reverse();
+  } else {
+    throw new Error("Chain is broken; no connecting sublist found.");
   }
 
-  // Extract the starting sublist
-  const mergedChain = [...remainingSublists[startingSublistIndex]];
-  remainingSublists.splice(startingSublistIndex, 1);
+  for (const sublist of rest) {
+    const tailKey = coordinateToKey(mergedChain[mergedChain.length - 1]);
 
-  // Step 2.1: Orient the starting sublist correctly if we have a clear endpoint
-  const firstCoord = coordinateToKey(mergedChain[0]);
-  const lastCoord = coordinateToKey(mergedChain[mergedChain.length - 1]);
-
-  // If the last coordinate appears only once, it should be at the end
-  // If the first coordinate appears only once, it should be at the start (don't reverse)
-  if (coordCount.get(lastCoord) === 1 && coordCount.get(firstCoord) !== 1) {
-    // Last coord is endpoint, first coord is not -> need to reverse
-    mergedChain.reverse();
-  }
-
-  // Step 3: Build the chain incrementally
-  while (remainingSublists.length > 0) {
-    const lastCoordInChain = mergedChain[mergedChain.length - 1];
-    const lastCoordKey = coordinateToKey(lastCoordInChain);
-
-    // Find the next sublist that connects to the current chain. Only the
-    // sublists' own endpoints count as connections — that is how the pathfinder
-    // graph is built (parts are adjacent when they share a first/last
+    // Only the sublists' own endpoints count as connections — that is how the
+    // pathfinder graph is built (parts are adjacent when they share a first/last
     // coordinate). Matching a coordinate in the *middle* of a sublist would
-    // pass the check but then splice in a segment that doesn't start at the
-    // chain's tail, silently producing a geometry with a jump in it.
-    const nextIndex = remainingSublists.findIndex(
-      (sublist) =>
-        coordinateToKey(sublist[0]) === lastCoordKey ||
-        coordinateToKey(sublist[sublist.length - 1]) === lastCoordKey,
-    );
-
-    if (nextIndex === -1) {
+    // splice in a segment that doesn't start at the chain's tail, silently
+    // producing a geometry with a jump in it.
+    let oriented: Coord[];
+    if (coordinateToKey(sublist[0]) === tailKey) {
+      oriented = sublist;
+    } else if (coordinateToKey(sublist[sublist.length - 1]) === tailKey) {
+      oriented = [...sublist].reverse();
+    } else {
       throw new Error("Chain is broken; no connecting sublist found.");
     }
 
-    // Orient the next sublist so its connecting endpoint comes first
-    const nextSublist = [...remainingSublists[nextIndex]];
-    if (coordinateToKey(nextSublist[0]) !== lastCoordKey) {
-      nextSublist.reverse();
-    }
-
-    // Add the non-overlapping part of the sublist to the chain
-    mergedChain.push(...nextSublist.slice(1));
-
-    // Remove the processed sublist
-    remainingSublists.splice(nextIndex, 1);
+    if (isZeroLength(oriented)) continue;
+    mergedChain.push(...oriented.slice(1));
   }
 
-  return mergedChain;
+  // Every part was zero-length (both clicks on one shared node): still a
+  // LINESTRING, which needs two points, as the chain was before any were skipped
+  return mergedChain.length > 1 ? mergedChain : [mergedChain[0], mergedChain[0]];
 }
 
 /**

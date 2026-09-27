@@ -823,7 +823,7 @@ export class RailwayPathFinder {
       }
     }
 
-    return mergeLinearChain(coordinateSublists, (message) => this.log(message));
+    return mergeLinearChain(coordinateSublists);
   }
 
   /**

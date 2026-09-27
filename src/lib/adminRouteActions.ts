@@ -357,6 +357,7 @@ export async function saveRailwayRoute(
 ): Promise<ActionResult<number>> {
   return asAdmin(async () => {
     const client = await pool.connect();
+    let brokenConnection: Error | undefined;
 
     try {
       // The write, the line_class reclassification and the station-proximity
@@ -546,14 +547,18 @@ export async function saveRailwayRoute(
 
       return savedTrackId as number;
     } catch (error) {
-      await client.query("ROLLBACK");
+      // A failed ROLLBACK means the connection itself is gone: keep the original
+      // error, and have the pool discard the client (see migrationActions)
+      await client.query("ROLLBACK").catch((rollbackError: Error) => {
+        brokenConnection = rollbackError;
+      });
       // A ValidationError is an answer for the admin, not a fault for the log
       if (!(error instanceof ValidationError)) {
         console.error("Error saving railway route:", error);
       }
       throw error;
     } finally {
-      client.release();
+      client.release(brokenConnection);
     }
   });
 }
@@ -664,6 +669,7 @@ export async function setRouteUnderRepair(
 export async function duplicateRailwayRoute(trackId: number): Promise<ActionResult<number>> {
   return asAdmin(async () => {
     const client = await pool.connect();
+    let brokenConnection: Error | undefined;
 
     try {
       await client.query("BEGIN");
@@ -713,14 +719,18 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
       console.log("Duplicated railway route", trackId, "→", newTrackId);
       return newTrackId;
     } catch (error) {
-      await client.query("ROLLBACK");
+      // A failed ROLLBACK means the connection itself is gone: keep the original
+      // error, and have the pool discard the client (see migrationActions)
+      await client.query("ROLLBACK").catch((rollbackError: Error) => {
+        brokenConnection = rollbackError;
+      });
       // A ValidationError is an answer for the admin, not a fault for the log
       if (!(error instanceof ValidationError)) {
         console.error("Error duplicating railway route:", error);
       }
       throw error;
     } finally {
-      client.release();
+      client.release(brokenConnection);
     }
   });
 }
@@ -731,6 +741,7 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
 export async function deleteRailwayRoute(trackId: number): Promise<ActionResult<void>> {
   return asAdmin(async () => {
     const client = await pool.connect();
+    let brokenConnection: Error | undefined;
 
     try {
       // As in saveRailwayRoute: the delete and the proximity refresh are one
@@ -757,14 +768,18 @@ export async function deleteRailwayRoute(trackId: number): Promise<ActionResult<
 
       console.log("Successfully deleted railway route:", trackId);
     } catch (error) {
-      await client.query("ROLLBACK");
+      // A failed ROLLBACK means the connection itself is gone: keep the original
+      // error, and have the pool discard the client (see migrationActions)
+      await client.query("ROLLBACK").catch((rollbackError: Error) => {
+        brokenConnection = rollbackError;
+      });
       // A ValidationError is an answer for the admin, not a fault for the log
       if (!(error instanceof ValidationError)) {
         console.error("Error deleting railway route:", error);
       }
       throw error;
     } finally {
-      client.release();
+      client.release(brokenConnection);
     }
   });
 }
