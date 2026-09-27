@@ -17,6 +17,9 @@ interface SelectedStation {
 
 type MaybeStation = SelectedStation | null;
 
+/** A station input: from, to, or a via row by index. */
+type SearchField = "from" | "to" | number;
+
 interface JourneyPlannerProps {
   onHighlightRoutes?: HighlightRoutesFn;
   onAddRoutesToSelection?: (routes: PlannerRoute[]) => void;
@@ -40,13 +43,31 @@ export default function JourneyPlanner({
   const [isSearchingPath, setIsSearchingPath] = useState(false);
 
   // Station search for each input
-  const [activeSearch, setActiveSearch] = useState<"from" | "to" | number | null>(null); // number for via index
+  const [activeSearch, setActiveSearch] = useState<SearchField | null>(null);
   const [fromSearchQuery, setFromSearchQuery] = useState("");
   const [viaSearchQueries, setViaSearchQueries] = useState<string[]>([]);
   const [toSearchQuery, setToSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Station[]>([]);
+  // Results remember the field they were fetched for: the three inputs share
+  // one dropdown's worth of state, and tabbing From → To used to show From's
+  // stations under To. Only the latest request may write (`searchRequestRef`).
+  const [searchResultState, setSearchResultState] = useState<{
+    field: SearchField | null;
+    stations: Station[];
+  }>({ field: null, stations: [] });
+  const searchResults = searchResultState.field === activeSearch ? searchResultState.stations : [];
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchRequestRef = useRef(0);
+  // Same guard for the path search, so a result from before a region switch or
+  // an older click never paints its highlights over a newer one
+  const pathRequestRef = useRef(0);
+
+  // Any change to the stops invalidates a search still running for the old ones,
+  // whose result would otherwise be painted over a form it no longer matches
+  const cancelPathSearch = useCallback(() => {
+    pathRequestRef.current++;
+    setIsSearchingPath(false);
+  }, []);
 
   // Refs for stable callback access (assigned during render, read only in callbacks)
   const activeSearchRef = useRef(activeSearch);
@@ -60,27 +81,59 @@ export default function JourneyPlanner({
   viaStationsRef.current = viaStations;
   viaSearchQueriesRef.current = viaSearchQueries;
 
+  const clearSearchResults = useCallback(() => {
+    searchRequestRef.current++;
+    setSearchResultState({ field: null, stations: [] });
+  }, []);
+
   // Debounced station search, limited to the region on screen
   const performSearch = useCallback(
-    async (query: string) => {
+    async (field: SearchField, query: string) => {
       if (query.trim().length < 2) {
-        setSearchResults([]);
+        clearSearchResults();
         return;
       }
 
+      const requestId = ++searchRequestRef.current;
       try {
         const results = await searchStations(query, regionId);
-        setSearchResults(results);
+        if (requestId !== searchRequestRef.current) return;
+        setSearchResultState({ field, stations: results });
       } catch (error) {
+        if (requestId !== searchRequestRef.current) return;
         console.error("Error searching stations:", error);
-        setSearchResults([]);
+        setSearchResultState({ field: null, stations: [] });
       }
     },
-    [regionId],
+    [regionId, clearSearchResults],
   );
 
+  const handleSearchFocus = (field: SearchField, query: string) => {
+    setActiveSearch(field);
+    setSelectedIndex(-1);
+    if (query.length >= 2) performSearch(field, query);
+  };
+
+  // Delayed so a click on a suggestion lands first. Tabbing to the next field
+  // focuses it within those 200ms, so the timer only closes the dropdown if
+  // this field is still the active one, and a search still debouncing for the
+  // field being left is dropped rather than answered under the next one.
+  const handleSearchBlur = (field: SearchField) => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+    setTimeout(() => {
+      if (activeSearchRef.current !== field) return;
+      setActiveSearch(null);
+      clearSearchResults();
+      setSelectedIndex(-1);
+    }, 200);
+  };
+
   // Handle search input change
-  const handleSearchChange = (field: "from" | "to" | number, value: string) => {
+  const handleSearchChange = (field: SearchField, value: string) => {
+    cancelPathSearch();
     if (field === "from") {
       setFromSearchQuery(value);
       // Clear selection when user edits
@@ -112,16 +165,17 @@ export default function JourneyPlanner({
 
     if (value.trim().length >= 2) {
       searchTimeoutRef.current = setTimeout(() => {
-        performSearch(value);
+        performSearch(field, value);
       }, 300);
     } else {
-      setSearchResults([]);
+      clearSearchResults();
       setSelectedIndex(-1);
     }
   };
 
   // Handle station selection
   const handleStationSelect = (station: Station) => {
+    cancelPathSearch();
     const selected = { id: station.id, name: station.name };
 
     if (activeSearch === "from") {
@@ -140,47 +194,51 @@ export default function JourneyPlanner({
       setViaSearchQueries(newQueries);
     }
 
-    setSearchResults([]);
+    clearSearchResults();
     setSelectedIndex(-1);
   };
 
   // Handle station click from map - using refs to avoid dependency issues
-  const handleStationClickFromMap = useCallback((station: Station | null) => {
-    // Guard against null station
-    if (!station?.id || !station.name) {
-      return;
-    }
+  const handleStationClickFromMap = useCallback(
+    (station: Station | null) => {
+      // Guard against null station
+      if (!station?.id || !station.name) {
+        return;
+      }
 
-    const selected = { id: station.id, name: station.name };
+      const selected = { id: station.id, name: station.name };
+      cancelPathSearch();
 
-    // Use refs to get current values without causing re-creation
-    const currentActiveSearch = activeSearchRef.current;
-    const currentFromStation = fromStationRef.current;
-    const currentToStation = toStationRef.current;
-    const currentViaStations = viaStationsRef.current;
-    const currentViaSearchQueries = viaSearchQueriesRef.current;
+      // Use refs to get current values without causing re-creation
+      const currentActiveSearch = activeSearchRef.current;
+      const currentFromStation = fromStationRef.current;
+      const currentToStation = toStationRef.current;
+      const currentViaStations = viaStationsRef.current;
+      const currentViaSearchQueries = viaSearchQueriesRef.current;
 
-    // Logic: if activeSearch is set, use that field
-    // Otherwise, fill from → to in order
-    if (currentActiveSearch === "from" || (!currentFromStation && currentActiveSearch === null)) {
-      setFromStation(selected);
-      setFromSearchQuery(station.name);
-    } else if (
-      currentActiveSearch === "to" ||
-      (currentFromStation && !currentToStation && currentActiveSearch === null)
-    ) {
-      setToStation(selected);
-      setToSearchQuery(station.name);
-    } else if (typeof currentActiveSearch === "number") {
-      // Via station
-      const newStations = [...currentViaStations];
-      newStations[currentActiveSearch] = selected;
-      setViaStations(newStations);
-      const newQueries = [...currentViaSearchQueries];
-      newQueries[currentActiveSearch] = station.name;
-      setViaSearchQueries(newQueries);
-    }
-  }, []); // Empty deps - handler is stable, uses refs for current values
+      // Logic: if activeSearch is set, use that field
+      // Otherwise, fill from → to in order
+      if (currentActiveSearch === "from" || (!currentFromStation && currentActiveSearch === null)) {
+        setFromStation(selected);
+        setFromSearchQuery(station.name);
+      } else if (
+        currentActiveSearch === "to" ||
+        (currentFromStation && !currentToStation && currentActiveSearch === null)
+      ) {
+        setToStation(selected);
+        setToSearchQuery(station.name);
+      } else if (typeof currentActiveSearch === "number") {
+        // Via station
+        const newStations = [...currentViaStations];
+        newStations[currentActiveSearch] = selected;
+        setViaStations(newStations);
+        const newQueries = [...currentViaSearchQueries];
+        newQueries[currentActiveSearch] = station.name;
+        setViaSearchQueries(newQueries);
+      }
+    },
+    [cancelPathSearch],
+  );
 
   // Register station click handler with parent on mount and when handler changes
   useEffect(() => {
@@ -215,7 +273,7 @@ export default function JourneyPlanner({
         }
         break;
       case "Escape":
-        setSearchResults([]);
+        clearSearchResults();
         setSelectedIndex(-1);
         break;
     }
@@ -235,6 +293,7 @@ export default function JourneyPlanner({
       return;
     }
 
+    const requestId = ++pathRequestRef.current;
     setIsSearchingPath(true);
     setPathError(null);
     setFoundPath([]);
@@ -249,6 +308,7 @@ export default function JourneyPlanner({
         .map((s) => (typeof s.id === "string" ? parseInt(s.id, 10) : s.id));
 
       const result = await findRoutePathBetweenStations(fromId, toId, viaIds);
+      if (requestId !== pathRequestRef.current) return;
 
       if (result.error) {
         setPathError(result.error);
@@ -270,12 +330,13 @@ export default function JourneyPlanner({
         }
       }
     } catch (error) {
+      if (requestId !== pathRequestRef.current) return;
       console.error("Error finding path:", error);
       setPathError("An error occurred while finding the path");
       setFoundPath([]);
       setTotalDistance(0);
     } finally {
-      setIsSearchingPath(false);
+      if (requestId === pathRequestRef.current) setIsSearchingPath(false);
     }
   };
 
@@ -295,6 +356,7 @@ export default function JourneyPlanner({
 
   // Clear all fields
   const resetForm = () => {
+    cancelPathSearch();
     setFoundPath([]);
     setTotalDistance(0);
     setPathError(null);
@@ -317,12 +379,14 @@ export default function JourneyPlanner({
 
   // Add new via station
   const addViaStation = () => {
+    cancelPathSearch();
     setViaStations([...viaStations, null]);
     setViaSearchQueries([...viaSearchQueries, ""]);
   };
 
   // Remove via station
   const removeViaStation = (index: number) => {
+    cancelPathSearch();
     setViaStations(viaStations.filter((_, i) => i !== index));
     setViaSearchQueries(viaSearchQueries.filter((_, i) => i !== index));
   };
@@ -335,6 +399,7 @@ export default function JourneyPlanner({
   const moveViaStation = (index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= viaStations.length) return;
+    cancelPathSearch();
 
     // The station and its query text are parallel arrays keyed by position, so both
     // move together or the row would show someone else's name.
@@ -370,20 +435,12 @@ export default function JourneyPlanner({
         selectedIndex={selectedIndex}
         onChange={(value) => handleSearchChange("from", value)}
         onKeyDown={handleKeyDown}
-        onFocus={() => {
-          setActiveSearch("from");
-          if (fromSearchQuery.length >= 2) performSearch(fromSearchQuery);
-        }}
-        onBlur={() =>
-          setTimeout(() => {
-            setActiveSearch(null);
-            setSearchResults([]);
-            setSelectedIndex(-1);
-          }, 200)
-        }
+        onFocus={() => handleSearchFocus("from", fromSearchQuery)}
+        onBlur={() => handleSearchBlur("from")}
         onSelectResult={handleStationSelect}
         onHoverResult={setSelectedIndex}
         onClear={() => {
+          cancelPathSearch();
           setFromStation(null);
           setFromSearchQuery("");
         }}
@@ -431,18 +488,8 @@ export default function JourneyPlanner({
             selectedIndex={selectedIndex}
             onChange={(value) => handleSearchChange(viaIndex, value)}
             onKeyDown={handleKeyDown}
-            onFocus={() => {
-              setActiveSearch(viaIndex);
-              if ((viaSearchQueries[viaIndex] || "").length >= 2)
-                performSearch(viaSearchQueries[viaIndex] || "");
-            }}
-            onBlur={() =>
-              setTimeout(() => {
-                setActiveSearch(null);
-                setSearchResults([]);
-                setSelectedIndex(-1);
-              }, 200)
-            }
+            onFocus={() => handleSearchFocus(viaIndex, viaSearchQueries[viaIndex] || "")}
+            onBlur={() => handleSearchBlur(viaIndex)}
             onSelectResult={handleStationSelect}
             onHoverResult={setSelectedIndex}
             onClear={() => removeViaStation(viaIndex)}
@@ -478,20 +525,12 @@ export default function JourneyPlanner({
         selectedIndex={selectedIndex}
         onChange={(value) => handleSearchChange("to", value)}
         onKeyDown={handleKeyDown}
-        onFocus={() => {
-          setActiveSearch("to");
-          if (toSearchQuery.length >= 2) performSearch(toSearchQuery);
-        }}
-        onBlur={() =>
-          setTimeout(() => {
-            setActiveSearch(null);
-            setSearchResults([]);
-            setSelectedIndex(-1);
-          }, 200)
-        }
+        onFocus={() => handleSearchFocus("to", toSearchQuery)}
+        onBlur={() => handleSearchBlur("to")}
         onSelectResult={handleStationSelect}
         onHoverResult={setSelectedIndex}
         onClear={() => {
+          cancelPathSearch();
           setToStation(null);
           setToSearchQuery("");
         }}

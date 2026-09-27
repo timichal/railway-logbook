@@ -5,7 +5,7 @@ import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
 import MapProgressBox from "@/components/map/MapProgressBox";
 import MobileBottomSheet from "@/components/ui/MobileBottomSheet";
 import type { User } from "@/lib/authActions";
-import { createDataAccess } from "@/lib/dataAccess";
+import { createDataAccess, type DataAccess } from "@/lib/dataAccess";
 import {
   createPublicNotesSource,
   createPublicStationsSource,
@@ -33,7 +33,16 @@ import type {
   Station,
 } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
+import { useToast } from "@/lib/toast";
 import { optionRow } from "@/lib/ui/buttonStyles";
+
+/** One user's country filter saves: at most one running, the newest list waiting. */
+interface CountrySaveQueue {
+  userId: number | null;
+  dataAccess: DataAccess;
+  running: boolean;
+  pending: string[] | null;
+}
 
 interface RailwayMapProps {
   className?: string;
@@ -77,6 +86,7 @@ export default function RailwayMap({
   const region = useRegion();
   const layerPrefs = useLayerPrefs();
   const dataAccess = useMemo(() => createDataAccess(user, region.id), [user, region.id]);
+  const { showError } = useToast();
 
   // Country filter state
   const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
@@ -472,17 +482,55 @@ export default function RailwayMap({
     if (mapLoaded) routeEditor.refreshProgress();
   }, [mapLoaded, routeEditor.refreshProgress]);
 
+  // Country filter saves run one at a time, and while one is in flight only the
+  // newest list waits behind it: toggling fast used to send concurrent saves
+  // that could land out of order and store an older list. The map and stats
+  // switch at once regardless, so a failure is the one thing the user can't see
+  // for themselves; it is reported unless a newer save is about to replace it.
+  //
+  // The queue belongs to one user and saves through that user's data access. A
+  // login or logout starts a fresh one and drops whatever the old one still had
+  // waiting, so a list is never saved to an account other than the one it was
+  // picked under, and the new session's first save doesn't wait behind the old.
+  // Keyed on the user rather than on `dataAccess`, which a region switch also
+  // replaces without changing where preferences are stored.
+  const countrySaveRef = useRef<CountrySaveQueue | null>(null);
+
+  const saveCountries = async (countries: string[]) => {
+    let queue = countrySaveRef.current;
+    if (!queue || queue.userId !== userId) {
+      if (queue) queue.pending = null;
+      queue = { userId, dataAccess, running: false, pending: null };
+      countrySaveRef.current = queue;
+    }
+    queue.pending = countries;
+    if (queue.running) return;
+    queue.running = true;
+    try {
+      while (queue.pending) {
+        const next = queue.pending;
+        queue.pending = null;
+        try {
+          await queue.dataAccess.updateUserPreferences(next);
+        } catch (error) {
+          console.error("Error updating country preferences:", error);
+          if (!queue.pending && countrySaveRef.current === queue) {
+            showError("Couldn't save your country selection; it will revert on the next visit");
+          }
+        }
+      }
+    } finally {
+      queue.running = false;
+    }
+  };
+
   // Country filter handler. The tiles take the filter from their URL, not from the
   // saved preference, so the refresh need not wait for the save; batched with the
   // state update, it runs with the new list.
-  const handleCountriesChange = async (countries: string[]) => {
-    try {
-      setSelectedCountries(countries);
-      refreshTiles();
-      await dataAccess.updateUserPreferences(countries);
-    } catch (error) {
-      console.error("Error updating country preferences:", error);
-    }
+  const handleCountriesChange = (countries: string[]) => {
+    setSelectedCountries(countries);
+    refreshTiles();
+    void saveCountries(countries);
   };
 
   // Station search handler

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import TripCard from "@/components/logbook/TripCard";
 import { useRegionId } from "@/lib/regionContext";
@@ -52,26 +52,47 @@ export default function JourneysAndTripsTab({
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // Only the latest request may write: a slow filtered query otherwise lands
+  // after the search was cleared, and fast Prev/Next shows whichever page
+  // answered last.
+  const loadRequestRef = useRef(0);
+
   const loadItems = useCallback(
     async (showSpinner = false) => {
+      const requestId = ++loadRequestRef.current;
+      let steppedBack = false;
       if (showSpinner) setIsLoading(true);
       try {
         const result = await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch, regionId);
+        if (requestId !== loadRequestRef.current) return;
         if (result.error) {
           showError(result.error);
           setItems([]);
           setTotal(0);
         } else {
+          // Deleting the last item on the last page leaves `page` past the end;
+          // step back rather than show "Page 3 of 2" over an empty list. The
+          // stale page (the deleted item included) goes at once, and the spinner
+          // stays up until the earlier page arrives.
+          const lastPage = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+          if (page > lastPage) {
+            steppedBack = true;
+            setItems([]);
+            setIsLoading(true);
+            setPage(lastPage);
+            return;
+          }
           setItems(result.items);
           setTotal(result.total);
         }
       } catch (error) {
+        if (requestId !== loadRequestRef.current) return;
         console.error("Error loading items:", error);
         showError("Failed to load journeys and trips");
         setItems([]);
         setTotal(0);
       } finally {
-        setIsLoading(false);
+        if (requestId === loadRequestRef.current && !steppedBack) setIsLoading(false);
       }
     },
     [page, debouncedSearch, regionId, showError],
@@ -94,14 +115,34 @@ export default function JourneysAndTripsTab({
     loadAvailableTrips();
   }, [loadAvailableTrips]);
 
+  // A page or search change can take the open card out of the list. The card
+  // ends its own map edit session as it unmounts; what is left here is the open
+  // state and its highlights, which would otherwise linger for an item no longer
+  // shown. Only then: a card still in the new results stays open, unsaved edits
+  // and all.
+  useEffect(() => {
+    if (!openItem) return;
+    const stillListed = items.some((item) =>
+      item.type === "trip"
+        ? openItem.type === "trip" && item.trip.id === openItem.id
+        : openItem.type === "journey" && item.journey.id === openItem.id,
+    );
+    if (stillListed) return;
+    setOpenItem(null);
+    setOpenNestedJourneyId(null);
+    onHighlightRoutes?.([]);
+  }, [items, openItem, onHighlightRoutes]);
+
   // Debounce search input → reset to page 1
   useEffect(() => {
+    const next = searchInput.trim();
+    if (next === debouncedSearch) return;
     const t = setTimeout(() => {
-      setDebouncedSearch(searchInput.trim());
+      setDebouncedSearch(next);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [searchInput]);
+  }, [searchInput, debouncedSearch]);
 
   // Cleanup on unmount: clear highlights and any in-flight edit session
   useEffect(() => {

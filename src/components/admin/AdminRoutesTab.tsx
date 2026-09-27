@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RouteEditForm from "@/components/admin/RouteEditForm";
 import RoutesList from "@/components/admin/RoutesList";
 import {
@@ -177,12 +177,16 @@ export default function AdminRoutesTab({
     showWithoutNameOnly,
   ]);
 
-  // Route selection
+  // Route selection. Only the latest click may apply: click A then B, and A's
+  // detail landing last would otherwise select A and fly the map there.
+  const routeRequestRef = useRef(0);
   const handleRouteClick = useCallback(
     async (trackId: number, { skipFocus = false } = {}) => {
+      const requestId = ++routeRequestRef.current;
       try {
         setIsLoading(true);
         const routeDetail = await getRailwayRoute(trackId);
+        if (requestId !== routeRequestRef.current) return;
         setSelectedRoute(routeDetail);
         setEditForm(editFormFromRoute(routeDetail));
 
@@ -194,17 +198,31 @@ export default function AdminRoutesTab({
           onRouteFocus(routeDetail.geometry);
         }
       } catch (error) {
+        if (requestId !== routeRequestRef.current) return;
         console.error("Error loading route detail:", error);
         showError(
           `Failed to load route details: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       } finally {
-        setIsLoading(false);
+        if (requestId === routeRequestRef.current) setIsLoading(false);
       }
     },
     [onRouteSelect, onRouteFocus, showError],
   );
 
+  // Clearing the selection counts as a newer request too, or a detail still in
+  // flight lands afterwards and selects its route again
+  const cancelRouteLoad = () => {
+    routeRequestRef.current++;
+    setIsLoading(false);
+  };
+
+  // Only a transition to "nothing selected" cancels: the effect below also runs
+  // with no selection whenever `handleRouteClick` changes identity, which must
+  // not cancel a list click still loading
+  const prevSelectedRouteIdRef = useRef(selectedRouteId);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cancelRouteLoad only touches a ref and a state setter; it is redefined every render and must not re-run this.
   useEffect(() => {
     // Only (re)load when the externally-selected id differs from the loaded route.
     // Both are numbers (the DB track_id and String→Number(feature.id) from the map),
@@ -212,9 +230,11 @@ export default function AdminRoutesTab({
     if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
       handleRouteClick(selectedRouteId, { skipFocus: true });
     } else if (!selectedRouteId) {
+      if (prevSelectedRouteIdRef.current) cancelRouteLoad();
       setSelectedRoute(null);
       setEditForm(null);
     }
+    prevSelectedRouteIdRef.current = selectedRouteId;
   }, [selectedRouteId, selectedRoute?.track_id, handleRouteClick]);
 
   // Route actions
@@ -370,6 +390,7 @@ export default function AdminRoutesTab({
   };
 
   const handleUnselect = () => {
+    cancelRouteLoad();
     setSelectedRoute(null);
     setEditForm(null);
     if (onRouteSelect) {

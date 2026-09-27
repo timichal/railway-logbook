@@ -129,7 +129,8 @@ export const DEFAULT_REGION: RegionId = "europe";
 export const REGION_COOKIE = "railway-region";
 
 export function isRegionId(value: unknown): value is RegionId {
-  return typeof value === "string" && value in REGIONS;
+  // hasOwn, not `in`: `in` walks the prototype chain, so "constructor" passed.
+  return typeof value === "string" && Object.hasOwn(REGIONS, value);
 }
 
 /** A region id as given, falling back to the default for anything unknown. */

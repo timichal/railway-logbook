@@ -18,6 +18,8 @@ import type { User } from "./authTokens";
 import { query } from "./db";
 import { ValidationError } from "./errors";
 import { ABSENT_USER_HASH, hashPassword } from "./passwordHash";
+import { updateSelectedCountriesForUser } from "./preferencesQueries";
+import { normalizeCountryCodes } from "./shared/constants";
 
 export async function authenticateUser(email: string, password: string): Promise<User> {
   if (!email || !password) {
@@ -88,12 +90,12 @@ export async function registerUser(
     throw new ValidationError("User with this email already exists");
   }
 
-  if (localPreferences && localPreferences.length > 0) {
+  // Client-supplied, so normalized before the emptiness check: a junk list that
+  // normalizes to nothing must leave the default filter, not store an empty one
+  const countries = normalizeCountryCodes(localPreferences ?? []);
+  if (countries.length > 0) {
     try {
-      await query("INSERT INTO user_preferences (user_id, selected_countries) VALUES ($1, $2)", [
-        user.id,
-        localPreferences,
-      ]);
+      await updateSelectedCountriesForUser(user.id, countries);
     } catch (error) {
       console.error("Error migrating preferences:", error);
       // Non-fatal: the account exists, and the default filter is every country.

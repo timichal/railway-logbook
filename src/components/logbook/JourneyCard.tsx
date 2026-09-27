@@ -120,53 +120,64 @@ export default function JourneyCard({
   );
 
   // Load journey details when this card opens
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes is intentionally omitted; the effect should fire only when the card opens or the journey changes, not when the callback identity changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes, onJourneyEditStart and onJourneyEditEnd are intentionally omitted; the effect should fire only when the card opens or the journey changes, not when the callback identity changes.
   useEffect(() => {
     if (!isOpen) return;
 
     let cancelled = false;
+    let sessionStarted = false;
     setIsLoadingDetails(true);
     (async () => {
-      const result = await getJourney(journey.id);
-      if (cancelled) return;
-      if (result.error) {
-        showError(result.error);
-        setIsLoadingDetails(false);
-        return;
+      try {
+        const result = await getJourney(journey.id);
+        if (cancelled) return;
+        if (result.error) {
+          showError(result.error);
+          return;
+        }
+        const routes = result.routes || [];
+        setViewedRoutes(routes);
+        if (result.journey) {
+          setEditName(result.journey.name);
+          setEditDate(result.journey.date);
+          setEditDescription(result.journey.description || "");
+          setEditTripId(result.journey.trip_id);
+          setOriginalSnapshot({
+            routes,
+            name: result.journey.name,
+            date: result.journey.date,
+            description: result.journey.description || "",
+            tripId: result.journey.trip_id,
+          });
+        }
+        onHighlightRoutes?.(routes.map((r) => r.track_id));
+        onJourneyEditStart?.(stableHandleMapRouteClick, stableIsRouteInJourney);
+        sessionStarted = true;
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Error loading journey:", error);
+        showError("Failed to load journey");
+      } finally {
+        if (!cancelled) setIsLoadingDetails(false);
       }
-      const routes = result.routes || [];
-      setViewedRoutes(routes);
-      if (result.journey) {
-        setEditName(result.journey.name);
-        setEditDate(result.journey.date);
-        setEditDescription(result.journey.description || "");
-        setEditTripId(result.journey.trip_id);
-        setOriginalSnapshot({
-          routes,
-          name: result.journey.name,
-          date: result.journey.date,
-          description: result.journey.description || "",
-          tripId: result.journey.trip_id,
-        });
-      }
-      setIsLoadingDetails(false);
-      onHighlightRoutes?.(routes.map((r) => r.track_id));
-      onJourneyEditStart?.(stableHandleMapRouteClick, stableIsRouteInJourney);
     })();
 
     return () => {
       cancelled = true;
+      // Covers the unmount the close effect below never sees: a card that
+      // leaves the list while open (a search with no hits, a region switch)
+      // would otherwise leave map clicks toggling routes on an invisible journey
+      if (sessionStarted) onJourneyEditEnd?.();
     };
   }, [isOpen, journey.id]);
 
-  // When this card closes (or unmounts), tear down the edit session
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onJourneyEditEnd is intentionally omitted; the teardown should fire only on the open→closed transition, not when the callback identity changes.
+  // When this card closes, reset its edit state. The map edit session itself is
+  // ended by the open effect's cleanup above, which also covers an unmount.
   useEffect(() => {
     if (isOpen) return;
     setViewedRoutes([]);
     setOriginalSnapshot(null);
     setDeleteConfirm(false);
-    onJourneyEditEnd?.();
     // Don't clear highlights here — parent owns coordination across cards
   }, [isOpen]);
 

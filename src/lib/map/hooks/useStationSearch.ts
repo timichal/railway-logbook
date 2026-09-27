@@ -16,10 +16,15 @@ export function useStationSearch(region: RegionId) {
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Only the latest request may write: "Pra" answering after "Praha hl.n."
+  // replaced the longer query's results, and its `finally` stopped the spinner
+  // while the newer search was still running.
+  const searchRequestRef = useRef(0);
 
   // Debounced station search
   const performSearch = useCallback(
     async (query: string) => {
+      const requestId = ++searchRequestRef.current;
       if (query.trim().length < 2) {
         setSearchResults([]);
         setShowSuggestions(false);
@@ -30,15 +35,17 @@ export function useStationSearch(region: RegionId) {
       setIsSearching(true);
       try {
         const results = await searchStations(query, region);
+        if (requestId !== searchRequestRef.current) return;
         setSearchResults(results);
         setShowSuggestions(results.length > 0);
         setSelectedStationIndex(-1);
       } catch (error) {
+        if (requestId !== searchRequestRef.current) return;
         console.error("Error searching stations:", error);
         setSearchResults([]);
         setShowSuggestions(false);
       } finally {
-        setIsSearching(false);
+        if (requestId === searchRequestRef.current) setIsSearching(false);
       }
     },
     [region],
@@ -57,6 +64,8 @@ export function useStationSearch(region: RegionId) {
         performSearch(searchQuery);
       }, 300); // 300ms debounce
     } else {
+      // Drop a search still in flight, or it would refill the cleared box
+      searchRequestRef.current++;
       setSearchResults([]);
       setShowSuggestions(false);
       setIsSearching(false);

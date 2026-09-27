@@ -1066,11 +1066,23 @@ export async function findRoutePathBetweenStations(
     };
   }
 
-  try {
-    // Normalized because station ids are bigint-backed: pg hands them back as
-    // strings, and they are used as map keys below
-    const stationSequence = [fromStationId, ...viaStationIds, toStationId].map(Number);
+  // Normalized because station ids are bigint-backed: pg hands them back as
+  // strings, and they are used as map keys below
+  const stationSequence = [fromStationId, ...viaStationIds, toStationId].map(Number);
 
+  // A leg from a station to itself has no stretch to cover: the direct finish
+  // costs 0 and its zero-width trim is discarded as "whole", so it came back as
+  // a whole route at full length. A loop (A via B to A) is fine — only
+  // consecutive stops are refused.
+  if (stationSequence.some((id, i) => i > 0 && id === stationSequence[i - 1])) {
+    return {
+      routes: [],
+      totalDistance: 0,
+      error: "Consecutive stops must be different stations",
+    };
+  }
+
+  try {
     const [stationMatches, { graph, routeInfo }] = await Promise.all([
       findRoutesNearStations([...new Set(stationSequence)]),
       getRouteGraph(),

@@ -20,56 +20,12 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       **Fix:** return `{ error }` for the expected rejections, as
       `login`/`register` now do (`asAuthResult` in `authActions.ts`).
 
-- [ ] **`isRegionId("constructor")` is true.** `src/lib/shared/regions.ts:132` uses
-      `value in REGIONS`, which walks the prototype chain.
-      `/shared/<token>?view=constructor` crashes the shared page for whoever opens
-      it, and `/api/v1/routes?region=toString` returns a 500 instead of a 400.
-      **Fix:** `Object.hasOwn(REGIONS, value)`.
-
-- [ ] **A failed country-filter save is silent, and rapid toggles can save an
-      older list.** `src/components/map/RailwayMap.tsx`, `handleCountriesChange`.
-      The map and stats switch to the new list at once, but a failed
-      `updateUserPreferences` (network, expired session) is only logged, so the
-      next load quietly reverts it. Toggling fast sends concurrent saves that can
-      land out of order. **Fix:** toast on failure; serialise the saves (or send
-      only the latest after the previous one settles).
-
-- [ ] **Out-of-order async responses overwrite newer ones.** The same missing
-      request-id guard appears in four places:
-      - `JourneysAndTripsTab.tsx:55-78`: a slow filtered query lands after the
-        search box was cleared. The same happens with fast Prev/Next. Also, `page`
-        is never clamped, so deleting the last item on page 3 of 3 shows
-        "Page 3 of 2" over an empty list.
-      - `JourneyPlanner.tsx:64-80`, `:225-280`: `searchResults` is shared by
-        from/via/to with no staleness check, and the debounce timer is not
-        cleared on blur. Tabbing From→To quickly shows From's stations under To.
-        `handleFindPath` also has no guard, so a path found after a region switch
-        paints gold highlights from the old region.
-      - `src/lib/map/hooks/useStationSearch.ts:21-45`: "Pra" results can replace
-        "Praha hl.n.", and the older call's `finally` turns the spinner off
-        early.
-      - (possible) `AdminRoutesTab.tsx:164-200`: click A then B quickly; if A's
-        response lands last, the map flies to A.
-
-      **Fix:** a request counter in a ref per call site, ignoring any response
-      that isn't the latest. Clamp `page` to `totalPages`.
-
-- [ ] **JourneyCard can hang on "Loading…", and a partly failed save can't be
-      retried cleanly.** `src/components/logbook/JourneyCard.tsx:124-161`,
-      `:186-279`. The open-effect IIFE has no try/catch, so a failed
-      `getJourney` leaves `isLoadingDetails` true for good. `handleSave` runs meta
-      → trip → add → per-route remove → per-route partial as separate actions and
+- [ ] **A partly failed JourneyCard save can't be retried cleanly.**
+      `src/components/logbook/JourneyCard.tsx`, `handleSave`. It runs meta → trip
+      → add → per-route remove → per-route partial as separate actions and
       returns at the first error without refreshing its snapshot or calling
-      `onChanged`. **Fix:** try/catch/finally around the load. Move the diff into
-      one server action applied in a single transaction.
-
-- [ ] **An open journey card that leaves the list keeps its map edit session.**
-      `JourneyCard.tsx:165-172`; `JourneysAndTripsTab.tsx:44`, `:121-127`. The
-      session ends only from an effect that runs while `isOpen` is false, never
-      on unmount. If you open a journey and then search for something with no
-      hits, map clicks keep toggling routes on an invisible journey. **Fix:**
-      return `onJourneyEditEnd` from the open effect's cleanup, and reset
-      `openItem` when `page` or the search changes.
+      `onChanged`. **Fix:** move the diff into one server action applied in a
+      single transaction.
 
 - [ ] **A via station pins the next leg to the route that arrived there.**
       `src/lib/routePathFinder.ts:1134-1143`. `previousEndRoute` is always one
@@ -82,19 +38,12 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       near the via, and let `computeTravelledTrims` trim routes entered or left
       mid-way at a via, not only the first and last.
 
-- [ ] **from == to returns a whole route at full length.**
-      `src/lib/routePathFinder.ts:704-715`, `:1000-1005`. The direct finish costs
-      0, and the zero-width trim (`hi - lo <= 0`) is discarded as "whole", so
-      `totalDistance` is the route's full length. Neither the action nor
-      `/api/v1/planner` rejects it. **Fix:** refuse from == to up front, and treat
-      a zero-width trim as 0 km.
-
-- [ ] **Registration stores the country filter unnormalized.**
-      `src/lib/authQueries.ts:96-104`. The `localPreferences` argument of the
-      `register` action is client-supplied and goes straight into
-      `selected_countries`, which breaks CLAUDE.md's "every write goes through
-      `normalizeCountryCodes`". **Fix:** call
-      `updateSelectedCountriesForUser(user.id, localPreferences)`.
+- [ ] (possible) **A zero-width planner trim counts the whole route.**
+      `computeTravelledTrims` in `src/lib/routePathFinder.ts` drops a trim with
+      `hi - lo <= 0` as "whole", so the route counts at full length. Consecutive
+      identical stops are now refused up front, so this needs two distinct
+      stations projecting onto the same point of one route. **Fix:** treat a
+      zero-width trim as 0 km.
 
 - [ ] **The API returns 500 for input API.md says is a 400.**
       `src/app/api/v1/journeys/route.ts:26-35`, `journeys/[id]/route.ts:31-37`,
@@ -186,11 +135,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       - `starting_part_id`/`ending_part_id` are deprecated, only ever written as
         NULL, and still indexed. They and the admin-only `error_message` are
         still shipped in every *public* route tile (`02-vector-tiles.sql:215-218`).
-
-- [ ] **Tile functions are declared `IMMUTABLE` but read live tables.**
-      `02-vector-tiles.sql:91`, `:274`, `:317`, `:366`, `:475`, `:516`. The planner
-      may constant-fold them. It is harmless today only because of how Martin
-      prepares its queries. **Fix:** `STABLE PARALLEL SAFE`, as Martin's docs use.
 
 - [ ] **Give `railway_routes` an `updated_at` trigger.** The planner's graph
       cache fingerprint (`routePathFinder.ts:363-379`) depends on every write path

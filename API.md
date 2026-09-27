@@ -168,6 +168,10 @@ stored under a negated id (see `CLAUDE.md`), so don't validate them as positive.
 400. Each via station is another search over the whole route graph, and this is
 the one endpoint that takes no token.
 
+The same station twice in a row — `fromStationId === toStationId` with no vias,
+or two equal neighbours anywhere in from → vias → to — is also a **400**: a leg
+from a station to itself covers nothing. A loop (A via B back to A) is fine.
+
 The search stays on the server for good: it needs Postgres and the in-memory
 route graph. First and last routes come back trimmed to the stretch actually
 travelled (`partial` geometry plus `travelled_length_km`), and `totalDistance`

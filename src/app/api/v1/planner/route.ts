@@ -18,7 +18,9 @@ import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
  * capped here as well: each via station is another search over the whole route
  * graph, and `requireIntArray`'s generic 2000-item ceiling is far too much to
  * hand an anonymous caller. Over the cap is a malformed request, so it is a 400
- * rather than the in-band `error` an unreachable station gets.
+ * rather than the in-band `error` an unreachable station gets. So is the same
+ * station twice in a row (from == to with no vias, or two equal neighbours),
+ * which `findRoutePathBetweenStations` refuses in-band for the web form.
  */
 export async function POST(request: Request): Promise<Response> {
   return apiHandler(async () => {
@@ -32,6 +34,10 @@ export async function POST(request: Request): Promise<Response> {
         : requireIntArray(body, "viaStationIds");
     if (viaStationIds.length > MAX_VIA_STATIONS) {
       throw new ApiError(400, `viaStationIds must hold at most ${MAX_VIA_STATIONS} items`);
+    }
+    const stops = [fromStationId, ...viaStationIds, toStationId];
+    if (stops.some((id, i) => i > 0 && id === stops[i - 1])) {
+      throw new ApiError(400, "Consecutive stops must be different stations");
     }
 
     return jsonResponse(
