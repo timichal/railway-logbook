@@ -59,6 +59,7 @@ A dump is copied into the container once, and the verification and restore read 
 - `npm run dev` (Turbopack), `npm run build`, `npm run start`.
 - `npm run lint` (Biome check — formatter + linter), `npm run lint:fix` (apply safe fixes), `npm run format` (format only). **All code must conform to Biome** (config in `biome.json`); run `npm run lint` and resolve findings before considering a change done.
 - `npx tsc --noEmit` — **always run this after a batch of code changes**. Do not run full builds unless the user asks.
+- `npm test` — the unit tests (`node --test` over `tests/**/*.test.ts`, through tsx). See "Tests" below.
 - `npm run generateAppIcons` — re-render the home-screen icon set from `assets/app-icon.png`. By hand, when the artwork changes; the outputs are committed. See "Installable app" below.
 
 ### Prerequisites
@@ -464,6 +465,13 @@ When changing schema or transforming existing data, create a TS script in `src/s
 
 ### Route recalculation performance
 `RECALC_PERFORMANCE.md` — why route recalculation dominates the import, how it is kept fast (a worker pool over the route list; one `ST_DWithin` query per route covering both endpoints), the constraints that must not be broken (don't shrink the pathfinder's buffer; don't wrap the run in a transaction; don't silence the pathfinder from outside), and the measurements behind the current default. Read it before touching `verifyRouteData.ts` or `scripts/lib/railwayPathFinder.ts` (or `partNetwork.ts` and `partGeometry.ts` beside it, which hold the search's parts and geometry) for performance reasons.
+
+### Tests
+`npm test` runs `tests/*.test.ts` with Node's own runner (`node:test`, `node:assert/strict`) loaded through tsx — no test framework dependency. They cover the pure logic where a mistake is silent: the ridden-whole rule (`routeCoverage.ts`), `parsePgTextArray`, `normalizeCountryCodes`, `mergeLinearChain`, the GeoJSON feature stream, the planner's search and trims over networks built by hand with `buildRouteGraph`, and the part geometry in `scripts/lib/partGeometry.ts`. Run them after touching any of those.
+
+The tests live in `tests/` rather than beside their modules because the shared folder may not import Node built-ins (see the Biome boundary above), and `node:test` is one. They import through `@/`, which tsx resolves from `tsconfig.json`.
+
+`routeCoverage.sql.test.ts` is the one that needs the database: it holds `isRouteFullyRidden` against `user_fully_ridden_routes` over ~2000 seeded random cases, since the two are the same rule written twice. It writes nothing real — the function names its tables unqualified, so temp tables of the same names shadow them inside a rolled-back transaction — and it skips itself when the database is unreachable. A new table the function reads needs a temp twin there too.
 
 ### Type checking
 Run `npx tsc --noEmit` after each batch of related changes. Don't run full builds unless asked.
