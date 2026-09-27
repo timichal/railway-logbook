@@ -872,32 +872,6 @@ function pairKey(trackId: number, stationId: number): string {
 }
 
 /**
- * Where each station falls along its route, as a 0..1 fraction of the route
- * geometry (0 = the geometry's first point).
- */
-async function locateStationsOnRoutes(
-  pairs: Array<[trackId: number, stationId: number]>,
-): Promise<Map<string, number>> {
-  const fractions = new Map<string, number>();
-  if (pairs.length === 0) return fractions;
-
-  const result = await pool.query<{ track_id: number; station_id: string | number; frac: number }>(
-    `
-    SELECT t.track_id, t.station_id, ST_LineLocatePoint(r.geometry, s.coordinates) AS frac
-    FROM unnest($1::int[], $2::bigint[]) AS t(track_id, station_id)
-    JOIN railway_routes r ON r.track_id = t.track_id
-    JOIN stations s ON s.id = t.station_id
-    `,
-    [pairs.map((p) => p[0]), pairs.map((p) => p[1])],
-  );
-
-  for (const row of result.rows) {
-    fractions.set(pairKey(row.track_id, Number(row.station_id)), row.frac);
-  }
-  return fractions;
-}
-
-/**
  * Which endpoint of `trackId` faces the route it connects to — the routes'
  * closest endpoint pairing.
  *
@@ -930,11 +904,16 @@ function connectingSide(
  * it is entered at to the station. Both sides come from `sides`, which the search
  * reports for the hops it actually took, rather than being inferred from the
  * routes' closest endpoint pairing.
+ *
+ * `fractions` is `findRoutesNearStations`' own: the terminal routes were picked
+ * from the routes it matched to the from and to stations, so where each station
+ * sits along them is already known.
  */
 async function computeTravelledTrims(
   path: number[],
   sides: (EndpointSide | null)[],
   routeInfo: Map<number, RouteBearingInfo>,
+  fractions: Map<string, number>,
   fromStationId: number,
   toStationId: number,
 ): Promise<Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>> {
@@ -947,16 +926,6 @@ async function computeTravelledTrims(
   // stretch, so leave it whole rather than guess.
   const occursOnce = (id: number) => path.filter((x) => x === id).length === 1;
 
-  const pairs: Array<[number, number]> = [];
-  if (path.length === 1) {
-    pairs.push([firstId, fromStationId], [firstId, toStationId]);
-  } else {
-    if (occursOnce(firstId)) pairs.push([firstId, fromStationId]);
-    if (occursOnce(lastId)) pairs.push([lastId, toStationId]);
-  }
-  if (pairs.length === 0) return trimmed;
-
-  const fractions = await locateStationsOnRoutes(pairs);
   const specs: TrimSpec[] = [];
 
   if (path.length === 1) {
@@ -971,7 +940,9 @@ async function computeTravelledTrims(
       });
     }
   } else {
-    const fromFrac = fractions.get(pairKey(firstId, fromStationId));
+    const fromFrac = occursOnce(firstId)
+      ? fractions.get(pairKey(firstId, fromStationId))
+      : undefined;
     const exitSide = sides[0] ?? connectingSide(routeInfo, firstId, path[1]);
     if (fromFrac !== undefined && exitSide) {
       specs.push(
@@ -981,7 +952,7 @@ async function computeTravelledTrims(
       );
     }
 
-    const toFrac = fractions.get(pairKey(lastId, toStationId));
+    const toFrac = occursOnce(lastId) ? fractions.get(pairKey(lastId, toStationId)) : undefined;
     // The search reports the endpoint the last route is left through, which is
     // the one beyond the destination — the journey enters at its opposite
     const lastExitSide = sides[path.length - 1];
@@ -1200,6 +1171,7 @@ export async function findRoutePathBetweenStations(
         path,
         sides,
         routeInfo,
+        stationMatches.fractions,
         stationSequence[0],
         stationSequence[stationSequence.length - 1],
       ),

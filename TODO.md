@@ -161,37 +161,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       over them until a recalculation backfills the length. This goes away with
       the NOT NULL item under "Database design".
 
-## Performance
-
-- [ ] **The hover popup is destroyed and rebuilt on every mousemove.**
-      `src/lib/map/interactions/userMapInteractions.ts:181-187`, `:446-469`.
-      **Fix:** keep the popup and the last feature id. On the same feature only
-      call `setLngLat`, and call `setHTML` only when the feature changes.
-
-- [ ] **The planner runs a fraction query it already has.**
-      `routePathFinder.ts:878-898`, `:959`. `locateStationsOnRoutes` recomputes
-      what `findRoutesNearStations` returned in `stationMatches.fractions`.
-      **Fix:** pass those through and delete the query.
-
-- [ ] **The station proximity refresh rewrites every station row.**
-      `src/lib/stationProximity.ts:49`. These are non-HOT updates (the column is
-      in a partial-index predicate), leaving a dead tuple per station per import.
-      **Fix:** add `WHERE s.near_route IS DISTINCT FROM (EXISTS …)`.
-
-- [ ] (possible) **Station search is an unindexed scan.**
-      `src/lib/routeQueries.ts:36-53`. `unaccent(name) ILIKE '%…%'` on every
-      keystroke. Measure it; if it is slow, add a pg_trgm GIN index on an
-      IMMUTABLE `unaccent` wrapper.
-
-- [ ] **The user map's construction specs are rebuilt on every render.**
-      `src/components/map/RailwayMap.tsx`, the `useMapLibre` call. Its sources
-      (`createRailwayRoutesSource` JSON-encodes the country list) and
-      `createUserMapLayers(theme)` are built on every render — each selection,
-      highlight, tab change and sheet drag — but read only when the map is built
-      (deps `[region.id]` plus the scheme). **Fix:** `useMemo` them on
-      `[theme, region.id]`, or have `useMapLibre` take a factory it calls at
-      construction. Same shape in `PublicRailwayMap.tsx`.
-
 ## Database design
 
 - [ ] **Add the missing constraints.** `database/init/01-schema.sql:53-70`,

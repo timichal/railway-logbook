@@ -121,8 +121,17 @@ export interface UseMapLibreOptions {
   region?: RegionId;
   center?: [number, number];
   zoom?: number;
-  sources?: Record<string, maplibregl.SourceSpecification>;
-  layers?: maplibregl.LayerSpecification[];
+  /**
+   * The map's own sources and layers, as factories called once, at construction.
+   *
+   * Factories rather than values because they are read only then, while the
+   * caller renders far more often — on every selection, highlight, tab change and
+   * sheet drag — and building them is not free (the route source JSON-encodes the
+   * country list; the layer stack is some dozen specs with their expressions).
+   * Each is called with the closure of the render whose `deps` built the map.
+   */
+  sources?: () => Record<string, maplibregl.SourceSpecification>;
+  layers?: () => maplibregl.LayerSpecification[];
   onLoad?: (map: maplibregl.Map) => void;
 }
 
@@ -148,8 +157,8 @@ export function useMapLibre(
     region = DEFAULT_REGION,
     center = REGIONS[region].center,
     zoom = REGIONS[region].zoom,
-    sources = {},
-    layers = [],
+    sources: buildSources,
+    layers: buildLayers,
     onLoad,
   } = options;
 
@@ -186,6 +195,7 @@ export function useMapLibre(
       const initialZoom = savedState?.zoom || zoom;
 
       // Build sources object (basemap + custom sources)
+      const sources = buildSources?.() ?? {};
       const allSources: Record<string, maplibregl.SourceSpecification> = basemap
         ? { ...basemap.sources, ...sources }
         : { osm: createOSMBackgroundSource(), ...sources };
@@ -200,7 +210,10 @@ export function useMapLibre(
         : [createOSMBackgroundGroundLayer(theme), createOSMBackgroundLayer(theme)].filter(
             (layer) => layer !== null,
           );
-      const allLayers: maplibregl.LayerSpecification[] = [...backgroundLayers, ...layers];
+      const allLayers: maplibregl.LayerSpecification[] = [
+        ...backgroundLayers,
+        ...(buildLayers?.() ?? []),
+      ];
 
       // Create map instance
       map.current = new maplibregl.Map({

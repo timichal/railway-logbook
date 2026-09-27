@@ -35,6 +35,27 @@ const NEAR_ROUTE_EXISTS = `
       AND ST_DWithin(r.geometry_3857, s.coordinates_3857, ${nearRouteRadius("s")})
   )`;
 
+/**
+ * Set `near_route` afresh on the stations `stationFilter` picks (a condition on
+ * `s`), writing only the rows whose flag actually changes.
+ *
+ * Rewriting every row, as a bare `UPDATE … SET near_route = EXISTS …` does, costs
+ * a new tuple per station per import even when nothing moved — and not a HOT one,
+ * since the column is in the predicate of the tile's partial index.
+ *
+ * The flag is a NOT NULL boolean, so a row that differs from the check can only
+ * be flipped — which is what lets the check sit in the `WHERE` alone and run
+ * once per station. Written as `SET near_route = EXISTS … WHERE near_route IS
+ * DISTINCT FROM EXISTS …`, every changed row would pay for it twice.
+ */
+function updateNearRouteSql(stationFilter: string): string {
+  return `
+    UPDATE stations s
+    SET near_route = NOT s.near_route
+    WHERE (${stationFilter})
+      AND s.near_route IS DISTINCT FROM ${NEAR_ROUTE_EXISTS}`;
+}
+
 export interface ProximityCounts {
   near: number;
   total: number;
@@ -46,7 +67,7 @@ export interface ProximityCounts {
  * an admin's edit from waiting on it.
  */
 export async function refreshAllStationProximity(db: ClientBase): Promise<ProximityCounts> {
-  await db.query(`UPDATE stations s SET near_route = ${NEAR_ROUTE_EXISTS}`);
+  await db.query(updateNearRouteSql("TRUE"));
 
   const { rows } = await db.query<{ near: string; total: string }>(
     `SELECT count(*) FILTER (WHERE near_route) AS near, count(*) AS total FROM stations`,
@@ -87,18 +108,15 @@ export async function refreshStationProximityFor(
   if (trackId === undefined && stationIds.length === 0) return;
 
   await db.query(
-    `
-    UPDATE stations s
-    SET near_route = ${NEAR_ROUTE_EXISTS}
-    WHERE s.id = ANY($1::bigint[])
-       OR EXISTS (
-         SELECT 1
-         FROM railway_routes r
-         WHERE r.track_id = $2
-           AND r.geometry_3857 IS NOT NULL
-           AND ST_DWithin(r.geometry_3857, s.coordinates_3857, ${nearRouteRadius("s")})
-       )
-    `,
+    updateNearRouteSql(`
+      s.id = ANY($1::bigint[])
+      OR EXISTS (
+        SELECT 1
+        FROM railway_routes r
+        WHERE r.track_id = $2
+          AND r.geometry_3857 IS NOT NULL
+          AND ST_DWithin(r.geometry_3857, s.coordinates_3857, ${nearRouteRadius("s")})
+      )`),
     [stationIds, trackId ?? null],
   );
 }

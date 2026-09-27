@@ -160,15 +160,15 @@ export default function RailwayMap({
     mapContainer,
     {
       region: region.id,
-      sources: {
+      sources: () => ({
         railway_routes: createRailwayRoutesSource({
           rides: userId ? "session" : undefined,
           selectedCountries: effectiveCountries,
         }),
         stations: createPublicStationsSource(),
         public_notes: createPublicNotesSource(),
-      },
-      layers: createUserMapLayers(theme),
+      }),
+      layers: () => createUserMapLayers(theme),
     },
     [region.id],
   );

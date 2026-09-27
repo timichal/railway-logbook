@@ -22,6 +22,10 @@ import type { RailwayRoute, RouteSummary, Station } from "./shared/types";
  *
  * Also restricted to the current region: the map is locked to it, so a hit in
  * the other one could neither be flown to nor routed from.
+ *
+ * `immutable_unaccent` rather than `unaccent`, on both sides: it is what the
+ * trigram index on station names is built over (02-vector-tiles.sql), and the
+ * planner uses that index only for the exact expression it indexes.
  */
 export async function searchStationsByName(
   searchQuery: string,
@@ -41,11 +45,11 @@ export async function searchStationsByName(
     FROM stations
     WHERE near_route
       AND coordinates && ${regionEnvelopeSql(region)}
-      AND unaccent(name) ILIKE unaccent($1)
+      AND immutable_unaccent(name) ILIKE immutable_unaccent($1)
     ORDER BY
       CASE
-        WHEN unaccent(name) ILIKE unaccent($2) THEN 0  -- Exact start match first
-        ELSE 1                                          -- Contains match second
+        WHEN immutable_unaccent(name) ILIKE immutable_unaccent($2) THEN 0  -- Start match first
+        ELSE 1  -- Contains match second
       END,
       name
     LIMIT 10

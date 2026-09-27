@@ -176,14 +176,14 @@ export default function AdminMap({
     mapContainer,
     {
       region: regionId,
-      sources: {
+      sources: () => ({
         railway_parts: createRailwayPartsSource(),
         railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBusterRef.current }),
         stations: createStationsSource(),
         admin_notes: createAdminNotesSource(notesCacheBusterRef.current),
         "route-endpoints": routeEndpointsSource,
-      },
-      layers: [
+      }),
+      layers: () => [
         createRailwayPartsLayer(),
         createScenicRoutesOutlineLayer(),
         createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }),

@@ -178,13 +178,74 @@ export function setupUserMapInteractions(
     return took;
   };
 
-  /** The hover popup: no close button, no buttons, gone when the pointer leaves. */
-  const openHoverPopup = (lngLat: maplibreglType.LngLatLike, className: string, body: string) => {
-    if (currentPopup) currentPopup.remove();
-    currentPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
-      .setLngLat(lngLat)
-      .setHTML(`<div class="${className}" style="color: var(--color-fg);">${body}</div>`)
-      .addTo(mapInstance);
+  /**
+   * The hover popup: no close button, no buttons, gone when the pointer leaves.
+   *
+   * **One popup follows the pointer rather than one per `mousemove`.** Over the
+   * same feature only its position changes, so that is all that is touched; the
+   * body is rebuilt and swapped in only when the pointer reaches another feature.
+   * A feature is told apart by its layer and its whole property set rather than by
+   * an id: the notes tile carries no id at all, and a tile refresh landing under a
+   * resting pointer (a journey logged, a login, a country toggled) changes a
+   * route's properties without changing its id — keyed on the id, the popup would
+   * keep the old body until the pointer left. Serialising a handful of scalar
+   * properties is still far cheaper than rebuilding the popup's DOM.
+   *
+   * **Precedence is settled before anything is drawn.** A station sits on its
+   * route and a note may sit on either, so one `mousemove` reaches several of the
+   * layer handlers below, in registration order, and the last one is meant to
+   * win. Applied one by one, a pointer resting on a station would swap the route's
+   * body in and the station's back on every move; instead each handler only
+   * records its offer, and the last offer of the dispatch is applied once, in a
+   * microtask. A `mouseleave` in the same dispatch may remove the popup first —
+   * the offer still stands, since a layer's `mousemove` fires only while the
+   * pointer is on it.
+   */
+  let hoverPopup: maplibregl.Popup | null = null;
+  let hoverKey: string | null = null;
+  type HoverOffer = {
+    lngLat: maplibreglType.LngLatLike;
+    key: string;
+    build: () => { className: string; body: string };
+  };
+  let hoverOffer: HoverOffer | null = null;
+  let tornDown = false;
+
+  const applyHoverOffer = () => {
+    const offer = hoverOffer;
+    hoverOffer = null;
+    if (!offer || tornDown || lastPointerWasTouch) return;
+    const { lngLat, key, build } = offer;
+
+    const live = hoverPopup !== null && currentPopup === hoverPopup;
+    if (live && key === hoverKey) {
+      hoverPopup?.setLngLat(lngLat);
+      return;
+    }
+
+    const { className, body } = build();
+    const html = `<div class="${className}" style="color: var(--color-fg);">${body}</div>`;
+    if (live && hoverPopup) {
+      hoverPopup.setHTML(html).setLngLat(lngLat);
+    } else {
+      if (currentPopup) currentPopup.remove();
+      hoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
+        .setLngLat(lngLat)
+        .setHTML(html)
+        .addTo(mapInstance);
+      currentPopup = hoverPopup;
+    }
+    hoverKey = key;
+  };
+
+  const openHoverPopup = (
+    lngLat: HoverOffer["lngLat"],
+    layer: string,
+    properties: Record<string, unknown>,
+    build: HoverOffer["build"],
+  ) => {
+    if (!hoverOffer) queueMicrotask(applyHoverOffer);
+    hoverOffer = { lngLat, key: `${layer}:${JSON.stringify(properties)}`, build };
   };
 
   /**
@@ -455,7 +516,10 @@ export function setupUserMapInteractions(
     const properties = e.features[0].properties;
     if (!properties) return;
 
-    openHoverPopup(e.lngLat, "railway-popup", buildRouteBody(properties, { linkRow: true }));
+    openHoverPopup(e.lngLat, "route", properties, () => ({
+      className: "railway-popup",
+      body: buildRouteBody(properties, { linkRow: true }),
+    }));
   };
 
   // Hover handler for station popups (takes precedence)
@@ -466,7 +530,10 @@ export function setupUserMapInteractions(
     const properties = e.features[0].properties;
     if (!properties) return;
 
-    openHoverPopup(e.lngLat, "station-popup", buildStationBody(properties));
+    openHoverPopup(e.lngLat, "station", properties, () => ({
+      className: "station-popup",
+      body: buildStationBody(properties),
+    }));
   };
 
   // Cursor handlers for routes
@@ -489,11 +556,10 @@ export function setupUserMapInteractions(
     const properties = e.features[0].properties;
     if (!properties) return;
 
-    openHoverPopup(
-      e.lngLat,
-      "railway-popup",
-      `<div style="max-width: 260px;">${buildNoteBody(properties, { sourceRow: true })}</div>`,
-    );
+    openHoverPopup(e.lngLat, "note", properties, () => ({
+      className: "railway-popup",
+      body: `<div style="max-width: 260px;">${buildNoteBody(properties, { sourceRow: true })}</div>`,
+    }));
   };
 
   // Tap handler for public notes — the touch half of the hover popup above.
@@ -624,6 +690,7 @@ export function setupUserMapInteractions(
 
   // Cleanup function
   return () => {
+    tornDown = true;
     removePopup();
     // The sheet's own close handler schedules this; tearing down mid-sheet would
     // otherwise leave double-click zoom off for good.

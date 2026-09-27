@@ -40,6 +40,24 @@ ON stations USING GIST (coordinates_3857);
 CREATE INDEX IF NOT EXISTS idx_stations_coordinates_3857_near_route
 ON stations USING GIST (coordinates_3857) WHERE near_route;
 
+-- Station name search (searchStationsByName in src/lib/routeQueries.ts) is a
+-- diacritic-insensitive substring match, `%…%`, which no btree can serve: a
+-- sequential scan running unaccent over every station name, ~60ms a keystroke.
+-- A trigram index answers it in about 1ms from three characters up (two are
+-- below a trigram, and still scan). unaccent() itself is only STABLE — it reads
+-- its dictionary through search_path — so the index goes through a wrapper that
+-- names the dictionary outright and can therefore be declared IMMUTABLE. The
+-- query must call the same wrapper, or the planner cannot match the index.
+-- Partial on near_route, the only stations the search offers.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+RETURN public.unaccent('public.unaccent'::regdictionary, $1);
+
+CREATE INDEX IF NOT EXISTS idx_stations_name_trgm_near_route
+ON stations USING GIN (immutable_unaccent(name) gin_trgm_ops) WHERE near_route;
+
 -- Function: railway_parts_tile
 -- Serves railway parts (raw OSM segments) as vector tiles
 -- Optimized with zoom-level filtering and geometry simplification

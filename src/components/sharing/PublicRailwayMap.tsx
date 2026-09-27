@@ -72,15 +72,15 @@ export default function PublicRailwayMap({
     mapContainer,
     {
       region: region.id,
-      sources: {
+      sources: () => ({
         railway_routes: createRailwayRoutesSource({
           rides: { shareToken: token },
           selectedCountries: effectiveCountries,
         }),
         stations: createPublicStationsSource(),
         public_notes: createPublicNotesSource(),
-      },
-      layers: createUserMapLayers(theme),
+      }),
+      layers: () => createUserMapLayers(theme),
     },
     [token, effectiveCountries, region.id],
   );
