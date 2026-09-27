@@ -13,11 +13,12 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default user for existing data
-INSERT INTO users (id, email, name, password) VALUES (1, 'osm@zlatkovsky.cz', 'Michal', '$2b$12$71HlDo/fgRFXvin5VZ4t5uMRfsUkkREuusSG9z13BGs00vi2AUZIe');
-
--- Fix the sequence to start from the next available ID
-SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
+-- id 1 is the admin (every admin check is `user_id = 1`), and it is created by
+-- `npm run createAdmin`, not seeded here: a seeded row put one person's email
+-- and password hash into every deployment. The sequence starts at 2 so that id 1
+-- stays reserved — otherwise whoever registered first on a fresh deployment
+-- would become the admin.
+SELECT setval('users_id_seq', 1);
 
 -- Railway stations (Point features from GeoJSON)
 CREATE TABLE stations (

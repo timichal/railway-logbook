@@ -17,20 +17,7 @@ import bcrypt from "bcryptjs";
 import type { User } from "./authTokens";
 import { query } from "./db";
 import { ValidationError } from "./errors";
-
-/** Bcrypt cost. Unchanged from the original inline value. */
-const SALT_ROUNDS = 12;
-
-/**
- * A real hash at `SALT_ROUNDS`, of a password no account has.
- *
- * An unknown email used to return before any bcrypt ran, so a miss answered in
- * a millisecond and a hit took the ~250ms a cost-12 compare takes — which is a
- * remote test for whether an address is registered. Comparing against this
- * makes both paths pay the same, and it is a constant rather than a hash
- * computed at startup so the cost is not also paid on boot.
- */
-const ABSENT_USER_HASH = "$2b$12$prcCwRuupfHvFFvT0nLEN.wp/pis0IEYblQpBUnOW061kZjKRk7H2";
+import { ABSENT_USER_HASH, hashPassword } from "./passwordHash";
 
 export async function authenticateUser(email: string, password: string): Promise<User> {
   if (!email || !password) {
@@ -84,7 +71,7 @@ export async function registerUser(
     throw new ValidationError("User with this email already exists");
   }
 
-  const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+  const hashedPassword = await hashPassword(password);
 
   const result = await query(
     "INSERT INTO users (email, name, password) VALUES ($1, $2, $3) RETURNING id, email, name",

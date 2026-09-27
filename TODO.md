@@ -12,11 +12,16 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Security (do these first)
 
-- [ ] **The schema seeds the author's email and bcrypt hash into a public repo.**
-      `database/init/01-schema.sql:17`. The hash can be cracked offline if the
-      password is weak, and every fresh deployment gets that admin account.
-      **Fix:** seed the admin from environment variables, or print a one-time
-      setup step, and rotate that password if it is still in use anywhere.
+- [ ] **Changing a password signs nobody out.** The web session cookie (7 days)
+      and the native app's access and refresh tokens are stateless JWTs carrying
+      only the user id (`src/lib/authTokens.ts`), and nothing checks them against
+      the account afterwards. So `npm run createAdmin -- … --reset` cannot take
+      the admin back from someone already signed in, and a refresh token can keep
+      renewing that access. Today the only way out is rotating `JWT_SECRET`, which
+      signs out every user. **Fix:** add `users.password_changed_at`, put the
+      token's `iat` next to it on every verify (the cookie, the bearer and the
+      refresh), and reject anything issued before it. That costs one indexed read
+      per authenticated request, route tiles included.
 
 ## Bugs that lose or corrupt data
 

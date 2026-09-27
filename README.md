@@ -29,7 +29,12 @@ npm run prepareMapData              # Downloads and transforms OSM data
 npm run importMapData -- data/europe-pruned.geojson data/japan-pruned.geojson   # Loads data, recalculates routes
 ```
 
-3. **Run application**
+3. **Create the admin account** (user 1 — no account is seeded; the password is prompted for)
+```bash
+npm run createAdmin -- you@example.com "Your name"
+```
+
+4. **Run application**
 ```bash
 npm run dev
 ```

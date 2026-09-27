@@ -52,14 +52,17 @@ async function fixSequences() {
 
     for (const { sequence_name, table_name, column_name } of sequences) {
       // setval to MAX(col); when the table is empty, reset to 1 with
-      // is_called=false so the first insert yields 1.
+      // is_called=false so the first insert yields 1 — except users, whose
+      // id 1 is reserved for the admin (`npm run createAdmin`), so a sequence
+      // rewound to 1 would make the next registration the admin.
+      const floor = table_name === "users" ? 1 : 0;
       const result = await client.query<{ max_id: number | null; new_value: number }>(
         `SELECT
            (SELECT MAX(${column_name}) FROM ${table_name}) AS max_id,
            CASE
-             WHEN (SELECT MAX(${column_name}) FROM ${table_name}) IS NULL
+             WHEN COALESCE((SELECT MAX(${column_name}) FROM ${table_name}), ${floor}) = 0
                THEN setval('${sequence_name}', 1, false)
-             ELSE setval('${sequence_name}', (SELECT MAX(${column_name}) FROM ${table_name}))
+             ELSE setval('${sequence_name}', GREATEST((SELECT MAX(${column_name}) FROM ${table_name}), ${floor}))
            END AS new_value`,
       );
 
