@@ -2,7 +2,13 @@ name: railway-logbook
 
 services:
   db:
-    image: imresamu/postgis:18-3.6-alpine
+    # Pinned by digest, like Martin below. The official image rather than
+    # imresamu/postgis: that one's alpine tags stopped being rebuilt at 18.1 in
+    # February 2026 while still being re-pushed, so pulling it never moved. This one
+    # is amd64 only - an arm64 Mac runs it emulated. Stay on Alpine: the databases
+    # use the libc provider, and moving from musl to glibc would change collation
+    # order under every text index.
+    image: postgis/postgis:18-3.6-alpine@sha256:ffcf0c4b904e41b9779f8098007fb5a9484025319c18c70cf8e1bcebb742b9b7
     container_name: db
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -16,17 +22,17 @@ services:
     restart: unless-stopped
 
   tiles:
-    # Pinned by digest: `latest` is pulled once per machine and never again, so it
-    # meant whatever was newest the day a machine first pulled it - 0.19.3 here,
-    # while a fresh pull would get a 1.x with a different configuration format.
-    # Upgrading is a change to make and test on purpose.
-    image: ghcr.io/maplibre/martin:martin-v0.19.3@sha256:897dc878a957f19a6d8cbc109c4b0566fa37098b6671f3fe5439649e0f761b92
+    # Pinned by digest: a moving tag is pulled once per machine and never again, so
+    # it means whatever was newest the day a machine first pulled it. Upgrading is
+    # a change to make and test on purpose - bump the tag and the digest together
+    # (the digest of the multi-arch index, `docker buildx imagetools inspect`).
+    image: ghcr.io/maplibre/martin:1.16.1@sha256:59902019bf9038926ff0c71174237d6852e64c457830a6349abe7090be8818ca
     container_name: tiles
     restart: always
     ports:
       - 127.0.0.1:3001:3000
     environment:
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${POSTGRES_DB}
+      - TILES_DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${POSTGRES_DB}
     volumes:
       - ./martin:/config
     command: --config /config/configuration.yml

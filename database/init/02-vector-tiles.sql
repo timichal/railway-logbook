@@ -286,7 +286,10 @@ BEGIN
             -- Render order: unvisited routes first (so visited are on top)
             CASE WHEN recent_trip.date IS NULL THEN 0 ELSE 1 END,
             rr.from_station,
-            rr.to_station
+            rr.to_station,
+            -- Parallel lines share both endpoints; without a tiebreaker their order
+            -- follows the plan, which changes the tile bytes (and Martin's ETag).
+            rr.track_id
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
 

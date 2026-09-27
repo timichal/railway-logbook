@@ -205,24 +205,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       as a 500 rather than "already exists". **Fix:** a unique index on
       `lower(email)`, normalize on write, and map 23505 to `ValidationError`.
 
-## Infra and deploy
-
-- [ ] **Upgrade the service images.** `docker-compose.yml`. Both were pulled
-      once per machine and never again, so they are whatever was newest that
-      day, on the server and in development alike.
-      - **Martin 0.19.3 → 1.x.** Pinned by digest to the 0.19.3 image that ran
-        as `latest`; `latest` is 1.16.1 now. A major version: check
-        `martin/configuration.yml` and the function-source signatures against
-        its changelog, try it locally (every Martin source, on both maps), then
-        bump the pin (tag and digest together).
-      - **PostgreSQL 18.1 → 18.6** (PostGIS 3.6.1). `imresamu/postgis:18-3.6-alpine`
-        is a moving tag, last pulled in February. A minor release, so the data
-        directory is kept as is — no dump/restore — but read the 18.2–18.6
-        release notes for any "reindex after upgrading" item before
-        `docker compose pull db && up -d db` (a short outage; take a
-        `backupRouteData` first). Pin it by digest as Martin is, so the version
-        running is the one the file names.
-
 ## Refactoring
 
 - [ ] **Share the station search and interaction setup between the two user

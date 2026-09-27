@@ -3,7 +3,9 @@
 
 # PostgreSQL connection (from environment variable)
 postgres:
-  connection_string: ${DATABASE_URL}
+  # Not DATABASE_URL: Martin also reads that one on its own, as a deprecated
+  # fallback, and warns about it at startup.
+  connection_string: ${TILES_DATABASE_URL}
 
   # Connection pool settings for performance
   pool_size: 20
@@ -68,9 +70,6 @@ cache_size_mb: 0
 
 # Server configuration
 listen_addresses: "0.0.0.0:3000"
-
-# Disable automatic bounds calculation on startup (improves startup time)
-auto_bounds: skip
 
 # Enable CORS for web access
 cors: true
