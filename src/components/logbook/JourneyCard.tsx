@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { deleteJourney, getJourney, saveJourneyEdits } from "@/lib/journeyActions";
 import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type {
@@ -123,13 +124,9 @@ export default function JourneyCard({
     setIsLoadingDetails(true);
     (async () => {
       try {
-        const result = await getJourney(journey.id);
+        const result = unwrap(await getJourney(journey.id));
         if (cancelled) return;
-        if (result.error) {
-          showError(result.error);
-          return;
-        }
-        const routes = result.routes || [];
+        const routes = result.routes;
         setViewedRoutes(routes);
         if (result.journey) {
           setEditName(result.journey.name);
@@ -150,7 +147,7 @@ export default function JourneyCard({
       } catch (error) {
         if (cancelled) return;
         console.error("Error loading journey:", error);
-        showError("Failed to load journey");
+        showError(actionErrorMessage(error, "Failed to load journey"));
       } finally {
         if (!cancelled) setIsLoadingDetails(false);
       }
@@ -215,25 +212,23 @@ export default function JourneyCard({
 
     setIsSaving(true);
     try {
-      const result = await saveJourneyEdits(journey.id, {
-        name: trimmedName,
-        description: trimmedDescription || null,
-        date: editDate,
-        tripId: editTripId !== originalSnapshot.tripId ? editTripId : undefined,
-        upsert,
-        remove,
-      });
-      if (result.error) {
-        showError(result.error);
-        return;
-      }
+      unwrap(
+        await saveJourneyEdits(journey.id, {
+          name: trimmedName,
+          description: trimmedDescription || null,
+          date: editDate,
+          tripId: editTripId !== originalSnapshot.tripId ? editTripId : undefined,
+          upsert,
+          remove,
+        }),
+      );
 
       showSuccess("Journey updated");
       onRequestClose();
       onChanged();
     } catch (error) {
       console.error("Error saving journey:", error);
-      showError("Failed to save journey");
+      showError(actionErrorMessage(error, "Failed to save journey"));
     } finally {
       setIsSaving(false);
     }
@@ -241,17 +236,13 @@ export default function JourneyCard({
 
   const handleDelete = async () => {
     try {
-      const result = await deleteJourney(journey.id);
-      if (result.error) {
-        showError(result.error);
-      } else {
-        showSuccess("Journey deleted");
-        onRequestClose();
-        onChanged();
-      }
+      unwrap(await deleteJourney(journey.id));
+      showSuccess("Journey deleted");
+      onRequestClose();
+      onChanged();
     } catch (error) {
       console.error("Error deleting journey:", error);
-      showError("Failed to delete journey");
+      showError(actionErrorMessage(error, "Failed to delete journey"));
     } finally {
       setDeleteConfirm(false);
     }

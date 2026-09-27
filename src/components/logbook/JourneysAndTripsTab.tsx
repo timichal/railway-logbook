@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import TripCard from "@/components/logbook/TripCard";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { useRegionId } from "@/lib/regionContext";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
@@ -63,32 +64,28 @@ export default function JourneysAndTripsTab({
       let steppedBack = false;
       if (showSpinner) setIsLoading(true);
       try {
-        const result = await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch, regionId);
+        const result = unwrap(
+          await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch, regionId),
+        );
         if (requestId !== loadRequestRef.current) return;
-        if (result.error) {
-          showError(result.error);
+        // Deleting the last item on the last page leaves `page` past the end;
+        // step back rather than show "Page 3 of 2" over an empty list. The
+        // stale page (the deleted item included) goes at once, and the spinner
+        // stays up until the earlier page arrives.
+        const lastPage = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+        if (page > lastPage) {
+          steppedBack = true;
           setItems([]);
-          setTotal(0);
-        } else {
-          // Deleting the last item on the last page leaves `page` past the end;
-          // step back rather than show "Page 3 of 2" over an empty list. The
-          // stale page (the deleted item included) goes at once, and the spinner
-          // stays up until the earlier page arrives.
-          const lastPage = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
-          if (page > lastPage) {
-            steppedBack = true;
-            setItems([]);
-            setIsLoading(true);
-            setPage(lastPage);
-            return;
-          }
-          setItems(result.items);
-          setTotal(result.total);
+          setIsLoading(true);
+          setPage(lastPage);
+          return;
         }
+        setItems(result.items);
+        setTotal(result.total);
       } catch (error) {
         if (requestId !== loadRequestRef.current) return;
         console.error("Error loading items:", error);
-        showError("Failed to load journeys and trips");
+        showError(actionErrorMessage(error, "Failed to load journeys and trips"));
         setItems([]);
         setTotal(0);
       } finally {
@@ -99,9 +96,12 @@ export default function JourneysAndTripsTab({
   );
 
   const loadAvailableTrips = useCallback(async () => {
-    const result = await getAllTrips(regionId);
-    if (!result.error) {
-      setAvailableTrips(result.trips || []);
+    // A failure leaves the picker as it was, which only costs filing a journey
+    // under a trip later.
+    try {
+      setAvailableTrips(unwrap(await getAllTrips(regionId)).trips);
+    } catch (error) {
+      console.error("Error loading trips:", error);
     }
   }, [regionId]);
 
@@ -174,19 +174,17 @@ export default function JourneysAndTripsTab({
     }
     setIsSavingNewTrip(true);
     try {
-      const result = await createTrip(newTripName.trim(), newTripDescription.trim() || null);
-      if (result.error) {
-        showError(result.error);
-      } else {
-        showSuccess(`Trip "${result.trip?.name}" created`);
-        setNewTripName("");
-        setNewTripDescription("");
-        setIsCreatingTrip(false);
-        handleChanged();
-      }
+      const { trip } = unwrap(
+        await createTrip(newTripName.trim(), newTripDescription.trim() || null),
+      );
+      showSuccess(`Trip "${trip?.name}" created`);
+      setNewTripName("");
+      setNewTripDescription("");
+      setIsCreatingTrip(false);
+      handleChanged();
     } catch (error) {
       console.error("Error creating trip:", error);
-      showError("Failed to create trip");
+      showError(actionErrorMessage(error, "Failed to create trip"));
     } finally {
       setIsSavingNewTrip(false);
     }

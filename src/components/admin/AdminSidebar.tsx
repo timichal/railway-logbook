@@ -7,15 +7,27 @@ import AdminCreateRouteTab, {
 } from "@/components/admin/AdminCreateRouteTab";
 import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
-import { unwrap } from "@/lib/actionResult";
-import { getFrequencyTags, getRailwayRoute, type SaveRouteData } from "@/lib/adminRouteActions";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
+import {
+  type AdminRouteDetail,
+  getFrequencyTags,
+  getRailwayRoute,
+  type SaveRouteData,
+} from "@/lib/adminRouteActions";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
 interface AdminSidebarProps {
   selectedRouteId?: number | null;
-  onRouteSelect?: (routeId: number | null) => void;
+  /** The selected route's detail, loaded by the page (the map reads it too). */
+  selectedRoute: AdminRouteDetail | null;
+  selectedRouteLoading: boolean;
+  onSelectedRouteChange: React.Dispatch<React.SetStateAction<AdminRouteDetail | null>>;
+  /** Re-reads the selected route after a save; resolves the detail, or null if superseded. */
+  onReloadSelectedRoute: () => Promise<AdminRouteDetail | null>;
+  /** `focus` flies the map to the route once it has loaded. */
+  onRouteSelect?: (routeId: number | null, options?: { focus?: boolean }) => void;
   /** Bumped per coordinate click on the map; switches to the create tab. */
   coordinateClickTrigger?: number;
   /** The create form's points. Owned by the page, which fills them from map clicks. */
@@ -40,6 +52,10 @@ interface AdminSidebarProps {
 
 export default function AdminSidebar({
   selectedRouteId,
+  selectedRoute,
+  selectedRouteLoading,
+  onSelectedRouteChange,
+  onReloadSelectedRoute,
   onRouteSelect,
   coordinateClickTrigger,
   createFormCoordinates,
@@ -150,9 +166,7 @@ export default function AdminSidebar({
         // in edit mode would only keep the map's routes hidden behind a save that
         // is bound to fail again.
         onEditingGeometryChange(null);
-        showError(
-          `Failed to load route details: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
+        showError(`Failed to load route details: ${actionErrorMessage(error)}`);
       }
     },
     [onEditingGeometryChange, onCreateFormCoordinatesChange, showError],
@@ -220,6 +234,10 @@ export default function AdminSidebar({
         {activeTab === "routes" && (
           <AdminRoutesTab
             selectedRouteId={selectedRouteId}
+            selectedRoute={selectedRoute}
+            selectedRouteLoading={selectedRouteLoading}
+            onSelectedRouteChange={onSelectedRouteChange}
+            onReloadSelectedRoute={onReloadSelectedRoute}
             onRouteSelect={onRouteSelect}
             onRouteDeleted={onRouteDeleted}
             onRouteUpdated={onRouteUpdated}
@@ -247,6 +265,12 @@ export default function AdminSidebar({
             onGeometryEditComplete={() => {
               endGeometryEdit();
               onRouteUpdated?.();
+              // The route stays selected, and the re-pick changed its length and
+              // validity: the banner and the map's length box must follow.
+              onReloadSelectedRoute().catch((error) => {
+                console.error("Error reloading route after geometry edit:", error);
+                showError(`Route saved, but reloading it failed: ${actionErrorMessage(error)}`);
+              });
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
             availableTags={availableTags}

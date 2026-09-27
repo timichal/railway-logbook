@@ -12,34 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Refactoring
 
-- [ ] **The admin map fetches the selected route twice.**
-      `useRouteLength` calls `getRailwayRoute`, geometry and all, only to read
-      `length_km`, while `AdminRoutesTab` fetches the same detail for the same
-      selection. Its fetch also has no stale-response guard: select A then B,
-      and if A's reply lands last the map shows A's length beside B. **Fix:**
-      have whoever loads the detail hand the length to the map (lift the
-      selected route's detail to `AdminPageClient`), and drop the second fetch.
-
-- [ ] **Journey and trip actions report failure differently from admin ones.**
-      They return `{ …, error }` shapes of their own (`journeyActions.ts`,
-      `tripActions.ts`), so they need a second lint plugin
-      (`bindActionResults.grit`), and a call site checks `result.error` by hand
-      where an admin one writes `unwrap(...)`. Moving them onto `ActionResult`
-      would give the web app one error model and one rule. The cost is that the
-      query modules under them return the same shapes to the HTTP API
-      (`api/v1`, `lib/api/response.ts`), so either the web actions translate at
-      the boundary or both transports change together.
-
-- [ ] **Style values hard-coded outside `style.ts`.**
-      - The dark ground `#05070a` is written twice in `basemap.ts` (`:204`,
-        `:371`), and the two must match.
-      - Railway-parts widths are inline at `src/lib/map/index.ts:437-446`.
-      - Default route and click widths (3 and 16) are inline at `index.ts:134`,
-        `:171`, `:209`, `:248`, `:277`.
-      - Line-class, scenic and frequency badge colours are inline in
-        `tooltipFormatting.ts:167-192`.
-      - There is also an empty duplicate "OPACITIES" banner in `style.ts`.
-
 - [ ] **There are no tests at all.** The riskiest logic is pure and easy to cover:
       - `routeCoverage.ts`: `isRouteFullyRidden` must agree with the SQL
         function.

@@ -5,9 +5,14 @@
  * `journeyQueries.ts`. The queries are a plain module so the mobile API's route
  * handlers can call them after resolving a bearer token instead
  * (MOBILE_APP_PLAN.md, Phase 1).
+ *
+ * The queries report failure in-band, for the API's sake; these return it as an
+ * `ActionResult` like every other action (`inBand`, `asUser`), so a call site
+ * reads it through `unwrap`.
  */
 
-import { getUser } from "./authActions";
+import { type ActionResult, inBand } from "./actionResult";
+import { asUser } from "./authHelpers";
 import {
   createJourneyForUser,
   deleteJourneyForUser,
@@ -19,17 +24,10 @@ import {
 import type { Journey, RailwayRoute } from "./shared/types";
 
 /** Get a single journey with all its logged routes. */
-export async function getJourney(journeyId: number): Promise<{
-  journey: Journey | null;
-  routes: RailwayRoute[];
-  error?: string;
-}> {
-  const user = await getUser();
-  if (!user) {
-    return { journey: null, routes: [], error: "Not authenticated" };
-  }
-
-  return journeyForUser(user.id, journeyId);
+export async function getJourney(
+  journeyId: number,
+): Promise<ActionResult<{ journey: Journey | null; routes: RailwayRoute[] }>> {
+  return asUser(async (userId) => inBand(await journeyForUser(userId, journeyId)));
 }
 
 /** Create a new journey and log routes to it (atomic operation). */
@@ -41,21 +39,20 @@ export async function createJourney(
   partialFlags: boolean[],
   tripId?: number | null,
   coveredRanges?: (LoggedRange | null)[],
-): Promise<{ journey: Journey | null; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { journey: null, error: "Not authenticated" };
-  }
-
-  return createJourneyForUser(
-    user.id,
-    name,
-    description,
-    date,
-    trackIds,
-    partialFlags,
-    tripId,
-    coveredRanges,
+): Promise<ActionResult<{ journey: Journey | null }>> {
+  return asUser(async (userId) =>
+    inBand(
+      await createJourneyForUser(
+        userId,
+        name,
+        description,
+        date,
+        trackIds,
+        partialFlags,
+        tripId,
+        coveredRanges,
+      ),
+    ),
   );
 }
 
@@ -66,23 +63,15 @@ export async function createJourney(
 export async function saveJourneyEdits(
   journeyId: number,
   edits: JourneyEdits,
-): Promise<{ success: boolean; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  return saveJourneyEditsForUser(user.id, journeyId, edits);
+): Promise<ActionResult<void>> {
+  return asUser(async (userId) => {
+    inBand(await saveJourneyEditsForUser(userId, journeyId, edits));
+  });
 }
 
 /** Delete a journey and all its logged parts. */
-export async function deleteJourney(
-  journeyId: number,
-): Promise<{ success: boolean; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  return deleteJourneyForUser(user.id, journeyId);
+export async function deleteJourney(journeyId: number): Promise<ActionResult<void>> {
+  return asUser(async (userId) => {
+    inBand(await deleteJourneyForUser(userId, journeyId));
+  });
 }

@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useState } from "react";
-import { unwrap } from "@/lib/actionResult";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { findRailwayPathFromCoordinates } from "@/lib/adminMapActions";
 
 /** The path found between the two picked points: what the admin map draws and a save stores. */
@@ -62,9 +62,7 @@ export function useRoutePreview(
       .catch((error) => {
         if (cancelled) return;
         console.error("Preview: path search failed:", error);
-        reportError(
-          `Error finding a path: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
+        reportError(`Error finding a path: ${actionErrorMessage(error)}`);
       });
 
     return () => {

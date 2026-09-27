@@ -1,0 +1,20 @@
+// An admin, journey or trip server action returns its refusal as `{ error }`
+// rather than throwing it (`asAdmin` / `asUser`, src/lib/authHelpers.ts), so a
+// call whose result is not passed through `unwrap` reports a refused save as
+// done. Accepted forms: `unwrap(await action(…))` and `action(…).then(unwrap)`.
+//
+// The import is looked for among the module's top-level items (`some`), never
+// with `$program <: contains`: that walks the whole file for every call in it,
+// which made `npm run lint` some 80x slower.
+language js
+
+`$f($args)` as $call where {
+  $program <: JsModule(items=$items),
+  $items <: some `import { $specs } from $src` where {
+    $src <: r"\"@/lib/(?:admin[A-Za-z]*|journey|trip)Actions\"",
+    $specs <: contains $f
+  },
+  not $call <: within `unwrap(await $inner)` where { $inner <: $call } ,
+  not $call <: within `$inner.then(unwrap)` where { $inner <: $call } ,
+  register_diagnostic(span=$call, message="This action returns its refusal as { error }: write unwrap(await action(…)) or action(…).then(unwrap), or a refusal passes for success.")
+}

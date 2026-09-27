@@ -2,17 +2,23 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CreateFormCoordinates,
   EditingGeometry,
 } from "@/components/admin/AdminCreateRouteTab";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import Navbar from "@/components/layout/Navbar";
+import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
-import { unwrap } from "@/lib/actionResult";
-import { type SaveRouteData, saveRailwayRoute } from "@/lib/adminRouteActions";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
+import {
+  type AdminRouteDetail,
+  getRailwayRoute,
+  type SaveRouteData,
+  saveRailwayRoute,
+} from "@/lib/adminRouteActions";
 import { logout } from "@/lib/authActions";
 import { useRoutePreview } from "@/lib/map/hooks/useRoutePreview";
 import { RegionProvider, useRegionId } from "@/lib/regionContext";
@@ -53,6 +59,28 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   const { showError, showSuccess } = useToast();
   const isMobile = useIsMobile();
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
+  // The selected route's detail, loaded here once for both of its readers: the
+  // sidebar's edit form and the map's length box. The map used to fetch it again
+  // for the length alone, with nothing to stop an earlier selection's reply
+  // landing last. Here rather than in the sidebar because the mobile drawer
+  // unmounts the sidebar, and the map still wants the length.
+  const selectedRoute = useAsyncLoad(
+    () =>
+      selectedRouteId === null
+        ? Promise.resolve(null)
+        : getRailwayRoute(selectedRouteId).then(unwrap),
+    [selectedRouteId],
+    "route details",
+  );
+  const selectedRouteLoading = selectedRouteId !== null && selectedRoute.loading;
+  const { data: selectedRouteDetail, setData: setSelectedRouteDetail } = selectedRoute;
+  // Read after an await, to tell whether the selection has moved on meanwhile.
+  const selectedRouteIdRef = useRef(selectedRouteId);
+  selectedRouteIdRef.current = selectedRouteId;
+  // A route picked from the list is flown to once its geometry is in (one picked
+  // on the map is already on screen). Held here, beside the load, rather than in
+  // the list: the mobile drawer holding the list may close before the load ends.
+  const focusOnLoadRef = useRef<number | null>(null);
   // Bumped per coordinate click, so the sidebar can switch to its create tab.
   const [coordinateClickTrigger, setCoordinateClickTrigger] = useState<number>(0);
   // The create form's two picked points, held here and nowhere else: the map draws
@@ -91,11 +119,45 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setFocusGeometry(null);
   }, [regionId]);
 
+  // However the selection moves on — a failed load, a region switch, a coordinate
+  // click — a fly-to still waiting for the old route is dropped with it.
+  useEffect(() => {
+    if (focusOnLoadRef.current !== selectedRouteId) focusOnLoadRef.current = null;
+  }, [selectedRouteId]);
+
+  useEffect(() => {
+    if (!selectedRouteDetail || focusOnLoadRef.current !== selectedRouteDetail.track_id) return;
+    focusOnLoadRef.current = null;
+    if (selectedRouteDetail.geometry) setFocusGeometry(selectedRouteDetail.geometry);
+  }, [selectedRouteDetail]);
+
+  // A route whose detail cannot be loaded (deleted in another tab, session gone)
+  // is not left selected: highlighted on the map with nothing to edit beside it.
+  useEffect(() => {
+    if (!selectedRoute.error) return;
+    showError(`Failed to load route details: ${actionErrorMessage(selectedRoute.error)}`);
+    setSelectedRouteId(null);
+  }, [selectedRoute.error, showError]);
+
+  // Re-reads the selected route after a save changed it on the server (validity,
+  // length, the under-repair flag), keeping the loaded detail on screen meanwhile.
+  // Resolves the detail it applied, or null if the selection moved on first.
+  const reloadSelectedRoute = useCallback(async (): Promise<AdminRouteDetail | null> => {
+    const trackId = selectedRouteIdRef.current;
+    if (trackId === null) return null;
+    const detail = unwrap(await getRailwayRoute(trackId));
+    if (selectedRouteIdRef.current !== trackId) return null;
+    setSelectedRouteDetail(detail);
+    return detail;
+  }, [setSelectedRouteDetail]);
+
   // Resizable sidebar hook
   const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } =
     useResizableSidebar({ isMobile });
 
-  const handleRouteSelect = useCallback((routeId: number | null) => {
+  const handleRouteSelect = useCallback((routeId: number | null, { focus = false } = {}) => {
+    // Any other selection drops a fly-to still waiting for its route
+    focusOnLoadRef.current = focus ? routeId : null;
     // null unselects the route
     if (routeId === null) {
       setSelectedRouteId(null);
@@ -161,7 +223,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       return true;
     } catch (error) {
       console.error("AdminPageClient: Error saving route:", error);
-      showError(`Error saving route: ${error instanceof Error ? error.message : "Unknown error"}`);
+      showError(`Error saving route: ${actionErrorMessage(error)}`);
       return false;
     }
   };
@@ -208,6 +270,10 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   const sidebarContent = (
     <AdminSidebar
       selectedRouteId={selectedRouteId}
+      selectedRoute={selectedRouteDetail}
+      selectedRouteLoading={selectedRouteLoading}
+      onSelectedRouteChange={setSelectedRouteDetail}
+      onReloadSelectedRoute={reloadSelectedRoute}
       onRouteSelect={handleRouteSelect}
       coordinateClickTrigger={coordinateClickTrigger}
       createFormCoordinates={createFormCoordinates}
@@ -278,6 +344,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
           <AdminMap
             className="w-full h-full"
             selectedRouteId={selectedRouteId}
+            selectedRouteLength={selectedRouteDetail?.length_km ?? null}
             onRouteSelect={handleRouteSelect}
             onCoordinateClick={handleCoordinateClick}
             previewRoute={previewRoute}

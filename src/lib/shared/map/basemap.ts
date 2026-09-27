@@ -199,7 +199,7 @@ export function createBasemapFadeLayer(
     paint: {
       // The wash is toward the ground the basemap is drawn on, so it fades rather
       // than tints: white over liberty, near-black over the dark style.
-      "background-color": dark ? "#05070a" : "#ffffff",
+      "background-color": dark ? COLORS.basemapGroundDark : COLORS.basemapGround,
       "background-opacity": dark ? OPACITIES.basemapFadeDark : OPACITIES.basemapFade,
     },
   };
@@ -349,7 +349,11 @@ export function createOSMBackgroundGroundLayer(
   theme: ResolvedTheme,
 ): BackgroundLayerSpecification | null {
   if (theme !== "dark") return null;
-  return { id: "background_ground", type: "background", paint: { "background-color": "#05070a" } };
+  return {
+    id: "background_ground",
+    type: "background",
+    paint: { "background-color": COLORS.basemapGroundDark },
+  };
 }
 
 export function createOSMBackgroundSource(): RasterSourceSpecification {

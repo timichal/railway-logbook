@@ -90,6 +90,14 @@ export const COLORS = {
    */
   countryBorder: "#6b7280",
   countryBorderDark: "#9aa4b2",
+  /**
+   * The ground the basemap is drawn on, which the fade washes toward (so it fades
+   * rather than tints) and which the dark raster fallback paints under its tiles.
+   * The two uses of the dark one must agree, or the fallback would fade toward
+   * one black and sit on another.
+   */
+  basemapGround: "#ffffff",
+  basemapGroundDark: "#05070a",
   adminNotes: {
     fill: "#fbbf24", // Yellow/amber for notes
     stroke: "#78350f", // Dark brown stroke
@@ -101,6 +109,18 @@ export const COLORS = {
     end: "#dc2626", // Red for end coordinate
     routeEndpoint: "#3b82f6", // Blue dot for every existing route endpoint
     stroke: "#ffffff",
+  },
+  /**
+   * Badges in the route popup and the native feature sheet (`routeBadges` in
+   * `routeFeature.ts`). Line class only earns one above branch. The usage-type
+   * badges take theirs from `usageOptions` in `constants.ts`, beside the labels
+   * the sidebar shows them with.
+   */
+  badges: {
+    highspeed: { color: "#ffffff", bgColor: "#ef4444" },
+    main: { color: "#1e40af", bgColor: "#bfdbfe" },
+    scenic: { color: "#78350f", bgColor: "#fbbf24" },
+    frequency: { color: "#166534", bgColor: "#dcfce7" },
   },
 } as const;
 
@@ -116,6 +136,12 @@ export const WIDTHS = {
     z7: { branch: 2, main: 2.5, highspeed: 3 },
   },
   adminRoute: { branch: 2.5, main: 3, highspeed: 3 },
+  // What the route layer factories draw with when the caller passes no width
+  // expression of its own. The scenic outline is the route's width plus
+  // `scenicOutlineOffset`, since a zoom-interpolate cannot be wrapped in a `+`.
+  fallback: { route: 3, clickBuffer: 16, scenicOutlineOffset: 6 },
+  // Raw OSM parts on the admin map; a hovered part thickens from z7.
+  railwayParts: { z4: 0.8, z7: 3, z7Hover: 5 },
   clickBuffer: {
     z4: { branch: 14, main: 14, highspeed: 14 },
     z12: { branch: 16, main: 16, highspeed: 16 },
@@ -190,10 +216,6 @@ export const CIRCLES = {
   // Blue dots marking every existing route endpoint on the admin map.
   routeEndpoint: { radius: 5, strokeWidth: 1.5 },
 } as const;
-
-// ============================================================================
-// OPACITIES
-// ============================================================================
 
 // ============================================================================
 // LABELS

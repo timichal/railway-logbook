@@ -21,3 +21,18 @@ export async function asAdmin<T>(action: () => Promise<T>): Promise<ActionResult
     return action();
   });
 }
+
+/**
+ * The body of a signed-in user's server action (the journey and trip ones):
+ * refuses a visitor with no session, then runs `action` with the user's id,
+ * returning expected rejections as `{ error }` exactly as `asAdmin` does.
+ */
+export async function asUser<T>(action: (userId: number) => Promise<T>): Promise<ActionResult<T>> {
+  return asActionResult(async () => {
+    const user = await getUser();
+    if (!user) {
+      throw new ValidationError("Not authenticated");
+    }
+    return action(user.id);
+  });
+}

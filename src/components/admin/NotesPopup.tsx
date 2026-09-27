@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { unwrap } from "@/lib/actionResult";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { createAdminNote, deleteAdminNote, updateAdminNote } from "@/lib/adminNotesActions";
 import { type NoteType, noteTypeOptions } from "@/lib/shared/constants";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
@@ -78,7 +78,7 @@ export default function NotesPopup({
       onSaved();
       onClose();
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Failed to save note");
+      showError(actionErrorMessage(error, "Failed to save note"));
     } finally {
       busyRef.current = false;
       setIsSaving(false);
@@ -96,7 +96,7 @@ export default function NotesPopup({
       onSaved();
       onClose();
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Failed to delete note");
+      showError(actionErrorMessage(error, "Failed to delete note"));
     } finally {
       busyRef.current = false;
       setIsDeleting(false);

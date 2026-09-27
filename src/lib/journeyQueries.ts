@@ -6,9 +6,10 @@
  * handlers resolve a bearer token and call the same functions
  * (MOBILE_APP_PLAN.md, Phase 1).
  *
- * Failures come back in-band as `{ error }` rather than as thrown exceptions,
- * which is what the web callers already expect; the route handlers turn the
- * message into a status code (see `src/lib/api/response.ts`).
+ * Failures come back in-band as `{ error }` rather than as thrown exceptions:
+ * the route handlers turn the message into a status code (see
+ * `src/lib/api/response.ts`), and the web actions into an `ActionResult`
+ * (`inBand` in `actionResult.ts`).
  */
 
 import pool from "./db";

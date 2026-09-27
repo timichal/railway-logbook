@@ -8,7 +8,7 @@ import type {
 import { getNoteTypeColor, noteTypeOptions } from "../constants";
 import type { ResolvedTheme } from "../theme/types";
 import { BASEMAP_FONT_BOLD } from "./basemap";
-import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES } from "./style";
+import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
 import { ZOOM_RANGES } from "./zoomRanges";
 
 /**
@@ -67,7 +67,7 @@ export function createRailwayRoutesLayer(
     colorExpression,
     widthExpression,
     opacityExpression,
-    defaultWidth = 3,
+    defaultWidth = WIDTHS.fallback.route,
     defaultOpacity = OPACITIES.defaultRoute,
     filter,
   } = config;
@@ -108,7 +108,7 @@ export function createRailwayRoutesLayer(
 export function createRailwayRoutesClickLayer(
   config: RailwayRoutesPaintConfig = {},
 ): LineLayerSpecification {
-  const { widthExpression, defaultWidth = 16, filter } = config;
+  const { widthExpression, defaultWidth = WIDTHS.fallback.clickBuffer, filter } = config;
 
   const layer: LineLayerSpecification = {
     id: "railway_routes_click",
@@ -146,7 +146,7 @@ export function createRailwayRoutesSpecialLayer(
     colorExpression,
     widthExpression,
     opacityExpression,
-    defaultWidth = 3,
+    defaultWidth = WIDTHS.fallback.route,
     defaultOpacity = OPACITIES.defaultRoute,
   } = config;
 
@@ -185,7 +185,7 @@ export function createRailwayRoutesHeritageLayer(
     colorExpression,
     widthExpression,
     opacityExpression,
-    defaultWidth = 3,
+    defaultWidth = WIDTHS.fallback.route,
     defaultOpacity = OPACITIES.defaultRoute,
   } = config;
 
@@ -209,18 +209,16 @@ export function createRailwayRoutesHeritageLayer(
   };
 }
 
-const SCENIC_OUTLINE_DEFAULT_OFFSET = 6; // px added to the visible width when no widthExpression is supplied
-
 export function createScenicRoutesOutlineLayer(
   config: RailwayRoutesPaintConfig = {},
 ): LineLayerSpecification {
-  const { widthExpression, defaultWidth = 3, filter } = config;
+  const { widthExpression, defaultWidth = WIDTHS.fallback.route, filter } = config;
 
   // MapLibre forbids wrapping a zoom-interpolate inside another expression like
   // ['+', expr, 6], so the caller must supply a fully-formed width expression
   // (typically getUserRouteScenicOutlineWidthExpression).
   const outlineWidth: ExpressionSpecification | number =
-    widthExpression ?? defaultWidth + SCENIC_OUTLINE_DEFAULT_OFFSET;
+    widthExpression ?? defaultWidth + WIDTHS.fallback.scenicOutlineOffset;
 
   const layer: LineLayerSpecification = {
     id: "railway_routes_scenic_outline",
@@ -344,9 +342,14 @@ export function createRailwayPartsLayer(): LineLayerSpecification {
         ["linear"],
         ["zoom"],
         4,
-        0.8,
+        WIDTHS.railwayParts.z4,
         7,
-        ["case", ["boolean", ["feature-state", "hover"], false], 5, 3],
+        [
+          "case",
+          ["boolean", ["feature-state", "hover"], false],
+          WIDTHS.railwayParts.z7Hover,
+          WIDTHS.railwayParts.z7,
+        ],
       ],
       "line-opacity": OPACITIES.railwayParts,
     },

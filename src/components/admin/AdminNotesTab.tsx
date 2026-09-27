@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { unwrap } from "@/lib/actionResult";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { getAllAdminNotes, updateAdminNote } from "@/lib/adminNotesActions";
 import { useRegionId } from "@/lib/regionContext";
 import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/shared/constants";
@@ -35,9 +35,7 @@ export default function AdminNotesTab({
       const data = unwrap(await getAllAdminNotes(regionId));
       setNotes(data);
     } catch (error) {
-      showError(
-        `Failed to load notes: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Failed to load notes: ${actionErrorMessage(error)}`);
     } finally {
       setIsLoading(false);
     }
@@ -68,9 +66,7 @@ export default function AdminNotesTab({
       showSuccess("Note type updated");
       onNoteChanged?.();
     } catch (error) {
-      showError(
-        `Failed to update type: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Failed to update type: ${actionErrorMessage(error)}`);
     } finally {
       setSavingId(null);
     }

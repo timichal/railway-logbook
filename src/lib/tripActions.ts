@@ -5,9 +5,14 @@
  * `tripQueries.ts`. The queries are a plain module so the mobile API's route
  * handlers can call them after resolving a bearer token instead
  * (MOBILE_APP_PLAN.md, Phase 1).
+ *
+ * The queries report failure in-band, for the API's sake; these return it as an
+ * `ActionResult` like every other action (`inBand`, `asUser`), so a call site
+ * reads it through `unwrap`.
  */
 
-import { getUser } from "./authActions";
+import { type ActionResult, inBand } from "./actionResult";
+import { asUser } from "./authHelpers";
 import type { RegionId } from "./shared/regions";
 import type { Trip } from "./shared/types";
 import {
@@ -28,44 +33,29 @@ import {
 export type { JourneyInTrip, StandaloneJourneyWithStats, TripsAndJourneysItem, TripWithStats };
 
 /** All of the current user's trips with computed stats, scoped to `region`. */
-export async function getAllTrips(region: RegionId): Promise<{
-  trips: TripWithStats[];
-  error?: string;
-}> {
-  const user = await getUser();
-  if (!user) {
-    return { trips: [], error: "Not authenticated" };
-  }
-
-  return tripsForUser(user.id, region);
+export async function getAllTrips(
+  region: RegionId,
+): Promise<ActionResult<{ trips: TripWithStats[] }>> {
+  return asUser(async (userId) => inBand(await tripsForUser(userId, region)));
 }
 
 /** Get a single trip with its assigned journeys. */
-export async function getTrip(tripId: number): Promise<{
-  trip: Trip | null;
-  journeys: JourneyInTrip[];
-  routeIds: number[];
-  error?: string;
-}> {
-  const user = await getUser();
-  if (!user) {
-    return { trip: null, journeys: [], routeIds: [], error: "Not authenticated" };
-  }
-
-  return tripForUser(user.id, tripId);
+export async function getTrip(tripId: number): Promise<
+  ActionResult<{
+    trip: Trip | null;
+    journeys: JourneyInTrip[];
+    routeIds: number[];
+  }>
+> {
+  return asUser(async (userId) => inBand(await tripForUser(userId, tripId)));
 }
 
 /** Create a new trip. */
 export async function createTrip(
   name: string,
   description: string | null,
-): Promise<{ trip: Trip | null; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { trip: null, error: "Not authenticated" };
-  }
-
-  return createTripForUser(user.id, name, description);
+): Promise<ActionResult<{ trip: Trip | null }>> {
+  return asUser(async (userId) => inBand(await createTripForUser(userId, name, description)));
 }
 
 /** Update trip metadata (name, description). */
@@ -73,36 +63,27 @@ export async function updateTrip(
   tripId: number,
   name: string,
   description: string | null,
-): Promise<{ trip: Trip | null; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { trip: null, error: "Not authenticated" };
-  }
-
-  return updateTripForUser(user.id, tripId, name, description);
+): Promise<ActionResult<{ trip: Trip | null }>> {
+  return asUser(async (userId) =>
+    inBand(await updateTripForUser(userId, tripId, name, description)),
+  );
 }
 
 /** Delete a trip (journeys get unassigned via ON DELETE SET NULL). */
-export async function deleteTrip(tripId: number): Promise<{ success: boolean; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  return deleteTripForUser(user.id, tripId);
+export async function deleteTrip(tripId: number): Promise<ActionResult<void>> {
+  return asUser(async (userId) => {
+    inBand(await deleteTripForUser(userId, tripId));
+  });
 }
 
 /** Assign a journey to a trip. */
 export async function assignJourneyToTrip(
   journeyId: number,
   tripId: number,
-): Promise<{ success: boolean; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  return assignJourneyToTripForUser(user.id, journeyId, tripId);
+): Promise<ActionResult<void>> {
+  return asUser(async (userId) => {
+    inBand(await assignJourneyToTripForUser(userId, journeyId, tripId));
+  });
 }
 
 /**
@@ -114,24 +95,15 @@ export async function getJourneysAndTrips(
   pageSize: number,
   search: string,
   region: RegionId,
-): Promise<{ items: TripsAndJourneysItem[]; total: number; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { items: [], total: 0, error: "Not authenticated" };
-  }
-
-  return journeysAndTripsForUser(user.id, page, pageSize, search, region);
+): Promise<ActionResult<{ items: TripsAndJourneysItem[]; total: number }>> {
+  return asUser(async (userId) =>
+    inBand(await journeysAndTripsForUser(userId, page, pageSize, search, region)),
+  );
 }
 
 /** Journeys not assigned to any trip (for the assignment picker), scoped to `region`. */
-export async function getUnassignedJourneys(region: RegionId): Promise<{
-  journeys: JourneyInTrip[];
-  error?: string;
-}> {
-  const user = await getUser();
-  if (!user) {
-    return { journeys: [], error: "Not authenticated" };
-  }
-
-  return unassignedJourneysForUser(user.id, region);
+export async function getUnassignedJourneys(
+  region: RegionId,
+): Promise<ActionResult<{ journeys: JourneyInTrip[] }>> {
+  return asUser(async (userId) => inBand(await unassignedJourneysForUser(userId, region)));
 }

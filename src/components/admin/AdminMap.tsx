@@ -123,6 +123,8 @@ interface AdminMapProps {
   onCoordinateClick?: (coordinate: [number, number]) => void;
   onRouteSelect?: (routeId: number | null) => void;
   selectedRouteId?: number | null;
+  /** The selected route's length, from the detail the page loads for the sidebar. */
+  selectedRouteLength: number | null;
   previewRoute?: PathPreview | null;
   selectedCoordinates?: {
     startingCoordinate: [number, number] | null;
@@ -143,6 +145,7 @@ export default function AdminMap({
   onCoordinateClick,
   onRouteSelect,
   selectedRouteId,
+  selectedRouteLength,
   previewRoute,
   selectedCoordinates,
   refreshTrigger,
@@ -166,7 +169,7 @@ export default function AdminMap({
   const isMobile = useIsMobile();
   const regionId = useRegionId();
 
-  const { previewLength, selectedRouteLength } = useRouteLength(previewRoute, selectedRouteId);
+  const previewLength = useRouteLength(previewRoute);
 
   // Store callbacks in refs to avoid map recreation on changes
   const onCoordinateClickRef = useRef(onCoordinateClick);

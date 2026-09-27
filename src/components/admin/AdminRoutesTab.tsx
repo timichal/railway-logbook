@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import RouteEditForm from "@/components/admin/RouteEditForm";
 import type { EditRouteData } from "@/components/admin/RouteMetadataFields";
 import RoutesList from "@/components/admin/RoutesList";
-import { unwrap } from "@/lib/actionResult";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import {
   type AdminRouteDetail,
   type AdminRouteSummary,
   deleteRailwayRoute,
   duplicateRailwayRoute,
   getAllRailwayRoutes,
-  getRailwayRoute,
   setRouteUnderRepair,
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
@@ -35,7 +34,14 @@ function editFormFromRoute(route: AdminRouteDetail): EditRouteData {
 
 interface AdminRoutesTabProps {
   selectedRouteId?: number | null;
-  onRouteSelect?: (routeId: number | null) => void;
+  /** The selected route's detail, loaded by the page. */
+  selectedRoute: AdminRouteDetail | null;
+  selectedRouteLoading: boolean;
+  onSelectedRouteChange: React.Dispatch<React.SetStateAction<AdminRouteDetail | null>>;
+  /** Re-reads the selected route after a save; resolves the detail, or null if superseded. */
+  onReloadSelectedRoute: () => Promise<AdminRouteDetail | null>;
+  /** `focus` flies the map to the route once it has loaded. */
+  onRouteSelect?: (routeId: number | null, options?: { focus?: boolean }) => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
   onEditGeometry?: (trackId: number) => void;
@@ -46,6 +52,10 @@ interface AdminRoutesTabProps {
 
 export default function AdminRoutesTab({
   selectedRouteId,
+  selectedRoute,
+  selectedRouteLoading,
+  onSelectedRouteChange,
+  onReloadSelectedRoute,
   onRouteSelect,
   onRouteDeleted,
   onRouteUpdated,
@@ -60,7 +70,6 @@ export default function AdminRoutesTab({
 
   // State
   const [routes, setRoutes] = useState<AdminRouteSummary[]>([]);
-  const [selectedRoute, setSelectedRoute] = useState<AdminRouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -71,6 +80,15 @@ export default function AdminRoutesTab({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const itemsPerPage = 100;
   const [editForm, setEditForm] = useState<EditRouteData | null>(null);
+  // The form is filled once per route loaded, not on every change to its detail:
+  // the under-repair toggle patches the detail in place, and refilling then would
+  // throw away edits still in progress.
+  const [formRouteId, setFormRouteId] = useState<number | null>(null);
+  const loadedRouteId = selectedRoute?.track_id ?? null;
+  if (loadedRouteId !== formRouteId) {
+    setFormRouteId(loadedRouteId);
+    setEditForm(selectedRoute ? editFormFromRoute(selectedRoute) : null);
+  }
 
   // Data loading
   const loadRoutes = async () => {
@@ -80,9 +98,7 @@ export default function AdminRoutesTab({
       setRoutes(routesData);
     } catch (error) {
       console.error("Error loading routes:", error);
-      showError(
-        `Failed to load routes: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Failed to load routes: ${actionErrorMessage(error)}`);
     } finally {
       setIsLoading(false);
     }
@@ -166,65 +182,15 @@ export default function AdminRoutesTab({
     showWithoutNameOnly,
   ]);
 
-  // Route selection. Only the latest click may apply: click A then B, and A's
-  // detail landing last would otherwise select A and fly the map there.
-  const routeRequestRef = useRef(0);
-  const handleRouteClick = useCallback(
-    async (trackId: number, { skipFocus = false } = {}) => {
-      const requestId = ++routeRequestRef.current;
-      try {
-        setIsLoading(true);
-        const routeDetail = unwrap(await getRailwayRoute(trackId));
-        if (requestId !== routeRequestRef.current) return;
-        setSelectedRoute(routeDetail);
-        setEditForm(editFormFromRoute(routeDetail));
-
-        if (onRouteSelect) {
-          onRouteSelect(trackId);
-        }
-
-        if (!skipFocus && onRouteFocus && routeDetail.geometry) {
-          onRouteFocus(routeDetail.geometry);
-        }
-      } catch (error) {
-        if (requestId !== routeRequestRef.current) return;
-        console.error("Error loading route detail:", error);
-        showError(
-          `Failed to load route details: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
-      } finally {
-        if (requestId === routeRequestRef.current) setIsLoading(false);
-      }
-    },
-    [onRouteSelect, onRouteFocus, showError],
-  );
-
-  // Clearing the selection counts as a newer request too, or a detail still in
-  // flight lands afterwards and selects its route again
-  const cancelRouteLoad = () => {
-    routeRequestRef.current++;
-    setIsLoading(false);
-  };
-
-  // Only a transition to "nothing selected" cancels: the effect below also runs
-  // with no selection whenever `handleRouteClick` changes identity, which must
-  // not cancel a list click still loading
-  const prevSelectedRouteIdRef = useRef(selectedRouteId);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: cancelRouteLoad only touches a ref and a state setter; it is redefined every render and must not re-run this.
-  useEffect(() => {
-    // Only (re)load when the externally-selected id differs from the loaded route.
-    // Both are numbers (the DB track_id and String→Number(feature.id) from the map),
-    // so a plain compare is reliable and won't re-fetch and clobber in-progress edits.
-    if (selectedRouteId && selectedRouteId !== selectedRoute?.track_id) {
-      handleRouteClick(selectedRouteId, { skipFocus: true });
-    } else if (!selectedRouteId) {
-      if (prevSelectedRouteIdRef.current) cancelRouteLoad();
-      setSelectedRoute(null);
-      setEditForm(null);
+  // Route selection. The page flies the map to a route picked here once it has
+  // loaded; one already loaded has nothing to wait for.
+  const handleRouteClick = (trackId: number) => {
+    if (selectedRoute?.track_id === trackId) {
+      if (selectedRoute.geometry) onRouteFocus?.(selectedRoute.geometry);
+      return;
     }
-    prevSelectedRouteIdRef.current = selectedRouteId;
-  }, [selectedRouteId, selectedRoute?.track_id, handleRouteClick]);
+    onRouteSelect?.(trackId, { focus: true });
+  };
 
   // Route actions
   const handleSaveRoute = async () => {
@@ -250,9 +216,7 @@ export default function AdminRoutesTab({
       );
     } catch (error) {
       console.error("Error updating route:", error);
-      showError(
-        `Failed to update route: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Failed to update route: ${actionErrorMessage(error)}`);
       setIsLoading(false);
       return;
     }
@@ -269,26 +233,27 @@ export default function AdminRoutesTab({
     // screen. One after the other, so the list reload's own `setIsLoading(false)`
     // is the last thing to run and the form stays disabled until both are in.
     try {
-      const routeDetail = unwrap(await getRailwayRoute(trackId));
-      setSelectedRoute(routeDetail);
-      setEditForm(editFormFromRoute(routeDetail));
+      // Null when another route was selected meanwhile, which has a detail of its own
+      const routeDetail = await onReloadSelectedRoute();
+      if (routeDetail) setEditForm(editFormFromRoute(routeDetail));
     } catch (error) {
       console.error("Error reloading route after save:", error);
-      showError(
-        `Route saved, but reloading it failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Route saved, but reloading it failed: ${actionErrorMessage(error)}`);
     }
     await loadRoutes();
   };
 
   const handleToggleUnderRepair = async (underRepair: boolean) => {
     if (!selectedRoute) return;
+    const trackId = selectedRoute.track_id;
 
     try {
       setIsLoading(true);
-      unwrap(await setRouteUnderRepair(selectedRoute.track_id, underRepair));
+      unwrap(await setRouteUnderRepair(trackId, underRepair));
 
-      setSelectedRoute({ ...selectedRoute, under_repair: underRepair });
+      onSelectedRouteChange((prev) =>
+        prev?.track_id === trackId ? { ...prev, under_repair: underRepair } : prev,
+      );
       await loadRoutes();
 
       // Repaints the admin map: the flag decides violet vs grey.
@@ -301,9 +266,7 @@ export default function AdminRoutesTab({
       );
     } catch (error) {
       console.error("Error updating under repair flag:", error);
-      showError(
-        `Failed to update under repair flag: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Failed to update under repair flag: ${actionErrorMessage(error)}`);
     } finally {
       setIsLoading(false);
     }
@@ -324,9 +287,6 @@ export default function AdminRoutesTab({
 
       await loadRoutes();
 
-      setSelectedRoute(null);
-      setEditForm(null);
-
       if (onRouteSelect) {
         onRouteSelect(null);
       }
@@ -343,9 +303,7 @@ export default function AdminRoutesTab({
       );
     } catch (error) {
       console.error("Error deleting route:", error);
-      showError(
-        `Error deleting route: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Error deleting route: ${actionErrorMessage(error)}`);
     } finally {
       setIsLoading(false);
     }
@@ -361,7 +319,7 @@ export default function AdminRoutesTab({
       await loadRoutes();
 
       // Select the new copy so the admin can immediately edit it.
-      await handleRouteClick(newTrackId, { skipFocus: true });
+      onRouteSelect?.(newTrackId);
 
       if (onRouteUpdated) {
         onRouteUpdated();
@@ -372,21 +330,14 @@ export default function AdminRoutesTab({
       );
     } catch (error) {
       console.error("Error duplicating route:", error);
-      showError(
-        `Error duplicating route: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Error duplicating route: ${actionErrorMessage(error)}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleUnselect = () => {
-    cancelRouteLoad();
-    setSelectedRoute(null);
-    setEditForm(null);
-    if (onRouteSelect) {
-      onRouteSelect(null);
-    }
+    onRouteSelect?.(null);
   };
 
   return (
@@ -418,6 +369,7 @@ export default function AdminRoutesTab({
           hasRouteNames={region.hasRouteNames}
           isLoading={isLoading && !selectedRoute}
           selectedRouteId={selectedRouteId}
+          selectedRouteLoading={selectedRouteLoading}
           searchQuery={searchQuery}
           showInvalidOnly={showInvalidOnly}
           showUnderRepairOnly={showUnderRepairOnly}
@@ -438,7 +390,8 @@ export default function AdminRoutesTab({
         <RouteEditForm
           selectedRoute={selectedRoute}
           editForm={editForm}
-          isLoading={isLoading}
+          // With no route loaded the form has no buttons, and only that load matters
+          isLoading={selectedRoute ? isLoading : selectedRouteLoading}
           availableTags={availableTags}
           onEditFormChange={setEditForm}
           onSave={handleSaveRoute}

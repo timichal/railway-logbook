@@ -1,28 +1,16 @@
-import { useEffect, useState } from "react";
-import { unwrap } from "@/lib/actionResult";
-import { getRailwayRoute } from "@/lib/adminRouteActions";
+import { useMemo } from "react";
 import { calculateDistance } from "../utils/distance";
 import type { PathPreview } from "./useRoutePreview";
 
 /**
- * Hook to manage route length calculations for preview and selected routes
+ * The length of the route preview, from its truncated coordinates — the ones the
+ * saved length is computed from, so the two match. The selected route's length
+ * is not worked out here: it comes with the detail the page already loads.
  */
-export function useRouteLength(
-  previewRoute: PathPreview | null | undefined,
-  selectedRouteId: number | null | undefined,
-) {
-  const [previewLength, setPreviewLength] = useState<number | null>(null);
-  const [selectedRouteLength, setSelectedRouteLength] = useState<number | null>(null);
+export function useRouteLength(previewRoute: PathPreview | null | undefined): number | null {
+  return useMemo(() => {
+    if (!previewRoute?.coordinates || previewRoute.coordinates.length < 2) return null;
 
-  // Calculate total length of preview route using truncated coordinates
-  // This ensures preview matches the saved length (which uses truncated coordinates)
-  useEffect(() => {
-    if (!previewRoute?.coordinates || previewRoute.coordinates.length < 2) {
-      setPreviewLength(null);
-      return;
-    }
-
-    // Calculate distance from truncated coordinates (matching database calculation)
     let totalLength = 0;
     for (let i = 0; i < previewRoute.coordinates.length - 1; i++) {
       totalLength += calculateDistance(
@@ -30,28 +18,6 @@ export function useRouteLength(
         previewRoute.coordinates[i + 1],
       );
     }
-    setPreviewLength(totalLength);
+    return totalLength;
   }, [previewRoute]);
-
-  // Fetch selected route length from database
-  useEffect(() => {
-    if (!selectedRouteId) {
-      setSelectedRouteLength(null);
-      return;
-    }
-
-    const fetchRouteLength = async () => {
-      try {
-        const route = unwrap(await getRailwayRoute(selectedRouteId));
-        setSelectedRouteLength(route.length_km);
-      } catch (error) {
-        console.error("Error fetching route length:", error);
-        setSelectedRouteLength(null);
-      }
-    };
-
-    fetchRouteLength();
-  }, [selectedRouteId]);
-
-  return { previewLength, selectedRouteLength };
 }

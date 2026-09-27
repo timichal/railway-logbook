@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import RouteMetadataFields, {
   routeMetadataIncomplete,
 } from "@/components/admin/RouteMetadataFields";
-import { unwrap } from "@/lib/actionResult";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { type SaveRouteData, saveRailwayRoute } from "@/lib/adminRouteActions";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
@@ -149,9 +149,7 @@ export default function AdminCreateRouteTab({
       onGeometryEditComplete?.();
     } catch (error) {
       console.error("Error updating route geometry:", error);
-      showError(
-        `Error updating route geometry: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      showError(`Error updating route geometry: ${actionErrorMessage(error)}`);
     } finally {
       savingRef.current = false;
       setIsSaving(false);

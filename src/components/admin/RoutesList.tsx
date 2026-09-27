@@ -14,6 +14,8 @@ interface RoutesListProps {
   /** Whether this region names its lines — gates the "Without name" filter. */
   hasRouteNames: boolean;
   isLoading: boolean;
+  /** The selected route's detail is still loading; its row says so. */
+  selectedRouteLoading: boolean;
   selectedRouteId?: number | null;
   searchQuery: string;
   showInvalidOnly: boolean;
@@ -41,6 +43,7 @@ export default function RoutesList({
   withoutNameCount,
   hasRouteNames,
   isLoading,
+  selectedRouteLoading,
   selectedRouteId,
   searchQuery,
   showInvalidOnly,
@@ -145,6 +148,9 @@ export default function RoutesList({
                 <div className="font-medium text-sm text-gray-900 truncate">
                   {route.from_station} ⟷ {route.to_station}
                 </div>
+                {selectedRouteLoading && selectedRouteId === route.track_id && (
+                  <div className="text-xs text-gray-500">Loading…</div>
+                )}
               </button>
             ))}
           </div>

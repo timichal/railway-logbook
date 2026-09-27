@@ -5,6 +5,7 @@ import {
   type UsageType,
 } from "../constants";
 import { REGIONS, type RegionId, regionUsageLabel } from "../regions";
+import { COLORS } from "./style";
 
 /**
  * What a route's tile feature *says*, separated from how either client draws it.
@@ -142,12 +143,9 @@ export function parseFrequencyTags(value: string | string[] | undefined): string
 
 /** Line class is only worth a badge when it is not the unremarkable default. */
 const LINE_CLASS_BADGE: Partial<Record<LineClass, Omit<RouteBadge, "label">>> = {
-  highspeed: { color: "#ffffff", bgColor: "#ef4444" },
-  main: { color: "#1e40af", bgColor: "#bfdbfe" },
+  highspeed: COLORS.badges.highspeed,
+  main: COLORS.badges.main,
 };
-
-const SCENIC_BADGE = { color: "#78350f", bgColor: "#fbbf24" };
-const FREQUENCY_BADGE = { color: "#166534", bgColor: "#dcfce7" };
 
 /**
  * Every badge a route earns, in the order they are shown: line class (unless
@@ -167,10 +165,10 @@ export function routeBadges(properties: RouteFeatureProperties, regionId: Region
     ...getUsageBadgeColors(properties.usage_type),
   });
 
-  if (properties.scenic) badges.push({ label: "Scenic", ...SCENIC_BADGE });
+  if (properties.scenic) badges.push({ label: "Scenic", ...COLORS.badges.scenic });
 
   for (const tag of parseFrequencyTags(properties.frequency)) {
-    badges.push({ label: tag, ...FREQUENCY_BADGE });
+    badges.push({ label: tag, ...COLORS.badges.frequency });
   }
 
   return badges;

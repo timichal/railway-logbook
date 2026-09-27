@@ -45,7 +45,7 @@ export default function RouteEditForm({
         style={{ width: "250px" }}
         className="overflow-y-auto flex-shrink-0 p-4 text-center text-gray-500"
       >
-        Select a route to edit
+        {isLoading ? "Loading route…" : "Select a route to edit"}
       </div>
     );
   }

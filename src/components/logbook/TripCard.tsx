@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { useRegionId } from "@/lib/regionContext";
 import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
@@ -75,10 +76,12 @@ export default function TripCard({
   const refreshTripHighlights = useCallback(async () => {
     if (openNestedJourneyId !== null) return;
     if (!isOpen) return;
-    const result = await getTrip(trip.id);
-    if (!result.error) {
-      setJourneys(result.journeys || []);
-      onHighlightRoutes?.(result.routeIds || []);
+    try {
+      const result = unwrap(await getTrip(trip.id));
+      setJourneys(result.journeys);
+      onHighlightRoutes?.(result.routeIds);
+    } catch (error) {
+      console.error("Error loading trip:", error);
     }
   }, [isOpen, openNestedJourneyId, trip.id, onHighlightRoutes]);
 
@@ -102,16 +105,12 @@ export default function TripCard({
     }
     setIsSavingEdit(true);
     try {
-      const result = await updateTrip(trip.id, editName.trim(), editDescription.trim() || null);
-      if (result.error) {
-        showError(result.error);
-      } else {
-        showSuccess("Trip updated");
-        onChanged();
-      }
+      unwrap(await updateTrip(trip.id, editName.trim(), editDescription.trim() || null));
+      showSuccess("Trip updated");
+      onChanged();
     } catch (error) {
       console.error("Error updating trip:", error);
-      showError("Failed to update trip");
+      showError(actionErrorMessage(error, "Failed to update trip"));
     } finally {
       setIsSavingEdit(false);
     }
@@ -124,17 +123,13 @@ export default function TripCard({
 
   const handleDelete = async () => {
     try {
-      const result = await deleteTrip(trip.id);
-      if (result.error) {
-        showError(result.error);
-      } else {
-        showSuccess("Trip deleted (journeys unassigned)");
-        onRequestClose();
-        onChanged();
-      }
+      unwrap(await deleteTrip(trip.id));
+      showSuccess("Trip deleted (journeys unassigned)");
+      onRequestClose();
+      onChanged();
     } catch (error) {
       console.error("Error deleting trip:", error);
-      showError("Failed to delete trip");
+      showError(actionErrorMessage(error, "Failed to delete trip"));
     } finally {
       setDeleteConfirm(false);
     }
@@ -144,16 +139,10 @@ export default function TripCard({
     setShowPicker(true);
     setIsLoadingUnassigned(true);
     try {
-      const result = await getUnassignedJourneys(regionId);
-      if (result.error) {
-        showError(result.error);
-        setUnassignedJourneys([]);
-      } else {
-        setUnassignedJourneys(result.journeys || []);
-      }
+      setUnassignedJourneys(unwrap(await getUnassignedJourneys(regionId)).journeys);
     } catch (error) {
       console.error("Error loading unassigned journeys:", error);
-      showError("Failed to load unassigned journeys");
+      showError(actionErrorMessage(error, "Failed to load unassigned journeys"));
       setUnassignedJourneys([]);
     } finally {
       setIsLoadingUnassigned(false);
@@ -162,18 +151,14 @@ export default function TripCard({
 
   const handleAssignJourney = async (journeyId: number) => {
     try {
-      const result = await assignJourneyToTrip(journeyId, trip.id);
-      if (result.error) {
-        showError(result.error);
-      } else {
-        showSuccess("Journey added to trip");
-        setUnassignedJourneys((prev) => prev.filter((j) => j.id !== journeyId));
-        await refreshTripHighlights();
-        onChanged();
-      }
+      unwrap(await assignJourneyToTrip(journeyId, trip.id));
+      showSuccess("Journey added to trip");
+      setUnassignedJourneys((prev) => prev.filter((j) => j.id !== journeyId));
+      await refreshTripHighlights();
+      onChanged();
     } catch (error) {
       console.error("Error assigning journey:", error);
-      showError("Failed to assign journey");
+      showError(actionErrorMessage(error, "Failed to assign journey"));
     }
   };
 
