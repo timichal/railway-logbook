@@ -908,17 +908,30 @@ function connectingSide(
  * `fractions` is `findRoutesNearStations`' own: the terminal routes were picked
  * from the routes it matched to the from and to stations, so where each station
  * sits along them is already known.
+ *
+ * A plan on a single route covers the span of every stop along it, vias
+ * included, so an out-and-back (A via B to A) covers A–B rather than nothing.
+ *
+ * A terminal route the journey barely enters — its station within
+ * MIN_UNTRAVELLED_KM of the endpoint the journey leaves through — comes back in
+ * `untravelled` rather than as a trim: the station projecting a few metres inside
+ * the route is the same noise that tolerance absorbs elsewhere, and dropping a
+ * zero-width trim as "leaves nothing out" would count the route at full length.
+ * A single-route plan is only untravelled when every stop sits on one point.
  */
 async function computeTravelledTrims(
   path: number[],
   sides: (EndpointSide | null)[],
   routeInfo: Map<number, RouteBearingInfo>,
   fractions: Map<string, number>,
-  fromStationId: number,
-  toStationId: number,
-): Promise<Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>> {
+  stationSequence: number[],
+): Promise<{
+  trimmed: Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>;
+  untravelled: Set<number>;
+}> {
   const trimmed = new Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>();
-  if (path.length === 0) return trimmed;
+  const untravelled = new Set<number>();
+  if (path.length === 0) return { trimmed, untravelled };
 
   const firstId = path[0];
   const lastId = path[path.length - 1];
@@ -928,16 +941,14 @@ async function computeTravelledTrims(
 
   const specs: TrimSpec[] = [];
 
+  const fromStationId = stationSequence[0];
+  const toStationId = stationSequence[stationSequence.length - 1];
+
   if (path.length === 1) {
-    // Both ends on one route: the covered stretch is the piece between them
-    const fromFrac = fractions.get(pairKey(firstId, fromStationId));
-    const toFrac = fractions.get(pairKey(firstId, toStationId));
-    if (fromFrac !== undefined && toFrac !== undefined) {
-      specs.push({
-        trackId: firstId,
-        lo: Math.min(fromFrac, toFrac),
-        hi: Math.max(fromFrac, toFrac),
-      });
+    // Every stop on one route: the covered stretch spans all of them
+    const stopFracs = stationSequence.map((id) => fractions.get(pairKey(firstId, id)));
+    if (stopFracs.every((frac): frac is number => frac !== undefined)) {
+      specs.push({ trackId: firstId, lo: Math.min(...stopFracs), hi: Math.max(...stopFracs) });
     }
   } else {
     const fromFrac = occursOnce(firstId)
@@ -968,13 +979,19 @@ async function computeTravelledTrims(
     }
   }
 
-  // Drop trims that leave nothing out, and degenerate ones
+  // Set aside the ones that cover nothing, and drop those that leave nothing out
   const meaningful = specs.filter((spec) => {
-    if (spec.hi - spec.lo <= 0) return false;
     const fullKm = routeInfo.get(spec.trackId)?.length_km ?? 0;
-    return fullKm * (1 - (spec.hi - spec.lo)) >= MIN_UNTRAVELLED_KM;
+    const width = spec.hi - spec.lo;
+    // A route with no length yet can't be measured, so only a zero width drops it
+    const barelyEntered = path.length > 1 && fullKm > 0 && fullKm * width < MIN_UNTRAVELLED_KM;
+    if (width <= 0 || barelyEntered) {
+      untravelled.add(spec.trackId);
+      return false;
+    }
+    return fullKm * (1 - width) >= MIN_UNTRAVELLED_KM;
   });
-  if (meaningful.length === 0) return trimmed;
+  if (meaningful.length === 0) return { trimmed, untravelled };
 
   const result = await pool.query<{
     track_id: number;
@@ -1012,7 +1029,7 @@ async function computeTravelledTrims(
     });
   }
 
-  return trimmed;
+  return { trimmed, untravelled };
 }
 
 /**
@@ -1071,8 +1088,8 @@ export async function findRoutePathBetweenStations(
   const stationSequence = [fromStationId, ...viaStationIds, toStationId].map(Number);
 
   // A leg from a station to itself has no stretch to cover: the direct finish
-  // costs 0 and its zero-width trim is discarded as "whole", so it came back as
-  // a whole route at full length. A loop (A via B to A) is fine — only
+  // costs 0 and the plan would be a zero-width trim, which says nothing useful
+  // (see computeTravelledTrims). A loop (A via B to A) is fine — only
   // consecutive stops are refused.
   if (stationSequence.some((id, i) => i > 0 && id === stationSequence[i - 1])) {
     return {
@@ -1177,17 +1194,20 @@ export async function findRoutePathBetweenStations(
     const { path, sides } = concatenateSegments(allSegments);
 
     // Get route details, then cut the terminal routes down to the stretch travelled
-    const [routes, trims] = await Promise.all([
+    const [pathRoutes, { trimmed: trims, untravelled }] = await Promise.all([
       getRouteDetails(path),
-      computeTravelledTrims(
-        path,
-        sides,
-        routeInfo,
-        stationMatches.fractions,
-        stationSequence[0],
-        stationSequence[stationSequence.length - 1],
-      ),
+      computeTravelledTrims(path, sides, routeInfo, stationMatches.fractions, stationSequence),
     ]);
+
+    // A terminal route the journey barely enters is not part of it
+    const routes = pathRoutes.filter((route) => !untravelled.has(route.track_id));
+    if (routes.length === 0) {
+      return {
+        routes: [],
+        totalDistance: 0,
+        error: "These stations are too close together on the line to log any track between them",
+      };
+    }
 
     for (const route of routes) {
       const trim = trims.get(route.track_id);

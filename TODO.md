@@ -12,13 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Bugs — user-facing
 
-- [ ] **A partly failed JourneyCard save can't be retried cleanly.**
-      `src/components/logbook/JourneyCard.tsx`, `handleSave`. It runs meta → trip
-      → add → per-route remove → per-route partial as separate actions and
-      returns at the first error without refreshing its snapshot or calling
-      `onChanged`. **Fix:** move the diff into one server action applied in a
-      single transaction.
-
 - [ ] **A via station pins the next leg to the route that arrived there.**
       `src/lib/routePathFinder.ts:1134-1143`. `previousEndRoute` is always one
       of `routeSequence[i]`, so the "if possible" `includes` test is always true
@@ -29,27 +22,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       whole although it was only partly ridden. **Fix:** seed from every route
       near the via, and let `computeTravelledTrims` trim routes entered or left
       mid-way at a via, not only the first and last.
-
-- [ ] (possible) **A zero-width planner trim counts the whole route.**
-      `computeTravelledTrims` in `src/lib/routePathFinder.ts` drops a trim with
-      `hi - lo <= 0` as "whole", so the route counts at full length. Consecutive
-      identical stops are now refused up front, so this needs two distinct
-      stations projecting onto the same point of one route. **Fix:** treat a
-      zero-width trim as 0 km.
-
-- [ ] **The API returns 500 for input API.md says is a 400.**
-      `src/app/api/v1/journeys/route.ts:26-35`, `journeys/[id]/route.ts:31-37`,
-      `journeys/[id]/routes/route.ts:23-29`. `date` is only checked to be
-      non-empty, and unknown `trackId`/`tripId` values reach Postgres. **Fix:**
-      validate `YYYY-MM-DD` in `params.ts`, and map FK violations (23503) and bad
-      dates (22007/22008) to `ValidationError`/not-found. Also make duplicate
-      track ids consistent: create keeps the first, add keeps the last.
-
-- [ ] **API.md documents two endpoints that don't exist.** `API.md:78`
-      (`POST /coverage/stretches`) and `:88` (`GET /coverage`). There is no
-      `src/app/api/v1/coverage`, and `requireCoveredRanges`
-      (`src/lib/api/params.ts:177-189`) has no callers. **Fix:** add the two thin
-      handlers, or remove the rows and the validator.
 
 ## Rare correctness issues
 

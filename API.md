@@ -110,7 +110,8 @@ Bearer token required.
 | `GET /journeys/unassigned?region=` | `{ journeys }` — the assignment picker's list |
 
 **A journey's `date` is a calendar day, `YYYY-MM-DD`**, both ways — never a
-timestamp, and with no timezone to apply. Parse it as a local date, not with
+timestamp, and with no timezone to apply. Anything else sent, a day that does
+not exist (`2026-02-31`) included, is a 400. Parse it as a local date, not with
 `new Date(date)`, which reads a bare date as UTC midnight and shows the day
 before anywhere west of UTC. (Before 2026-09-27 the responses carried it as an
 ISO timestamp of the server's local midnight, which the native logbook, cutting
@@ -132,6 +133,10 @@ along the route geometry, and is **dropped unless `partial` is true** — a rout
 logged whole covers all of it, so a range would only draw a stray overlay. Both
 fields absent means the extent is unknown, which is what a route ticked partial
 by hand looks like.
+
+A `trackId` listed twice counts once, **the last entry winning**, whether the
+call creates the journey or adds to it. A `trackId` that is not a route is a
+404 `Route not found`, and nothing is written.
 
 Assignment is keyed on the journey because the journey is what changes: `trip_id`
 is a column on it, and a journey belongs to at most one trip.

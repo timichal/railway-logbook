@@ -1,14 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  addRoutesToJourney,
-  deleteJourney,
-  getJourney,
-  removeRouteFromJourney,
-  updateJourney,
-  updateLoggedPartPartial,
-} from "@/lib/journeyActions";
+import { deleteJourney, getJourney, saveJourneyEdits } from "@/lib/journeyActions";
 import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type {
   HighlightRoutesFn,
@@ -19,7 +12,6 @@ import type {
 } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
-import { assignJourneyToTrip, unassignJourneyFromTrip } from "@/lib/tripActions";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
@@ -203,78 +195,35 @@ export default function JourneyCard({
       return;
     }
 
+    // Only the difference goes to the server, applied there in one transaction:
+    // a failed save changes nothing, so the snapshot still matches the journey
+    // and pressing Save again retries the whole edit
+    const origMap = new Map(originalSnapshot.routes.map((r) => [r.track_id, r]));
+    const editedIds = new Set(viewedRoutes.map((r) => r.track_id));
+    const upsert = viewedRoutes.flatMap((edited) => {
+      const orig = origMap.get(edited.track_id);
+      const partial = edited.partial ?? false;
+      return !orig || (orig.partial ?? false) !== partial
+        ? [{ trackId: edited.track_id, partial }]
+        : [];
+    });
+    const remove = originalSnapshot.routes
+      .filter((orig) => !editedIds.has(orig.track_id))
+      .map((orig) => orig.track_id);
+
     setIsSaving(true);
     try {
-      const metaChanged =
-        trimmedName !== originalSnapshot.name ||
-        editDate !== originalSnapshot.date ||
-        trimmedDescription !== originalSnapshot.description;
-      if (metaChanged) {
-        const result = await updateJourney(
-          journey.id,
-          trimmedName,
-          trimmedDescription || null,
-          editDate,
-        );
-        if (result.error) {
-          showError(result.error);
-          return;
-        }
-      }
-
-      if (editTripId !== originalSnapshot.tripId) {
-        const result = editTripId
-          ? await assignJourneyToTrip(journey.id, editTripId)
-          : await unassignJourneyFromTrip(journey.id);
-        if (result.error) {
-          showError(result.error);
-          return;
-        }
-      }
-
-      const origMap = new Map(originalSnapshot.routes.map((r) => [r.track_id, r]));
-      const editedMap = new Map(viewedRoutes.map((r) => [r.track_id, r]));
-
-      const toAdd: { trackId: number; partial: boolean }[] = [];
-      const toUpdatePartial: { trackId: number; partial: boolean }[] = [];
-      editedMap.forEach((edited, id) => {
-        const orig = origMap.get(id);
-        const partial = edited.partial ?? false;
-        if (!orig) {
-          toAdd.push({ trackId: edited.track_id, partial });
-        } else if ((orig.partial ?? false) !== partial) {
-          toUpdatePartial.push({ trackId: edited.track_id, partial });
-        }
+      const result = await saveJourneyEdits(journey.id, {
+        name: trimmedName,
+        description: trimmedDescription || null,
+        date: editDate,
+        tripId: editTripId !== originalSnapshot.tripId ? editTripId : undefined,
+        upsert,
+        remove,
       });
-      const toRemove: number[] = [];
-      origMap.forEach((orig, id) => {
-        if (!editedMap.has(id)) toRemove.push(orig.track_id);
-      });
-
-      if (toAdd.length > 0) {
-        const result = await addRoutesToJourney(
-          journey.id,
-          toAdd.map((a) => a.trackId),
-          toAdd.map((a) => a.partial),
-        );
-        if (result.error) {
-          showError(result.error);
-          return;
-        }
-      }
-      for (const trackId of toRemove) {
-        const result = await removeRouteFromJourney(journey.id, trackId);
-        if (result.error) {
-          showError(result.error);
-          return;
-        }
-      }
-      for (const { trackId, partial } of toUpdatePartial) {
-        const result = await updateLoggedPartPartial(journey.id, trackId, partial);
-        if (result.error) {
-          showError(result.error);
-          return;
-        }
+      if (result.error) {
+        showError(result.error);
+        return;
       }
 
       showSuccess("Journey updated");

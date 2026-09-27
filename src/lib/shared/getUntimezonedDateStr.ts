@@ -23,5 +23,9 @@ export const parseDateOnly = (value: string): Date => {
     : new Date(Number.NaN);
 };
 
+/** Whether `value` is a YYYY-MM-DD day that exists — what a journey's `date` must be. */
+export const isDateOnly = (value: string): boolean =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(parseDateOnly(value).getTime());
+
 /** Today where the user is, as YYYY-MM-DD. */
 export const getTodayDateStr = (): string => getUntimezonedDateStr(new Date());

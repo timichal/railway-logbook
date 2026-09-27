@@ -193,6 +193,7 @@ export async function progressByCountryForUser(
 
 /** Cap on ranges accepted from the client, so a crafted call can't ask for the world. */
 const MAX_COVERED_RANGES = 2000;
+const MAX_PG_INT = 2147483647;
 
 /**
  * Resolve covered fraction ranges into drawable geometry.
@@ -255,7 +256,9 @@ export function normalizeCoveredRanges(ranges: CoveredRange[]): CoveredRange[] {
     const trackId = Number(range?.track_id);
     const start = Number(range?.covered_start);
     const end = Number(range?.covered_end);
-    if (!Number.isInteger(trackId)) continue;
+    // Bounded to Postgres `int`, which the ids are cast to: a larger one is not a
+    // route, and would fail the whole query rather than just match nothing
+    if (!Number.isInteger(trackId) || trackId <= 0 || trackId > MAX_PG_INT) continue;
     if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
     if (start < 0 || end > 1 || start >= end) continue;
 

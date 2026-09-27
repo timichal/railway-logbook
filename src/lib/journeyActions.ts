@@ -9,14 +9,12 @@
 
 import { getUser } from "./authActions";
 import {
-  addRoutesToJourneyForUser,
   createJourneyForUser,
   deleteJourneyForUser,
+  type JourneyEdits,
   journeyForUser,
   type LoggedRange,
-  removeRouteFromJourneyForUser,
-  updateJourneyForUser,
-  updateLoggedPartPartialForUser,
+  saveJourneyEditsForUser,
 } from "./journeyQueries";
 import type { Journey, RailwayRoute } from "./shared/types";
 
@@ -61,19 +59,20 @@ export async function createJourney(
   );
 }
 
-/** Update journey metadata (name, description, date). */
-export async function updateJourney(
+/**
+ * Save an edited journey — metadata, trip, routes and partial flags — in one
+ * transaction, so a failure leaves it exactly as it was.
+ */
+export async function saveJourneyEdits(
   journeyId: number,
-  name: string,
-  description: string | null,
-  date: string,
-): Promise<{ journey: Journey | null; error?: string }> {
+  edits: JourneyEdits,
+): Promise<{ success: boolean; error?: string }> {
   const user = await getUser();
   if (!user) {
-    return { journey: null, error: "Not authenticated" };
+    return { success: false, error: "Not authenticated" };
   }
 
-  return updateJourneyForUser(user.id, journeyId, name, description, date);
+  return saveJourneyEditsForUser(user.id, journeyId, edits);
 }
 
 /** Delete a journey and all its logged parts. */
@@ -86,46 +85,4 @@ export async function deleteJourney(
   }
 
   return deleteJourneyForUser(user.id, journeyId);
-}
-
-/** Add routes to an existing journey. */
-export async function addRoutesToJourney(
-  journeyId: number,
-  trackIds: number[],
-  partialFlags: boolean[],
-  coveredRanges?: (LoggedRange | null)[],
-): Promise<{ success: boolean; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  return addRoutesToJourneyForUser(user.id, journeyId, trackIds, partialFlags, coveredRanges);
-}
-
-/** Remove a single route from a journey. */
-export async function removeRouteFromJourney(
-  journeyId: number,
-  trackId: number,
-): Promise<{ success: boolean; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  return removeRouteFromJourneyForUser(user.id, journeyId, trackId);
-}
-
-/** Toggle the partial flag for a logged part. */
-export async function updateLoggedPartPartial(
-  journeyId: number,
-  trackId: number,
-  partial: boolean,
-): Promise<{ success: boolean; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  return updateLoggedPartPartialForUser(user.id, journeyId, trackId, partial);
 }

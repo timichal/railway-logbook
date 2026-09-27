@@ -22,7 +22,6 @@ import {
   tripForUser,
   tripsForUser,
   unassignedJourneysForUser,
-  unassignJourneyFromTripForUser,
   updateTripForUser,
 } from "./tripQueries";
 
@@ -104,18 +103,6 @@ export async function assignJourneyToTrip(
   }
 
   return assignJourneyToTripForUser(user.id, journeyId, tripId);
-}
-
-/** Unassign a journey from its trip (set trip_id = NULL). */
-export async function unassignJourneyFromTrip(
-  journeyId: number,
-): Promise<{ success: boolean; error?: string }> {
-  const user = await getUser();
-  if (!user) {
-    return { success: false, error: "Not authenticated" };
-  }
-
-  return unassignJourneyFromTripForUser(user.id, journeyId);
 }
 
 /**
