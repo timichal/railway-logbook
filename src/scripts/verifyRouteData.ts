@@ -64,28 +64,24 @@ export async function recalculateRoute(
   // which is what this used to do — cannot survive two overlapping searches.
   const pathFinder = new RailwayPathFinder({ quiet: true });
 
-  try {
-    const result = await pathFinder.findPathFromCoordinates(
-      db,
-      startingCoordinate,
-      endingCoordinate,
-    );
+  // Deliberately no try/catch. Every way pathfinding can fail comes back as
+  // null — the one failure that throws, a part combination whose chain doesn't
+  // connect ("Chain is broken"), is caught per combination inside the finder —
+  // so what does throw is the part-loading query or a bug. Catching it here
+  // used to write e.g. "Connection terminated unexpectedly" as the route's
+  // error_message with is_valid = FALSE, and a `--valid-only` run (every
+  // deploy) then never looked at the route again. Let it stop the run instead.
+  const result = await pathFinder.findPathFromCoordinates(db, startingCoordinate, endingCoordinate);
 
-    if (!result) {
-      return { success: false, error: "No path found between starting and ending coordinates" };
-    }
-
-    return {
-      success: true,
-      coordinates: result.coordinates,
-      hasBacktracking: result.hasBacktracking || false,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error during recalculation",
-    };
+  if (!result) {
+    return { success: false, error: "No path found between starting and ending coordinates" };
   }
+
+  return {
+    success: true,
+    coordinates: result.coordinates,
+    hasBacktracking: result.hasBacktracking || false,
+  };
 }
 
 export interface RecalculationOptions {
@@ -278,7 +274,7 @@ export async function recalculateAllRoutes(
         outcomes[index] = await recalculateAndStoreRoute(db, routes.rows[index]);
       } catch (error) {
         // A pathfinding failure is already an outcome (see recalculateRoute), so
-        // reaching here means the database itself is unhappy. Stop the other
+        // reaching here means the database itself is unhappy (or a bug). Stop the other
         // workers from picking up more work and let it propagate, rather than
         // marking a route invalid over what is probably a transient fault.
         aborted = true;

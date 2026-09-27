@@ -1,11 +1,13 @@
 "use server";
 
+import type { PoolClient } from "pg";
 import { requireAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool, { query } from "./db";
 import type { LineClass, UsageType } from "./shared/constants";
 import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import { MAX_TOLERANCE_FRACTION, UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
 import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./shared/types";
 import { getStationsNearRoute, refreshStationProximityFor } from "./stationProximity";
 
@@ -198,6 +200,145 @@ export async function getAllRouteEndpoints(region: RegionId): Promise<GeoJSONFea
 }
 
 /**
+ * How close to the new geometry a piece of an old stretch has to run to count
+ * as the same track. Both geometries are cut from the same OSM ways, so a ride
+ * still on the line is ~0m off it; the slack is for a route whose old geometry
+ * predates an OSM realignment. Well under the spacing of two separate lines.
+ */
+const REPROJECT_CORRIDOR_METERS = 20;
+
+/**
+ * Move every partial ride's stretch on a route from its current geometry onto
+ * `newGeometryWKT`. Call before the new geometry is written — the current one is
+ * read from the row.
+ *
+ * `covered_start`/`covered_end` are fractions along the geometry they were
+ * logged against, so a re-picked geometry leaves them pointing at the wrong
+ * track. The case that matters is a split: A–C is duplicated and the two copies
+ * re-picked as A–B and B–C, so a ride of A–B only, stored as [0, 0.5], would
+ * show the first half of B–C as ridden and A–B as half done.
+ *
+ * So each stretch is cut out of the old line, and what is kept of it is the
+ * pieces that run along the new line (within `REPROJECT_CORRIDOR_METERS`) for at
+ * least the tolerance the ridden-whole rule already ignores (see
+ * routeCoverage.ts). The pieces' ends are located on the new line and their
+ * outermost pair becomes the new range. The length floor is what discards a
+ * line merely *crossing* the new one, and the sliver a split leaves at its
+ * split point — a hand-picked click that won't sit exactly where the ride's
+ * station projected. A stretch with no piece left rode none of the new line:
+ * that ride is deleted, since it says the user rode track that is now some
+ * other route's.
+ *
+ * Nothing moves when the geometry is re-saved unchanged. A route that turns
+ * back on itself, before or after, has its stretches cleared to unknown extent
+ * instead: on doubled track a point lies on both legs, and locating it picks
+ * one of them arbitrarily. Whole rides (`partial = FALSE`) and stretches already
+ * of unknown extent are untouched. On OSM recalculation (`verifyRouteData`) the
+ * fractions are kept as they are: there the geometry only shifts, which is
+ * what fractions are for.
+ */
+async function reprojectCoveredRanges(
+  client: PoolClient,
+  trackId: number,
+  newGeometryWKT: string,
+  newHasBacktracking: boolean,
+): Promise<void> {
+  const result = await client.query<{ moved: string; cleared: string; dropped: string }>(
+    `
+    WITH route AS (
+      SELECT
+        rr.geometry AS old_geom,
+        ng.geom AS new_geom,
+        ST_Buffer(ng.geom::geography, $3)::geometry AS corridor,
+        -- The ridden-whole tolerance, in km: UNTRAVELLED_NOISE_KM capped at
+        -- MAX_TOLERANCE_FRACTION of the route
+        LEAST($4::float8, $5::float8 * ST_Length(ng.geom::geography) / 1000) AS min_km,
+        rr.has_backtracking OR rr.intended_backtracking OR $6::boolean AS ambiguous
+      FROM railway_routes rr
+      CROSS JOIN (SELECT ST_GeomFromText($2, 4326) AS geom) ng
+      WHERE rr.track_id = $1
+        AND NOT ST_OrderingEquals(rr.geometry, ng.geom)
+    ),
+    rides AS (
+      SELECT ulp.id, ST_LineSubstring(r.old_geom, ulp.covered_start, ulp.covered_end) AS stretch
+      FROM user_logged_parts ulp
+      CROSS JOIN route r
+      WHERE ulp.track_id = $1
+        AND ulp.partial
+        AND ulp.covered_start IS NOT NULL
+        AND ulp.covered_end IS NOT NULL
+    ),
+    extent AS (
+      SELECT
+        rides.id,
+        MIN(LEAST(loc.a, loc.b)) AS lo,
+        MAX(GREATEST(loc.a, loc.b)) AS hi
+      FROM rides
+      CROSS JOIN route r
+      CROSS JOIN LATERAL ST_Dump(ST_Intersection(rides.stretch, r.corridor)) piece
+      CROSS JOIN LATERAL (
+        SELECT
+          ST_LineLocatePoint(r.new_geom, ST_StartPoint(piece.geom)) AS a,
+          ST_LineLocatePoint(r.new_geom, ST_EndPoint(piece.geom)) AS b
+      ) loc
+      WHERE NOT r.ambiguous
+        AND ST_GeometryType(piece.geom) = 'ST_LineString'
+        AND ST_Length(piece.geom::geography) / 1000 >= r.min_km
+      GROUP BY rides.id
+    ),
+    judged AS (
+      SELECT
+        rides.id,
+        e.lo,
+        e.hi,
+        CASE
+          WHEN r.ambiguous THEN 'clear'
+          WHEN e.hi > e.lo THEN 'move'
+          ELSE 'delete'
+        END AS action
+      FROM rides
+      CROSS JOIN route r
+      LEFT JOIN extent e ON e.id = rides.id
+    ),
+    dropped AS (
+      DELETE FROM user_logged_parts
+      WHERE id IN (SELECT id FROM judged WHERE action = 'delete')
+      RETURNING id
+    ),
+    changed AS (
+      UPDATE user_logged_parts ulp
+      SET
+        covered_start = CASE WHEN j.action = 'move' THEN j.lo END,
+        covered_end = CASE WHEN j.action = 'move' THEN j.hi END
+      FROM judged j
+      WHERE ulp.id = j.id AND j.action <> 'delete'
+      RETURNING j.action
+    )
+    SELECT
+      count(*) FILTER (WHERE action = 'move') AS moved,
+      count(*) FILTER (WHERE action = 'clear') AS cleared,
+      (SELECT count(*) FROM dropped) AS dropped
+    FROM changed
+    `,
+    [
+      trackId,
+      newGeometryWKT,
+      REPROJECT_CORRIDOR_METERS,
+      UNTRAVELLED_NOISE_KM,
+      MAX_TOLERANCE_FRACTION,
+      newHasBacktracking,
+    ],
+  );
+
+  const { moved, cleared, dropped } = result.rows[0];
+  if (Number(moved) + Number(cleared) + Number(dropped) > 0) {
+    console.log(
+      `Route ${trackId}: partial rides moved onto the new geometry ${moved}, cleared to unknown extent ${cleared}, deleted as no longer overlapping ${dropped}`,
+    );
+  }
+}
+
+/**
  * Create a new route OR update existing route geometry
  * @param trackId - If provided, updates geometry only. If omitted, creates new route.
  * @param startCoordinate - Exact start coordinate [lng, lat]
@@ -344,6 +485,17 @@ export async function saveRailwayRoute(
     // first: the new geometry may run elsewhere, leaving them without a route
     const stationsOnOldGeometry = trackId ? await getStationsNearRoute(client, trackId) : [];
 
+    // Likewise the partial rides: their fractions are positions along the
+    // current geometry, so they are moved onto the new one before it is written
+    if (trackId) {
+      await reprojectCoveredRanges(
+        client,
+        trackId,
+        geometryWKT,
+        pathResult.hasBacktracking || false,
+      );
+    }
+
     const result = await client.query(queryStr, values);
     if (result.rowCount === 0) {
       // Only an edit can match nothing: the route was deleted since it was opened
@@ -489,8 +641,10 @@ export async function setRouteUnderRepair(trackId: number, underRepair: boolean)
  * Every user's logs are cloned, not just the acting admin's, because duplication
  * is how a route is split: A–C grows a branch at B, so the copy is made and the
  * two are re-pointed at A–B and B–C. Everyone who rode A–C rode both halves, so
- * both copies of their log are correct. Finish the split — a duplicate left
- * un-split double-counts.
+ * both copies of their log are correct. A partial ride is carried through the
+ * split by the geometry re-pick, which moves its stretch onto each half and
+ * deletes it from the half it doesn't reach (`reprojectCoveredRanges`). Finish
+ * the split — a duplicate left un-split double-counts.
  */
 export async function duplicateRailwayRoute(trackId: number): Promise<number> {
   await requireAdmin();

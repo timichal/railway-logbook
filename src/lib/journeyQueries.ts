@@ -25,7 +25,7 @@ export interface LoggedRange {
  * the route, and only for a partial ride: a route logged whole covers all of it,
  * so a range would be redundant (and would draw a stray overlay).
  */
-function sanitizeRange(
+export function sanitizeRange(
   range: LoggedRange | null | undefined,
   partial: boolean,
 ): LoggedRange | null {

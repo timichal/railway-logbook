@@ -10,40 +10,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ---
 
-## Bugs that lose or corrupt data
-
-- [ ] **A transient DB fault during recalculation marks a route invalid, and
-      `--valid-only` never rechecks it.** `src/scripts/verifyRouteData.ts:67-88`.
-      The try/catch wraps the whole of `findPathFromCoordinates`, including the
-      part-loading query, so an error such as "Connection terminated unexpectedly"
-      is written as `is_valid=FALSE` with that text as `error_message`. Deploys
-      run `--valid-only`, so the route is never looked at again.
-      `RECALC_PERFORMANCE.md` says a thrown error stops the run. **Fix:** catch
-      only genuine pathfinding failures (a null result, "Chain is broken") and
-      rethrow everything else. Guarding the unguarded `this.findPath(...)` in
-      `findBestCoordinatePath` (`src/scripts/lib/railwayPathFinder.ts:733`) makes
-      that split clean.
-
-- [ ] **Partial-ride fractions are kept when a route's geometry changes.**
-      `src/lib/adminRouteActions.ts:255-273` (geometry re-pick) and `:550-558`
-      (duplicate). `covered_start`/`covered_end` are positions along the *old*
-      line. Splitting A–C into A–B and B–C leaves a user who rode only A–B
-      (stored as [0, 0.5]) showing the first half of B–C as ridden and A–B as
-      only half done. The split case in CLAUDE.md holds for whole rides only.
-      **Fix:** on a geometry change, re-project each range by taking the endpoints
-      of `ST_LineSubstring(old, s, e)` and `ST_LineLocatePoint`ing them onto the
-      new line, then clip or drop any range that no longer overlaps.
-
-- [ ] **Migrating local journeys gets stuck on a deleted route.**
-      `src/lib/migrationActions.ts:47-130`. The migration is not a transaction and
-      throws on the first failed part insert. A localStorage part pointing at a
-      `track_id` the admin has since deleted violates the FK, so every retry
-      aborts at the same point and leaves half-imported, possibly empty journeys
-      behind. Ranges also skip `sanitizeRange`. **Fix:** one transaction; skip
-      and count parts whose route no longer exists; run ranges through
-      `sanitizeRange`. Also consider the dedupe: matching on name+date merges two
-      genuinely separate same-day journeys, such as an out-and-back.
-
 ## Bugs — user-facing
 
 - [ ] **Sign-in and registration errors are unreadable in production.**

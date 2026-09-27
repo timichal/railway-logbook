@@ -5,6 +5,7 @@ import { useState } from "react";
 import { register } from "@/lib/authActions";
 import * as localStore from "@/lib/localStorage";
 import { migrateLocalJourneys } from "@/lib/migrationActions";
+import { describeJourneyMigration } from "@/lib/migrationMessage";
 import { useToast } from "@/lib/toast";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import { FIELD, FIELD_HINT, FIELD_LABEL, FORM_ERROR } from "@/lib/ui/inputStyles";
@@ -43,13 +44,7 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
           // Clear localStorage after successful migration
           localStore.clearAll();
 
-          if (migrationResult.journeysMigrated > 0) {
-            showSuccess(
-              `Account created! ${migrationResult.journeysMigrated} journey${migrationResult.journeysMigrated !== 1 ? "s" : ""} and ${migrationResult.partsMigrated} route${migrationResult.partsMigrated !== 1 ? "s" : ""} migrated successfully.`,
-            );
-          } else {
-            showSuccess("Account created successfully!");
-          }
+          showSuccess(`Account created! ${describeJourneyMigration(migrationResult)}`);
         } catch (migrationErr) {
           console.error("Error migrating journeys:", migrationErr);
           showSuccess(

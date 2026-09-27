@@ -5,6 +5,7 @@ import { useState } from "react";
 import { login } from "@/lib/authActions";
 import * as localStore from "@/lib/localStorage";
 import { migrateLocalJourneys } from "@/lib/migrationActions";
+import { describeJourneyMigration } from "@/lib/migrationMessage";
 import { useToast } from "@/lib/toast";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import { FIELD, FIELD_LABEL, FORM_ERROR } from "@/lib/ui/inputStyles";
@@ -50,13 +51,7 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormPr
               // Clear localStorage after successful migration
               localStore.clearAll();
 
-              if (result.journeysMigrated > 0) {
-                showSuccess(
-                  `${result.journeysMigrated} journey${result.journeysMigrated !== 1 ? "s" : ""} and ${result.partsMigrated} route${result.partsMigrated !== 1 ? "s" : ""} merged successfully!`,
-                );
-              } else {
-                showSuccess("All journeys were duplicates, none merged.");
-              }
+              showSuccess(describeJourneyMigration(result));
 
               // Refresh to show merged data
               router.refresh();

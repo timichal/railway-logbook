@@ -32,8 +32,12 @@ pulling the next route off a shared index and writing its own `UPDATE`:
   import.
 - **Outcomes are collected by index**, then aggregated in a second pass, so the
   summary lists routes in `track_id` order however the workers interleave.
-- **A thrown error stops the run.** Pathfinding failure is already an outcome
-  (`recalculateRoute` catches it and returns `{success: false}`), so an exception
+- **A thrown error stops the run.** Pathfinding failure is already an outcome:
+  `findPathFromCoordinates` returns null for it (the one failure that throws,
+  "Chain is broken", is caught per part combination inside the finder), and
+  `recalculateRoute` turns that into `{success: false}`. `recalculateRoute` does
+  **not** catch — it once did, and wrote a dropped connection into the route as
+  `is_valid = FALSE`, which `--valid-only` then never rechecked. So an exception
   escaping `recalculateAndStoreRoute` means the database is unhappy — the worker
   sets `aborted`, the others stop taking new routes, and it propagates. Marking a
   route invalid over a transient fault would be worse than failing loudly.

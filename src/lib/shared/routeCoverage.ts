@@ -39,7 +39,7 @@ export const UNTRAVELLED_NOISE_KM = 0.3;
  * Only bites on routes shorter than ~1.2km, where 0.3km is a large part of the
  * line: there, a stretch must still cover the middle half to reach both ends.
  */
-const MAX_TOLERANCE_FRACTION = 0.25;
+export const MAX_TOLERANCE_FRACTION = 0.25;
 
 /** `UNTRAVELLED_NOISE_KM` as a fraction of a route's length (0 if unknown). */
 export function coverageToleranceFraction(lengthKm: number | null | undefined): number {
