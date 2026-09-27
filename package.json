@@ -24,7 +24,6 @@
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
     "fixSequences": "tsx src/scripts/fixSequences.ts",
-    "addOwnershipConstraints": "tsx src/scripts/addOwnershipConstraints.ts",
     "listStations": "tsx src/scripts/listStations.ts",
     "inspectPath": "tsx src/scripts/inspectPath.ts",
     "showBacktracking": "tsx src/scripts/showBacktracking.ts",
