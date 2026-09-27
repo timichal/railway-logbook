@@ -1,5 +1,5 @@
 import type * as maplibregl from "maplibre-gl";
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import {
   setupUserMapInteractions,
   type UserMapInteractionCallbacks,
@@ -7,19 +7,22 @@ import {
 
 /**
  * Attaches the user map's popups, touch sheets and click handlers once the route
- * layers exist, and re-attaches them whenever a callback changes. Shared by the
- * interactive map and the read-only shared one, which differ only in the callbacks
- * they pass (the shared map passes no `onRouteClick`, which is what makes it
- * read-only).
+ * layers exist, once per map. Shared by the interactive map and the read-only
+ * shared one, which differ only in the callbacks they pass (the shared map passes
+ * no `onRouteClick`, which is what makes it read-only).
  *
- * The callbacks are effect deps, so a caller that builds one inline re-attaches
- * every handler on every render: memoise them.
+ * The callbacks are read afresh on every event (an Effect Event, so always the
+ * committed ones), and a change to them never re-attaches the handlers:
+ * re-attaching took down any popup or touch sheet that was open, which a sidebar
+ * tab switch or a journey card opening did in mid-use.
  */
 export function useUserMapInteractions(
   map: React.MutableRefObject<maplibregl.Map | null>,
   mapLoaded: boolean,
-  { onRouteClick, onStationClick, region, routeTapAction }: UserMapInteractionCallbacks,
+  callbacks: UserMapInteractionCallbacks,
 ) {
+  const getCallbacks = useEffectEvent(() => callbacks);
+
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
@@ -33,12 +36,7 @@ export function useUserMapInteractions(
 
     const setupWhenReady = () => {
       if (cancelled || !map.current?.getLayer("railway_routes")) return;
-      cleanup = setupUserMapInteractions(map.current, {
-        onRouteClick,
-        onStationClick,
-        region,
-        routeTapAction,
-      });
+      cleanup = setupUserMapInteractions(map.current, getCallbacks);
     };
 
     if (!map.current.isMoving()) {
@@ -52,5 +50,5 @@ export function useUserMapInteractions(
       map.current?.off("idle", setupWhenReady);
       if (cleanup) cleanup();
     };
-  }, [map, mapLoaded, onRouteClick, onStationClick, region, routeTapAction]);
+  }, [map, mapLoaded]);
 }

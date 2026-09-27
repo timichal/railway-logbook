@@ -71,12 +71,16 @@ const SHEET_TAP_GRACE_MS = 400;
  * popups and the double-click stay exactly as they were for a pointer; every
  * handler branches on `lastPointerWasTouch`, tracked from the pointer events that
  * precede whatever MapLibre goes on to synthesize.
+ *
+ * The callbacks are asked for afresh on every event rather than taken once here,
+ * so the handlers are attached once per map: re-attaching them whenever a callback
+ * changed (a sidebar tab switch, a journey card opening) took down whatever popup
+ * or sheet was open along with the old set.
  */
 export function setupUserMapInteractions(
   mapInstance: maplibreglType.Map,
-  callbacks: UserMapInteractionCallbacks,
+  getCallbacks: () => UserMapInteractionCallbacks,
 ) {
-  const { onRouteClick, onStationClick, region, routeTapAction } = callbacks;
   let currentPopup: maplibregl.Popup | null = null;
 
   // Seeded from the media query so that even a first tap is treated as one, then
@@ -358,6 +362,7 @@ export function setupUserMapInteractions(
    * carries a button in its place.
    */
   const buildRouteBody = (properties: FeatureProperties, { linkRow }: { linkRow: boolean }) => {
+    const { region } = getCallbacks();
     let body = formatRouteTitle(properties, region);
 
     body += formatRouteMetadataBadges(
@@ -417,6 +422,9 @@ export function setupUserMapInteractions(
     // away — including a tap on bare map, which the layer-scoped handlers miss.
     if (sheetTookThisClick(e)) return;
 
+    const callbacks = getCallbacks();
+    const { onRouteClick, onStationClick } = callbacks;
+
     // With a pointer there is nothing to do here on a read-only map; a finger still
     // gets the sheet, which is the only way to read a route where hover cannot.
     if (!onRouteClick && !lastPointerWasTouch) return;
@@ -471,19 +479,26 @@ export function setupUserMapInteractions(
 
     if (lastPointerWasTouch) {
       const actions: SheetAction[] = [];
-      if (onRouteClick) {
-        // No `routeTapAction` supplied means every tap selects, so the button is
-        // labelled for the only thing it can do.
-        const action = routeTapAction
-          ? routeTapAction(route.track_id)
-          : { label: "Add to selection" };
-        if (action) {
-          actions.push({
-            label: action.label,
-            variant: "primary",
-            onClick: () => onRouteClick(route),
-          });
-        }
+      // No `routeTapAction` supplied means every tap selects, so the button is
+      // labelled for the only thing it can do.
+      const tapLabel = ({ routeTapAction }: UserMapInteractionCallbacks) =>
+        routeTapAction ? (routeTapAction(route.track_id)?.label ?? null) : "Add to selection";
+      const label = onRouteClick ? tapLabel(callbacks) : null;
+      if (label) {
+        actions.push({
+          label,
+          variant: "primary",
+          // The sheet outlives a sidebar tab switch or a journey card opening, either
+          // of which changes what a press does. So the press asks again, and acts
+          // only if the answer is still what the button says; otherwise the tap just
+          // closes the sheet, as every tap in it does.
+          onClick: () => {
+            const current = getCallbacks();
+            if (current.onRouteClick && tapLabel(current) === label) {
+              current.onRouteClick(route);
+            }
+          },
+        });
       }
       if (safeHref(properties.link)) {
         actions.push({
@@ -624,6 +639,7 @@ export function setupUserMapInteractions(
       openTouchSheet(e.lngLat, "station-popup", buildStationBody(properties), []);
     }
 
+    const { onStationClick } = getCallbacks();
     if (!onStationClick || !geometry || geometry.type !== "Point") return;
 
     // Validate station data before creating Station object

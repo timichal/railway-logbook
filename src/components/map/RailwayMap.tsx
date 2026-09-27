@@ -114,21 +114,21 @@ export default function RailwayMap({
     [],
   );
 
-  // Journey edit mode: route clicks in My Journeys tab go to the edit handler
+  // Journey edit mode: route clicks in My Journeys tab go to the edit handler.
+  // The handler being set *is* the mode — there is no separate flag, which could
+  // disagree with it while a card mounts or unmounts, and then the touch sheet
+  // would promise one thing and its button do another.
   const journeyRouteClickHandlerRef = useRef<((route: SelectedRoute) => void) | null>(null);
   // Whether a route is already in the journey being edited — the touch sheet asks
   // before it labels its button. Only the open card knows.
   const journeyContainsRouteRef = useRef<((trackId: number) => boolean) | null>(null);
-  const [journeyEditActive, setJourneyEditActive] = useState(false);
   const handleJourneyEditStart = useCallback<JourneyEditStartFn>((handler, isRouteInJourney) => {
     journeyRouteClickHandlerRef.current = handler;
     journeyContainsRouteRef.current = isRouteInJourney;
-    setJourneyEditActive(true);
   }, []);
   const handleJourneyEditEnd = useCallback(() => {
     journeyRouteClickHandlerRef.current = null;
     journeyContainsRouteRef.current = null;
-    setJourneyEditActive(false);
   }, []);
 
   // Highlighted routes state. `kind` controls the highlight color: 'planner'
@@ -182,12 +182,7 @@ export default function RailwayMap({
   );
 
   // An anonymous visitor's rides, coloured from their localStorage log
-  const refreshLocalRouteStates = useLocalRouteFeatureStates(
-    map,
-    mapLoaded,
-    userId !== null,
-    dataAccess,
-  );
+  const refreshLocalRouteStates = useLocalRouteFeatureStates(map, mapLoaded, dataAccess, showError);
 
   // Route editor hook
   const routeEditor = useRouteEditor(dataAccess, effectiveCountries);
@@ -228,8 +223,9 @@ export default function RailwayMap({
   const handleRouteClick = useCallback(
     (route: SelectedRoute) => {
       // Journey edit mode: delegate to the journey edit handler
-      if (journeyEditActive && journeyRouteClickHandlerRef.current) {
-        journeyRouteClickHandlerRef.current(route);
+      const journeyHandler = journeyRouteClickHandlerRef.current;
+      if (journeyHandler) {
+        journeyHandler(route);
         return;
       }
 
@@ -249,7 +245,7 @@ export default function RailwayMap({
       // error toast for a capped user who wanted to look at a line.
       setSelectedRoutes((prev) => [...prev, route]);
     },
-    [activeTab, journeyEditActive],
+    [activeTab],
   );
 
   // What a tap on a route is about to do, worded for the touch sheet's button.
@@ -257,7 +253,7 @@ export default function RailwayMap({
   // press will do, so the two must not drift. Null where a tap does nothing.
   const routeTapAction = useCallback(
     (trackId: number) => {
-      if (journeyEditActive) {
+      if (journeyRouteClickHandlerRef.current) {
         const inJourney = journeyContainsRouteRef.current?.(trackId) ?? false;
         return { label: inJourney ? "Remove from journey" : "Add to journey" };
       }
@@ -265,7 +261,7 @@ export default function RailwayMap({
       const isSelected = selectedRoutesRef.current.some((r) => r.track_id === trackId);
       return { label: isSelected ? "Remove from selection" : "Add to selection" };
     },
-    [activeTab, journeyEditActive],
+    [activeTab],
   );
 
   // Switching regions drops everything picked out of the old one: a selection
@@ -323,7 +319,7 @@ export default function RailwayMap({
       refreshTiles();
       routeEditor.refreshProgress();
     } else {
-      refreshLocalRouteStates();
+      void refreshLocalRouteStates();
       routeEditor.refreshProgress();
     }
     // Journeys changed, so the ridden stretches of unfinished routes may have too
