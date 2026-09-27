@@ -313,9 +313,18 @@ async function processStdin(outputFilePath: string) {
 }
 
 async function writeFeatures(writeStream: ReturnType<typeof createWriteStream>) {
+  // write() never refuses a chunk, it only queues it once the disk falls behind,
+  // so the output would pile up in memory. Waiting for "drain" pauses the read
+  // loop instead, and the full pipe then holds osmium back.
+  let isFirstFeature = true;
+  const writeFeature = async (feature: Feature) => {
+    const chunk = (isFirstFeature ? "" : ",") + JSON.stringify(feature);
+    isFirstFeature = false;
+    if (!writeStream.write(chunk)) await once(writeStream, "drain");
+  };
+
   writeStream.write('{"type":"FeatureCollection","features":[');
 
-  let isFirstFeature = true;
   let processedCount = 0;
 
   // Stations mapped as areas are held back until the whole stream has been
@@ -332,9 +341,7 @@ async function writeFeatures(writeStream: ReturnType<typeof createWriteStream>) 
   for await (const feature of streamFeatures<Feature>(process.stdin, stats)) {
     if (filterFeature(feature)) {
       const prunedFeature = pruneFeatureProperties(feature);
-      if (!isFirstFeature) writeStream.write(",");
-      writeStream.write(JSON.stringify(prunedFeature));
-      isFirstFeature = false;
+      await writeFeature(prunedFeature);
       processedCount++;
 
       if (feature.geometry.type === "Point") {
@@ -367,9 +374,7 @@ async function writeFeatures(writeStream: ReturnType<typeof createWriteStream>) 
       continue;
     }
 
-    if (!isFirstFeature) writeStream.write(",");
-    writeStream.write(JSON.stringify(pruneFeatureProperties(areaStationToFeature(station))));
-    isFirstFeature = false;
+    await writeFeature(pruneFeatureProperties(areaStationToFeature(station)));
     processedCount++;
     areaStationCount++;
   }

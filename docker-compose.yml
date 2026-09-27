@@ -16,7 +16,11 @@ services:
     restart: unless-stopped
 
   tiles:
-    image: ghcr.io/maplibre/martin:latest
+    # Pinned by digest: `latest` is pulled once per machine and never again, so it
+    # meant whatever was newest the day a machine first pulled it - 0.19.3 here,
+    # while a fresh pull would get a 1.x with a different configuration format.
+    # Upgrading is a change to make and test on purpose.
+    image: ghcr.io/maplibre/martin:martin-v0.19.3@sha256:897dc878a957f19a6d8cbc109c4b0566fa37098b6671f3fe5439649e0f761b92
     container_name: tiles
     restart: always
     ports:

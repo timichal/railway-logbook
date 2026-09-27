@@ -207,26 +207,21 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Infra and deploy
 
-- [ ] **Deploys don't apply schema or tile-function changes.**
-      `.github/workflows/deploy.yml:50-63`. CI uploads `martin/` but never runs
-      `02-vector-tiles.sql`, so a commit adding a tile function and its Martin
-      entry deploys a config that references a function the DB does not have.
-      Related problems in the same workflow: `martin:latest` is unpinned, secrets
-      are interpolated into a single-quoted remote command line (a `'` in a
-      password breaks it), and host keys are taken on trust via `ssh-keyscan`.
-      **Fix:** a `psql -v ON_ERROR_STOP=1` migration step before `compose up`, a
-      pinned Martin tag, and secrets read from an env file on the server.
-
-- [ ] **Dependency tidying.** `package.json`.
-      - `autoprefixer` and `postcss` are listed but unused (`postcss.config.mjs`
-        only loads `@tailwindcss/postcss`).
-      - `allowScripts` pins `sharp@0.34.5` while 0.35.4 is installed.
-      - `npm audit` reports a low esbuild advisory (dev server on Windows):
-        `npm audit fix`.
-
-- [ ] (possible) **`pruneData` ignores `write()` backpressure.**
-      `src/scripts/pruneData.ts:337-373`. Output buffers in memory when the disk
-      is slower than osmium.
+- [ ] **Upgrade the service images.** `docker-compose.yml`. Both were pulled
+      once per machine and never again, so they are whatever was newest that
+      day, on the server and in development alike.
+      - **Martin 0.19.3 → 1.x.** Pinned by digest to the 0.19.3 image that ran
+        as `latest`; `latest` is 1.16.1 now. A major version: check
+        `martin/configuration.yml` and the function-source signatures against
+        its changelog, try it locally (every Martin source, on both maps), then
+        bump the pin (tag and digest together).
+      - **PostgreSQL 18.1 → 18.6** (PostGIS 3.6.1). `imresamu/postgis:18-3.6-alpine`
+        is a moving tag, last pulled in February. A minor release, so the data
+        directory is kept as is — no dump/restore — but read the 18.2–18.6
+        release notes for any "reindex after upgrading" item before
+        `docker compose pull db && up -d db` (a short outage; take a
+        `backupRouteData` first). Pin it by digest as Martin is, so the version
+        running is the one the file names.
 
 ## Refactoring
 

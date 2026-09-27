@@ -23,46 +23,81 @@ jobs:
       DOCKER_TAG: railway-logbook
       SERVER_IP: ${{ secrets.SERVER_HOST }}
       SERVER_USERNAME: ${{ secrets.SERVER_USER }}
-      POSTGRES_DB: railway-logbook
-      DB_USER: ${{ secrets.DB_USER }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-    
-    steps:
-      # The server refuses to start with a shorter one (resolveJwtSecret in
-      # src/lib/authTokens.ts), so fail here, before the running container is
-      # replaced by one that exits on boot.
-      - name: Check JWT secret
-        run: |
-          bytes=$(printf '%s' "$JWT_SECRET" | wc -c)
-          if [ "$bytes" -lt 32 ]; then
-            echo "::error::JWT_SECRET is $bytes bytes; at least 32 are required"
-            exit 1
-          fi
-        shell: bash
+      # The server's ed25519 host key, pinned rather than taken from ssh-keyscan,
+      # which trusts whoever answers. A public key, so no secret; if the server is
+      # ever rebuilt, `ssh-keyscan -t ed25519` it from a machine that already
+      # trusts it and replace this.
+      SERVER_HOST_KEY: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOL9SboPtnC1MPIRQ/m169D42IZExgj4ghdbpOcybPTD
+      # The secrets (DB_USER, DB_PASSWORD, POSTGRES_DB, JWT_SECRET) live on the
+      # server, in the .env of its checkout that importMapData reads too - so the
+      # stack and the map data pipeline cannot disagree about the database, and a
+      # compose command run there by hand gets them as well. Nothing secret is
+      # interpolated into a command line here.
+      COMPOSE: docker compose --env-file osm-trains/.env
 
+    steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Build the Docker image
-        run: docker build . --file Dockerfile --no-cache --tag $DOCKER_TAG
-        
-      - name: Create SSH key
+      - name: Set up SSH
         run: |
           mkdir -p ~/.ssh/
           echo "$SSH_PRIVATE_KEY" > ../private.key
           sudo chmod 600 ../private.key
-          ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+          echo "$SERVER_IP $SERVER_HOST_KEY" > ~/.ssh/known_hosts
         shell: bash
-        
+
+      # Uploaded under a new name, so the compose file on the server is replaced
+      # only by the reload below and a failed deploy leaves the running one alone.
+      - name: Upload docker-compose
+        run: scp -i $SSH_KEY_PATH docker-compose.yml $SERVER_USERNAME@$SERVER_IP:/home/$SERVER_USERNAME/$DOCKER_TAG.yml.new
+
+      # The server refuses to start with a shorter one (resolveJwtSecret in
+      # src/lib/authTokens.ts), so fail here, before the running container is
+      # replaced by one that exits on boot. Read through `compose config`, i.e. as
+      # compose itself parses the env file, and only its length is printed.
+      - name: Check JWT secret
+        run: |
+          ssh -i $SSH_KEY_PATH $SERVER_USERNAME@$SERVER_IP python3 - <<EOF
+          import json, subprocess, sys
+          args = "$COMPOSE -f $DOCKER_TAG.yml.new config --format json".split()
+          config = json.loads(subprocess.run(args, check=True, capture_output=True, text=True).stdout)
+          secret = config["services"]["frontend"]["environment"].get("JWT_SECRET") or ""
+          size = len(secret.encode())
+          if size < 32:
+              print(f"::error::JWT_SECRET is {size} bytes; at least 32 are required")
+              sys.exit(1)
+          EOF
+        shell: bash
+
+      - name: Build the Docker image
+        run: docker build . --file Dockerfile --no-cache --tag $DOCKER_TAG
+
       - name: Save, compress and push the Docker image
         run: docker save $DOCKER_TAG | gzip | ssh -i $SSH_KEY_PATH $SERVER_USERNAME@$SERVER_IP docker load
-        
-      - name: Upload docker-compose
-        run: scp -i $SSH_KEY_PATH docker-compose.yml $SERVER_USERNAME@$SERVER_IP:/home/$SERVER_USERNAME/$DOCKER_TAG.yml
 
       - name: Upload martin configuration
         run: scp -i $SSH_KEY_PATH -r martin $SERVER_USERNAME@$SERVER_IP:/home/$SERVER_USERNAME/
+
+      # Re-applies the tile functions before the new containers start, so neither
+      # a Martin entry nor the app can reach a function the database lacks. The
+      # file is idempotent (npm run applyVectorTiles runs the same thing) and is
+      # streamed in, never copied to the server. One transaction, so a failure
+      # leaves the previous functions in place; its ALTER TABLEs lock the map
+      # tables until it commits (under two seconds), and lock_timeout makes it give
+      # up rather than queue every tile query behind a long writer - a map data
+      # import in progress. 01-schema.sql is not re-run: it creates tables, and
+      # schema changes go through a migration script (see CLAUDE.md).
+      - name: Apply tile functions
+        run: |
+          ssh -i $SSH_KEY_PATH $SERVER_USERNAME@$SERVER_IP "
+            docker exec -i -e PGOPTIONS='-c lock_timeout=10s -c client_min_messages=warning' db \
+              sh -c 'psql -X -q -v ON_ERROR_STOP=1 --single-transaction -U \$POSTGRES_USER -d \$POSTGRES_DB'
+          " < database/init/02-vector-tiles.sql || {
+            echo "::error::02-vector-tiles.sql did not apply. A lock timeout means something held the map tables - is deployMapData running? Rerun this workflow once it finishes."
+            exit 1
+          }
+        shell: bash
 
       # Martin reads its configuration once, at start, and `up -d` leaves a running
       # container alone when only the mounted file changed — so it is restarted
@@ -72,13 +107,10 @@ jobs:
       - name: Reload container
         run: |
           ssh -i $SSH_KEY_PATH $SERVER_USERNAME@$SERVER_IP "
-            export DB_USER='$DB_USER'
-            export DB_PASSWORD='$DB_PASSWORD'
-            export POSTGRES_DB='$POSTGRES_DB'
-            export JWT_SECRET='$JWT_SECRET'
-            docker compose -f $DOCKER_TAG.yml up -d &&
+            mv $DOCKER_TAG.yml.new $DOCKER_TAG.yml &&
+            $COMPOSE -f $DOCKER_TAG.yml up -d &&
             if ! sha256sum --check --status martin.sha256 2>/dev/null; then
-              docker compose -f $DOCKER_TAG.yml restart tiles &&
+              $COMPOSE -f $DOCKER_TAG.yml restart tiles &&
               sha256sum martin/* > martin.sha256
             fi &&
             docker image prune --force
