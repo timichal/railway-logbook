@@ -9,6 +9,7 @@ import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { getAllTrips } from "@/lib/tripActions";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import { useTodayDefault } from "@/lib/useTodayDefault";
 
 interface JourneyLoggerProps {
   selectedRoutes: SelectedRoute[];
@@ -33,11 +34,14 @@ export default function JourneyLogger({
 }: JourneyLoggerProps) {
   const regionId = useRegionId();
   const { showSuccess, showError } = useToast();
-  const today = new Date().toISOString().split("T")[0];
-
   // Journey form state
   const [journeyName, setJourneyName] = useState("");
-  const [journeyDate, setJourneyDate] = useState(today);
+  const {
+    value: journeyDate,
+    setValue: setJourneyDate,
+    reset: resetJourneyDate,
+    refresh: refreshJourneyDate,
+  } = useTodayDefault();
   const [journeyDescription, setJourneyDescription] = useState("");
   const [journeyTripId, setJourneyTripId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -89,7 +93,7 @@ export default function JourneyLogger({
 
       // Clear form and selection
       setJourneyName("");
-      setJourneyDate(today);
+      resetJourneyDate();
       setJourneyDescription("");
       setJourneyTripId(null);
       onClearSelection();
@@ -138,6 +142,7 @@ export default function JourneyLogger({
               type="date"
               value={journeyDate}
               onChange={(e) => setJourneyDate(e.target.value)}
+              onFocus={refreshJourneyDate}
               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

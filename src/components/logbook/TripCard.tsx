@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { useRegionId } from "@/lib/regionContext";
+import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import type { JourneyInTrip, TripWithStats } from "@/lib/tripActions";
@@ -178,11 +179,11 @@ export default function TripCard({
 
   const formatDateRange = (startDate: string | null, endDate: string | null): string => {
     if (!startDate) return "No journeys";
-    const start = new Date(startDate);
+    const start = parseDateOnly(startDate);
     if (startDate === endDate || !endDate) {
       return start.toLocaleDateString();
     }
-    const end = new Date(endDate);
+    const end = parseDateOnly(endDate);
     return `${start.toLocaleDateString()} – ${end.toLocaleDateString()}`;
   };
 
@@ -357,7 +358,7 @@ export default function TripCard({
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{j.name}</div>
                         <div className="text-gray-600 flex items-center gap-3 mt-0.5">
-                          <span>{new Date(j.date).toLocaleDateString()}</span>
+                          <span>{parseDateOnly(j.date).toLocaleDateString()}</span>
                           <span>{Number(j.total_distance).toFixed(1)} km</span>
                         </div>
                       </div>

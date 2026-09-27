@@ -20,23 +20,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       **Fix:** return `{ error }` for the expected rejections, as
       `login`/`register` now do (`asAuthResult` in `authActions.ts`).
 
-- [ ] **Journey dates reach the app as timezone-dependent `Date`s.**
-      `src/lib/journeyQueries.ts:53`, `:123-126`, `:194-199`; the `uj.*` selects in
-      `tripQueries.ts`. No type parser is set for `DATE` (OID 1082), so
-      `types.ts`'s `date: string // YYYY-MM-DD` is untrue. Over the API a date
-      serialises as e.g. `"2026-09-24T22:00:00.000Z"`, the previous day when the
-      server runs at UTC+2. On the web, `getUntimezonedDateStr` then applies the
-      *browser's* offset, and `JourneyCard` writes the shifted date back on save.
-      Trip `start_date`/`end_date` already use `::text`, so the two are
-      inconsistent. **Fix:** `types.setTypeParser(1082, v => v)` in `db.ts`. That
-      also fixes the export item above.
-
-- [ ] **The new-journey date defaults to the UTC day.**
-      `src/components/logbook/JourneyLogger.tsx:36`, `LocalTripLogger.tsx:32` use
-      `new Date().toISOString().split("T")[0]`. Before 02:00 in Prague or 09:00 in
-      Japan the form prefills yesterday. **Fix:** use
-      `getUntimezonedDateStr(new Date())`, computed when the form resets.
-
 - [ ] **`isRegionId("constructor")` is true.** `src/lib/shared/regions.ts:132` uses
       `value in REGIONS`, which walks the prototype chain.
       `/shared/<token>?view=constructor` crashes the shared page for whoever opens
@@ -392,6 +375,24 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
         `iconBtn("sm", "danger")`.
       - `TagInput.tsx:277-279` appends text colours to `optionRow(...)`.
       - `TripCard.tsx:194` carries both `text-[10px]` and `text-xs`.
+
+- [ ] **Decide one display format for journey dates.** Each display site picks
+      its own locale, so one journey's date reads differently from one view to
+      the next:
+      - Browser locale (`toLocaleDateString()`): `JourneyCard.tsx:315`,
+        `TripCard.tsx:179-187` (`formatDateRange`) and `:360`.
+      - `cs-CZ`: `LocalJourneyLogTab.tsx:417`, the route popup
+        (`userMapInteractions.ts:323`), and in the native app
+        `mobile/src/map/FeatureSheet.tsx` (`formatJourneyDate`) and
+        `mobile/app/(tabs)/logbook.tsx:332-339`.
+
+      They all parse through `parseDateOnly` now, so none of them shows the
+      wrong day; this is only about the format. **Decide** which locale (the
+      viewer's, or a fixed one). **Then** add `formatDateOnly(value)` (and a
+      range form) beside `parseDateOnly` in
+      `src/lib/shared/getUntimezonedDateStr.ts`, which both apps share, and
+      route every site through it, so that a new display can't go back to
+      `new Date(str)`.
 
 - [ ] **The admin colour expression breaks the paint-expression house rule.**
       `AdminMap.tsx:64-83` uses `["all", …]` inside a `case` that has further

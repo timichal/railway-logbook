@@ -6,6 +6,7 @@ import * as localStore from "@/lib/localStorage";
 import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import { useTodayDefault } from "@/lib/useTodayDefault";
 
 interface LocalTripLoggerProps {
   selectedRoutes: SelectedRoute[];
@@ -29,11 +30,14 @@ export default function LocalTripLogger({
   onStationClickHandler,
 }: LocalTripLoggerProps) {
   const { showSuccess, showError } = useToast();
-  const today = new Date().toISOString().split("T")[0];
-
   // Journey form state
   const [journeyName, setJourneyName] = useState("");
-  const [journeyDate, setJourneyDate] = useState(today);
+  const {
+    value: journeyDate,
+    setValue: setJourneyDate,
+    reset: resetJourneyDate,
+    refresh: refreshJourneyDate,
+  } = useTodayDefault();
   const [journeyDescription, setJourneyDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -74,7 +78,7 @@ export default function LocalTripLogger({
 
       // Clear form and selection
       setJourneyName("");
-      setJourneyDate(today);
+      resetJourneyDate();
       setJourneyDescription("");
       onClearSelection();
 
@@ -142,6 +146,7 @@ export default function LocalTripLogger({
               type="date"
               value={journeyDate}
               onChange={(e) => setJourneyDate(e.target.value)}
+              onFocus={refreshJourneyDate}
               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

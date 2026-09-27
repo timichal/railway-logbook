@@ -109,6 +109,14 @@ Bearer token required.
 | `DELETE /journeys/:id/trip` | file it under none |
 | `GET /journeys/unassigned?region=` | `{ journeys }` — the assignment picker's list |
 
+**A journey's `date` is a calendar day, `YYYY-MM-DD`**, both ways — never a
+timestamp, and with no timezone to apply. Parse it as a local date, not with
+`new Date(date)`, which reads a bare date as UTC midnight and shows the day
+before anywhere west of UTC. (Before 2026-09-27 the responses carried it as an
+ISO timestamp of the server's local midnight, which the native logbook, cutting
+it at the `T`, showed as the day before.) A trip's
+`start_date` / `end_date` are the same.
+
 **`routes` is one array of objects**, not the three positionally-aligned arrays
 the query module takes:
 

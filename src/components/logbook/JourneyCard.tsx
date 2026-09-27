@@ -9,7 +9,7 @@ import {
   updateJourney,
   updateLoggedPartPartial,
 } from "@/lib/journeyActions";
-import { getUntimezonedDateStr } from "@/lib/shared/getUntimezonedDateStr";
+import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type {
   HighlightRoutesFn,
   Journey,
@@ -75,7 +75,7 @@ export default function JourneyCard({
 
   const [viewedRoutes, setViewedRoutes] = useState<RailwayRoute[]>([]);
   const [editName, setEditName] = useState(journey.name);
-  const [editDate, setEditDate] = useState(getUntimezonedDateStr(journey.date));
+  const [editDate, setEditDate] = useState(journey.date);
   const [editDescription, setEditDescription] = useState(journey.description || "");
   const [editTripId, setEditTripId] = useState<number | null>(journey.trip_id);
   const [originalSnapshot, setOriginalSnapshot] = useState<{
@@ -137,15 +137,14 @@ export default function JourneyCard({
       const routes = result.routes || [];
       setViewedRoutes(routes);
       if (result.journey) {
-        const dateStr = getUntimezonedDateStr(result.journey.date);
         setEditName(result.journey.name);
-        setEditDate(dateStr);
+        setEditDate(result.journey.date);
         setEditDescription(result.journey.description || "");
         setEditTripId(result.journey.trip_id);
         setOriginalSnapshot({
           routes,
           name: result.journey.name,
-          date: dateStr,
+          date: result.journey.date,
           description: result.journey.description || "",
           tripId: result.journey.trip_id,
         });
@@ -313,7 +312,7 @@ export default function JourneyCard({
             )}
           </div>
           <div className="text-xs text-gray-600 mt-0.5">
-            {new Date(journey.date).toLocaleDateString()} · {journey.route_count} route
+            {parseDateOnly(journey.date).toLocaleDateString()} · {journey.route_count} route
             {journey.route_count === 1 ? "" : "s"} · {Number(journey.total_distance).toFixed(1)} km
           </div>
         </div>

@@ -12,6 +12,7 @@
  * decisions the web popup renders as HTML spans.
  */
 import { Ionicons } from "@expo/vector-icons";
+import { parseDateOnly } from "@shared/getUntimezonedDateStr";
 import { routeBadges, routeTitle } from "@shared/map/routeFeature";
 import type { RegionId } from "@shared/regions";
 import type { ReactNode } from "react";
@@ -142,7 +143,7 @@ function LinkButton({ label, url }: { label: string; url: string }): ReactNode {
 
 /** `cs-CZ`, as the web popup formats it. */
 function formatJourneyDate(value: string): string {
-  const date = new Date(value);
+  const date = parseDateOnly(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("cs-CZ").format(date);
 }

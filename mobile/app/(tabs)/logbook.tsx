@@ -13,7 +13,7 @@
  * the highlight and says so — the reader goes to the map to see it.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { getUntimezonedDateStr } from "@shared/getUntimezonedDateStr";
+import { parseDateOnly } from "@shared/getUntimezonedDateStr";
 import { useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from "react-native";
@@ -330,7 +330,7 @@ function formatKm(value: string | null): string {
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("cs-CZ").format(new Date(getUntimezonedDateStr(value)));
+  return new Intl.DateTimeFormat("cs-CZ").format(parseDateOnly(value));
 }
 
 function dateRange(start: string | null, end: string | null): string {

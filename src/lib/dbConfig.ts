@@ -1,3 +1,13 @@
+import { types } from "pg";
+
+// A DATE (journey dates) is a calendar day, not an instant. pg's default parser
+// turns it into a `Date` at the *server's* local midnight, which then serialises
+// as the previous day's evening in UTC (`"2026-09-24T22:00:00.000Z"` at UTC+2) and
+// is shifted again by whichever timezone reads it. Keep Postgres' own YYYY-MM-DD.
+// The parser table is global to `pg`; it is set here because every pool, the
+// app's, the tile pool and the scripts' alike, is built from this module.
+types.setTypeParser(types.builtins.DATE, (value) => value);
+
 /**
  * Shared database configuration
  * Used by both the application (Pool) and scripts (Client)

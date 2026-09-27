@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as localStore from "@/lib/localStorage";
 import { useRegionId } from "@/lib/regionContext";
-import { getUntimezonedDateStr } from "@/lib/shared/getUntimezonedDateStr";
+import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type {
   HighlightRoutesFn,
   JourneyEditStartFn,
@@ -233,8 +233,7 @@ export default function LocalJourneyLogTab({
     // Set up edit mode with current journey data
     setEditingJourneyId(journeyId);
     setEditName(journeyData.journey.name);
-    const dateStr = getUntimezonedDateStr(journeyData.journey.date);
-    setEditDate(dateStr);
+    setEditDate(journeyData.journey.date);
     setEditDescription(journeyData.journey.description || "");
 
     // Highlight routes on map
@@ -280,8 +279,7 @@ export default function LocalJourneyLogTab({
     const journeyData = journeys.find((j) => j.journey.id === editingJourneyId);
     if (journeyData) {
       setEditName(journeyData.journey.name);
-      const dateStr = getUntimezonedDateStr(journeyData.journey.date);
-      setEditDate(dateStr);
+      setEditDate(journeyData.journey.date);
       setEditDescription(journeyData.journey.description || "");
     }
   };
@@ -416,7 +414,7 @@ export default function LocalJourneyLogTab({
               {/* Journey Stats */}
               <div className="flex items-center gap-4 text-xs text-gray-700 mb-3">
                 <span className="font-medium">
-                  {new Date(journey.date).toLocaleDateString("cs-CZ")}
+                  {parseDateOnly(journey.date).toLocaleDateString("cs-CZ")}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="font-medium">{parts.length}</span>
