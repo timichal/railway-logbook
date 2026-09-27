@@ -10,9 +10,11 @@ interface UseSourceTileRefreshOptions {
   signal: number;
   /**
    * The tile URL's `v`. Owned by the caller so the map's construction can use the
-   * latest one; bumped here on every refresh.
+   * latest one — a map rebuilt after a refresh must not go back to a URL from
+   * before it; bumped here on every refresh. Undefined until the first one, for a
+   * caller that builds its first source with no `v` at all.
    */
-  cacheBusterRef: React.MutableRefObject<number>;
+  cacheBusterRef: React.MutableRefObject<number | undefined>;
   /** The source's tile URL for a given `v`. Read when a refresh runs, not before. */
   tileUrl: (cacheBuster: number) => string;
 }
@@ -52,7 +54,7 @@ export function useSourceTileRefresh({
 
     // The `v` must not repeat across page loads (a plain counter would) nor within
     // one (two refreshes in one millisecond would collapse into one).
-    cacheBusterRef.current = Math.max(Date.now(), cacheBusterRef.current + 1);
+    cacheBusterRef.current = Math.max(Date.now(), (cacheBusterRef.current ?? 0) + 1);
     source.setTiles([tileUrl(cacheBusterRef.current)]);
   }, [signal, mapLoaded]);
 }

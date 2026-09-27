@@ -1,5 +1,5 @@
 import type * as maplibregl from "maplibre-gl";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { railwayRoutesTileUrl } from "../index";
 import { useSourceTileRefresh } from "./useSourceTileRefresh";
 
@@ -9,6 +9,9 @@ interface UseMapTileRefreshOptions {
   /** Logged-in user ID (null for unlogged users, whose tiles carry no rides) */
   userId: number | null;
   selectedCountries: string[];
+  /** The route source's `v`, which the map's construction must read too (see
+      `useSourceTileRefresh`). */
+  cacheBusterRef: React.MutableRefObject<number | undefined>;
 }
 
 /**
@@ -28,9 +31,9 @@ export function useMapTileRefresh({
   mapLoaded,
   userId,
   selectedCountries,
+  cacheBusterRef,
 }: UseMapTileRefreshOptions) {
   const [signal, setSignal] = useState(0);
-  const cacheBusterRef = useRef(Date.now());
 
   useSourceTileRefresh({
     map,

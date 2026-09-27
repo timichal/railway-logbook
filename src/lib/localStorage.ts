@@ -6,7 +6,7 @@
  * (`import * as localStore from "@/lib/localStorage"`).
  */
 
-import { SUPPORTED_COUNTRIES } from "./shared/constants";
+import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
 import type { LocalJourney, LocalLoggedPart } from "./shared/types";
 
 interface LocalJourneysData {
@@ -40,6 +40,47 @@ export const JOURNEY_LIMIT_MESSAGE = `Journey limit reached (${MAX_JOURNEYS}/${M
 // one of them corrupt the defaults for everyone else.
 const defaultCountries = (): string[] => SUPPORTED_COUNTRIES.map((country) => country.code);
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Only the fields something downstream reads without checking - a search calls
+// `name.toLowerCase()`, the map colouring looks rides up by `track_id`. No more:
+// every write re-saves what the last read returned, so an entry refused here is
+// deleted for good, and a ride stored by an older version must not be lost over a
+// field nothing would have crashed on.
+const isLocalJourney = (entry: unknown): entry is LocalJourney =>
+  isRecord(entry) &&
+  typeof entry.id === "string" &&
+  typeof entry.name === "string" &&
+  typeof entry.date === "string";
+
+const isLocalLoggedPart = (entry: unknown): entry is LocalLoggedPart =>
+  isRecord(entry) &&
+  typeof entry.id === "string" &&
+  typeof entry.journey_id === "string" &&
+  typeof entry.track_id === "number";
+
+/**
+ * The array under `field` in the JSON stored at `key`, keeping only the entries
+ * `isEntry` accepts; null when nothing of that shape is stored. The callers' try/catch
+ * only covers a value that fails to parse: one that parses to the wrong shape —
+ * `{"journeys":{}}`, `null`, a journey with no name — used to be returned as it was
+ * and crash the tabs at their first `.filter` or property read. Storage is the
+ * browser's, not ours: anything (an old version, an extension, a hand edit) can
+ * have written it.
+ */
+function readStoredArray<T>(
+  key: string,
+  field: string,
+  isEntry: (entry: unknown) => entry is T,
+): T[] | null {
+  const data = localStorage.getItem(key);
+  if (!data) return null;
+  const parsed: unknown = JSON.parse(data);
+  const entries = isRecord(parsed) ? parsed[field] : undefined;
+  return Array.isArray(entries) ? entries.filter(isEntry) : null;
+}
+
 // ===== Journey Operations =====
 
 /**
@@ -49,11 +90,7 @@ export function getJourneys(): LocalJourney[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const data = localStorage.getItem(JOURNEYS_KEY);
-    if (!data) return [];
-
-    const parsed: LocalJourneysData = JSON.parse(data);
-    return parsed.journeys || [];
+    return readStoredArray(JOURNEYS_KEY, "journeys", isLocalJourney) ?? [];
   } catch (error) {
     console.error("Error reading journeys from localStorage:", error);
     return [];
@@ -212,11 +249,7 @@ export function getLoggedParts(): LocalLoggedPart[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const data = localStorage.getItem(LOGGED_PARTS_KEY);
-    if (!data) return [];
-
-    const parsed: LocalLoggedPartsData = JSON.parse(data);
-    return parsed.parts || [];
+    return readStoredArray(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? [];
   } catch (error) {
     console.error("Error reading logged parts from localStorage:", error);
     return [];
@@ -384,11 +417,14 @@ export function getPreferences(): string[] {
   if (typeof window === "undefined") return defaultCountries();
 
   try {
-    const data = localStorage.getItem(PREFS_KEY);
-    if (!data) return defaultCountries();
-
-    const parsed: LocalPreferencesData = JSON.parse(data);
-    return parsed.selected_countries || defaultCountries();
+    // The same cleanup every other reader of the filter applies (upper case, no
+    // duplicates, two letters), so a hand-edited "cz" still matches the tiles.
+    const codes = readStoredArray(
+      PREFS_KEY,
+      "selected_countries",
+      (code): code is string => typeof code === "string",
+    );
+    return codes ? normalizeCountryCodes(codes) : defaultCountries();
   } catch (error) {
     console.error("Error reading preferences from localStorage:", error);
     return defaultCountries();

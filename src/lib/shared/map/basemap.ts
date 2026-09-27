@@ -303,6 +303,10 @@ const pendingStyles: Partial<Record<ResolvedTheme, Promise<BasemapStyle | null>>
  * caller then builds the raster basemap instead, because a railway map with a
  * plain OSM background is still usable and one with no background at all is
  * not. A failure clears the memo, so the next map to mount tries again.
+ *
+ * Every map gets the same layer and source objects. MapLibre copies what it keeps
+ * from a spec rather than mutating it, so that is safe — provided nothing of ours
+ * mutates them after the fetch either.
  */
 export function loadBasemapStyle(theme: ResolvedTheme = "light"): Promise<BasemapStyle | null> {
   const cached = pendingStyles[theme];

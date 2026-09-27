@@ -163,19 +163,32 @@ export default function RailwayMap({
   // context and the basemap on every country checkbox. The sources below are read
   // once, at construction; a later change reaches the map through refreshTiles.
   const theme = useResolvedTheme();
+  // The route tiles' `v`, shared with useMapTileRefresh: a map rebuilt for a region
+  // or scheme change has to carry the latest one, or it would be back on a URL from
+  // before the last refresh — a stale tile, the moment anything caches them.
+  const routesCacheBusterRef = useRef<number | undefined>(undefined);
 
   const { map, mapLoaded } = useMapLibre(
     mapContainer,
     {
       region: region.id,
-      sources: () => ({
-        railway_routes: createRailwayRoutesSource({
-          rides: userId ? "session" : undefined,
-          selectedCountries: effectiveCountries,
-        }),
-        stations: createPublicStationsSource(),
-        public_notes: createPublicNotesSource(),
-      }),
+      sources: () => {
+        // A session tile is coloured by this user's rides, so it has a `v` from its
+        // first request: without one its URL would be the same across page loads and
+        // across everyone who signs in on this browser. A visitor's tile is Martin's,
+        // the same for everyone, and gets none until a refresh needs one, so it
+        // stays cacheable.
+        if (userId) routesCacheBusterRef.current ??= Date.now();
+        return {
+          railway_routes: createRailwayRoutesSource({
+            rides: userId ? "session" : undefined,
+            cacheBuster: routesCacheBusterRef.current,
+            selectedCountries: effectiveCountries,
+          }),
+          stations: createPublicStationsSource(),
+          public_notes: createPublicNotesSource(),
+        };
+      },
       layers: () => createUserMapLayers(theme),
     },
     [region.id],
@@ -193,6 +206,7 @@ export default function RailwayMap({
     mapLoaded,
     userId,
     selectedCountries: effectiveCountries,
+    cacheBusterRef: routesCacheBusterRef,
   });
 
   // Route highlighting hooks

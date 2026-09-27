@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import HowToUseArticle from "@/components/articles/HowToUseArticle";
 import RailwayNotesArticle from "@/components/articles/RailwayNotesArticle";
 import LoginForm from "@/components/auth/LoginForm";
@@ -104,9 +104,20 @@ function Chevron() {
 const ROW =
   "w-full flex items-center gap-3.5 min-h-14 px-4 text-left text-base text-gray-900 transition-colors hover:bg-gray-50 active:bg-gray-100";
 
-function Row({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+/** Marks the control that opens a sub-view, so focus can come back to it (`data-opens`). */
+function Row({
+  icon,
+  label,
+  opens,
+  onOpen,
+}: {
+  icon: string;
+  label: string;
+  opens: MenuView;
+  onOpen: (view: MenuView) => void;
+}) {
   return (
-    <button type="button" onClick={onClick} className={ROW}>
+    <button type="button" onClick={() => onOpen(opens)} data-opens={opens} className={ROW}>
       <Icon path={icon} className="w-5 h-5 text-gray-400 flex-shrink-0" />
       <span className="flex-1">{label}</span>
       <Chevron />
@@ -145,6 +156,50 @@ export default function MenuSheet({
   const [view, setView] = useState<MenuView>(initialView);
   const dialogRef = useModalDialog(onClose);
   const titleId = useId();
+  const headerRef = useRef<HTMLElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // The menu control a sub-view was opened from, for the way back to find. Kept
+  // across a switch between the two auth forms, which is still the same trip out.
+  // A menu opened straight onto a form counts as opened from the footer button
+  // that names it, which is on screen once the menu is.
+  const openedFromRef = useRef<MenuView | null>(initialView === "menu" ? null : initialView);
+  const shownViewRef = useRef<MenuView | null>(null);
+
+  // A view change unmounts whatever had focus (the row, the back arrow, the link
+  // between the forms), and focus falls to <body>: the next Tab would start over
+  // from the top of the dialog, and a screen reader would announce nothing. So a
+  // sub-view hands focus to its first field — what an auth form is opened to fill —
+  // and the menu to the control that led out of it; failing either, the header's
+  // first button (the back arrow in a sub-view, the × in the menu). Not the title:
+  // a focusable heading would be the first focusable thing in the dialog, and so
+  // where showModal() puts focus on every open. The first render is left to
+  // showModal() unless it opened straight onto a form. `preventScroll`, because
+  // this runs while the panel is still sliding in (see the comment on <dialog>).
+  useEffect(() => {
+    const headerButton = () => headerRef.current?.querySelector<HTMLElement>("button");
+    const previous = shownViewRef.current;
+    shownViewRef.current = view;
+    if (previous === view) return; // Strict Mode's second run
+    const isFirstRender = previous === null;
+    if (view === "menu") {
+      if (isFirstRender) return;
+      const opener = openedFromRef.current;
+      openedFromRef.current = null;
+      const row = opener
+        ? dialogRef.current?.querySelector<HTMLElement>(`[data-opens="${opener}"]`)
+        : null;
+      (row ?? headerButton())?.focus({ preventScroll: true });
+      return;
+    }
+    const field = bodyRef.current?.querySelector<HTMLElement>("input, select, textarea");
+    if (field) field.focus({ preventScroll: true });
+    else if (!isFirstRender) headerButton()?.focus({ preventScroll: true });
+  }, [view, dialogRef]);
+
+  const openView = (next: MenuView) => {
+    if (view === "menu") openedFromRef.current = next;
+    setView(next);
+  };
 
   const handleAuthSuccess = () => {
     onAuthSuccess();
@@ -165,13 +220,13 @@ export default function MenuSheet({
   if (view === "login") {
     body = (
       <div className="p-4">
-        <LoginForm onSuccess={handleAuthSuccess} onSwitchToRegister={() => setView("register")} />
+        <LoginForm onSuccess={handleAuthSuccess} onSwitchToRegister={() => openView("register")} />
       </div>
     );
   } else if (view === "register") {
     body = (
       <div className="p-4">
-        <RegisterForm onSuccess={handleAuthSuccess} onSwitchToLogin={() => setView("login")} />
+        <RegisterForm onSuccess={handleAuthSuccess} onSwitchToLogin={() => openView("login")} />
       </div>
     );
   } else if (view === "howto") {
@@ -229,8 +284,8 @@ export default function MenuSheet({
         </div>
 
         <nav className="divide-y divide-gray-100">
-          <Row icon={ICON_PATHS.howTo} label="How To Use" onClick={() => setView("howto")} />
-          <Row icon={ICON_PATHS.notes} label="Railway Notes" onClick={() => setView("notes")} />
+          <Row icon={ICON_PATHS.howTo} label="How To Use" opens="howto" onOpen={openView} />
+          <Row icon={ICON_PATHS.notes} label="Railway Notes" opens="notes" onOpen={openView} />
           {user?.id === 1 && (
             <Link href="/admin" className={ROW}>
               <Icon path={ICON_PATHS.admin} className="w-5 h-5 text-gray-400 flex-shrink-0" />
@@ -257,7 +312,10 @@ export default function MenuSheet({
       className="fixed inset-0 m-0 p-0 w-full h-full max-w-none max-h-none overflow-clip bg-transparent text-fg open:flex md:justify-end backdrop:bg-transparent"
     >
       <div className="menu-sheet relative z-10 w-full md:w-[380px] bg-surface md:shadow-2xl flex flex-col safe-area">
-        <header className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0">
+        <header
+          ref={headerRef}
+          className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0"
+        >
           {view !== "menu" && (
             <IconButton onClick={backToMenu} label="Back to menu" path={CHEVRON_LEFT} />
           )}
@@ -272,7 +330,9 @@ export default function MenuSheet({
           <IconButton onClick={onClose} label="Close menu" path={CROSS} />
         </header>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">{body}</div>
+        <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto">
+          {body}
+        </div>
 
         {/* Auth lives in a footer, not in the list: it is the one action a visitor is
             most likely here for, and Log out must not look like another navigation row. */}
@@ -293,14 +353,16 @@ export default function MenuSheet({
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => setView("login")}
+                  onClick={() => openView("login")}
+                  data-opens="login"
                   className={`${btn("primary", "lg")} w-full`}
                 >
                   Sign in
                 </button>
                 <button
                   type="button"
-                  onClick={() => setView("register")}
+                  onClick={() => openView("register")}
+                  data-opens="register"
                   className={`${btn("outline", "lg")} w-full`}
                 >
                   Create account
