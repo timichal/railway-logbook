@@ -6,6 +6,7 @@ import type { ProgressByCountry } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
 import { getCountryFlag } from "@/lib/shared/countryFlag";
 import { btn } from "@/lib/ui/buttonStyles";
+import { FORM_ERROR } from "@/lib/ui/inputStyles";
 
 interface CountriesStatsTabProps {
   dataAccess: DataAccess;
@@ -23,24 +24,38 @@ export default function CountriesStatsTab({
   const countries = useRegion().countries;
   const [stats, setStats] = useState<ProgressByCountry | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Bumped by Retry, to re-run the load effect
+  const [attempt, setAttempt] = useState(0);
 
-  // Load stats on mount and when selection changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedCountries is an intentional trigger to reload stats when the country selection changes.
+  // The per-country numbers don't depend on the selection - every country in the
+  // region is counted, ticked or not - so toggling one must not reload them. The
+  // tab is mounted only while open, so opening it is what picks up newly logged
+  // rides; `dataAccess` changes on login/logout and region switch.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is an intentional trigger - Retry bumps it to load again.
   useEffect(() => {
-    async function loadStats() {
-      setIsLoading(true);
-      try {
-        const progressData = await dataAccess.getProgressByCountry();
-        setStats(progressData);
-      } catch (error) {
+    let cancelled = false;
+    // Clear the previous account's or region's numbers, so a failed load can't leave them standing
+    setStats(null);
+    setLoadFailed(false);
+    setIsLoading(true);
+    dataAccess
+      .getProgressByCountry()
+      .then((progressData) => {
+        if (!cancelled) setStats(progressData);
+      })
+      .catch((error) => {
+        if (cancelled) return;
         console.error("Failed to load country stats:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadStats();
-  }, [selectedCountries, dataAccess]); // Reload when selection changes (in case user logs routes)
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dataAccess, attempt]);
 
   const handleCountryToggle = (countryCode: string) => {
     const newSelection = selectedCountries.includes(countryCode)
@@ -87,6 +102,18 @@ export default function CountriesStatsTab({
         )}
       </div>
 
+      {/* A failed load must not read as "nothing ridden", so the numbers are
+          blanked rather than zeroed - but the countries stay selectable, since
+          the filter works without them */}
+      {loadFailed && (
+        <div className={`${FORM_ERROR} mb-4 flex items-center justify-between gap-3`} role="alert">
+          <span>Couldn't load the statistics.</span>
+          <button type="button" onClick={() => setAttempt((n) => n + 1)} className={btn("outline")}>
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Country Checkboxes with Stats */}
       <div className="space-y-2 mb-6">
         {isLoading ? (
@@ -116,7 +143,9 @@ export default function CountriesStatsTab({
                   <span className="text-sm text-gray-600">{country.name}</span>
                 </div>
                 <div className="text-sm text-gray-600">
-                  {countryStat ? (
+                  {loadFailed ? (
+                    "—"
+                  ) : countryStat ? (
                     <>
                       {formatKm(countryStat.completedKm)} / {formatKm(countryStat.totalKm)} km
                     </>

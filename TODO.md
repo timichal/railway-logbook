@@ -211,6 +211,23 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
         default would reach the web app but not the native one. Its hydration
         can be `setRegionId(regionIdOrDefault(stored))`.
 
+- [ ] **A `useAsyncLoad` hook for the cancellable load effect.** The
+      `let cancelled = false` / `.then` / `.catch` / `.finally` / cleanup pattern
+      is written out by hand in `CountriesStatsTab.tsx`, `ShareMapDialog.tsx`,
+      `LocalJourneyLogTab.tsx` (region track ids), `JourneyCard.tsx` (journey
+      details) and `useCoverageOverlay.ts`. Every copy has to get each guard
+      right by itself, and they don't agree: some copies log a failure for a
+      request that was already cancelled, and only `CountriesStatsTab` and
+      `ShareMapDialog` show the user that a load failed. **Fix:**
+      `useAsyncLoad(fn, deps)` returning `{ data, loading, error, retry }`, which
+      clears `data` whenever deps change so a failed load can't leave the
+      previous account's or region's result on screen. `JourneyCard` and
+      `useCoverageOverlay` act on the result rather than only storing it, so they
+      may want an `onData` callback or may simply stay as they are. The
+      `cancelled` flags in `RailwayMap`, `PublicRailwayMap` and `useMapLibre` look
+      the same but guard deferred map setup, not a load, so they are out of
+      scope.
+
 - [ ] **Style values hard-coded outside `style.ts`.**
       - The dark ground `#05070a` is written twice in `basemap.ts` (`:204`,
         `:371`), and the two must match.
