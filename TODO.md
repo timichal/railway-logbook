@@ -12,28 +12,13 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Refactoring
 
-- [ ] **Split the two ~1200-line pathfinders along their seams.**
-      - `routePathFinder.ts`:
-        - `routeGraph.ts`: graph, grid, loader, cache (`:80-404`).
-        - `routeSearch.ts`: heap, `findShortestPath`, `terminalCost`,
-          `resolveEntry`, bearings (`:410-804`). Pure code, and the part that
-          most needs unit tests.
-        - `plannerStations.ts`.
-        - Split `computeTravelledTrims` into a pure spec and the SQL.
-        - Pull the per-segment loop body (`:1145-1188`) out as `searchSegment()`.
-      - `railwayPathFinder.ts`:
-        - A `PartNetwork` (load, adjacency, lengths).
-        - Pure part-geometry functions (`:650-959`). They are private methods
-          today, so they can't be tested.
-        - One `junctionAngle()` shared by `findBacktracking` and
-          `wouldCreateBacktracking`.
-
 - [ ] **Small shared helpers.**
       - The index-based worker pool is copy-pasted in `verifyRouteData.ts:267-297`
         and `showBacktracking.ts:121-145`; replace both with a `runPool()`.
       - The `ST_DWithin(geometry_3857, …, m / GREATEST(cos(radians(lat)), 0.01))`
-        fragment appears three times: `routePathFinder:169`,
-        `railwayPathFinder:103`, `stationProximity:25`.
+        fragment appears three times: `planner/stations.ts`
+        (`findRoutesNearStations`), `scripts/lib/partNetwork.ts`
+        (`loadAround`), `stationProximity:25`.
       - The per-journey stats SELECT is copy-pasted four times in
         `tripQueries.ts` (`:158`, `:438`, `:461`, `:517`). Make it one fragment
         like `TRIP_STATS_SELECT`.
@@ -96,7 +81,11 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       - `geojsonFeatureStream`: input cut right after a feature's `},` must
         read as truncated.
       - `normalizeCountryCodes`.
-      - The planner's search on a synthetic network, once it is split out.
+      - The planner's search (`planner/routeSearch.ts`) on a network built by
+        hand with `buildRouteGraph`, and `planVisits`/`planTrims`
+        (`planner/routeVisits.ts`).
+      - The part geometry in `scripts/lib/partGeometry.ts` (orientation,
+        `findBacktracking`, edge truncation).
 
       `node --test` with tsx needs no new dependency.
 

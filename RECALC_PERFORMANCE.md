@@ -1,7 +1,7 @@
 # Route recalculation performance
 
 Read this before changing `verifyRouteData.ts` or `scripts/lib/railwayPathFinder.ts`
-for performance reasons. The work described here is **done**; what remains is the
+(or the `partNetwork.ts` and `partGeometry.ts` beside it) for performance reasons. The work described here is **done**; what remains is the
 reasoning behind the current shape, the constraints that must not be broken, and
 the two things still on the table.
 
@@ -68,13 +68,13 @@ pulling the next route off a shared index and writing its own `UPDATE`:
   GeoJSON text for 1744 routes (~50 MB for a full run) serialised, shipped and
   held in Node for nothing.
 - **One query loads both endpoints' surroundings**
-  (`loadRailwayPartsAroundCoordinates`), against the GIST-indexed
+  (`PartNetwork.loadAround`), against the GIST-indexed
   `railway_parts.geometry_3857` with `ST_DWithin`. It used to be two queries, one
   per endpoint, each materialising an `ST_Buffer` 32-gon and testing
   `ST_Intersects` against the WGS84 column. For any route shorter than the buffer
   — most of them — the two disks overlap almost entirely, so every part in the
   overlap was selected, encoded as GeoJSON, shipped and `JSON.parse`d twice, only
-  for `parseAndStoreParts` to drop the second copy.
+  for the second copy to be dropped as a duplicate.
 - **A click point off the network fails at once.** The part containing a
   coordinate lies within 1 m of it, so if the 50 km load holds none, the 100 km
   and 222 km loads cannot either — the buffer only ever adds parts farther away.
@@ -88,13 +88,13 @@ pulling the next route off a shared index and writing its own `UPDATE`:
   `ORDER BY id`).
 - **A part's length, endpoint keys and neighbours are computed once, not per
   hop.** Each part carries its haversine
-  `lengthMeters` and its endpoint keys from `parseAndStoreParts`, and
-  `getConnectedPartIds` caches its sorted neighbour list per part — cleared
+  `lengthMeters` and its endpoint keys from `PartNetwork.add`, and
+  `PartNetwork.connected` caches its sorted neighbour list per part — cleared
   whenever a part is added, since a part's neighbours depend on everything
   loaded. The label-correcting search pops a part many times over, and used to
   re-sum its haversines on every relaxation and rebuild and sort a `Set` on every
   pop. `lengthMeters` is summed in the same order the relaxation summed it, so
-  the distances are identical to the bit. `calculatePathDistance` deliberately
+  the distances are identical to the bit. `pathDistance` deliberately
   stays one running sum over every segment of the path: regrouping it per part
   rounds differently, and its result decides between candidate paths. The
   backtracking check per relaxation (two bearings off the connection segments)

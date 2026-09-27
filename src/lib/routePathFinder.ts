@@ -2,6 +2,13 @@
  * Journey-planner pathfinding over whole routes. See "Journey planner
  * pathfinding" in CLAUDE.md for the search itself.
  *
+ * This module is the flow — find the stations' routes, search each segment,
+ * work out what was travelled — and the reads that turn the plan into
+ * `PlannerRoute`s. The pieces are under `planner/`: the network model
+ * (`routeGraph.ts`) and its cache (`routeGraphCache.ts`), the search
+ * (`routeSearch.ts`), the stations' routes (`stations.ts`) and the travelled
+ * stretches (`routeVisits.ts`). The search and the stretches are pure.
+ *
  * A plain module rather than a "use server" one: the web app reaches it through
  * `plannerActions.ts`, the mobile API through its own route handler, and
  * `inspectPath.ts` imports it straight from the CLI (MOBILE_APP_PLAN.md,
@@ -9,784 +16,22 @@
  */
 
 import pool from "./db";
+import { getRouteNetwork } from "./planner/routeGraphCache";
 import {
-  BACKTRACKING_THRESHOLD_DEGREES,
-  calculateBearing,
-  haversineDistance,
-  normalizeBearingDifference,
-} from "./geoUtils";
+  changeCosts,
+  type SearchResult,
+  searchSegment,
+  type TerminalFractions,
+} from "./planner/routeSearch";
+import { planTrims, planVisits, type TrimSpec } from "./planner/routeVisits";
+import { findRoutesNearStations } from "./planner/stations";
 import { MAX_VIA_STATIONS } from "./shared/constants";
-import { UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
 import type { PartialRouteGeometry, PlannerRoute } from "./shared/types";
 
 export interface PathResult {
   routes: PlannerRoute[];
   totalDistance: number;
   error?: string;
-}
-
-/** Bearing info for backtracking detection at route connection points */
-interface RouteBearingInfo {
-  track_id: number;
-  from_station: string;
-  to_station: string;
-  length_km: number;
-  line_class: string | null;
-  /** First coordinate of route geometry */
-  startCoord: [number, number];
-  /** Second coordinate of route geometry (near start) */
-  nearStartCoord: [number, number];
-  /** Second-to-last coordinate of route geometry (near end) */
-  nearEndCoord: [number, number];
-  /** Last coordinate of route geometry */
-  endCoord: [number, number];
-}
-
-/**
- * Cost multiplier for route-level pathfinding based on line_class.
- * Lower = preferred. Main/highspeed routes are preferred over branch routes.
- */
-function getRouteCostMultiplier(info: RouteBearingInfo): number {
-  if (info.line_class === "highspeed") return 0.5;
-  if (info.line_class === "main") return 1.0;
-  return 2.0; // branch or unknown
-}
-
-/** Tolerance in meters for matching route endpoints as connected */
-const ENDPOINT_TOLERANCE_METERS = 500;
-
-/**
- * Cost, expressed in km of main line, charged per km of gap left between the
- * endpoints of two consecutive routes.
- *
- * Endpoint coordinates are hand-picked click points, so two routes that really
- * meet still land a few metres apart — hence the tolerance above. But a junction
- * complex packs several distinct endpoints a few hundred metres apart, all
- * inside that tolerance. Without a penalty the search treats the jump between
- * them as free and skips the short connecting route that actually covers the
- * gap, producing a path with a hole in it. Penalising the gap makes the covered
- * chain cheaper than the jump, while still allowing a jump when nothing covers it.
- */
-const GAP_PENALTY_PER_KM = 25;
-
-/**
- * Cost, in km of main line, of changing to another route at a via station
- * rather than carrying on along the one the journey arrived on — on top of the
- * gap between the two, charged at GAP_PENALTY_PER_KM like any other.
- *
- * The gap alone leaves a change free wherever two routes run on top of each
- * other: a parallel line, or a route duplicated and not yet split. There a
- * journey that merely passed through the via would come out as two partial
- * routes instead of one whole one. A few km is enough to settle those ties for
- * the arriving route, and nothing next to the detour it takes to stay on a line
- * that doesn't go where the journey is headed.
- */
-const VIA_CHANGE_PENALTY = 5;
-
-type EndpointSide = "start" | "end";
-
-const ENDPOINT_SIDES: EndpointSide[] = ["start", "end"];
-
-function getEndpointCoord(info: RouteBearingInfo, side: EndpointSide): [number, number] {
-  return side === "start" ? info.startCoord : info.endCoord;
-}
-
-interface GraphWithBearingInfo {
-  graph: RouteGraph;
-  routeInfo: Map<number, RouteBearingInfo>;
-}
-
-/**
- * In-memory route graph for fast pathfinding
- */
-class RouteGraph {
-  private adjacencyList: Map<number, Set<number>> = new Map();
-
-  addConnection(from: number, to: number) {
-    if (!this.adjacencyList.has(from)) {
-      this.adjacencyList.set(from, new Set());
-    }
-    this.adjacencyList.get(from)!.add(to);
-  }
-
-  getNeighbors(routeId: number): number[] {
-    return Array.from(this.adjacencyList.get(routeId) || []);
-  }
-
-  clear() {
-    this.adjacencyList.clear();
-  }
-}
-
-// ============================================================================
-// STATION -> ROUTES
-// ============================================================================
-
-/** Progressive tolerance levels (meters) for matching routes to a station */
-const STATION_TOLERANCES = [100, 500, 1000, 2000, 5000];
-
-interface StationRouteMatches {
-  /** Routes passing near each station, by station id. */
-  routes: Map<number, number[]>;
-  /** Fraction along each route where the station sits, keyed by `pairKey`. */
-  fractions: Map<string, number>;
-  /** The point on each route closest to the station, keyed by `pairKey`. */
-  points: Map<string, [number, number]>;
-}
-
-/**
- * Find the routes passing near each of the given stations.
- *
- * One indexed query covers every station at the widest tolerance; the
- * progressive narrowing then happens in memory. (Querying each tolerance level
- * separately meant up to six sequential sequential scans per station, because
- * `ST_DWithin` on a `::geography` cast cannot use the geometry index.)
- *
- * Per station: the smallest tolerance level that matches anything wins, extended
- * to the next level up to catch nearby routes at slightly different distances
- * (e.g. parallel tracks at the same station).
- *
- * Each match also carries where the station falls along that route, as a 0..1
- * fraction of its geometry: a station is regularly mid-route, and the search
- * charges a terminal route for the stretch between the station and the endpoint
- * it leaves through rather than for the whole line. And the point on the route
- * nearest the station, which is where a journey changing lines at a via gets on
- * or off it (see `changeCosts`).
- */
-async function findRoutesNearStations(stationIds: number[]): Promise<StationRouteMatches> {
-  const routes = new Map<number, number[]>();
-  const fractions = new Map<string, number>();
-  const points = new Map<string, [number, number]>();
-  if (stationIds.length === 0) return { routes, fractions, points };
-
-  const maxTolerance = STATION_TOLERANCES[STATION_TOLERANCES.length - 1];
-  const client = await pool.connect();
-  try {
-    // ST_DWithin against geometry_3857 (indexed) with 1/cos(lat) scaling so the
-    // real ground radius matches maxTolerance; exact distance is then measured
-    // on the few candidates that survive.
-    const rows = await client.query<{
-      station_id: string | number;
-      track_id: number;
-      distance_m: string | number;
-      frac: string | number;
-      lon: number;
-      lat: number;
-    }>(
-      `
-      WITH s AS (
-        SELECT id, coordinates, ST_Transform(coordinates, 3857) AS geom_3857
-        FROM stations
-        WHERE id = ANY($1)
-      )
-      SELECT
-        s.id AS station_id,
-        r.track_id,
-        ST_Distance(r.geometry::geography, s.coordinates::geography) AS distance_m,
-        ST_LineLocatePoint(r.geometry, s.coordinates) AS frac,
-        ST_X(ST_ClosestPoint(r.geometry, s.coordinates)) AS lon,
-        ST_Y(ST_ClosestPoint(r.geometry, s.coordinates)) AS lat
-      FROM s
-      JOIN railway_routes r
-        ON r.usage_type = 0
-       AND ST_DWithin(
-             r.geometry_3857,
-             s.geom_3857,
-             $2 / GREATEST(cos(radians(ST_Y(s.coordinates))), 0.01)
-           )
-      ORDER BY s.id, distance_m
-      `,
-      [stationIds, maxTolerance],
-    );
-
-    const byStation = new Map<number, { track_id: number; distance: number }[]>();
-    for (const row of rows.rows) {
-      const stationId = Number(row.station_id);
-      const distance =
-        typeof row.distance_m === "string" ? parseFloat(row.distance_m) : row.distance_m;
-      if (distance > maxTolerance) continue;
-      if (!byStation.has(stationId)) byStation.set(stationId, []);
-      byStation.get(stationId)!.push({ track_id: row.track_id, distance });
-      const key = pairKey(row.track_id, stationId);
-      fractions.set(key, typeof row.frac === "string" ? parseFloat(row.frac) : row.frac);
-      points.set(key, [Number(row.lon), Number(row.lat)]);
-    }
-
-    for (const stationId of stationIds) {
-      const candidates = byStation.get(stationId) ?? [];
-      let matched: number[] = [];
-
-      for (let i = 0; i < STATION_TOLERANCES.length; i++) {
-        if (!candidates.some((c) => c.distance <= STATION_TOLERANCES[i])) continue;
-        const cutoff = STATION_TOLERANCES[Math.min(i + 1, STATION_TOLERANCES.length - 1)];
-        matched = candidates.filter((c) => c.distance <= cutoff).map((c) => c.track_id);
-        break;
-      }
-
-      routes.set(stationId, matched);
-    }
-
-    return { routes, fractions, points };
-  } finally {
-    client.release();
-  }
-}
-
-// ============================================================================
-// GRAPH BUILDING
-// ============================================================================
-
-/** Grid cell size in degrees of latitude — one tolerance radius across. */
-const CELL_DEGREES = ENDPOINT_TOLERANCE_METERS / 111_320;
-
-function latBand(lat: number): number {
-  return Math.floor(lat / CELL_DEGREES);
-}
-
-/**
- * Longitude band within a latitude band. Scaled by cos(lat) so a cell stays at
- * least one tolerance radius wide on the ground even at Nordic latitudes, which
- * is what lets a 3x3 cell scan find every endpoint within tolerance.
- */
-function lonBand(lon: number, band: number): number {
-  const refLat = (band + 0.5) * CELL_DEGREES;
-  const scale = Math.max(Math.cos((refLat * Math.PI) / 180), 0.01);
-  return Math.floor((lon * scale) / CELL_DEGREES);
-}
-
-/**
- * Load the whole regular-usage route network and connect routes whose endpoints
- * are within ENDPOINT_TOLERANCE_METERS of each other.
- *
- * The network is small enough (a few thousand routes, endpoints only) to load in
- * one query, so there is no buffering around the stations: pathfinding used to
- * retry with 50km/100km/.../1000km buffers, re-querying and rebuilding the graph
- * each time a segment failed.
- *
- * Endpoints are bucketed into a spatial grid so pairing stays roughly linear
- * instead of comparing every route against every other one.
- */
-async function loadRouteGraph(signature: string): Promise<CachedRouteGraph> {
-  const client = await pool.connect();
-  const graph = new RouteGraph();
-  const routeInfo = new Map<number, RouteBearingInfo>();
-
-  try {
-    const result = await client.query<{
-      track_id: number;
-      from_station: string;
-      to_station: string;
-      length_km: string | number;
-      line_class: string | null;
-      start_x: number;
-      start_y: number;
-      near_start_x: number;
-      near_start_y: number;
-      near_end_x: number;
-      near_end_y: number;
-      end_x: number;
-      end_y: number;
-    }>(
-      `
-      SELECT
-        r.track_id,
-        r.from_station,
-        r.to_station,
-        r.length_km,
-        r.line_class,
-        ST_X(ST_PointN(r.geometry, 1)) as start_x,
-        ST_Y(ST_PointN(r.geometry, 1)) as start_y,
-        ST_X(ST_PointN(r.geometry, 2)) as near_start_x,
-        ST_Y(ST_PointN(r.geometry, 2)) as near_start_y,
-        ST_X(ST_PointN(r.geometry, GREATEST(ST_NPoints(r.geometry) - 1, 1))) as near_end_x,
-        ST_Y(ST_PointN(r.geometry, GREATEST(ST_NPoints(r.geometry) - 1, 1))) as near_end_y,
-        ST_X(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_x,
-        ST_Y(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_y
-      FROM railway_routes r
-      WHERE r.usage_type = 0
-        AND ST_NPoints(r.geometry) >= 2
-      `,
-    );
-
-    for (const row of result.rows) {
-      const lengthKm =
-        typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km;
-      routeInfo.set(row.track_id, {
-        track_id: row.track_id,
-        from_station: row.from_station,
-        to_station: row.to_station,
-        length_km: lengthKm,
-        line_class: row.line_class,
-        startCoord: [row.start_x, row.start_y],
-        nearStartCoord: [row.near_start_x, row.near_start_y],
-        nearEndCoord: [row.near_end_x, row.near_end_y],
-        endCoord: [row.end_x, row.end_y],
-      });
-    }
-
-    // Bucket every endpoint into the spatial grid
-    const grid = new Map<string, number[]>();
-    for (const info of routeInfo.values()) {
-      for (const side of ENDPOINT_SIDES) {
-        const [lon, lat] = getEndpointCoord(info, side);
-        const band = latBand(lat);
-        const key = `${band}:${lonBand(lon, band)}`;
-        const cell = grid.get(key);
-        if (cell) cell.push(info.track_id);
-        else grid.set(key, [info.track_id]);
-      }
-    }
-
-    // Connect routes sharing an endpoint location, scanning the 3x3 neighbourhood
-    for (const info of routeInfo.values()) {
-      for (const side of ENDPOINT_SIDES) {
-        const coord = getEndpointCoord(info, side);
-        const band = latBand(coord[1]);
-
-        for (let b = band - 1; b <= band + 1; b++) {
-          const lb = lonBand(coord[0], b);
-          for (let l = lb - 1; l <= lb + 1; l++) {
-            const cell = grid.get(`${b}:${l}`);
-            if (!cell) continue;
-
-            for (const otherId of cell) {
-              if (otherId === info.track_id) continue;
-              const other = routeInfo.get(otherId)!;
-              const gap = Math.min(
-                haversineDistance(coord, other.startCoord),
-                haversineDistance(coord, other.endCoord),
-              );
-              if (gap > ENDPOINT_TOLERANCE_METERS) continue;
-
-              graph.addConnection(info.track_id, otherId);
-              graph.addConnection(otherId, info.track_id);
-            }
-          }
-        }
-      }
-    }
-
-    return { graph, routeInfo, signature };
-  } finally {
-    client.release();
-  }
-}
-
-interface CachedRouteGraph extends GraphWithBearingInfo {
-  /** Network fingerprint the graph was built from — see getNetworkSignature. */
-  signature: string;
-}
-
-let cachedGraph: CachedRouteGraph | null = null;
-let graphInFlight: { signature: string; promise: Promise<CachedRouteGraph> } | null = null;
-
-/**
- * Cheap fingerprint of the route network: the row count and the sum of every
- * row's `xmin`, the id of the transaction that last wrote it.
- *
- * An insert or update gives its row a new `xmin` and a delete moves the count,
- * so any committed write changes the signature — whatever the write path, and
- * whichever order concurrent writes commit in. `max(updated_at)`, the previous
- * fingerprint, had neither property: it relied on every write path setting the
- * column, and a timestamp is taken when a transaction starts, so an admin save
- * committing after a later-started `verifyRouteData` update left the maximum
- * where it was and the cache stale. (Freezing can rewrite an old row's `xmin`,
- * which costs one needless rebuild and nothing else.)
- */
-async function getNetworkSignature(): Promise<string> {
-  const result = await pool.query<{ total: string; xmins: string | null }>(
-    `
-    SELECT count(*) AS total, sum(xmin::text::bigint) AS xmins
-    FROM railway_routes
-    `,
-  );
-  const row = result.rows[0];
-  return `${row.total}/${row.xmins ?? "-"}`;
-}
-
-/**
- * Route graph for the current network, reused across requests.
- *
- * Extracting endpoint coordinates costs ~450ms because every ST_PointN has to
- * walk the full linestring, so the built graph is kept in memory and only
- * rebuilt when the network fingerprint changes.
- */
-async function getRouteGraph(): Promise<GraphWithBearingInfo> {
-  const signature = await getNetworkSignature();
-  if (cachedGraph?.signature === signature) return cachedGraph;
-
-  // Concurrent searches share one rebuild, as long as they want the same network
-  if (graphInFlight?.signature !== signature) {
-    graphInFlight = { signature, promise: loadRouteGraph(signature) };
-  }
-
-  const pending = graphInFlight;
-  try {
-    cachedGraph = await pending.promise;
-    return cachedGraph;
-  } finally {
-    if (graphInFlight === pending) graphInFlight = null;
-  }
-}
-
-// ============================================================================
-// BACKTRACKING DETECTION
-// ============================================================================
-
-/**
- * Work out how a route is entered when arriving at a given coordinate: the
- * nearer of its two endpoints, with the exit side being the other one.
- *
- * Picking the *first* endpoint within tolerance instead makes any route shorter
- * than the tolerance traversable in one direction only — the 0.2km connectors
- * inside a junction complex were reachable but always exited back the way they
- * came in.
- */
-function resolveEntry(
-  info: RouteBearingInfo,
-  arrivalCoord: [number, number],
-): { exitSide: EndpointSide; gapMeters: number } | null {
-  const toStart = haversineDistance(info.startCoord, arrivalCoord);
-  const toEnd = haversineDistance(info.endCoord, arrivalCoord);
-  const gapMeters = Math.min(toStart, toEnd);
-
-  if (gapMeters > ENDPOINT_TOLERANCE_METERS) return null;
-  return { exitSide: toStart <= toEnd ? "end" : "start", gapMeters };
-}
-
-/**
- * Get the exit bearing of a route at a given endpoint side.
- */
-function getExitBearing(info: RouteBearingInfo, side: EndpointSide): number {
-  if (side === "end") {
-    return calculateBearing(info.nearEndCoord, info.endCoord);
-  } else {
-    return calculateBearing(info.nearStartCoord, info.startCoord);
-  }
-}
-
-/**
- * Get the entry bearing of a route at a given endpoint side.
- */
-function getEntryBearing(info: RouteBearingInfo, side: EndpointSide): number {
-  if (side === "start") {
-    return calculateBearing(info.startCoord, info.nearStartCoord);
-  } else {
-    return calculateBearing(info.endCoord, info.nearEndCoord);
-  }
-}
-
-function oppositeSide(side: EndpointSide): EndpointSide {
-  return side === "start" ? "end" : "start";
-}
-
-/**
- * Check whether leaving routeA at sideA and entering routeB at entrySideB doubles
- * back: true when the bearing difference at that junction exceeds 140°.
- */
-function isBacktrackingAt(
-  infoA: RouteBearingInfo,
-  sideA: EndpointSide,
-  infoB: RouteBearingInfo,
-  entrySideB: EndpointSide,
-): boolean {
-  const exitBear = getExitBearing(infoA, sideA);
-  const entryBear = getEntryBearing(infoB, entrySideB);
-
-  return normalizeBearingDifference(entryBear, exitBear) > BACKTRACKING_THRESHOLD_DEGREES;
-}
-
-/**
- * Check if a found path has any backtracking transitions between consecutive
- * routes. Each junction is checked at the endpoints the search reports it
- * travelled (`sides`), not at the routes' closest endpoint pairing — inside a
- * junction complex the two can differ, and a guessed junction that happens not
- * to double back would skip the `avoidBacktracking` re-search. A side is null
- * only on a single-route path, which has no junction to check.
- */
-function hasRoutePathBacktracking(
-  { path, sides }: Pick<SearchResult, "path" | "sides">,
-  routeInfo: Map<number, RouteBearingInfo>,
-): boolean {
-  for (let i = 0; i < path.length - 1; i++) {
-    const infoA = routeInfo.get(path[i]);
-    const infoB = routeInfo.get(path[i + 1]);
-    const exitSideA = sides[i];
-    const exitSideB = sides[i + 1];
-    if (!infoA || !infoB || !exitSideA || !exitSideB) continue;
-
-    if (isBacktrackingAt(infoA, exitSideA, infoB, oppositeSide(exitSideB))) return true;
-  }
-  return false;
-}
-
-// ============================================================================
-// PATH FINDING
-// ============================================================================
-
-interface SearchState {
-  route: number;
-  path: number[];
-  /**
-   * The endpoint each route in `path` is left through, aligned with it — so the
-   * last entry is the endpoint this state sits at. Carried rather than inferred
-   * afterwards: inside a junction complex several endpoint pairings can sit
-   * inside ENDPOINT_TOLERANCE_METERS at once, and the closest need not be the
-   * one travelled.
-   */
-  sides: EndpointSide[];
-  cost: number;
-}
-
-/** Binary min-heap over search states, keyed on cost. */
-class SearchQueue {
-  private items: SearchState[] = [];
-
-  get size(): number {
-    return this.items.length;
-  }
-
-  push(state: SearchState) {
-    const items = this.items;
-    items.push(state);
-    let i = items.length - 1;
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if (items[parent].cost <= items[i].cost) break;
-      [items[parent], items[i]] = [items[i], items[parent]];
-      i = parent;
-    }
-  }
-
-  pop(): SearchState | undefined {
-    const items = this.items;
-    if (items.length === 0) return undefined;
-
-    const top = items[0];
-    const last = items.pop()!;
-    if (items.length === 0) return top;
-
-    items[0] = last;
-    let i = 0;
-    for (;;) {
-      const left = i * 2 + 1;
-      const right = left + 1;
-      let smallest = i;
-      if (left < items.length && items[left].cost < items[smallest].cost) smallest = left;
-      if (right < items.length && items[right].cost < items[smallest].cost) smallest = right;
-      if (smallest === i) break;
-      [items[smallest], items[i]] = [items[i], items[smallest]];
-      i = smallest;
-    }
-    return top;
-  }
-}
-
-interface SearchOptions {
-  /** Reject transitions that double back on themselves (>140° turn). */
-  avoidBacktracking?: boolean;
-  /** Give up on paths whose weighted cost exceeds this. */
-  maxCost?: number;
-  /** Extra cost of starting on each route, by track id (see `changeCosts`). */
-  startCosts?: Map<number, number>;
-}
-
-interface SearchResult {
-  path: number[];
-  /**
-   * The endpoint each route in `path` is left through, aligned with it. The last
-   * route is left *beyond* the destination — the journey stops at the station
-   * partway along it — so its entry side is that entry's opposite. Null where a
-   * single route serves both stations and no endpoint is involved at all.
-   */
-  sides: (EndpointSide | null)[];
-  /** Weighted cost, not km — only comparable against other costs from this search. */
-  cost: number;
-}
-
-/** Where the segment's from/to station sits along each of its terminal routes. */
-interface TerminalFractions {
-  /** Fraction along each start route, by track id. */
-  from: Map<number, number>;
-  /** Fraction along each end route, by track id. */
-  to: Map<number, number>;
-}
-
-/**
- * Weighted cost of the stretch of `info` between a station at `frac` and the
- * given endpoint — the piece of a terminal route the journey actually rides.
- *
- * A route whose station could not be located on it is charged whole, which is
- * what every terminal route used to cost.
- */
-function terminalCost(
-  info: RouteBearingInfo,
-  frac: number | undefined,
-  side: EndpointSide,
-): number {
-  const covered = frac === undefined ? 1 : side === "end" ? 1 - frac : frac;
-  return info.length_km * covered * getRouteCostMultiplier(info);
-}
-
-/**
- * Dijkstra over the route graph (in-memory).
- *
- * Costs are route length weighted by line_class — highspeed (0.5x), main (1.0x),
- * branch (2.0x) — plus GAP_PENALTY_PER_KM for any gap left between consecutive
- * routes.
- *
- * State is (route, exit endpoint) rather than just the route: traversing a route
- * means entering at one endpoint and leaving at the other, so the next route has
- * to start near where we came out. Without that, paths "teleport" from one end of
- * a route to the other.
- *
- * **The terminal routes are charged for the stretch travelled, not for their
- * whole length.** A from/to station regularly sits mid-route, and the plan is
- * trimmed to the covered stretch afterwards (`computeTravelledTrims`) — so
- * costing the whole route makes the search pay for track the journey never rides.
- * Seeding at zero instead, as this did, made it worse than symmetric: where a
- * station is served both by a 4 km connector and by a 300 km trunk, starting on
- * the trunk was free, so a path could set off down the wrong line and still look
- * cheapest. Because the end route is now discounted at the moment it is reached,
- * the first one popped is no longer necessarily the best; the search keeps the
- * cheapest finish and runs until nothing queued can beat it.
- */
-function findShortestPath(
-  graph: RouteGraph,
-  startRoutes: number[],
-  endRoutes: number[],
-  routeInfo: Map<number, RouteBearingInfo>,
-  fractions: TerminalFractions,
-  options: SearchOptions = {},
-): SearchResult | null {
-  if (startRoutes.length === 0 || endRoutes.length === 0) {
-    return null;
-  }
-
-  const { avoidBacktracking = false, maxCost = Infinity, startCosts } = options;
-  const endSet = new Set(endRoutes);
-  const queue = new SearchQueue();
-  const bestCost = new Map<string, number>();
-
-  // Cheapest complete path found so far. A finish costs less than the state it
-  // grows from would as an ordinary hop, so it can't simply be returned on pop.
-  const best: { path: number[] | null; sides: (EndpointSide | null)[]; cost: number } = {
-    path: null,
-    sides: [],
-    cost: Infinity,
-  };
-  const considerFinish = (path: number[], sides: (EndpointSide | null)[], cost: number) => {
-    if (cost > maxCost || cost >= best.cost) return;
-    best.path = path;
-    best.sides = sides;
-    best.cost = cost;
-  };
-
-  // Seed with the start routes, traversable in either direction
-  for (const route of startRoutes) {
-    const info = routeInfo.get(route);
-    if (!info) continue;
-    const fromFrac = fractions.from.get(route);
-    const startCost = startCosts?.get(route) ?? 0;
-
-    // Both stations on one route: the journey is the stretch between them, and
-    // there is nothing to search — an end route is never travelled through
-    if (endSet.has(route)) {
-      const toFrac = fractions.to.get(route);
-      const covered =
-        fromFrac !== undefined && toFrac !== undefined ? Math.abs(toFrac - fromFrac) : 1;
-      considerFinish(
-        [route],
-        [null],
-        startCost + info.length_km * covered * getRouteCostMultiplier(info),
-      );
-      continue;
-    }
-
-    for (const exitSide of ENDPOINT_SIDES) {
-      const key = `${route}_${exitSide}`;
-      const cost = startCost + terminalCost(info, fromFrac, exitSide);
-      const prevBest = bestCost.get(key);
-      if (prevBest !== undefined && cost >= prevBest) continue;
-      bestCost.set(key, cost);
-      queue.push({ route, path: [route], sides: [exitSide], cost });
-    }
-  }
-
-  while (queue.size > 0) {
-    const current = queue.pop()!;
-
-    // Dijkstra pops in nondecreasing cost order, so once the queue's cheapest
-    // state costs as much as the best finish, nothing left can improve on it
-    if (best.path !== null && current.cost >= best.cost) break;
-
-    const currentExitSide = current.sides[current.sides.length - 1];
-
-    // Stale heap entry: a cheaper way to this state was found after it was queued
-    const currentBest = bestCost.get(`${current.route}_${currentExitSide}`);
-    if (currentBest !== undefined && current.cost > currentBest) continue;
-
-    if (current.cost > maxCost) continue;
-
-    const currentInfo = routeInfo.get(current.route);
-    if (!currentInfo) continue;
-    const exitCoord = getEndpointCoord(currentInfo, currentExitSide);
-
-    for (const neighbor of graph.getNeighbors(current.route)) {
-      const neighborInfo = routeInfo.get(neighbor);
-      if (!neighborInfo) continue;
-
-      // The neighbour has to meet us at the endpoint we came out of
-      const entry = resolveEntry(neighborInfo, exitCoord);
-      if (!entry) continue;
-
-      // Keep paths elementary — a journey plan listing the same route twice is never useful
-      if (current.path.includes(neighbor)) continue;
-
-      // The sides being travelled are known here, so check that exact junction
-      // rather than the routes' closest endpoint pairing
-      if (
-        avoidBacktracking &&
-        isBacktrackingAt(currentInfo, currentExitSide, neighborInfo, oppositeSide(entry.exitSide))
-      ) {
-        continue;
-      }
-
-      const gapCost = (entry.gapMeters / 1000) * GAP_PENALTY_PER_KM;
-
-      // The journey ends at the to-station, which is usually partway along the
-      // end route: charge only the stretch from the endpoint entered to it, and
-      // don't search on — a route reaching the destination is the destination
-      if (endSet.has(neighbor)) {
-        considerFinish(
-          [...current.path, neighbor],
-          [...current.sides, entry.exitSide],
-          current.cost +
-            gapCost +
-            terminalCost(neighborInfo, fractions.to.get(neighbor), oppositeSide(entry.exitSide)),
-        );
-        continue;
-      }
-
-      const newCost =
-        current.cost + neighborInfo.length_km * getRouteCostMultiplier(neighborInfo) + gapCost;
-      if (newCost > maxCost) continue;
-
-      const key = `${neighbor}_${entry.exitSide}`;
-      const prevBest = bestCost.get(key);
-      if (prevBest !== undefined && newCost >= prevBest) continue;
-
-      bestCost.set(key, newCost);
-      queue.push({
-        route: neighbor,
-        path: [...current.path, neighbor],
-        sides: [...current.sides, entry.exitSide],
-        cost: newCost,
-      });
-    }
-  }
-
-  return best.path === null ? null : { path: best.path, sides: best.sides, cost: best.cost };
 }
 
 /**
@@ -830,159 +75,15 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
   }
 }
 
-// ============================================================================
-// PARTIAL TERMINAL ROUTES
-// ============================================================================
-
 /**
- * How much untravelled track a terminal route must be left with before the plan
- * calls it partial.
- *
- * A station projects a few metres inside the route that starts there — its
- * endpoint is a hand-picked click point, not the platform centre — so tiny
- * remainders are noise rather than track the journey misses. The same number,
- * from the same reasoning, is the tolerance that lets several partial rides add
- * up to a complete route (`routeCoverage.ts`).
+ * Cut each route down to the fraction range `planTrims` picked, with the length
+ * of what is left, by track id.
  */
-const MIN_UNTRAVELLED_KM = UNTRAVELLED_NOISE_KM;
-
-/** The fraction range of a route's geometry that the journey actually covers. */
-interface TrimSpec {
-  trackId: number;
-  lo: number;
-  hi: number;
-}
-
-function pairKey(trackId: number, stationId: number): string {
-  return `${trackId}:${stationId}`;
-}
-
-/**
- * One unbroken stay on a route, with every point the journey touches on it — an
- * endpoint (0 or 1) or a stop (its fraction along the route; undefined if it
- * could not be located there). The covered stretch is the span of those points:
- * an intermediate route touches both endpoints and is whole, a route joined at a
- * stop runs from that stop to the endpoint it is left through, and an
- * out-and-back that turns at a via covers the endpoint (or stop) it came from up
- * to the via.
- */
-interface RouteVisit {
-  trackId: number;
-  fracs: (number | undefined)[];
-}
-
-/**
- * Turn the per-segment searches into route visits, merging the visit a segment
- * ends with into the one the next segment starts with when both are on the same
- * route — the journey passed through the via station without leaving it.
- *
- * Within a segment, the first route is joined at the segment's from-station and
- * the last left at its to-station; every other point is an endpoint, as the
- * search reports it (`SearchResult.sides`). The last route's reported side is
- * the one beyond the destination, so it is entered through the opposite one. A
- * segment on a single route reports no side and touches only its two stations.
- *
- * Every stop is therefore a point on the route the journey is on when it gets
- * there — a via included, whichever route it arrived on and whichever it leaves
- * on — so a route joined or left mid-way at a via is trimmed exactly as the
- * first and last route of the plan are.
- *
- * `fractions` is `findRoutesNearStations`' own: every route a stop is a point on
- * was picked from the routes it matched to that stop, so where the stop sits
- * along it is already known.
- */
-function planVisits(
-  segments: SearchResult[],
-  stationSequence: number[],
-  fractions: Map<string, number>,
-): RouteVisit[] {
-  const visits: RouteVisit[] = [];
-  const endpointFrac = (side: EndpointSide) => (side === "start" ? 0 : 1);
-
-  segments.forEach((segment, i) => {
-    const fromStation = stationSequence[i];
-    const toStation = stationSequence[i + 1];
-    const last = segment.path.length - 1;
-
-    segment.path.forEach((trackId, j) => {
-      // Null only on a single-route segment, whose one route is both first and last
-      const side = segment.sides[j];
-      const fracs = [
-        j === 0 || !side
-          ? fractions.get(pairKey(trackId, fromStation))
-          : endpointFrac(oppositeSide(side)),
-        j === last || !side ? fractions.get(pairKey(trackId, toStation)) : endpointFrac(side),
-      ];
-
-      const previous = visits[visits.length - 1];
-      if (j === 0 && previous?.trackId === trackId) {
-        previous.fracs.push(...fracs);
-      } else {
-        visits.push({ trackId, fracs });
-      }
-    });
-  });
-
-  return visits;
-}
-
-/**
- * Cut every route visit down to the stretch the journey covers.
- *
- * Intermediate routes come out whole — the search enters a route at one endpoint
- * and leaves at the other — but a route joined or left at a stop is covered only
- * from that stop (e.g. Nový Bor, halfway along Jedlová ⟷ Česká Lípa). Which
- * endpoints are touched comes from `sides`, which the search reports for the hops
- * it actually took, rather than being inferred from the routes' closest endpoint
- * pairing (see `planVisits`).
- *
- * A plan on a single route covers the span of every stop along it, vias
- * included, so an out-and-back (A via B to A) covers A–B rather than nothing.
- *
- * A route the journey barely touches — its stop within MIN_UNTRAVELLED_KM of the
- * endpoint the journey enters or leaves through — comes back in `untravelled`
- * rather than as a trim: the station projecting a few metres inside the route is
- * the same noise that tolerance absorbs elsewhere, and dropping a zero-width trim
- * as "leaves nothing out" would count the route at full length. A single-route
- * plan is only untravelled when every stop sits on one point.
- */
-async function computeTravelledTrims(
-  visits: RouteVisit[],
-  routeInfo: Map<number, RouteBearingInfo>,
-): Promise<{
-  trimmed: Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>;
-  untravelled: Set<number>;
-}> {
-  const trimmed = new Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>();
-  const untravelled = new Set<number>();
-
-  // A route visited twice (possible across via segments) has no single covered
-  // stretch, so leave it whole rather than guess.
-  const visitCounts = new Map<number, number>();
-  for (const { trackId } of visits) {
-    visitCounts.set(trackId, (visitCounts.get(trackId) ?? 0) + 1);
-  }
-
-  const specs: TrimSpec[] = [];
-  for (const { trackId, fracs } of visits) {
-    if (visitCounts.get(trackId) !== 1) continue;
-    if (!fracs.every((frac): frac is number => frac !== undefined)) continue;
-    specs.push({ trackId, lo: Math.min(...fracs), hi: Math.max(...fracs) });
-  }
-
-  // Set aside the ones that cover nothing, and drop those that leave nothing out
-  const meaningful = specs.filter((spec) => {
-    // Every route on a plan came out of the graph, so routeInfo has it
-    const fullKm = routeInfo.get(spec.trackId)!.length_km;
-    const width = spec.hi - spec.lo;
-    const barelyEntered = visits.length > 1 && fullKm * width < MIN_UNTRAVELLED_KM;
-    if (width <= 0 || barelyEntered) {
-      untravelled.add(spec.trackId);
-      return false;
-    }
-    return fullKm * (1 - width) >= MIN_UNTRAVELLED_KM;
-  });
-  if (meaningful.length === 0) return { trimmed, untravelled };
+async function cutTravelledStretches(
+  trims: TrimSpec[],
+): Promise<Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>> {
+  const cut = new Map<number, { geometry: PartialRouteGeometry; lengthKm: number }>();
+  if (trims.length === 0) return cut;
 
   const result = await pool.query<{
     track_id: number;
@@ -1001,13 +102,13 @@ async function computeTravelledTrims(
     FROM unnest($1::int[], $2::float8[], $3::float8[]) AS t(track_id, lo, hi)
     JOIN railway_routes r ON r.track_id = t.track_id
     `,
-    [meaningful.map((s) => s.trackId), meaningful.map((s) => s.lo), meaningful.map((s) => s.hi)],
+    [trims.map((s) => s.trackId), trims.map((s) => s.lo), trims.map((s) => s.hi)],
   );
 
   for (const row of result.rows) {
     const parsed = JSON.parse(row.geojson) as { coordinates: [number, number][] };
     if (!parsed.coordinates || parsed.coordinates.length < 2) continue;
-    trimmed.set(row.track_id, {
+    cut.set(row.track_id, {
       geometry: {
         track_id: row.track_id,
         // The fractions travel with the geometry: they are what gets stored when
@@ -1020,38 +121,7 @@ async function computeTravelledTrims(
     });
   }
 
-  return { trimmed, untravelled };
-}
-
-/**
- * What starting the segment after a via on each of the via's routes costs, given
- * the route the journey arrived on: nothing to carry on along it, and for any
- * other the gap between the two where they pass the station — charged at
- * GAP_PENALTY_PER_KM, exactly as a gap between two routes inside a segment is —
- * plus VIA_CHANGE_PENALTY.
- *
- * Without the gap, a via would be a free jump between any two routes matched to
- * it: the progressive tolerance in `findRoutesNearStations` can take in a route
- * hundreds of metres off, or kilometres where nothing is closer, and a change
- * there would join two lines at a place they never meet. A route with no known
- * point near the via (none should be) is charged as if it were a tolerance away.
- */
-function changeCosts(
-  arrivedOn: number,
-  viaStationId: number,
-  viaRoutes: number[],
-  points: Map<string, [number, number]>,
-): Map<number, number> {
-  const arrivalPoint = points.get(pairKey(arrivedOn, viaStationId));
-  return new Map(
-    viaRoutes.map((trackId) => {
-      if (trackId === arrivedOn) return [trackId, 0];
-      const point = points.get(pairKey(trackId, viaStationId));
-      const gapMeters =
-        arrivalPoint && point ? haversineDistance(arrivalPoint, point) : ENDPOINT_TOLERANCE_METERS;
-      return [trackId, VIA_CHANGE_PENALTY + (gapMeters / 1000) * GAP_PENALTY_PER_KM];
-    }),
-  );
+  return cut;
 }
 
 /**
@@ -1078,8 +148,8 @@ export async function findRoutePathBetweenStations(
 
   // A leg from a station to itself has no stretch to cover: the direct finish
   // costs 0 and the plan would be a zero-width trim, which says nothing useful
-  // (see computeTravelledTrims). A loop (A via B to A) is fine — only
-  // consecutive stops are refused.
+  // (see planTrims). A loop (A via B to A) is fine — only consecutive stops are
+  // refused.
   if (stationSequence.some((id, i) => i > 0 && id === stationSequence[i - 1])) {
     return {
       routes: [],
@@ -1089,31 +159,23 @@ export async function findRoutePathBetweenStations(
   }
 
   try {
-    const [stationMatches, { graph, routeInfo }] = await Promise.all([
+    const [stations, network] = await Promise.all([
       findRoutesNearStations([...new Set(stationSequence)]),
-      getRouteGraph(),
+      getRouteNetwork(),
     ]);
 
-    const routeSequence = stationSequence.map((id) => stationMatches.routes.get(id) ?? []);
-
-    /** Where `stationId` sits along each of the routes it is served by. */
-    const fractionsFor = (stationId: number, trackIds: number[]) =>
-      new Map(
-        trackIds.flatMap((trackId) => {
-          const frac = stationMatches.fractions.get(pairKey(trackId, stationId));
-          return frac === undefined ? [] : [[trackId, frac] as [number, number]];
-        }),
-      );
+    // Every id in the sequence was asked about, so each has an entry
+    const stops = stationSequence.map((id) => stations.get(id)!);
 
     // Validate we found routes near all stations
-    if (routeSequence[0].length === 0) {
+    if (stops[0].routes.length === 0) {
       return { routes: [], totalDistance: 0, error: "No routes found near starting station" };
     }
-    if (routeSequence[routeSequence.length - 1].length === 0) {
+    if (stops[stops.length - 1].routes.length === 0) {
       return { routes: [], totalDistance: 0, error: "No routes found near ending station" };
     }
-    for (let i = 1; i < routeSequence.length - 1; i++) {
-      if (routeSequence[i].length === 0) {
+    for (let i = 1; i < stops.length - 1; i++) {
+      if (stops[i].routes.length === 0) {
         return { routes: [], totalDistance: 0, error: `No routes found near via station ${i}` };
       }
     }
@@ -1126,38 +188,22 @@ export async function findRoutePathBetweenStations(
     // directly. Carrying on along the arriving line is still one of the seeds,
     // and `planVisits` merges the two visits back into one when it is taken;
     // changing to another costs what `changeCosts` says.
-    const allSegments: SearchResult[] = [];
+    const segments: SearchResult[] = [];
 
-    for (let i = 0; i < stationSequence.length - 1; i++) {
-      const segmentFromRoutes = routeSequence[i];
-      const segmentToRoutes = routeSequence[i + 1];
-      const previous = allSegments[allSegments.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) {
+      const from = stops[i];
+      const to = stops[i + 1];
+      const previous = segments[segments.length - 1];
       const startCosts = previous
-        ? changeCosts(
-            previous.path[previous.path.length - 1],
-            stationSequence[i],
-            segmentFromRoutes,
-            stationMatches.points,
-          )
+        ? changeCosts(previous.path[previous.path.length - 1], from.routes, from.points)
         : undefined;
 
       // Each segment is costed from its own pair of stations, so a via station
       // partway along a route splits that route's cost between the two segments
-      const segmentFractions: TerminalFractions = {
-        from: fractionsFor(stationSequence[i], segmentFromRoutes),
-        to: fractionsFor(stationSequence[i + 1], segmentToRoutes),
-      };
+      const fractions: TerminalFractions = { from: from.fractions, to: to.fractions };
 
-      const best = findShortestPath(
-        graph,
-        segmentFromRoutes,
-        segmentToRoutes,
-        routeInfo,
-        segmentFractions,
-        { startCosts },
-      );
-
-      if (!best) {
+      const segment = searchSegment(network, from.routes, to.routes, fractions, startCosts);
+      if (!segment) {
         return {
           routes: [],
           totalDistance: 0,
@@ -1165,38 +211,16 @@ export async function findRoutePathBetweenStations(
         };
       }
 
-      let segment = best;
-
-      // Prefer an alternative of comparable cost that doesn't double back
-      if (hasRoutePathBacktracking(segment, routeInfo)) {
-        const alternative = findShortestPath(
-          graph,
-          segmentFromRoutes,
-          segmentToRoutes,
-          routeInfo,
-          segmentFractions,
-          {
-            avoidBacktracking: true,
-            // Twice the cost or +20, whichever is smaller.
-            maxCost: Math.min(best.cost * 2, best.cost + 20),
-            startCosts,
-          },
-        );
-
-        if (alternative) {
-          segment = alternative;
-        }
-      }
-
-      allSegments.push(segment);
+      segments.push(segment);
     }
 
-    const visits = planVisits(allSegments, stationSequence, stationMatches.fractions);
+    const visits = planVisits(segments, stationSequence, stations);
+    const { trims, untravelled } = planTrims(visits, network.routeInfo);
 
     // Get route details, then cut each route down to the stretch travelled
-    const [pathRoutes, { trimmed: trims, untravelled }] = await Promise.all([
+    const [pathRoutes, stretches] = await Promise.all([
       getRouteDetails(visits.map((visit) => visit.trackId)),
-      computeTravelledTrims(visits, routeInfo),
+      cutTravelledStretches(trims),
     ]);
 
     // A route the journey barely enters is not part of it
@@ -1210,10 +234,10 @@ export async function findRoutePathBetweenStations(
     }
 
     for (const route of routes) {
-      const trim = trims.get(route.track_id);
-      if (!trim) continue;
-      route.partial = trim.geometry;
-      route.travelled_length_km = trim.lengthKm;
+      const stretch = stretches.get(route.track_id);
+      if (!stretch) continue;
+      route.partial = stretch.geometry;
+      route.travelled_length_km = stretch.lengthKm;
     }
 
     const totalDistance = routes.reduce((sum, r) => sum + r.travelled_length_km, 0);
