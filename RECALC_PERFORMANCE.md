@@ -72,6 +72,34 @@ pulling the next route off a shared index and writing its own `UPDATE`:
   — most of them — the two disks overlap almost entirely, so every part in the
   overlap was selected, encoded as GeoJSON, shipped and `JSON.parse`d twice, only
   for `parseAndStoreParts` to drop the second copy.
+- **A click point off the network fails at once.** The part containing a
+  coordinate lies within 1 m of it, so if the 50 km load holds none, the 100 km
+  and 222 km loads cannot either — the buffer only ever adds parts farther away.
+  `findPathFromCoordinates` returns null there instead of escalating. This is the
+  commonest way a route breaks after an OSM update, and each such route used to
+  pay for the two largest loads to find the same nothing. The ladder itself is
+  untouched (see "Do not shrink the buffer"): a route whose ends are both on the
+  network but unconnected still escalates — and by the same argument it reuses
+  the end parts found on the first pass rather than rescanning every segment of
+  the larger load for them (same set, and same order, every load being
+  `ORDER BY id`).
+- **A part's length, endpoint keys and neighbours are computed once, not per
+  hop.** Each part carries its haversine
+  `lengthMeters` and its endpoint keys from `parseAndStoreParts`, and
+  `getConnectedPartIds` caches its sorted neighbour list per part — cleared
+  whenever a part is added, since a part's neighbours depend on everything
+  loaded. The label-correcting search pops a part many times over, and used to
+  re-sum its haversines on every relaxation and rebuild and sort a `Set` on every
+  pop. `lengthMeters` is summed in the same order the relaxation summed it, so
+  the distances are identical to the bit. `calculatePathDistance` deliberately
+  stays one running sum over every segment of the path: regrouping it per part
+  rounds differently, and its result decides between candidate paths. The
+  backtracking check per relaxation (two bearings off the connection segments)
+  is still computed each time, deliberately: it runs only in
+  `findPathWithoutBacktracking`, which only the few routes whose shortest path
+  backtracks ever enter, and there it is cheap next to the per-push path copy.
+  Caching it per part end would buy little; the time is in loading parts (see
+  "Still on the table").
 - **`loadRailwayParts`, the part-id-based loader, is gone.** Nothing called it,
   and it was the last carrier of the superseded `ST_Buffer` pattern. If part-id
   loading is ever wanted again, build it on `ST_DWithin` against `geometry_3857`
@@ -130,8 +158,10 @@ mismatch too, not just on failure.
 `npm run verifyRouteData` runs step 2 on its own against the current data, so it
 can be timed without a full import; it prints its own elapsed time and the route
 count as `Found N routes to recalculate`. `--valid-only` restricts it to routes
-not already invalid, which is much faster — an invalid route escalates through
-all three buffers, including the 222 km one, before giving up.
+not already invalid, which is much faster — an invalid route whose ends are on
+the network but unconnected escalates through all three buffers, including the
+222 km one, before giving up. (One with an end off the network gives up after
+the first.)
 
 `npm run inspectPath -- "<from>" "<to>"` prints a single *journey planner* search
 and the gaps between consecutive routes. Note that it exercises
@@ -173,6 +203,14 @@ memory, with no writes at all. Sample the routes that reach the code being
 changed — for this one, all 41 with `has_backtracking` (the only routes that
 enter `findPathWithoutBacktracking`) plus the longest few, which are the routes
 whose buffer escalates and whose queues get large.
+
+The early exit for an off-network click point, the reused end parts and the
+per-part precomputation were verified the second way, over all 6874 routes rather
+than a sample: the previous finder and the new one ran on each route back to back,
+and their `PathResult`s compared equal as JSON (so to the bit) for every one, the
+71 null results included. Summed per-route time fell from 9071s to 8108s at 8
+workers; the gain is concentrated on routes with an end off the network, which
+went from 20-55s to 1-7s each.
 
 The earlier changes recorded above were verified the first way: over all 5531
 routes, `is_valid`, `error_message` presence and `length_km` to three decimals

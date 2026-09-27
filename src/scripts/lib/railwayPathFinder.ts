@@ -18,6 +18,15 @@ interface RailwayPart {
   coordinates: [number, number][];
   startPoint: [number, number];
   endPoint: [number, number];
+  /** `coordinateToKey` of the endpoints, which the search compares on every hop. */
+  startKey: string;
+  endKey: string;
+  /**
+   * Haversine length, summed segment by segment from 0 — the same additions in
+   * the same order the search used to repeat on every relaxation, so the same
+   * number to the bit.
+   */
+  lengthMeters: number;
 }
 
 interface PointOnSegment {
@@ -50,12 +59,20 @@ export interface PathFinderOptions {
  * - Part-based pathfinding (between railway part IDs)
  * - Coordinate-based pathfinding (between GPS coordinates)
  * - Backtracking detection and avoidance
- * - Progressive buffer retry (50km → 100km → 222km)
+ * - Progressive buffer retry (50km → 100km → 222km) while both click points are on
+ *   the network but no path joins them; a point off the network fails at once
  * - Edge truncation for coordinate-based routes
  */
 export class RailwayPathFinder {
   private parts: Map<string, RailwayPart> = new Map();
   private coordToPartIds: Map<string, string[]> = new Map();
+  /**
+   * `getConnectedPartIds`' answers, built on first ask. A part's neighbours
+   * depend on every part loaded, not only on itself, and loading is additive —
+   * so this cannot be filled in at parse time, and is emptied whenever the
+   * loaded set changes.
+   */
+  private neighbours: Map<string, readonly string[]> = new Map();
   private readonly quiet: boolean;
 
   constructor(options: PathFinderOptions = {}) {
@@ -136,6 +153,7 @@ export class RailwayPathFinder {
   clear(): void {
     this.parts.clear();
     this.coordToPartIds.clear();
+    this.neighbours.clear();
   }
 
   // ============================================================================
@@ -224,6 +242,18 @@ export class RailwayPathFinder {
   ): Promise<PathResult | null> {
     const buffers = [50000, 100000, 222000]; // 50km, 100km, 222km
 
+    // The parts containing each click point are the same at every buffer: such
+    // a part lies within 1m of the point, so the smallest buffer already loads
+    // it if it exists at all, and a larger one only adds parts farther away. The
+    // order is the same too, since every load is `ORDER BY id`. So they are
+    // found once, on the first pass — and a point off the network fails the
+    // route there, instead of paying for the two largest loads to find the same
+    // nothing. That is the commonest way a route breaks after an OSM update.
+    // (The buffer ladder itself is untouched; see RECALC_PERFORMANCE.md on why
+    // it must not shrink.)
+    let startPartIds: string[] | null = null;
+    let endPartIds: string[] | null = null;
+
     for (const bufferMeters of buffers) {
       this.log(`Attempting coordinate-based pathfinding with ${bufferMeters / 1000}km buffer...`);
       this.clear();
@@ -235,22 +265,24 @@ export class RailwayPathFinder {
         bufferMeters,
       );
 
-      // Find parts containing the coordinates (1m tolerance)
-      const startPartIds = this.findAllPartsContainingCoordinate(startCoordinate, 1);
-      const endPartIds = this.findAllPartsContainingCoordinate(endCoordinate, 1);
+      if (!startPartIds || !endPartIds) {
+        // Find parts containing the coordinates (1m tolerance)
+        startPartIds = this.findAllPartsContainingCoordinate(startCoordinate, 1);
+        endPartIds = this.findAllPartsContainingCoordinate(endCoordinate, 1);
 
-      if (startPartIds.length === 0) {
-        this.log(`Start coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
-        continue;
+        if (startPartIds.length === 0) {
+          this.log(`Start coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
+          return null;
+        }
+
+        if (endPartIds.length === 0) {
+          this.log(`End coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
+          return null;
+        }
+
+        this.log(`Found ${startPartIds.length} start part(s): ${startPartIds.join(", ")}`);
+        this.log(`Found ${endPartIds.length} end part(s): ${endPartIds.join(", ")}`);
       }
-
-      if (endPartIds.length === 0) {
-        this.log(`End coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
-        continue;
-      }
-
-      this.log(`Found ${startPartIds.length} start part(s): ${startPartIds.join(", ")}`);
-      this.log(`Found ${endPartIds.length} end part(s): ${endPartIds.join(", ")}`);
 
       // Try all combinations
       const bestResult = this.findBestCoordinatePath(
@@ -397,14 +429,7 @@ export class RailwayPathFinder {
         const connectedPart = this.parts.get(connectedId);
         if (!connectedPart) continue;
 
-        let segmentDist = 0;
-        for (let i = 0; i < connectedPart.coordinates.length - 1; i++) {
-          segmentDist += haversineDistance(
-            connectedPart.coordinates[i],
-            connectedPart.coordinates[i + 1],
-          );
-        }
-        const newDistance = current.distance + segmentDist;
+        const newDistance = current.distance + connectedPart.lengthMeters;
 
         // Only explore if this is best path to this node so far
         const bestToNode = bestDistance.get(connectedId);
@@ -587,38 +612,19 @@ export class RailwayPathFinder {
     const part = this.parts.get(partId);
     if (!part) return true;
 
-    const startKey = coordinateToKey(part.startPoint);
-    const endKey = coordinateToKey(part.endPoint);
-
-    // Determine orientation based on next part
+    // Determine orientation based on next part: if end connects to next, we're going forward
     if (nextPartId) {
       const nextPart = this.parts.get(nextPartId);
       if (nextPart) {
-        const nextStartKey = coordinateToKey(nextPart.startPoint);
-        const nextEndKey = coordinateToKey(nextPart.endPoint);
-
-        // If end connects to next, we're going forward
-        if (endKey === nextStartKey || endKey === nextEndKey) {
-          return true;
-        } else {
-          return false;
-        }
+        return part.endKey === nextPart.startKey || part.endKey === nextPart.endKey;
       }
     }
 
-    // Determine orientation based on previous part
+    // Determine orientation based on previous part: if start connects to prev, we're going forward
     if (prevPartId) {
       const prevPart = this.parts.get(prevPartId);
       if (prevPart) {
-        const prevStartKey = coordinateToKey(prevPart.startPoint);
-        const prevEndKey = coordinateToKey(prevPart.endPoint);
-
-        // If start connects to prev, we're going forward
-        if (startKey === prevStartKey || startKey === prevEndKey) {
-          return true;
-        } else {
-          return false;
-        }
+        return part.startKey === prevPart.startKey || part.startKey === prevPart.endKey;
       }
     }
 
@@ -874,10 +880,7 @@ export class RailwayPathFinder {
     if (!part || !nextPart) return part ? part.coordinates : [];
 
     // Determine which endpoint connects to next part
-    const endKey = coordinateToKey(part.endPoint);
-    const nextStartKey = coordinateToKey(nextPart.startPoint);
-    const nextEndKey = coordinateToKey(nextPart.endPoint);
-    const endsConnect = endKey === nextStartKey || endKey === nextEndKey;
+    const endsConnect = part.endKey === nextPart.startKey || part.endKey === nextPart.endKey;
 
     const startPoint = this.findNearestPointOnPart(partId, startCoordinate);
     if (!startPoint) return part.coordinates;
@@ -917,10 +920,7 @@ export class RailwayPathFinder {
     if (!part || !prevPart) return part ? part.coordinates : [];
 
     // Determine which endpoint connects to previous part
-    const startKey = coordinateToKey(part.startPoint);
-    const prevStartKey = coordinateToKey(prevPart.startPoint);
-    const prevEndKey = coordinateToKey(prevPart.endPoint);
-    const startsConnect = startKey === prevStartKey || startKey === prevEndKey;
+    const startsConnect = part.startKey === prevPart.startKey || part.startKey === prevPart.endKey;
 
     const endPoint = this.findNearestPointOnPart(partId, endCoordinate);
     if (!endPoint) return part.coordinates;
@@ -1012,6 +1012,13 @@ export class RailwayPathFinder {
 
   /**
    * Calculate total distance for a path (by part IDs)
+   *
+   * Deliberately **not** a sum of the parts' `lengthMeters`: this is one running
+   * sum over every segment of the path, and regrouping it per part rounds
+   * differently in the last bits. Its result is compared against `maxDistance`
+   * and between candidates, so a regrouped sum could, on a near tie, pick a
+   * different path than before — and recalculation must return exactly what it
+   * did. It runs once per completed path rather than per relaxation.
    */
   private calculatePathDistance(partIds: string[]): number {
     let totalDistance = 0;
@@ -1044,34 +1051,34 @@ export class RailwayPathFinder {
   // ============================================================================
 
   /**
-   * Get all part IDs connected to a given part (sorted deterministically)
+   * Get all part IDs connected to a given part (sorted deterministically).
+   *
+   * Cached per part, because the label-correcting search pops the same part
+   * many times over. The returned array is shared — callers must not mutate it.
    */
-  private getConnectedPartIds(partId: string): string[] {
+  private getConnectedPartIds(partId: string): readonly string[] {
+    const cached = this.neighbours.get(partId);
+    if (cached) return cached;
+
     const part = this.parts.get(partId);
     if (!part) return [];
 
     const connected = new Set<string>();
 
     // Check connections at start coordinate
-    const startKey = coordinateToKey(part.startPoint);
-    const startConnected = this.coordToPartIds.get(startKey) || [];
-    startConnected.forEach((id) => {
+    for (const id of this.coordToPartIds.get(part.startKey) ?? []) {
       if (id !== partId) connected.add(id);
-    });
+    }
 
     // Check connections at end coordinate
-    const endKey = coordinateToKey(part.endPoint);
-    const endConnected = this.coordToPartIds.get(endKey) || [];
-    endConnected.forEach((id) => {
+    for (const id of this.coordToPartIds.get(part.endKey) ?? []) {
       if (id !== partId) connected.add(id);
-    });
+    }
 
     // Sort for deterministic BFS ordering
-    return Array.from(connected).sort((a, b) => {
-      const numA = parseInt(a, 10);
-      const numB = parseInt(b, 10);
-      return numA - numB;
-    });
+    const sorted = Array.from(connected).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    this.neighbours.set(partId, sorted);
+    return sorted;
   }
 
   // ============================================================================
@@ -1101,6 +1108,8 @@ export class RailwayPathFinder {
    * Parse database rows and store parts in memory
    */
   private parseAndStoreParts(rows: { id: string | number; geometry_json: string }[]): void {
+    let added = false;
+
     for (const row of rows) {
       const id = String(row.id);
 
@@ -1115,20 +1124,28 @@ export class RailwayPathFinder {
         const coordinates = geom.coordinates as [number, number][];
         const startPoint = coordinates[0];
         const endPoint = coordinates[coordinates.length - 1];
+        const startKey = coordinateToKey(startPoint);
+        const endKey = coordinateToKey(endPoint);
+
+        let lengthMeters = 0;
+        for (let i = 0; i < coordinates.length - 1; i++) {
+          lengthMeters += haversineDistance(coordinates[i], coordinates[i + 1]);
+        }
 
         const part: RailwayPart = {
           id,
           coordinates,
           startPoint,
           endPoint,
+          startKey,
+          endKey,
+          lengthMeters,
         };
 
         this.parts.set(id, part);
+        added = true;
 
         // Add to coordinate mapping for connection lookups
-        const startKey = coordinateToKey(startPoint);
-        const endKey = coordinateToKey(endPoint);
-
         if (!this.coordToPartIds.has(startKey)) {
           this.coordToPartIds.set(startKey, []);
         }
@@ -1142,5 +1159,8 @@ export class RailwayPathFinder {
         }
       }
     }
+
+    // A new part is a new neighbour of whatever it touches
+    if (added) this.neighbours.clear();
   }
 }

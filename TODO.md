@@ -289,22 +289,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Performance
 
-- [ ] **Recalculation grows the buffer when the click point is off the network.**
-      `src/scripts/lib/railwayPathFinder.ts:262-270`. If no part is within 1 m at
-      the 50 km buffer, none will be at 100 km or 222 km either, yet the loop
-      `continue`s to both. This is the most common way a route breaks after an OSM
-      update, and each such route pays for the largest load for nothing. This is
-      not the forbidden "shrink the buffer" change. **Fix:** return null when
-      either end matches no part.
-
-- [ ] **Recalculation recomputes part lengths and adjacency inside its loops.**
-      `railwayPathFinder.ts:401`, `:420-426`, `:1049-1062`, `:1082-1108`. Each
-      relaxation re-sums haversines over the whole part, and
-      `getConnectedPartIds` builds and sorts a Set per pop in a label-correcting
-      search. **Fix:** precompute `lengthMeters` and sorted neighbours in
-      `parseAndStoreParts`. Visit order is unchanged, so check with the
-      RECALC_PERFORMANCE regression diff.
-
 - [ ] **The hover popup is destroyed and rebuilt on every mousemove.**
       `src/lib/map/interactions/userMapInteractions.ts:181-187`, `:446-469`.
       **Fix:** keep the popup and the last feature id. On the same feature only
