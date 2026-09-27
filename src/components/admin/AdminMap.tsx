@@ -16,15 +16,17 @@ import {
   createRailwayRoutesLayer,
   createRailwayRoutesSource,
   createRailwayRoutesSpecialLayer,
+  createRouteEndpointsLayer,
   createScenicRoutesOutlineLayer,
   createStationLabelsLayer,
   createStationsLayer,
   createStationsSource,
   lineClassColorExpression,
   OPACITIES,
+  railwayRoutesTileUrl,
 } from "@/lib/map";
 import { useAdminLayerVisibility } from "@/lib/map/hooks/useAdminLayerVisibility";
-import { useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
+import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useRouteLength } from "@/lib/map/hooks/useRouteLength";
@@ -144,7 +146,10 @@ export default function AdminMap({
   showError,
 }: AdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const [routesCacheBuster, setRoutesCacheBuster] = useState(Date.now());
+  // The route tiles' `v`. A ref, read when the map is built: a refresh points the
+  // live source at a new one itself, and a later rebuild (region, scheme) must
+  // start from the newest rather than from tiles the browser cached before a save.
+  const routesCacheBusterRef = useRef(Date.now());
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
   const [validRoutesTotalKm, setValidRoutesTotalKm] = useState<number | null>(null);
   const isMobile = useIsMobile();
@@ -169,9 +174,10 @@ export default function AdminMap({
       region: regionId,
       sources: {
         railway_parts: createRailwayPartsSource(),
-        railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBuster }),
+        railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBusterRef.current }),
         stations: createStationsSource(),
         admin_notes: createAdminNotesSource(),
+        "route-endpoints": routeEndpointsSource,
       },
       layers: [
         createRailwayPartsLayer(),
@@ -183,6 +189,7 @@ export default function AdminMap({
         createStationsLayer(theme),
         createStationLabelsLayer(theme),
         createAdminNotesLayer(),
+        createRouteEndpointsLayer(),
       ],
       onLoad: (mapInstance) => {
         setupAdminMapInteractions(mapInstance, {
@@ -240,47 +247,24 @@ export default function AdminMap({
     applyAdminRouteLinePaint(map.current, selectedRouteId ?? null);
   }, [selectedRouteId, mapLoaded, map]);
 
-  // Refresh routes tiles when routes are saved/deleted
+  // Refresh the route tiles when routes are saved/deleted, by pointing the source
+  // at a new URL (`setTiles`) as the user map's useMapTileRefresh does. The layers,
+  // their order, paint and visibility all stay put, so nothing has to be re-added
+  // or re-applied. `refreshTrigger` is the only trigger; the refresh it stands for
+  // is remembered so a map rebuilt afterwards (whose construction already took the
+  // newest `v`) is not refreshed again on load.
+  const appliedRefreshRef = useRef(refreshTrigger);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is the trigger; mapLoaded only catches up on one that arrived before the map could take it.
   useEffect(() => {
-    if (!map.current || !mapLoaded || refreshTrigger === undefined || refreshTrigger === 0) return;
+    const source = mapLoaded
+      ? map.current?.getSource<maplibregl.VectorTileSource>("railway_routes")
+      : undefined;
+    if (!source || appliedRefreshRef.current === refreshTrigger) return;
+    appliedRefreshRef.current = refreshTrigger;
 
-    const newCacheBuster = Date.now();
-    setRoutesCacheBuster(newCacheBuster);
-
-    // Remove layers → source → re-add
-    const m = map.current;
-    const routeLayers = [
-      "railway_routes_click",
-      "railway_routes_special",
-      "railway_routes_heritage",
-      "railway_routes",
-      "railway_routes_scenic_outline",
-    ];
-    for (const id of routeLayers) {
-      if (m.getLayer(id)) m.removeLayer(id);
-    }
-    if (m.getSource("railway_routes")) m.removeSource("railway_routes");
-
-    m.addSource("railway_routes", createRailwayRoutesSource({ cacheBuster: newCacheBuster }));
-    // Re-inserted below the station names, which would otherwise end up buried
-    // under the route lines every time the routes are refreshed.
-    m.addLayer(createScenicRoutesOutlineLayer(), "station_labels");
-    m.addLayer(createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }), "station_labels");
-    m.addLayer(createRailwayRoutesHeritageLayer(), "station_labels");
-    m.addLayer(createRailwayRoutesSpecialLayer(), "station_labels");
-    m.addLayer(createRailwayRoutesClickLayer(), "station_labels");
-
-    // Re-apply visibility (heritage/special factories default to hidden)
-    const visibility = layerVisibility.showRoutesLayer ? "visible" : "none";
-    for (const id of routeLayers) {
-      m.setLayoutProperty(id, "visibility", visibility);
-    }
-
-    // Re-apply selected route highlighting / invalid coloring to all route layers
-    applyAdminRouteLinePaint(m, selectedRouteId ?? null);
-
-    m.triggerRepaint();
-  }, [refreshTrigger, mapLoaded, layerVisibility.showRoutesLayer, selectedRouteId, map]);
+    routesCacheBusterRef.current = Math.max(Date.now(), routesCacheBusterRef.current + 1);
+    source.setTiles([railwayRoutesTileUrl({ cacheBuster: routesCacheBusterRef.current })]);
+  }, [refreshTrigger, mapLoaded]);
 
   // Focus on a single coordinate (e.g. admin note clicked in Notes tab)
   useEffect(() => {

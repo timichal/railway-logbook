@@ -1,49 +1,37 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import AdminCreateRouteTab from "@/components/admin/AdminCreateRouteTab";
+import { useCallback, useEffect, useRef, useState } from "react";
+import AdminCreateRouteTab, {
+  type CreateFormCoordinates,
+  type EditingGeometry,
+  type NewRouteData,
+  type PathPreview,
+} from "@/components/admin/AdminCreateRouteTab";
 import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
-import { getFrequencyTags } from "@/lib/adminRouteActions";
-import type { UsageType } from "@/lib/shared/constants";
-import type { RailwayPart } from "@/lib/shared/types";
+import { getFrequencyTags, getRailwayRoute } from "@/lib/adminRouteActions";
 import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
 interface AdminSidebarProps {
   selectedRouteId?: number | null;
   onRouteSelect?: (routeId: number | null) => void;
-  selectedCoordinate?: [number, number] | null;
+  /** Bumped per coordinate click on the map; switches to the create tab. */
   coordinateClickTrigger?: number;
-  onPreviewRoute?: (
-    partIds: string[],
-    coordinates: [number, number][],
-    railwayParts: RailwayPart[],
-    startCoordinate: [number, number],
-    endCoordinate: [number, number],
-    hasBacktracking?: boolean,
-  ) => void;
-  onCreateFormCoordinatesChange?: (coords: {
-    startingCoordinate: [number, number] | null;
-    endingCoordinate: [number, number] | null;
-  }) => void;
-  isPreviewMode?: boolean;
+  /** The create form's points. Owned by the page, which fills them from map clicks. */
+  createFormCoordinates: CreateFormCoordinates;
+  onCreateFormCoordinatesChange: React.Dispatch<React.SetStateAction<CreateFormCoordinates>>;
+  /** The geometry edit in progress, also owned by the page (the map hides routes during it). */
+  editingGeometry: EditingGeometry | null;
+  onEditingGeometryChange: (editing: EditingGeometry | null) => void;
+  previewRoute: PathPreview | null;
+  onPreviewRoute?: (preview: PathPreview) => void;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: {
-    name: string;
-    from_station: string;
-    to_station: string;
-    description: string;
-    usage_type: UsageType;
-    frequency: string[];
-    link: string;
-    scenic: boolean;
-    intended_backtracking: boolean;
-  }) => void;
-  onFormReset?: () => void;
+  onSaveRoute?: (routeData: NewRouteData) => Promise<boolean>;
+  /** Clears the create form's points and the preview drawn from them. */
+  onFormReset: () => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
-  onEditingGeometryChange?: (trackId: number | null) => void;
   onRouteFocus?: (geometry: string) => void;
   sidebarWidth?: number | null;
   onFocusNote?: (coordinate: [number, number]) => void;
@@ -55,17 +43,18 @@ interface AdminSidebarProps {
 export default function AdminSidebar({
   selectedRouteId,
   onRouteSelect,
-  selectedCoordinate,
   coordinateClickTrigger,
-  onPreviewRoute,
+  createFormCoordinates,
   onCreateFormCoordinatesChange,
-  isPreviewMode,
+  editingGeometry,
+  onEditingGeometryChange,
+  previewRoute,
+  onPreviewRoute,
   onCancelPreview,
   onSaveRoute,
   onFormReset,
   onRouteDeleted,
   onRouteUpdated,
-  onEditingGeometryChange,
   onRouteFocus,
   sidebarWidth,
   onFocusNote,
@@ -75,13 +64,19 @@ export default function AdminSidebar({
 }: AdminSidebarProps) {
   const { showError: showErrorToast } = useToast();
   const showError = showErrorProp || showErrorToast;
-  const [activeTab, setActiveTab] = useState<"routes" | "create" | "notes">("routes");
+  const [selectedTab, setSelectedTab] = useState<"routes" | "create" | "notes">("routes");
+  // A geometry edit is only ever shown on the create tab. Derived rather than set,
+  // because the edit is the page's and this component's state is not: the mobile
+  // drawer unmounts it, and a remount mid-edit opened on the routes tab with every
+  // route still hidden on the map and no Cancel in sight.
+  const activeTab = editingGeometry ? "create" : selectedTab;
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<number | null>(null);
-  const [editingRouteInfo, setEditingRouteInfo] = useState<{
-    from_station: string;
-    to_station: string;
-  } | null>(null);
+  // Read after an await, to tell whether the edit that asked is still the current one.
+  const editingGeometryRef = useRef(editingGeometry);
+  editingGeometryRef.current = editingGeometry;
+  // Bumped per edit started, so a cancelled edit's load cannot land in a new edit of
+  // the same route.
+  const editRequestRef = useRef(0);
 
   // Load the in-use frequency tags for autocomplete, and keep them fresh after edits.
   const loadTags = useCallback(async () => {
@@ -97,141 +92,85 @@ export default function AdminSidebar({
   }, [loadTags]);
 
   // Switch to create tab when a coordinate is clicked
-  // biome-ignore lint/correctness/useExhaustiveDependencies: coordinateClickTrigger is a trigger that must re-run the effect even when the same coordinate is clicked again.
-  React.useEffect(() => {
-    if (selectedCoordinate) {
-      setActiveTab("create");
+  useEffect(() => {
+    if (coordinateClickTrigger) {
+      setSelectedTab("create");
     }
-  }, [selectedCoordinate, coordinateClickTrigger]);
+  }, [coordinateClickTrigger]);
 
   // Switch to routes tab when a route is selected
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedRouteId) {
-      setActiveTab("routes");
-      // Clear the local form coordinates when switching to routes
-      setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+      setSelectedTab("routes");
     }
   }, [selectedRouteId]);
 
-  // State for create route form coordinates
-  const [createFormCoordinates, setCreateFormCoordinates] = useState<{
-    startingCoordinate: [number, number] | null;
-    endingCoordinate: [number, number] | null;
-  }>({
-    startingCoordinate: null,
-    endingCoordinate: null,
-  });
-
-  // Handle selectedCoordinate to auto-fill form inputs
-  // biome-ignore lint/correctness/useExhaustiveDependencies: coordinateClickTrigger is a trigger that must re-run the effect even when the same coordinate is clicked again.
-  React.useEffect(() => {
-    if (selectedCoordinate) {
-      setCreateFormCoordinates((prev) => {
-        // If starting coordinate is empty, fill it
-        if (!prev.startingCoordinate) {
-          return { ...prev, startingCoordinate: selectedCoordinate };
-        }
-        // If ending coordinate is empty, fill it
-        else if (!prev.endingCoordinate) {
-          return { ...prev, endingCoordinate: selectedCoordinate };
-        }
-        // Both are filled, do nothing
-        return prev;
-      });
-    }
-  }, [selectedCoordinate, coordinateClickTrigger]);
-
-  // Notify parent when form coordinates change
-  React.useEffect(() => {
-    if (onCreateFormCoordinatesChange) {
-      onCreateFormCoordinatesChange(createFormCoordinates);
-    }
-  }, [createFormCoordinates, onCreateFormCoordinatesChange]);
-
-  // Notify parent when editing geometry state changes
-  React.useEffect(() => {
-    if (onEditingGeometryChange) {
-      onEditingGeometryChange(editingGeometryForTrackId);
-    }
-  }, [editingGeometryForTrackId, onEditingGeometryChange]);
-
-  // Create a callback to handle resetting coordinates that the child can call
-  const handleResetCoordinates = React.useCallback(() => {
-    setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
-    // Also notify parent if needed
-    if (onFormReset) {
-      onFormReset();
-    }
-  }, [onFormReset]);
+  // Leaving the create tab abandons whatever was being picked there, a geometry
+  // edit included — it would otherwise keep the routes hidden on the map behind a
+  // tab that is no longer on screen.
+  const leaveCreateTab = () => {
+    onFormReset();
+    if (editingGeometryRef.current) onEditingGeometryChange(null);
+  };
 
   // Handle edit geometry button click
-  const handleEditGeometry = React.useCallback(
+  const handleEditGeometry = useCallback(
     async (trackId: number) => {
-      setEditingGeometryForTrackId(trackId);
-      setActiveTab("create");
-
-      // Notify parent component about editing state
-      if (onEditingGeometryChange) {
-        onEditingGeometryChange(trackId);
-      }
+      const request = ++editRequestRef.current;
+      onEditingGeometryChange({ trackId, routeInfo: null });
+      setSelectedTab("create");
 
       // Fetch the route details to get starting_coordinate and ending_coordinate
       try {
-        const { getRailwayRoute } = await import("@/lib/adminRouteActions");
         const routeDetail = await getRailwayRoute(trackId);
+        // Cancelled (and perhaps restarted), or the region switched, while the
+        // route was loading.
+        if (request !== editRequestRef.current || editingGeometryRef.current?.trackId !== trackId)
+          return;
 
-        // Store route info for display
-        setEditingRouteInfo({
-          from_station: routeDetail.from_station,
-          to_station: routeDetail.to_station,
+        onEditingGeometryChange({
+          trackId,
+          routeInfo: {
+            from_station: routeDetail.from_station,
+            to_station: routeDetail.to_station,
+          },
         });
 
-        // Prefill the starting/ending coordinates if they exist
-        if (routeDetail.starting_coordinate && routeDetail.ending_coordinate) {
-          setCreateFormCoordinates({
-            startingCoordinate: routeDetail.starting_coordinate,
-            endingCoordinate: routeDetail.ending_coordinate,
-          });
-
-          // Also notify parent of the coordinate changes
-          if (onCreateFormCoordinatesChange) {
-            onCreateFormCoordinatesChange({
-              startingCoordinate: routeDetail.starting_coordinate,
-              endingCoordinate: routeDetail.ending_coordinate,
-            });
-          }
+        // Prefill the stored points — unless a point was picked on the map while the
+        // route loaded, which is the admin's choice and not to be overwritten.
+        const { starting_coordinate, ending_coordinate } = routeDetail;
+        if (starting_coordinate && ending_coordinate) {
+          onCreateFormCoordinatesChange((prev) =>
+            prev.startingCoordinate || prev.endingCoordinate
+              ? prev
+              : { startingCoordinate: starting_coordinate, endingCoordinate: ending_coordinate },
+          );
         } else {
           console.warn("Route does not have starting/ending coordinates stored");
-          setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
         }
       } catch (error) {
         console.error("Error fetching route details for geometry edit:", error);
         showError(
           `Failed to load route details: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
-        setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
       }
     },
     [onEditingGeometryChange, onCreateFormCoordinatesChange, showError],
   );
 
+  // Ends a geometry edit, whether saved or cancelled: the form is cleared once, here.
+  const endGeometryEdit = useCallback(() => {
+    onEditingGeometryChange(null);
+    onFormReset();
+    setSelectedTab("routes");
+  }, [onEditingGeometryChange, onFormReset]);
+
   // Handle cancel geometry edit
-  const handleCancelGeometryEdit = React.useCallback(() => {
-    setEditingGeometryForTrackId(null);
-    setEditingRouteInfo(null);
-    setActiveTab("routes");
-    setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
-
-    // Notify parent component
-    if (onEditingGeometryChange) {
-      onEditingGeometryChange(null);
-    }
-
+  const handleCancelGeometryEdit = useCallback(() => {
+    endGeometryEdit();
     // Unselect the route
-    if (onRouteSelect) {
-      onRouteSelect(null);
-    }
-  }, [onEditingGeometryChange, onRouteSelect]);
+    onRouteSelect?.(null);
+  }, [endGeometryEdit, onRouteSelect]);
 
   return (
     <div
@@ -243,9 +182,8 @@ export default function AdminSidebar({
         <button
           type="button"
           onClick={() => {
-            setActiveTab("routes");
-            // Clear form coordinates when manually switching to Railway Routes
-            setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+            setSelectedTab("routes");
+            leaveCreateTab();
           }}
           className={tabBtn(activeTab === "routes")}
         >
@@ -254,7 +192,7 @@ export default function AdminSidebar({
         <button
           type="button"
           onClick={() => {
-            setActiveTab("create");
+            setSelectedTab("create");
             // Unselect any selected route when switching to Create New
             if (onRouteSelect) {
               onRouteSelect(null);
@@ -267,9 +205,9 @@ export default function AdminSidebar({
         <button
           type="button"
           onClick={() => {
-            setActiveTab("notes");
+            setSelectedTab("notes");
             if (onRouteSelect) onRouteSelect(null);
-            setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+            leaveCreateTab();
           }}
           className={tabBtn(activeTab === "notes")}
         >
@@ -297,30 +235,20 @@ export default function AdminSidebar({
             startingCoordinate={createFormCoordinates.startingCoordinate}
             endingCoordinate={createFormCoordinates.endingCoordinate}
             onStartingCoordinateChange={(coord) =>
-              setCreateFormCoordinates((prev) => ({ ...prev, startingCoordinate: coord }))
+              onCreateFormCoordinatesChange((prev) => ({ ...prev, startingCoordinate: coord }))
             }
             onEndingCoordinateChange={(coord) =>
-              setCreateFormCoordinates((prev) => ({ ...prev, endingCoordinate: coord }))
+              onCreateFormCoordinatesChange((prev) => ({ ...prev, endingCoordinate: coord }))
             }
+            previewRoute={previewRoute}
             onPreviewRoute={onPreviewRoute}
-            isPreviewMode={isPreviewMode}
             onCancelPreview={onCancelPreview}
             onSaveRoute={onSaveRoute}
-            onFormReset={handleResetCoordinates}
-            editingGeometryForTrackId={editingGeometryForTrackId}
-            editingRouteInfo={editingRouteInfo}
+            editingGeometryForTrackId={editingGeometry?.trackId ?? null}
+            editingRouteInfo={editingGeometry?.routeInfo ?? null}
             onGeometryEditComplete={() => {
-              setEditingGeometryForTrackId(null);
-              setEditingRouteInfo(null);
-              setActiveTab("routes");
-
-              // Trigger map refresh after geometry edit
-              // Use setTimeout to allow showRoutesLayer state to update first
-              if (onRouteUpdated) {
-                setTimeout(() => {
-                  onRouteUpdated();
-                }, 50);
-              }
+              endGeometryEdit();
+              onRouteUpdated?.();
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
             availableTags={availableTags}

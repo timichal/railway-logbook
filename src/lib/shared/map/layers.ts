@@ -398,6 +398,26 @@ export function createAdminNotesLayer(): CircleLayerSpecification {
   };
 }
 
+/**
+ * Every route's start and end point on the admin map, clickable to reuse as a new
+ * route's endpoint. Drawn from a GeoJSON source of the same id that the admin map
+ * builds empty and fills once the endpoints have loaded.
+ */
+export function createRouteEndpointsLayer(): CircleLayerSpecification {
+  return {
+    id: "route-endpoints",
+    type: "circle",
+    source: "route-endpoints",
+    paint: {
+      "circle-radius": CIRCLES.routeEndpoint.radius,
+      "circle-color": COLORS.adminMarkers.routeEndpoint,
+      "circle-stroke-color": COLORS.adminMarkers.stroke,
+      "circle-stroke-width": CIRCLES.routeEndpoint.strokeWidth,
+      "circle-opacity": OPACITIES.routeEndpoint,
+    },
+  };
+}
+
 export function createPublicNotesLayer(): CircleLayerSpecification {
   return {
     id: "public_notes",

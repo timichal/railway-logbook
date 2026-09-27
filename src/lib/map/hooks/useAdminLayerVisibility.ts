@@ -67,6 +67,7 @@ export function useAdminLayerVisibility({
     setVisibility("railway_routes_click", routesVisible);
 
     setVisibility("stations", showStationsLayer);
+    setVisibility("station_labels", showStationsLayer);
     setVisibility("admin_notes", showNotesLayer);
     setVisibility("route-endpoints", showEndpointsLayer);
   }, [

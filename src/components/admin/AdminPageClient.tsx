@@ -2,7 +2,13 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+  CreateFormCoordinates,
+  EditingGeometry,
+  NewRouteData,
+  PathPreview,
+} from "@/components/admin/AdminCreateRouteTab";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import Navbar from "@/components/layout/Navbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -10,9 +16,7 @@ import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
 import { logout } from "@/lib/authActions";
 import { RegionProvider, useRegionId } from "@/lib/regionContext";
-import type { UsageType } from "@/lib/shared/constants";
 import type { RegionId } from "@/lib/shared/regions";
-import type { RailwayPart } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { btn } from "@/lib/ui/buttonStyles";
 
@@ -25,6 +29,8 @@ const AdminMap = dynamic(() => import("@/components/admin/AdminMap"), {
     </div>
   ),
 });
+
+const NO_COORDINATES: CreateFormCoordinates = { startingCoordinate: null, endingCoordinate: null };
 
 interface AdminPageClientProps {
   user: {
@@ -47,23 +53,23 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   const { showError, showSuccess } = useToast();
   const isMobile = useIsMobile();
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
-  const [selectedCoordinate, setSelectedCoordinate] = useState<[number, number] | null>(null);
-  const [coordinateClickTrigger, setCoordinateClickTrigger] = useState<number>(0); // Trigger to force effect to run
-  const [previewRoute, setPreviewRoute] = useState<{
-    partIds: string[];
-    coordinates: [number, number][];
-    railwayParts: RailwayPart[];
-    startCoordinate: [number, number];
-    endCoordinate: [number, number];
-    hasBacktracking?: boolean;
-  } | null>(null);
-  const [createFormCoordinates, setCreateFormCoordinates] = useState<{
-    startingCoordinate: [number, number] | null;
-    endingCoordinate: [number, number] | null;
-  }>({ startingCoordinate: null, endingCoordinate: null });
-  const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
+  // Bumped per coordinate click, so the sidebar can switch to its create tab.
+  const [coordinateClickTrigger, setCoordinateClickTrigger] = useState<number>(0);
+  // The path found between the picked points: drawn by the map, saved by the form.
+  const [previewRoute, setPreviewRoute] = useState<PathPreview | null>(null);
+  // The create form's two picked points, held here and nowhere else: the map draws
+  // them, the sidebar edits them, and the region switch below has to be able to
+  // clear them. A second copy in the sidebar used to survive that clear and bring
+  // the old region's preview straight back.
+  const [createFormCoordinates, setCreateFormCoordinates] =
+    useState<CreateFormCoordinates>(NO_COORDINATES);
+  // Read when a preview search returns, to tell whether its points are still picked.
+  const createFormCoordinatesRef = useRef(createFormCoordinates);
+  createFormCoordinatesRef.current = createFormCoordinates;
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
-  const [editingGeometryForTrackId, setEditingGeometryForTrackId] = useState<number | null>(null);
+  // Likewise the geometry edit in progress, which the map needs (it hides the
+  // routes) as much as the sidebar does.
+  const [editingGeometry, setEditingGeometry] = useState<EditingGeometry | null>(null);
   const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
   const [focusCoordinate, setFocusCoordinate] = useState<{
     coordinate: [number, number];
@@ -79,9 +85,8 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   useEffect(() => {
     setSelectedRouteId(null);
     setPreviewRoute(null);
-    setIsPreviewMode(false);
-    setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
-    setEditingGeometryForTrackId(null);
+    setCreateFormCoordinates(NO_COORDINATES);
+    setEditingGeometry(null);
     setFocusGeometry(null);
   }, [regionId]);
 
@@ -101,60 +106,51 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       // This prevents clearing coordinates when re-selecting the same route
       // (which happens during "Edit Route Geometry")
       if (prevId !== routeId) {
-        setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+        setCreateFormCoordinates(NO_COORDINATES);
         setPreviewRoute(null);
-        setIsPreviewMode(false);
       }
       return routeId;
     });
   }, []);
 
   const handleCoordinateClick = (coordinate: [number, number]) => {
-    setSelectedCoordinate(coordinate);
-    setCoordinateClickTrigger((prev) => prev + 1); // Increment to force effect to run
+    // Fill the first empty point; with both picked, a click changes nothing until
+    // one of them is cleared.
+    setCreateFormCoordinates((prev) => {
+      if (!prev.startingCoordinate) return { ...prev, startingCoordinate: coordinate };
+      if (!prev.endingCoordinate) return { ...prev, endingCoordinate: coordinate };
+      return prev;
+    });
+    setCoordinateClickTrigger((prev) => prev + 1);
     // Unselect any selected route when clicking a coordinate
     setSelectedRouteId(null);
   };
 
-  const handlePreviewRoute = (
-    partIds: string[],
-    coordinates: [number, number][],
-    railwayParts: RailwayPart[],
-    startCoordinate: [number, number],
-    endCoordinate: [number, number],
-    hasBacktracking?: boolean,
-  ) => {
-    setPreviewRoute({
-      partIds,
-      coordinates,
-      railwayParts,
-      startCoordinate,
-      endCoordinate,
-      hasBacktracking,
-    });
-    setIsPreviewMode(true);
-  };
+  // A path search takes a round trip, and its points may be gone by the time it
+  // returns — cleared by a region switch, by leaving the create tab, or replaced.
+  // Taking the result anyway put the old points' path back on the map, saveable.
+  const handlePreviewRoute = useCallback((preview: PathPreview) => {
+    const current = createFormCoordinatesRef.current;
+    if (
+      current.startingCoordinate !== preview.startCoordinate ||
+      current.endingCoordinate !== preview.endCoordinate
+    ) {
+      return;
+    }
+    setPreviewRoute(preview);
+  }, []);
 
   const handleCancelPreview = () => {
     setPreviewRoute(null);
-    setIsPreviewMode(false);
   };
 
-  const handleSaveRoute = async (routeData: {
-    name: string;
-    from_station: string;
-    to_station: string;
-    description: string;
-    usage_type: UsageType;
-    frequency: string[];
-    link: string;
-    scenic: boolean;
-    intended_backtracking: boolean;
-  }) => {
+  // Resolves whether the route was saved, so the form clears only then: a failed
+  // save leaves everything typed into it in place, to be retried.
+  const handleSaveRoute = async (routeData: NewRouteData): Promise<boolean> => {
     if (!previewRoute) {
       console.error("AdminPageClient: No preview route to save");
       showError("Error: No route preview available to save");
-      return;
+      return false;
     }
 
     try {
@@ -169,12 +165,8 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
         previewRoute.endCoordinate,
       );
 
-      // Clear preview mode
-      setPreviewRoute(null);
-      setIsPreviewMode(false);
-
-      // Clear the form coordinates (unselect start/end points)
-      setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
+      // Clear the picked points and the preview; the form clears its own fields
+      handleFormReset();
 
       // Trigger routes layer refresh
       setRefreshTrigger((prev) => prev + 1);
@@ -182,16 +174,20 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       showSuccess(
         `Route "${routeData.name || `${routeData.from_station} ⟷ ${routeData.to_station}`}" saved successfully! Track ID: ${trackId}`,
       );
+      return true;
     } catch (error) {
       console.error("AdminPageClient: Error saving route:", error);
       showError(`Error saving route: ${error instanceof Error ? error.message : "Unknown error"}`);
+      return false;
     }
   };
 
-  const handleFormReset = () => {
-    // Clear the form coordinates
-    setCreateFormCoordinates({ startingCoordinate: null, endingCoordinate: null });
-  };
+  // Clears the picked points and the preview drawn from them: a preview whose
+  // points are gone is one the form can no longer save or cancel.
+  const handleFormReset = useCallback(() => {
+    setCreateFormCoordinates(NO_COORDINATES);
+    setPreviewRoute(null);
+  }, []);
 
   const handleRouteDeleted = () => {
     // Trigger routes layer refresh after deletion
@@ -203,20 +199,13 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  const handleCreateFormCoordinatesChange = (coordinates: {
-    startingCoordinate: [number, number] | null;
-    endingCoordinate: [number, number] | null;
-  }) => {
-    setCreateFormCoordinates(coordinates);
-  };
-
-  const handleEditingGeometryChange = (trackId: number | null) => {
-    setEditingGeometryForTrackId(trackId);
+  const handleEditingGeometryChange = useCallback((editing: EditingGeometry | null) => {
+    setEditingGeometry(editing);
     // Clear focus geometry when entering/exiting edit mode to prevent unwanted panning
-    if (trackId) {
+    if (editing) {
       setFocusGeometry(null);
     }
-  };
+  }, []);
 
   const handleRouteFocus = (geometry: string) => {
     setFocusGeometry(geometry);
@@ -238,17 +227,18 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     <AdminSidebar
       selectedRouteId={selectedRouteId}
       onRouteSelect={handleRouteSelect}
-      selectedCoordinate={selectedCoordinate}
       coordinateClickTrigger={coordinateClickTrigger}
+      createFormCoordinates={createFormCoordinates}
+      onCreateFormCoordinatesChange={setCreateFormCoordinates}
+      editingGeometry={editingGeometry}
+      onEditingGeometryChange={handleEditingGeometryChange}
+      previewRoute={previewRoute}
       onPreviewRoute={handlePreviewRoute}
-      onCreateFormCoordinatesChange={handleCreateFormCoordinatesChange}
-      isPreviewMode={isPreviewMode}
       onCancelPreview={handleCancelPreview}
       onSaveRoute={handleSaveRoute}
       onFormReset={handleFormReset}
       onRouteDeleted={handleRouteDeleted}
       onRouteUpdated={handleRouteUpdated}
-      onEditingGeometryChange={handleEditingGeometryChange}
       onRouteFocus={handleRouteFocus}
       sidebarWidth={isMobile ? null : sidebarWidth}
       onFocusNote={handleFocusNote}
@@ -311,12 +301,9 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
             onRouteSelect={handleRouteSelect}
             onCoordinateClick={handleCoordinateClick}
             previewRoute={previewRoute}
-            selectedCoordinates={{
-              startingCoordinate: createFormCoordinates.startingCoordinate,
-              endingCoordinate: createFormCoordinates.endingCoordinate,
-            }}
+            selectedCoordinates={createFormCoordinates}
             refreshTrigger={refreshTrigger}
-            isEditingGeometry={!!editingGeometryForTrackId}
+            isEditingGeometry={!!editingGeometry}
             focusGeometry={focusGeometry}
             focusCoordinate={focusCoordinate}
             notesRefreshTrigger={notesRefreshTrigger}

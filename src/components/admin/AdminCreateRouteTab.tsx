@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import TagInput from "@/components/ui/TagInput";
 import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
@@ -12,35 +12,76 @@ import type { RailwayPart } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { btn } from "@/lib/ui/buttonStyles";
 
+/** What the create form saves alongside the previewed geometry. */
+export interface NewRouteData {
+  name: string;
+  from_station: string;
+  to_station: string;
+  description: string;
+  usage_type: UsageType;
+  frequency: string[];
+  link: string;
+  scenic: boolean;
+  intended_backtracking: boolean;
+}
+
+/** The create form's two picked points (also what a geometry edit re-picks). */
+export interface CreateFormCoordinates {
+  startingCoordinate: [number, number] | null;
+  endingCoordinate: [number, number] | null;
+}
+
+/** A geometry edit in progress; `routeInfo` arrives once the route has loaded. */
+export interface EditingGeometry {
+  trackId: number;
+  routeInfo: { from_station: string; to_station: string } | null;
+}
+
+/** The path found between the two picked points: what the map draws and a save stores. */
+export interface PathPreview {
+  partIds: string[];
+  coordinates: [number, number][];
+  railwayParts: RailwayPart[];
+  startCoordinate: [number, number];
+  endCoordinate: [number, number];
+  hasBacktracking?: boolean;
+}
+
+const EMPTY_FORM = {
+  name: "",
+  from_station: "",
+  to_station: "",
+  description: "",
+  // Default to Regular — the overwhelming majority of routes, saves a click
+  usage_type: 0 as UsageType | undefined,
+  frequency: [] as string[],
+  link: "",
+  scenic: false,
+  intended_backtracking: false,
+};
+
 interface AdminCreateRouteTabProps {
   startingCoordinate: [number, number] | null;
   endingCoordinate: [number, number] | null;
   onStartingCoordinateChange: (coord: [number, number] | null) => void;
   onEndingCoordinateChange: (coord: [number, number] | null) => void;
-  onPreviewRoute?: (
-    partIds: string[],
-    coordinates: [number, number][],
-    railwayParts: RailwayPart[],
-    startCoordinate: [number, number],
-    endCoordinate: [number, number],
-    hasBacktracking?: boolean,
-  ) => void;
-  isPreviewMode?: boolean;
+  /**
+   * The page's preview, which is also what gets saved. Read from the page rather
+   * than kept here as well: this tab unmounts with the mobile drawer, and a copy of
+   * its own came back empty beside a preview still on the map, leaving Save enabled
+   * and doing nothing.
+   */
+  previewRoute: PathPreview | null;
+  onPreviewRoute?: (preview: PathPreview) => void;
   onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: {
-    name: string;
-    from_station: string;
-    to_station: string;
-    description: string;
-    usage_type: UsageType;
-    frequency: string[];
-    link: string;
-    scenic: boolean;
-    intended_backtracking: boolean;
-  }) => void;
-  onFormReset?: () => void;
+  /**
+   * Resolves whether the route was saved. The page clears the points and preview on
+   * success; this tab then clears only its own fields.
+   */
+  onSaveRoute?: (routeData: NewRouteData) => Promise<boolean>;
   editingGeometryForTrackId?: number | null;
   editingRouteInfo?: { from_station: string; to_station: string } | null;
+  /** Called once a new geometry is saved; the sidebar ends the edit and clears the form. */
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
   availableTags?: string[];
@@ -52,11 +93,10 @@ export default function AdminCreateRouteTab({
   endingCoordinate,
   onStartingCoordinateChange,
   onEndingCoordinateChange,
+  previewRoute,
   onPreviewRoute,
-  isPreviewMode,
   onCancelPreview,
   onSaveRoute,
-  onFormReset,
   editingGeometryForTrackId,
   editingRouteInfo,
   onGeometryEditComplete,
@@ -66,51 +106,30 @@ export default function AdminCreateRouteTab({
 }: AdminCreateRouteTabProps) {
   const { showError, showSuccess } = useToast();
   const region = useRegion();
+  const isPreviewMode = previewRoute !== null;
+  // Held across the save's round trip, so a second click cannot save twice. The
+  // ref is the guard: it is set synchronously, while the state that disables the
+  // button only lands on the next render — two clicks in one task both got past it.
+  const savingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
   // Japan calls its usage types JR / non-JR lines; Europe keeps the defaults.
   const usageOptions = regionUsageOptions(region.id);
 
+  // The points as of the latest render, and whether this tab is still mounted: a
+  // preview search reports a failure only while both still hold (the page makes the
+  // same check before taking a result — see handlePreviewRoute in AdminPageClient).
+  const pointsRef = useRef({ startingCoordinate, endingCoordinate });
+  pointsRef.current = { startingCoordinate, endingCoordinate };
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Create route form state (without the coordinates that are managed by parent)
-  const [createForm, setCreateForm] = useState({
-    name: "",
-    from_station: "",
-    to_station: "",
-    description: "",
-    // Default to Regular — the overwhelming majority of routes, saves a click
-    usage_type: 0 as UsageType | undefined,
-    frequency: [] as string[],
-    link: "",
-    scenic: false,
-    intended_backtracking: false,
-  });
-
-  // Store the current path result and railway parts for geometry updates
-  const [currentPathResult, setCurrentPathResult] = useState<{
-    partIds: string[];
-    coordinates: [number, number][];
-    railwayParts: RailwayPart[];
-    startCoordinate: [number, number];
-    endCoordinate: [number, number];
-    hasBacktracking?: boolean;
-  } | null>(null);
-
-  // Reset form function
-  const resetForm = () => {
-    setCreateForm({
-      name: "",
-      from_station: "",
-      to_station: "",
-      description: "",
-      usage_type: 0,
-      frequency: [],
-      link: "",
-      scenic: false,
-      intended_backtracking: false,
-    });
-    // Clear the coordinates managed by parent via callback
-    if (onFormReset) {
-      onFormReset();
-    }
-  };
+  const [createForm, setCreateForm] = useState(EMPTY_FORM);
 
   // Clear starting coordinate
   const clearStartingCoordinate = () => {
@@ -135,70 +154,85 @@ export default function AdminCreateRouteTab({
       return;
     }
 
-    // Use coordinate-based server action to find path
-    const result = await findRailwayPathFromCoordinates(startingCoordinate, endingCoordinate);
+    const isStillWanted = () =>
+      mountedRef.current &&
+      pointsRef.current.startingCoordinate === startingCoordinate &&
+      pointsRef.current.endingCoordinate === endingCoordinate;
 
-    if (result) {
-      // Fetch the actual railway part geometries from the database
-      const railwayParts = await getRailwayPartsByIds(result.partIds);
+    try {
+      // Use coordinate-based server action to find path
+      const result = await findRailwayPathFromCoordinates(startingCoordinate, endingCoordinate);
 
-      // Store the path result for potential geometry updates
-      setCurrentPathResult({
-        partIds: result.partIds,
-        coordinates: result.coordinates,
-        railwayParts,
-        startCoordinate: startingCoordinate,
-        endCoordinate: endingCoordinate,
-        hasBacktracking: result.hasBacktracking,
-      });
+      if (result) {
+        // Fetch the actual railway part geometries from the database
+        const railwayParts = await getRailwayPartsByIds(result.partIds);
 
-      // Pass both the path result, the individual railway parts, and the start/end coordinates
-      onPreviewRoute(
-        result.partIds,
-        result.coordinates,
-        railwayParts,
-        startingCoordinate,
-        endingCoordinate,
-        result.hasBacktracking,
-      );
-    } else {
-      console.error("Preview: No path found between coordinates");
-      showError(
-        "No path found between the selected coordinates within 222km. Make sure both points are on connected railway parts.",
-      );
+        onPreviewRoute({
+          partIds: result.partIds,
+          coordinates: result.coordinates,
+          railwayParts,
+          startCoordinate: startingCoordinate,
+          endCoordinate: endingCoordinate,
+          hasBacktracking: result.hasBacktracking,
+        });
+      } else if (isStillWanted()) {
+        console.error("Preview: No path found between coordinates");
+        showError(
+          "No path found between the selected coordinates within 222km. Make sure both points are on connected railway parts.",
+        );
+      }
+    } catch (error) {
+      console.error("Preview: path search failed:", error);
+      if (isStillWanted()) {
+        showError(
+          `Error finding a path: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      }
     }
   };
 
   // Handle save route functionality
   const handleSaveRoute = async () => {
-    if (!onSaveRoute || createForm.usage_type === undefined || !currentPathResult) return;
+    if (savingRef.current || !onSaveRoute || createForm.usage_type === undefined || !previewRoute)
+      return;
 
-    await onSaveRoute({
-      name: createForm.name.trim(),
-      from_station: createForm.from_station.trim(),
-      to_station: createForm.to_station.trim(),
-      description: createForm.description,
-      usage_type: createForm.usage_type,
-      frequency: createForm.frequency,
-      link: createForm.link,
-      scenic: createForm.scenic,
-      intended_backtracking: createForm.intended_backtracking,
-    });
+    savingRef.current = true;
+    setIsSaving(true);
+    try {
+      const saved = await onSaveRoute({
+        name: createForm.name.trim(),
+        from_station: createForm.from_station.trim(),
+        to_station: createForm.to_station.trim(),
+        description: createForm.description,
+        usage_type: createForm.usage_type,
+        frequency: createForm.frequency,
+        link: createForm.link,
+        scenic: createForm.scenic,
+        intended_backtracking: createForm.intended_backtracking,
+      });
+      // The parent has already reported a failure; keep the form for a retry.
+      if (!saved) return;
 
-    // Reset form after successful save
-    resetForm();
+      setCreateForm(EMPTY_FORM);
 
-    // A newly created route may introduce new tags; refresh the suggestion set.
-    onTagsChanged?.();
+      // A newly created route may introduce new tags; refresh the suggestion set.
+      onTagsChanged?.();
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   // Handle save geometry for existing route
   const handleSaveGeometry = async () => {
-    if (!editingGeometryForTrackId || !currentPathResult) {
+    if (savingRef.current) return;
+    if (!editingGeometryForTrackId || !previewRoute) {
       console.error("Cannot save geometry: missing track ID or path result");
       return;
     }
 
+    savingRef.current = true;
+    setIsSaving(true);
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
       // Metadata (name, description, usage_type, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
@@ -215,51 +249,25 @@ export default function AdminCreateRouteTab({
           intended_backtracking: false,
         }, // Dummy data, not used in UPDATE mode
         {
-          partIds: currentPathResult.partIds,
-          coordinates: currentPathResult.coordinates,
-          hasBacktracking: currentPathResult.hasBacktracking,
+          partIds: previewRoute.partIds,
+          coordinates: previewRoute.coordinates,
+          hasBacktracking: previewRoute.hasBacktracking,
         },
-        currentPathResult.startCoordinate,
-        currentPathResult.endCoordinate,
+        previewRoute.startCoordinate,
+        previewRoute.endCoordinate,
         editingGeometryForTrackId, // Pass track ID to trigger UPDATE query
       );
 
       showSuccess("Route geometry updated successfully!");
-
-      // Clear preview route
-      if (onCancelPreview) {
-        onCancelPreview();
-      }
-
-      // Reset and complete editing
-      resetForm();
-      setCurrentPathResult(null);
-
-      if (onGeometryEditComplete) {
-        onGeometryEditComplete();
-      }
+      onGeometryEditComplete?.();
     } catch (error) {
       console.error("Error updating route geometry:", error);
       showError(
         `Error updating route geometry: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
-    }
-  };
-
-  // Handle cancel geometry edit
-  const handleCancelGeometryEdit = () => {
-    // Clear preview route
-    if (onCancelPreview) {
-      onCancelPreview();
-    }
-
-    // Reset form and path result
-    resetForm();
-    setCurrentPathResult(null);
-
-    // Call parent callback to exit edit mode
-    if (onCancelGeometryEdit) {
-      onCancelGeometryEdit();
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -530,7 +538,7 @@ export default function AdminCreateRouteTab({
             <>
               <button
                 type="button"
-                onClick={handleCancelGeometryEdit}
+                onClick={onCancelGeometryEdit}
                 className={`${btn("neutral", "md")} w-full mb-2`}
               >
                 Cancel
@@ -539,10 +547,10 @@ export default function AdminCreateRouteTab({
               <button
                 type="button"
                 onClick={handleSaveGeometry}
-                disabled={!isPreviewMode}
+                disabled={!isPreviewMode || isSaving}
                 className={`${btn("success", "md")} w-full`}
               >
-                Save New Geometry
+                {isSaving ? "Saving…" : "Save New Geometry"}
               </button>
 
               <p className="text-xs text-gray-500 mt-2">
@@ -556,6 +564,7 @@ export default function AdminCreateRouteTab({
                 type="button"
                 onClick={handleSaveRoute}
                 disabled={
+                  isSaving ||
                   !isPreviewMode ||
                   (region.hasRouteNames && !createForm.name.trim()) ||
                   !createForm.from_station ||
@@ -564,7 +573,7 @@ export default function AdminCreateRouteTab({
                 }
                 className={`${btn("success", "md")} w-full`}
               >
-                Save Route to Database
+                {isSaving ? "Saving…" : "Save Route to Database"}
               </button>
 
               <p className="text-xs text-gray-500 mt-2">

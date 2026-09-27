@@ -31,14 +31,9 @@ export function setupAdminMapInteractions(
   const handlePartClick = (e: maplibreglType.MapLayerMouseEvent) => {
     if (!e.features || e.features.length === 0) return;
 
-    // Don't handle part clicks if we clicked on a route endpoint (only if layer exists)
-    if (mapInstance.getLayer("route-endpoints")) {
-      const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ["route-endpoints"],
-      });
-      if (endpointFeatures && endpointFeatures.length > 0) {
-        return; // Let the endpoint handler handle this
-      }
+    // Don't handle part clicks if we clicked on a route endpoint; its own handler does
+    if (mapInstance.queryRenderedFeatures(e.point, { layers: ["route-endpoints"] }).length > 0) {
+      return;
     }
 
     // Don't handle part clicks if we also clicked on a route (wide hit-area buffer included)
@@ -66,27 +61,15 @@ export function setupAdminMapInteractions(
   // Click handler for railway_parts
   mapInstance.on("click", "railway_parts", handlePartClick);
 
-  // Click handler for route endpoints - conditionally add if layer exists
-  // Note: This layer is dynamically added/removed, so we handle clicks through a wrapper
-  const handleMapClick = (e: maplibreglType.MapMouseEvent) => {
-    // Check if we have the route-endpoints layer and if we clicked on an endpoint
-    if (mapInstance.getLayer("route-endpoints")) {
-      const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ["route-endpoints"],
-      });
-      if (endpointFeatures && endpointFeatures.length > 0) {
-        // Manually call the endpoint click handler with proper features
-        const feature = endpointFeatures[0];
-        if (feature.geometry.type === "Point" && onCoordinateClickRef.current) {
-          const clickedCoordinate = feature.geometry.coordinates as [number, number];
-          onCoordinateClickRef.current(clickedCoordinate);
-        }
-      }
+  // Click handler for route endpoints: reuses the endpoint's exact coordinate. The
+  // layer is built with the map (empty until the endpoints load), so it can take a
+  // layer-scoped handler like any other.
+  mapInstance.on("click", "route-endpoints", (e) => {
+    const feature = e.features?.[0];
+    if (feature?.geometry.type === "Point" && onCoordinateClickRef.current) {
+      onCoordinateClickRef.current(feature.geometry.coordinates as [number, number]);
     }
-  };
-
-  // We can't use layer-specific click for dynamic layers, so use general map click
-  mapInstance.on("click", handleMapClick);
+  });
 
   // Click handler for railway routes (uses wide invisible click buffer layer for easier tapping)
   mapInstance.on("click", "railway_routes_click", (e) => {
@@ -95,11 +78,8 @@ export function setupAdminMapInteractions(
     // Routes pass through their own start/end markers, so a click on a route-endpoint
     // dot also lands on the route. The endpoint handler already set the coordinate —
     // don't also select the route.
-    if (mapInstance.getLayer("route-endpoints")) {
-      const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ["route-endpoints"],
-      });
-      if (endpointFeatures && endpointFeatures.length > 0) return;
+    if (mapInstance.queryRenderedFeatures(e.point, { layers: ["route-endpoints"] }).length > 0) {
+      return;
     }
 
     const feature = e.features[0];
@@ -124,13 +104,9 @@ export function setupAdminMapInteractions(
       layers: ["railway_parts"],
     });
 
-    // Also check for endpoint clicks
-    let endpointFeatures = null;
-    if (mapInstance.getLayer("route-endpoints")) {
-      endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ["route-endpoints"],
-      });
-    }
+    const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
+      layers: ["route-endpoints"],
+    });
 
     // If we didn't click on any features, unselect the route
     if (
@@ -298,62 +274,42 @@ export function setupAdminMapInteractions(
     }
   });
 
-  // Hover effects for route endpoints with popup (handled through mousemove since layer is dynamic)
+  // Hover effects for route endpoints with popup
   let endpointHoverPopup: maplibregl.Popup | null = null;
-  let isOverEndpoint = false;
 
-  mapInstance.on("mousemove", (e) => {
-    // Only check if the layer exists
-    if (!mapInstance.getLayer("route-endpoints")) {
-      if (endpointHoverPopup) {
-        endpointHoverPopup.remove();
-        endpointHoverPopup = null;
-      }
-      isOverEndpoint = false;
-      return;
+  mapInstance.on("mouseenter", "route-endpoints", (e) => {
+    const properties = e.features?.[0]?.properties;
+    if (!properties) return;
+    mapInstance.getCanvas().style.cursor = "pointer";
+
+    if (endpointHoverPopup) {
+      endpointHoverPopup.remove();
     }
 
-    const features = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ["route-endpoints"],
-    });
+    const endpointTypeLabel = properties.endpoint_type === "start" ? "Start" : "End";
 
-    if (features && features.length > 0) {
-      const feature = features[0];
-      const properties = feature.properties;
+    endpointHoverPopup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 10,
+      className: "endpoint-hover-popup",
+    })
+      .setLngLat(e.lngLat)
+      .setHTML(`
+        <div style="color: var(--color-fg);">
+          <h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
+          <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.route_name)}</div>
+          <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">Click to use this coordinate</div>
+        </div>
+      `)
+      .addTo(mapInstance);
+  });
 
-      if (properties && !isOverEndpoint) {
-        mapInstance.getCanvas().style.cursor = "pointer";
-        isOverEndpoint = true;
-
-        if (endpointHoverPopup) {
-          endpointHoverPopup.remove();
-        }
-
-        const endpointTypeLabel = properties.endpoint_type === "start" ? "Start" : "End";
-
-        endpointHoverPopup = new maplibregl.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 10,
-          className: "endpoint-hover-popup",
-        })
-          .setLngLat(e.lngLat)
-          .setHTML(`
-            <div style="color: var(--color-fg);">
-              <h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
-              <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.route_name)}</div>
-              <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">Click to use this coordinate</div>
-            </div>
-          `)
-          .addTo(mapInstance);
-      }
-    } else if (isOverEndpoint) {
-      // Mouse left the endpoint
-      isOverEndpoint = false;
-      if (endpointHoverPopup) {
-        endpointHoverPopup.remove();
-        endpointHoverPopup = null;
-      }
+  mapInstance.on("mouseleave", "route-endpoints", () => {
+    mapInstance.getCanvas().style.cursor = "";
+    if (endpointHoverPopup) {
+      endpointHoverPopup.remove();
+      endpointHoverPopup = null;
     }
   });
 

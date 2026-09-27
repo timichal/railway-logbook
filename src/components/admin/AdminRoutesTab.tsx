@@ -16,6 +16,34 @@ import type { LineClass, UsageType } from "@/lib/shared/constants";
 import type { RailwayRoute } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 
+interface EditForm {
+  name: string;
+  from_station: string;
+  to_station: string;
+  description: string;
+  usage_type: UsageType;
+  frequency: string[];
+  link: string;
+  scenic: boolean;
+  line_class: LineClass;
+  intended_backtracking: boolean;
+}
+
+function editFormFromRoute(route: RailwayRoute): EditForm {
+  return {
+    name: route.name || "",
+    from_station: route.from_station,
+    to_station: route.to_station,
+    description: route.description || "",
+    usage_type: route.usage_type,
+    frequency: route.frequency || [],
+    link: route.link || "",
+    scenic: route.scenic || false,
+    line_class: route.line_class || "branch",
+    intended_backtracking: route.intended_backtracking || false,
+  };
+}
+
 interface AdminRoutesTabProps {
   selectedRouteId?: number | null;
   onRouteSelect?: (routeId: number | null) => void;
@@ -53,18 +81,7 @@ export default function AdminRoutesTab({
   const [showWithoutNameOnly, setShowWithoutNameOnly] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const itemsPerPage = 100;
-  const [editForm, setEditForm] = useState<{
-    name: string;
-    from_station: string;
-    to_station: string;
-    description: string;
-    usage_type: UsageType;
-    frequency: string[];
-    link: string;
-    scenic: boolean;
-    line_class: LineClass;
-    intended_backtracking: boolean;
-  } | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
 
   // Data loading
   const loadRoutes = async () => {
@@ -167,18 +184,7 @@ export default function AdminRoutesTab({
         setIsLoading(true);
         const routeDetail = await getRailwayRoute(trackId);
         setSelectedRoute(routeDetail);
-        setEditForm({
-          name: routeDetail.name || "",
-          from_station: routeDetail.from_station,
-          to_station: routeDetail.to_station,
-          description: routeDetail.description || "",
-          usage_type: routeDetail.usage_type,
-          frequency: routeDetail.frequency || [],
-          link: routeDetail.link || "",
-          scenic: routeDetail.scenic || false,
-          line_class: routeDetail.line_class || "branch",
-          intended_backtracking: routeDetail.intended_backtracking || false,
-        });
+        setEditForm(editFormFromRoute(routeDetail));
 
         if (onRouteSelect) {
           onRouteSelect(trackId);
@@ -214,11 +220,12 @@ export default function AdminRoutesTab({
   // Route actions
   const handleSaveRoute = async () => {
     if (!selectedRoute || !editForm) return;
+    const trackId = selectedRoute.track_id;
 
+    setIsLoading(true);
     try {
-      setIsLoading(true);
       await updateRailwayRoute(
-        selectedRoute.track_id,
+        trackId,
         editForm.name.trim() || null,
         editForm.from_station.trim(),
         editForm.to_station.trim(),
@@ -230,41 +237,37 @@ export default function AdminRoutesTab({
         editForm.line_class,
         editForm.intended_backtracking,
       );
-
-      await loadRoutes();
-
-      // Update state with trimmed values
-      const trimmedForm = {
-        ...editForm,
-        name: editForm.name.trim(),
-        from_station: editForm.from_station.trim(),
-        to_station: editForm.to_station.trim(),
-      };
-
-      setSelectedRoute({
-        ...selectedRoute,
-        ...trimmedForm,
-        description: editForm.description || null,
-      });
-
-      setEditForm(trimmedForm);
-
-      if (onRouteUpdated) {
-        onRouteUpdated();
-      }
-
-      // Editing a route may add new tags or drop the last use of an existing one.
-      onTagsChanged?.();
-
-      showSuccess("Route updated successfully!");
     } catch (error) {
       console.error("Error updating route:", error);
       showError(
         `Failed to update route: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
-    } finally {
       setIsLoading(false);
+      return;
     }
+
+    // The save stands from here on, whatever happens to the reads below.
+    onRouteUpdated?.();
+    // Editing a route may add new tags or drop the last use of an existing one.
+    onTagsChanged?.();
+    showSuccess("Route updated successfully!");
+
+    // Re-read the route rather than merging the form into it: the save also marks
+    // it valid and clears its error and under-repair flag, and a merge would leave
+    // the Invalid Route banner (and its toggle, which the server now refuses) on
+    // screen. One after the other, so the list reload's own `setIsLoading(false)`
+    // is the last thing to run and the form stays disabled until both are in.
+    try {
+      const routeDetail = await getRailwayRoute(trackId);
+      setSelectedRoute(routeDetail);
+      setEditForm(editFormFromRoute(routeDetail));
+    } catch (error) {
+      console.error("Error reloading route after save:", error);
+      showError(
+        `Route saved, but reloading it failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+    await loadRoutes();
   };
 
   const handleToggleUnderRepair = async (underRepair: boolean) => {

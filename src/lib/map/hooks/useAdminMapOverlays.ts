@@ -18,6 +18,19 @@ interface OverlayData {
 }
 
 /**
+ * The route endpoints overlay (`createRouteEndpointsLayer`) is part of the map's
+ * construction (see AdminMap), built over this empty source, rather than added once
+ * its data arrives: it then exists before the layer toggles are first applied and
+ * keeps its visibility across refreshes, the hook below only ever swapping its data.
+ * Added on arrival, it came back visible after every save while its box still read
+ * unticked.
+ */
+export const routeEndpointsSource: maplibregl.GeoJSONSourceSpecification = {
+  type: "geojson",
+  data: { type: "FeatureCollection", features: [] },
+};
+
+/**
  * Remove a GeoJSON layer and its source from the map if they exist.
  */
 function removeGeoJSONLayer(mapInstance: maplibregl.Map, id: string) {
@@ -128,30 +141,11 @@ export function useAdminMapOverlays(
     }
   }, [selectedCoordinates, mapLoaded, map]);
 
-  // Route endpoints overlay
+  // Route endpoints overlay: the layer is built with the map, only its data changes
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    removeGeoJSONLayer(map.current, "route-endpoints");
-
-    if (routeEndpoints && routeEndpoints.features.length > 0) {
-      map.current.addSource("route-endpoints", {
-        type: "geojson",
-        data: routeEndpoints,
-      });
-
-      map.current.addLayer({
-        id: "route-endpoints",
-        type: "circle",
-        source: "route-endpoints",
-        paint: {
-          "circle-radius": CIRCLES.routeEndpoint.radius,
-          "circle-color": COLORS.adminMarkers.routeEndpoint,
-          "circle-stroke-color": COLORS.adminMarkers.stroke,
-          "circle-stroke-width": CIRCLES.routeEndpoint.strokeWidth,
-          "circle-opacity": OPACITIES.routeEndpoint,
-        },
-      });
-    }
+    if (!map.current || !mapLoaded || !routeEndpoints) return;
+    map.current
+      .getSource<maplibregl.GeoJSONSource>("route-endpoints")
+      ?.setData(routeEndpoints as GeoJSON.FeatureCollection);
   }, [routeEndpoints, mapLoaded, map]);
 }

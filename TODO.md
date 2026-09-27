@@ -143,52 +143,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Bugs — admin
 
-- [ ] **"Save Route" wipes the form when the save fails, and a double click
-      saves twice.** `src/components/admin/AdminCreateRouteTab.tsx:181-201`;
-      `AdminPageClient.tsx:171-203`. The parent catches every error and resolves
-      normally, so the child always runs `resetForm()`. There is also no
-      `isSaving` guard. **Fix:** return success (or rethrow) from `onSaveRoute`,
-      reset only on success, and disable the button while saving.
-
-- [ ] **Switching region brings back the old region's route preview.**
-      `AdminPageClient.tsx:80-87`; `AdminSidebar.tsx:119-150`;
-      `AdminCreateRouteTab.tsx:276-280`. The create-form coordinates are held
-      twice. The region switch clears the parent's copy and leaves the sidebar's,
-      so the auto-preview effect re-runs and re-enters preview mode with a
-      European path on the Japan map, and "Save Route" would save it. **Fix:** a
-      single owner for the coordinates, lifted into `AdminPageClient`.
-
-- [ ] **Saving an invalid route's metadata leaves the "Invalid Route" banner up.**
-      `AdminRoutesTab.tsx:244-248`. The server sets `is_valid=TRUE` and clears
-      `error_message`/`under_repair`, but the client only merges the form fields.
-      The under-repair toggle then hits `setRouteUnderRepair`, which refuses
-      valid routes. **Fix:** re-fetch the route after saving.
-
-- [ ] **After the first save, every route click refetches all route tiles.**
-      `src/components/admin/AdminMap.tsx:244-283`. The refresh effect's only guard
-      is `refreshTrigger === 0`, but its deps include `selectedRouteId` and
-      `showRoutesLayer`. After any save, each selection or toggle removes and
-      re-adds five layers with a fresh cache buster, so the whole network
-      flickers and re-downloads. **Fix:** make `refreshTrigger` the only trigger
-      and read the other two through refs, and refresh with
-      `source.setTiles([railwayRoutesTileUrl(...)])` as the user map's
-      `useMapTileRefresh` now does: the layers, their order, paint and visibility
-      then stay put, which also fixes the next item and removes the hand-written
-      re-adding.
-
-- [ ] **That same refresh buries the station dots under the lines.**
-      `AdminMap.tsx:267-271`. Routes are re-added with
-      `beforeId: "station_labels"`, which puts them above the `stations` circles.
-      **Fix:** falls out of the `setTiles` change above (no layers are re-added).
-      Update the matching sentence in CLAUDE.md ("the admin map's route refresh
-      re-adds its line layers with `beforeId: "station_labels"`") either way.
-
-- [ ] **Admin layer toggles fall out of sync.** Unticking Stations hides the dots
-      but not `station_labels` (`src/lib/map/hooks/useAdminLayerVisibility.ts:69`).
-      The route-endpoints layer is recreated with default visibility after every
-      save, so it reappears while its box reads unticked
-      (`useAdminMapOverlays.ts:135-156`; use `setData` instead).
-
 - [ ] **Notes popup: leaked React roots and redundant rebuilds.**
       `src/lib/map/hooks/useAdminNotesPopup.tsx`.
       - `root.unmount()` only runs from the popup's own Close. Outside-click,
@@ -376,11 +330,12 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 - [ ] **The admin route metadata form is written twice.**
       `AdminCreateRouteTab.tsx:374-531` and `RouteEditForm.tsx` repeat every
       field with identical ~110-character input class strings (10 and 8 copies).
-      The save-payload type is restated in `AdminPageClient.tsx:152-162`,
-      `AdminSidebar.tsx:31-41` and `AdminCreateRouteTab.tsx:30-40`. **Fix:**
-      `<RouteMetadataFields>`, `RouteMetadata`/`PathPreview` declared once in
-      `types.ts`, and a `useRoutePreview` hook, which also fixes the missing
-      try/catch and stale-response handling in `handlePreviewRoute` (`:133-178`).
+      The preview-route shape is restated in `AdminPageClient.tsx`,
+      `AdminSidebar.tsx`, `AdminCreateRouteTab.tsx` and `AdminMap.tsx`. **Fix:**
+      `<RouteMetadataFields>`, `PathPreview` declared once (`NewRouteData` in
+      `AdminCreateRouteTab.tsx` already is), and a `useRoutePreview` hook, which
+      also fixes the missing try/catch and stale-response handling in
+      `handlePreviewRoute`.
 
 - [ ] **Split the two ~1200-line pathfinders along their seams.**
       - `routePathFinder.ts`:
