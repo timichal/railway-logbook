@@ -14,13 +14,30 @@
  * saves behind them.
  */
 
+import type { TokenClaims } from "./authTokens";
 import { tilePool } from "./routeTileQueries";
+import { currentAccountIdSql, issuedAtParam } from "./sessionQueries";
 
-/** One admin notes tile as MVT bytes; an empty buffer is an empty tile. */
-export async function adminNotesTile(z: number, x: number, y: number): Promise<Buffer> {
-  const result = await tilePool.query<{ tile: Buffer | null }>(
-    "SELECT admin_notes_tile($1, $2, $3) AS tile",
-    [z, x, y],
+/**
+ * One admin notes tile as MVT bytes; an empty buffer is an empty tile. Null when
+ * the claims are not the admin's as the account stands now — a token from before
+ * a password change — checked in the same statement, as `routeTile` does.
+ */
+export async function adminNotesTile(
+  z: number,
+  x: number,
+  y: number,
+  claims: TokenClaims,
+): Promise<Buffer | null> {
+  const result = await tilePool.query<{ admin_id: number | null; tile: Buffer | null }>(
+    `WITH admin AS (SELECT ${currentAccountIdSql("$4", "$5")} AS user_id)
+     SELECT admin.user_id AS admin_id,
+            CASE WHEN admin.user_id = 1 THEN admin_notes_tile($1, $2, $3) END AS tile
+     FROM admin`,
+    [z, x, y, claims.userId, issuedAtParam(claims)],
   );
-  return result.rows[0]?.tile ?? Buffer.alloc(0);
+
+  const row = result.rows[0];
+  if (row?.admin_id !== 1) return null;
+  return row.tile ?? Buffer.alloc(0);
 }

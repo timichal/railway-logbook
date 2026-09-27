@@ -6,14 +6,17 @@
  * anyone who typed a number. The SQL function behind it, `railway_routes_mvt`
  * (`database/init/02-vector-tiles.sql`), is left out of Martin's config, and this
  * module is the only thing that calls it with a user. Callers resolve *which*
- * user first — the tile handler under `src/app/api/tiles`, from the session or a
- * bearer token — the same split as `progressQueries.ts`. A share token is the
- * exception: it is resolved inside the tile query itself (see `routeTile`).
+ * user first — the tile handler under `src/app/api/tiles`, from the session, a
+ * bearer token or a share token — the same split as `progressQueries.ts`. What it
+ * cannot settle without the database, whether that token still stands, is settled
+ * inside the tile query itself (see `routeTile`).
  */
 
 import { Pool } from "pg";
+import type { TokenClaims } from "./authTokens";
 import { dbConfig } from "./dbConfig";
 import { isPlausibleShareToken, sharedMapOwnerIdSql } from "./publicMapQueries";
+import { currentAccountIdSql, issuedAtParam } from "./sessionQueries";
 
 /**
  * A pool of its own, because a map view asks for a dozen or more tiles at once
@@ -33,8 +36,11 @@ tilePool.on("error", (error) => {
   console.error("Idle route tile connection failed:", error.message);
 });
 
-/** Whose rides: a user already resolved, or a share token still to be. */
-export type RouteTileRidesOf = { userId: number } | { shareToken: string };
+/**
+ * Whose rides: a session's or access token's claims (signature checked, account
+ * not yet), or a share token. Both are resolved to a user inside the tile query.
+ */
+export type RouteTileRidesOf = { claims: TokenClaims } | { shareToken: string };
 
 /**
  * One route tile as MVT bytes, coloured by the rides of `of`.
@@ -42,13 +48,14 @@ export type RouteTileRidesOf = { userId: number } | { shareToken: string };
  * `selectedCountries` null shows every route; a list keeps the routes with both
  * endpoints in it (an empty list, none). An empty buffer is an empty tile.
  *
- * **Null means the share link is dead** — an unknown token, or sharing switched
- * off. The token is resolved in the same statement that draws the tile, through
- * the one share rule (`sharedMapOwnerIdSql`), so a shared map's tile is one round
- * trip on this pool: looking the token up first through `publicMapOwner` would put
- * every tile of every visitor's pan on the app's own pool as well. The CASE keeps
- * a dead token from falling through to `railway_routes_mvt(…, NULL, …)`, which is
- * the anonymous tile and would draw the routes with nothing ridden.
+ * **Null means whoever it was no longer answers** — for a share token, an unknown
+ * one or sharing switched off (`sharedMapOwnerIdSql`); for claims, a token from
+ * before a password change or of an account that is gone (`currentAccountIdSql`).
+ * Either rule is applied in the same statement that draws the tile, so a tile is
+ * one round trip on this pool: checking first on the app's pool would put every
+ * tile of every pan there as well. The CASE keeps a dead token from falling
+ * through to `railway_routes_mvt(…, NULL, …)`, which is the anonymous tile and
+ * would draw the routes with nothing ridden.
  */
 export async function routeTile(
   z: number,
@@ -57,24 +64,25 @@ export async function routeTile(
   of: RouteTileRidesOf,
   selectedCountries: string[] | null,
 ): Promise<Buffer | null> {
-  if ("userId" in of) {
-    const result = await tilePool.query<{ tile: Buffer | null }>(
-      "SELECT railway_routes_mvt($1, $2, $3, $4, $5::text[]) AS tile",
-      [z, x, y, of.userId, selectedCountries],
-    );
-    return result.rows[0]?.tile ?? Buffer.alloc(0);
+  let ownerSql: string;
+  let params: unknown[];
+  if ("claims" in of) {
+    ownerSql = currentAccountIdSql("$4", "$6");
+    params = [z, x, y, of.claims.userId, selectedCountries, issuedAtParam(of.claims)];
+  } else {
+    if (!isPlausibleShareToken(of.shareToken)) return null;
+    ownerSql = sharedMapOwnerIdSql("$4");
+    params = [z, x, y, of.shareToken, selectedCountries];
   }
 
-  if (!isPlausibleShareToken(of.shareToken)) return null;
-
   const result = await tilePool.query<{ owner_id: number | null; tile: Buffer | null }>(
-    `WITH owner AS (SELECT ${sharedMapOwnerIdSql("$4")} AS user_id)
+    `WITH owner AS (SELECT ${ownerSql} AS user_id)
      SELECT owner.user_id AS owner_id,
             CASE WHEN owner.user_id IS NOT NULL
                  THEN railway_routes_mvt($1, $2, $3, owner.user_id, $5::text[])
             END AS tile
      FROM owner`,
-    [z, x, y, of.shareToken, selectedCountries],
+    params,
   );
 
   const row = result.rows[0];

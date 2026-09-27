@@ -7,8 +7,9 @@ import { apiHandler, jsonResponse } from "@/lib/api/response";
  *
  * The refresh token is replaced as well as the access token, so a client that
  * checks in occasionally never runs its refresh window down. The old one stays
- * valid until it expires (nothing is stored server-side to invalidate it), so a
- * lost response costs nothing but a retry.
+ * valid until it expires or the password changes (nothing else is stored
+ * server-side to invalidate it), so a lost response costs nothing but a retry.
+ * The new pair carries the account's current email and name, not the old token's.
  */
 export async function POST(request: Request): Promise<Response> {
   return apiHandler(async () => {

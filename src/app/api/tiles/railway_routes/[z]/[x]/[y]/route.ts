@@ -1,5 +1,5 @@
-import { userFromRequest } from "@/lib/api/auth";
-import { mvtResponse, parseTile, sessionUser } from "@/lib/api/tiles";
+import { bearerClaims } from "@/lib/api/auth";
+import { mvtResponse, parseTile, sessionClaims } from "@/lib/api/tiles";
 import { type RouteTileRidesOf, routeTile } from "@/lib/routeTileQueries";
 import { normalizeCountryCodes } from "@/lib/shared/constants";
 import { ZOOM_RANGES } from "@/lib/shared/map/zoomRanges";
@@ -16,8 +16,9 @@ type Context = { params: Promise<{ z: string; x: string; y: string }> };
  *  - otherwise `Authorization: Bearer` — the native app's access token;
  *  - otherwise the web session cookie — the owner's own map.
  *
- * **A refusal is a refusal, never a plainer tile.** No session (expired, or
- * logged out in another tab) is a 401 and a dead share link a 404, so the map
+ * **A refusal is a refusal, never a plainer tile.** No session (expired, logged
+ * out in another tab, or from before a password change) is a 401 and a dead
+ * share link a 404, so the map
  * stops drawing routes rather than drawing them all unridden. On purpose: an
  * uncoloured tile is indistinguishable from a logbook with nothing in it, and a
  * map that quietly lies about what has been ridden is worse than an empty one.
@@ -46,8 +47,9 @@ export async function GET(request: Request, context: Context): Promise<Response>
 
   try {
     const body = await routeTile(tile.z, tile.x, tile.y, rides, countries);
-    // A dead share link: unknown token, or sharing switched off since the page loaded.
-    if (body === null) return new Response(null, { status: 404 });
+    // A dead share link (unknown token, or sharing switched off since the page
+    // loaded), or a session from before a password change.
+    if (body === null) return new Response(null, { status: "shareToken" in rides ? 404 : 401 });
 
     return mvtResponse(body);
   } catch (error) {
@@ -57,9 +59,9 @@ export async function GET(request: Request, context: Context): Promise<Response>
 }
 
 /**
- * Whose rides colour the tile, or the status to refuse with. A share token is
- * passed on unresolved: `routeTile` checks it in the same query that draws the
- * tile, and answers null for a dead one.
+ * Whose rides colour the tile, or the status to refuse with. Neither a share
+ * token nor a session is checked against the database here: `routeTile` does it
+ * in the same query that draws the tile, and answers null for a dead one.
  */
 async function resolveRides(
   request: Request,
@@ -69,12 +71,12 @@ async function resolveRides(
   if (share !== null) return { shareToken: share };
 
   if (request.headers.has("authorization")) {
-    const user = await userFromRequest(request);
-    return user ? { userId: user.id } : { status: 401 };
+    const claims = await bearerClaims(request);
+    return claims ? { claims } : { status: 401 };
   }
 
-  const user = await sessionUser();
-  return user ? { userId: user.id } : { status: 401 };
+  const claims = await sessionClaims();
+  return claims ? { claims } : { status: 401 };
 }
 
 /** Absent: every route (null). Malformed: undefined, which is a 400. */

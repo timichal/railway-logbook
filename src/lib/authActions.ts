@@ -16,9 +16,11 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { authenticateUser, registerUser } from "./authQueries";
-import { COOKIE_NAME, createToken, type User, verifyToken } from "./authTokens";
+import { COOKIE_NAME, createToken, type User } from "./authTokens";
 import { enforceLoginRateLimit, enforceRegisterRateLimit } from "./rateLimit";
+import { verifyToken } from "./sessionQueries";
 
 export type { User };
 
@@ -35,6 +37,13 @@ async function setSessionCookie(user: User): Promise<void> {
   });
 }
 
+/**
+ * A verify reads the account (see `sessionQueries.ts`), and a page render asks
+ * more than once — the page itself, then the server actions it calls — so the
+ * answer is kept for the request. Not exported: every export here is an endpoint.
+ */
+const sessionUserForToken = cache((token: string) => verifyToken(token));
+
 export async function getUser(): Promise<User | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
@@ -43,7 +52,7 @@ export async function getUser(): Promise<User | null> {
     return null;
   }
 
-  return verifyToken(token);
+  return sessionUserForToken(token);
 }
 
 export async function login(formData: FormData) {

@@ -10,6 +10,11 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255), -- Optional display name
     password VARCHAR(255), -- To be used later for authentication
+    -- When the password last changed. Every token issued before it is refused
+    -- (src/lib/sessionQueries.ts), which is what makes a password change sign out
+    -- the sessions and app logins already out there. NULL: unchanged since the
+    -- column was added, every token stands.
+    password_changed_at TIMESTAMPTZ,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -8,16 +8,18 @@
  * API call it didn't mean to make.
  *
  * The signing is shared with the web session (`authTokens.ts`): one secret, one
- * claim shape, two transports.
+ * claim shape, two transports. So is the account check (`sessionQueries.ts`).
  */
 
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   createAccessToken,
   createRefreshToken,
+  readToken,
+  type TokenClaims,
   type User,
-  verifyToken,
 } from "../authTokens";
+import { verifyToken } from "../sessionQueries";
 import { ApiError } from "./response";
 
 function bearerToken(request: Request): string | null {
@@ -34,6 +36,18 @@ export async function userFromRequest(request: Request): Promise<User | null> {
   if (!token) return null;
 
   return verifyToken(token, "access");
+}
+
+/**
+ * What the request's access token claims, signature checked but **not** held
+ * against the account — for a tile handler, which does that in its tile query
+ * (see `sessionQueries.ts`). Anything else wants `userFromRequest`.
+ */
+export async function bearerClaims(request: Request): Promise<TokenClaims | null> {
+  const token = bearerToken(request);
+  if (!token) return null;
+
+  return readToken(token, "access");
 }
 
 /** The request's user, or a 401. */
@@ -64,8 +78,8 @@ export async function userFromRefreshToken(token: unknown): Promise<User> {
  * Two tokens because of how a logbook is used: the access token is short enough
  * that a leaked one expires, and the refresh token is long enough that opening
  * the app after a month of not travelling doesn't land on a login screen. They
- * are stateless, so there is no server-side revocation — logging out is the
- * client dropping both.
+ * carry no session state, so logging out is the client dropping both; the one
+ * server-side revocation is a password change (see `sessionQueries.ts`).
  */
 export async function issueTokens(user: User): Promise<{
   user: User;

@@ -7,8 +7,11 @@
  * one place is what stops the two drifting apart — a token minted for one has
  * to verify for the other, since both are the same user session.
  *
- * Nothing here touches `cookies()` or a request, so it is callable from a
- * server action, a route handler and a CLI script alike.
+ * Nothing here touches `cookies()`, a request or the database, so it is
+ * callable from a server action, a route handler and a CLI script alike. That is
+ * also why a token read here is not yet a session: the signature says who the
+ * token was issued to, and only the account can say whether it still stands —
+ * `verifyToken` in `sessionQueries.ts` asks it.
  */
 
 import { jwtVerify, SignJWT } from "jose";
@@ -89,7 +92,14 @@ const REFRESH_TTL = "180d";
 export const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 function sign(user: User, kind: TokenKind, ttl: string): Promise<string> {
-  const claims: Record<string, unknown> = { userId: user.id, email: user.email, name: user.name };
+  const claims: Record<string, unknown> = {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    // `iat` is whole seconds, too coarse to say which side of a password change
+    // a token issued in the same second fell on (see `sessionQueries.ts`).
+    iatMs: Date.now(),
+  };
   if (kind !== "session") claims.typ = kind;
 
   return new SignJWT(claims)
@@ -112,18 +122,32 @@ export function createRefreshToken(user: User): Promise<string> {
   return sign(user, "refresh", REFRESH_TTL);
 }
 
+/** What a token says, once its signature and kind have checked out. */
+export interface TokenClaims {
+  userId: number;
+  email: string;
+  name?: string;
+  /**
+   * When it was issued, in milliseconds. From `iatMs`, or `iat` for a token
+   * minted before that claim existed — which puts it at the start of its
+   * second, i.e. never later than it really was.
+   */
+  issuedAtMs: number;
+}
+
 /**
- * Verify a token and return its user, or null.
+ * Check a token's signature and kind and return what it claims, or null. Not a
+ * session check on its own — see the header.
  *
  * `expect` is the kind the caller is willing to accept. A cookie session token
  * is accepted wherever an access token is, so a browser and the app can hit the
  * same handler; a refresh token is accepted only where it is explicitly asked
  * for, and never as an access token.
  */
-export async function verifyToken(
+export async function readToken(
   token: string,
   expect: "session" | "access" | "refresh" = "session",
-): Promise<User | null> {
+): Promise<TokenClaims | null> {
   // Outside the try: a missing secret is a server fault, not a bad token, and
   // must not pass for "logged out".
   const secret = getJwtSecret();
@@ -137,10 +161,15 @@ export async function verifyToken(
       return null;
     }
 
+    if (typeof payload.userId !== "number") return null;
+    const issuedAtMs =
+      typeof payload.iatMs === "number" ? payload.iatMs : (payload.iat ?? 0) * 1000;
+
     return {
-      id: payload.userId as number,
+      userId: payload.userId,
       email: payload.email as string,
       name: payload.name as string,
+      issuedAtMs,
     };
   } catch {
     return null;

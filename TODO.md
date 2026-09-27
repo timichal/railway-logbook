@@ -10,19 +10,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ---
 
-## Security (do these first)
-
-- [ ] **Changing a password signs nobody out.** The web session cookie (7 days)
-      and the native app's access and refresh tokens are stateless JWTs carrying
-      only the user id (`src/lib/authTokens.ts`), and nothing checks them against
-      the account afterwards. So `npm run createAdmin -- … --reset` cannot take
-      the admin back from someone already signed in, and a refresh token can keep
-      renewing that access. Today the only way out is rotating `JWT_SECRET`, which
-      signs out every user. **Fix:** add `users.password_changed_at`, put the
-      token's `iat` next to it on every verify (the cookie, the bearer and the
-      refresh), and reject anything issued before it. That costs one indexed read
-      per authenticated request, route tiles included.
-
 ## Bugs that lose or corrupt data
 
 - [ ] **A transient DB fault during recalculation marks a route invalid, and

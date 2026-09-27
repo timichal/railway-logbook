@@ -5,7 +5,8 @@
  *   npm run createAdmin -- <email> [name]           # a fresh deployment
  *   npm run createAdmin -- <email> [name] --reset   # replace an existing admin's
  *                                                   # email and password (and name,
- *                                                   # if given)
+ *                                                   # if given), signing out every
+ *                                                   # session and app login it had
  *
  * The schema seeds no user: id 1 is reserved (`users_id_seq` starts at 2) and
  * this is the one way to fill it. The password is prompted for, never taken as
@@ -151,16 +152,24 @@ async function createAdmin() {
       process.exit(1);
     }
 
+    // password_changed_at on a fresh admin too: a token for user 1 signed with
+    // this JWT_SECRET may outlive the database it was issued against.
     await pool.query(
-      `INSERT INTO users (id, email, name, password) VALUES (1, $1, $2, $3)
+      `INSERT INTO users (id, email, name, password, password_changed_at)
+       VALUES (1, $1, $2, $3, now())
        ON CONFLICT (id) DO UPDATE
          SET email = EXCLUDED.email,
              name = COALESCE(EXCLUDED.name, users.name),
-             password = EXCLUDED.password`,
+             password = EXCLUDED.password,
+             password_changed_at = EXCLUDED.password_changed_at`,
       [email, name, await hashPassword(password)],
     );
 
-    console.log(`✓ Admin (user 1) ${existing.rows.length > 0 ? "reset" : "created"}: ${email}`);
+    console.log(
+      existing.rows.length > 0
+        ? `✓ Admin (user 1) reset: ${email}. Every session signed in as it is now signed out.`
+        : `✓ Admin (user 1) created: ${email}`,
+    );
   } catch (error) {
     if ((error as { code?: string }).code === "23505") {
       console.error(`${email} is already registered to another account.`);

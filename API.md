@@ -53,9 +53,13 @@ logbook is opened when a trip happens, and being logged out on a train is worse
 than useless. Refreshing replaces both, so a client that checks in occasionally
 never runs its window down.
 
-Tokens are stateless: there is no server-side revocation and **no logout
-endpoint**. Logging out is the client deleting both tokens, which is why they
-belong in `expo-secure-store` and not in plain storage.
+Tokens carry no session state and there is **no logout endpoint**: logging out
+is the client deleting both tokens, which is why they belong in
+`expo-secure-store` and not in plain storage. The one server-side revocation is
+a **password change**, which invalidates every token issued before it — access
+and refresh alike, so the next request is a 401 and the refresh behind it a 401
+too, i.e. a real sign-out. A token naming an account that no longer exists is
+refused the same way.
 
 **Login and register are rate-limited per client** — 10 sign-ins per 5 minutes,
 5 registrations per hour, counted in memory against the address the proxy

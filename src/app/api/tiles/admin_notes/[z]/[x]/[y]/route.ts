@@ -1,5 +1,5 @@
 import { adminNotesTile } from "@/lib/adminNotesTileQueries";
-import { mvtResponse, parseTile, sessionUser } from "@/lib/api/tiles";
+import { mvtResponse, parseTile, sessionClaims } from "@/lib/api/tiles";
 import { ZOOM_RANGES } from "@/lib/shared/map/zoomRanges";
 
 type Context = { params: Promise<{ z: string; x: string; y: string }> };
@@ -21,12 +21,16 @@ export async function GET(_request: Request, context: Context): Promise<Response
   const tile = parseTile(await context.params, ZOOM_RANGES.adminNotes);
   if (!tile) return new Response("Invalid tile coordinates", { status: 400 });
 
-  const user = await sessionUser();
-  if (!user) return new Response(null, { status: 401 });
-  if (user.id !== 1) return new Response(null, { status: 403 });
+  const claims = await sessionClaims();
+  if (!claims) return new Response(null, { status: 401 });
+  if (claims.userId !== 1) return new Response(null, { status: 403 });
 
   try {
-    return mvtResponse(await adminNotesTile(tile.z, tile.x, tile.y));
+    const body = await adminNotesTile(tile.z, tile.x, tile.y, claims);
+    // A session from before the admin's password was last changed.
+    if (body === null) return new Response(null, { status: 401 });
+
+    return mvtResponse(body);
   } catch (error) {
     console.error("Admin notes tile failed:", error);
     return new Response(null, { status: 500 });

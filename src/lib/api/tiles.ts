@@ -5,17 +5,20 @@
  */
 
 import { cookies } from "next/headers";
-import { COOKIE_NAME, type User, verifyToken } from "../authTokens";
+import { COOKIE_NAME, readToken, type TokenClaims } from "../authTokens";
 
 /**
- * The web session's user, from the cookie, or null. Tile handlers are the only
+ * What the web session's cookie claims, or null. Tile handlers are the only
  * route handlers that read the cookie (see "Vector tiles" in CLAUDE.md); this is
  * the one place they do it. Not `authActions.getUser`, which is a `"use server"`
  * module a route handler must not import.
+ *
+ * Signature checked, **not** held against the account: the tile query does that
+ * (`currentAccountIdSql`), so a tile stays one round trip on the tile pool.
  */
-export async function sessionUser(): Promise<User | null> {
+export async function sessionClaims(): Promise<TokenClaims | null> {
   const session = (await cookies()).get(COOKIE_NAME)?.value;
-  return session ? verifyToken(session) : null;
+  return session ? readToken(session) : null;
 }
 
 /** `z`/`x`/`y` from the path, or null when they are not a tile inside `zooms`. */
