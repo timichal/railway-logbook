@@ -15,13 +15,6 @@
  * An email is stored as `lower(btrim(...))`, in SQL rather than in JS so the
  * folding is Postgres' own and always satisfies the CHECK on `users.email`:
  * "Foo@x " signs in to, and cannot re-register, "foo@x".
- *
- * Lookups fold the stored side too (`lower(email)`), which only matters until
- * `applySchemaConstraints` has lower-cased the rows already there: without it,
- * every account stored with a capital would be locked out in the gap between
- * the deploy and the migration, and could be registered a second time. When
- * that script is removed, these can go back to `email = lower(btrim($1))`,
- * which the unique index serves.
  */
 
 import bcrypt from "bcryptjs";
@@ -37,13 +30,8 @@ export async function authenticateUser(email: string, password: string): Promise
     throw new ValidationError("Email and password are required");
   }
 
-  // An exact match first, should two rows fold to the same address before the
-  // migration has run
   const result = await query(
-    `SELECT id, email, name, password FROM users
-     WHERE lower(email) = lower(btrim($1))
-     ORDER BY email = btrim($1) DESC, id
-     LIMIT 1`,
+    "SELECT id, email, name, password FROM users WHERE email = lower(btrim($1))",
     [email],
   );
 
@@ -85,9 +73,7 @@ export async function registerUser(
     throw new ValidationError("Password must be at least 6 characters");
   }
 
-  const existingUser = await query("SELECT id FROM users WHERE lower(email) = lower(btrim($1))", [
-    email,
-  ]);
+  const existingUser = await query("SELECT id FROM users WHERE email = lower(btrim($1))", [email]);
   if (existingUser.rows.length > 0) {
     throw new ValidationError("User with this email already exists");
   }

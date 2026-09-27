@@ -24,7 +24,6 @@
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
     "fixSequences": "tsx src/scripts/fixSequences.ts",
-    "applySchemaConstraints": "tsx src/scripts/applySchemaConstraints.ts",
     "createAdmin": "tsx src/scripts/createAdmin.ts",
     "listStations": "tsx src/scripts/listStations.ts",
     "inspectPath": "tsx src/scripts/inspectPath.ts",
