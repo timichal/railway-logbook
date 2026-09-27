@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
 import MapProgressBox from "@/components/map/MapProgressBox";
+import MapStationSearch from "@/components/map/MapStationSearch";
 import MobileBottomSheet from "@/components/ui/MobileBottomSheet";
 import type { User } from "@/lib/authActions";
 import { createDataAccess, type DataAccess } from "@/lib/dataAccess";
@@ -13,12 +14,12 @@ import {
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
+import { useLocalRouteFeatureStates } from "@/lib/map/hooks/useLocalRouteFeatureStates";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useMapTileRefresh } from "@/lib/map/hooks/useMapTileRefresh";
 import { useRouteEditor } from "@/lib/map/hooks/useRouteEditor";
 import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
-import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
-import { setupUserMapInteractions } from "@/lib/map/interactions/userMapInteractions";
+import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
 import { createUserMapLayers } from "@/lib/shared/map/userMapLayers";
@@ -34,7 +35,6 @@ import type {
 } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
 import { useToast } from "@/lib/toast";
-import { optionRow } from "@/lib/ui/buttonStyles";
 
 /** One user's country filter saves: at most one running, the newest list waiting. */
 interface CountrySaveQueue {
@@ -154,8 +154,6 @@ export default function RailwayMap({
   const selectedRoutesRef = useRef<SelectedRoute[]>([]);
   selectedRoutesRef.current = selectedRoutes;
 
-  const stationSearch = useStationSearch(region.id);
-
   // Initialize map
   // The station dots and their labels are picked against the basemap under them, so
   // they follow the scheme. useMapLibre rebuilds the map when it changes.
@@ -183,55 +181,13 @@ export default function RailwayMap({
     [region.id],
   );
 
-  // Track which routes have feature states applied (for cleanup)
-  const featureStateTrackIdsRef = useRef<Set<number>>(new Set());
-  // Read after an await, where the closure's `user` may already be stale. Written
-  // in an effect, not during render: a render React throws away would otherwise
-  // leave a user here that was never committed.
-  const userRef = useRef(user);
-  useEffect(() => {
-    userRef.current = user;
-  }, [user]);
-
-  // Update map feature states for localStorage trips (unlogged users only).
-  // The tiles carry no visit status for an unauthenticated visitor, so which
-  // routes read as ridden whole is worked out from the local log (see
-  // getLocalRouteStatuses) and applied per feature.
-  const updateLocalStorageFeatureStates = useCallback(async () => {
-    if (!map.current || user) return;
-
-    const statuses = await dataAccess.getLocalRouteStatuses();
-    // Re-read after the await: the map may have gone away while it ran, or the
-    // visitor logged in — and feature state outlives a tile refresh, so states
-    // laid on now would stay on the logged-in map
-    const target = map.current;
-    if (!target || userRef.current) return;
-
-    const newTrackIds = new Set<number>();
-    for (const status of statuses) {
-      newTrackIds.add(status.track_id);
-      target.setFeatureState(
-        { source: "railway_routes", sourceLayer: "railway_routes", id: status.track_id },
-        {
-          hasTrip: true,
-          date: new Date().toISOString().split("T")[0],
-          partial: !status.complete,
-        },
-      );
-    }
-
-    featureStateTrackIdsRef.current.forEach((trackId) => {
-      if (!newTrackIds.has(trackId)) {
-        target.removeFeatureState({
-          source: "railway_routes",
-          sourceLayer: "railway_routes",
-          id: trackId,
-        });
-      }
-    });
-
-    featureStateTrackIdsRef.current = newTrackIds;
-  }, [map, user, dataAccess]);
+  // An anonymous visitor's rides, coloured from their localStorage log
+  const refreshLocalRouteStates = useLocalRouteFeatureStates(
+    map,
+    mapLoaded,
+    userId !== null,
+    dataAccess,
+  );
 
   // Route editor hook
   const routeEditor = useRouteEditor(dataAccess, effectiveCountries);
@@ -367,46 +323,12 @@ export default function RailwayMap({
       refreshTiles();
       routeEditor.refreshProgress();
     } else {
-      updateLocalStorageFeatureStates();
+      refreshLocalRouteStates();
       routeEditor.refreshProgress();
     }
     // Journeys changed, so the ridden stretches of unfinished routes may have too
     setCoverageVersion((v) => v + 1);
-  }, [user, refreshTiles, updateLocalStorageFeatureStates, routeEditor.refreshProgress]);
-
-  // Set up localStorage feature states when map loads (for unlogged users). They
-  // live on the route source, which a tile refresh keeps, so they outlast it — and
-  // outlast a login too, which is why logging in clears them: the logged-in tile
-  // leaves a route it has no ride for to the feature-state branch of the colour,
-  // and the local log would paint it ridden.
-  useEffect(() => {
-    const m = map.current;
-    if (!m || !mapLoaded) return;
-
-    if (user) {
-      for (const trackId of featureStateTrackIdsRef.current) {
-        m.removeFeatureState({
-          source: "railway_routes",
-          sourceLayer: "railway_routes",
-          id: trackId,
-        });
-      }
-      featureStateTrackIdsRef.current = new Set();
-      return;
-    }
-
-    const applyStates = () => {
-      updateLocalStorageFeatureStates();
-    };
-
-    if (m.isMoving()) {
-      m.once("idle", applyStates);
-      return () => {
-        m.off("idle", applyStates);
-      };
-    }
-    applyStates();
-  }, [map, mapLoaded, user, updateLocalStorageFeatureStates]);
+  }, [user, refreshTiles, refreshLocalRouteStates, routeEditor.refreshProgress]);
 
   // Refresh the route tiles when the user changes (login/logout): the map outlives
   // it, and the tiles must switch between this user's rides and none. The mount
@@ -430,52 +352,13 @@ export default function RailwayMap({
     refreshTiles();
   }, [userId, refreshTiles]);
 
-  // Setup map interactions
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    let cleanup: (() => void) | undefined;
-    // A setup deferred to "idle" outlives the effect run that queued it: without
-    // this, an effect re-run while the map is still moving queues a second one and
-    // both fire, leaving two live sets of handlers with only the later set's
-    // teardown tracked. Two sets means one tap handled twice, by two closures that
-    // disagree about which popup is open.
-    let cancelled = false;
-
-    const setupWhenReady = () => {
-      if (cancelled || !map.current?.getLayer("railway_routes")) return;
-
-      cleanup = setupUserMapInteractions(map.current, {
-        onRouteClick: handleRouteClick,
-        onStationClick:
-          activeTab === "routes" && journeyStationClickHandler
-            ? journeyStationClickHandler
-            : undefined,
-        region: region.id,
-        routeTapAction,
-      });
-    };
-
-    if (!map.current.isMoving()) {
-      setupWhenReady();
-    } else {
-      map.current.once("idle", setupWhenReady);
-    }
-
-    return () => {
-      cancelled = true;
-      map.current?.off("idle", setupWhenReady);
-      if (cleanup) cleanup();
-    };
-  }, [
-    map,
-    mapLoaded,
-    handleRouteClick,
-    activeTab,
-    journeyStationClickHandler,
-    region.id,
+  useUserMapInteractions(map, mapLoaded, {
+    onRouteClick: handleRouteClick,
+    onStationClick:
+      activeTab === "routes" && journeyStationClickHandler ? journeyStationClickHandler : undefined,
+    region: region.id,
     routeTapAction,
-  ]);
+  });
 
   // Fetch progress stats on mount
   useEffect(() => {
@@ -531,49 +414,6 @@ export default function RailwayMap({
     setSelectedCountries(countries);
     refreshTiles();
     void saveCountries(countries);
-  };
-
-  // Station search handler
-  const handleStationSelect = (station: Station) => {
-    if (!map.current) return;
-    const [lon, lat] = station.coordinates;
-    map.current.flyTo({ center: [lon, lat], zoom: 14, duration: 1500 });
-    stationSearch.setSearchQuery("");
-    stationSearch.setShowSuggestions(false);
-    stationSearch.setSelectedStationIndex(-1);
-    // The dropdown holds focus in the input (see the suggestion list below), so the
-    // field has to be released here or the keyboard stays up over the map.
-    stationSearch.searchInputRef.current?.blur();
-  };
-
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!stationSearch.showSuggestions || stationSearch.searchResults.length === 0) return;
-
-    switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        stationSearch.setSelectedStationIndex((prev) =>
-          prev < stationSearch.searchResults.length - 1 ? prev + 1 : prev,
-        );
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        stationSearch.setSelectedStationIndex((prev) => (prev > 0 ? prev - 1 : -1));
-        break;
-      case "Enter":
-        e.preventDefault();
-        if (
-          stationSearch.selectedStationIndex >= 0 &&
-          stationSearch.selectedStationIndex < stationSearch.searchResults.length
-        ) {
-          handleStationSelect(stationSearch.searchResults[stationSearch.selectedStationIndex]);
-        }
-        break;
-      case "Escape":
-        stationSearch.setShowSuggestions(false);
-        stationSearch.setSelectedStationIndex(-1);
-        break;
-    }
   };
 
   // Watch the pane rather than the sheet's height: the same measurement then covers
@@ -679,80 +519,12 @@ export default function RailwayMap({
           />
         )}
 
-        {/* Station Search Box */}
-        <div
-          className={`absolute z-10 ${isMobile ? "top-3 left-3 right-14" : "top-4 right-12 w-80"} ${
-            furnitureFits ? "" : "hidden"
-          }`}
-        >
-          <div className="relative">
-            <input
-              ref={stationSearch.searchInputRef}
-              type="text"
-              value={stationSearch.searchQuery}
-              onChange={(e) => stationSearch.setSearchQuery(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              onFocus={() =>
-                stationSearch.searchQuery.length >= 2 && stationSearch.setShowSuggestions(true)
-              }
-              onBlur={() => setTimeout(() => stationSearch.setShowSuggestions(false), 200)}
-              placeholder="Search stations..."
-              className="w-full px-4 py-2 pr-10 bg-surface border border-gray-300 rounded-lg shadow-lg text-fg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <svg
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-
-            {/* Search Suggestions Dropdown */}
-            {stationSearch.showSuggestions &&
-              !stationSearch.isSearching &&
-              stationSearch.searchResults.length > 0 && (
-                <div
-                  // Keeps the focus in the input: without it the pointerdown blurs
-                  // the field and the 200ms blur timer above hides the list before
-                  // the click lands — on touch, even scrolling the list did it.
-                  onPointerDown={(e) => e.preventDefault()}
-                  className="absolute top-full mt-1 w-full bg-surface border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto z-20"
-                >
-                  {stationSearch.searchResults.map((station, index) => (
-                    <button
-                      type="button"
-                      key={station.id}
-                      onClick={() => handleStationSelect(station)}
-                      onMouseEnter={() => stationSearch.setSelectedStationIndex(index)}
-                      className={`${optionRow(stationSearch.selectedStationIndex === index)} px-4 py-2 text-sm text-fg border-b border-gray-100 last:border-b-0`}
-                    >
-                      <div className="font-medium">{station.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {station.coordinates[1].toFixed(4)}, {station.coordinates[0].toFixed(4)}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-            {/* Loading indicator */}
-            {stationSearch.isSearching && (
-              <div className="absolute top-full mt-1 w-full bg-surface border border-gray-200 rounded-lg shadow-xl p-3 z-20">
-                <div className="flex items-center justify-center text-sm text-gray-500">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
-                  Searching...
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <MapStationSearch
+          map={map}
+          region={region.id}
+          isMobile={isMobile}
+          hidden={!furnitureFits}
+        />
       </div>
 
       {/* Mobile bottom sheet (the map keeps the space above it) */}

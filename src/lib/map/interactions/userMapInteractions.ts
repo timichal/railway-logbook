@@ -23,7 +23,7 @@ export interface RouteTapAction {
   label: string;
 }
 
-interface UserMapInteractionCallbacks {
+export interface UserMapInteractionCallbacks {
   /**
    * Omitted on the read-only shared map (`/shared/<token>`): nothing can be
    * selected there, so a pointer gets the hover popup and a finger gets an info

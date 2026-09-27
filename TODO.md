@@ -10,17 +10,46 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ---
 
-## Refactoring
+## Map interaction bugs
 
-- [ ] **Share the station search and interaction setup between the two user
-      maps.** `RailwayMap.tsx:395-498`, `:603-676` and
-      `PublicRailwayMap.tsx:106-258` are about 150 lines copied near-verbatim:
-      the input, the dropdown's pointerdown fix, the explicit blur, and the
-      cancellable idle-deferred interaction setup ("See RailwayMap"). **Fix:**
-      extract `<MapStationSearch>` and `useUserMapInteractions`. The local
-      feature-state logic (`RailwayMap.tsx:185-217`, `:368-380`) could become
-      `useLocalRouteFeatureStates`, which would bring RailwayMap down from 687
-      lines.
+From a code review of the station search / interaction refactor (2026-09-27).
+Line numbers are as of that change.
+
+- [ ] **Changing tab or journey card closes an open route popup or sheet.**
+      `RailwayMap.tsx:228` (`handleRouteClick`) and `:258` (`routeTapAction`)
+      depend on `activeTab` and `journeyEditActive`, and both are deps of
+      `useUserMapInteractions` (`:355`). So any tab switch or journey card
+      opening or closing tears down every handler and attaches them again, and a
+      touch sheet that is open disappears in the middle of use. **Fix:** read
+      `activeTab` and `journeyEditActive` through refs (as `selectedRoutesRef`
+      already is), so the callbacks stay stable and the handlers are attached
+      once per map.
+
+- [ ] **The touch sheet's label can disagree with what its button does.**
+      `routeTapAction` (`RailwayMap.tsx:258`) enters journey mode on
+      `journeyEditActive` alone. `handleRouteClick` also requires
+      `journeyRouteClickHandlerRef.current`. While a card is mounting or
+      unmounting, the flag and the ref disagree. The sheet then says "Add to
+      journey", but the press adds the route to the selection, or does nothing
+      off the Route Logger tab. The comment says the two mirror each other
+      branch for branch. **Fix:** test the same condition in both, ideally
+      through one shared helper.
+
+- [ ] **A failed load of local ride colours goes unhandled.**
+      `useLocalRouteFeatureStates.ts:87` and `RailwayMap.tsx:326` call
+      `refresh()` without handling its promise. If `getRouteSummaries` fails,
+      the result is an unhandled rejection. An anonymous visitor's rides stay
+      uncoloured, with no retry and no message. **Fix:** catch the error inside
+      `refresh` and log it, or show a toast.
+
+- [ ] **Small cleanups in `useLocalRouteFeatureStates.ts`.**
+      - `:59` builds today's date by hand (`toISOString().split("T")[0]`, which
+        gives the UTC day) instead of calling `getTodayDateStr()`.
+      - It takes `loggedIn` and `dataAccess` separately, and a caller can pass a
+        pair that disagrees: a DB `dataAccess` with `loggedIn=false` silently
+        clears every state. Derive one from the other, or pass the user.
+
+## Refactoring
 
 - [ ] **Merge the logged-in and local logbook variants.** `JourneyLogger.tsx` and
       `LocalTripLogger.tsx` match line for line apart from the save call, trip

@@ -51,6 +51,18 @@ export function useStationSearch(region: RegionId) {
     [region],
   );
 
+  // A new region drops the old one's search: its results could be picked and
+  // flown to, and they lie outside the map's new bounds
+  // biome-ignore lint/correctness/useExhaustiveDependencies: region is the trigger; the setters are stable.
+  useEffect(() => {
+    searchRequestRef.current++;
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSuggestions(false);
+    setSelectedStationIndex(-1);
+    setIsSearching(false);
+  }, [region]);
+
   // Debounce search queries
   useEffect(() => {
     // Clear existing timeout
