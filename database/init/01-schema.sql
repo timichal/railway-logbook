@@ -79,7 +79,10 @@ CREATE TABLE user_trips (
     name TEXT NOT NULL CHECK (name != ''), -- User-defined trip name (required, non-empty)
     description TEXT, -- Optional trip description
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Target of user_journeys' composite FK, so a journey can only be filed
+    -- under a trip of its own user's (id alone is already unique).
+    CONSTRAINT user_trips_id_user_id_key UNIQUE (id, user_id)
 );
 
 -- User journeys (named, dated collections of routes)
@@ -89,16 +92,23 @@ CREATE TABLE user_journeys (
     name TEXT NOT NULL CHECK (name != ''), -- User-defined journey name (required, non-empty)
     description TEXT, -- Optional journey description
     date DATE NOT NULL, -- Journey date (required)
-    trip_id INTEGER REFERENCES user_trips(id) ON DELETE SET NULL, -- Optional trip grouping
+    trip_id INTEGER, -- Optional trip grouping (FK below)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Target of user_logged_parts' composite FK (see user_trips).
+    CONSTRAINT user_journeys_id_user_id_key UNIQUE (id, user_id),
+    -- A journey's trip must belong to the same user. Composite, so the schema
+    -- cannot hold a cross-user link whatever a query forgets to check. Deleting
+    -- the trip nulls trip_id alone: user_id is NOT NULL and stays.
+    CONSTRAINT user_journeys_trip_owner_fkey FOREIGN KEY (trip_id, user_id)
+        REFERENCES user_trips (id, user_id) ON DELETE SET NULL (trip_id)
 );
 
 -- User logged parts (connects journeys to routes with partial flags)
 CREATE TABLE user_logged_parts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    journey_id INTEGER NOT NULL REFERENCES user_journeys(id) ON DELETE CASCADE,
+    journey_id INTEGER NOT NULL, -- FK below
     track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE CASCADE, -- Deleted when the route is deleted
     partial BOOLEAN DEFAULT FALSE, -- Per-journey partial flag
     -- Which stretch of the route was ridden, as fractions along railway_routes.geometry
@@ -112,7 +122,10 @@ CREATE TABLE user_logged_parts (
     CONSTRAINT logged_parts_covered_range CHECK (
         (covered_start IS NULL) = (covered_end IS NULL)
         AND (covered_start IS NULL OR (covered_start >= 0 AND covered_end <= 1 AND covered_start < covered_end))
-    )
+    ),
+    -- A logged part belongs to the same user as its journey (see user_journeys).
+    CONSTRAINT user_logged_parts_journey_owner_fkey FOREIGN KEY (journey_id, user_id)
+        REFERENCES user_journeys (id, user_id) ON DELETE CASCADE
 );
 
 -- User preferences (for country filtering and other settings)

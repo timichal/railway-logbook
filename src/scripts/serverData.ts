@@ -261,6 +261,41 @@ async function refreshProximity(): Promise<void> {
   }
 }
 
+/**
+ * The restore skipped the foreign key checks, so the composite ownership FKs
+ * (see user_journeys in 01-schema.sql) went unchecked too, and a dump taken
+ * before they existed can carry a journey filed under another user's trip —
+ * which createJourney once allowed. Unfile those, as the migration that added
+ * the FKs did. A logged part whose user differs from its journey's was never
+ * producible by the app and has no obvious repair, so it is reported instead.
+ */
+async function repairOwnership(): Promise<void> {
+  const unfiled = await pool.query(`
+    UPDATE user_journeys uj
+    SET trip_id = NULL
+    FROM user_trips ut
+    WHERE ut.id = uj.trip_id AND ut.user_id <> uj.user_id
+    RETURNING uj.id
+  `);
+  if (unfiled.rows.length > 0) {
+    console.log(
+      `✓ Unfiled ${unfiled.rows.length} journey(s) from another user's trip: ${unfiled.rows.map((row) => row.id).join(", ")}`,
+    );
+  }
+
+  const foreignParts = await pool.query(`
+    SELECT ulp.id
+    FROM user_logged_parts ulp
+    JOIN user_journeys uj ON uj.id = ulp.journey_id
+    WHERE ulp.user_id <> uj.user_id
+  `);
+  if (foreignParts.rows.length > 0) {
+    throw new Error(
+      `Restored logged parts whose user differs from their journey's (resolve by hand): ${foreignParts.rows.map((row) => row.id).join(", ")}`,
+    );
+  }
+}
+
 async function printLocalCounts(tables: string[]): Promise<void> {
   const counts = await pool.query<Record<string, string>>(
     `SELECT ${tables.map((table) => `(SELECT count(*) FROM ${table}) AS ${table}`).join(", ")}`,
@@ -313,6 +348,7 @@ async function main(): Promise<void> {
         console.log("\nReplacing the local route data...");
         restore(containerFile, ROUTE_TABLES);
       });
+      await repairOwnership();
       await printLocalCounts(ROUTE_TABLES);
       await refreshProximity();
       console.log(
@@ -336,6 +372,7 @@ async function main(): Promise<void> {
       } finally {
         fs.rmSync(file, { force: true });
       }
+      await repairOwnership();
       await printLocalCounts(ALL_TABLES);
       break;
     }
@@ -350,6 +387,7 @@ async function main(): Promise<void> {
         console.log(`Replacing the local route data with ${fileArg}...`);
         restore(containerFile, ROUTE_TABLES);
       });
+      await repairOwnership();
       await printLocalCounts(ROUTE_TABLES);
       await refreshProximity();
       break;

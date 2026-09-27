@@ -94,7 +94,7 @@ Bearer token required.
 
 | | |
 | --- | --- |
-| `POST /journeys` | `{ name, date, description?, tripId?, routes }` → 201 `{ journey }`. Journey and logged parts commit together |
+| `POST /journeys` | `{ name, date, description?, tripId?, routes }` → 201 `{ journey }`. Journey and logged parts commit together. A `tripId` that is not one of the caller's own trips is a 404 `Trip not found`, and nothing is written |
 | `GET /journeys/:id` | `{ journey, routes }` — the routes carry the line `name` (where the region has one) plus `partial`, `covered_start`, `covered_end` |
 | `PATCH /journeys/:id` | `{ name, date, description? }` → `{ journey }` |
 | `DELETE /journeys/:id` | `{ success: true }`, logged parts included |

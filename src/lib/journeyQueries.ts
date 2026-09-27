@@ -119,6 +119,23 @@ export async function createJourneyForUser(
 
     await client.query("BEGIN");
 
+    // The trip must be the caller's own: tripId arrives from the client, and an
+    // unchecked one files this journey under someone else's trip. A trip that
+    // exists but isn't theirs answers exactly like one that doesn't exist. The
+    // composite FK on user_journeys (trip_id, user_id) enforces the same. FOR
+    // KEY SHARE holds off a concurrent delete of the trip until COMMIT, which
+    // would otherwise turn a passed check into an FK error on the insert.
+    if (tripId) {
+      const tripCheck = await client.query(
+        "SELECT 1 FROM user_trips WHERE id = $1 AND user_id = $2 FOR KEY SHARE",
+        [tripId, userId],
+      );
+      if (tripCheck.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return { journey: null, error: "Trip not found" };
+      }
+    }
+
     // Create journey
     const journeyResult = await client.query<Journey>(
       `INSERT INTO user_journeys (user_id, name, description, date, trip_id)

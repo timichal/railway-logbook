@@ -12,18 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Security (do these first)
 
-- [ ] **`createJourney` files a journey under someone else's trip.**
-      `src/lib/journeyQueries.ts:123-128`, reachable from `journeyActions` and
-      `POST /api/v1/journeys` through `tripId`. `trip_id` is inserted without an
-      ownership check, although `assignJourneyToTripForUser` does check.
-      `tripInRegionSql` (`src/lib/tripQueries.ts:34-42`) does not filter by user
-      either, so user A's journey changes which region B's trip is listed under,
-      and the FK error versus success reveals which trip ids exist. **Fix:** check
-      `user_trips.user_id` inside the transaction. As defence in depth, add
-      `UNIQUE (id, user_id)` on `user_trips` and `user_journeys`, then composite
-      FKs `(trip_id, user_id)` and `(journey_id, user_id)`, so the schema cannot
-      hold a cross-user link.
-
 - [ ] **The schema seeds the author's email and bcrypt hash into a public repo.**
       `database/init/01-schema.sql:17`. The hash can be cracked offline if the
       password is weak, and every fresh deployment gets that admin account.
