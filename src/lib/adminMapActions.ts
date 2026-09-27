@@ -1,7 +1,8 @@
 "use server";
 
 import { RailwayPathFinder } from "../scripts/lib/railwayPathFinder";
-import { requireAdmin } from "./authHelpers";
+import type { ActionResult } from "./actionResult";
+import { asAdmin } from "./authHelpers";
 import pool from "./db";
 import type { PathResult, RailwayPart } from "./shared/types";
 
@@ -12,26 +13,27 @@ import type { PathResult, RailwayPart } from "./shared/types";
 export async function findRailwayPathFromCoordinates(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
-): Promise<PathResult | null> {
-  await requireAdmin();
-
-  const pathFinder = new RailwayPathFinder();
-  return pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
+): Promise<ActionResult<PathResult | null>> {
+  return asAdmin(async () => {
+    const pathFinder = new RailwayPathFinder();
+    return pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
+  });
 }
 
 /**
  * Get railway parts by their IDs (used for route creation)
  */
-export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPart[]> {
-  await requireAdmin();
+export async function getRailwayPartsByIds(
+  partIds: string[],
+): Promise<ActionResult<RailwayPart[]>> {
+  return asAdmin(async () => {
+    if (partIds.length === 0) return [];
 
-  if (partIds.length === 0) return [];
+    const client = await pool.connect();
 
-  const client = await pool.connect();
-
-  try {
-    const placeholders = partIds.map((_, index) => `$${index + 1}`).join(",");
-    const queryStr = `
+    try {
+      const placeholders = partIds.map((_, index) => `$${index + 1}`).join(",");
+      const queryStr = `
       SELECT
         id,
         ST_AsGeoJSON(geometry) as geometry_json
@@ -40,26 +42,25 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
         AND geometry IS NOT NULL
     `;
 
-    const result = await client.query(queryStr, partIds);
+      const result = await client.query(queryStr, partIds);
 
-    const features: RailwayPart[] = result.rows.map((row) => {
-      const geom = JSON.parse(row.geometry_json);
-      return {
-        type: "Feature" as const,
-        geometry: geom,
-        properties: {
-          "@id": parseInt(row.id, 10),
-        },
-      } as RailwayPart;
-    });
+      const features: RailwayPart[] = result.rows.map((row) => {
+        const geom = JSON.parse(row.geometry_json);
+        return {
+          type: "Feature" as const,
+          geometry: geom,
+          properties: {
+            "@id": parseInt(row.id, 10),
+          },
+        } as RailwayPart;
+      });
 
-    return features;
-  } catch (error) {
-    console.error("Error fetching railway parts by IDs:", error);
-    throw new Error(
-      `Failed to fetch railway parts: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
-  } finally {
-    client.release();
-  }
+      return features;
+    } catch (error) {
+      console.error("Error fetching railway parts by IDs:", error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 }

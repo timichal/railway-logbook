@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { unwrap } from "@/lib/actionResult";
 import { getRailwayRoute } from "@/lib/adminRouteActions";
 import type { RailwayPart } from "@/lib/shared/types";
 import { calculateDistance } from "../utils/distance";
@@ -47,7 +48,7 @@ export function useRouteLength(
 
     const fetchRouteLength = async () => {
       try {
-        const route = await getRailwayRoute(selectedRouteId);
+        const route = unwrap(await getRailwayRoute(selectedRouteId));
         setSelectedRouteLength(route.length_km ? parseFloat(route.length_km) : null);
       } catch (error) {
         console.error("Error fetching route length:", error);

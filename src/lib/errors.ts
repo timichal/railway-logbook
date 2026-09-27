@@ -9,8 +9,8 @@
  *
  * On the web, throwing it is not enough: a production build replaces the message
  * of anything thrown out of a server function, so a thrown message never reaches
- * a form. A web action has to catch it and *return* `{ error }` — today only
- * `login`/`register` in `authActions.ts` do.
+ * a form. A web action has to catch it and *return* `{ error }` — which is what
+ * `asActionResult` (`actionResult.ts`) is for.
  */
 export class ValidationError extends Error {
   constructor(message: string) {

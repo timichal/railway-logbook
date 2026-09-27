@@ -4,6 +4,7 @@ import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import AdminLayerControls from "@/components/admin/AdminLayerControls";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { unwrap } from "@/lib/actionResult";
 import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
 import {
   adminNotesTileUrl,
@@ -225,6 +226,7 @@ export default function AdminMap({
   useEffect(() => {
     if (!mapLoaded) return;
     getAllRouteEndpoints(regionId)
+      .then(unwrap)
       .then(setRouteEndpoints)
       .catch((error) => console.error("Error fetching route endpoints:", error));
   }, [mapLoaded, refreshTrigger, regionId]);
@@ -233,6 +235,7 @@ export default function AdminMap({
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch the total on demand.
   useEffect(() => {
     getValidRoutesTotalKm(regionId)
+      .then(unwrap)
       .then(setValidRoutesTotalKm)
       .catch((error) => console.error("Error fetching valid routes total km:", error));
   }, [refreshTrigger, regionId]);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { unwrap } from "@/lib/actionResult";
 import { getAllAdminNotes, updateAdminNote } from "@/lib/adminNotesActions";
 import { useRegionId } from "@/lib/regionContext";
 import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/shared/constants";
@@ -31,7 +32,7 @@ export default function AdminNotesTab({
   const loadNotes = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await getAllAdminNotes(regionId);
+      const data = unwrap(await getAllAdminNotes(regionId));
       setNotes(data);
     } catch (error) {
       showError(
@@ -62,7 +63,7 @@ export default function AdminNotesTab({
   const handleTypeChange = async (note: AdminNote, newType: NoteType) => {
     setSavingId(note.id);
     try {
-      const updated = await updateAdminNote(note.id, note.text, newType, note.source);
+      const updated = unwrap(await updateAdminNote(note.id, note.text, newType, note.source));
       setNotes((prev) => prev.map((n) => (n.id === note.id ? updated : n)));
       showSuccess("Note type updated");
       onNoteChanged?.();

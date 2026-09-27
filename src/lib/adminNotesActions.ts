@@ -1,7 +1,9 @@
 "use server";
 
-import { requireAdmin } from "./authHelpers";
+import type { ActionResult } from "./actionResult";
+import { asAdmin } from "./authHelpers";
 import pool from "./db";
+import { ValidationError } from "./errors";
 import type { NoteType } from "./shared/constants";
 import { type RegionId, regionEnvelopeSql } from "./shared/regions";
 import type { AdminNote } from "./shared/types";
@@ -32,10 +34,9 @@ function rowToNote(row: AdminNoteRow): AdminNote {
  * Get the region's admin notes
  * Admin-only (user_id=1)
  */
-export async function getAllAdminNotes(region: RegionId): Promise<AdminNote[]> {
-  await requireAdmin();
-
-  const result = await pool.query<AdminNoteRow>(`
+export async function getAllAdminNotes(region: RegionId): Promise<ActionResult<AdminNote[]>> {
+  return asAdmin(async () => {
+    const result = await pool.query<AdminNoteRow>(`
     SELECT
       id,
       ST_AsGeoJSON(coordinate)::json as coordinate,
@@ -49,18 +50,18 @@ export async function getAllAdminNotes(region: RegionId): Promise<AdminNote[]> {
     ORDER BY updated_at DESC
   `);
 
-  return result.rows.map(rowToNote);
+    return result.rows.map(rowToNote);
+  });
 }
 
 /**
  * Get a single admin note by ID
  * Admin-only (user_id=1)
  */
-export async function getAdminNote(id: number): Promise<AdminNote | null> {
-  await requireAdmin();
-
-  const result = await pool.query<AdminNoteRow>(
-    `
+export async function getAdminNote(id: number): Promise<ActionResult<AdminNote | null>> {
+  return asAdmin(async () => {
+    const result = await pool.query<AdminNoteRow>(
+      `
     SELECT
       id,
       ST_AsGeoJSON(coordinate)::json as coordinate,
@@ -72,14 +73,15 @@ export async function getAdminNote(id: number): Promise<AdminNote | null> {
     FROM admin_notes
     WHERE id = $1
   `,
-    [id],
-  );
+      [id],
+    );
 
-  if (result.rows.length === 0) {
-    return null;
-  }
+    if (result.rows.length === 0) {
+      return null;
+    }
 
-  return rowToNote(result.rows[0]);
+    return rowToNote(result.rows[0]);
+  });
 }
 
 /**
@@ -91,13 +93,12 @@ export async function createAdminNote(
   text: string,
   noteType: NoteType,
   source: string | null = null,
-): Promise<AdminNote> {
-  await requireAdmin();
+): Promise<ActionResult<AdminNote>> {
+  return asAdmin(async () => {
+    const [lng, lat] = coordinate;
 
-  const [lng, lat] = coordinate;
-
-  const result = await pool.query<AdminNoteRow>(
-    `
+    const result = await pool.query<AdminNoteRow>(
+      `
     INSERT INTO admin_notes (coordinate, text, note_type, source)
     VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, $4, $5)
     RETURNING
@@ -109,10 +110,11 @@ export async function createAdminNote(
       created_at,
       updated_at
   `,
-    [lng, lat, text, noteType, source],
-  );
+      [lng, lat, text, noteType, source],
+    );
 
-  return rowToNote(result.rows[0]);
+    return rowToNote(result.rows[0]);
+  });
 }
 
 /**
@@ -124,11 +126,10 @@ export async function updateAdminNote(
   text: string,
   noteType: NoteType,
   source: string | null = null,
-): Promise<AdminNote> {
-  await requireAdmin();
-
-  const result = await pool.query<AdminNoteRow>(
-    `
+): Promise<ActionResult<AdminNote>> {
+  return asAdmin(async () => {
+    const result = await pool.query<AdminNoteRow>(
+      `
     UPDATE admin_notes
     SET text = $1, note_type = $2, source = $3
     WHERE id = $4
@@ -141,32 +142,33 @@ export async function updateAdminNote(
       created_at,
       updated_at
   `,
-    [text, noteType, source, id],
-  );
+      [text, noteType, source, id],
+    );
 
-  if (result.rows.length === 0) {
-    throw new Error("Note not found");
-  }
+    if (result.rows.length === 0) {
+      throw new ValidationError("Note not found");
+    }
 
-  return rowToNote(result.rows[0]);
+    return rowToNote(result.rows[0]);
+  });
 }
 
 /**
  * Delete an admin note
  * Admin-only (user_id=1)
  */
-export async function deleteAdminNote(id: number): Promise<void> {
-  await requireAdmin();
-
-  const result = await pool.query(
-    `
+export async function deleteAdminNote(id: number): Promise<ActionResult<void>> {
+  return asAdmin(async () => {
+    const result = await pool.query(
+      `
     DELETE FROM admin_notes
     WHERE id = $1
   `,
-    [id],
-  );
+      [id],
+    );
 
-  if (result.rowCount === 0) {
-    throw new Error("Note not found");
-  }
+    if (result.rowCount === 0) {
+      throw new ValidationError("Note not found");
+    }
+  });
 }

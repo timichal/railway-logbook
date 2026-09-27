@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import TagInput from "@/components/ui/TagInput";
+import { unwrap } from "@/lib/actionResult";
 import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
 import { handleJunctionShortcut } from "@/lib/junctionShortcut";
@@ -161,11 +162,13 @@ export default function AdminCreateRouteTab({
 
     try {
       // Use coordinate-based server action to find path
-      const result = await findRailwayPathFromCoordinates(startingCoordinate, endingCoordinate);
+      const result = unwrap(
+        await findRailwayPathFromCoordinates(startingCoordinate, endingCoordinate),
+      );
 
       if (result) {
         // Fetch the actual railway part geometries from the database
-        const railwayParts = await getRailwayPartsByIds(result.partIds);
+        const railwayParts = unwrap(await getRailwayPartsByIds(result.partIds));
 
         onPreviewRoute({
           partIds: result.partIds,
@@ -236,26 +239,28 @@ export default function AdminCreateRouteTab({
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
       // Metadata (name, description, usage_type, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
-      await saveRailwayRoute(
-        {
-          name: "",
-          from_station: "",
-          to_station: "",
-          description: "",
-          usage_type: 0,
-          frequency: [],
-          link: "",
-          scenic: false,
-          intended_backtracking: false,
-        }, // Dummy data, not used in UPDATE mode
-        {
-          partIds: previewRoute.partIds,
-          coordinates: previewRoute.coordinates,
-          hasBacktracking: previewRoute.hasBacktracking,
-        },
-        previewRoute.startCoordinate,
-        previewRoute.endCoordinate,
-        editingGeometryForTrackId, // Pass track ID to trigger UPDATE query
+      unwrap(
+        await saveRailwayRoute(
+          {
+            name: "",
+            from_station: "",
+            to_station: "",
+            description: "",
+            usage_type: 0,
+            frequency: [],
+            link: "",
+            scenic: false,
+            intended_backtracking: false,
+          }, // Dummy data, not used in UPDATE mode
+          {
+            partIds: previewRoute.partIds,
+            coordinates: previewRoute.coordinates,
+            hasBacktracking: previewRoute.hasBacktracking,
+          },
+          previewRoute.startCoordinate,
+          previewRoute.endCoordinate,
+          editingGeometryForTrackId, // Pass track ID to trigger UPDATE query
+        ),
       );
 
       showSuccess("Route geometry updated successfully!");

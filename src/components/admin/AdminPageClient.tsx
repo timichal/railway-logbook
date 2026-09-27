@@ -13,6 +13,7 @@ import AdminSidebar from "@/components/admin/AdminSidebar";
 import Navbar from "@/components/layout/Navbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
+import { unwrap } from "@/lib/actionResult";
 import { saveRailwayRoute } from "@/lib/adminRouteActions";
 import { logout } from "@/lib/authActions";
 import { RegionProvider, useRegionId } from "@/lib/regionContext";
@@ -154,15 +155,17 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     }
 
     try {
-      const trackId = await saveRailwayRoute(
-        routeData,
-        {
-          partIds: previewRoute.partIds,
-          coordinates: previewRoute.coordinates,
-          hasBacktracking: previewRoute.hasBacktracking,
-        },
-        previewRoute.startCoordinate,
-        previewRoute.endCoordinate,
+      const trackId = unwrap(
+        await saveRailwayRoute(
+          routeData,
+          {
+            partIds: previewRoute.partIds,
+            coordinates: previewRoute.coordinates,
+            hasBacktracking: previewRoute.hasBacktracking,
+          },
+          previewRoute.startCoordinate,
+          previewRoute.endCoordinate,
+        ),
       );
 
       // Clear the picked points and the preview; the form clears its own fields

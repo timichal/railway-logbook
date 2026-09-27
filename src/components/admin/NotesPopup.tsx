@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { unwrap } from "@/lib/actionResult";
 import { createAdminNote, deleteAdminNote, updateAdminNote } from "@/lib/adminNotesActions";
 import { type NoteType, noteTypeOptions } from "@/lib/shared/constants";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
@@ -68,10 +69,10 @@ export default function NotesPopup({
     try {
       const trimmedSource = source.trim() || null;
       if (noteId) {
-        await updateAdminNote(noteId, text.trim(), noteType, trimmedSource);
+        unwrap(await updateAdminNote(noteId, text.trim(), noteType, trimmedSource));
         showSuccess("Note updated successfully");
       } else {
-        await createAdminNote(coordinate, text.trim(), noteType, trimmedSource);
+        unwrap(await createAdminNote(coordinate, text.trim(), noteType, trimmedSource));
         showSuccess("Note created successfully");
       }
       onSaved();
@@ -90,7 +91,7 @@ export default function NotesPopup({
     busyRef.current = true;
     setIsDeleting(true);
     try {
-      await deleteAdminNote(noteId);
+      unwrap(await deleteAdminNote(noteId));
       showSuccess("Note deleted successfully");
       onSaved();
       onClose();

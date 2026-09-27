@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RouteEditForm from "@/components/admin/RouteEditForm";
 import RoutesList from "@/components/admin/RoutesList";
+import { unwrap } from "@/lib/actionResult";
 import {
   deleteRailwayRoute,
   duplicateRailwayRoute,
@@ -87,7 +88,7 @@ export default function AdminRoutesTab({
   const loadRoutes = async () => {
     try {
       setIsLoading(true);
-      const routesData = await getAllRailwayRoutes(regionId);
+      const routesData = unwrap(await getAllRailwayRoutes(regionId));
       setRoutes(routesData);
     } catch (error) {
       console.error("Error loading routes:", error);
@@ -185,7 +186,7 @@ export default function AdminRoutesTab({
       const requestId = ++routeRequestRef.current;
       try {
         setIsLoading(true);
-        const routeDetail = await getRailwayRoute(trackId);
+        const routeDetail = unwrap(await getRailwayRoute(trackId));
         if (requestId !== routeRequestRef.current) return;
         setSelectedRoute(routeDetail);
         setEditForm(editFormFromRoute(routeDetail));
@@ -244,18 +245,20 @@ export default function AdminRoutesTab({
 
     setIsLoading(true);
     try {
-      await updateRailwayRoute(
-        trackId,
-        editForm.name.trim() || null,
-        editForm.from_station.trim(),
-        editForm.to_station.trim(),
-        editForm.description || null,
-        editForm.usage_type,
-        editForm.frequency,
-        editForm.link || null,
-        editForm.scenic,
-        editForm.line_class,
-        editForm.intended_backtracking,
+      unwrap(
+        await updateRailwayRoute(
+          trackId,
+          editForm.name.trim() || null,
+          editForm.from_station.trim(),
+          editForm.to_station.trim(),
+          editForm.description || null,
+          editForm.usage_type,
+          editForm.frequency,
+          editForm.link || null,
+          editForm.scenic,
+          editForm.line_class,
+          editForm.intended_backtracking,
+        ),
       );
     } catch (error) {
       console.error("Error updating route:", error);
@@ -278,7 +281,7 @@ export default function AdminRoutesTab({
     // screen. One after the other, so the list reload's own `setIsLoading(false)`
     // is the last thing to run and the form stays disabled until both are in.
     try {
-      const routeDetail = await getRailwayRoute(trackId);
+      const routeDetail = unwrap(await getRailwayRoute(trackId));
       setSelectedRoute(routeDetail);
       setEditForm(editFormFromRoute(routeDetail));
     } catch (error) {
@@ -295,7 +298,7 @@ export default function AdminRoutesTab({
 
     try {
       setIsLoading(true);
-      await setRouteUnderRepair(selectedRoute.track_id, underRepair);
+      unwrap(await setRouteUnderRepair(selectedRoute.track_id, underRepair));
 
       setSelectedRoute({ ...selectedRoute, under_repair: underRepair });
       await loadRoutes();
@@ -329,7 +332,7 @@ export default function AdminRoutesTab({
 
     try {
       setIsLoading(true);
-      await deleteRailwayRoute(selectedRoute.track_id);
+      unwrap(await deleteRailwayRoute(selectedRoute.track_id));
 
       await loadRoutes();
 
@@ -365,7 +368,7 @@ export default function AdminRoutesTab({
 
     try {
       setIsLoading(true);
-      const newTrackId = await duplicateRailwayRoute(selectedRoute.track_id);
+      const newTrackId = unwrap(await duplicateRailwayRoute(selectedRoute.track_id));
 
       await loadRoutes();
 

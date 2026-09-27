@@ -17,9 +17,9 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { type ActionResult, asActionResult } from "./actionResult";
 import { authenticateUser, registerUser } from "./authQueries";
 import { COOKIE_NAME, createToken, type User } from "./authTokens";
-import { RateLimitError, ValidationError } from "./errors";
 import { enforceLoginRateLimit, enforceRegisterRateLimit } from "./rateLimit";
 import { verifyToken } from "./sessionQueries";
 
@@ -57,28 +57,11 @@ export async function getUser(): Promise<User | null> {
 }
 
 /**
- * What the two forms get back. A rejection is *returned*, not thrown: a
- * production build replaces the message of anything thrown out of a server
- * function with a generic "An error occurred in the Server Components render",
- * so a wrong password would read the same as a crash. Only the two classes whose
- * messages are written for the user are caught; anything else still throws and
- * stays opaque, as it should.
+ * A rejection is *returned*, not thrown, or a wrong password would read the same
+ * as a crash in production (see `actionResult.ts`).
  */
-export type AuthResult = { user: User; error?: undefined } | { user?: undefined; error: string };
-
-async function asAuthResult(attempt: () => Promise<User>): Promise<AuthResult> {
-  try {
-    return { user: await attempt() };
-  } catch (error) {
-    if (error instanceof ValidationError || error instanceof RateLimitError) {
-      return { error: error.message };
-    }
-    throw error;
-  }
-}
-
-export async function login(formData: FormData): Promise<AuthResult> {
-  return asAuthResult(async () => {
+export async function login(formData: FormData): Promise<ActionResult<User>> {
+  return asActionResult(async () => {
     enforceLoginRateLimit(await headers());
 
     const email = formData.get("email") as string;
@@ -93,8 +76,8 @@ export async function login(formData: FormData): Promise<AuthResult> {
 export async function register(
   formData: FormData,
   localPreferences?: string[],
-): Promise<AuthResult> {
-  return asAuthResult(async () => {
+): Promise<ActionResult<User>> {
+  return asActionResult(async () => {
     enforceRegisterRateLimit(await headers());
 
     const user = await registerUser(

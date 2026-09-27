@@ -1,10 +1,12 @@
 "use server";
 
 import type { PoolClient } from "pg";
-import { requireAdmin } from "./authHelpers";
+import type { ActionResult } from "./actionResult";
+import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool, { query } from "./db";
+import { ValidationError } from "./errors";
 import type { LineClass, UsageType } from "./shared/constants";
 import { type RegionId, regionEnvelopeSql } from "./shared/regions";
 import { MAX_TOLERANCE_FRACTION, UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
@@ -36,9 +38,8 @@ export interface SaveRouteData {
  * they were drawn in.
  */
 export async function getAllRailwayRoutes(region: RegionId) {
-  await requireAdmin();
-
-  const result = await query(`
+  return asAdmin(async () => {
+    const result = await query(`
     SELECT track_id, name, from_station, to_station, description, usage_type, scenic, line_class,
            starting_part_id, ending_part_id, is_valid, error_message, under_repair,
            intended_backtracking, has_backtracking
@@ -47,24 +48,25 @@ export async function getAllRailwayRoutes(region: RegionId) {
     ORDER BY from_station, to_station
   `);
 
-  return result.rows;
+    return result.rows;
+  });
 }
 
 /**
  * Get the total length (km) of the region's valid routes. Powers the admin map
  * km counter, which sits beside a map showing that region alone.
  */
-export async function getValidRoutesTotalKm(region: RegionId): Promise<number> {
-  await requireAdmin();
-
-  const result = await query(`
+export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionResult<number>> {
+  return asAdmin(async () => {
+    const result = await query(`
     SELECT COALESCE(SUM(length_km), 0) AS total_km
     FROM railway_routes
     WHERE is_valid = true
       AND geometry && ${regionEnvelopeSql(region)}
   `);
 
-  return Math.round((parseFloat(result.rows[0].total_km) || 0) * 10) / 10;
+    return Math.round((parseFloat(result.rows[0].total_km) || 0) * 10) / 10;
+  });
 }
 
 /**
@@ -73,27 +75,26 @@ export async function getValidRoutesTotalKm(region: RegionId): Promise<number> {
  * references it, so dropping the last usage of a tag removes it implicitly.
  * Used to power the tag-label autocomplete in the route editor.
  */
-export async function getFrequencyTags(): Promise<string[]> {
-  await requireAdmin();
-
-  const result = await query(`
+export async function getFrequencyTags(): Promise<ActionResult<string[]>> {
+  return asAdmin(async () => {
+    const result = await query(`
     SELECT DISTINCT tag
     FROM railway_routes, unnest(frequency) AS tag
     WHERE tag IS NOT NULL AND tag <> ''
     ORDER BY tag
   `);
 
-  return result.rows.map((row) => row.tag as string);
+    return result.rows.map((row) => row.tag as string);
+  });
 }
 
 /**
  * Get a single railway route by track_id
  */
 export async function getRailwayRoute(trackId: number) {
-  await requireAdmin();
-
-  const result = await query(
-    `
+  return asAdmin(async () => {
+    const result = await query(
+      `
     SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, scenic, line_class,
            ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
@@ -102,48 +103,50 @@ export async function getRailwayRoute(trackId: number) {
     FROM railway_routes
     WHERE track_id = $1
   `,
-    [trackId],
-  );
+      [trackId],
+    );
 
-  if (result.rows.length === 0) {
-    throw new Error("Route not found");
-  }
-
-  const row = result.rows[0];
-
-  // Parse coordinate JSON if they exist
-  let startingCoordinate = null;
-  let endingCoordinate = null;
-
-  if (row.starting_coordinate_json) {
-    const geojson = JSON.parse(row.starting_coordinate_json);
-    if (geojson.type === "Point" && geojson.coordinates) {
-      startingCoordinate = geojson.coordinates as [number, number];
+    if (result.rows.length === 0) {
+      throw new ValidationError("Route not found");
     }
-  }
 
-  if (row.ending_coordinate_json) {
-    const geojson = JSON.parse(row.ending_coordinate_json);
-    if (geojson.type === "Point" && geojson.coordinates) {
-      endingCoordinate = geojson.coordinates as [number, number];
+    const row = result.rows[0];
+
+    // Parse coordinate JSON if they exist
+    let startingCoordinate = null;
+    let endingCoordinate = null;
+
+    if (row.starting_coordinate_json) {
+      const geojson = JSON.parse(row.starting_coordinate_json);
+      if (geojson.type === "Point" && geojson.coordinates) {
+        startingCoordinate = geojson.coordinates as [number, number];
+      }
     }
-  }
 
-  return {
-    ...row,
-    starting_coordinate: startingCoordinate,
-    ending_coordinate: endingCoordinate,
-  };
+    if (row.ending_coordinate_json) {
+      const geojson = JSON.parse(row.ending_coordinate_json);
+      if (geojson.type === "Point" && geojson.coordinates) {
+        endingCoordinate = geojson.coordinates as [number, number];
+      }
+    }
+
+    return {
+      ...row,
+      starting_coordinate: startingCoordinate,
+      ending_coordinate: endingCoordinate,
+    };
+  });
 }
 
 /**
  * Get the region's route endpoints (starting and ending coordinates) for map
  * display. Returns GeoJSON FeatureCollection of Point features.
  */
-export async function getAllRouteEndpoints(region: RegionId): Promise<GeoJSONFeatureCollection> {
-  await requireAdmin();
-
-  const result = await query(`
+export async function getAllRouteEndpoints(
+  region: RegionId,
+): Promise<ActionResult<GeoJSONFeatureCollection>> {
+  return asAdmin(async () => {
+    const result = await query(`
     SELECT
       track_id,
       from_station,
@@ -155,48 +158,49 @@ export async function getAllRouteEndpoints(region: RegionId): Promise<GeoJSONFea
       AND geometry && ${regionEnvelopeSql(region)}
   `);
 
-  const features: GeoJSONFeature[] = [];
+    const features: GeoJSONFeature[] = [];
 
-  for (const row of result.rows) {
-    // Parse starting coordinate
-    if (row.starting_coordinate_json) {
-      const geojson = JSON.parse(row.starting_coordinate_json);
-      if (geojson.type === "Point" && geojson.coordinates) {
-        features.push({
-          type: "Feature" as const,
-          geometry: geojson,
-          properties: {
-            track_id: row.track_id,
-            endpoint_type: "start",
-            station_name: row.from_station,
-            route_name: `${row.from_station} ⟷ ${row.to_station}`,
-          },
-        });
+    for (const row of result.rows) {
+      // Parse starting coordinate
+      if (row.starting_coordinate_json) {
+        const geojson = JSON.parse(row.starting_coordinate_json);
+        if (geojson.type === "Point" && geojson.coordinates) {
+          features.push({
+            type: "Feature" as const,
+            geometry: geojson,
+            properties: {
+              track_id: row.track_id,
+              endpoint_type: "start",
+              station_name: row.from_station,
+              route_name: `${row.from_station} ⟷ ${row.to_station}`,
+            },
+          });
+        }
+      }
+
+      // Parse ending coordinate
+      if (row.ending_coordinate_json) {
+        const geojson = JSON.parse(row.ending_coordinate_json);
+        if (geojson.type === "Point" && geojson.coordinates) {
+          features.push({
+            type: "Feature" as const,
+            geometry: geojson,
+            properties: {
+              track_id: row.track_id,
+              endpoint_type: "end",
+              station_name: row.to_station,
+              route_name: `${row.from_station} ⟷ ${row.to_station}`,
+            },
+          });
+        }
       }
     }
 
-    // Parse ending coordinate
-    if (row.ending_coordinate_json) {
-      const geojson = JSON.parse(row.ending_coordinate_json);
-      if (geojson.type === "Point" && geojson.coordinates) {
-        features.push({
-          type: "Feature" as const,
-          geometry: geojson,
-          properties: {
-            track_id: row.track_id,
-            endpoint_type: "end",
-            station_name: row.to_station,
-            route_name: `${row.from_station} ⟷ ${row.to_station}`,
-          },
-        });
-      }
-    }
-  }
-
-  return {
-    type: "FeatureCollection",
-    features,
-  };
+    return {
+      type: "FeatureCollection",
+      features,
+    };
+  });
 }
 
 /**
@@ -350,42 +354,41 @@ export async function saveRailwayRoute(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
   trackId?: number,
-): Promise<number> {
-  await requireAdmin();
+): Promise<ActionResult<number>> {
+  return asAdmin(async () => {
+    const client = await pool.connect();
 
-  const client = await pool.connect();
+    try {
+      // The write, the line_class reclassification and the station-proximity
+      // refresh are one change: a failure between them would leave the route at
+      // the default 'branch', or the user map showing stations no route reaches.
+      await client.query("BEGIN");
 
-  try {
-    // The write, the line_class reclassification and the station-proximity
-    // refresh are one change: a failure between them would leave the route at
-    // the default 'branch', or the user map showing stations no route reaches.
-    await client.query("BEGIN");
+      // Use the truncated/merged coordinates from pathResult
+      // The pathfinder already handles truncation and merging correctly
+      const sortedCoordinates = pathResult.coordinates;
 
-    // Use the truncated/merged coordinates from pathResult
-    // The pathfinder already handles truncation and merging correctly
-    const sortedCoordinates = pathResult.coordinates;
+      // Create LineString geometry from coordinates
+      const geometryWKT = coordinatesToWKT(sortedCoordinates);
 
-    // Create LineString geometry from coordinates
-    const geometryWKT = coordinatesToWKT(sortedCoordinates);
+      // Create POINT WKT for start and end coordinates
+      const startPointWKT = `POINT(${startCoordinate[0]} ${startCoordinate[1]})`;
+      const endPointWKT = `POINT(${endCoordinate[0]} ${endCoordinate[1]})`;
 
-    // Create POINT WKT for start and end coordinates
-    const startPointWKT = `POINT(${startCoordinate[0]} ${startCoordinate[1]})`;
-    const endPointWKT = `POINT(${endCoordinate[0]} ${endCoordinate[1]})`;
+      // Determine countries from route geometry
+      const { startCountry, endCountry } = getRouteCountries({
+        type: "LineString",
+        coordinates: sortedCoordinates,
+      });
 
-    // Determine countries from route geometry
-    const { startCountry, endCountry } = getRouteCountries({
-      type: "LineString",
-      coordinates: sortedCoordinates,
-    });
+      let queryStr: string;
+      let values: (string | number | string[] | boolean | null)[];
 
-    let queryStr: string;
-    let values: (string | number | string[] | boolean | null)[];
-
-    if (trackId) {
-      // Update existing route - only update geometry, length, coordinates, countries, validity, and backtracking flag
-      // Keep name, description, usage_type unchanged
-      // Set part_id fields to NULL (deprecated)
-      queryStr = `
+      if (trackId) {
+        // Update existing route - only update geometry, length, coordinates, countries, validity, and backtracking flag
+        // Keep name, description, usage_type unchanged
+        // Set part_id fields to NULL (deprecated)
+        queryStr = `
         UPDATE railway_routes
         SET
           geometry = ST_GeomFromText($1, 4326),
@@ -405,19 +408,19 @@ export async function saveRailwayRoute(
         RETURNING track_id
       `;
 
-      values = [
-        geometryWKT,
-        startCountry,
-        endCountry,
-        startPointWKT,
-        endPointWKT,
-        pathResult.hasBacktracking || false,
-        trackId,
-      ];
-    } else {
-      // Insert new route with auto-generated track_id
-      // Set part_id fields to NULL (deprecated)
-      queryStr = `
+        values = [
+          geometryWKT,
+          startCountry,
+          endCountry,
+          startPointWKT,
+          endPointWKT,
+          pathResult.hasBacktracking || false,
+          trackId,
+        ];
+      } else {
+        // Insert new route with auto-generated track_id
+        // Set part_id fields to NULL (deprecated)
+        queryStr = `
         INSERT INTO railway_routes (
           name,
           from_station,
@@ -462,48 +465,48 @@ export async function saveRailwayRoute(
         RETURNING track_id
       `;
 
-      values = [
-        routeData.name.trim() || null,
-        routeData.from_station,
-        routeData.to_station,
-        routeData.description || null,
-        routeData.usage_type,
-        routeData.frequency || [],
-        routeData.link || null,
-        routeData.scenic,
-        geometryWKT,
-        startCountry,
-        endCountry,
-        startPointWKT,
-        endPointWKT,
-        routeData.intended_backtracking,
-        pathResult.hasBacktracking || false,
-      ];
-    }
+        values = [
+          routeData.name.trim() || null,
+          routeData.from_station,
+          routeData.to_station,
+          routeData.description || null,
+          routeData.usage_type,
+          routeData.frequency || [],
+          routeData.link || null,
+          routeData.scenic,
+          geometryWKT,
+          startCountry,
+          endCountry,
+          startPointWKT,
+          endPointWKT,
+          routeData.intended_backtracking,
+          pathResult.hasBacktracking || false,
+        ];
+      }
 
-    // For an edit, the stations along the route's *current* geometry are collected
-    // first: the new geometry may run elsewhere, leaving them without a route
-    const stationsOnOldGeometry = trackId ? await getStationsNearRoute(client, trackId) : [];
+      // For an edit, the stations along the route's *current* geometry are collected
+      // first: the new geometry may run elsewhere, leaving them without a route
+      const stationsOnOldGeometry = trackId ? await getStationsNearRoute(client, trackId) : [];
 
-    // Likewise the partial rides: their fractions are positions along the
-    // current geometry, so they are moved onto the new one before it is written
-    if (trackId) {
-      await reprojectCoveredRanges(
-        client,
-        trackId,
-        geometryWKT,
-        pathResult.hasBacktracking || false,
-      );
-    }
+      // Likewise the partial rides: their fractions are positions along the
+      // current geometry, so they are moved onto the new one before it is written
+      if (trackId) {
+        await reprojectCoveredRanges(
+          client,
+          trackId,
+          geometryWKT,
+          pathResult.hasBacktracking || false,
+        );
+      }
 
-    const result = await client.query(queryStr, values);
-    if (result.rowCount === 0) {
-      // Only an edit can match nothing: the route was deleted since it was opened
-      throw new Error(`Route ${trackId} no longer exists`);
-    }
-    const savedTrackId = result.rows[0].track_id;
+      const result = await client.query(queryStr, values);
+      if (result.rowCount === 0) {
+        // Only an edit can match nothing: the route was deleted since it was opened
+        throw new ValidationError(`Route ${trackId} no longer exists`);
+      }
+      const savedTrackId = result.rows[0].track_id;
 
-    const classifyLineClassSQL = `
+      const classifyLineClassSQL = `
       WITH part_lengths AS (
         SELECT
           rp.highspeed,
@@ -528,29 +531,31 @@ export async function saveRailwayRoute(
       WHERE track_id = $1
     `;
 
-    await client.query(classifyLineClassSQL, [savedTrackId]);
-    // Stations the user map draws follow the routes, so a new or moved route
-    // reveals (or hides) the stations along it right away
-    await refreshStationProximityFor(client, {
-      trackId: savedTrackId,
-      stationIds: stationsOnOldGeometry,
-    });
+      await client.query(classifyLineClassSQL, [savedTrackId]);
+      // Stations the user map draws follow the routes, so a new or moved route
+      // reveals (or hides) the stations along it right away
+      await refreshStationProximityFor(client, {
+        trackId: savedTrackId,
+        stationIds: stationsOnOldGeometry,
+      });
 
-    await client.query("COMMIT");
-    console.log(
-      `${trackId ? "Updated" : "Saved"} railway route ${savedTrackId}: ${routeData.name.trim() || `${routeData.from_station} ⟷ ${routeData.to_station}`}`,
-    );
+      await client.query("COMMIT");
+      console.log(
+        `${trackId ? "Updated" : "Saved"} railway route ${savedTrackId}: ${routeData.name.trim() || `${routeData.from_station} ⟷ ${routeData.to_station}`}`,
+      );
 
-    return savedTrackId as number;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Error saving railway route:", error);
-    throw new Error(
-      `Failed to save route: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
-  } finally {
-    client.release();
-  }
+      return savedTrackId as number;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      // A ValidationError is an answer for the admin, not a fault for the log
+      if (!(error instanceof ValidationError)) {
+        console.error("Error saving railway route:", error);
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 }
 
 /**
@@ -570,31 +575,36 @@ export async function updateRailwayRoute(
   scenic: boolean,
   lineClass: LineClass,
   intendedBacktracking: boolean,
-) {
-  await requireAdmin();
-
-  await query(
-    `
+): Promise<ActionResult<void>> {
+  return asAdmin(async () => {
+    const result = await query(
+      `
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
         link = $8, scenic = $9, line_class = $10, intended_backtracking = $11, is_valid = TRUE,
         error_message = NULL, under_repair = FALSE, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1
   `,
-    [
-      trackId,
-      name,
-      fromStation,
-      toStation,
-      description,
-      usageType,
-      frequency || [],
-      link,
-      scenic,
-      lineClass,
-      intendedBacktracking,
-    ],
-  );
+      [
+        trackId,
+        name,
+        fromStation,
+        toStation,
+        description,
+        usageType,
+        frequency || [],
+        link,
+        scenic,
+        lineClass,
+        intendedBacktracking,
+      ],
+    );
+
+    // Deleted since it was opened (another tab, a split finished elsewhere)
+    if (result.rowCount === 0) {
+      throw new ValidationError("Route not found");
+    }
+  });
 }
 
 /**
@@ -610,21 +620,26 @@ export async function updateRailwayRoute(
  * the moment a route becomes valid again — on geometry re-pick, metadata save
  * and successful recalculation alike.
  */
-export async function setRouteUnderRepair(trackId: number, underRepair: boolean): Promise<void> {
-  await requireAdmin();
-
-  const result = await query(
-    `
+export async function setRouteUnderRepair(
+  trackId: number,
+  underRepair: boolean,
+): Promise<ActionResult<void>> {
+  return asAdmin(async () => {
+    const result = await query(
+      `
     UPDATE railway_routes
     SET under_repair = $2, updated_at = CURRENT_TIMESTAMP
     WHERE track_id = $1 AND ($2 = FALSE OR is_valid = FALSE)
   `,
-    [trackId, underRepair],
-  );
+      [trackId, underRepair],
+    );
 
-  if (result.rowCount === 0) {
-    throw new Error("Route not found, or it is valid and cannot be marked under repair");
-  }
+    if (result.rowCount === 0) {
+      throw new ValidationError(
+        "Route not found, or it is valid and cannot be marked under repair",
+      );
+    }
+  });
 }
 
 /**
@@ -646,18 +661,17 @@ export async function setRouteUnderRepair(trackId: number, underRepair: boolean)
  * deletes it from the half it doesn't reach (`reprojectCoveredRanges`). Finish
  * the split — a duplicate left un-split double-counts.
  */
-export async function duplicateRailwayRoute(trackId: number): Promise<number> {
-  await requireAdmin();
+export async function duplicateRailwayRoute(trackId: number): Promise<ActionResult<number>> {
+  return asAdmin(async () => {
+    const client = await pool.connect();
 
-  const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-  try {
-    await client.query("BEGIN");
-
-    // Clone the route row (track_id is SERIAL; created_at/updated_at default;
-    // the Web Mercator geom columns are repopulated by the INSERT triggers).
-    const insertRoute = await client.query(
-      `
+      // Clone the route row (track_id is SERIAL; created_at/updated_at default;
+      // the Web Mercator geom columns are repopulated by the INSERT triggers).
+      const insertRoute = await client.query(
+        `
       INSERT INTO railway_routes (
         name, from_station, to_station, description, usage_type, frequency, link, scenic,
         line_class, geometry, length_km, start_country, end_country,
@@ -674,80 +688,83 @@ export async function duplicateRailwayRoute(trackId: number): Promise<number> {
       WHERE track_id = $1
       RETURNING track_id
       `,
-      [trackId],
-    );
+        [trackId],
+      );
 
-    if (insertRoute.rows.length === 0) {
-      throw new Error(`Route with track_id ${trackId} not found`);
-    }
+      if (insertRoute.rows.length === 0) {
+        throw new ValidationError(`Route with track_id ${trackId} not found`);
+      }
 
-    const newTrackId = insertRoute.rows[0].track_id as number;
+      const newTrackId = insertRoute.rows[0].track_id as number;
 
-    // Clone the user logs, remapping track_id to the new route.
-    await client.query(
-      `
+      // Clone the user logs, remapping track_id to the new route.
+      await client.query(
+        `
       INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end, created_at)
       SELECT user_id, journey_id, $2, partial, covered_start, covered_end, created_at
       FROM user_logged_parts
       WHERE track_id = $1
       `,
-      [trackId, newTrackId],
-    );
+        [trackId, newTrackId],
+      );
 
-    await client.query("COMMIT");
+      await client.query("COMMIT");
 
-    console.log("Duplicated railway route", trackId, "→", newTrackId);
-    return newTrackId;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Error duplicating railway route:", error);
-    throw new Error(
-      `Failed to duplicate route: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
-  } finally {
-    client.release();
-  }
+      console.log("Duplicated railway route", trackId, "→", newTrackId);
+      return newTrackId;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      // A ValidationError is an answer for the admin, not a fault for the log
+      if (!(error instanceof ValidationError)) {
+        console.error("Error duplicating railway route:", error);
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 }
 
 /**
  * Delete a railway route
  */
-export async function deleteRailwayRoute(trackId: number): Promise<void> {
-  await requireAdmin();
+export async function deleteRailwayRoute(trackId: number): Promise<ActionResult<void>> {
+  return asAdmin(async () => {
+    const client = await pool.connect();
 
-  const client = await pool.connect();
+    try {
+      // As in saveRailwayRoute: the delete and the proximity refresh are one
+      // change, and the stations it needs can no longer be found afterwards.
+      await client.query("BEGIN");
 
-  try {
-    // As in saveRailwayRoute: the delete and the proximity refresh are one
-    // change, and the stations it needs can no longer be found afterwards.
-    await client.query("BEGIN");
+      console.log("Deleting railway route with track_id:", trackId);
 
-    console.log("Deleting railway route with track_id:", trackId);
+      // Collected before the delete — afterwards the geometry is gone and there is
+      // no way to find the stations that may have just lost their last route
+      const affectedStations = await getStationsNearRoute(client, trackId);
 
-    // Collected before the delete — afterwards the geometry is gone and there is
-    // no way to find the stations that may have just lost their last route
-    const affectedStations = await getStationsNearRoute(client, trackId);
+      // Delete from railway_routes table (CASCADE will handle user_trips)
+      const deleteQuery = "DELETE FROM railway_routes WHERE track_id = $1";
+      const result = await client.query(deleteQuery, [trackId]);
 
-    // Delete from railway_routes table (CASCADE will handle user_trips)
-    const deleteQuery = "DELETE FROM railway_routes WHERE track_id = $1";
-    const result = await client.query(deleteQuery, [trackId]);
+      if (result.rowCount === 0) {
+        throw new ValidationError(`Route with track_id ${trackId} not found`);
+      }
 
-    if (result.rowCount === 0) {
-      throw new Error(`Route with track_id ${trackId} not found`);
+      await refreshStationProximityFor(client, { stationIds: affectedStations });
+
+      await client.query("COMMIT");
+
+      console.log("Successfully deleted railway route:", trackId);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      // A ValidationError is an answer for the admin, not a fault for the log
+      if (!(error instanceof ValidationError)) {
+        console.error("Error deleting railway route:", error);
+      }
+      throw error;
+    } finally {
+      client.release();
     }
-
-    await refreshStationProximityFor(client, { stationIds: affectedStations });
-
-    await client.query("COMMIT");
-
-    console.log("Successfully deleted railway route:", trackId);
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Error deleting railway route:", error);
-    throw new Error(
-      `Failed to delete route: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
-  } finally {
-    client.release();
-  }
+  });
 }

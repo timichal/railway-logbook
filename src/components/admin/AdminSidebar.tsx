@@ -9,6 +9,7 @@ import AdminCreateRouteTab, {
 } from "@/components/admin/AdminCreateRouteTab";
 import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
+import { unwrap } from "@/lib/actionResult";
 import { getFrequencyTags, getRailwayRoute } from "@/lib/adminRouteActions";
 import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
@@ -81,7 +82,7 @@ export default function AdminSidebar({
   // Load the in-use frequency tags for autocomplete, and keep them fresh after edits.
   const loadTags = useCallback(async () => {
     try {
-      setAvailableTags(await getFrequencyTags());
+      setAvailableTags(unwrap(await getFrequencyTags()));
     } catch (error) {
       console.error("Error loading frequency tags:", error);
     }
@@ -122,7 +123,7 @@ export default function AdminSidebar({
 
       // Fetch the route details to get starting_coordinate and ending_coordinate
       try {
-        const routeDetail = await getRailwayRoute(trackId);
+        const routeDetail = unwrap(await getRailwayRoute(trackId));
         // Cancelled (and perhaps restarted), or the region switched, while the
         // route was loading.
         if (request !== editRequestRef.current || editingGeometryRef.current?.trackId !== trackId)
@@ -149,7 +150,15 @@ export default function AdminSidebar({
           console.warn("Route does not have starting/ending coordinates stored");
         }
       } catch (error) {
+        // Superseded: a newer edit (or none) owns the tab now, and nobody is
+        // waiting on this one.
+        if (request !== editRequestRef.current || editingGeometryRef.current?.trackId !== trackId)
+          return;
         console.error("Error fetching route details for geometry edit:", error);
+        // With no route to re-pick (deleted in another tab, session gone), staying
+        // in edit mode would only keep the map's routes hidden behind a save that
+        // is bound to fail again.
+        onEditingGeometryChange(null);
         showError(
           `Failed to load route details: ${error instanceof Error ? error.message : "Unknown error"}`,
         );

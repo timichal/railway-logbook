@@ -12,14 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Bugs — user-facing
 
-- [ ] **Admin action errors are unreadable in production.** The admin actions
-      (`adminRouteActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts`)
-      reject by throwing `Error("Route not found")` and the like, and
-      AdminPageClient/AdminRoutesTab show `error.message` — which a production
-      build replaces with "An error occurred in the Server Components render…".
-      **Fix:** return `{ error }` for the expected rejections, as
-      `login`/`register` now do (`asAuthResult` in `authActions.ts`).
-
 - [ ] **A partly failed JourneyCard save can't be retried cleanly.**
       `src/components/logbook/JourneyCard.tsx`, `handleSave`. It runs meta → trip
       → add → per-route remove → per-route partial as separate actions and
@@ -60,6 +52,15 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       handlers, or remove the rows and the validator.
 
 ## Rare correctness issues
+
+- [ ] **A failed `ROLLBACK` hides the error that caused it.**
+      `saveRailwayRoute`, `duplicateRailwayRoute` and `deleteRailwayRoute` in
+      `src/lib/adminRouteActions.ts` `await client.query("ROLLBACK")` in their
+      catch. If the connection has died, that rejects and replaces the original
+      error, a `ValidationError` meant for the admin included. The client is
+      then released to the pool as healthy. **Fix:** catch the rollback's own
+      failure, rethrow the original, and `client.release(err)` so the pool
+      destroys the connection.
 
 - [ ] **`mergeLinearChain` can build a route backwards.**
       `src/lib/coordinateUtils.ts:57-82` with
@@ -109,6 +110,14 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       `routePathFinder.ts:641`, `:785` cost them `?? 0`, so the search can route
       over them until a recalculation backfills the length. This goes away with
       the NOT NULL item under "Database design".
+
+- [ ] **Admin note writes are validated only in the popup.**
+      `createAdminNote`/`updateAdminNote` (`src/lib/adminNotesActions.ts`) pass
+      text and type straight to Postgres, and every export of a `"use server"`
+      module is an endpoint. A blank text or an unknown `noteType` fails on a
+      constraint and reaches the admin as the generic production error.
+      **Fix:** throw `ValidationError` for a blank text or a type outside
+      `noteTypeOptions`.
 
 ## Database design
 
@@ -170,6 +179,22 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       `MAX_JOURNEYS` exists. **Fix:** extract `<JourneyMetaFields>`,
       `<SelectedRoutesList>`, `<LoggedRouteRow>` and `TrashIcon`, then build one
       `RouteLogger` that takes an `onCreate` strategy.
+
+- [ ] **Nothing stops an admin call site from ignoring its result.** Admin
+      actions return their refusals as `{ error }` (`asAdmin`,
+      `src/lib/authHelpers.ts`). A call that forgets `unwrap`, such as
+      `await deleteAdminNote(id); showSuccess(…)`, compiles, passes Biome, and
+      reports a refused delete as done. The journey and trip actions' `{ error }`
+      results carry the same risk. **Fix:** a lint rule (Biome GritQL plugin)
+      that flags an `await` on an `@/lib/admin*Actions` import not wrapped in
+      `unwrap`, or an ESLint-style "no floating result" check if Biome gains one.
+
+- [ ] **`getAllRailwayRoutes` and `getRailwayRoute` are untyped.**
+      `src/lib/adminRouteActions.ts`. They have no declared return type, so they
+      infer `ActionResult<any>`, and `routeDetail.geometry`, `.length_km` and the
+      rest are never checked against `RailwayRoute`. A renamed column compiles
+      and fails at runtime. **Fix:** declare the row types (the detail one adds
+      the parsed coordinates) as their siblings do.
 
 - [ ] **The admin route metadata form is written twice.**
       `AdminCreateRouteTab.tsx:374-531` and `RouteEditForm.tsx` repeat every
