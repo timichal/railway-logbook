@@ -7,7 +7,10 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 -- Users table
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
+    -- Stored lower-cased and trimmed (every write goes through lower(btrim(...)) in
+    -- SQL, and the CHECK holds it to that), so the plain UNIQUE is also unique
+    -- regardless of case: "Foo@x" and "foo@x" are one account.
+    email VARCHAR(255) UNIQUE NOT NULL CHECK (email = lower(btrim(email))),
     name VARCHAR(255), -- Optional display name
     password VARCHAR(255), -- To be used later for authentication
     -- When the password last changed. Every token issued before it is refused
@@ -56,25 +59,27 @@ CREATE TABLE railway_routes (
     from_station TEXT NOT NULL, -- Starting station/location
     to_station TEXT NOT NULL, -- Ending station/location
     description TEXT, -- Route description
-    usage_type INTEGER NOT NULL, -- Usage type (0=Regular, 1=Heritage, 2=Special; 1 & 2 are non-regular)
-    frequency TEXT[] DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
+    usage_type INTEGER NOT NULL CHECK (usage_type IN (0, 1, 2)), -- Usage type (0=Regular, 1=Heritage, 2=Special; 1 & 2 are non-regular)
+    frequency TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
     link TEXT, -- External URL/link for the route
-    scenic BOOLEAN DEFAULT FALSE, -- Flag to mark route as scenic
-    line_class VARCHAR(20) DEFAULT 'branch' CHECK (line_class IN ('highspeed', 'main', 'branch')), -- Line classification derived from OSM data
-    geometry GEOMETRY(LINESTRING, 4326), -- PostGIS LineString
-    length_km NUMERIC, -- Route length in kilometers (calculated from geometry)
-    start_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of start point
-    end_country VARCHAR(2), -- ISO 3166-1 alpha-2 country code of end point
-    starting_coordinate GEOMETRY(POINT, 4326), -- Exact start coordinate on route (for verification)
-    ending_coordinate GEOMETRY(POINT, 4326), -- Exact end coordinate on route (for verification)
-    starting_part_id TEXT, -- DEPRECATED: Reference to starting railway_part (kept for migration, will be removed)
-    ending_part_id TEXT, -- DEPRECATED: Reference to ending railway_part (kept for migration, will be removed)
-    is_valid BOOLEAN DEFAULT TRUE, -- Route validity flag (for recalculation errors)
-    error_message TEXT, -- Error details if route recalculation fails
-    under_repair BOOLEAN DEFAULT FALSE, -- Admin-set: this route is invalid only because the OSM layout is temporarily broken (bridge works etc.), not because the line really changed
-    intended_backtracking BOOLEAN DEFAULT FALSE, -- Flag to indicate backtracking is intentional
-    has_backtracking BOOLEAN DEFAULT FALSE, -- Flag set by verification script indicating route uses backtracking path
+    scenic BOOLEAN NOT NULL DEFAULT FALSE, -- Flag to mark route as scenic
+    line_class VARCHAR(20) NOT NULL DEFAULT 'branch' CHECK (line_class IN ('highspeed', 'main', 'branch')), -- Line classification derived from OSM data
+    geometry GEOMETRY(LINESTRING, 4326) NOT NULL, -- PostGIS LineString
+    length_km NUMERIC NOT NULL, -- Route length in kilometers (calculated from geometry). NOT NULL: the planner costs a route by it, and a missing one would make the route free
+    -- ISO 3166-1 alpha-2 country code of the start/end point. NULL only where
+    -- country-coder finds no country (a point out at sea)
+    start_country VARCHAR(2) CHECK (start_country ~ '^[A-Z]{2}$'),
+    end_country VARCHAR(2) CHECK (end_country ~ '^[A-Z]{2}$'),
+    starting_coordinate GEOMETRY(POINT, 4326) NOT NULL, -- Exact start coordinate on route (for verification)
+    ending_coordinate GEOMETRY(POINT, 4326) NOT NULL, -- Exact end coordinate on route (for verification)
+    is_valid BOOLEAN NOT NULL DEFAULT TRUE, -- Route validity flag (for recalculation errors)
+    error_message TEXT, -- Error details if route recalculation fails. Admin-only: never served by a public query or tile
+    under_repair BOOLEAN NOT NULL DEFAULT FALSE, -- Admin-set: this route is invalid only because the OSM layout is temporarily broken (bridge works etc.), not because the line really changed
+    intended_backtracking BOOLEAN NOT NULL DEFAULT FALSE, -- Flag to indicate backtracking is intentional
+    has_backtracking BOOLEAN NOT NULL DEFAULT FALSE, -- Flag set by verification script indicating route uses backtracking path
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Kept by the railway_routes_update_timestamp trigger below, so no write path
+    -- has to remember it
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -115,8 +120,8 @@ CREATE TABLE user_logged_parts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     journey_id INTEGER NOT NULL, -- FK below
-    track_id INTEGER REFERENCES railway_routes(track_id) ON DELETE CASCADE, -- Deleted when the route is deleted
-    partial BOOLEAN DEFAULT FALSE, -- Per-journey partial flag
+    track_id INTEGER NOT NULL REFERENCES railway_routes(track_id) ON DELETE CASCADE, -- Deleted when the route is deleted
+    partial BOOLEAN NOT NULL DEFAULT FALSE, -- Per-journey partial flag
     -- Which stretch of the route was ridden, as fractions along railway_routes.geometry
     -- (ST_LineLocatePoint space, 0 = the geometry's first point). Both NULL means the
     -- extent is unknown: either the whole route (partial = FALSE) or a partial ride
@@ -143,7 +148,12 @@ CREATE TABLE user_preferences (
     selected_countries TEXT[] NOT NULL DEFAULT ARRAY[
         'AT', 'BE', 'CZ', 'DK', 'EE', 'ES', 'FI', 'FR', 'DE', 'IT',
         'LV', 'LT', 'LU', 'NL', 'NO', 'PL', 'SE', 'SK', 'SI', 'CH', 'GB'
-    ],
+    ]
+    -- Every element a two-letter upper-case code, which is what
+    -- normalizeCountryCodes lets through. A NULL element is written as '?' so it
+    -- fails the pattern instead of vanishing from the joined string.
+    CONSTRAINT user_preferences_selected_countries_format
+        CHECK (array_to_string(selected_countries, ',', '?') ~ '^([A-Z]{2}(,[A-Z]{2})*)?$'),
     -- Public map sharing. Off by default: a map is private until its owner says
     -- otherwise, and the token alone grants nothing while this is FALSE.
     public_map_enabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -176,21 +186,16 @@ CREATE INDEX idx_railway_routes_from_station ON railway_routes (from_station);
 CREATE INDEX idx_railway_routes_to_station ON railway_routes (to_station);
 CREATE INDEX idx_railway_routes_start_country ON railway_routes (start_country);
 CREATE INDEX idx_railway_routes_end_country ON railway_routes (end_country);
-CREATE INDEX idx_railway_routes_starting_part ON railway_routes (starting_part_id);
-CREATE INDEX idx_railway_routes_ending_part ON railway_routes (ending_part_id);
 
 -- User trips indexes
 CREATE INDEX idx_user_trips_user_id ON user_trips (user_id);
 
--- User journeys indexes
-CREATE INDEX idx_user_journeys_user_id ON user_journeys (user_id);
-CREATE INDEX idx_user_journeys_date ON user_journeys (date);
+-- User journeys indexes. A plain (user_id) one would be the prefix of user_date.
 CREATE INDEX idx_user_journeys_trip_id ON user_journeys (trip_id);
 CREATE INDEX idx_user_journeys_user_date ON user_journeys (user_id, date DESC); -- Composite index for common query pattern
 
--- User logged parts indexes
-CREATE INDEX idx_logged_parts_user_id ON user_logged_parts (user_id);
-CREATE INDEX idx_logged_parts_journey_id ON user_logged_parts (journey_id);
+-- User logged parts indexes. No plain (user_id) or (journey_id) index: each
+-- would be the prefix of one below, which serves the same lookups.
 CREATE INDEX idx_logged_parts_track_id ON user_logged_parts (track_id);
 CREATE UNIQUE INDEX idx_logged_parts_unique ON user_logged_parts (journey_id, track_id); -- Same route once per journey
 CREATE INDEX idx_logged_parts_user_track_partial ON user_logged_parts (user_id, track_id, partial); -- CRITICAL: Progress calculation performance
@@ -205,6 +210,15 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Trigger to auto-update updated_at on railway_routes updates. The journey
+-- planner's graph cache is fingerprinted off this table (getNetworkSignature in
+-- src/lib/routePathFinder.ts), and a write path that forgot the column used to
+-- be the one way to leave the cache stale.
+CREATE TRIGGER railway_routes_update_timestamp
+BEFORE UPDATE ON railway_routes
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
 
 -- Trigger to auto-update updated_at on user_trips updates
 CREATE TRIGGER user_trips_update_timestamp

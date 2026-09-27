@@ -97,8 +97,6 @@ export type RailwayRoute = {
   length_km?: number;
   start_country?: string | null; // ISO 3166-1 alpha-2 country code of start point
   end_country?: string | null; // ISO 3166-1 alpha-2 country code of end point
-  starting_part_id?: string | null;
-  ending_part_id?: string | null;
   is_valid?: boolean;
   error_message?: string | null;
   under_repair?: boolean; // Invalid only because the OSM layout is temporarily broken (admin-set)

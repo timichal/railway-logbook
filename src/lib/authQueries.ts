@@ -11,6 +11,17 @@
  * Rejections are thrown as `ValidationError`: the web actions return its message
  * as `{ error }`, and the route handlers turn them into a 400 (a 401 for bad
  * credentials) while an unexpected exception stays a 500.
+ *
+ * An email is stored as `lower(btrim(...))`, in SQL rather than in JS so the
+ * folding is Postgres' own and always satisfies the CHECK on `users.email`:
+ * "Foo@x " signs in to, and cannot re-register, "foo@x".
+ *
+ * Lookups fold the stored side too (`lower(email)`), which only matters until
+ * `applySchemaConstraints` has lower-cased the rows already there: without it,
+ * every account stored with a capital would be locked out in the gap between
+ * the deploy and the migration, and could be registered a second time. When
+ * that script is removed, these can go back to `email = lower(btrim($1))`,
+ * which the unique index serves.
  */
 
 import bcrypt from "bcryptjs";
@@ -22,13 +33,19 @@ import { updateSelectedCountriesForUser } from "./preferencesQueries";
 import { normalizeCountryCodes } from "./shared/constants";
 
 export async function authenticateUser(email: string, password: string): Promise<User> {
-  if (!email || !password) {
+  if (!email?.trim() || !password) {
     throw new ValidationError("Email and password are required");
   }
 
-  const result = await query("SELECT id, email, name, password FROM users WHERE email = $1", [
-    email,
-  ]);
+  // An exact match first, should two rows fold to the same address before the
+  // migration has run
+  const result = await query(
+    `SELECT id, email, name, password FROM users
+     WHERE lower(email) = lower(btrim($1))
+     ORDER BY email = btrim($1) DESC, id
+     LIMIT 1`,
+    [email],
+  );
 
   const user = result.rows[0];
 
@@ -56,7 +73,7 @@ export async function registerUser(
 ): Promise<User> {
   const { name, email, password, confirmPassword } = input;
 
-  if (!email || !password || !confirmPassword) {
+  if (!email?.trim() || !password || !confirmPassword) {
     throw new ValidationError("All fields are required");
   }
 
@@ -68,7 +85,9 @@ export async function registerUser(
     throw new ValidationError("Password must be at least 6 characters");
   }
 
-  const existingUser = await query("SELECT id FROM users WHERE email = $1", [email]);
+  const existingUser = await query("SELECT id FROM users WHERE lower(email) = lower(btrim($1))", [
+    email,
+  ]);
   if (existingUser.rows.length > 0) {
     throw new ValidationError("User with this email already exists");
   }
@@ -79,7 +98,7 @@ export async function registerUser(
   // leaves open (a double submit, two tabs), which would otherwise surface as a
   // unique violation and reach the form as an opaque failure.
   const result = await query(
-    `INSERT INTO users (email, name, password) VALUES ($1, $2, $3)
+    `INSERT INTO users (email, name, password) VALUES (lower(btrim($1)), $2, $3)
      ON CONFLICT (email) DO NOTHING
      RETURNING id, email, name`,
     [email, name || null, hashedPassword],

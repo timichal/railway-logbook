@@ -100,7 +100,7 @@ interface RouteRow {
   start_lat: string;
   end_lng: string;
   end_lat: string;
-  length_km: string | null;
+  length_km: string;
   intended_backtracking: boolean;
 }
 
@@ -118,7 +118,7 @@ type RouteOutcome =
  */
 async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<RouteOutcome> {
   const { track_id, start_lng, start_lat, end_lng, end_lat, length_km } = route;
-  const originalLength = parseFloat(length_km ?? "");
+  const originalLength = parseFloat(length_km);
 
   const startingCoordinate: [number, number] = [parseFloat(start_lng), parseFloat(start_lat)];
   const endingCoordinate: [number, number] = [parseFloat(end_lng), parseFloat(end_lat)];
@@ -133,8 +133,7 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
       UPDATE railway_routes
       SET
         is_valid = FALSE,
-        error_message = $1,
-        updated_at = CURRENT_TIMESTAMP
+        error_message = $1
       WHERE track_id = $2
     `,
       [recalcResult.error, track_id],
@@ -174,8 +173,7 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
       UPDATE railway_routes
       SET
         is_valid = FALSE,
-        error_message = $1,
-        updated_at = CURRENT_TIMESTAMP
+        error_message = $1
       WHERE track_id = $2
     `,
       [errorMsg, track_id],
@@ -197,8 +195,7 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
       -- The route routes again, so whatever works had broken it are over.
       -- The failure branches leave the flag alone: a route still under
       -- repair keeps it across OSM updates until it recalculates.
-      under_repair = FALSE,
-      updated_at = CURRENT_TIMESTAMP
+      under_repair = FALSE
     WHERE track_id = $4
   `,
     [lineString, newLength, recalcResult.hasBacktracking || false, track_id],
@@ -249,9 +246,7 @@ export async function recalculateAllRoutes(
       length_km,
       intended_backtracking
     FROM railway_routes
-    WHERE starting_coordinate IS NOT NULL
-      AND ending_coordinate IS NOT NULL
-      ${options.validOnly ? "AND is_valid IS NOT FALSE" : ""}
+    ${options.validOnly ? "WHERE is_valid" : ""}
     ORDER BY track_id
   `);
 
@@ -324,9 +319,7 @@ export async function verifyAndRecalculateRoutes(
   const routeCount = await db.query(`
     SELECT COUNT(*) as count
     FROM railway_routes
-    WHERE starting_coordinate IS NOT NULL
-      AND ending_coordinate IS NOT NULL
-      ${options.validOnly ? "AND is_valid IS NOT FALSE" : ""}
+    ${options.validOnly ? "WHERE is_valid" : ""}
   `);
 
   const hasRoutes = parseInt(routeCount.rows[0].count, 10) > 0;

@@ -27,8 +27,7 @@ async function markAllRoutesInvalid() {
     const result = await client.query(`
       UPDATE railway_routes
       SET is_valid = FALSE,
-          error_message = 'Route recheck',
-          updated_at = CURRENT_TIMESTAMP
+          error_message = 'Route recheck'
       WHERE is_valid = TRUE OR error_message IS NULL OR error_message != 'Route recheck'
       RETURNING track_id, from_station, to_station;
     `);

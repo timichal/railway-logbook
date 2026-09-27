@@ -106,10 +106,7 @@ async function showBacktracking(): Promise<void> {
         ST_X(ending_coordinate) as end_lng,
         ST_Y(ending_coordinate) as end_lat
       FROM railway_routes
-      WHERE has_backtracking = TRUE
-        AND intended_backtracking IS NOT TRUE
-        AND starting_coordinate IS NOT NULL
-        AND ending_coordinate IS NOT NULL
+      WHERE has_backtracking AND NOT intended_backtracking
       ORDER BY from_station, to_station, track_id
     `);
 

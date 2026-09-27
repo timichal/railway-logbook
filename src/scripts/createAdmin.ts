@@ -116,6 +116,8 @@ async function createAdmin() {
   }
 
   const reset = flags.includes("--reset");
+  // Stored as lower(btrim(...)) in SQL, exactly as authQueries.ts folds it, so
+  // the admin signs in with the address as typed
   const email = positionals[0].trim();
   const name = positionals[1]?.trim() || null;
   if (!email.includes("@") || /\s/.test(email)) {
@@ -156,7 +158,7 @@ async function createAdmin() {
     // this JWT_SECRET may outlive the database it was issued against.
     await pool.query(
       `INSERT INTO users (id, email, name, password, password_changed_at)
-       VALUES (1, $1, $2, $3, now())
+       VALUES (1, lower(btrim($1)), $2, $3, now())
        ON CONFLICT (id) DO UPDATE
          SET email = EXCLUDED.email,
              name = COALESCE(EXCLUDED.name, users.name),

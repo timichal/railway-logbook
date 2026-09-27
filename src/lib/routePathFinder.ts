@@ -304,7 +304,6 @@ async function loadRouteGraph(signature: string): Promise<CachedRouteGraph> {
         ST_Y(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_y
       FROM railway_routes r
       WHERE r.usage_type = 0
-        AND r.geometry IS NOT NULL
         AND ST_NPoints(r.geometry) >= 2
       `,
     );
@@ -382,22 +381,27 @@ let cachedGraph: CachedRouteGraph | null = null;
 let graphInFlight: { signature: string; promise: Promise<CachedRouteGraph> } | null = null;
 
 /**
- * Cheap fingerprint of the route network. Every write path bumps `updated_at`,
- * and deletions move the counts, so a matching signature means the cached graph
- * is still accurate.
+ * Cheap fingerprint of the route network: the row count and the sum of every
+ * row's `xmin`, the id of the transaction that last wrote it.
+ *
+ * An insert or update gives its row a new `xmin` and a delete moves the count,
+ * so any committed write changes the signature — whatever the write path, and
+ * whichever order concurrent writes commit in. `max(updated_at)`, the previous
+ * fingerprint, had neither property: it relied on every write path setting the
+ * column, and a timestamp is taken when a transaction starts, so an admin save
+ * committing after a later-started `verifyRouteData` update left the maximum
+ * where it was and the cache stale. (Freezing can rewrite an old row's `xmin`,
+ * which costs one needless rebuild and nothing else.)
  */
 async function getNetworkSignature(): Promise<string> {
-  const result = await pool.query<{ regular: string; total: string; updated: Date | null }>(
+  const result = await pool.query<{ total: string; xmins: string | null }>(
     `
-    SELECT
-      count(*) FILTER (WHERE usage_type = 0) AS regular,
-      count(*) AS total,
-      max(updated_at) AS updated
+    SELECT count(*) AS total, sum(xmin::text::bigint) AS xmins
     FROM railway_routes
     `,
   );
   const row = result.rows[0];
-  return `${row.regular}/${row.total}/${row.updated?.toISOString() ?? "-"}`;
+  return `${row.total}/${row.xmins ?? "-"}`;
 }
 
 /**
@@ -621,7 +625,7 @@ function terminalCost(
   side: EndpointSide,
 ): number {
   const covered = frac === undefined ? 1 : side === "end" ? 1 - frac : frac;
-  return (info.length_km ?? 0) * covered * getRouteCostMultiplier(info);
+  return info.length_km * covered * getRouteCostMultiplier(info);
 }
 
 /**
@@ -694,7 +698,7 @@ function findShortestPath(
       considerFinish(
         [route],
         [null],
-        startCost + (info.length_km ?? 0) * covered * getRouteCostMultiplier(info),
+        startCost + info.length_km * covered * getRouteCostMultiplier(info),
       );
       continue;
     }
@@ -765,9 +769,7 @@ function findShortestPath(
       }
 
       const newCost =
-        current.cost +
-        (neighborInfo.length_km ?? 0) * getRouteCostMultiplier(neighborInfo) +
-        gapCost;
+        current.cost + neighborInfo.length_km * getRouteCostMultiplier(neighborInfo) + gapCost;
       if (newCost > maxCost) continue;
 
       const key = `${neighbor}_${entry.exitSide}`;
@@ -970,10 +972,10 @@ async function computeTravelledTrims(
 
   // Set aside the ones that cover nothing, and drop those that leave nothing out
   const meaningful = specs.filter((spec) => {
-    const fullKm = routeInfo.get(spec.trackId)?.length_km ?? 0;
+    // Every route on a plan came out of the graph, so routeInfo has it
+    const fullKm = routeInfo.get(spec.trackId)!.length_km;
     const width = spec.hi - spec.lo;
-    // A route with no length yet can't be measured, so only a zero width drops it
-    const barelyEntered = visits.length > 1 && fullKm > 0 && fullKm * width < MIN_UNTRAVELLED_KM;
+    const barelyEntered = visits.length > 1 && fullKm * width < MIN_UNTRAVELLED_KM;
     if (width <= 0 || barelyEntered) {
       untravelled.add(spec.trackId);
       return false;

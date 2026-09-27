@@ -149,10 +149,10 @@ export async function journeyForUser(
         rr.track_id, rr.name, rr.from_station, rr.to_station,
         rr.description, rr.usage_type, rr.frequency, rr.link, rr.scenic, rr.line_class,
         rr.length_km, rr.start_country, rr.end_country,
-        rr.is_valid, rr.error_message,
+        rr.is_valid,
         ulp.partial, ulp.covered_start, ulp.covered_end
       FROM user_logged_parts ulp
-      LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
+      JOIN railway_routes rr ON ulp.track_id = rr.track_id
       WHERE ulp.journey_id = $1 AND ulp.user_id = $2
       ORDER BY ulp.created_at ASC`,
       [journeyId, userId],

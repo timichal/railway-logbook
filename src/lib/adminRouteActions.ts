@@ -41,8 +41,7 @@ export async function getAllRailwayRoutes(region: RegionId) {
   return asAdmin(async () => {
     const result = await query(`
     SELECT track_id, name, from_station, to_station, description, usage_type, scenic, line_class,
-           starting_part_id, ending_part_id, is_valid, error_message, under_repair,
-           intended_backtracking, has_backtracking
+           is_valid, error_message, under_repair, intended_backtracking, has_backtracking
     FROM railway_routes
     WHERE geometry && ${regionEnvelopeSql(region)}
     ORDER BY from_station, to_station
@@ -99,7 +98,7 @@ export async function getRailwayRoute(trackId: number) {
            ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
            ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json,
-           starting_part_id, ending_part_id, is_valid, error_message, under_repair, intended_backtracking
+           is_valid, error_message, under_repair, intended_backtracking
     FROM railway_routes
     WHERE track_id = $1
   `,
@@ -154,8 +153,7 @@ export async function getAllRouteEndpoints(
       ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
       ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json
     FROM railway_routes
-    WHERE starting_coordinate IS NOT NULL AND ending_coordinate IS NOT NULL
-      AND geometry && ${regionEnvelopeSql(region)}
+    WHERE geometry && ${regionEnvelopeSql(region)}
   `);
 
     const features: GeoJSONFeature[] = [];
@@ -388,7 +386,6 @@ export async function saveRailwayRoute(
       if (trackId) {
         // Update existing route - only update geometry, length, coordinates, countries, validity, and backtracking flag
         // Keep name, description, usage_type unchanged
-        // Set part_id fields to NULL (deprecated)
         queryStr = `
         UPDATE railway_routes
         SET
@@ -398,13 +395,10 @@ export async function saveRailwayRoute(
           end_country = $3,
           starting_coordinate = ST_GeomFromText($4, 4326),
           ending_coordinate = ST_GeomFromText($5, 4326),
-          starting_part_id = NULL,
-          ending_part_id = NULL,
           has_backtracking = $6,
           is_valid = TRUE,
           error_message = NULL,
-          under_repair = FALSE,
-          updated_at = CURRENT_TIMESTAMP
+          under_repair = FALSE
         WHERE track_id = $7
         RETURNING track_id
       `;
@@ -420,7 +414,6 @@ export async function saveRailwayRoute(
         ];
       } else {
         // Insert new route with auto-generated track_id
-        // Set part_id fields to NULL (deprecated)
         queryStr = `
         INSERT INTO railway_routes (
           name,
@@ -437,8 +430,6 @@ export async function saveRailwayRoute(
           end_country,
           starting_coordinate,
           ending_coordinate,
-          starting_part_id,
-          ending_part_id,
           is_valid,
           intended_backtracking,
           has_backtracking
@@ -457,8 +448,6 @@ export async function saveRailwayRoute(
           $11,
           ST_GeomFromText($12, 4326),
           ST_GeomFromText($13, 4326),
-          NULL,
-          NULL,
           TRUE,
           $14,
           $15
@@ -587,7 +576,7 @@ export async function updateRailwayRoute(
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
         link = $8, scenic = $9, line_class = $10, intended_backtracking = $11, is_valid = TRUE,
-        error_message = NULL, under_repair = FALSE, updated_at = CURRENT_TIMESTAMP
+        error_message = NULL, under_repair = FALSE
     WHERE track_id = $1
   `,
       [
@@ -633,7 +622,7 @@ export async function setRouteUnderRepair(
     const result = await query(
       `
     UPDATE railway_routes
-    SET under_repair = $2, updated_at = CURRENT_TIMESTAMP
+    SET under_repair = $2
     WHERE track_id = $1 AND ($2 = FALSE OR is_valid = FALSE)
   `,
       [trackId, underRepair],
@@ -681,15 +670,14 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
       INSERT INTO railway_routes (
         name, from_station, to_station, description, usage_type, frequency, link, scenic,
         line_class, geometry, length_km, start_country, end_country,
-        starting_coordinate, ending_coordinate, starting_part_id, ending_part_id,
+        starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       )
       SELECT
         name, from_station || ' [duplicate]', to_station || ' [duplicate]', description,
         usage_type, frequency, link, scenic, line_class, geometry, length_km,
         start_country, end_country, starting_coordinate, ending_coordinate,
-        starting_part_id, ending_part_id, is_valid, error_message, under_repair,
-        intended_backtracking, has_backtracking
+        is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       FROM railway_routes
       WHERE track_id = $1
       RETURNING track_id

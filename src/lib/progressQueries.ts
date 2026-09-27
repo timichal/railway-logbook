@@ -220,7 +220,6 @@ export async function buildCoveredStretches(ranges: CoveredRange[]): Promise<Cov
       ST_AsGeoJSON(ST_LineSubstring(rr.geometry, t.covered_start, t.covered_end)) AS geojson
     FROM unnest($1::int[], $2::float8[], $3::float8[]) AS t(track_id, covered_start, covered_end)
     JOIN railway_routes rr ON rr.track_id = t.track_id
-    WHERE rr.geometry IS NOT NULL
     `,
     [
       ranges.map((r) => r.track_id),
@@ -289,7 +288,11 @@ export async function coveredStretchesForUser(userId: number): Promise<CoveredSt
     WHERE ulp.user_id = $1
       AND ulp.partial = TRUE
       AND ulp.covered_start IS NOT NULL
-      AND ulp.track_id NOT IN (${FULLY_RIDDEN_TRACK_IDS})
+      -- NOT EXISTS rather than NOT IN: a NULL in the set would make NOT IN
+      -- answer NULL for every row
+      AND NOT EXISTS (
+        SELECT 1 FROM (${FULLY_RIDDEN_TRACK_IDS}) ridden WHERE ridden.track_id = ulp.track_id
+      )
     `,
     [userId],
   );

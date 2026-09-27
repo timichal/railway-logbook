@@ -161,7 +161,6 @@ RETURNS TABLE (track_id integer) AS $$
     FROM user_logged_parts ulp
     WHERE ulp.user_id = p_user_id
       AND ulp.partial = FALSE
-      AND ulp.track_id IS NOT NULL
     UNION
     SELECT stretch.track_id
     FROM (
@@ -233,11 +232,10 @@ BEGIN
             rr.length_km,
             rr.start_country,
             rr.end_country,
+            -- Validity alone: the admin map greys invalid routes, but the error
+            -- text is admin-only and this tile is public
             rr.is_valid,
-            rr.error_message,
             rr.under_repair,
-            rr.starting_part_id,
-            rr.ending_part_id,
             -- Include most recent journey data for client-side styling
             -- Use latest journey (by date, then by created_at) for route coloring
             recent_trip.date,

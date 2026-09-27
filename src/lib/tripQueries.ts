@@ -88,7 +88,7 @@ const TRIP_STATS_SELECT = `
       SELECT DISTINCT uj.trip_id, ulp.track_id
       FROM user_journeys uj
       JOIN user_logged_parts ulp ON ulp.journey_id = uj.id
-      WHERE uj.user_id = $1 AND uj.trip_id IS NOT NULL AND ulp.track_id IS NOT NULL
+      WHERE uj.user_id = $1 AND uj.trip_id IS NOT NULL
     ) tr
     JOIN railway_routes rr ON rr.track_id = tr.track_id
     GROUP BY tr.trip_id
@@ -174,7 +174,7 @@ export async function tripForUser(
       `SELECT DISTINCT ulp.track_id
       FROM user_logged_parts ulp
       JOIN user_journeys uj ON ulp.journey_id = uj.id
-      WHERE uj.trip_id = $1 AND uj.user_id = $2 AND ulp.track_id IS NOT NULL`,
+      WHERE uj.trip_id = $1 AND uj.user_id = $2`,
       [tripId, userId],
     );
 

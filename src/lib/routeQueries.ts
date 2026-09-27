@@ -149,8 +149,7 @@ export async function routeMetadataByIds(trackIds: number[]): Promise<RailwayRou
       length_km,
       start_country,
       end_country,
-      is_valid,
-      error_message
+      is_valid
     FROM railway_routes
     WHERE track_id = ANY($1::int[])
   `,
