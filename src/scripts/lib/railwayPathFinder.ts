@@ -350,6 +350,10 @@ export class RailwayPathFinder {
    * Optionally forces a specific first hop for retry logic
    *
    * Uses best-distance tracking instead of global visited to allow alternative paths.
+   * The distance is kept per part **and the end it was entered at**, not per part:
+   * whether a part can be left without backtracking depends on which way it is being
+   * travelled, so a short arrival from one side must not prune a longer one from the
+   * other — that may be the only one that can carry on.
    */
   private findPathWithoutBacktracking(
     startId: string,
@@ -358,9 +362,10 @@ export class RailwayPathFinder {
     forcedFirstHop?: string,
   ): string[] | null {
     // Head index rather than `shift()`, as in `findShortestPath`.
-    const queue: ({ id: string; path: string[]; distance: number } | undefined)[] = [
+    const queue: ({ id: string; key: string; path: string[]; distance: number } | undefined)[] = [
       {
         id: startId,
+        key: startId,
         path: [startId],
         distance: 0,
       },
@@ -379,7 +384,7 @@ export class RailwayPathFinder {
       head++;
 
       // Skip if we already found a better path to this node
-      const currentBest = bestDistance.get(current.id);
+      const currentBest = bestDistance.get(current.key);
       if (currentBest !== undefined && current.distance > currentBest) {
         continue;
       }
@@ -406,7 +411,9 @@ export class RailwayPathFinder {
         if (connectedId === endId) {
           const completePath = [...current.path, connectedId];
 
-          if (this.findBacktracking(completePath)) {
+          // `findBacktracking` orients each part from the next one only, so it cannot
+          // see a part entered and left through the same node; the step check can.
+          if (this.wouldCreateBacktracking(completePath) || this.findBacktracking(completePath)) {
             continue;
           }
 
@@ -432,11 +439,13 @@ export class RailwayPathFinder {
         const newDistance = current.distance + connectedPart.lengthMeters;
 
         // Only explore if this is best path to this node so far
-        const bestToNode = bestDistance.get(connectedId);
+        const key = `${connectedId}:${this.isPartTraversedForward(connectedId, current.id, null) ? "start" : "end"}`;
+        const bestToNode = bestDistance.get(key);
         if (bestToNode === undefined || newDistance < bestToNode) {
-          bestDistance.set(connectedId, newDistance);
+          bestDistance.set(key, newDistance);
           queue.push({
             id: connectedId,
+            key,
             path: newPath,
             distance: newDistance,
           });
@@ -492,6 +501,14 @@ export class RailwayPathFinder {
 
   /**
    * Check if adding the last node to a path would create backtracking
+   *
+   * The part before the new one was checked when it was added, oriented from its
+   * predecessor — the only neighbour it had then. Now that the part after it is known,
+   * its orientation is settled by that one instead (as `findBacktracking` will judge
+   * it), and the two must agree: a part entered and left through the same node is a
+   * reversal, whatever the angle to the next part says. Let through, it reached the
+   * parts beyond at a distance no train can travel and pruned the clean path to them,
+   * only for the final check to reject it.
    */
   private wouldCreateBacktracking(path: string[]): boolean {
     if (path.length < 2) return false;
@@ -500,6 +517,14 @@ export class RailwayPathFinder {
     const prevPartId = currentIdx > 0 ? path[currentIdx - 1] : null;
     const currentPartId = path[currentIdx];
     const nextPartId = path[currentIdx + 1];
+
+    if (
+      prevPartId &&
+      this.isPartTraversedForward(currentPartId, prevPartId, null) !==
+        this.isPartTraversedForward(currentPartId, null, nextPartId)
+    ) {
+      return true;
+    }
 
     const exitSegment = this.getConnectionSegment(currentPartId, prevPartId, nextPartId, true);
     const entrySegment = this.getConnectionSegment(nextPartId, currentPartId, null, false);

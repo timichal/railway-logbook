@@ -85,7 +85,7 @@ Spatial data uses GIST indexes. Web Mercator (EPSG:3857) geometry columns synced
 
 ### Key architectural decisions
 
-- **Coordinate-based routing.** Routes are defined by exact start/end POINTs (click positions on railway parts). Pathfinding (`RailwayPathFinder`) finds which parts contain each coordinate (1m tolerance — parts are matched against the exact stored click point), truncates edge parts to the click point, and stitches via `mergeLinearChain`. The primary search is BFS by hop count; a distance-weighted search is used only when the shortest path backtracks and a non-backtracking alternative is sought. Recalculation after OSM updates uses the stored coordinates.
+- **Coordinate-based routing.** Routes are defined by exact start/end POINTs (click positions on railway parts). Pathfinding (`RailwayPathFinder`) finds which parts contain each coordinate (1m tolerance — parts are matched against the exact stored click point), truncates edge parts to the click point, and stitches via `mergeLinearChain`. The primary search is BFS by hop count; a distance-weighted search is used only when the shortest path backtracks and a non-backtracking alternative is sought. That search keys its best distances on **(part, end entered at)** and rejects a part entered and left through the same node: keyed on the part alone, a path that ran into a stub and straight back out claimed the parts beyond it at a distance no train travels, pruned the clean path to them, and was then thrown out by the final check — leaving `has_backtracking` set on a route with a clean path. Recalculation after OSM updates uses the stored coordinates.
 
   `mergeLinearChain` joins sublists **only at their first/last coordinates**, matching how `coordToPartIds` builds adjacency. Two OSM ways can share a node mid-way, and accepting such a match would splice in a segment that doesn't start at the chain's tail — silently producing a geometry with a jump. Callers catch the resulting "Chain is broken" and skip that part combination. It takes the sublists **in path order** and never works the order out for itself: it once picked its start from whichever endpoint occurred only once, and a start click exactly on a shared node (truncating the first part to a point) left none unique at the start, so the route was built — and stored — backwards, countries swapped. The rows written that way were turned round once, on 2026-09-27.
 - **Regions** (`src/lib/shared/regions.ts`). Europe and Japan are two views of one backend. A region is a **bounding box**: it is the map's `maxBounds`, and every query that must not leak the other network filters on it (`regionEnvelopeSql` → `geometry && ST_MakeEnvelope(...)`, GIST-backed). Coordinates rather than a `region` column, because the boxes are half a planet apart — nothing is ambiguous — and a bbox needs no backfill when geometry moves. The box is a display/filter extent, not a country test: it is drawn generously and covers water and slivers of neighbours, which is harmless since we only import the regions' own extracts.
@@ -386,7 +386,10 @@ session and the region cookie, so the markup carries the signed-in name and that
 region's map), and route tiles carry visit colours — a stale one paints a map that lies
 about what has been ridden. What it does take is content-addressed and public:
 `/_next/static/` cache-first, since a build hash in the filename means a new deploy
-asks a new URL and can never be answered with an old one, plus stale-while-revalidate
+asks a new URL and can never be answered with an old one (capped at 150 entries,
+oldest out first: `sw.js` is the same bytes every deploy, so no new worker ever
+activates to clear a retired build's chunks, and an origin evicted under storage
+pressure loses the anonymous user's localStorage journeys with it), plus stale-while-revalidate
 for `/maplibre/`, whose names are fixed by `copyMaplibreWorker` while its bytes turn
 over with the dependency. Cross-origin requests — the basemap, the tiles — are never
 touched. Everything else falls through to the network with no worker in the way.

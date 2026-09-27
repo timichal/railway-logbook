@@ -30,9 +30,20 @@
  */
 
 // Bump to discard everything the previous worker stored. Only needed when the rules
-// below change; hashed assets retire themselves.
+// below change; retired builds' assets are dropped by `trimStaticCache`.
 const CACHE_VERSION = "v1";
 const STATIC_CACHE = `railway-logbook-static-${CACHE_VERSION}`;
+
+/**
+ * How many responses the static cache keeps. A new deploy asks for new hashed URLs,
+ * but nothing ever asks for the old ones again — and this file is the same bytes
+ * from one deploy to the next, so no new worker activates to clear them out. Left
+ * alone the cache grows by a build's chunks per deploy, and when the browser evicts
+ * under storage pressure it evicts the whole origin, the anonymous user's
+ * localStorage journeys with it. A build is ~45 files, a visitor fetches fewer, so
+ * this holds several builds' worth.
+ */
+const MAX_STATIC_ENTRIES = 150;
 
 /** Content-addressed by build hash — safe to serve from the cache forever. */
 const IMMUTABLE_PREFIX = "/_next/static/";
@@ -65,14 +76,57 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-async function cacheFirst(request) {
+let trimming = null;
+let trimAgain = false;
+
+/**
+ * Drops the oldest entries beyond `MAX_STATIC_ENTRIES`. `keys()` lists in insertion
+ * order, so what goes first is what was stored longest ago: mostly retired builds'
+ * chunks, occasionally one still in use, which costs a single refetch. One trim at a
+ * time — a page load stores dozens of chunks at once, and each would otherwise walk
+ * the key list and delete the same entries. A store that lands while one runs may
+ * postdate its `keys()`, so it asks for another pass rather than joining a trim that
+ * cannot see it.
+ */
+function trimStaticCache() {
+  if (trimming) {
+    trimAgain = true;
+    return trimming;
+  }
+  trimming = (async () => {
+    const cache = await caches.open(STATIC_CACHE);
+    do {
+      trimAgain = false;
+      const keys = await cache.keys();
+      await Promise.all(
+        keys
+          .slice(0, Math.max(0, keys.length - MAX_STATIC_ENTRIES))
+          .map((key) => cache.delete(key)),
+      );
+    } while (trimAgain);
+  })().finally(() => {
+    trimming = null;
+  });
+  return trimming;
+}
+
+async function store(cache, request, response) {
+  try {
+    await cache.put(request, response);
+  } finally {
+    // A put refused for quota is the moment the trim matters most.
+    await trimStaticCache();
+  }
+}
+
+async function cacheFirst(request, event) {
   const cache = await caches.open(STATIC_CACHE);
   const hit = await cache.match(request);
   if (hit) return hit;
 
   const response = await fetch(request);
   // An error page cached under an immutable URL would outlive the outage.
-  if (response.ok) cache.put(request, response.clone());
+  if (response.ok) event.waitUntil(store(cache, request, response.clone()));
   return response;
 }
 
@@ -81,7 +135,7 @@ async function staleWhileRevalidate(request, event) {
   const hit = await cache.match(request);
   const network = fetch(request)
     .then((response) => {
-      if (response.ok) cache.put(request, response.clone());
+      if (response.ok) event.waitUntil(store(cache, request, response.clone()));
       return response;
     })
     // Offline with nothing stored: reject, so the caller below fails as a plain
@@ -109,7 +163,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (url.pathname.startsWith(IMMUTABLE_PREFIX)) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(cacheFirst(request, event));
     return;
   }
 

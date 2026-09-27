@@ -12,19 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Rare correctness issues
 
-- [ ] **The service worker's static cache grows forever.** `public/sw.js:68-77`.
-      Every deploy's hashed chunks accumulate until `CACHE_VERSION` is bumped by
-      hand. Eviction under storage pressure is per origin, so it can take the
-      anonymous user's localStorage journeys with it. **Fix:** prune on activate
-      (drop entries not from the current build id) or cap the cache as an LRU.
-
-- [ ] (possible) **The non-backtracking admin search can prune the clean
-      alternative.** `railwayPathFinder.ts:342-443`. `wouldCreateBacktracking`
-      orients a part only from the next part, so a path can enter and leave a
-      stub through one node and claim `bestDistance` before the final
-      `findBacktracking` rejects it. That flags `has_backtracking` although a
-      clean path exists. This needs a synthetic test case to confirm.
-
 - [ ] (possible) **Routes with NULL `length_km` are free in the planner.**
       `routePathFinder.ts:641`, `:785` cost them `?? 0`, so the search can route
       over them until a recalculation backfills the length. This goes away with
