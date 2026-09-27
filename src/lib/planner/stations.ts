@@ -4,6 +4,7 @@
  */
 
 import pool from "../db";
+import { withinMetersSql } from "../mercatorDistance";
 
 /** Progressive tolerance levels (meters) for matching routes to a station */
 const STATION_TOLERANCES = [100, 500, 1000, 2000, 5000];
@@ -50,9 +51,8 @@ export async function findRoutesNearStations(
   const maxTolerance = STATION_TOLERANCES[STATION_TOLERANCES.length - 1];
   const client = await pool.connect();
   try {
-    // ST_DWithin against geometry_3857 (indexed) with 1/cos(lat) scaling so the
-    // real ground radius matches maxTolerance; exact distance is then measured
-    // on the few candidates that survive.
+    // An indexed, Mercator-scaled prefilter (withinMetersSql); the exact distance
+    // is then measured on the few candidates that survive.
     const rows = await client.query<{
       station_id: string | number;
       track_id: number;
@@ -77,11 +77,7 @@ export async function findRoutesNearStations(
       FROM s
       JOIN railway_routes r
         ON r.usage_type = 0
-       AND ST_DWithin(
-             r.geometry_3857,
-             s.geom_3857,
-             $2 / GREATEST(cos(radians(ST_Y(s.coordinates))), 0.01)
-           )
+       AND ${withinMetersSql("r.geometry_3857", "s.geom_3857", "$2", "ST_Y(s.coordinates)")}
       ORDER BY s.id, distance_m
       `,
       [stationIds, maxTolerance],

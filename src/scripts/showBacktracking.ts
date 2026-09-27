@@ -26,6 +26,7 @@
 import dotenv from "dotenv";
 import type { Pool } from "pg";
 import { RailwayPathFinder } from "./lib/railwayPathFinder";
+import { runPool } from "./lib/runPool";
 import { createRecalcPool, parseConcurrencyArg } from "./verifyRouteData";
 
 dotenv.config();
@@ -115,30 +116,18 @@ async function showBacktracking(): Promise<void> {
       return;
     }
 
-    // Outcomes by index, so the list reads in query order however the workers
-    // happen to interleave.
-    const outcomes: Outcome[] = new Array(routes.rows.length);
-    let nextIndex = 0;
-    let searched = 0;
-
     process.stderr.write(
       `Locating backtracking in ${routes.rows.length} route(s), ${concurrency} at a time...\n`,
     );
 
-    const worker = async (): Promise<void> => {
-      while (true) {
-        const index = nextIndex++;
-        if (index >= routes.rows.length) return;
-
-        outcomes[index] = await locateBacktracking(pool, routes.rows[index]);
-
-        searched++;
+    // Outcomes come back in query order, so the list reads that way too.
+    const outcomes = await runPool(
+      routes.rows,
+      concurrency,
+      (route) => locateBacktracking(pool, route),
+      (searched) => {
         process.stderr.write(`\r  ${searched}/${routes.rows.length} routes searched...`);
-      }
-    };
-
-    await Promise.all(
-      Array.from({ length: Math.min(concurrency, routes.rows.length) }, () => worker()),
+      },
     );
     process.stderr.write("\n\n");
 

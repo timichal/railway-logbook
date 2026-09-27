@@ -18,8 +18,9 @@ route is recalculated independently of every other one.
 
 ## What it does now
 
-`recalculateAllRoutes` runs a fixed set of workers over the route list, each
-pulling the next route off a shared index and writing its own `UPDATE`:
+`recalculateAllRoutes` runs a fixed set of workers over the route list
+(`runPool`, `scripts/lib/runPool.ts`), each pulling the next route off a shared
+index and writing its own `UPDATE`:
 
 - **`DEFAULT_RECALC_CONCURRENCY` = 4 routes at a time.** This needs a `Pool`, not
   a `Client`: node-pg serialises concurrent queries on a single connection, so
@@ -38,8 +39,8 @@ pulling the next route off a shared index and writing its own `UPDATE`:
   `recalculateRoute` turns that into `{success: false}`. `recalculateRoute` does
   **not** catch — it once did, and wrote a dropped connection into the route as
   `is_valid = FALSE`, which `--valid-only` then never rechecked. So an exception
-  escaping `recalculateAndStoreRoute` means the database is unhappy — the worker
-  sets `aborted`, the others stop taking new routes, and it propagates. Marking a
+  escaping `recalculateAndStoreRoute` means the database is unhappy — `runPool`
+  stops the other workers taking new routes, and it propagates. Marking a
   route invalid over a transient fault would be worse than failing loudly.
 - **Both BFS queues are popped through a head index, not `shift()`.** `shift()`
   reindexes the whole queue on every pop, and at the 222 km buffer the queue

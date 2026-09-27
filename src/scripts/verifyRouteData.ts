@@ -7,6 +7,7 @@ import {
   STATION_ROUTE_PROXIMITY_METERS,
 } from "../lib/stationProximity";
 import { RailwayPathFinder } from "./lib/railwayPathFinder";
+import { runPool } from "./lib/runPool";
 
 dotenv.config();
 
@@ -253,38 +254,19 @@ export async function recalculateAllRoutes(
   result.totalRoutes = routes.rows.length;
   console.log(`Found ${result.totalRoutes} routes to recalculate (${concurrency} at a time)`);
 
-  // Outcomes are collected by index, so the summary reads in track_id order
-  // however the workers happen to interleave.
-  const outcomes: RouteOutcome[] = new Array(result.totalRoutes);
-  let nextIndex = 0;
-  let processed = 0;
-  let aborted = false;
-
-  const worker = async (): Promise<void> => {
-    while (!aborted) {
-      const index = nextIndex++;
-      if (index >= routes.rows.length) return;
-
-      try {
-        outcomes[index] = await recalculateAndStoreRoute(db, routes.rows[index]);
-      } catch (error) {
-        // A pathfinding failure is already an outcome (see recalculateRoute), so
-        // reaching here means the database itself is unhappy (or a bug). Stop the other
-        // workers from picking up more work and let it propagate, rather than
-        // marking a route invalid over what is probably a transient fault.
-        aborted = true;
-        throw error;
-      }
-
-      processed++;
+  // A pathfinding failure is already an outcome (see recalculateRoute), so a throw
+  // means the database itself is unhappy (or a bug): runPool stops the run rather
+  // than marking a route invalid over what is probably a transient fault. Outcomes
+  // come back in track_id order, so the summary reads that way too.
+  const outcomes = await runPool(
+    routes.rows,
+    concurrency,
+    (route) => recalculateAndStoreRoute(db, route),
+    (processed) => {
       if (processed % 10 === 0 || processed === result.totalRoutes) {
         process.stdout.write(`\r  ${processed}/${result.totalRoutes} routes recalculated...`);
       }
-    }
-  };
-
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, routes.rows.length) }, () => worker()),
+    },
   );
 
   for (const [index, route] of routes.rows.entries()) {

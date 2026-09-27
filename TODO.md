@@ -12,21 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Refactoring
 
-- [ ] **Small shared helpers.**
-      - The index-based worker pool is copy-pasted in `verifyRouteData.ts:267-297`
-        and `showBacktracking.ts:121-145`; replace both with a `runPool()`.
-      - The `ST_DWithin(geometry_3857, …, m / GREATEST(cos(radians(lat)), 0.01))`
-        fragment appears three times: `planner/stations.ts`
-        (`findRoutesNearStations`), `scripts/lib/partNetwork.ts`
-        (`loadAround`), `stationProximity:25`.
-      - The per-journey stats SELECT is copy-pasted four times in
-        `tripQueries.ts` (`:158`, `:438`, `:461`, `:517`). Make it one fragment
-        like `TRIP_STATS_SELECT`.
-      - `mobile/src/region/RegionContext.tsx:16-28` restates `DEFAULT_REGION` and
-        `isRegionId` instead of taking them from `@shared/regions`, so a changed
-        default would reach the web app but not the native one. Its hydration
-        can be `setRegionId(regionIdOrDefault(stored))`.
-
 - [ ] **A `useAsyncLoad` hook for the cancellable load effect.** The
       `let cancelled = false` / `.then` / `.catch` / `.finally` / cleanup pattern
       is written out by hand in `CountriesStatsTab.tsx`, `ShareMapDialog.tsx`,

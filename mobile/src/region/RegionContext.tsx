@@ -9,11 +9,16 @@
  * so a screen must not be able to observe "no region yet".
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { REGIONS, type Region, type RegionId } from "@shared/regions";
+import {
+  DEFAULT_REGION,
+  REGIONS,
+  type Region,
+  type RegionId,
+  regionIdOrDefault,
+} from "@shared/regions";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 
 const STORAGE_KEY = "railwayLogbook.region";
-const DEFAULT_REGION: RegionId = "europe";
 
 interface RegionValue {
   region: Region;
@@ -22,10 +27,6 @@ interface RegionValue {
 }
 
 const RegionContext = createContext<RegionValue | null>(null);
-
-function isRegionId(value: string | null): value is RegionId {
-  return value !== null && value in REGIONS;
-}
 
 export function RegionProvider({ children }: { children: ReactNode }): ReactNode {
   const [regionId, setRegionId] = useState<RegionId>(DEFAULT_REGION);
@@ -37,7 +38,7 @@ export function RegionProvider({ children }: { children: ReactNode }): ReactNode
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (cancelled) return;
-        if (isRegionId(stored)) setRegionId(stored);
+        setRegionId(regionIdOrDefault(stored));
       })
       .catch(() => {
         // A read failure just means the default region; nothing here is worth an

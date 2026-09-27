@@ -1,5 +1,6 @@
 import type { Client, Pool, PoolClient } from "pg";
 import { coordinateToKey } from "../../lib/coordinateUtils";
+import { withinMetersSql } from "../../lib/mercatorDistance";
 import { coordinateDistance, pointToSegmentDistance } from "./partGeometry";
 
 /** One OSM railway way, as the recalculation pathfinder holds it. */
@@ -64,12 +65,10 @@ export class PartNetwork {
    * GeoJSON and re-transfers every part in the overlap, only for it to be
    * dropped as a duplicate.
    *
-   * `ST_DWithin` against the GIST-indexed `geometry_3857` rather than
+   * `ST_DWithin` against the GIST-indexed `geometry_3857` (`withinMetersSql`,
+   * each radius scaled at its own coordinate's latitude) rather than
    * `ST_Intersects` against a materialised `ST_Buffer`: the same set, without
    * building a 32-gon per call and without the round trip back through WGS84.
-   * Web Mercator inflates distances by 1/cos(lat), so each radius is scaled by
-   * that factor at its own coordinate's latitude (guarded, as elsewhere, so a
-   * degenerate latitude cannot blow up the divisor).
    */
   async loadAround(
     dbClient: Client | Pool,
@@ -87,11 +86,12 @@ export class PartNetwork {
           const lng = values.push(coordinate[0]);
           const lat = values.push(coordinate[1]);
           const radius = values.push(bufferMeters);
-          return `ST_DWithin(
-            rp.geometry_3857,
-            ST_Transform(ST_SetSRID(ST_MakePoint($${lng}, $${lat}), 4326), 3857),
-            $${radius} / GREATEST(cos(radians($${lat})), 0.01)
-          )`;
+          return withinMetersSql(
+            "rp.geometry_3857",
+            `ST_Transform(ST_SetSRID(ST_MakePoint($${lng}, $${lat}), 4326), 3857)`,
+            `$${radius}`,
+            `$${lat}`,
+          );
         })
         .join(" OR ");
 

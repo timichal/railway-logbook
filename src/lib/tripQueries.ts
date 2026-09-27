@@ -102,6 +102,25 @@ export type JourneyInTrip = Journey & {
 };
 
 /**
+ * The journeys of the user in placeholder `userParam` (e.g. `"$1"`) matching
+ * `where` (a condition on `uj`), each with the number and total length of its
+ * logged routes. The user condition is written here, so no caller can forget it.
+ */
+function journeyStatsSql(userParam: string, where: string, orderBy?: string): string {
+  return `
+    SELECT
+      uj.*,
+      COUNT(ulp.id)::int AS route_count,
+      COALESCE(SUM(rr.length_km), 0) AS total_distance
+    FROM user_journeys uj
+    LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
+    LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
+    WHERE uj.user_id = ${userParam} AND (${where})
+    GROUP BY uj.id
+    ${orderBy ? `ORDER BY ${orderBy}` : ""}`;
+}
+
+/**
  * All of the user's trips with computed stats, scoped to `region`.
  *
  * This is the trip picker used when filing a journey under a trip, and a journey
@@ -156,16 +175,7 @@ export async function tripForUser(
     }
 
     const journeysResult = await pool.query<JourneyInTrip>(
-      `SELECT
-        uj.*,
-        COUNT(ulp.id)::int as route_count,
-        COALESCE(SUM(rr.length_km), 0) as total_distance
-      FROM user_journeys uj
-      LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
-      LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
-      WHERE uj.trip_id = $1 AND uj.user_id = $2
-      GROUP BY uj.id
-      ORDER BY uj.date ASC`,
+      journeyStatsSql("$2", "uj.trip_id = $1", "uj.date ASC"),
       [tripId, userId],
     );
 
@@ -436,16 +446,7 @@ export async function journeysAndTripsForUser(
     const tripJourneysByTripId = new Map<number, JourneyInTrip[]>();
     if (tripIds.length > 0) {
       const tripJourneysResult = await pool.query<JourneyInTrip>(
-        `SELECT
-          uj.*,
-          COUNT(ulp.id)::int as route_count,
-          COALESCE(SUM(rr.length_km), 0) as total_distance
-        FROM user_journeys uj
-        LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
-        LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
-        WHERE uj.user_id = $1 AND uj.trip_id = ANY($2::int[])
-        GROUP BY uj.id
-        ORDER BY uj.date ASC`,
+        journeyStatsSql("$1", "uj.trip_id = ANY($2::int[])", "uj.date ASC"),
         [userId, tripIds],
       );
       tripJourneysResult.rows.forEach((j) => {
@@ -459,15 +460,7 @@ export async function journeysAndTripsForUser(
     const journeysById = new Map<number, StandaloneJourneyWithStats>();
     if (journeyIds.length > 0) {
       const journeysResult = await pool.query<StandaloneJourneyWithStats>(
-        `SELECT
-          uj.*,
-          COUNT(ulp.id)::int as route_count,
-          COALESCE(SUM(rr.length_km), 0) as total_distance
-        FROM user_journeys uj
-        LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
-        LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
-        WHERE uj.user_id = $1 AND uj.id = ANY($2::int[])
-        GROUP BY uj.id`,
+        journeyStatsSql("$1", "uj.id = ANY($2::int[])"),
         [userId, journeyIds],
       );
       journeysResult.rows.forEach((j) => {
@@ -515,17 +508,11 @@ export async function unassignedJourneysForUser(
 }> {
   try {
     const result = await pool.query<JourneyInTrip>(
-      `SELECT
-        uj.*,
-        COUNT(ulp.id)::int as route_count,
-        COALESCE(SUM(rr.length_km), 0) as total_distance
-      FROM user_journeys uj
-      LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
-      LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id
-      WHERE uj.user_id = $1 AND uj.trip_id IS NULL
-        AND ${journeyInRegionSql(region, "uj.id")}
-      GROUP BY uj.id
-      ORDER BY uj.date DESC`,
+      journeyStatsSql(
+        "$1",
+        `uj.trip_id IS NULL AND ${journeyInRegionSql(region, "uj.id")}`,
+        "uj.date DESC",
+      ),
       [userId],
     );
 

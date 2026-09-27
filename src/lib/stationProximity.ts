@@ -1,8 +1,3 @@
-import type { ClientBase } from "pg";
-
-/** How close a route has to run for a station to show on the user map. */
-export const STATION_ROUTE_PROXIMITY_METERS = 250;
-
 /**
  * `stations.near_route` marks the stations that have an admin-defined route
  * running within STATION_ROUTE_PROXIMITY_METERS. Only those are served to the
@@ -15,16 +10,12 @@ export const STATION_ROUTE_PROXIMITY_METERS = 250;
  * The flag is derived, so it has to be refreshed whenever route geometry moves:
  * fully after a bulk recalculation (import, verifyRouteData), and per-route on
  * admin writes.
- *
- * Distances are measured in EPSG:3857 so the GIST index on `geometry_3857` is
- * usable — an `ST_DWithin` on a `::geography` cast can't use it. Web Mercator
- * inflates distance by 1/cos(lat), so the radius is scaled by the same factor
- * per station (guarded like the pathfinder's, so a degenerate latitude can't
- * blow up the divisor).
  */
-function nearRouteRadius(stationAlias: string): string {
-  return `${STATION_ROUTE_PROXIMITY_METERS} / GREATEST(cos(radians(ST_Y(${stationAlias}.coordinates))), 0.01)`;
-}
+import type { ClientBase } from "pg";
+import { withinMetersSql } from "./mercatorDistance";
+
+/** How close a route has to run for a station to show on the user map. */
+export const STATION_ROUTE_PROXIMITY_METERS = 250;
 
 /** TRUE when any route runs within range of station `s`. */
 const NEAR_ROUTE_EXISTS = `
@@ -32,7 +23,7 @@ const NEAR_ROUTE_EXISTS = `
     SELECT 1
     FROM railway_routes r
     WHERE r.geometry_3857 IS NOT NULL
-      AND ST_DWithin(r.geometry_3857, s.coordinates_3857, ${nearRouteRadius("s")})
+      AND ${withinMetersSql("r.geometry_3857", "s.coordinates_3857", STATION_ROUTE_PROXIMITY_METERS, "ST_Y(s.coordinates)")}
   )`;
 
 /**
@@ -88,7 +79,7 @@ export async function getStationsNearRoute(db: ClientBase, trackId: number): Pro
     FROM stations s
     JOIN railway_routes r ON r.track_id = $1
     WHERE r.geometry_3857 IS NOT NULL
-      AND ST_DWithin(r.geometry_3857, s.coordinates_3857, ${nearRouteRadius("s")})
+      AND ${withinMetersSql("r.geometry_3857", "s.coordinates_3857", STATION_ROUTE_PROXIMITY_METERS, "ST_Y(s.coordinates)")}
     `,
     [trackId],
   );
@@ -115,7 +106,7 @@ export async function refreshStationProximityFor(
         FROM railway_routes r
         WHERE r.track_id = $2
           AND r.geometry_3857 IS NOT NULL
-          AND ST_DWithin(r.geometry_3857, s.coordinates_3857, ${nearRouteRadius("s")})
+          AND ${withinMetersSql("r.geometry_3857", "s.coordinates_3857", STATION_ROUTE_PROXIMITY_METERS, "ST_Y(s.coordinates)")}
       )`),
     [stationIds, trackId ?? null],
   );
