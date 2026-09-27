@@ -1,6 +1,7 @@
 import type * as maplibregl from "maplibre-gl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { railwayRoutesTileUrl } from "../index";
+import { useSourceTileRefresh } from "./useSourceTileRefresh";
 
 interface UseMapTileRefreshOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
@@ -19,13 +20,8 @@ interface UseMapTileRefreshOptions {
  * one source. So the refresh reads `userId` and `selectedCountries` as they are
  * when it runs, and serves logged-out visitors too — their tile is Martin's,
  * uncoloured, and the visit states are laid on it as feature state by the caller.
- *
- * **It points the existing source at a new URL (`setTiles`) rather than replacing
- * the source.** MapLibre then reloads the tiles in view while still drawing the
- * old ones, and everything attached to the source survives: the layers and their
- * order, the highlight overlays, the layer filters, the feature state. Removing
- * and re-adding the source dropped all of that, and every overlay had to watch
- * for the refresh and put itself back.
+ * The refresh itself is `setTiles` on the existing source (see
+ * `useSourceTileRefresh`), which keeps the feature state and every overlay.
  */
 export function useMapTileRefresh({
   map,
@@ -33,38 +29,25 @@ export function useMapTileRefresh({
   userId,
   selectedCountries,
 }: UseMapTileRefreshOptions) {
-  // Doubles as the tile URL's `v`, so it must not repeat across page loads (a
-  // plain counter would) nor within one (two refreshes in one millisecond would
-  // collapse into one).
-  const [cacheBuster, setCacheBuster] = useState(() => Date.now());
-  // The refresh the source currently stands for. A refresh asked for while the map
-  // is still loading cannot be applied yet, and the map under construction took its
-  // sources from a render before it — so it is applied on load instead of dropped.
-  // The initial value is what the map's own construction already stands for.
-  const appliedRef = useRef(cacheBuster);
+  const [signal, setSignal] = useState(0);
+  const cacheBusterRef = useRef(Date.now());
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: cacheBuster is the intentional trigger, and mapLoaded only catches up on one that arrived before the map could take it. userId and selectedCountries are read at refresh time but must not trigger a refresh of their own.
-  useEffect(() => {
-    const source = mapLoaded
-      ? map.current?.getSource<maplibregl.VectorTileSource>("railway_routes")
-      : undefined;
-    if (!source || appliedRef.current === cacheBuster) return;
-    appliedRef.current = cacheBuster;
-
-    source.setTiles([
+  useSourceTileRefresh({
+    map,
+    mapLoaded,
+    sourceId: "railway_routes",
+    signal,
+    cacheBusterRef,
+    tileUrl: (cacheBuster) =>
       railwayRoutesTileUrl({
         rides: userId ? "session" : undefined,
         cacheBuster,
         selectedCountries,
       }),
-    ]);
-  }, [cacheBuster, mapLoaded]);
+  });
 
   // Stable identity: consumers list it in effect/callback dependency arrays.
-  const refreshTiles = useCallback(
-    () => setCacheBuster((previous) => Math.max(Date.now(), previous + 1)),
-    [],
-  );
+  const refreshTiles = useCallback(() => setSignal((previous) => previous + 1), []);
 
   return { refreshTiles };
 }

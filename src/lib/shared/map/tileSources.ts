@@ -135,6 +135,12 @@ export function createRailwayPartsSource(tileBaseUrl: string): VectorSourceSpeci
   };
 }
 
+export function adminNotesTileUrl(appOrigin: string, cacheBuster?: number): string {
+  const params: [string, string][] =
+    cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];
+  return `${appOrigin}/api/tiles/admin_notes/{z}/{x}/{y}${queryString(params)}`;
+}
+
 /**
  * Every admin note, drafts included — so, like a ride-coloured route tile, it is
  * served by the app's own handler (`src/app/api/tiles/admin_notes`), which checks
@@ -145,11 +151,9 @@ export function createAdminNotesSource(
   appOrigin: string,
   cacheBuster?: number,
 ): VectorSourceSpecification {
-  const params: [string, string][] =
-    cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];
   return {
     type: "vector",
-    tiles: [`${appOrigin}/api/tiles/admin_notes/{z}/{x}/{y}${queryString(params)}`],
+    tiles: [adminNotesTileUrl(appOrigin, cacheBuster)],
     minzoom: ZOOM_RANGES.adminNotes.min,
     maxzoom: ZOOM_RANGES.adminNotes.max,
   };

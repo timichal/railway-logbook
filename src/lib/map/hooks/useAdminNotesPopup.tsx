@@ -1,56 +1,55 @@
 import * as maplibregl from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import NotesPopup from "@/components/admin/NotesPopup";
 import { getAdminNote } from "@/lib/adminNotesActions";
 import type { NoteType } from "@/lib/shared/constants";
-import { createAdminNotesLayer, createAdminNotesSource } from "../index";
+import type { AdminNote } from "@/lib/shared/types";
 
 interface UseAdminNotesPopupOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
-  showNotesLayer: boolean;
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
-  externalRefreshSignal?: number; // Parent bumps this to force notes tile refresh
-  onNotesChanged?: () => void; // Called after any popup-driven save/delete
+  /** Called after a popup save/delete; the parent refreshes the notes tiles. */
+  onNotesChanged: () => void;
 }
 
 /**
  * Manages the right-click notes popup system on the admin map:
  * - Right-click to create/edit notes
  * - Click outside to close popup
- * - Notes layer cache busting on save/delete
  */
 export function useAdminNotesPopup({
   map,
   mapLoaded,
-  showNotesLayer,
   showSuccess,
   showError,
-  externalRefreshSignal,
   onNotesChanged,
 }: UseAdminNotesPopupOptions) {
-  const [notesCacheBuster, setNotesCacheBuster] = useState(Date.now());
   const notesPopupRef = useRef<maplibregl.Popup | null>(null);
-
-  // Bump cache buster when parent forces a refresh (e.g. after tab-driven edits)
-  useEffect(() => {
-    if (externalRefreshSignal === undefined || externalRefreshSignal === 0) return;
-    setNotesCacheBuster(Date.now());
-  }, [externalRefreshSignal]);
 
   // Right-click handler for notes
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+    const mapInstance = map.current;
+    if (!mapInstance || !mapLoaded) return;
+
+    // A right-click on a note waits for the note before opening its popup. Only the
+    // latest click may open one — a newer right-click replaces it, and a left-click
+    // cancels it — and none may once this effect is torn down. A slow fetch would
+    // otherwise open a popup over a newer one, after the admin clicked away, or on
+    // a map that is gone.
+    let latestClick = 0;
+    let disposed = false;
 
     const handleRightClick = async (e: maplibregl.MapMouseEvent) => {
       e.preventDefault();
+      const clickId = ++latestClick;
 
       const coordinate: [number, number] = [e.lngLat.lng, e.lngLat.lat];
 
       // Check if clicking on an existing note
-      const noteFeatures = map.current!.queryRenderedFeatures(e.point, {
+      const noteFeatures = mapInstance.queryRenderedFeatures(e.point, {
         layers: ["admin_notes"],
       });
 
@@ -63,31 +62,37 @@ export function useAdminNotesPopup({
       if (noteFeatures && noteFeatures.length > 0) {
         noteId = noteFeatures[0].properties?.id;
         if (noteId) {
+          let note: AdminNote | null;
           try {
-            const note = await getAdminNote(noteId);
-            if (note) {
-              noteText = note.text;
-              noteUpdatedAt = note.updated_at;
-              noteTypeValue = note.note_type;
-              noteSource = note.source;
-            }
+            note = await getAdminNote(noteId);
           } catch (error) {
             console.error("Failed to load note:", error);
+            if (!disposed && clickId === latestClick) showError("Failed to load note");
             return;
           }
+          if (disposed || clickId !== latestClick) return;
+          // A note deleted a moment ago is still drawn until its tile reloads (the
+          // refresh keeps the old tile on screen meanwhile). Opening it would offer
+          // an empty form that saves over a row that no longer exists.
+          if (!note) {
+            showError("This note has been deleted");
+            return;
+          }
+          noteText = note.text;
+          noteUpdatedAt = note.updated_at;
+          noteTypeValue = note.note_type;
+          noteSource = note.source;
         }
       }
 
       // Close existing popup if any
-      if (notesPopupRef.current) {
-        notesPopupRef.current.remove();
-      }
+      notesPopupRef.current?.remove();
 
       const popupContainer = document.createElement("div");
 
       // Dynamic anchor based on click position
       const clickY = e.point.y;
-      const mapHeight = map.current!.getContainer().clientHeight;
+      const mapHeight = mapInstance.getContainer().clientHeight;
       const anchor = clickY < mapHeight * 0.3 ? "top" : "bottom";
 
       const popup = new maplibregl.Popup({
@@ -96,25 +101,21 @@ export function useAdminNotesPopup({
         maxWidth: "none",
         anchor,
         offset: 15,
-      })
-        .setLngLat(e.lngLat)
-        .setDOMContent(popupContainer)
-        .addTo(map.current!);
-
-      notesPopupRef.current = popup;
-
+      });
       const root = createRoot(popupContainer);
 
-      const handleClose = () => {
-        popup.remove();
-        notesPopupRef.current = null;
-        root.unmount();
-      };
+      // Every way a popup ends — its own Close/Esc, a click outside, a newer
+      // right-click, this effect's cleanup, the map being removed — goes through
+      // `remove()`, which fires "close" exactly once. The unmount is deferred for
+      // the cleanup path: that runs during AdminMap's commit, and React refuses to
+      // unmount a root synchronously while it is already rendering.
+      popup.on("close", () => {
+        if (notesPopupRef.current === popup) notesPopupRef.current = null;
+        queueMicrotask(() => root.unmount());
+      });
 
-      const handleSaved = () => {
-        setNotesCacheBuster(Date.now());
-        onNotesChanged?.();
-      };
+      popup.setLngLat(e.lngLat).setDOMContent(popupContainer).addTo(mapInstance);
+      notesPopupRef.current = popup;
 
       root.render(
         <NotesPopup
@@ -124,8 +125,8 @@ export function useAdminNotesPopup({
           initialSource={noteSource}
           updatedAt={noteUpdatedAt}
           coordinate={coordinate}
-          onClose={handleClose}
-          onSaved={handleSaved}
+          onClose={() => popup.remove()}
+          onSaved={onNotesChanged}
           showSuccess={showSuccess}
           showError={showError}
         />,
@@ -134,9 +135,10 @@ export function useAdminNotesPopup({
 
     // Click outside popup to close
     const handleMapClick = (e: maplibregl.MapMouseEvent) => {
+      latestClick++;
       if (!notesPopupRef.current) return;
 
-      const noteFeatures = map.current!.queryRenderedFeatures(e.point, {
+      const noteFeatures = mapInstance.queryRenderedFeatures(e.point, {
         layers: ["admin_notes"],
       });
       if (noteFeatures && noteFeatures.length > 0) return;
@@ -147,41 +149,16 @@ export function useAdminNotesPopup({
       }
 
       notesPopupRef.current.remove();
-      notesPopupRef.current = null;
     };
 
-    map.current.on("contextmenu", handleRightClick);
-    map.current.on("click", handleMapClick);
+    mapInstance.on("contextmenu", handleRightClick);
+    mapInstance.on("click", handleMapClick);
 
     return () => {
-      if (map.current) {
-        map.current.off("contextmenu", handleRightClick);
-        map.current.off("click", handleMapClick);
-      }
-      if (notesPopupRef.current) {
-        notesPopupRef.current.remove();
-        notesPopupRef.current = null;
-      }
+      disposed = true;
+      mapInstance.off("contextmenu", handleRightClick);
+      mapInstance.off("click", handleMapClick);
+      notesPopupRef.current?.remove();
     };
   }, [mapLoaded, map, showSuccess, showError, onNotesChanged]);
-
-  // Refresh notes layer when cache buster changes
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    const hasNotesLayer = map.current.getLayer("admin_notes");
-    const hasNotesSource = map.current.getSource("admin_notes");
-
-    if (!hasNotesLayer && !hasNotesSource) return; // Initial load, layers not ready yet
-
-    if (hasNotesLayer) map.current.removeLayer("admin_notes");
-    if (hasNotesSource) map.current.removeSource("admin_notes");
-
-    map.current.addSource("admin_notes", createAdminNotesSource(notesCacheBuster));
-    map.current.addLayer(createAdminNotesLayer());
-
-    map.current.setLayoutProperty("admin_notes", "visibility", showNotesLayer ? "visible" : "none");
-
-    map.current.triggerRepaint();
-  }, [notesCacheBuster, mapLoaded, map, showNotesLayer]);
 }

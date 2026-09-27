@@ -141,21 +141,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       (`src/lib/api/params.ts:177-189`) has no callers. **Fix:** add the two thin
       handlers, or remove the rows and the validator.
 
-## Bugs — admin
-
-- [ ] **Notes popup: leaked React roots and redundant rebuilds.**
-      `src/lib/map/hooks/useAdminNotesPopup.tsx`.
-      - `root.unmount()` only runs from the popup's own Close. Outside-click,
-        replacement by a new right-click and effect cleanup all leak the root
-        (`:83`, `:149`, `:162`). Unmount from `popup.on("close")` via
-        `queueMicrotask`.
-      - The notes layer is rebuilt on mount, on every visibility toggle, and twice
-        per save (`:169-186`, `:38-41`, `:114-117`).
-      - (possible) After `await getAdminNote`, `map.current!` is dereferenced
-        unchecked (`:67-102`).
-      - (possible) Holding Ctrl+Enter in `NotesPopup.tsx:97-101` skips the
-        `isSaving` check and can create duplicates.
-
 ## Rare correctness issues
 
 - [ ] **`mergeLinearChain` can build a route backwards.**

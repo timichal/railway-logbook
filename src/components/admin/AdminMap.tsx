@@ -6,6 +6,7 @@ import AdminLayerControls from "@/components/admin/AdminLayerControls";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
 import {
+  adminNotesTileUrl,
   COLORS,
   createAdminNotesLayer,
   createAdminNotesSource,
@@ -30,6 +31,7 @@ import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAd
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useRouteLength } from "@/lib/map/hooks/useRouteLength";
+import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
 import { useRegionId } from "@/lib/regionContext";
 import {
@@ -123,8 +125,8 @@ interface AdminMapProps {
   isEditingGeometry?: boolean;
   focusGeometry?: string | null;
   focusCoordinate?: { coordinate: [number, number]; nonce: number } | null;
-  notesRefreshTrigger?: number;
-  onNotesChanged?: () => void;
+  notesRefreshTrigger: number;
+  onNotesChanged: () => void;
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
 }
@@ -146,10 +148,12 @@ export default function AdminMap({
   showError,
 }: AdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  // The route tiles' `v`. A ref, read when the map is built: a refresh points the
-  // live source at a new one itself, and a later rebuild (region, scheme) must
-  // start from the newest rather than from tiles the browser cached before a save.
+  // The route and note tiles' `v`. Refs, read when the map is built: a refresh
+  // points the live source at a new one itself, and a later rebuild (region,
+  // scheme) must start from the newest rather than from tiles the browser cached
+  // before a save.
   const routesCacheBusterRef = useRef(Date.now());
+  const notesCacheBusterRef = useRef(Date.now());
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
   const [validRoutesTotalKm, setValidRoutesTotalKm] = useState<number | null>(null);
   const isMobile = useIsMobile();
@@ -176,7 +180,7 @@ export default function AdminMap({
         railway_parts: createRailwayPartsSource(),
         railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBusterRef.current }),
         stations: createStationsSource(),
-        admin_notes: createAdminNotesSource(),
+        admin_notes: createAdminNotesSource(notesCacheBusterRef.current),
         "route-endpoints": routeEndpointsSource,
       },
       layers: [
@@ -214,15 +218,7 @@ export default function AdminMap({
   });
 
   // Notes popup system
-  useAdminNotesPopup({
-    map,
-    mapLoaded,
-    showNotesLayer: layerVisibility.showNotesLayer,
-    showSuccess,
-    showError,
-    externalRefreshSignal: notesRefreshTrigger,
-    onNotesChanged,
-  });
+  useAdminNotesPopup({ map, mapLoaded, showSuccess, showError, onNotesChanged });
 
   // Fetch route endpoints
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch endpoints on demand.
@@ -247,24 +243,24 @@ export default function AdminMap({
     applyAdminRouteLinePaint(map.current, selectedRouteId ?? null);
   }, [selectedRouteId, mapLoaded, map]);
 
-  // Refresh the route tiles when routes are saved/deleted, by pointing the source
-  // at a new URL (`setTiles`) as the user map's useMapTileRefresh does. The layers,
-  // their order, paint and visibility all stay put, so nothing has to be re-added
-  // or re-applied. `refreshTrigger` is the only trigger; the refresh it stands for
-  // is remembered so a map rebuilt afterwards (whose construction already took the
-  // newest `v`) is not refreshed again on load.
-  const appliedRefreshRef = useRef(refreshTrigger);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is the trigger; mapLoaded only catches up on one that arrived before the map could take it.
-  useEffect(() => {
-    const source = mapLoaded
-      ? map.current?.getSource<maplibregl.VectorTileSource>("railway_routes")
-      : undefined;
-    if (!source || appliedRefreshRef.current === refreshTrigger) return;
-    appliedRefreshRef.current = refreshTrigger;
-
-    routesCacheBusterRef.current = Math.max(Date.now(), routesCacheBusterRef.current + 1);
-    source.setTiles([railwayRoutesTileUrl({ cacheBuster: routesCacheBusterRef.current })]);
-  }, [refreshTrigger, mapLoaded]);
+  // Refresh the route tiles when routes are saved/deleted, and the note tiles when
+  // a note is, from the popup or the Notes tab.
+  useSourceTileRefresh({
+    map,
+    mapLoaded,
+    sourceId: "railway_routes",
+    signal: refreshTrigger ?? 0,
+    cacheBusterRef: routesCacheBusterRef,
+    tileUrl: (cacheBuster) => railwayRoutesTileUrl({ cacheBuster }),
+  });
+  useSourceTileRefresh({
+    map,
+    mapLoaded,
+    sourceId: "admin_notes",
+    signal: notesRefreshTrigger,
+    cacheBusterRef: notesCacheBusterRef,
+    tileUrl: adminNotesTileUrl,
+  });
 
   // Focus on a single coordinate (e.g. admin note clicked in Notes tab)
   useEffect(() => {

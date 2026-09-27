@@ -77,5 +77,8 @@ export const createRailwayPartsSource = () => sources.createRailwayPartsSource(T
 export const createAdminNotesSource = (cacheBuster?: number) =>
   sources.createAdminNotesSource(APP_ORIGIN, cacheBuster);
 
+export const adminNotesTileUrl = (cacheBuster?: number) =>
+  sources.adminNotesTileUrl(APP_ORIGIN, cacheBuster);
+
 export const createPublicNotesSource = (cacheBuster?: number) =>
   sources.createPublicNotesSource(TILE_BASE_URL, cacheBuster);

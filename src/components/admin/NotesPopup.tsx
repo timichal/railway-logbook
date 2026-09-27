@@ -41,6 +41,9 @@ export default function NotesPopup({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Held Ctrl+Enter repeats keydown faster than `isSaving` reaches the handler, so
+  // the guard against a second save (a duplicate note) has to be synchronous.
+  const busyRef = useRef(false);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -50,6 +53,7 @@ export default function NotesPopup({
   const canSave = !!text.trim() && !!noteType;
 
   const handleSave = async () => {
+    if (busyRef.current) return;
     if (!text.trim()) {
       showError("Note text cannot be empty");
       return;
@@ -59,6 +63,7 @@ export default function NotesPopup({
       return;
     }
 
+    busyRef.current = true;
     setIsSaving(true);
     try {
       const trimmedSource = source.trim() || null;
@@ -74,13 +79,15 @@ export default function NotesPopup({
     } catch (error) {
       showError(error instanceof Error ? error.message : "Failed to save note");
     } finally {
+      busyRef.current = false;
       setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!noteId) return;
+    if (!noteId || busyRef.current) return;
 
+    busyRef.current = true;
     setIsDeleting(true);
     try {
       await deleteAdminNote(noteId);
@@ -90,6 +97,7 @@ export default function NotesPopup({
     } catch (error) {
       showError(error instanceof Error ? error.message : "Failed to delete note");
     } finally {
+      busyRef.current = false;
       setIsDeleting(false);
     }
   };
