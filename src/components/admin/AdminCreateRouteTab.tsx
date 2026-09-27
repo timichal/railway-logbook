@@ -43,7 +43,6 @@ interface AdminCreateRouteTabProps {
   editingRouteInfo?: { from_station: string; to_station: string } | null;
   onGeometryEditComplete?: () => void;
   onCancelGeometryEdit?: () => void;
-  onRefreshMap?: () => void;
   availableTags?: string[];
   onTagsChanged?: () => void;
 }
@@ -136,19 +135,12 @@ export default function AdminCreateRouteTab({
       return;
     }
 
-    console.log("Preview: Finding path from", startingCoordinate, "to", endingCoordinate);
-
     // Use coordinate-based server action to find path
     const result = await findRailwayPathFromCoordinates(startingCoordinate, endingCoordinate);
 
     if (result) {
-      console.log("Preview: Path found!");
-      console.log("Part IDs:", result.partIds);
-      console.log("Has backtracking:", result.hasBacktracking);
-
       // Fetch the actual railway part geometries from the database
       const railwayParts = await getRailwayPartsByIds(result.partIds);
-      console.log("Preview: Fetched", railwayParts.length, "railway part geometries");
 
       // Store the path result for potential geometry updates
       setCurrentPathResult({

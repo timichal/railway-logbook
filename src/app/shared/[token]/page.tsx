@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import PublicMapLayout from "@/components/sharing/PublicMapLayout";
 import { publicMapOwner } from "@/lib/publicMapQueries";
-import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/shared/regions";
+import { isRegionId, REGION_COOKIE, regionIdOrDefault } from "@/lib/shared/regions";
 import { btn } from "@/lib/ui/buttonStyles";
 
 /**
@@ -31,11 +31,7 @@ export default async function SharedMapPage({
   // cookie (a visitor last on Japan lands on Japan) for links made before the
   // parameter existed, and to the default region otherwise.
   const regionCookie = (await cookies()).get(REGION_COOKIE)?.value;
-  const initialRegion = isRegionId(view)
-    ? view
-    : isRegionId(regionCookie)
-      ? regionCookie
-      : DEFAULT_REGION;
+  const initialRegion = isRegionId(view) ? view : regionIdOrDefault(regionCookie);
 
   if (!owner) {
     return (

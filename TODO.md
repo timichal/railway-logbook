@@ -477,11 +477,10 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       - The per-journey stats SELECT is copy-pasted four times in
         `tripQueries.ts` (`:158`, `:438`, `:461`, `:517`). Make it one fragment
         like `TRIP_STATS_SELECT`.
-
-- [ ] **Dead code in the admin pathfinder.** `railwayPathFinder.ts:176-224`:
-      `searchDistance` and `maxAcceptable` are the same expression, so "Alternative
-      is too long" can't run. `buildPathResult(firstPath)` merges a chain that
-      its only caller throws away and rebuilds (`:733`).
+      - `mobile/src/region/RegionContext.tsx:16-28` restates `DEFAULT_REGION` and
+        `isRegionId` instead of taking them from `@shared/regions`, so a changed
+        default would reach the web app but not the native one. Its hydration
+        can be `setRegionId(regionIdOrDefault(stored))`.
 
 - [ ] **Style values hard-coded outside `style.ts`.**
       - The dark ground `#05070a` is written twice in `basemap.ts` (`:204`,
@@ -492,17 +491,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       - Line-class, scenic and frequency badge colours are inline in
         `tooltipFormatting.ts:167-192`.
       - There is also an empty duplicate "OPACITIES" banner in `style.ts`.
-
-- [ ] **Remove dead exports and leftovers.**
-      - The basemap and `mapState` re-export blocks in `src/lib/map/index.ts`
-        (`:8-23`, `:550`); nothing imports them. Also `TILE_SERVER_PORT`'s
-        export.
-      - `getRegion` and `regionForCoordinate` (`regions.ts`). `getRegion` could
-        instead replace the three `isRegionId(cookie) ? cookie : DEFAULT_REGION`
-        copies in the pages.
-      - `UserPreferences` (`types.ts:172`).
-      - The unused `onRefreshMap` prop of `AdminCreateRouteTab`.
-      - The `console.log` of whole payloads on every admin preview and save.
 
 - [ ] **There are no tests at all.** The riskiest logic is pure and easy to cover:
       - `routeCoverage.ts`: `isRouteFullyRidden` must agree with the SQL

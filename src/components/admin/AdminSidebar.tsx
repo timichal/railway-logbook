@@ -46,7 +46,6 @@ interface AdminSidebarProps {
   onEditingGeometryChange?: (trackId: number | null) => void;
   onRouteFocus?: (geometry: string) => void;
   sidebarWidth?: number | null;
-  onRefreshMap?: () => void;
   onFocusNote?: (coordinate: [number, number]) => void;
   onNoteChanged?: () => void;
   notesRefreshSignal?: number;
@@ -69,7 +68,6 @@ export default function AdminSidebar({
   onEditingGeometryChange,
   onRouteFocus,
   sidebarWidth,
-  onRefreshMap,
   onFocusNote,
   onNoteChanged,
   notesRefreshSignal,
@@ -169,7 +167,6 @@ export default function AdminSidebar({
   // Handle edit geometry button click
   const handleEditGeometry = React.useCallback(
     async (trackId: number) => {
-      console.log("Edit geometry for track:", trackId);
       setEditingGeometryForTrackId(trackId);
       setActiveTab("create");
 
@@ -182,10 +179,6 @@ export default function AdminSidebar({
       try {
         const { getRailwayRoute } = await import("@/lib/adminRouteActions");
         const routeDetail = await getRailwayRoute(trackId);
-
-        console.log("Route detail:", routeDetail);
-        console.log("Starting coordinate:", routeDetail.starting_coordinate);
-        console.log("Ending coordinate:", routeDetail.ending_coordinate);
 
         // Store route info for display
         setEditingRouteInfo({
@@ -224,7 +217,6 @@ export default function AdminSidebar({
 
   // Handle cancel geometry edit
   const handleCancelGeometryEdit = React.useCallback(() => {
-    console.log("Cancel geometry edit");
     setEditingGeometryForTrackId(null);
     setEditingRouteInfo(null);
     setActiveTab("routes");
@@ -331,7 +323,6 @@ export default function AdminSidebar({
               }
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
-            onRefreshMap={onRefreshMap}
             availableTags={availableTags}
             onTagsChanged={loadTags}
           />

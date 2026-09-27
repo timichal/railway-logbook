@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import MainLayout from "@/components/layout/MainLayout";
 import { getUser, logout } from "@/lib/authActions";
 import { SUPPORTED_COUNTRIES } from "@/lib/shared/constants";
-import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/shared/regions";
+import { REGION_COOKIE, regionIdOrDefault } from "@/lib/shared/regions";
 import { getUserPreferences } from "@/lib/userPreferencesActions";
 
 export default async function Home() {
@@ -11,7 +11,7 @@ export default async function Home() {
 
   // Region comes from a cookie so the first paint is already the right one
   const regionCookie = (await cookies()).get(REGION_COOKIE)?.value;
-  const initialRegion = isRegionId(regionCookie) ? regionCookie : DEFAULT_REGION;
+  const initialRegion = regionIdOrDefault(regionCookie);
 
   // Fetch user preferences server-side to avoid flash (only for logged-in users)
   const selectedCountries = user

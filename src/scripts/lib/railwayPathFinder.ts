@@ -10,6 +10,9 @@ import type { BacktrackingPoint, PathResult } from "../../lib/shared/types";
 
 export type { BacktrackingPoint, PathResult };
 
+/** A path as parts only; its coordinates are built by the caller, truncated to the clicks. */
+type PartPath = Omit<PathResult, "coordinates">;
+
 interface RailwayPart {
   id: string;
   coordinates: [number, number][];
@@ -146,82 +149,59 @@ export class RailwayPathFinder {
    * 1. Find shortest path using BFS
    * 2. Check if it backtracks
    * 3. If backtracking, search for non-backtracking alternative
-   * 4. Compare alternatives and choose best
+   *
+   * Returns the candidates in order of preference, empty if there is no path: the
+   * alternative, then the backtracking path to fall back on. Which one is used is
+   * the caller's call, since only the geometry it builds says whether a path connects.
    */
-  findPath(startId: string, endId: string): PathResult | null {
+  findPath(startId: string, endId: string): PartPath[] {
     if (!this.parts.has(startId) || !this.parts.has(endId)) {
-      return null;
+      return [];
     }
 
     if (startId === endId) {
-      const part = this.parts.get(startId)!;
-      return { partIds: [startId], coordinates: part.coordinates, hasBacktracking: false };
+      return [{ partIds: [startId], hasBacktracking: false }];
     }
 
     // Step 1: Find shortest path using standard BFS
     const firstPath = this.findShortestPath(startId, endId);
     if (!firstPath) {
-      return null;
+      return [];
     }
 
     // Step 2: Check if it backtracks
     const firstBacktracking = this.findBacktracking(firstPath);
     if (!firstBacktracking) {
-      const result = this.buildPathResult(firstPath);
-      result.hasBacktracking = false;
-      return result;
+      return [{ partIds: firstPath, hasBacktracking: false }];
     }
+    const backtrackingPath: PartPath = {
+      partIds: firstPath,
+      hasBacktracking: true,
+      backtrackingAt: firstBacktracking,
+    };
 
-    // Step 3: Search for non-backtracking alternative
+    // Step 3: Search for non-backtracking alternative. Non-backtracking paths are often
+    // slightly longer, so allow some slack: 10% or 5km, whichever is smaller (the
+    // percentage rules on long paths, the +5km on short ones). The search returns
+    // nothing longer than this, so whatever it finds is acceptable.
     const firstDistance = this.calculatePathDistance(firstPath);
-    // Non-backtracking paths are often slightly longer, so allow some slack: 10% or
-    // 5km, whichever is smaller (the percentage rules on long paths, the +5km on short ones).
-    const searchDistance = Math.min(firstDistance * 1.1, firstDistance + 5000);
+    const maxDistance = Math.min(firstDistance * 1.1, firstDistance + 5000);
     this.log(
-      `  Searching for non-backtracking alternatives (max ${(searchDistance / 1000).toFixed(1)}km)...`,
+      `  Searching for non-backtracking alternatives (max ${(maxDistance / 1000).toFixed(1)}km)...`,
     );
 
-    const bestAlternative = this.findNonBacktrackingAlternative(startId, endId, searchDistance);
+    const bestAlternative = this.findNonBacktrackingAlternative(startId, endId, maxDistance);
 
     if (!bestAlternative) {
       this.log(`  No non-backtracking alternative found, using original`);
-      const result = this.buildPathResult(firstPath);
-      result.hasBacktracking = true;
-      result.backtrackingAt = firstBacktracking;
-      return result;
+      return [backtrackingPath];
     }
 
-    // Step 4: Compare by distance
     const altDistance = this.calculatePathDistance(bestAlternative);
-    // Same allowance as the search above: 10% or 5km longer, whichever is smaller.
-    const maxAcceptable = Math.min(firstDistance * 1.1, firstDistance + 5000);
-
-    if (altDistance <= maxAcceptable) {
-      this.log(
-        `  Using non-backtracking alternative (${(altDistance / 1000).toFixed(1)}km) over backtracking path (${(firstDistance / 1000).toFixed(1)}km)`,
-      );
-
-      // Try to build the path - if it fails due to chain break, use original
-      try {
-        const result = this.buildPathResult(bestAlternative);
-        result.hasBacktracking = false;
-        return result;
-      } catch {
-        this.log(`  ⚠️  Alternative path has broken chain, using backtracking path instead`);
-        const result = this.buildPathResult(firstPath);
-        result.hasBacktracking = true;
-        result.backtrackingAt = firstBacktracking;
-        return result;
-      }
-    }
-
     this.log(
-      `  Alternative is too long (${(altDistance / 1000).toFixed(1)}km vs ${(firstDistance / 1000).toFixed(1)}km), using original`,
+      `  Preferring non-backtracking alternative (${(altDistance / 1000).toFixed(1)}km) over backtracking path (${(firstDistance / 1000).toFixed(1)}km)`,
     );
-    const result = this.buildPathResult(firstPath);
-    result.hasBacktracking = true;
-    result.backtrackingAt = firstBacktracking;
-    return result;
+    return [{ partIds: bestAlternative, hasBacktracking: false }, backtrackingPath];
   }
 
   // ============================================================================
@@ -730,27 +710,36 @@ export class RailwayPathFinder {
       for (const endPartId of endPartIds) {
         this.log(`  Trying path: ${startPartId} → ${endPartId}`);
 
-        const pathResult = this.findPath(startPartId, endPartId);
-        if (!pathResult) {
+        const candidates = this.findPath(startPartId, endPartId);
+        if (candidates.length === 0) {
           this.log(`    No path found`);
           continue;
         }
 
-        this.log(`    Path found with ${pathResult.partIds.length} parts`);
-
-        // Build coordinates with edge truncation
-        let coordinates: [number, number][];
-        try {
-          coordinates = this.buildCoordinatesWithTruncation(
-            pathResult.partIds,
-            startCoordinate,
-            endCoordinate,
-          );
-        } catch {
-          // Chain is broken - this path doesn't connect properly
+        // Build coordinates with edge truncation, taking the first candidate whose
+        // chain connects (a non-backtracking alternative that doesn't falls back to
+        // the backtracking path)
+        let pathResult: PartPath | null = null;
+        let coordinates: [number, number][] = [];
+        for (const candidate of candidates) {
+          try {
+            coordinates = this.buildCoordinatesWithTruncation(
+              candidate.partIds,
+              startCoordinate,
+              endCoordinate,
+            );
+            pathResult = candidate;
+            break;
+          } catch {
+            this.log(`    ⚠️  Chain broken for a ${candidate.partIds.length}-part candidate`);
+          }
+        }
+        if (!pathResult) {
           this.log(`    ❌ Chain broken - skipping this combination`);
           continue;
         }
+
+        this.log(`    Path found with ${pathResult.partIds.length} parts`);
 
         // Calculate total distance
         const distance = this.calculateCoordinateDistance(coordinates);
@@ -956,28 +945,6 @@ export class RailwayPathFinder {
 
     truncated.push(endPoint.projectedPoint);
     return truncated;
-  }
-
-  // ============================================================================
-  // PATH RESULT BUILDING
-  // ============================================================================
-
-  /**
-   * Build PathResult from part IDs (merges and orients coordinates)
-   */
-  private buildPathResult(partIds: string[]): PathResult {
-    const coordinateSublists: [number, number][][] = [];
-
-    for (const partId of partIds) {
-      const part = this.parts.get(partId);
-      if (part) {
-        coordinateSublists.push(part.coordinates);
-      }
-    }
-
-    const coordinates = mergeLinearChain(coordinateSublists, (message) => this.log(message));
-
-    return { partIds, coordinates };
   }
 
   // ============================================================================

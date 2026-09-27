@@ -124,14 +124,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     endCoordinate: [number, number],
     hasBacktracking?: boolean,
   ) => {
-    console.log("AdminPageClient: Preview route requested");
-    console.log("Part IDs:", partIds);
-    console.log("Coordinates count:", coordinates.length);
-    console.log("Railway parts:", railwayParts.length);
-    console.log("Start coordinate:", startCoordinate);
-    console.log("End coordinate:", endCoordinate);
-    console.log("Has backtracking:", hasBacktracking);
-
     setPreviewRoute({
       partIds,
       coordinates,
@@ -144,7 +136,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   };
 
   const handleCancelPreview = () => {
-    console.log("AdminPageClient: Preview cancelled");
     setPreviewRoute(null);
     setIsPreviewMode(false);
   };
@@ -160,8 +151,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     scenic: boolean;
     intended_backtracking: boolean;
   }) => {
-    console.log("AdminPageClient: Save route requested", routeData);
-
     if (!previewRoute) {
       console.error("AdminPageClient: No preview route to save");
       showError("Error: No route preview available to save");
@@ -178,10 +167,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
         },
         previewRoute.startCoordinate,
         previewRoute.endCoordinate,
-      );
-      console.log(
-        "AdminPageClient: Route saved successfully with auto-generated track_id:",
-        trackId,
       );
 
       // Clear preview mode

@@ -178,14 +178,6 @@ export type LocalLoggedPart = {
   created_at: string; // ISO timestamp
 };
 
-// User preferences from database
-export type UserPreferences = {
-  user_id: number;
-  selected_countries: string[]; // ISO 3166-1 alpha-2 country codes
-  created_at: string;
-  updated_at: string;
-};
-
 // Admin note from database
 export type AdminNote = {
   id: number;

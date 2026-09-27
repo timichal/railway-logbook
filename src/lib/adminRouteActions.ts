@@ -220,15 +220,9 @@ export async function saveRailwayRoute(
     // the default 'branch', or the user map showing stations no route reaches.
     await client.query("BEGIN");
 
-    console.log("Saving railway route:", `${routeData.from_station} ⟷ ${routeData.to_station}`);
-    console.log("Path segments:", pathResult.partIds.length);
-    console.log("Start coordinate:", startCoordinate);
-    console.log("End coordinate:", endCoordinate);
-
     // Use the truncated/merged coordinates from pathResult
     // The pathfinder already handles truncation and merging correctly
     const sortedCoordinates = pathResult.coordinates;
-    console.log("Using pathfinder coordinates:", sortedCoordinates.length, "points");
 
     // Create LineString geometry from coordinates
     const geometryWKT = coordinatesToWKT(sortedCoordinates);
@@ -242,8 +236,6 @@ export async function saveRailwayRoute(
       type: "LineString",
       coordinates: sortedCoordinates,
     });
-    console.log("Route countries:", startCountry, "→", endCountry);
-    console.log("Has backtracking:", pathResult.hasBacktracking || false);
 
     let queryStr: string;
     let values: (string | number | string[] | boolean | null)[];
@@ -269,7 +261,7 @@ export async function saveRailwayRoute(
           under_repair = FALSE,
           updated_at = CURRENT_TIMESTAMP
         WHERE track_id = $7
-        RETURNING track_id, length_km
+        RETURNING track_id
       `;
 
       values = [
@@ -326,7 +318,7 @@ export async function saveRailwayRoute(
           $14,
           $15
         )
-        RETURNING track_id, length_km
+        RETURNING track_id
       `;
 
       values = [
@@ -353,8 +345,11 @@ export async function saveRailwayRoute(
     const stationsOnOldGeometry = trackId ? await getStationsNearRoute(client, trackId) : [];
 
     const result = await client.query(queryStr, values);
+    if (result.rowCount === 0) {
+      // Only an edit can match nothing: the route was deleted since it was opened
+      throw new Error(`Route ${trackId} no longer exists`);
+    }
     const savedTrackId = result.rows[0].track_id;
-    const lengthKm = result.rows[0].length_km;
 
     const classifyLineClassSQL = `
       WITH part_lengths AS (
@@ -381,15 +376,7 @@ export async function saveRailwayRoute(
       WHERE track_id = $1
     `;
 
-    if (trackId) {
-      console.log("Successfully updated railway route geometry:", trackId);
-      await client.query(classifyLineClassSQL, [trackId]);
-      console.log("Re-classified line_class for route:", trackId);
-    } else {
-      console.log("Successfully saved railway route with auto-generated track_id:", savedTrackId);
-      await client.query(classifyLineClassSQL, [savedTrackId]);
-      console.log("Auto-classified line_class for route:", savedTrackId);
-    }
+    await client.query(classifyLineClassSQL, [savedTrackId]);
     // Stations the user map draws follow the routes, so a new or moved route
     // reveals (or hides) the stations along it right away
     await refreshStationProximityFor(client, {
@@ -397,14 +384,10 @@ export async function saveRailwayRoute(
       stationIds: stationsOnOldGeometry,
     });
 
-    console.log("Final geometry has", sortedCoordinates.length, "coordinate points");
-    console.log(
-      "Calculated route length:",
-      lengthKm ? `${Math.round(lengthKm * 10) / 10} km` : "N/A",
-    );
-    console.log("Stored coordinates:", startCoordinate, "to", endCoordinate);
-
     await client.query("COMMIT");
+    console.log(
+      `${trackId ? "Updated" : "Saved"} railway route ${savedTrackId}: ${routeData.name.trim() || `${routeData.from_station} ⟷ ${routeData.to_station}`}`,
+    );
 
     return savedTrackId as number;
   } catch (error) {

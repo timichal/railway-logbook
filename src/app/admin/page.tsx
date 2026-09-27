@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AdminPageClient from "@/components/admin/AdminPageClient";
 import { getUser } from "@/lib/authActions";
-import { DEFAULT_REGION, isRegionId, REGION_COOKIE } from "@/lib/shared/regions";
+import { REGION_COOKIE, regionIdOrDefault } from "@/lib/shared/regions";
 
 export default async function AdminPage() {
   // Check if user is authenticated and is admin
@@ -15,7 +15,7 @@ export default async function AdminPage() {
   // Shared with the main map: the same cookie, so switching region on one page
   // carries over to the other.
   const regionCookie = (await cookies()).get(REGION_COOKIE)?.value;
-  const initialRegion = isRegionId(regionCookie) ? regionCookie : DEFAULT_REGION;
+  const initialRegion = regionIdOrDefault(regionCookie);
 
   return <AdminPageClient user={user} initialRegion={initialRegion} />;
 }

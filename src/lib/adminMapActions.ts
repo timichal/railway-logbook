@@ -15,29 +15,8 @@ export async function findRailwayPathFromCoordinates(
 ): Promise<PathResult | null> {
   await requireAdmin();
 
-  console.log(
-    "Coordinate-based path finder: Finding path from",
-    startCoordinate,
-    "to",
-    endCoordinate,
-  );
-
   const pathFinder = new RailwayPathFinder();
-  const result = await pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
-
-  if (result) {
-    console.log(
-      "Coordinate-based path finder: Path found with",
-      result.partIds.length,
-      "segments and",
-      result.coordinates.length,
-      "coordinates",
-    );
-  } else {
-    console.log("Coordinate-based path finder: No path found");
-  }
-
-  return result;
+  return pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
 }
 
 /**
@@ -51,8 +30,6 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
   const client = await pool.connect();
 
   try {
-    console.log("Fetching railway parts for IDs:", partIds);
-
     const placeholders = partIds.map((_, index) => `$${index + 1}`).join(",");
     const queryStr = `
       SELECT
@@ -76,7 +53,6 @@ export async function getRailwayPartsByIds(partIds: string[]): Promise<RailwayPa
       } as RailwayPart;
     });
 
-    console.log("Fetched", features.length, "railway parts from database");
     return features;
   } catch (error) {
     console.error("Error fetching railway parts by IDs:", error);

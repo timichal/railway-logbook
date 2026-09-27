@@ -132,9 +132,9 @@ export function isRegionId(value: unknown): value is RegionId {
   return typeof value === "string" && value in REGIONS;
 }
 
-/** The region for an id, falling back to the default for anything unknown. */
-export function getRegion(value: unknown): Region {
-  return REGIONS[isRegionId(value) ? value : DEFAULT_REGION];
+/** A region id as given, falling back to the default for anything unknown. */
+export function regionIdOrDefault(value: unknown): RegionId {
+  return isRegionId(value) ? value : DEFAULT_REGION;
 }
 
 /**
@@ -171,15 +171,6 @@ export function regionUsageOptions(regionId: RegionId) {
 /** ISO country codes of a region, e.g. for the `selected_countries` tile filter. */
 export function regionCountryCodes(regionId: RegionId): string[] {
   return REGIONS[regionId].countries.map((country) => country.code);
-}
-
-/** The region a coordinate falls in, or null if it is outside every region. */
-export function regionForCoordinate(lon: number, lat: number): RegionId | null {
-  for (const id of REGION_IDS) {
-    const [[west, south], [east, north]] = REGIONS[id].bounds;
-    if (lon >= west && lon <= east && lat >= south && lat <= north) return id;
-  }
-  return null;
 }
 
 /**

@@ -11,34 +11,15 @@ import * as sources from "../shared/map/tileSources";
  *
  * **The native app must not import this module.** `getTileBaseUrl()` runs at module
  * load and reads `window.location`, which in React Native is a `window` with no
- * `location` on it; and `mapState` below reaches localStorage. The app imports
+ * `location` on it. The app imports
  * `@shared/map/style`, `@shared/map/layers`, `@shared/map/tileSources` and
  * `@shared/map/basemap` directly instead — those four carry no DOM dependency, and
  * keeping it that way is what keeps one set of layer specs serving both renderers.
  */
 
-// The basemap (vector, latin labels) and its raster fallback live in basemap.ts.
-export {
-  BASEMAP_FONT,
-  BASEMAP_FONT_BOLD,
-  BASEMAP_STYLE_URLS,
-  createBasemapFadeLayer,
-  createCountryBordersLayer,
-  createOSMBackgroundGroundLayer,
-  createOSMBackgroundLayer,
-  createOSMBackgroundSource,
-  dropPoiLayers,
-  filterPointsFromParkOutlines,
-  flattenBuildings,
-  GLYPHS_URL,
-  latinizeLabels,
-  loadBasemapStyle,
-  OSM_TILES_URL,
-} from "../shared/map/basemap";
 // Layer specs — shared with the native app, hence their own module.
 export {
   createAdminNotesLayer,
-  createPublicNotesLayer,
   createRailwayPartsLayer,
   createRailwayRoutesClickLayer,
   createRailwayRoutesHeritageLayer,
@@ -48,20 +29,14 @@ export {
   createStationLabelsLayer,
   createStationsLayer,
   lineClassColorExpression,
-  type RailwayRoutesPaintConfig,
 } from "../shared/map/layers";
-// Re-export so existing `import { COLORS } from '@/lib/map'` keeps working.
-export { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "../shared/map/style";
-export type { RailwayRoutesSourceOptions, RouteTileRides } from "../shared/map/tileSources";
-export { ZOOM_RANGES } from "../shared/map/zoomRanges";
-export { resolveMissingBasemapIcons } from "./missingIcons";
+export { CIRCLES, COLORS, OPACITIES, WIDTHS } from "../shared/map/style";
 
 // ============================================================================
 // TILE SOURCES, BOUND TO THIS APP'S TILE HOST
 // ============================================================================
 
-// The initial view and the panning limits are per-region; see src/lib/shared/regions.ts.
-export const TILE_SERVER_PORT = 3001;
+const TILE_SERVER_PORT = 3001;
 
 // Use /tiles/ path in production (proxied through Caddy), direct port in development
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
@@ -103,9 +78,3 @@ export const createAdminNotesSource = (cacheBuster?: number) =>
 
 export const createPublicNotesSource = (cacheBuster?: number) =>
   sources.createPublicNotesSource(TILE_BASE_URL, cacheBuster);
-
-// ============================================================================
-// MAP STATE PERSISTENCE
-// ============================================================================
-
-export { loadMapState, type MapState, saveMapState } from "./mapState";
