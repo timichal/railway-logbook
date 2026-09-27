@@ -2,20 +2,19 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type {
   CreateFormCoordinates,
   EditingGeometry,
-  NewRouteData,
-  PathPreview,
 } from "@/components/admin/AdminCreateRouteTab";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import Navbar from "@/components/layout/Navbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { unwrap } from "@/lib/actionResult";
-import { saveRailwayRoute } from "@/lib/adminRouteActions";
+import { type SaveRouteData, saveRailwayRoute } from "@/lib/adminRouteActions";
 import { logout } from "@/lib/authActions";
+import { useRoutePreview } from "@/lib/map/hooks/useRoutePreview";
 import { RegionProvider, useRegionId } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
 import { useToast } from "@/lib/toast";
@@ -56,17 +55,19 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   // Bumped per coordinate click, so the sidebar can switch to its create tab.
   const [coordinateClickTrigger, setCoordinateClickTrigger] = useState<number>(0);
-  // The path found between the picked points: drawn by the map, saved by the form.
-  const [previewRoute, setPreviewRoute] = useState<PathPreview | null>(null);
   // The create form's two picked points, held here and nowhere else: the map draws
   // them, the sidebar edits them, and the region switch below has to be able to
   // clear them. A second copy in the sidebar used to survive that clear and bring
   // the old region's preview straight back.
   const [createFormCoordinates, setCreateFormCoordinates] =
     useState<CreateFormCoordinates>(NO_COORDINATES);
-  // Read when a preview search returns, to tell whether its points are still picked.
-  const createFormCoordinatesRef = useRef(createFormCoordinates);
-  createFormCoordinatesRef.current = createFormCoordinates;
+  // The path found between the picked points: drawn by the map, saved by the form,
+  // and gone as soon as either point is.
+  const previewRoute = useRoutePreview(
+    createFormCoordinates.startingCoordinate,
+    createFormCoordinates.endingCoordinate,
+    showError,
+  );
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   // Likewise the geometry edit in progress, which the map needs (it hides the
   // routes) as much as the sidebar does.
@@ -85,7 +86,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: regionId is the trigger; the setters are stable and intentionally not read here.
   useEffect(() => {
     setSelectedRouteId(null);
-    setPreviewRoute(null);
     setCreateFormCoordinates(NO_COORDINATES);
     setEditingGeometry(null);
     setFocusGeometry(null);
@@ -103,12 +103,11 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     }
 
     setSelectedRouteId((prevId) => {
-      // Only clear coordinates/preview if the route ID actually changed
+      // Only clear the points (and so the preview) if the route ID actually changed
       // This prevents clearing coordinates when re-selecting the same route
       // (which happens during "Edit Route Geometry")
       if (prevId !== routeId) {
         setCreateFormCoordinates(NO_COORDINATES);
-        setPreviewRoute(null);
       }
       return routeId;
     });
@@ -127,27 +126,9 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setSelectedRouteId(null);
   };
 
-  // A path search takes a round trip, and its points may be gone by the time it
-  // returns — cleared by a region switch, by leaving the create tab, or replaced.
-  // Taking the result anyway put the old points' path back on the map, saveable.
-  const handlePreviewRoute = useCallback((preview: PathPreview) => {
-    const current = createFormCoordinatesRef.current;
-    if (
-      current.startingCoordinate !== preview.startCoordinate ||
-      current.endingCoordinate !== preview.endCoordinate
-    ) {
-      return;
-    }
-    setPreviewRoute(preview);
-  }, []);
-
-  const handleCancelPreview = () => {
-    setPreviewRoute(null);
-  };
-
   // Resolves whether the route was saved, so the form clears only then: a failed
   // save leaves everything typed into it in place, to be retried.
-  const handleSaveRoute = async (routeData: NewRouteData): Promise<boolean> => {
+  const handleSaveRoute = async (routeData: SaveRouteData): Promise<boolean> => {
     if (!previewRoute) {
       console.error("AdminPageClient: No preview route to save");
       showError("Error: No route preview available to save");
@@ -185,11 +166,9 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     }
   };
 
-  // Clears the picked points and the preview drawn from them: a preview whose
-  // points are gone is one the form can no longer save or cancel.
+  // Clears the picked points, and with them the preview drawn from them.
   const handleFormReset = useCallback(() => {
     setCreateFormCoordinates(NO_COORDINATES);
-    setPreviewRoute(null);
   }, []);
 
   const handleRouteDeleted = () => {
@@ -236,8 +215,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       editingGeometry={editingGeometry}
       onEditingGeometryChange={handleEditingGeometryChange}
       previewRoute={previewRoute}
-      onPreviewRoute={handlePreviewRoute}
-      onCancelPreview={handleCancelPreview}
       onSaveRoute={handleSaveRoute}
       onFormReset={handleFormReset}
       onRouteDeleted={handleRouteDeleted}

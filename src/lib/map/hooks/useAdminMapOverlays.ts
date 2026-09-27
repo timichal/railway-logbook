@@ -1,14 +1,11 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
-import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/shared/types";
+import type { GeoJSONFeatureCollection } from "@/lib/shared/types";
 import { CIRCLES, COLORS, OPACITIES, WIDTHS } from "../index";
+import type { PathPreview } from "./useRoutePreview";
 
 interface OverlayData {
-  previewRoute?: {
-    partIds: string[];
-    coordinates: [number, number][];
-    railwayParts?: RailwayPart[];
-  } | null;
+  previewRoute?: PathPreview | null;
   selectedCoordinates?: {
     startingCoordinate: [number, number] | null;
     endingCoordinate: [number, number] | null;

@@ -34,6 +34,7 @@ import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAd
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useRouteLength } from "@/lib/map/hooks/useRouteLength";
+import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
 import { useRegionId } from "@/lib/regionContext";
@@ -42,7 +43,7 @@ import {
   getAdminRouteWidthExpression,
 } from "@/lib/shared/map/utils/userRouteStyling";
 import type { RegionId } from "@/lib/shared/regions";
-import type { GeoJSONFeatureCollection, RailwayPart, Station } from "@/lib/shared/types";
+import type { GeoJSONFeatureCollection, Station } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
 
 // The base layer draws Regular routes solid; Heritage (dotted) and Special
@@ -122,11 +123,7 @@ interface AdminMapProps {
   onCoordinateClick?: (coordinate: [number, number]) => void;
   onRouteSelect?: (routeId: number | null) => void;
   selectedRouteId?: number | null;
-  previewRoute?: {
-    partIds: string[];
-    coordinates: [number, number][];
-    railwayParts?: RailwayPart[];
-  } | null;
+  previewRoute?: PathPreview | null;
   selectedCoordinates?: {
     startingCoordinate: [number, number] | null;
     endingCoordinate: [number, number] | null;

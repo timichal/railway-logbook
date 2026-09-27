@@ -1,30 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import TagInput from "@/components/ui/TagInput";
+import { useRef, useState } from "react";
+import RouteMetadataFields, {
+  routeMetadataIncomplete,
+} from "@/components/admin/RouteMetadataFields";
 import { unwrap } from "@/lib/actionResult";
-import { findRailwayPathFromCoordinates, getRailwayPartsByIds } from "@/lib/adminMapActions";
-import { saveRailwayRoute } from "@/lib/adminRouteActions";
-import { handleJunctionShortcut } from "@/lib/junctionShortcut";
+import { type SaveRouteData, saveRailwayRoute } from "@/lib/adminRouteActions";
+import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
-import type { UsageType } from "@/lib/shared/constants";
-import { regionUsageOptions } from "@/lib/shared/regions";
-import type { RailwayPart } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import { btn } from "@/lib/ui/buttonStyles";
-
-/** What the create form saves alongside the previewed geometry. */
-export interface NewRouteData {
-  name: string;
-  from_station: string;
-  to_station: string;
-  description: string;
-  usage_type: UsageType;
-  frequency: string[];
-  link: string;
-  scenic: boolean;
-  intended_backtracking: boolean;
-}
+import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 
 /** The create form's two picked points (also what a geometry edit re-picks). */
 export interface CreateFormCoordinates {
@@ -38,24 +23,14 @@ export interface EditingGeometry {
   routeInfo: { from_station: string; to_station: string } | null;
 }
 
-/** The path found between the two picked points: what the map draws and a save stores. */
-export interface PathPreview {
-  partIds: string[];
-  coordinates: [number, number][];
-  railwayParts: RailwayPart[];
-  startCoordinate: [number, number];
-  endCoordinate: [number, number];
-  hasBacktracking?: boolean;
-}
-
-const EMPTY_FORM = {
+const EMPTY_FORM: SaveRouteData = {
   name: "",
   from_station: "",
   to_station: "",
   description: "",
   // Default to Regular — the overwhelming majority of routes, saves a click
-  usage_type: 0 as UsageType | undefined,
-  frequency: [] as string[],
+  usage_type: 0,
+  frequency: [],
   link: "",
   scenic: false,
   intended_backtracking: false,
@@ -67,19 +42,17 @@ interface AdminCreateRouteTabProps {
   onStartingCoordinateChange: (coord: [number, number] | null) => void;
   onEndingCoordinateChange: (coord: [number, number] | null) => void;
   /**
-   * The page's preview, which is also what gets saved. Read from the page rather
-   * than kept here as well: this tab unmounts with the mobile drawer, and a copy of
-   * its own came back empty beside a preview still on the map, leaving Save enabled
-   * and doing nothing.
+   * The page's preview (`useRoutePreview`), which is also what gets saved. Read from
+   * the page rather than kept here as well: this tab unmounts with the mobile
+   * drawer, and a copy of its own came back empty beside a preview still on the
+   * map, leaving Save enabled and doing nothing.
    */
   previewRoute: PathPreview | null;
-  onPreviewRoute?: (preview: PathPreview) => void;
-  onCancelPreview?: () => void;
   /**
-   * Resolves whether the route was saved. The page clears the points and preview on
-   * success; this tab then clears only its own fields.
+   * Resolves whether the route was saved. The page clears the points (and so the
+   * preview) on success; this tab then clears only its own fields.
    */
-  onSaveRoute?: (routeData: NewRouteData) => Promise<boolean>;
+  onSaveRoute?: (routeData: SaveRouteData) => Promise<boolean>;
   editingGeometryForTrackId?: number | null;
   editingRouteInfo?: { from_station: string; to_station: string } | null;
   /** Called once a new geometry is saved; the sidebar ends the edit and clears the form. */
@@ -95,8 +68,6 @@ export default function AdminCreateRouteTab({
   onStartingCoordinateChange,
   onEndingCoordinateChange,
   previewRoute,
-  onPreviewRoute,
-  onCancelPreview,
   onSaveRoute,
   editingGeometryForTrackId,
   editingRouteInfo,
@@ -113,105 +84,26 @@ export default function AdminCreateRouteTab({
   // button only lands on the next render — two clicks in one task both got past it.
   const savingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
-  // Japan calls its usage types JR / non-JR lines; Europe keeps the defaults.
-  const usageOptions = regionUsageOptions(region.id);
-
-  // The points as of the latest render, and whether this tab is still mounted: a
-  // preview search reports a failure only while both still hold (the page makes the
-  // same check before taking a result — see handlePreviewRoute in AdminPageClient).
-  const pointsRef = useRef({ startingCoordinate, endingCoordinate });
-  pointsRef.current = { startingCoordinate, endingCoordinate };
-  const mountedRef = useRef(false);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   // Create route form state (without the coordinates that are managed by parent)
   const [createForm, setCreateForm] = useState(EMPTY_FORM);
 
-  // Clear starting coordinate
-  const clearStartingCoordinate = () => {
-    onStartingCoordinateChange(null);
-    if (onCancelPreview) {
-      onCancelPreview();
-    }
-  };
-
-  // Clear ending coordinate
-  const clearEndingCoordinate = () => {
-    onEndingCoordinateChange(null);
-    if (onCancelPreview) {
-      onCancelPreview();
-    }
-  };
-
-  // Handle preview route functionality
-  const handlePreviewRoute = async () => {
-    if (!startingCoordinate || !endingCoordinate || !onPreviewRoute) {
-      console.error("Preview: Missing starting coordinate, ending coordinate, or preview callback");
-      return;
-    }
-
-    const isStillWanted = () =>
-      mountedRef.current &&
-      pointsRef.current.startingCoordinate === startingCoordinate &&
-      pointsRef.current.endingCoordinate === endingCoordinate;
-
-    try {
-      // Use coordinate-based server action to find path
-      const result = unwrap(
-        await findRailwayPathFromCoordinates(startingCoordinate, endingCoordinate),
-      );
-
-      if (result) {
-        // Fetch the actual railway part geometries from the database
-        const railwayParts = unwrap(await getRailwayPartsByIds(result.partIds));
-
-        onPreviewRoute({
-          partIds: result.partIds,
-          coordinates: result.coordinates,
-          railwayParts,
-          startCoordinate: startingCoordinate,
-          endCoordinate: endingCoordinate,
-          hasBacktracking: result.hasBacktracking,
-        });
-      } else if (isStillWanted()) {
-        console.error("Preview: No path found between coordinates");
-        showError(
-          "No path found between the selected coordinates within 222km. Make sure both points are on connected railway parts.",
-        );
-      }
-    } catch (error) {
-      console.error("Preview: path search failed:", error);
-      if (isStillWanted()) {
-        showError(
-          `Error finding a path: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
-      }
-    }
-  };
+  // Clearing a point drops the preview with it (`useRoutePreview`).
+  const clearStartingCoordinate = () => onStartingCoordinateChange(null);
+  const clearEndingCoordinate = () => onEndingCoordinateChange(null);
 
   // Handle save route functionality
   const handleSaveRoute = async () => {
-    if (savingRef.current || !onSaveRoute || createForm.usage_type === undefined || !previewRoute)
-      return;
+    if (savingRef.current || !onSaveRoute || !previewRoute) return;
 
     savingRef.current = true;
     setIsSaving(true);
     try {
       const saved = await onSaveRoute({
+        ...createForm,
         name: createForm.name.trim(),
         from_station: createForm.from_station.trim(),
         to_station: createForm.to_station.trim(),
-        description: createForm.description,
-        usage_type: createForm.usage_type,
-        frequency: createForm.frequency,
-        link: createForm.link,
-        scenic: createForm.scenic,
-        intended_backtracking: createForm.intended_backtracking,
       });
       // The parent has already reported a failure; keep the form for a retry.
       if (!saved) return;
@@ -241,17 +133,7 @@ export default function AdminCreateRouteTab({
       // Metadata (name, description, usage_type, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
       unwrap(
         await saveRailwayRoute(
-          {
-            name: "",
-            from_station: "",
-            to_station: "",
-            description: "",
-            usage_type: 0,
-            frequency: [],
-            link: "",
-            scenic: false,
-            intended_backtracking: false,
-          }, // Dummy data, not used in UPDATE mode
+          EMPTY_FORM, // Not used in UPDATE mode
           {
             partIds: previewRoute.partIds,
             coordinates: previewRoute.coordinates,
@@ -275,14 +157,6 @@ export default function AdminCreateRouteTab({
       setIsSaving(false);
     }
   };
-
-  // Automatically preview route when both coordinates are filled
-  // biome-ignore lint/correctness/useExhaustiveDependencies: handlePreviewRoute is intentionally omitted; including it would re-run on every render and loop. The effect should fire only when the coordinates or preview mode change.
-  useEffect(() => {
-    if (startingCoordinate && endingCoordinate && !isPreviewMode) {
-      handlePreviewRoute();
-    }
-  }, [startingCoordinate, endingCoordinate, isPreviewMode]);
 
   const isEditMode = !!editingGeometryForTrackId;
 
@@ -334,8 +208,9 @@ export default function AdminCreateRouteTab({
             <button
               type="button"
               onClick={clearStartingCoordinate}
-              className="inline-flex items-center justify-center px-2 py-2 text-sm text-red-600 border border-gray-300 rounded-md transition-colors hover:bg-red-50 active:bg-red-100"
-              title="Clear starting coordinate"
+              className={`${iconBtn("sm", "danger")} self-center`}
+              title="Clear starting point"
+              aria-label="Clear starting point"
             >
               ×
             </button>
@@ -365,8 +240,9 @@ export default function AdminCreateRouteTab({
             <button
               type="button"
               onClick={clearEndingCoordinate}
-              className="inline-flex items-center justify-center px-2 py-2 text-sm text-red-600 border border-gray-300 rounded-md transition-colors hover:bg-red-50 active:bg-red-100"
-              title="Clear ending coordinate"
+              className={`${iconBtn("sm", "danger")} self-center`}
+              title="Clear ending point"
+              aria-label="Clear ending point"
             >
               ×
             </button>
@@ -375,166 +251,13 @@ export default function AdminCreateRouteTab({
 
         {/* Only show metadata fields in create mode */}
         {!isEditMode && (
-          <>
-            {/* Line Name — only where the region names its lines (Japan) */}
-            {region.hasRouteNames && (
-              <div>
-                <label
-                  htmlFor="route-name"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Name *
-                </label>
-                <input
-                  id="route-name"
-                  type="text"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
-                  placeholder="Line name"
-                />
-              </div>
-            )}
-
-            {/* From Station */}
-            <div>
-              <label htmlFor="route-from" className="block text-sm font-medium text-gray-700 mb-1">
-                From *
-              </label>
-              <input
-                id="route-from"
-                type="text"
-                value={createForm.from_station}
-                onChange={(e) => setCreateForm({ ...createForm, from_station: e.target.value })}
-                onKeyDown={(e) =>
-                  handleJunctionShortcut(e, (value) =>
-                    setCreateForm({ ...createForm, from_station: value }),
-                  )
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
-                placeholder="Starting station"
-              />
-            </div>
-
-            {/* To Station */}
-            <div>
-              <label htmlFor="route-to" className="block text-sm font-medium text-gray-700 mb-1">
-                To *
-              </label>
-              <input
-                id="route-to"
-                type="text"
-                value={createForm.to_station}
-                onChange={(e) => setCreateForm({ ...createForm, to_station: e.target.value })}
-                onKeyDown={(e) =>
-                  handleJunctionShortcut(e, (value) =>
-                    setCreateForm({ ...createForm, to_station: value }),
-                  )
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
-                placeholder="Ending station"
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label
-                htmlFor="route-description"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Description
-              </label>
-              <textarea
-                id="route-description"
-                value={createForm.description}
-                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
-                placeholder="Enter route description"
-              />
-            </div>
-
-            {/* Link */}
-            <div>
-              <label htmlFor="route-link" className="block text-sm font-medium text-gray-700 mb-1">
-                Link (URL)
-              </label>
-              <input
-                id="route-link"
-                type="url"
-                value={createForm.link}
-                onChange={(e) => setCreateForm({ ...createForm, link: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
-                placeholder="https://example.com"
-              />
-            </div>
-
-            {/* Usage Type */}
-            <div>
-              <span className="block text-sm font-medium text-gray-700 mb-2">Usage Type *</span>
-              <div className="flex gap-4">
-                {usageOptions.map((option) => (
-                  <label key={option.key} className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="usage_type"
-                      value={option.id}
-                      checked={createForm.usage_type === option.id}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          usage_type: Number(e.target.value) as UsageType,
-                        })
-                      }
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{option.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Frequency Tags */}
-            <div>
-              <span className="block text-sm font-medium text-gray-700 mb-2">Frequency Tags</span>
-              <TagInput
-                value={createForm.frequency}
-                availableTags={availableTags}
-                onChange={(frequency) => setCreateForm({ ...createForm, frequency })}
-              />
-            </div>
-
-            <span className="block text-sm font-medium text-gray-700 mb-2">Other</span>
-            <div className="flex flex-wrap gap-4">
-              {/* Scenic */}
-              <div className="flex-[0_1_30%]">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={createForm.scenic}
-                    onChange={(e) => setCreateForm({ ...createForm, scenic: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Scenic route</span>
-                </label>
-              </div>
-
-              {/* Intended Backtracking */}
-              <div className="flex-[0_1_30%]">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={createForm.intended_backtracking}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, intended_backtracking: e.target.checked })
-                    }
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Intended backtracking</span>
-                </label>
-              </div>
-            </div>
-          </>
+          <RouteMetadataFields
+            value={createForm}
+            onChange={setCreateForm}
+            idPrefix="route"
+            layout="wide"
+            availableTags={availableTags}
+          />
         )}
 
         {/* Save Button */}
@@ -571,10 +294,7 @@ export default function AdminCreateRouteTab({
                 disabled={
                   isSaving ||
                   !isPreviewMode ||
-                  (region.hasRouteNames && !createForm.name.trim()) ||
-                  !createForm.from_station ||
-                  !createForm.to_station ||
-                  createForm.usage_type === undefined
+                  routeMetadataIncomplete(createForm, region.hasRouteNames)
                 }
                 className={`${btn("success", "md")} w-full`}
               >

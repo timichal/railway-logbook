@@ -4,13 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AdminCreateRouteTab, {
   type CreateFormCoordinates,
   type EditingGeometry,
-  type NewRouteData,
-  type PathPreview,
 } from "@/components/admin/AdminCreateRouteTab";
 import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
 import { unwrap } from "@/lib/actionResult";
-import { getFrequencyTags, getRailwayRoute } from "@/lib/adminRouteActions";
+import { getFrequencyTags, getRailwayRoute, type SaveRouteData } from "@/lib/adminRouteActions";
+import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
@@ -26,9 +25,7 @@ interface AdminSidebarProps {
   editingGeometry: EditingGeometry | null;
   onEditingGeometryChange: (editing: EditingGeometry | null) => void;
   previewRoute: PathPreview | null;
-  onPreviewRoute?: (preview: PathPreview) => void;
-  onCancelPreview?: () => void;
-  onSaveRoute?: (routeData: NewRouteData) => Promise<boolean>;
+  onSaveRoute?: (routeData: SaveRouteData) => Promise<boolean>;
   /** Clears the create form's points and the preview drawn from them. */
   onFormReset: () => void;
   onRouteDeleted?: () => void;
@@ -50,8 +47,6 @@ export default function AdminSidebar({
   editingGeometry,
   onEditingGeometryChange,
   previewRoute,
-  onPreviewRoute,
-  onCancelPreview,
   onSaveRoute,
   onFormReset,
   onRouteDeleted,
@@ -140,15 +135,11 @@ export default function AdminSidebar({
         // Prefill the stored points — unless a point was picked on the map while the
         // route loaded, which is the admin's choice and not to be overwritten.
         const { starting_coordinate, ending_coordinate } = routeDetail;
-        if (starting_coordinate && ending_coordinate) {
-          onCreateFormCoordinatesChange((prev) =>
-            prev.startingCoordinate || prev.endingCoordinate
-              ? prev
-              : { startingCoordinate: starting_coordinate, endingCoordinate: ending_coordinate },
-          );
-        } else {
-          console.warn("Route does not have starting/ending coordinates stored");
-        }
+        onCreateFormCoordinatesChange((prev) =>
+          prev.startingCoordinate || prev.endingCoordinate
+            ? prev
+            : { startingCoordinate: starting_coordinate, endingCoordinate: ending_coordinate },
+        );
       } catch (error) {
         // Superseded: a newer edit (or none) owns the tab now, and nobody is
         // waiting on this one.
@@ -250,8 +241,6 @@ export default function AdminSidebar({
               onCreateFormCoordinatesChange((prev) => ({ ...prev, endingCoordinate: coord }))
             }
             previewRoute={previewRoute}
-            onPreviewRoute={onPreviewRoute}
-            onCancelPreview={onCancelPreview}
             onSaveRoute={onSaveRoute}
             editingGeometryForTrackId={editingGeometry?.trackId ?? null}
             editingRouteInfo={editingGeometry?.routeInfo ?? null}

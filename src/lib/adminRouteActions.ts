@@ -14,6 +14,21 @@ import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./sha
 import { getStationsNearRoute, refreshStationProximityFor } from "./stationProximity";
 
 /**
+ * The endpoints are required, and so is the name where the region names its
+ * lines; the forms say so first, but every export here is an endpoint. Trimmed,
+ * because a name of spaces reads as none. `name` is checked only by the caller
+ * that knows the region.
+ */
+function requiredStations(from: string, to: string): { from: string; to: string } {
+  const trimmedFrom = typeof from === "string" ? from.trim() : "";
+  const trimmedTo = typeof to === "string" ? to.trim() : "";
+  if (!trimmedFrom || !trimmedTo) {
+    throw new ValidationError("A route needs both a From and a To station");
+  }
+  return { from: trimmedFrom, to: trimmedTo };
+}
+
+/**
  * Interface for route metadata used during creation
  */
 export interface SaveRouteData {
@@ -29,6 +44,39 @@ export interface SaveRouteData {
   intended_backtracking: boolean;
 }
 
+/** A row of the admin routes list: the route's metadata and flags, no geometry. */
+export type AdminRouteSummary = {
+  track_id: number;
+  /** Line name where the region names its lines, NULL elsewhere. */
+  name: string | null;
+  from_station: string;
+  to_station: string;
+  description: string | null;
+  usage_type: UsageType;
+  scenic: boolean;
+  line_class: LineClass;
+  is_valid: boolean;
+  error_message: string | null;
+  under_repair: boolean;
+  intended_backtracking: boolean;
+  has_backtracking: boolean;
+};
+
+/**
+ * One route as the admin edits it: the list row's fields plus what the edit
+ * form, the map focus and the geometry re-pick need.
+ */
+export type AdminRouteDetail = AdminRouteSummary & {
+  frequency: string[];
+  link: string | null;
+  /** GeoJSON LineString, as a string. */
+  geometry: string;
+  length_km: number;
+  /** The stored click points the route is recalculated from. */
+  starting_coordinate: [number, number];
+  ending_coordinate: [number, number];
+};
+
 /**
  * Get all railway routes of one region (list view, no geometry).
  *
@@ -37,9 +85,11 @@ export interface SaveRouteData {
  * SUPPORTED_COUNTRIES, and those must still show up in the list of the region
  * they were drawn in.
  */
-export async function getAllRailwayRoutes(region: RegionId) {
+export async function getAllRailwayRoutes(
+  region: RegionId,
+): Promise<ActionResult<AdminRouteSummary[]>> {
   return asAdmin(async () => {
-    const result = await query(`
+    const result = await pool.query<AdminRouteSummary>(`
     SELECT track_id, name, from_station, to_station, description, usage_type, scenic, line_class,
            is_valid, error_message, under_repair, intended_backtracking, has_backtracking
     FROM railway_routes
@@ -87,52 +137,37 @@ export async function getFrequencyTags(): Promise<ActionResult<string[]>> {
   });
 }
 
-/**
- * Get a single railway route by track_id
- */
-export async function getRailwayRoute(trackId: number) {
+type AdminRouteDetailRow = Omit<AdminRouteDetail, "starting_coordinate" | "ending_coordinate"> & {
+  starting_coordinate: { coordinates: [number, number] };
+  ending_coordinate: { coordinates: [number, number] };
+};
+
+/** Get a single railway route by track_id. */
+export async function getRailwayRoute(trackId: number): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
-    const result = await query(
+    // length_km is NUMERIC, which pg hands back as a string unless cast.
+    const result = await pool.query<AdminRouteDetailRow>(
       `
     SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, scenic, line_class,
-           ST_AsGeoJSON(geometry) as geometry, length_km,
-           ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
-           ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json,
-           is_valid, error_message, under_repair, intended_backtracking
+           ST_AsGeoJSON(geometry) as geometry, length_km::float8 AS length_km,
+           ST_AsGeoJSON(starting_coordinate)::json as starting_coordinate,
+           ST_AsGeoJSON(ending_coordinate)::json as ending_coordinate,
+           is_valid, error_message, under_repair, intended_backtracking, has_backtracking
     FROM railway_routes
     WHERE track_id = $1
   `,
       [trackId],
     );
 
-    if (result.rows.length === 0) {
-      throw new ValidationError("Route not found");
-    }
-
     const row = result.rows[0];
-
-    // Parse coordinate JSON if they exist
-    let startingCoordinate = null;
-    let endingCoordinate = null;
-
-    if (row.starting_coordinate_json) {
-      const geojson = JSON.parse(row.starting_coordinate_json);
-      if (geojson.type === "Point" && geojson.coordinates) {
-        startingCoordinate = geojson.coordinates as [number, number];
-      }
-    }
-
-    if (row.ending_coordinate_json) {
-      const geojson = JSON.parse(row.ending_coordinate_json);
-      if (geojson.type === "Point" && geojson.coordinates) {
-        endingCoordinate = geojson.coordinates as [number, number];
-      }
+    if (!row) {
+      throw new ValidationError("Route not found");
     }
 
     return {
       ...row,
-      starting_coordinate: startingCoordinate,
-      ending_coordinate: endingCoordinate,
+      starting_coordinate: row.starting_coordinate.coordinates,
+      ending_coordinate: row.ending_coordinate.coordinates,
     };
   });
 }
@@ -413,6 +448,7 @@ export async function saveRailwayRoute(
           trackId,
         ];
       } else {
+        const { from, to } = requiredStations(routeData.from_station, routeData.to_station);
         // Insert new route with auto-generated track_id
         queryStr = `
         INSERT INTO railway_routes (
@@ -457,8 +493,8 @@ export async function saveRailwayRoute(
 
         values = [
           routeData.name.trim() || null,
-          routeData.from_station,
-          routeData.to_station,
+          from,
+          to,
           routeData.description || null,
           routeData.usage_type,
           routeData.frequency || [],
@@ -571,6 +607,7 @@ export async function updateRailwayRoute(
   intendedBacktracking: boolean,
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
+    const { from, to } = requiredStations(fromStation, toStation);
     const result = await query(
       `
     UPDATE railway_routes
@@ -582,8 +619,8 @@ export async function updateRailwayRoute(
       [
         trackId,
         name,
-        fromStation,
-        toStation,
+        from,
+        to,
         description,
         usageType,
         frequency || [],

@@ -9,6 +9,7 @@
     "ignoreUnknown": true,
     "includes": ["**", "!**/database/init/*.sql", "!**/osmium-scripts"]
   },
+  "plugins": ["./biome-plugins/unwrapAdminActions.grit", "./biome-plugins/bindActionResults.grit"],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

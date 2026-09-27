@@ -1,11 +1,11 @@
 "use client";
 
-import type { RailwayRoute } from "@/lib/shared/types";
+import type { AdminRouteSummary } from "@/lib/adminRouteActions";
 import { btn, optionRow } from "@/lib/ui/buttonStyles";
 
 interface RoutesListProps {
-  routes: RailwayRoute[];
-  paginatedRoutes: RailwayRoute[];
+  routes: AdminRouteSummary[];
+  paginatedRoutes: AdminRouteSummary[];
   totalRoutes: number;
   invalidRouteCount: number;
   underRepairCount: number;

@@ -1,0 +1,26 @@
+// The journey and trip server actions return a failure in-band, as
+// `{ …, error }`, so a call whose result is dropped reports a failed save as
+// done. The result must be bound where its `error` can be read —
+// `const result = await action(…)`, a destructuring that takes `error`, or a
+// `.then` callback that reads `result.error`.
+//
+// The import is looked for among the module's top-level items, never with
+// `$program <: contains` (see unwrapAdminActions.grit).
+language js
+
+`$f($args)` as $call where {
+  $program <: JsModule(items=$items),
+  $items <: some `import { $specs } from $src` where {
+    $src <: r"\"@/lib/(?:journey|trip)Actions\"",
+    $specs <: contains $f
+  },
+  not $call <: within `const $name = await $inner` where {
+    $inner <: $call,
+    or { not $name <: JsObjectBindingPattern(), $name <: contains `error` }
+  } ,
+  not $call <: within `$inner.then(($name) => $body)` where {
+    $inner <: $call,
+    $body <: contains `$name.error`
+  } ,
+  register_diagnostic(span=$call, message="A journey or trip action returns its failure as { error }: bind the result (const result = await action(…)) and check result.error.")
+}

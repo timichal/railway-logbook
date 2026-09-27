@@ -1,20 +1,14 @@
 import { useEffect, useState } from "react";
 import { unwrap } from "@/lib/actionResult";
 import { getRailwayRoute } from "@/lib/adminRouteActions";
-import type { RailwayPart } from "@/lib/shared/types";
 import { calculateDistance } from "../utils/distance";
-
-interface PreviewRoute {
-  partIds: string[];
-  coordinates: [number, number][];
-  railwayParts?: RailwayPart[];
-}
+import type { PathPreview } from "./useRoutePreview";
 
 /**
  * Hook to manage route length calculations for preview and selected routes
  */
 export function useRouteLength(
-  previewRoute: PreviewRoute | null | undefined,
+  previewRoute: PathPreview | null | undefined,
   selectedRouteId: number | null | undefined,
 ) {
   const [previewLength, setPreviewLength] = useState<number | null>(null);
@@ -49,7 +43,7 @@ export function useRouteLength(
     const fetchRouteLength = async () => {
       try {
         const route = unwrap(await getRailwayRoute(selectedRouteId));
-        setSelectedRouteLength(route.length_km ? parseFloat(route.length_km) : null);
+        setSelectedRouteLength(route.length_km);
       } catch (error) {
         console.error("Error fetching route length:", error);
         setSelectedRouteLength(null);

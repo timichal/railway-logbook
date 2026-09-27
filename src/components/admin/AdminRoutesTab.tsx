@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RouteEditForm from "@/components/admin/RouteEditForm";
+import type { EditRouteData } from "@/components/admin/RouteMetadataFields";
 import RoutesList from "@/components/admin/RoutesList";
 import { unwrap } from "@/lib/actionResult";
 import {
+  type AdminRouteDetail,
+  type AdminRouteSummary,
   deleteRailwayRoute,
   duplicateRailwayRoute,
   getAllRailwayRoutes,
@@ -13,35 +16,20 @@ import {
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
-import type { LineClass, UsageType } from "@/lib/shared/constants";
-import type { RailwayRoute } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 
-interface EditForm {
-  name: string;
-  from_station: string;
-  to_station: string;
-  description: string;
-  usage_type: UsageType;
-  frequency: string[];
-  link: string;
-  scenic: boolean;
-  line_class: LineClass;
-  intended_backtracking: boolean;
-}
-
-function editFormFromRoute(route: RailwayRoute): EditForm {
+function editFormFromRoute(route: AdminRouteDetail): EditRouteData {
   return {
     name: route.name || "",
     from_station: route.from_station,
     to_station: route.to_station,
     description: route.description || "",
     usage_type: route.usage_type,
-    frequency: route.frequency || [],
+    frequency: route.frequency,
     link: route.link || "",
-    scenic: route.scenic || false,
-    line_class: route.line_class || "branch",
-    intended_backtracking: route.intended_backtracking || false,
+    scenic: route.scenic,
+    line_class: route.line_class,
+    intended_backtracking: route.intended_backtracking,
   };
 }
 
@@ -71,8 +59,8 @@ export default function AdminRoutesTab({
   const { showError, showSuccess } = useToast();
 
   // State
-  const [routes, setRoutes] = useState<RailwayRoute[]>([]);
-  const [selectedRoute, setSelectedRoute] = useState<RailwayRoute | null>(null);
+  const [routes, setRoutes] = useState<AdminRouteSummary[]>([]);
+  const [selectedRoute, setSelectedRoute] = useState<AdminRouteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -82,7 +70,7 @@ export default function AdminRoutesTab({
   const [showWithoutNameOnly, setShowWithoutNameOnly] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const itemsPerPage = 100;
-  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [editForm, setEditForm] = useState<EditRouteData | null>(null);
 
   // Data loading
   const loadRoutes = async () => {

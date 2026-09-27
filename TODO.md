@@ -12,32 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Refactoring
 
-- [ ] **Nothing stops an admin call site from ignoring its result.** Admin
-      actions return their refusals as `{ error }` (`asAdmin`,
-      `src/lib/authHelpers.ts`). A call that forgets `unwrap`, such as
-      `await deleteAdminNote(id); showSuccess(…)`, compiles, passes Biome, and
-      reports a refused delete as done. The journey and trip actions' `{ error }`
-      results carry the same risk. **Fix:** a lint rule (Biome GritQL plugin)
-      that flags an `await` on an `@/lib/admin*Actions` import not wrapped in
-      `unwrap`, or an ESLint-style "no floating result" check if Biome gains one.
-
-- [ ] **`getAllRailwayRoutes` and `getRailwayRoute` are untyped.**
-      `src/lib/adminRouteActions.ts`. They have no declared return type, so they
-      infer `ActionResult<any>`, and `routeDetail.geometry`, `.length_km` and the
-      rest are never checked against `RailwayRoute`. A renamed column compiles
-      and fails at runtime. **Fix:** declare the row types (the detail one adds
-      the parsed coordinates) as their siblings do.
-
-- [ ] **The admin route metadata form is written twice.**
-      `AdminCreateRouteTab.tsx:374-531` and `RouteEditForm.tsx` repeat every
-      field with identical ~110-character input class strings (10 and 8 copies).
-      The preview-route shape is restated in `AdminPageClient.tsx`,
-      `AdminSidebar.tsx`, `AdminCreateRouteTab.tsx` and `AdminMap.tsx`. **Fix:**
-      `<RouteMetadataFields>`, `PathPreview` declared once (`NewRouteData` in
-      `AdminCreateRouteTab.tsx` already is), and a `useRoutePreview` hook, which
-      also fixes the missing try/catch and stale-response handling in
-      `handlePreviewRoute`.
-
 - [ ] **Split the two ~1200-line pathfinders along their seams.**
       - `routePathFinder.ts`:
         - `routeGraph.ts`: graph, grid, loader, cache (`:80-404`).
@@ -84,6 +58,24 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
       `cancelled` flags in `RailwayMap`, `PublicRailwayMap` and `useMapLibre` look
       the same but guard deferred map setup, not a load, so they are out of
       scope.
+
+- [ ] **The admin map fetches the selected route twice.**
+      `useRouteLength` calls `getRailwayRoute`, geometry and all, only to read
+      `length_km`, while `AdminRoutesTab` fetches the same detail for the same
+      selection. Its fetch also has no stale-response guard: select A then B,
+      and if A's reply lands last the map shows A's length beside B. **Fix:**
+      have whoever loads the detail hand the length to the map (lift the
+      selected route's detail to `AdminPageClient`), and drop the second fetch.
+
+- [ ] **Journey and trip actions report failure differently from admin ones.**
+      They return `{ …, error }` shapes of their own (`journeyActions.ts`,
+      `tripActions.ts`), so they need a second lint plugin
+      (`bindActionResults.grit`), and a call site checks `result.error` by hand
+      where an admin one writes `unwrap(...)`. Moving them onto `ActionResult`
+      would give the web app one error model and one rule. The cost is that the
+      query modules under them return the same shapes to the HTTP API
+      (`api/v1`, `lib/api/response.ts`), so either the web actions translate at
+      the boundary or both transports change together.
 
 - [ ] **Style values hard-coded outside `style.ts`.**
       - The dark ground `#05070a` is written twice in `basemap.ts` (`:204`,
@@ -136,9 +128,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
         `aria-activedescendant`.
 
 - [ ] **A few controls bypass `buttonStyles.ts`.**
-      - The coordinate "×" buttons (`AdminCreateRouteTab.tsx:332`, `:363`) are
-        hand-built, with no `not-disabled:` and no `aria-label`; use
-        `iconBtn("sm", "danger")`.
       - `TagInput.tsx:277-279` appends text colours to `optionRow(...)`.
       - `TripCard.tsx:194` carries both `text-[10px]` and `text-xs`.
 
