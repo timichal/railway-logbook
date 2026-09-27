@@ -12,8 +12,11 @@
 # (download.geofabrik.de/europe.html), so the data is the same as the whole
 # continent's extract: track everywhere on the admin map, whether or not the
 # country is on the user map (SUPPORTED_COUNTRIES in
-# src/lib/shared/constants.ts) or has routes yet. Two adjustments:
+# src/lib/shared/constants.ts) or has routes yet. Three adjustments:
 #
+# - Iceland and the Azores are left out: both lie west of the Europe region's
+#   12W edge (src/lib/shared/regions.ts), so nothing of them would ever be
+#   drawn.
 # - "Russian Federation" links to Geofabrik's Russia, which covers all of it.
 #   The continent's extract reaches only as far as 46.8E, so it is taken as the
 #   federal districts inside that line. The Volga and Northwestern districts
@@ -29,7 +32,6 @@
 europe europe/albania
 europe europe/andorra
 europe europe/austria
-europe europe/azores
 europe europe/belarus
 europe europe/belgium
 europe europe/bosnia-herzegovina
@@ -47,7 +49,6 @@ europe europe/germany
 europe europe/greece
 europe europe/guernsey-jersey
 europe europe/hungary
-europe europe/iceland
 europe europe/ireland-and-northern-ireland
 europe europe/isle-of-man
 europe europe/italy
