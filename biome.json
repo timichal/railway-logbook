@@ -20,6 +20,14 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "correctness": {
+        "useExhaustiveDependencies": {
+          "level": "error",
+          "options": {
+            "hooks": [{ "name": "useAsyncLoad", "closureIndex": 0, "dependenciesIndex": 1 }]
+          }
+        }
+      },
       "style": {
         "noNonNullAssertion": "off"
       }

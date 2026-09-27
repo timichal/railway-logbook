@@ -12,23 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Refactoring
 
-- [ ] **A `useAsyncLoad` hook for the cancellable load effect.** The
-      `let cancelled = false` / `.then` / `.catch` / `.finally` / cleanup pattern
-      is written out by hand in `CountriesStatsTab.tsx`, `ShareMapDialog.tsx`,
-      `LocalJourneyLogTab.tsx` (region track ids), `JourneyCard.tsx` (journey
-      details) and `useCoverageOverlay.ts`. Every copy has to get each guard
-      right by itself, and they don't agree: some copies log a failure for a
-      request that was already cancelled, and only `CountriesStatsTab` and
-      `ShareMapDialog` show the user that a load failed. **Fix:**
-      `useAsyncLoad(fn, deps)` returning `{ data, loading, error, retry }`, which
-      clears `data` whenever deps change so a failed load can't leave the
-      previous account's or region's result on screen. `JourneyCard` and
-      `useCoverageOverlay` act on the result rather than only storing it, so they
-      may want an `onData` callback or may simply stay as they are. The
-      `cancelled` flags in `RailwayMap`, `PublicRailwayMap` and `useMapLibre` look
-      the same but guard deferred map setup, not a load, so they are out of
-      scope.
-
 - [ ] **The admin map fetches the selected route twice.**
       `useRouteLength` calls `getRailwayRoute`, geometry and all, only to read
       `length_km`, while `AdminRoutesTab` fetches the same detail for the same

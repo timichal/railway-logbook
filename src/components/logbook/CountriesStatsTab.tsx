@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import type { DataAccess } from "@/lib/dataAccess";
-import type { ProgressByCountry } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
 import { getCountryFlag } from "@/lib/shared/countryFlag";
 import { btn } from "@/lib/ui/buttonStyles";
@@ -22,40 +21,17 @@ export default function CountriesStatsTab({
   // The tab only exists for a region with more than one country, and lists that
   // region's countries alone - the other region is a separate view entirely.
   const countries = useRegion().countries;
-  const [stats, setStats] = useState<ProgressByCountry | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-  // Bumped by Retry, to re-run the load effect
-  const [attempt, setAttempt] = useState(0);
-
   // The per-country numbers don't depend on the selection - every country in the
   // region is counted, ticked or not - so toggling one must not reload them. The
   // tab is mounted only while open, so opening it is what picks up newly logged
   // rides; `dataAccess` changes on login/logout and region switch.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is an intentional trigger - Retry bumps it to load again.
-  useEffect(() => {
-    let cancelled = false;
-    // Clear the previous account's or region's numbers, so a failed load can't leave them standing
-    setStats(null);
-    setLoadFailed(false);
-    setIsLoading(true);
-    dataAccess
-      .getProgressByCountry()
-      .then((progressData) => {
-        if (!cancelled) setStats(progressData);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        console.error("Failed to load country stats:", error);
-        setLoadFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [dataAccess, attempt]);
+  const {
+    data: stats,
+    loading: isLoading,
+    error: loadError,
+    retry,
+  } = useAsyncLoad(() => dataAccess.getProgressByCountry(), [dataAccess], "country stats");
+  const loadFailed = loadError !== null;
 
   const handleCountryToggle = (countryCode: string) => {
     const newSelection = selectedCountries.includes(countryCode)
@@ -108,7 +84,7 @@ export default function CountriesStatsTab({
       {loadFailed && (
         <div className={`${FORM_ERROR} mb-4 flex items-center justify-between gap-3`} role="alert">
           <span>Couldn't load the statistics.</span>
-          <button type="button" onClick={() => setAttempt((n) => n + 1)} className={btn("outline")}>
+          <button type="button" onClick={retry} className={btn("outline")}>
             Retry
           </button>
         </div>

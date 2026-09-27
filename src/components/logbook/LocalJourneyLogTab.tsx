@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
+import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import * as localStore from "@/lib/localStorage";
 import { useRegionId } from "@/lib/regionContext";
 import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
@@ -54,10 +55,15 @@ export default function LocalJourneyLogTab({
   const { showSuccess, showError } = useToast();
   const regionId = useRegionId();
   const [journeys, setJourneys] = useState<JourneyWithRoutes[]>([]);
-  // Track ids of the region on screen. A localStorage journey knows only track
-  // ids, so this is what tells the list which journeys belong here; null while
-  // it loads, and then everything is shown rather than nothing.
-  const [regionTrackIds, setRegionTrackIds] = useState<Set<number> | null>(null);
+  // Track ids of the region on screen, refetched when the region changes. A
+  // localStorage journey knows only track ids, so this is what tells the list
+  // which journeys belong here; null while it loads (or if it failed), and then
+  // everything is shown rather than nothing.
+  const { data: regionTrackIds } = useAsyncLoad(
+    () => getRegionTrackIds(regionId).then((ids) => new Set(ids)),
+    [regionId],
+    "region route ids",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [viewedJourneyId, setViewedJourneyId] = useState<string | null>(null);
@@ -71,22 +77,14 @@ export default function LocalJourneyLogTab({
   const [editDate, setEditDate] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
-  // The region's track ids, refetched when the region changes. Any journey open
-  // at the time is collapsed: it may not be in this region at all, and its
-  // highlight is dropped by the map anyway.
-  useEffect(() => {
-    let cancelled = false;
-    setRegionTrackIds(null);
+  // Any journey open when the region changes is collapsed: it may not be in this
+  // region at all, and its highlight is dropped by the map anyway. Done during
+  // the render that sees the new region, so it is never drawn open under it.
+  const [listedRegionId, setListedRegionId] = useState(regionId);
+  if (listedRegionId !== regionId) {
+    setListedRegionId(regionId);
     setViewedJourneyId(null);
-    getRegionTrackIds(regionId)
-      .then((ids) => {
-        if (!cancelled) setRegionTrackIds(new Set(ids));
-      })
-      .catch((error) => console.error("Error loading region route ids:", error));
-    return () => {
-      cancelled = true;
-    };
-  }, [regionId]);
+  }
 
   // Load journeys on mount and when storage changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadJourneys only needs to run on mount; the storage listener handles subsequent reloads.

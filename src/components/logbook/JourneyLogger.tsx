@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import RouteLogger, {
   type NewJourney,
   type RouteSelectionProps,
 } from "@/components/logbook/RouteLogger";
+import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { createJourney } from "@/lib/journeyActions";
 import { useRegionId } from "@/lib/regionContext";
 import type { TripWithStats } from "@/lib/tripActions";
 import { getAllTrips } from "@/lib/tripActions";
+
+const NO_TRIPS: TripWithStats[] = [];
 
 async function createAccountJourney(journey: NewJourney): Promise<string> {
   const result = await createJourney(
@@ -32,19 +34,19 @@ async function createAccountJourney(journey: NewJourney): Promise<string> {
 /** The Route Logger of a signed-in user: journeys go to the account, and may be filed under a trip. */
 export default function JourneyLogger(props: RouteSelectionProps) {
   const regionId = useRegionId();
-  const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
+  // Trips are region-scoped. A failed load leaves the picker empty, which only
+  // costs filing the journey under a trip later.
+  const { data: availableTrips } = useAsyncLoad(
+    () =>
+      getAllTrips(regionId).then((result) => {
+        if (result.error) throw new Error(result.error);
+        return result.trips ?? [];
+      }),
+    [regionId],
+    "trips",
+  );
 
-  // Trips are region-scoped
-  useEffect(() => {
-    let cancelled = false;
-    setAvailableTrips([]);
-    getAllTrips(regionId).then((result) => {
-      if (!cancelled && !result.error) setAvailableTrips(result.trips || []);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [regionId]);
-
-  return <RouteLogger {...props} trips={availableTrips} onCreate={createAccountJourney} />;
+  return (
+    <RouteLogger {...props} trips={availableTrips ?? NO_TRIPS} onCreate={createAccountJourney} />
+  );
 }

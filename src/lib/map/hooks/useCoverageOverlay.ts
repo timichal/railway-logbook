@@ -79,7 +79,7 @@ export function useCoverageOverlay(
         syncCoverageOverlay(m, stretches, selectedCountries);
       })
       .catch((error) => {
-        console.error("Error loading ridden stretches:", error);
+        if (!cancelled) console.error("Error loading ridden stretches:", error);
       });
 
     return () => {

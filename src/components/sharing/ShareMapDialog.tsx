@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { getPublicMapSettings, setPublicMapEnabled } from "@/lib/publicMapActions";
 import { useRegionId } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
@@ -25,77 +26,57 @@ interface ShareMapDialogProps {
  * open an empty Europe map. The token is unchanged by this; only the query is.
  */
 export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps) {
-  const regionId = useRegionId();
-  const [enabled, setEnabled] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Mounted only while open, so every open starts clean — its own load, no error
+  // or "Copied!" left over — and a save that returns after a close lands nowhere.
+  return isOpen ? <ShareMapPanel onClose={onClose} /> : null;
+}
 
-  // The token only ever arrives from the effect below, so this is a browser-only
+function ShareMapPanel({ onClose }: { onClose: () => void }) {
+  const regionId = useRegionId();
+  const settings = useAsyncLoad(() => getPublicMapSettings(), [], "sharing settings");
+  const { setData: setSettings } = settings;
+  const enabled = settings.data?.enabled ?? false;
+  const token = settings.data?.token ?? null;
+  const [saving, setSaving] = useState(false);
+  // A failed save or copy; a failed load is the hook's
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const error = actionError ?? (settings.error ? "Could not load your sharing settings." : null);
+
+  // The token only ever arrives from the load above, so this is a browser-only
   // value in practice; the explicit check keeps it safe under SSR regardless.
   const shareUrl =
     token && typeof window !== "undefined"
       ? `${window.location.origin}/shared/${token}?view=${regionId}`
       : "";
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    getPublicMapSettings()
-      .then((settings) => {
-        if (cancelled) return;
-        setEnabled(settings.enabled);
-        setToken(settings.token);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Could not load your sharing settings.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen]);
-
-  // Reset the transient "Copied!" state whenever the dialog is reopened
-  useEffect(() => {
-    if (!isOpen) setCopied(false);
-  }, [isOpen]);
-
   // Escape closes, matching the admin note popup
   useEffect(() => {
-    if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, onClose]);
+  }, [onClose]);
 
-  const handleToggle = useCallback(async (next: boolean) => {
-    setSaving(true);
-    setError(null);
-    // Optimistic: the switch is the whole point of the dialog, and a round trip
-    // of lag on it reads as a broken control.
-    setEnabled(next);
-    try {
-      const settings = await setPublicMapEnabled(next);
-      setEnabled(settings.enabled);
-      setToken(settings.token);
-    } catch {
-      setEnabled(!next);
-      setError("Could not save the setting. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  }, []);
+  const handleToggle = useCallback(
+    async (next: boolean) => {
+      setSaving(true);
+      setActionError(null);
+      // Optimistic: the switch is the whole point of the dialog, and a round trip
+      // of lag on it reads as a broken control.
+      setSettings((s) => s && { ...s, enabled: next });
+      try {
+        setSettings(await setPublicMapEnabled(next));
+      } catch {
+        setSettings((s) => s && { ...s, enabled: !next });
+        setActionError("Could not save the setting. Please try again.");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [setSettings],
+  );
 
   const handleCopy = useCallback(async () => {
     if (!shareUrl) return;
@@ -104,11 +85,9 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("Could not copy — select the link and copy it manually.");
+      setActionError("Could not copy — select the link and copy it manually.");
     }
   }, [shareUrl]);
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -143,7 +122,7 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
           </button>
         </div>
 
-        {loading ? (
+        {settings.loading ? (
           <div className="flex items-center text-sm text-gray-500 py-4">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
             Loading sharing settings…
