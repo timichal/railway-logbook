@@ -3,8 +3,10 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import AdminLayerControls from "@/components/admin/AdminLayerControls";
+import MapStationSearch from "@/components/map/MapStationSearch";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { unwrap } from "@/lib/actionResult";
+import { searchAllStations } from "@/lib/adminMapActions";
 import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
 import {
   adminNotesTileUrl,
@@ -39,13 +41,20 @@ import {
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
 } from "@/lib/shared/map/utils/userRouteStyling";
-import type { GeoJSONFeatureCollection, RailwayPart } from "@/lib/shared/types";
+import type { RegionId } from "@/lib/shared/regions";
+import type { GeoJSONFeatureCollection, RailwayPart, Station } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
 
 // The base layer draws Regular routes solid; Heritage (dotted) and Special
 // (dashed) get their own layers so the dash/dot gaps aren't filled by a solid
 // line underneath. All three are always shown on the admin map.
 const REGULAR_ONLY_FILTER = ["==", ["get", "usage_type"], 0] as maplibregl.FilterSpecification;
+
+// The admin map draws every station, so its search offers every station too — not
+// only the near-route ones the user map's does. Module-level: the search hook
+// re-creates its search whenever the function changes.
+const searchAdminStations = (query: string, region: RegionId): Promise<Station[]> =>
+  searchAllStations(query, region).then(unwrap);
 
 // The three colored route line layers. They share identical visit/selection
 // paint; only their dash style (baked into each factory) differs.
@@ -298,6 +307,16 @@ export default function AdminMap({
     <div className={`${className} relative`}>
       <div ref={mapContainer} className="w-full h-full" />
 
+      <MapStationSearch
+        map={map}
+        region={regionId}
+        isMobile={isMobile}
+        search={searchAdminStations}
+        // On a phone the collapsed "Layers" pill holds the top-left corner, and the
+        // expanded panel, later in the tree, covers the box while it is open.
+        positionClassName={isMobile ? "top-3 left-20 right-14" : undefined}
+      />
+
       <AdminLayerControls {...layerVisibility} isMobile={isMobile} />
 
       {validRoutesTotalKm !== null && (
@@ -314,7 +333,12 @@ export default function AdminMap({
       )}
 
       {(previewLength !== null || selectedRouteLength !== null) && (
-        <div className="absolute top-4 right-4 bg-surface p-3 rounded shadow-lg text-fg z-10">
+        // Below the station search, clear of MapLibre's top-right controls.
+        <div
+          className={`absolute bg-surface p-3 rounded shadow-lg text-fg z-10 ${
+            isMobile ? "top-14 right-14" : "top-16 right-12"
+          }`}
+        >
           <h3 className="font-bold mb-2">Route Length</h3>
           {previewLength !== null && (
             <div className="text-sm">

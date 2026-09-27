@@ -2,7 +2,7 @@
 
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
-import { useStationSearch } from "@/lib/map/hooks/useStationSearch";
+import { type StationSearchFn, useStationSearch } from "@/lib/map/hooks/useStationSearch";
 import type { RegionId } from "@/lib/shared/regions";
 import type { Station } from "@/lib/shared/types";
 import { optionRow } from "@/lib/ui/buttonStyles";
@@ -14,19 +14,26 @@ interface MapStationSearchProps {
   isMobile: boolean;
   /** Stands the box down without unmounting it, so a typed query survives. */
   hidden?: boolean;
+  /** Which stations to offer; the user map's near-route search by default. */
+  search?: StationSearchFn;
+  /** Placement classes, replacing the default top-corner position. */
+  positionClassName?: string;
 }
 
 /**
  * The search box in the map's top corner: type a station name, pick a result, and
- * the map flies to it. Shared by the interactive map and the read-only shared one.
+ * the map flies to it. Shared by the interactive map, the read-only shared one and
+ * the admin map.
  */
 export default function MapStationSearch({
   map,
   region,
   isMobile,
   hidden = false,
+  search,
+  positionClassName,
 }: MapStationSearchProps) {
-  const stationSearch = useStationSearch(region);
+  const stationSearch = useStationSearch(region, search);
 
   // The blur hides the list after a delay (see onBlur). A focus coming back inside
   // it must cancel that, or the list vanishes under a focused input.
@@ -82,9 +89,9 @@ export default function MapStationSearch({
 
   return (
     <div
-      className={`absolute z-10 ${isMobile ? "top-3 left-3 right-14" : "top-4 right-12 w-80"} ${
-        hidden ? "hidden" : ""
-      }`}
+      className={`absolute z-10 ${
+        positionClassName ?? (isMobile ? "top-3 left-3 right-14" : "top-4 right-12 w-80")
+      } ${hidden ? "hidden" : ""}`}
     >
       <div className="relative">
         <input

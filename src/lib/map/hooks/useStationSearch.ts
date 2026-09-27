@@ -3,12 +3,15 @@ import type { RegionId } from "@/lib/shared/regions";
 import type { Station } from "@/lib/shared/types";
 import { searchStations } from "@/lib/userActions";
 
+export type StationSearchFn = (query: string, region: RegionId) => Promise<Station[]>;
+
 /**
  * Hook to manage station search with debouncing and keyboard navigation.
  * Results are limited to `region` - the map is locked to it, so a hit anywhere
- * else could not be flown to.
+ * else could not be flown to. `search` defaults to the user map's (near-route
+ * stations only); pass a stable function, since a new one re-creates the search.
  */
-export function useStationSearch(region: RegionId) {
+export function useStationSearch(region: RegionId, search: StationSearchFn = searchStations) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Station[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -34,7 +37,7 @@ export function useStationSearch(region: RegionId) {
 
       setIsSearching(true);
       try {
-        const results = await searchStations(query, region);
+        const results = await search(query, region);
         if (requestId !== searchRequestRef.current) return;
         setSearchResults(results);
         setShowSuggestions(results.length > 0);
@@ -48,7 +51,7 @@ export function useStationSearch(region: RegionId) {
         if (requestId === searchRequestRef.current) setIsSearching(false);
       }
     },
-    [region],
+    [region, search],
   );
 
   // A new region drops the old one's search: its results could be picked and

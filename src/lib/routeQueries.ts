@@ -13,12 +13,13 @@ import { type RegionId, regionEnvelopeSql } from "./shared/regions";
 import type { RailwayRoute, RouteSummary, Station } from "./shared/types";
 
 /**
- * Station name search for the user map search box and the Journey Planner.
+ * Station name search for the map search boxes and the Journey Planner.
  *
- * Restricted to `near_route` stations — the same set the user map draws
- * (public_stations_tile), so the autocomplete can't offer a station that isn't
- * on the map and has no route within reach of the planner. The admin map is
- * unaffected; it has its own search and sees every station.
+ * Restricted by default to `near_route` stations — the same set the user map
+ * draws (public_stations_tile), so the autocomplete can't offer a station that
+ * isn't on the map and has no route within reach of the planner. The admin map
+ * draws every station (route creation needs the ones with no route yet), so its
+ * search passes `nearRouteOnly: false` to match.
  *
  * Also restricted to the current region: the map is locked to it, so a hit in
  * the other one could neither be flown to nor routed from.
@@ -30,6 +31,7 @@ import type { RailwayRoute, RouteSummary, Station } from "./shared/types";
 export async function searchStationsByName(
   searchQuery: string,
   region: RegionId,
+  { nearRouteOnly = true }: { nearRouteOnly?: boolean } = {},
 ): Promise<Station[]> {
   if (searchQuery.trim().length < 2) {
     return [];
@@ -43,7 +45,7 @@ export async function searchStationsByName(
            ST_X(coordinates) as lon,
            ST_Y(coordinates) as lat
     FROM stations
-    WHERE near_route
+    WHERE ($3 OR near_route)
       AND coordinates && ${regionEnvelopeSql(region)}
       AND immutable_unaccent(name) ILIKE immutable_unaccent($1)
     ORDER BY
@@ -54,7 +56,7 @@ export async function searchStationsByName(
       name
     LIMIT 10
   `,
-    [`%${pattern}%`, `${pattern}%`],
+    [`%${pattern}%`, `${pattern}%`, !nearRouteOnly],
   );
 
   return result.rows.map((row) => ({
