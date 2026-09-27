@@ -246,11 +246,15 @@ export default function MenuSheet({
   return (
     // The dialog is the whole viewport, transparent, with the panel inside it: the
     // scrim below is a real button rather than a click on `::backdrop`, and the
-    // panel is laid out exactly as it was before it was a dialog.
+    // panel is laid out exactly as it was before it was a dialog. `overflow-clip`,
+    // not `overflow-hidden`: a hidden box is still a scroll container, and
+    // `showModal()` focuses the header while the panel is still translated off the
+    // edge by its open animation — so the dialog scrolled to reveal it, then
+    // jumped back as the animation shrank the overflow. A clip box cannot scroll.
     <dialog
       ref={dialogRef}
       aria-labelledby={titleId}
-      className="fixed inset-0 m-0 p-0 w-full h-full max-w-none max-h-none overflow-hidden bg-transparent text-fg open:flex md:justify-end backdrop:bg-transparent"
+      className="fixed inset-0 m-0 p-0 w-full h-full max-w-none max-h-none overflow-clip bg-transparent text-fg open:flex md:justify-end backdrop:bg-transparent"
     >
       <div className="menu-sheet relative z-10 w-full md:w-[380px] bg-surface md:shadow-2xl flex flex-col safe-area">
         <header className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0">
