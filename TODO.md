@@ -12,16 +12,6 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Refactoring
 
-- [ ] **Merge the logged-in and local logbook variants.** `JourneyLogger.tsx` and
-      `LocalTripLogger.tsx` match line for line apart from the save call, trip
-      select and banner. `JourneyCard.tsx:386-521` and
-      `LocalJourneyLogTab.tsx:465-611` duplicate the edit form and route row (the
-      same trash SVG included). The local copies still hard-code `/5`
-      (`LocalJourneyLogTab.tsx:377`, `LocalTripLogger.tsx:85`) although
-      `MAX_JOURNEYS` exists. **Fix:** extract `<JourneyMetaFields>`,
-      `<SelectedRoutesList>`, `<LoggedRouteRow>` and `TrashIcon`, then build one
-      `RouteLogger` that takes an `onCreate` strategy.
-
 - [ ] **Nothing stops an admin call site from ignoring its result.** Admin
       actions return their refusals as `{ error }` (`asAdmin`,
       `src/lib/authHelpers.ts`). A call that forgets `unwrap`, such as

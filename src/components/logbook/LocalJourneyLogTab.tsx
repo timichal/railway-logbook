@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
+import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
 import * as localStore from "@/lib/localStorage";
 import { useRegionId } from "@/lib/regionContext";
 import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
@@ -13,7 +15,7 @@ import type {
   SelectedRoute,
 } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import { btn } from "@/lib/ui/buttonStyles";
 import { getRegionTrackIds, getRoutesByIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
@@ -333,9 +335,9 @@ export default function LocalJourneyLogTab({
     }
   };
 
-  const handleTogglePartial = (partId: string, currentPartial: boolean) => {
+  const handleSetPartial = (partId: string, partial: boolean) => {
     try {
-      localStore.updateLoggedPart(partId, !currentPartial);
+      localStore.updateLoggedPart(partId, partial);
       loadJourneys();
 
       // Trigger map refresh
@@ -372,7 +374,7 @@ export default function LocalJourneyLogTab({
       <div>
         <h3 className="text-lg font-bold mb-2">My Journeys (Local Storage)</h3>
         <p className="text-sm text-gray-600">
-          View and manage your railway journeys ({journeys.length}/5 used)
+          View and manage your railway journeys ({journeys.length}/{localStore.MAX_JOURNEYS} used)
         </p>
       </div>
 
@@ -470,51 +472,16 @@ export default function LocalJourneyLogTab({
                   {editingJourneyId === journey.id && (
                     <div className="space-y-2">
                       <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Journey</h5>
-                      <div>
-                        <label
-                          htmlFor={`local-journey-${journey.id}-name`}
-                          className="block text-xs font-medium mb-1"
-                        >
-                          Journey Name*
-                        </label>
-                        <input
-                          id={`local-journey-${journey.id}-name`}
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          htmlFor={`local-journey-${journey.id}-date`}
-                          className="block text-xs font-medium mb-1"
-                        >
-                          Date*
-                        </label>
-                        <input
-                          id={`local-journey-${journey.id}-date`}
-                          type="date"
-                          value={editDate}
-                          onChange={(e) => setEditDate(e.target.value)}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          htmlFor={`local-journey-${journey.id}-description`}
-                          className="block text-xs font-medium mb-1"
-                        >
-                          Description
-                        </label>
-                        <textarea
-                          id={`local-journey-${journey.id}-description`}
-                          value={editDescription}
-                          onChange={(e) => setEditDescription(e.target.value)}
-                          rows={2}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                        />
-                      </div>
+                      <JourneyMetaFields
+                        idPrefix={`local-journey-${journey.id}`}
+                        compact
+                        name={editName}
+                        onNameChange={setEditName}
+                        date={editDate}
+                        onDateChange={setEditDate}
+                        description={editDescription}
+                        onDescriptionChange={setEditDescription}
+                      />
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -545,63 +512,18 @@ export default function LocalJourneyLogTab({
                         {parts.map((part) => {
                           const meta = routeMeta[part.track_id];
                           return (
-                            <div
+                            <LoggedRouteRow
                               key={part.id}
-                              className="p-2 bg-gray-50 border border-gray-200 rounded text-xs"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-medium truncate">
-                                  {meta ? (
-                                    <>
-                                      {meta.from_station} ⟷ {meta.to_station}
-                                    </>
-                                  ) : (
-                                    `Route #${part.track_id}`
-                                  )}
-                                </span>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  <label className="flex items-center gap-1.5 select-none min-h-11 md:min-h-0 px-1 md:px-0">
-                                    <input
-                                      type="checkbox"
-                                      checked={part.partial}
-                                      onChange={() => handleTogglePartial(part.id, part.partial)}
-                                      className="w-4 h-4"
-                                    />
-                                    <span className="text-gray-500">partial</span>
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeletePart(part.id)}
-                                    title="Remove route from journey"
-                                    className={iconBtn("responsive", "danger")}
-                                  >
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      width="14"
-                                      height="14"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      aria-hidden="true"
-                                    >
-                                      <polyline points="3 6 5 6 21 6" />
-                                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                      <path d="M10 11v6" />
-                                      <path d="M14 11v6" />
-                                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </div>
-                              {meta?.length_km != null && (
-                                <div className="text-gray-500 mt-0.5">
-                                  {Number(meta.length_km).toFixed(1)} km
-                                </div>
-                              )}
-                            </div>
+                              title={
+                                meta
+                                  ? `${meta.from_station} ⟷ ${meta.to_station}`
+                                  : `Route #${part.track_id}`
+                              }
+                              lengthKm={meta?.length_km}
+                              partial={part.partial}
+                              onPartialChange={(partial) => handleSetPartial(part.id, partial)}
+                              onRemove={() => handleDeletePart(part.id)}
+                            />
                           );
                         })}
                       </div>

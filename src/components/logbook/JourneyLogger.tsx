@@ -1,284 +1,50 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import JourneyPlanner from "@/components/logbook/JourneyPlanner";
+import RouteLogger, {
+  type NewJourney,
+  type RouteSelectionProps,
+} from "@/components/logbook/RouteLogger";
 import { createJourney } from "@/lib/journeyActions";
 import { useRegionId } from "@/lib/regionContext";
-import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/shared/types";
-import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { getAllTrips } from "@/lib/tripActions";
-import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
-import { useTodayDefault } from "@/lib/useTodayDefault";
 
-interface JourneyLoggerProps {
-  selectedRoutes: SelectedRoute[];
-  onRemoveRoute: (trackId: number) => void;
-  onClearSelection: () => void;
-  onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
-  onRoutesLogged: () => void;
-  onHighlightRoutes?: HighlightRoutesFn;
-  onAddRoutesFromPlanner?: (routes: PlannerRoute[]) => void;
-  onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
+async function createAccountJourney(journey: NewJourney): Promise<string> {
+  const result = await createJourney(
+    journey.name,
+    journey.description,
+    journey.date,
+    journey.routes.map((r) => r.track_id),
+    journey.routes.map((r) => r.partial ?? false),
+    journey.tripId,
+    // Ridden stretch, known only for routes the Journey Planner joined mid-way
+    journey.routes.map((r) =>
+      r.covered
+        ? { covered_start: r.covered.covered_start, covered_end: r.covered.covered_end }
+        : null,
+    ),
+  );
+  if (result.error) throw new Error(result.error);
+  return `Journey "${result.journey?.name}" created successfully!`;
 }
 
-export default function JourneyLogger({
-  selectedRoutes,
-  onRemoveRoute,
-  onClearSelection,
-  onUpdateRoutePartial,
-  onRoutesLogged,
-  onHighlightRoutes,
-  onAddRoutesFromPlanner,
-  onStationClickHandler,
-}: JourneyLoggerProps) {
+/** The Route Logger of a signed-in user: journeys go to the account, and may be filed under a trip. */
+export default function JourneyLogger(props: RouteSelectionProps) {
   const regionId = useRegionId();
-  const { showSuccess, showError } = useToast();
-  // Journey form state
-  const [journeyName, setJourneyName] = useState("");
-  const {
-    value: journeyDate,
-    setValue: setJourneyDate,
-    reset: resetJourneyDate,
-    refresh: refreshJourneyDate,
-  } = useTodayDefault();
-  const [journeyDescription, setJourneyDescription] = useState("");
-  const [journeyTripId, setJourneyTripId] = useState<number | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Available trips for dropdown
   const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
 
-  // Trips are region-scoped, so a switch also drops a pick that is no longer offered
+  // Trips are region-scoped
   useEffect(() => {
-    setJourneyTripId(null);
+    let cancelled = false;
+    setAvailableTrips([]);
     getAllTrips(regionId).then((result) => {
-      if (!result.error) {
-        setAvailableTrips(result.trips || []);
-      }
+      if (!cancelled && !result.error) setAvailableTrips(result.trips || []);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [regionId]);
 
-  const handleCreateJourney = async () => {
-    if (!journeyName.trim() || !journeyDate || selectedRoutes.length === 0) {
-      showError("Please fill in journey name, date, and select at least one route");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const trackIds = selectedRoutes.map((r) => r.track_id);
-      const partialFlags = selectedRoutes.map((r) => r.partial ?? false);
-      // Ridden stretch, known only for routes the Journey Planner joined mid-way
-      const coveredRanges = selectedRoutes.map((r) =>
-        r.covered
-          ? { covered_start: r.covered.covered_start, covered_end: r.covered.covered_end }
-          : null,
-      );
-
-      const result = await createJourney(
-        journeyName.trim(),
-        journeyDescription.trim() || null,
-        journeyDate,
-        trackIds,
-        partialFlags,
-        journeyTripId,
-        coveredRanges,
-      );
-
-      if (result.error) {
-        showError(result.error);
-        return;
-      }
-
-      // Clear form and selection
-      setJourneyName("");
-      resetJourneyDate();
-      setJourneyDescription("");
-      setJourneyTripId(null);
-      onClearSelection();
-
-      // Trigger map refresh
-      onRoutesLogged();
-
-      showSuccess(`Journey "${result.journey?.name}" created successfully!`);
-    } catch (error) {
-      console.error("Error creating journey:", error);
-      showError(error instanceof Error ? error.message : "Failed to create journey");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const totalDistance = selectedRoutes.reduce((sum, route) => sum + route.length_km, 0);
-
-  return (
-    <div className="p-4 text-fg space-y-4">
-      {/* Journey Form Section */}
-      <div>
-        <h3 className="text-lg font-bold mb-3">New Journey</h3>
-
-        <div className="space-y-2">
-          <div>
-            <label htmlFor="new-journey-name" className="block text-sm font-medium mb-1">
-              Journey Name*
-            </label>
-            <input
-              id="new-journey-name"
-              type="text"
-              value={journeyName}
-              onChange={(e) => setJourneyName(e.target.value)}
-              placeholder="e.g., Prague to Vienna via Brno"
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="new-journey-date" className="block text-sm font-medium mb-1">
-              Date*
-            </label>
-            <input
-              id="new-journey-date"
-              type="date"
-              value={journeyDate}
-              onChange={(e) => setJourneyDate(e.target.value)}
-              onFocus={refreshJourneyDate}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="new-journey-description" className="block text-sm font-medium mb-1">
-              Description
-            </label>
-            <textarea
-              id="new-journey-description"
-              value={journeyDescription}
-              onChange={(e) => setJourneyDescription(e.target.value)}
-              rows={2}
-              placeholder="Optional notes about this journey..."
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-          </div>
-
-          {availableTrips.length > 0 && (
-            <div>
-              <label htmlFor="new-journey-trip" className="block text-sm font-medium mb-1">
-                Trip
-              </label>
-              <select
-                id="new-journey-trip"
-                value={journeyTripId ?? ""}
-                onChange={(e) => setJourneyTripId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">None</option>
-                {availableTrips.map((trip) => (
-                  <option key={trip.id} value={trip.id}>
-                    {trip.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Journey Planner Section */}
-      <div className="pt-3 border-t border-gray-200">
-        <JourneyPlanner
-          onHighlightRoutes={onHighlightRoutes}
-          onAddRoutesToSelection={onAddRoutesFromPlanner}
-          onStationClickHandler={onStationClickHandler}
-        />
-      </div>
-
-      {/* Selected Routes Section */}
-      <div className="pt-3 border-t border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700">
-            Selected Routes ({selectedRoutes.length})
-          </h3>
-          {selectedRoutes.length > 0 && (
-            <button type="button" onClick={onClearSelection} className={LINK_BTN}>
-              Clear all
-            </button>
-          )}
-        </div>
-
-        {selectedRoutes.length === 0 ? (
-          <div className="text-sm text-gray-500 text-center py-8 bg-gray-50 rounded border border-gray-200">
-            Click routes on the map to add them here
-          </div>
-        ) : (
-          <>
-            {/* Routes List */}
-            <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
-              {selectedRoutes.map((route) => (
-                <div
-                  key={route.track_id}
-                  className="p-2 bg-gray-50 border border-gray-200 rounded text-xs flex items-start justify-between gap-2"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">
-                      {route.from_station} ⟷ {route.to_station}
-                    </div>
-                    <div className="flex items-center gap-4 mt-1">
-                      <span className="text-gray-600">{route.length_km.toFixed(1)} km</span>
-                      <label className="flex items-center gap-1.5 text-xs text-gray-700 min-h-11 md:min-h-0 pr-2 md:pr-0">
-                        <input
-                          type="checkbox"
-                          checked={route.partial ?? false}
-                          onChange={(e) => onUpdateRoutePartial(route.track_id, e.target.checked)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                        />
-                        <span>Partial</span>
-                      </label>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onRemoveRoute(route.track_id)}
-                      className={`${iconBtn("responsive")} -my-2 -mr-1 md:my-0 md:mr-0 text-lg`}
-                      title="Remove route"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Summary */}
-            <div className="text-xs text-gray-600 mb-3 flex justify-between items-center bg-blue-50 px-3 py-2 rounded border border-blue-200">
-              <span className="font-medium">Total Distance:</span>
-              <span className="font-bold text-blue-700">{totalDistance.toFixed(1)} km</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Submit Button */}
-      <div className="pt-3 border-t border-gray-200">
-        <button
-          type="button"
-          onClick={handleCreateJourney}
-          disabled={isSaving || !journeyName.trim() || !journeyDate || selectedRoutes.length === 0}
-          className={`${btn("success", "md")} w-full`}
-          title={
-            !journeyName.trim()
-              ? "Journey name is required"
-              : !journeyDate
-                ? "Date is required"
-                : selectedRoutes.length === 0
-                  ? "Select at least one route"
-                  : ""
-          }
-        >
-          {isSaving ? "Creating..." : `Create Journey & Log ${selectedRoutes.length} Routes`}
-        </button>
-      </div>
-    </div>
-  );
+  return <RouteLogger {...props} trips={availableTrips} onCreate={createAccountJourney} />;
 }
