@@ -12,27 +12,13 @@ audit (`AUDIT.md`, closed in `7932aa7`) raised are not repeated here.
 
 ## Bugs — user-facing
 
-- [ ] **Sign-in and registration errors are unreadable in production.**
-      `src/lib/authActions.ts:49-78`; `LoginForm.tsx:88`; `RegisterForm.tsx`
-      (catch). `login`/`register` report rejections by *throwing*
-      `ValidationError`/`RateLimitError`, and the forms show `err.message`. A
-      production build replaces any message thrown from a server function with
-      "An error occurred in the Server Components render…", so a wrong password,
-      mismatched passwords and the 429 wait all show that sentence. The same
-      applies to other `showError(error.message)` calls after thrown actions
-      (AdminPageClient, AdminRoutesTab, JourneyLogger). The comment in `errors.ts`
-      ("the web forms render `error.message` either way") only holds in dev.
-      **Fix:** catch the two classes in the web actions and return `{ error }`,
-      as the journey/trip actions already do (see
-      `node_modules/next/dist/docs/01-app/01-getting-started/10-error-handling.md`).
-      Confirm with `npm run build && npm start`.
-
-- [ ] **Signing in with local journeys leaves the menu stuck on "Signing in…".**
-      `src/components/auth/LoginForm.tsx:36-81`. None of the merge dialog's three
-      callbacks calls `onSuccess()`, and `setLoading(false)` only runs in the
-      catch. The sheet stays open with the button disabled, and `onAuthSuccess`
-      (switch to Route Logger) never fires. **Fix:** call `onSuccess()` in every
-      branch and reset `loading` in a `finally`.
+- [ ] **Admin action errors are unreadable in production.** The admin actions
+      (`adminRouteActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts`)
+      reject by throwing `Error("Route not found")` and the like, and
+      AdminPageClient/AdminRoutesTab show `error.message` — which a production
+      build replaces with "An error occurred in the Server Components render…".
+      **Fix:** return `{ error }` for the expected rejections, as
+      `login`/`register` now do (`asAuthResult` in `authActions.ts`).
 
 - [ ] **Journey dates reach the app as timezone-dependent `Date`s.**
       `src/lib/journeyQueries.ts:53`, `:123-126`, `:194-199`; the `uj.*` selects in

@@ -19,6 +19,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { authenticateUser, registerUser } from "./authQueries";
 import { COOKIE_NAME, createToken, type User } from "./authTokens";
+import { RateLimitError, ValidationError } from "./errors";
 import { enforceLoginRateLimit, enforceRegisterRateLimit } from "./rateLimit";
 import { verifyToken } from "./sessionQueries";
 
@@ -55,34 +56,60 @@ export async function getUser(): Promise<User | null> {
   return sessionUserForToken(token);
 }
 
-export async function login(formData: FormData) {
-  enforceLoginRateLimit(await headers());
+/**
+ * What the two forms get back. A rejection is *returned*, not thrown: a
+ * production build replaces the message of anything thrown out of a server
+ * function with a generic "An error occurred in the Server Components render",
+ * so a wrong password would read the same as a crash. Only the two classes whose
+ * messages are written for the user are caught; anything else still throws and
+ * stays opaque, as it should.
+ */
+export type AuthResult = { user: User; error?: undefined } | { user?: undefined; error: string };
 
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-
-  const user = await authenticateUser(email, password);
-  await setSessionCookie(user);
-
-  return { success: true, user };
+async function asAuthResult(attempt: () => Promise<User>): Promise<AuthResult> {
+  try {
+    return { user: await attempt() };
+  } catch (error) {
+    if (error instanceof ValidationError || error instanceof RateLimitError) {
+      return { error: error.message };
+    }
+    throw error;
+  }
 }
 
-export async function register(formData: FormData, localPreferences?: string[]) {
-  enforceRegisterRateLimit(await headers());
+export async function login(formData: FormData): Promise<AuthResult> {
+  return asAuthResult(async () => {
+    enforceLoginRateLimit(await headers());
 
-  const user = await registerUser(
-    {
-      name: formData.get("name") as string,
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
-      confirmPassword: formData.get("confirmPassword") as string,
-    },
-    localPreferences,
-  );
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
 
-  await setSessionCookie(user);
+    const user = await authenticateUser(email, password);
+    await setSessionCookie(user);
+    return user;
+  });
+}
 
-  return { success: true, user };
+export async function register(
+  formData: FormData,
+  localPreferences?: string[],
+): Promise<AuthResult> {
+  return asAuthResult(async () => {
+    enforceRegisterRateLimit(await headers());
+
+    const user = await registerUser(
+      {
+        name: formData.get("name") as string,
+        email: formData.get("email") as string,
+        password: formData.get("password") as string,
+        confirmPassword: formData.get("confirmPassword") as string,
+      },
+      localPreferences,
+    );
+
+    await setSessionCookie(user);
+    return user;
+  });
 }
 
 export async function logout() {

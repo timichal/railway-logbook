@@ -34,7 +34,11 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
       const localPreferences = localStore.exportPreferences();
 
       // Register with auto-migration
-      await register(formData, localPreferences);
+      const result = await register(formData, localPreferences);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
 
       // Migrate journeys if there are any
       if (journeys.length > 0) {
@@ -59,7 +63,10 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
       onSuccess();
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      // Only an unexpected failure lands here; its message is not for the user.
+      console.error("Error creating account:", err);
+      setError("Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
     }
   }

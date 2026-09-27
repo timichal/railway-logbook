@@ -24,63 +24,77 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormPr
   const router = useRouter();
   const { showSuccess, showConfirm } = useToast();
 
+  /**
+   * Ask what to do with the journeys stored locally, and do it. Resolves once the
+   * chosen action has finished; the dialog has no way out but its three buttons,
+   * so it always does.
+   */
+  async function settleLocalJourneys(journeyCount: number) {
+    const plural = journeyCount !== 1 ? "s" : "";
+    const choice = await new Promise<"merge" | "keep" | "delete">((resolve) =>
+      showConfirm({
+        title: "Merge Local Journeys?",
+        message: `You have ${journeyCount} journey${plural} stored locally. Would you like to merge them with your account?\n\nDuplicates will be skipped automatically.\n\nIf you choose "Keep Local", these journeys will remain in your browser but won't be visible until you log out.`,
+        confirmLabel: `Merge ${journeyCount} Journey${plural}`,
+        cancelLabel: "Keep Local",
+        thirdLabel: "Delete Local",
+        variant: "info",
+        onConfirm: () => resolve("merge"),
+        onCancel: () => resolve("keep"),
+        onThird: () => resolve("delete"),
+      }),
+    );
+
+    if (choice === "keep") {
+      // Journeys stay in localStorage, invisible until logout.
+      showSuccess("Signed in. Your local journeys remain in browser storage.");
+    } else if (choice === "delete") {
+      localStore.clearAll();
+      showSuccess("Signed in. Local journeys have been deleted.");
+    } else {
+      try {
+        const { journeys, parts } = localStore.exportJourneysData();
+        const result = await migrateLocalJourneys(journeys, parts);
+
+        // Clear localStorage after successful migration
+        localStore.clearAll();
+
+        showSuccess(describeJourneyMigration(result));
+      } catch (err) {
+        console.error("Error migrating journeys:", err);
+        showSuccess(
+          "Signed in, but journey migration failed. Your local journeys are still saved.",
+        );
+      }
+    }
+  }
+
   async function handleSubmit(formData: FormData) {
     setError("");
     setLoading(true);
 
     try {
-      await login(formData);
-
-      // Check if there are localStorage journeys
-      const journeyCount = localStore.getJourneyCount();
-
-      if (journeyCount > 0) {
-        // Show confirmation dialog for merging journeys
-        showConfirm({
-          title: "Merge Local Journeys?",
-          message: `You have ${journeyCount} journey${journeyCount !== 1 ? "s" : ""} stored locally. Would you like to merge them with your account?\n\nDuplicates will be skipped automatically.\n\nIf you choose "Keep Local", these journeys will remain in your browser but won't be visible until you log out.`,
-          confirmLabel: `Merge ${journeyCount} Journey${journeyCount !== 1 ? "s" : ""}`,
-          cancelLabel: "Keep Local",
-          thirdLabel: "Delete Local",
-          variant: "info",
-          onConfirm: async () => {
-            try {
-              const { journeys, parts } = localStore.exportJourneysData();
-              const result = await migrateLocalJourneys(journeys, parts);
-
-              // Clear localStorage after successful migration
-              localStore.clearAll();
-
-              showSuccess(describeJourneyMigration(result));
-
-              // Refresh to show merged data
-              router.refresh();
-            } catch (err) {
-              console.error("Error migrating journeys:", err);
-              showSuccess(
-                "Signed in, but journey migration failed. Your local journeys are still saved.",
-              );
-            }
-          },
-          onCancel: () => {
-            // User chose to keep local - journeys stay in localStorage but invisible
-            showSuccess("Signed in. Your local journeys remain in browser storage.");
-            router.refresh();
-          },
-          onThird: () => {
-            // User chose to delete local journeys
-            localStore.clearAll();
-            showSuccess("Signed in. Local journeys have been deleted.");
-            router.refresh();
-          },
-        });
-      } else {
-        // No local journeys to ask about — close the sheet and pick up the session.
-        onSuccess();
-        router.refresh();
+      const result = await login(formData);
+      if (result.error) {
+        setError(result.error);
+        return;
       }
+
+      const journeyCount = localStore.getJourneyCount();
+      if (journeyCount > 0) {
+        await settleLocalJourneys(journeyCount);
+      }
+
+      // Only now close the sheet and pick up the session. Until then the page is
+      // still the signed-out one, and a journey logged locally while a merge is
+      // in flight would be wiped by its `clearAll()` without ever being sent.
+      onSuccess();
+      router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      // Only an unexpected failure lands here; its message is not for the user.
+      console.error("Error signing in:", err);
+      setError("Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
     }
   }

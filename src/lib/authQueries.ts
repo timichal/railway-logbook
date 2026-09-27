@@ -8,9 +8,9 @@
  * them is only where the resulting token is put, so that part stays in the
  * caller and the credential work lives here.
  *
- * Rejections are thrown as `ValidationError`: the web forms render
- * `error.message` directly, and the route handlers turn them into a 400 (a 401
- * for bad credentials) while an unexpected exception stays a 500.
+ * Rejections are thrown as `ValidationError`: the web actions return its message
+ * as `{ error }`, and the route handlers turn them into a 400 (a 401 for bad
+ * credentials) while an unexpected exception stays a 500.
  */
 
 import bcrypt from "bcryptjs";
@@ -73,12 +73,20 @@ export async function registerUser(
 
   const hashedPassword = await hashPassword(password);
 
+  // The check above saves a bcrypt on the common case; this catches the race it
+  // leaves open (a double submit, two tabs), which would otherwise surface as a
+  // unique violation and reach the form as an opaque failure.
   const result = await query(
-    "INSERT INTO users (email, name, password) VALUES ($1, $2, $3) RETURNING id, email, name",
+    `INSERT INTO users (email, name, password) VALUES ($1, $2, $3)
+     ON CONFLICT (email) DO NOTHING
+     RETURNING id, email, name`,
     [email, name || null, hashedPassword],
   );
 
   const user = result.rows[0];
+  if (!user) {
+    throw new ValidationError("User with this email already exists");
+  }
 
   if (localPreferences && localPreferences.length > 0) {
     try {
