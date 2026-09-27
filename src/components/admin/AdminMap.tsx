@@ -74,28 +74,25 @@ const ROUTE_LINE_LAYERS = [
 function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | null) {
   const trackIdNum = selectedRouteId ?? null;
 
-  // `under_repair` is only ever set on invalid routes, but it is checked first
-  // anyway so a stale flag can never outrank the grey.
+  // `under_repair` only qualifies an invalid route, so it is asked only inside the
+  // invalid branch — which also keeps a stale flag on a valid route from showing.
+  // Nested single-condition `case`s rather than an `["all", ...]`, per the house
+  // rule for data-driven paint (see "Map styling" in CLAUDE.md).
+  const statusColor: maplibregl.ExpressionSpecification = [
+    "case",
+    ["==", ["get", "is_valid"], false],
+    [
+      "case",
+      ["==", ["get", "under_repair"], true],
+      COLORS.railwayRoutes.underRepair,
+      COLORS.railwayRoutes.invalid,
+    ],
+    lineClassColorExpression(COLORS.railwayRoutes.default),
+  ];
   const colorExpression: maplibregl.ExpressionSpecification =
     trackIdNum !== null
-      ? [
-          "case",
-          ["==", ["id"], trackIdNum],
-          COLORS.railwayRoutes.selected,
-          ["all", ["==", ["get", "is_valid"], false], ["==", ["get", "under_repair"], true]],
-          COLORS.railwayRoutes.underRepair,
-          ["==", ["get", "is_valid"], false],
-          COLORS.railwayRoutes.invalid,
-          lineClassColorExpression(COLORS.railwayRoutes.default),
-        ]
-      : [
-          "case",
-          ["all", ["==", ["get", "is_valid"], false], ["==", ["get", "under_repair"], true]],
-          COLORS.railwayRoutes.underRepair,
-          ["==", ["get", "is_valid"], false],
-          COLORS.railwayRoutes.invalid,
-          lineClassColorExpression(COLORS.railwayRoutes.default),
-        ];
+      ? ["case", ["==", ["id"], trackIdNum], COLORS.railwayRoutes.selected, statusColor]
+      : statusColor;
 
   const widthExpression = getAdminRouteWidthExpression(trackIdNum);
   // Heritage dots' diameter equals the line width, so they use their own width.

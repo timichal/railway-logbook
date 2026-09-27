@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import HowToUseArticle from "@/components/articles/HowToUseArticle";
 import RailwayNotesArticle from "@/components/articles/RailwayNotesArticle";
 import LoginForm from "@/components/auth/LoginForm";
@@ -13,6 +13,7 @@ import type { User } from "@/lib/authActions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import { useModalDialog } from "@/lib/ui/useModalDialog";
 
 /**
  * What the hamburger opens: one menu, at every width — a full-screen sheet on a
@@ -44,7 +45,9 @@ import { btn, iconBtn } from "@/lib/ui/buttonStyles";
  * spent only on Log out.
  *
  * Mounted only while open (the caller conditions on it), so closing resets the view
- * and the open animation runs on every open.
+ * and the open animation runs on every open. It is a native modal `<dialog>`
+ * (`useModalDialog`): the page behind it is inert, and Escape reaches it only when
+ * nothing is open over it — the local-journeys confirm after a sign-in is.
  */
 
 interface MenuSheetProps {
@@ -140,14 +143,8 @@ export default function MenuSheet({
   const region = useRegion();
   const layerPrefs = useLayerPrefs();
   const [view, setView] = useState<MenuView>(initialView);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  const dialogRef = useModalDialog(onClose);
+  const titleId = useId();
 
   const handleAuthSuccess = () => {
     onAuthSuccess();
@@ -247,23 +244,21 @@ export default function MenuSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex md:justify-end">
-      {/* The scrim is desktop-only: the phone sheet covers the screen, so there is
-          nothing left to dim, and a tap-to-close target under a full-bleed panel is
-          unreachable anyway. */}
-      <button
-        type="button"
-        aria-label="Close menu"
-        onClick={onClose}
-        className="hidden md:block absolute inset-0 bg-black/40"
-      />
-
-      <div className="menu-sheet relative w-full md:w-[380px] bg-surface md:shadow-2xl flex flex-col safe-area">
+    // The dialog is the whole viewport, transparent, with the panel inside it: the
+    // scrim below is a real button rather than a click on `::backdrop`, and the
+    // panel is laid out exactly as it was before it was a dialog.
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      className="fixed inset-0 m-0 p-0 w-full h-full max-w-none max-h-none overflow-hidden bg-transparent text-fg open:flex md:justify-end backdrop:bg-transparent"
+    >
+      <div className="menu-sheet relative z-10 w-full md:w-[380px] bg-surface md:shadow-2xl flex flex-col safe-area">
         <header className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0">
           {view !== "menu" && (
             <IconButton onClick={backToMenu} label="Back to menu" path={CHEVRON_LEFT} />
           )}
           <h2
+            id={titleId}
             className={`flex-1 text-lg font-semibold text-gray-900 truncate ${
               view === "menu" ? "px-1" : ""
             }`}
@@ -311,6 +306,20 @@ export default function MenuSheet({
           </div>
         )}
       </div>
-    </div>
+
+      {/* The scrim is desktop-only: the phone sheet covers the screen, so there is
+          nothing left to dim, and a tap-to-close target under a full-bleed panel is
+          unreachable anyway. After the panel in the tree (and under it, by the
+          panel's z-10) so the dialog's initial focus lands in the panel's header
+          rather than on the scrim; out of the tab order and hidden from screen
+          readers, since the header's × is the accessible way to do the same. */}
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onClose}
+        className="hidden md:block absolute inset-0 bg-black/40"
+      />
+    </dialog>
   );
 }

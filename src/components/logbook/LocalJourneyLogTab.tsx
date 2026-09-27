@@ -6,7 +6,7 @@ import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import * as localStore from "@/lib/localStorage";
 import { useRegionId } from "@/lib/regionContext";
-import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
+import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type {
   HighlightRoutesFn,
   JourneyEditStartFn,
@@ -361,7 +361,9 @@ export default function LocalJourneyLogTab({
   const filteredJourneys = regionJourneys.filter(({ journey }) => {
     const query = searchQuery.toLowerCase();
     const matchesName = journey.name.toLowerCase().includes(query);
-    const matchesDate = String(journey.date).includes(query);
+    // The stored day, and the day as the card shows it in the viewer's locale.
+    const matchesDate =
+      journey.date.includes(query) || formatDateOnly(journey.date).includes(query);
     const matchesDescription = journey.description?.toLowerCase().includes(query) || false;
     return matchesName || matchesDate || matchesDescription;
   });
@@ -380,6 +382,7 @@ export default function LocalJourneyLogTab({
       <div>
         <input
           type="text"
+          aria-label="Search journeys"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by name, date, or description..."
@@ -413,9 +416,7 @@ export default function LocalJourneyLogTab({
 
               {/* Journey Stats */}
               <div className="flex items-center gap-4 text-xs text-gray-700 mb-3">
-                <span className="font-medium">
-                  {parseDateOnly(journey.date).toLocaleDateString("cs-CZ")}
-                </span>
+                <span className="font-medium">{formatDateOnly(journey.date)}</span>
                 <span className="flex items-center gap-1">
                   <span className="font-medium">{parts.length}</span>
                   <span>routes</span>

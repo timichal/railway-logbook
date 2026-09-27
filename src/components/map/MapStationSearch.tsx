@@ -6,6 +6,7 @@ import { type StationSearchFn, useStationSearch } from "@/lib/map/hooks/useStati
 import type { RegionId } from "@/lib/shared/regions";
 import type { Station } from "@/lib/shared/types";
 import { optionRow } from "@/lib/ui/buttonStyles";
+import { useCombobox } from "@/lib/ui/useCombobox";
 
 interface MapStationSearchProps {
   map: React.MutableRefObject<maplibregl.Map | null>;
@@ -34,6 +35,17 @@ export default function MapStationSearch({
   positionClassName,
 }: MapStationSearchProps) {
   const stationSearch = useStationSearch(region, search);
+  const expanded =
+    stationSearch.showSuggestions &&
+    !stationSearch.isSearching &&
+    stationSearch.searchResults.length > 0;
+  const activeIndex = stationSearch.selectedStationIndex;
+  // A combobox, as `StationSearchInput` is: focus stays in the input.
+  const combobox = useCombobox({
+    expanded,
+    activeIndex,
+    count: stationSearch.searchResults.length,
+  });
 
   // The blur hides the list after a delay (see onBlur). A focus coming back inside
   // it must cancel that, or the list vanishes under a focused input.
@@ -96,7 +108,9 @@ export default function MapStationSearch({
       <div className="relative">
         <input
           ref={stationSearch.searchInputRef}
+          {...combobox.inputProps}
           type="text"
+          aria-label="Search stations"
           value={stationSearch.searchQuery}
           onChange={(e) => stationSearch.setSearchQuery(e.target.value)}
           onKeyDown={handleSearchKeyDown}
@@ -127,32 +141,34 @@ export default function MapStationSearch({
         </svg>
 
         {/* Search Suggestions Dropdown */}
-        {stationSearch.showSuggestions &&
-          !stationSearch.isSearching &&
-          stationSearch.searchResults.length > 0 && (
-            <div
-              // Keeps the focus in the input: without it the pointerdown blurs the
-              // field and the 200ms blur timer above hides the list before the
-              // click lands — on touch, even scrolling the list did it.
-              onPointerDown={(e) => e.preventDefault()}
-              className="absolute top-full mt-1 w-full bg-surface border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto z-20"
-            >
-              {stationSearch.searchResults.map((station, index) => (
-                <button
-                  type="button"
-                  key={station.id}
-                  onClick={() => handleStationSelect(station)}
-                  onMouseEnter={() => stationSearch.setSelectedStationIndex(index)}
-                  className={`${optionRow(stationSearch.selectedStationIndex === index)} px-4 py-2 text-sm text-fg border-b border-gray-100 last:border-b-0`}
-                >
-                  <div className="font-medium">{station.name}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {station.coordinates[1].toFixed(4)}, {station.coordinates[0].toFixed(4)}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+        {expanded && (
+          <div
+            id={combobox.listId}
+            role="listbox"
+            aria-label="Stations"
+            // Keeps the focus in the input: without it the pointerdown blurs the
+            // field and the 200ms blur timer above hides the list before the
+            // click lands — on touch, even scrolling the list did it.
+            onPointerDown={(e) => e.preventDefault()}
+            className="absolute top-full mt-1 w-full bg-surface border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto z-20"
+          >
+            {stationSearch.searchResults.map((station, index) => (
+              <button
+                type="button"
+                key={station.id}
+                {...combobox.optionProps(index)}
+                onClick={() => handleStationSelect(station)}
+                onMouseEnter={() => stationSearch.setSelectedStationIndex(index)}
+                className={`${optionRow(activeIndex === index)} px-4 py-2 text-sm text-fg border-b border-gray-100 last:border-b-0`}
+              >
+                <div className="font-medium">{station.name}</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {station.coordinates[1].toFixed(4)}, {station.coordinates[0].toFixed(4)}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Loading indicator */}
         {stationSearch.isSearching && (

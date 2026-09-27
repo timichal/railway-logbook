@@ -263,6 +263,7 @@ export default function JourneysAndTripsTab({
       <div>
         <input
           type="text"
+          aria-label="Search trips and journeys"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search by name, date, or description..."

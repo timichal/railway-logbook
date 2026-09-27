@@ -9,7 +9,7 @@ import {
   POPUP_ROW_STYLE,
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
-import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
+import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type { RegionId } from "@/lib/shared/regions";
 import type { SelectedRoute, Station } from "@/lib/shared/types";
 import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
@@ -387,7 +387,7 @@ export function setupUserMapInteractions(
     // logged journey (both NOT NULL in user_journeys), so either both are
     // present or neither is.
     if (properties.date) {
-      const dateStr = new Intl.DateTimeFormat("cs-CZ").format(parseDateOnly(properties.date));
+      const dateStr = escapeHtml(formatDateOnly(properties.date));
       body += POPUP_DIVIDER;
       body += `<div style="${POPUP_ROW_STYLE} color: var(--color-gray-700);">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</div>`;
     }

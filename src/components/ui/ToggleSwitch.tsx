@@ -6,10 +6,14 @@ interface ToggleSwitchProps {
   onChange: (checked: boolean) => void;
   /** Tighter track and row, for the map's cramped overlay boxes. */
   compact?: boolean;
+  /** While a change is being saved, or before there is anything to switch. Set as
+      `aria-disabled` rather than `disabled`: a disabled button drops focus, so a
+      keyboard user who flipped the switch would lose their place mid-save. */
+  disabled?: boolean;
 }
 
 /**
- * On/off switch for the map's layer toggles.
+ * On/off switch — the map's layer toggles, and the share dialog's publish switch.
  *
  * A `role="switch"` button rather than a styled `<input type="checkbox">`: the whole
  * row is the hit area (44pt on touch, `md:`-reset for desktop density), and there is
@@ -25,14 +29,18 @@ export default function ToggleSwitch({
   checked,
   onChange,
   compact = false,
+  disabled = false,
 }: ToggleSwitchProps) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`w-full flex items-center justify-between gap-3 text-left text-gray-900 min-h-11 md:min-h-0 ${
+      aria-disabled={disabled || undefined}
+      onClick={() => {
+        if (!disabled) onChange(!checked);
+      }}
+      className={`w-full flex items-center justify-between gap-3 text-left text-gray-900 min-h-11 md:min-h-0 aria-disabled:opacity-50 ${
         compact ? "text-xs md:py-0.5" : "text-sm py-1"
       }`}
     >

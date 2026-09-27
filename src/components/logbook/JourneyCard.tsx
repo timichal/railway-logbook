@@ -5,7 +5,7 @@ import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { deleteJourney, getJourney, saveJourneyEdits } from "@/lib/journeyActions";
-import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
+import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type {
   HighlightRoutesFn,
   Journey,
@@ -265,7 +265,7 @@ export default function JourneyCard({
             )}
           </div>
           <div className="text-xs text-gray-600 mt-0.5">
-            {parseDateOnly(journey.date).toLocaleDateString()} · {journey.route_count} route
+            {formatDateOnly(journey.date)} · {journey.route_count} route
             {journey.route_count === 1 ? "" : "s"} · {Number(journey.total_distance).toFixed(1)} km
           </div>
         </div>

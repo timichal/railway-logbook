@@ -13,7 +13,7 @@
  * the highlight and says so — the reader goes to the map to see it.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { parseDateOnly } from "@shared/getUntimezonedDateStr";
+import { formatDateOnly, formatDateOnlyRange } from "@shared/getUntimezonedDateStr";
 import { useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from "react-native";
@@ -195,7 +195,7 @@ function TripCard({
                 {journey.name}
               </Text>
               <Text className="text-xs text-gray-600 dark:text-gray-400">
-                {formatDate(journey.date)} · {journey.route_count}{" "}
+                {formatDateOnly(journey.date)} · {journey.route_count}{" "}
                 {plural(journey.route_count, "route", "routes")} ·{" "}
                 {formatKm(journey.total_distance)} km
               </Text>
@@ -222,7 +222,7 @@ function JourneyCard({
       <CardHeader
         icon="train-outline"
         title={journey.name}
-        subtitle={formatDate(journey.date)}
+        subtitle={formatDateOnly(journey.date)}
         stats={`${journey.route_count} ${plural(journey.route_count, "route", "routes")} · ${formatKm(journey.total_distance)} km`}
         open={open}
         onToggle={onToggle}
@@ -329,11 +329,7 @@ function formatKm(value: string | null): string {
   return (Number(value) || 0).toFixed(1);
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("cs-CZ").format(parseDateOnly(value));
-}
-
 function dateRange(start: string | null, end: string | null): string {
   if (!start || !end) return "No journeys yet";
-  return start === end ? formatDate(start) : `${formatDate(start)} – ${formatDate(end)}`;
+  return formatDateOnlyRange(start, end);
 }

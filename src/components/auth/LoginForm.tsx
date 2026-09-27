@@ -26,8 +26,8 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormPr
 
   /**
    * Ask what to do with the journeys stored locally, and do it. Resolves once the
-   * chosen action has finished; the dialog has no way out but its three buttons,
-   * so it always does.
+   * chosen action has finished; the dialog has no way out but its three buttons
+   * (Escape is "Keep Local", its cancel), so it always does.
    */
   async function settleLocalJourneys(journeyCount: number) {
     const plural = journeyCount !== 1 ? "s" : "";

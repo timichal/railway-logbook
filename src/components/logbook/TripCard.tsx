@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { useRegionId } from "@/lib/regionContext";
-import { parseDateOnly } from "@/lib/shared/getUntimezonedDateStr";
+import { formatDateOnly, formatDateOnlyRange } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import type { JourneyInTrip, TripWithStats } from "@/lib/tripActions";
@@ -162,22 +162,16 @@ export default function TripCard({
     }
   };
 
-  const formatDateRange = (startDate: string | null, endDate: string | null): string => {
-    if (!startDate) return "No journeys";
-    const start = parseDateOnly(startDate);
-    if (startDate === endDate || !endDate) {
-      return start.toLocaleDateString();
-    }
-    const end = parseDateOnly(endDate);
-    return `${start.toLocaleDateString()} – ${end.toLocaleDateString()}`;
-  };
+  const dateRange = trip.start_date
+    ? formatDateOnlyRange(trip.start_date, trip.end_date)
+    : "No journeys";
 
   return (
     <div className="bg-surface border border-purple-300 rounded shadow-sm">
       <div className="px-3 py-2 flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 overflow-hidden">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold text-xs bg-purple-100 text-purple-800 flex-shrink-0 tracking-wide">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-800 flex-shrink-0 tracking-wide">
               Trip
             </span>
             <span className="font-semibold text-sm truncate" title={trip.name}>
@@ -190,7 +184,7 @@ export default function TripCard({
             )}
           </div>
           <div className="text-xs text-gray-600 mt-0.5">
-            {formatDateRange(trip.start_date, trip.end_date)} · {trip.journey_count} journey
+            {dateRange} · {trip.journey_count} journey
             {trip.journey_count === 1 ? "" : "s"} · {trip.route_count} route
             {trip.route_count === 1 ? "" : "s"} · {Number(trip.total_distance).toFixed(1)} km
           </div>
@@ -343,7 +337,7 @@ export default function TripCard({
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{j.name}</div>
                         <div className="text-gray-600 flex items-center gap-3 mt-0.5">
-                          <span>{parseDateOnly(j.date).toLocaleDateString()}</span>
+                          <span>{formatDateOnly(j.date)}</span>
                           <span>{Number(j.total_distance).toFixed(1)} km</span>
                         </div>
                       </div>

@@ -430,6 +430,7 @@ export default function JourneyPlanner({
         isSelected={!!fromStation}
         selectedClassName="border-blue-300 bg-blue-50"
         showClear={!!fromStation}
+        clearLabel="Clear from station"
         showResults={activeSearch === "from"}
         searchResults={searchResults}
         selectedIndex={selectedIndex}
@@ -478,11 +479,14 @@ export default function JourneyPlanner({
           )}
           <StationSearchInput
             containerClassName="flex-1"
+            label={`Via station ${viaIndex + 1}`}
+            hideLabel
             value={viaSearchQueries[viaIndex] || ""}
             placeholder={`Search via station ${viaIndex + 1}...`}
             isSelected={!!station}
             selectedClassName="border-green-300 bg-green-50"
             showClear={true}
+            clearLabel={`Remove via station ${viaIndex + 1}`}
             showResults={activeSearch === viaIndex}
             searchResults={searchResults}
             selectedIndex={selectedIndex}
@@ -520,6 +524,7 @@ export default function JourneyPlanner({
         isSelected={!!toStation}
         selectedClassName="border-blue-300 bg-blue-50"
         showClear={!!toStation}
+        clearLabel="Clear to station"
         showResults={activeSearch === "to"}
         searchResults={searchResults}
         selectedIndex={selectedIndex}

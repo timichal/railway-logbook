@@ -29,3 +29,20 @@ export const isDateOnly = (value: string): boolean =>
 
 /** Today where the user is, as YYYY-MM-DD. */
 export const getTodayDateStr = (): string => getUntimezonedDateStr(new Date());
+
+/**
+ * A YYYY-MM-DD day for display, in the viewer's own locale — the one format every
+ * journey date is shown in, on both apps, so a day reads the same from one view to
+ * the next. Goes through `parseDateOnly`, never `new Date(str)`; a value that is
+ * not a day comes back as it is rather than as "Invalid Date".
+ */
+export const formatDateOnly = (value: string): string => {
+  const date = parseDateOnly(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+};
+
+/** `formatDateOnly` for a span of days: one date when it starts and ends on the same one. */
+export const formatDateOnlyRange = (start: string, end: string | null): string =>
+  !end || end === start
+    ? formatDateOnly(start)
+    : `${formatDateOnly(start)} – ${formatDateOnly(end)}`;

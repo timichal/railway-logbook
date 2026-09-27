@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useId, useState } from "react";
+import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { getPublicMapSettings, setPublicMapEnabled } from "@/lib/publicMapActions";
 import { useRegionId } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import { useModalDialog } from "@/lib/ui/useModalDialog";
 
 interface ShareMapDialogProps {
   isOpen: boolean;
@@ -33,6 +35,8 @@ export default function ShareMapDialog({ isOpen, onClose }: ShareMapDialogProps)
 
 function ShareMapPanel({ onClose }: { onClose: () => void }) {
   const regionId = useRegionId();
+  const dialogRef = useModalDialog(onClose);
+  const titleId = useId();
   const settings = useAsyncLoad(() => getPublicMapSettings(), [], "sharing settings");
   const { setData: setSettings } = settings;
   const enabled = settings.data?.enabled ?? false;
@@ -49,15 +53,6 @@ function ShareMapPanel({ onClose }: { onClose: () => void }) {
     token && typeof window !== "undefined"
       ? `${window.location.origin}/shared/${token}?view=${regionId}`
       : "";
-
-  // Escape closes, matching the admin note popup
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
 
   const handleToggle = useCallback(
     async (next: boolean) => {
@@ -90,97 +85,95 @@ function ShareMapPanel({ onClose }: { onClose: () => void }) {
   }, [shareUrl]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-surface rounded-lg shadow-xl max-w-lg w-full p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Share your map</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Publish a read-only version of your map for anyone to view.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className={`${iconBtn("sm")} ml-4`}
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      className="m-auto w-[calc(100%-2rem)] max-w-lg p-6 bg-surface text-fg rounded-lg shadow-xl backdrop:bg-[rgb(0_0_0/0.5)]"
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 id={titleId} className="text-lg font-semibold text-gray-900">
+            Share your map
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Publish a read-only version of your map for anyone to view.
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className={`${iconBtn("sm")} ml-4`}
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
 
-        {settings.loading ? (
-          <div className="flex items-center text-sm text-gray-500 py-4">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
-            Loading sharing settings…
+      {settings.loading ? (
+        <div className="flex items-center text-sm text-gray-500 py-4">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+          Loading sharing settings…
+        </div>
+      ) : (
+        <>
+          <div className="py-2 border-t border-b border-gray-200">
+            <ToggleSwitch
+              label="Enable public map display"
+              checked={enabled}
+              disabled={saving || !token}
+              onChange={handleToggle}
+            />
           </div>
-        ) : (
-          <>
-            <label className="flex items-center justify-between gap-4 py-3 border-t border-b border-gray-200">
-              <span className="text-sm font-medium text-gray-900">Enable public map display</span>
-              <span className="relative inline-flex flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  disabled={saving || !token}
-                  onChange={(event) => handleToggle(event.target.checked)}
-                  className="peer sr-only"
-                />
-                <span className="w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-600 peer-disabled:opacity-50 transition-colors"></span>
-                <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></span>
-              </span>
-            </label>
 
-            {/* The link only exists as an offer while sharing is on — a dead one
+          {/* The link only exists as an offer while sharing is on — a dead one
                 on screen just invites someone to send it. It is the same link
                 each time it comes back, the token outliving the switch. */}
-            {enabled ? (
-              <div className="mt-4">
-                <div className="text-xs font-medium text-gray-700 mb-1">Public link</div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={shareUrl}
-                    onFocus={(event) => event.currentTarget.select()}
-                    className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm text-fg bg-surface"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    disabled={!shareUrl}
-                    className={`${btn("primary", "md")} whitespace-nowrap`}
-                  >
-                    {copied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Anyone with this link can see your map. Turn the switch off to disable the link.
-                </p>
+          {enabled ? (
+            <div className="mt-4">
+              <div className="text-xs font-medium text-gray-700 mb-1">Public link</div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareUrl}
+                  onFocus={(event) => event.currentTarget.select()}
+                  className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm text-fg bg-surface"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  disabled={!shareUrl}
+                  className={`${btn("primary", "md")} whitespace-nowrap`}
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
               </div>
-            ) : (
-              <p className="text-xs text-gray-500 mt-3">
-                Your map is private. Turn the switch on to publish it and get a link to share.
+              <p className="text-xs text-gray-500 mt-2">
+                Anyone with this link can see your map. Turn the switch off to disable the link.
               </p>
-            )}
-          </>
-        )}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 mt-3">
+              Your map is private. Turn the switch on to publish it and get a link to share.
+            </p>
+          )}
+        </>
+      )}
 
-        {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-      </div>
-    </div>
+      {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+    </dialog>
   );
 }

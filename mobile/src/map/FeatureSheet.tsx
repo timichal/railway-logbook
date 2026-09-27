@@ -12,7 +12,7 @@
  * decisions the web popup renders as HTML spans.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { parseDateOnly } from "@shared/getUntimezonedDateStr";
+import { formatDateOnly } from "@shared/getUntimezonedDateStr";
 import { routeBadges, routeTitle } from "@shared/map/routeFeature";
 import type { RegionId } from "@shared/regions";
 import type { ReactNode } from "react";
@@ -113,7 +113,7 @@ function RouteBody({
       {feature.lastJourney ? (
         <View className="gap-1 border-t border-gray-200 pt-2 dark:border-gray-700">
           <Text className="text-sm text-gray-700 dark:text-gray-300">
-            Most recent: {formatJourneyDate(feature.lastJourney.date)} ({feature.lastJourney.name})
+            Most recent: {formatDateOnly(feature.lastJourney.date)} ({feature.lastJourney.name})
           </Text>
         </View>
       ) : null}
@@ -139,11 +139,4 @@ function LinkButton({ label, url }: { label: string; url: string }): ReactNode {
       }}
     />
   );
-}
-
-/** `cs-CZ`, as the web popup formats it. */
-function formatJourneyDate(value: string): string {
-  const date = parseDateOnly(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("cs-CZ").format(date);
 }

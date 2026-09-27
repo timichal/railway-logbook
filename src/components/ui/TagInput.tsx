@@ -136,9 +136,7 @@ export default function TagInput({
                 type="button"
                 onClick={() => addTag(opt.value)}
                 onMouseEnter={() => setHighlight(i)}
-                className={`${optionRow(i === safeHighlight)} px-3 py-1.5 text-sm ${
-                  i === safeHighlight ? "text-blue-700" : "text-gray-700"
-                }`}
+                className={`${optionRow(i === safeHighlight)} px-3 py-1.5 text-sm`}
               >
                 {opt.type === "create" ? (
                   <>

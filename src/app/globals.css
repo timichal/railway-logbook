@@ -286,8 +286,9 @@ body,
 
    30 works because nothing between the popup and `.map-pane` opens a stacking
    context — `.maplibregl-map` is `position: relative` with `z-index: auto` — so
-   the popup competes directly with those siblings. It stays below the menu sheet
-   (z-40) and the toasts (z-50), both of which should cover a map popup. */
+   the popup competes directly with those siblings. It stays below the toasts
+   (z-50), which should cover a map popup; the modals (the menu, the share and
+   confirm dialogs) are native `<dialog>`s in the top layer, above any z-index. */
 .maplibregl-popup {
   z-index: 30;
 }

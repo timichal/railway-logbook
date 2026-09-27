@@ -3,12 +3,15 @@
 import { useRef } from "react";
 import type { Station } from "@/lib/shared/types";
 import { iconBtn, optionRow } from "@/lib/ui/buttonStyles";
+import { useCombobox } from "@/lib/ui/useCombobox";
 
 interface StationSearchInputProps {
-  /** Optional id for the input (used to associate the label). */
+  /** Optional id for the input; one is generated otherwise. */
   id?: string;
-  /** Optional label rendered above the input. */
-  label?: string;
+  /** The field's name: shown above the input, or — with `hideLabel` — only read out. */
+  label: string;
+  /** Leave the label to screen readers, for a row whose position already says it. */
+  hideLabel?: boolean;
   /** Current text in the input. */
   value: string;
   placeholder: string;
@@ -26,6 +29,8 @@ interface StationSearchInputProps {
   containerClassName?: string;
   /** Whether to render the clear/remove (×) button. */
   showClear: boolean;
+  /** What the × does, for screen readers: in a via row it deletes the stop, not the text. */
+  clearLabel: string;
   onChange: (value: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onFocus: () => void;
@@ -40,10 +45,14 @@ interface StationSearchInputProps {
  * Presentational only — the parent owns all search state (active field, results,
  * highlighted index) so that a single dropdown is open across the from/via/to
  * inputs at any time.
+ *
+ * An ARIA combobox (`useCombobox`): focus never leaves the input (see `keepFocus`),
+ * so the arrow keys' cursor is announced rather than moved onto the options.
  */
 export default function StationSearchInput({
   id,
   label,
+  hideLabel = false,
   value,
   placeholder,
   isSelected,
@@ -53,6 +62,7 @@ export default function StationSearchInput({
   selectedIndex,
   containerClassName,
   showClear,
+  clearLabel,
   onChange,
   onKeyDown,
   onFocus,
@@ -62,6 +72,13 @@ export default function StationSearchInput({
   onClear,
 }: StationSearchInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const expanded = showResults && searchResults.length > 0;
+  const combobox = useCombobox({
+    expanded,
+    activeIndex: selectedIndex,
+    count: searchResults.length,
+    id,
+  });
 
   // The dropdown deliberately never takes focus off the input: `preventDefault` on
   // pointerdown suppresses the focus change (and the compat mousedown with it), so
@@ -83,8 +100,9 @@ export default function StationSearchInput({
     <div className={`relative ${containerClassName ?? ""}`}>
       <input
         ref={inputRef}
-        id={id}
+        {...combobox.inputProps}
         type="text"
+        aria-label={hideLabel ? label : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -99,13 +117,17 @@ export default function StationSearchInput({
         <button
           type="button"
           onClick={onClear}
+          aria-label={clearLabel}
           className={`${iconBtn("sm")} absolute right-2 top-1/2 -translate-y-1/2`}
         >
           ×
         </button>
       )}
-      {showResults && searchResults.length > 0 && (
+      {expanded && (
         <div
+          id={combobox.listId}
+          role="listbox"
+          aria-label={`${label} suggestions`}
           onPointerDown={keepFocus}
           className="absolute top-full mt-1 w-full bg-surface border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto z-20"
         >
@@ -113,6 +135,7 @@ export default function StationSearchInput({
             <button
               type="button"
               key={station.id}
+              {...combobox.optionProps(index)}
               onClick={() => selectResult(station)}
               onMouseEnter={() => onHoverResult(index)}
               className={`${optionRow(selectedIndex === index)} px-3 py-2 text-sm border-b border-gray-100 last:border-b-0`}
@@ -125,11 +148,11 @@ export default function StationSearchInput({
     </div>
   );
 
-  if (!label) return input;
+  if (hideLabel) return input;
 
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium mb-1">
+      <label htmlFor={combobox.inputId} className="block text-xs font-medium mb-1">
         {label}
       </label>
       {input}
