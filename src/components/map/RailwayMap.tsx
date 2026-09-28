@@ -78,6 +78,7 @@ export default function RailwayMap({
   isMobile,
 }: RailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
+  const mapPane = useRef<HTMLDivElement>(null);
   const [furnitureFits, setFurnitureFits] = useState(true);
 
   const userId = user?.id || null;
@@ -428,56 +429,98 @@ export default function RailwayMap({
   // lies over the map rather than shrinking it (see MobileBottomSheet), so this is
   // what keeps centring, flyTo and fitBounds aimed at the part still visible.
   const sheetCover = useRef(0);
+  // The map a padding already waits on a `moveend` for, so settles during one flight
+  // queue a single retry rather than one each.
+  const paddingWaitsOn = useRef<typeof map.current>(null);
+  // The map whose first padding has been set (see the effect below).
+  const paddedMap = useRef<typeof map.current>(null);
+  // True while a desktop/mobile layout switch is pending: its own timer applies the
+  // padding, once the map has been resized to the new layout.
+  const layoutSwitching = useRef(false);
 
   // A new padding normally moves the camera: the centre stays put and is re-drawn
   // at the new padded centre. So the centre is first moved to whatever is on screen
-  // at that spot, and the map does not shift under the sheet.
-  const handleSheetSettled = useCallback(
-    (visibleHeight: number) => {
-      sheetCover.current = visibleHeight;
+  // at that spot, and the map does not shift under the sheet. Mid-flight (a station
+  // search's flyTo, geolocation, a pan still coasting) a jump would stop the camera
+  // where it is, so the padding waits for it to land.
+  const applySheetPadding = useCallback(() => {
+    const apply = () => {
       const m = map.current;
-      if (!m || !mapLoaded || m.getPadding().bottom === visibleHeight) return;
+      if (!m) return;
+      const bottom = sheetCover.current;
+      if (m.getPadding().bottom === bottom) return;
+      if (m.isMoving()) {
+        if (paddingWaitsOn.current !== m) {
+          paddingWaitsOn.current = m;
+          m.once("moveend", () => {
+            paddingWaitsOn.current = null;
+            apply();
+          });
+        }
+        return;
+      }
       const { clientWidth, clientHeight } = m.getContainer();
-      const center = m.unproject([clientWidth / 2, (clientHeight - visibleHeight) / 2]);
-      m.jumpTo({ center, padding: { top: 0, left: 0, right: 0, bottom: visibleHeight } });
+      const center = m.unproject([clientWidth / 2, (clientHeight - bottom) / 2]);
+      m.jumpTo({ center, padding: { top: 0, left: 0, right: 0, bottom } });
+    };
+    apply();
+  }, [map]);
+
+  const handleSheetSettled = useCallback(
+    (covered: number) => {
+      sheetCover.current = covered;
+      if (mapLoaded && !layoutSwitching.current) applySheetPadding();
     },
-    [map, mapLoaded],
+    [mapLoaded, applySheetPadding],
   );
 
   // A freshly built map takes the padding as it stands, without the compensation
   // above: it has just opened at the saved centre, which was the centre of the
   // visible part when it was saved, and that is where it should appear again.
   useEffect(() => {
-    if (!mapLoaded || !map.current) return;
-    const bottom = isMobile ? sheetCover.current : 0;
-    map.current.setPadding({ top: 0, left: 0, right: 0, bottom });
+    const m = map.current;
+    if (!mapLoaded || !m || paddedMap.current === m) return;
+    paddedMap.current = m;
+    m.setPadding({ top: 0, left: 0, right: 0, bottom: isMobile ? sheetCover.current : 0 });
   }, [mapLoaded, isMobile, map]);
 
-  // The top furniture needs room the sheet may not leave; this runs on every frame
-  // of a drag, and React drops the update whenever the answer has not changed.
-  const handleMapRoomChange = useCallback((room: number) => {
+  // Runs on every frame the sheet moves. The furniture offset goes on the map pane —
+  // the only subtree that reads it — rather than on an ancestor of the sheet, which
+  // would restyle the whole sidebar per frame. React drops the furniture update
+  // whenever the answer has not changed.
+  const handleSheetCoverChange = useCallback((covered: number, room: number) => {
+    mapPane.current?.style.setProperty("--sheet-visible", `${covered}px`);
     setFurnitureFits(room >= MAP_FURNITURE_MIN_HEIGHT_PX);
   }, []);
 
   // Resize map when the layout switches between the desktop sidebar and the mobile
-  // sheet. The sheet itself never resizes the map; it lies over it.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: isMobile is an intentional trigger — the effect resizes the map when it changes, even though it is not read in the body.
+  // sheet (the sheet itself never resizes the map; it lies over it), then give it
+  // the new layout's padding. Uncompensated on purpose: a layout switch keeps the
+  // centre, as the resize itself does.
   useEffect(() => {
-    if (!map.current) return;
+    layoutSwitching.current = true;
+    if (!isMobile) mapPane.current?.style.removeProperty("--sheet-visible");
     // Small delay to let CSS transitions finish
     const timer = setTimeout(() => {
-      map.current?.resize();
+      layoutSwitching.current = false;
+      const m = map.current;
+      if (!m) return;
+      m.resize();
+      m.setPadding({ top: 0, left: 0, right: 0, bottom: isMobile ? sheetCover.current : 0 });
     }, 300);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      layoutSwitching.current = false;
+    };
   }, [isMobile, map]);
+
+  // Only the sheet can take the room away, so the desktop layout always has it.
+  const showFurniture = !isMobile || furnitureFits;
 
   // What the collapsed sheet calls itself. Not the active tab: all three of the
   // sheet's tabs are the logger. The count is the one thing worth surfacing from
   // behind a closed sheet — routes are picked on the map, which is exactly when the
   // sheet is down and the selection is out of sight.
-  // Only the sheet can take the room away, so the desktop layout always has it.
-  const showFurniture = !isMobile || furnitureFits;
-
   const sheetLabel =
     selectedRoutes.length > 0 ? `Route Logger · ${selectedRoutes.length} selected` : "Route Logger";
 
@@ -524,6 +567,7 @@ export default function RailwayMap({
           bottom controls above the sheet lying over it. On mobile it is the full
           height of the column, whatever the sheet is doing. */}
       <div
+        ref={mapPane}
         className={`map-pane overflow-hidden relative ${isMobile ? "h-full" : "flex-1 min-h-0"} ${
           showFurniture ? "" : "map-pane-short"
         }`}
@@ -556,7 +600,7 @@ export default function RailwayMap({
       {isMobile && (
         <MobileBottomSheet
           onSettled={handleSheetSettled}
-          onMapRoomChange={handleMapRoomChange}
+          onCoverChange={handleSheetCoverChange}
           collapsedLabel={sheetLabel}
         >
           {sidebarContent}

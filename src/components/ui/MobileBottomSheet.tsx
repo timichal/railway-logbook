@@ -30,17 +30,19 @@ import {
  * aim at the visible part without the map ever moving under the finger.
  *
  * **A drag renders nothing.** The position lives in a ref and is written straight to
- * the DOM (transform, scrim opacity, `--sheet-visible`); React hears about it only
- * when a gesture starts and ends. What does change at those two moments is the
- * content box's height: while moving it is the height of the topmost snap, so
- * whatever the drag uncovers is already laid out; at rest it is exactly the visible
- * height, so the scroll container ends where the screen does and its bottom can be
- * scrolled to. The transform makes up the difference, and is written in a layout
- * effect so the two never land in different frames.
+ * the DOM (transform, scrim opacity); React hears about it only when a gesture starts
+ * and ends. What does change at those two moments is the content box's height: while
+ * moving it is the height of the topmost snap, so whatever the drag uncovers is
+ * already laid out; at rest it is exactly the visible height, so the scroll container
+ * ends where the screen does and its bottom can be scrolled to. The transform makes
+ * up the difference, and is written in a layout effect so the two never land in
+ * different frames.
  *
- * **`--sheet-visible`**, set on the parent on every frame, is how the map's bottom
- * furniture (attribution, scale, progress box) rides above the sheet — see
- * `globals.css` and `MapProgressBox`.
+ * **What it covers is reported on every frame it moves** (`onCoverChange`) — while a
+ * snap animates too, read back off the running transition, since reporting the target
+ * at once had the map's furniture arrive before the sheet did. That is how the
+ * attribution, scale and progress box ride above it (`--sheet-visible`, which
+ * `RailwayMap` sets on the map pane).
  *
  * **The handle stays visible at the collapsed snap** — it is the sheet's only control,
  * so a collapsed sheet must never be a state with no way back out of it. Collapsed, it
@@ -55,7 +57,12 @@ import {
 
 /** Peek shows the tab bar and the first line of content. */
 const PEEK_PX = 120;
-/** Fractions of the available height for the two larger snaps. */
+/**
+ * The handle band, `h-11` below: the collapsed sheet's only control, so it keeps the
+ * 44px touch floor. A constant, so a drag frame never has to measure it.
+ */
+const BAND_PX = 44;
+/** Fractions of the content budget (the parent less the band) for the two larger snaps. */
 const HALF_FRACTION = 0.5;
 const FULL_FRACTION = 0.9;
 /** Movement past this many pixels is a drag, not a tap. */
@@ -68,8 +75,16 @@ const SNAP_EASING = "cubic-bezier(0.2, 0.9, 0.3, 1)";
  * slow deliberate drag still lands where it was let go.
  */
 const FLICK_PROJECTION_MS = 180;
-/** Only the pointer samples this recent count towards the release velocity. */
+/**
+ * Only the pointer samples this recent count towards the release velocity, and a
+ * pointer held still this long before letting go was placed, not thrown.
+ */
 const VELOCITY_WINDOW_MS = 100;
+/**
+ * How long after a drag its trailing click is swallowed, unless another press comes
+ * first: a touch's click can arrive a task or two after its pointerup.
+ */
+const CLICK_SWALLOW_MS = 400;
 /** How dark the map behind goes at the topmost snap. */
 const MAX_SCRIM_OPACITY = 0.4;
 /** Marks the elements a drag can start from: the handle, and the tab bar inside. */
@@ -80,12 +95,12 @@ interface MobileBottomSheetProps {
    * Called when the sheet comes to rest, with how many pixels of the parent it now
    * covers — the map's bottom padding.
    */
-  onSettled?: (visibleHeight: number) => void;
+  onSettled?: (covered: number) => void;
   /**
-   * Called on every frame the sheet moves, with how much of the parent is left
-   * uncovered above it — lets the map hide top furniture that no longer fits.
+   * Called on every frame the sheet moves (dragged or snapping), with how many pixels
+   * of the parent it covers and how many it leaves uncovered above it.
    */
-  onMapRoomChange?: (room: number) => void;
+  onCoverChange?: (covered: number, room: number) => void;
   /** Shown on the handle bar while collapsed, to say what tapping it opens. */
   collapsedLabel?: ReactNode;
   children: ReactNode;
@@ -93,13 +108,18 @@ interface MobileBottomSheetProps {
 
 type Phase = "idle" | "dragging" | "animating";
 
-function snapPointsFor(available: number): number[] {
-  if (available <= 0) return [0, PEEK_PX];
-  const peek = Math.min(PEEK_PX, available);
-  const points = [0, peek, available * HALF_FRACTION, available * FULL_FRACTION];
+/**
+ * Content heights to snap to. `budget` is the parent less the band, so the topmost
+ * snap plus the band still fits — sized off the whole parent, a landscape phone's
+ * short map pushed the handle out past the top edge, where it was clipped.
+ */
+function snapPointsFor(budget: number): number[] {
+  if (budget <= 0) return [0];
+  const peek = Math.min(PEEK_PX, budget);
+  const points = [0, peek, budget * HALF_FRACTION, budget * FULL_FRACTION];
   // A short viewport can collapse the larger snaps into one; keep them ascending
   // and distinct so the snap order never repeats a height.
-  return [...new Set(points.map((p) => Math.round(Math.min(p, available))))].sort((a, b) => a - b);
+  return [...new Set(points.map((p) => Math.round(Math.min(p, budget))))].sort((a, b) => a - b);
 }
 
 function nearestSnap(height: number, snaps: number[]): number {
@@ -107,22 +127,26 @@ function nearestSnap(height: number, snaps: number[]): number {
 }
 
 /** Where a tap on the handle goes: up to half from below it, down to peek from half. */
-function tapTarget(current: number, snaps: number[], available: number): number {
-  const half = nearestSnap(available * HALF_FRACTION, snaps);
+function tapTarget(current: number, snaps: number[], budget: number): number {
+  const half = nearestSnap(budget * HALF_FRACTION, snaps);
   const peek = snaps.length > 1 ? snaps[1] : snaps[0];
   if (current < half) return half;
   if (current === half) return peek;
   return half;
 }
 
+/** The content height a sheet shows on screen, read off its current transform. */
+function onScreenHeight(sheet: HTMLElement, contentHeight: number): number {
+  return contentHeight - new DOMMatrix(getComputedStyle(sheet).transform).m42;
+}
+
 export default function MobileBottomSheet({
   onSettled,
-  onMapRoomChange,
+  onCoverChange,
   collapsedLabel,
   children,
 }: MobileBottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
-  const bandRef = useRef<HTMLButtonElement>(null);
   const scrimRef = useRef<HTMLButtonElement>(null);
 
   const [available, setAvailable] = useState(0);
@@ -130,46 +154,58 @@ export default function MobileBottomSheet({
   const [settled, setSettled] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
 
-  /** The height currently on screen, written on every frame of a drag. */
+  /** The height currently on screen (or a snap's target), written on every drag frame. */
   const heightRef = useRef(0);
   /** The content box height currently in the DOM (see the header comment). */
   const contentRef = useRef(0);
   const animationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The rAF that starts a snap, then follows it for `onCoverChange`. */
+  const animationFrame = useRef<number | null>(null);
 
-  const snaps = snapPointsFor(available);
+  const budget = Math.max(available - BAND_PX, 0);
+  const snaps = snapPointsFor(budget);
   const topSnap = snaps[snaps.length - 1];
   const dimFromSnap = snaps.length >= 2 ? snaps[snaps.length - 2] : topSnap;
   const contentHeight = phase === "idle" ? (settled ?? 0) : topSnap;
 
   // Kept in refs so the window listeners and the layout effect read this render's
   // values without being re-created per render.
-  const live = useRef({ available, snaps, topSnap, dimFromSnap, onMapRoomChange, onSettled });
-  live.current = { available, snaps, topSnap, dimFromSnap, onMapRoomChange, onSettled };
+  const live = useRef({ available, snaps, topSnap, dimFromSnap, onCoverChange, onSettled });
+  live.current = { available, snaps, topSnap, dimFromSnap, onCoverChange, onSettled };
 
-  /** Puts the sheet at `height` on screen: transform, scrim, furniture offset. */
-  const paint = useCallback((height: number) => {
-    heightRef.current = height;
-    const sheet = sheetRef.current;
-    if (!sheet) return;
-    const { available, topSnap, dimFromSnap, onMapRoomChange } = live.current;
-    const offset = contentRef.current - height;
-    // No transform at all at rest: a transformed element is the containing block of
-    // every `position: fixed` inside it.
-    sheet.style.transform = Math.abs(offset) < 0.5 ? "" : `translateY(${offset}px)`;
-
-    const scrim = scrimRef.current;
-    if (scrim) {
-      const progress =
-        topSnap <= dimFromSnap
-          ? 0
-          : Math.min(Math.max((height - dimFromSnap) / (topSnap - dimFromSnap), 0), 1);
-      scrim.style.opacity = String(progress * MAX_SCRIM_OPACITY);
-    }
-
-    const visible = height + (bandRef.current?.offsetHeight ?? 0);
-    sheet.parentElement?.style.setProperty("--sheet-visible", `${visible}px`);
-    onMapRoomChange?.(available - visible);
+  const reportCover = useCallback((height: number) => {
+    const { available, onCoverChange } = live.current;
+    onCoverChange?.(height + BAND_PX, available - height - BAND_PX);
   }, []);
+
+  /**
+   * Puts the sheet at `height`: transform and scrim, and the cover report — unless a
+   * snap is about to animate there, when the cover is followed frame by frame.
+   */
+  const paint = useCallback(
+    (height: number, report = true) => {
+      heightRef.current = height;
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+      const { topSnap, dimFromSnap } = live.current;
+      const offset = contentRef.current - height;
+      // No transform at all at rest: a transformed element is the containing block of
+      // every `position: fixed` inside it.
+      sheet.style.transform = Math.abs(offset) < 0.5 ? "" : `translateY(${offset}px)`;
+
+      const scrim = scrimRef.current;
+      if (scrim) {
+        const progress =
+          topSnap <= dimFromSnap
+            ? 0
+            : Math.min(Math.max((height - dimFromSnap) / (topSnap - dimFromSnap), 0), 1);
+        scrim.style.opacity = String(progress * MAX_SCRIM_OPACITY);
+      }
+
+      if (report) reportCover(height);
+    },
+    [reportCover],
+  );
 
   const setTransition = useCallback((on: boolean) => {
     const transition = on ? `transform ${SNAP_TRANSITION_MS}ms ${SNAP_EASING}` : "none";
@@ -178,6 +214,14 @@ export default function MobileBottomSheet({
       scrimRef.current.style.transition = on
         ? `opacity ${SNAP_TRANSITION_MS}ms ${SNAP_EASING}`
         : "none";
+  }, []);
+
+  /** Cancels a snap in flight: its end timer, and its start/follow frame. */
+  const stopAnimation = useCallback(() => {
+    if (animationTimer.current) clearTimeout(animationTimer.current);
+    animationTimer.current = null;
+    if (animationFrame.current !== null) cancelAnimationFrame(animationFrame.current);
+    animationFrame.current = null;
   }, []);
 
   // The parent is the box the sheet lies over, so its height is the budget.
@@ -195,59 +239,67 @@ export default function MobileBottomSheet({
   // toolbar collapsing) rather than keeping a height that no longer fits.
   useEffect(() => {
     if (available <= 0) return;
-    const points = snapPointsFor(available);
+    const budget = Math.max(available - BAND_PX, 0);
+    const points = snapPointsFor(budget);
     setSettled((current) =>
       current === null
-        ? nearestSnap(available * HALF_FRACTION, points)
+        ? nearestSnap(budget * HALF_FRACTION, points)
         : Math.min(Math.max(current, points[0]), points[points.length - 1]),
     );
   }, [available]);
 
   // The content box just changed height: re-derive the transform from the same
-  // on-screen height before the browser paints, so the sheet does not jump.
+  // on-screen height before the browser paints, so the sheet does not jump. Also
+  // re-run when only the parent changed size (a rotation that leaves the snap where
+  // it was), since how much of the map is left uncovered changed with it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: available is an intentional trigger — paint reads it through `live`.
   useLayoutEffect(() => {
     contentRef.current = contentHeight;
     if (phase === "idle") {
+      stopAnimation();
       setTransition(false);
       paint(contentHeight);
     } else {
-      paint(heightRef.current);
+      // Mid-snap the cover is already being followed off the transition.
+      paint(heightRef.current, phase === "dragging");
     }
-  }, [contentHeight, phase, paint, setTransition]);
+  }, [contentHeight, phase, available, paint, setTransition, stopAnimation]);
 
   // Report the resting height once the sheet stops.
   useEffect(() => {
     if (phase !== "idle" || settled === null) return;
-    live.current.onSettled?.(settled + (bandRef.current?.offsetHeight ?? 0));
+    live.current.onSettled?.(settled + BAND_PX);
   }, [phase, settled]);
 
-  useEffect(
-    () => () => {
-      if (animationTimer.current) clearTimeout(animationTimer.current);
-    },
-    [],
-  );
+  useEffect(() => stopAnimation, [stopAnimation]);
 
   /** Animates from wherever the sheet is on screen to `target`. */
   const snapTo = useCallback(
     (target: number) => {
-      if (animationTimer.current) clearTimeout(animationTimer.current);
+      stopAnimation();
       setSettled(target);
       setPhase("animating");
       // Started after the commit that grows the content box: the layout effect has
       // then painted the start position, and a forced reflow makes it the point the
-      // transition runs from.
-      requestAnimationFrame(() => {
-        sheetRef.current?.getBoundingClientRect();
+      // transition runs from. The cover then follows the sheet frame by frame.
+      animationFrame.current = requestAnimationFrame(() => {
+        const sheet = sheetRef.current;
+        if (!sheet) return;
+        sheet.getBoundingClientRect();
         setTransition(true);
-        paint(target);
+        paint(target, false);
+        const follow = () => {
+          reportCover(onScreenHeight(sheet, contentRef.current));
+          animationFrame.current = requestAnimationFrame(follow);
+        };
+        follow();
       });
       animationTimer.current = setTimeout(() => {
         animationTimer.current = null;
         setPhase("idle");
       }, SNAP_TRANSITION_MS + 30);
     },
-    [paint, setTransition],
+    [paint, setTransition, stopAnimation, reportCover],
   );
 
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -260,7 +312,7 @@ export default function MobileBottomSheet({
     const sheet = sheetRef.current;
     const startHeight =
       phase === "animating" && sheet
-        ? contentRef.current - new DOMMatrix(getComputedStyle(sheet).transform).m42
+        ? onScreenHeight(sheet, contentRef.current)
         : heightRef.current;
     const pointerId = e.pointerId;
     const samples: { t: number; y: number }[] = [{ t: e.timeStamp, y: e.clientY }];
@@ -272,7 +324,7 @@ export default function MobileBottomSheet({
       if (!moved) {
         if (Math.abs(delta) <= DRAG_THRESHOLD_PX) return;
         moved = true;
-        if (animationTimer.current) clearTimeout(animationTimer.current);
+        stopAnimation();
         setTransition(false);
         setPhase("dragging");
       }
@@ -291,19 +343,30 @@ export default function MobileBottomSheet({
       if (!moved) return;
 
       // The drag ends in a click on whatever it started on — a tab, or the handle,
-      // whose click is the tap toggle. Neither should run.
+      // whose click is the tap toggle. Neither should run. That click may come a task
+      // or two later, so the swallow stands until it arrives, the next press, or a
+      // timeout — whichever is first.
+      const release = () => {
+        clearTimeout(timer);
+        window.removeEventListener("click", swallow, { capture: true });
+        window.removeEventListener("pointerdown", release, { capture: true });
+      };
       const swallow = (click: MouseEvent) => {
         click.stopPropagation();
         click.preventDefault();
+        release();
       };
-      window.addEventListener("click", swallow, { capture: true, once: true });
-      setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
+      const timer = setTimeout(release, CLICK_SWALLOW_MS);
+      window.addEventListener("click", swallow, { capture: true });
+      window.addEventListener("pointerdown", release, { capture: true });
 
       const first = samples[0];
       const last = samples[samples.length - 1];
       const dt = last.t - first.t;
-      // Positive = upward, in px per ms.
-      const velocity = dt > 0 ? (first.y - last.y) / dt : 0;
+      // Positive = upward, in px per ms. A pointer that stopped before letting go says
+      // nothing with its last moves about the release.
+      const stale = ev.timeStamp - last.t > VELOCITY_WINDOW_MS;
+      const velocity = dt > 0 && !stale ? (first.y - last.y) / dt : 0;
       const projected = heightRef.current + velocity * FLICK_PROJECTION_MS;
       snapTo(nearestSnap(projected, live.current.snaps));
     };
@@ -329,9 +392,11 @@ export default function MobileBottomSheet({
     <div
       ref={sheetRef}
       onPointerDown={handlePointerDown}
-      // z-20 so the sheet is above everything positioned in the map pane (the search
-      // box at z-10, its dropdown at z-20 but earlier in the DOM, MapLibre's controls).
-      className="mobile-sheet absolute inset-x-0 bottom-0 z-20 bg-surface rounded-t-2xl flex flex-col sheet-slide-up"
+      // z-40: above everything positioned in the map pane — the search box (z-10) and
+      // its dropdown (z-20), MapLibre's controls, and its popups (30, globals.css),
+      // which would otherwise float over the sheet now that the pane runs beneath it.
+      // Under the toasts (50).
+      className="mobile-sheet absolute inset-x-0 bottom-0 z-40 bg-surface rounded-t-2xl flex flex-col sheet-slide-up"
       style={{
         boxShadow:
           phase === "dragging"
@@ -354,13 +419,12 @@ export default function MobileBottomSheet({
       />
 
       <button
-        ref={bandRef}
         type="button"
         data-sheet-drag=""
         aria-label={collapsed ? "Open panel" : "Resize panel"}
-        onClick={() => settled !== null && snapTo(tapTarget(settled, snaps, available))}
+        onClick={() => settled !== null && snapTo(tapTarget(settled, snaps, budget))}
         onKeyDown={handleKeyDown}
-        className="group w-full h-10 flex flex-col items-center justify-center gap-1 touch-none select-none cursor-grab active:cursor-grabbing flex-shrink-0"
+        className="group w-full h-11 flex flex-col items-center justify-center gap-1 touch-none select-none cursor-grab active:cursor-grabbing flex-shrink-0"
       >
         <span
           className={`rounded-full transition-all duration-150 ${
