@@ -83,7 +83,12 @@ export default function UserSidebar({
         sidebarWidth != null ? "border-r border-gray-200 flex-shrink-0" : "flex-1 min-h-0"
       }`}
     >
-      <div className="flex border-b border-gray-200">
+      {/* In the mobile sheet the tab bar is also the sheet's drag handle, which is a
+          far easier target than the grabber above it alone (see MobileBottomSheet). */}
+      <div
+        className={`flex border-b border-gray-200 ${sidebarWidth == null ? "touch-none select-none" : ""}`}
+        data-sheet-drag={sidebarWidth == null ? "" : undefined}
+      >
         <button
           type="button"
           onClick={() => setActiveTab("routes")}

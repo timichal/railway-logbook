@@ -57,13 +57,12 @@ interface RailwayMapProps {
 }
 
 /**
- * Below this the map pane is too short to carry its own furniture. At the mobile
- * sheet's topmost snap the map is a ~40px strip: the station search and MapLibre's
- * top-right control stack no longer fit in it, and — being positioned above the
- * sheet's stacking level — the part of them that fell in the seam the sheet overlaps
- * painted over its rounded top edge. They stand down until there is room again. The
- * bottom-corner furniture is left alone: the attribution has to stay visible and
- * already clears the seam (see globals.css).
+ * Below this much uncovered map the pane cannot carry its own top furniture. At the
+ * mobile sheet's topmost snap the map shows as a ~40px strip: the station search and
+ * MapLibre's top-right control stack no longer fit in it and would be cut off by the
+ * sheet's top edge, so they stand down until there is room again. The bottom-corner
+ * furniture is left alone: it rides above the sheet (`--sheet-visible`, globals.css)
+ * and the attribution has to stay visible.
  */
 const MAP_FURNITURE_MIN_HEIGHT_PX = 180;
 
@@ -79,7 +78,6 @@ export default function RailwayMap({
   isMobile,
 }: RailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const mapPane = useRef<HTMLDivElement>(null);
   const [furnitureFits, setFurnitureFits] = useState(true);
 
   const userId = user?.id || null;
@@ -426,26 +424,43 @@ export default function RailwayMap({
     void saveCountries(countries);
   };
 
-  // Watch the pane rather than the sheet's height: the same measurement then covers
-  // every way the map can lose room, and it updates during the drag (not only once
-  // the sheet has settled), so the controls are gone before they reach the seam.
+  // How much of the map the mobile sheet covers, as bottom camera padding. The sheet
+  // lies over the map rather than shrinking it (see MobileBottomSheet), so this is
+  // what keeps centring, flyTo and fitBounds aimed at the part still visible.
+  const sheetCover = useRef(0);
+
+  // A new padding normally moves the camera: the centre stays put and is re-drawn
+  // at the new padded centre. So the centre is first moved to whatever is on screen
+  // at that spot, and the map does not shift under the sheet.
+  const handleSheetSettled = useCallback(
+    (visibleHeight: number) => {
+      sheetCover.current = visibleHeight;
+      const m = map.current;
+      if (!m || !mapLoaded || m.getPadding().bottom === visibleHeight) return;
+      const { clientWidth, clientHeight } = m.getContainer();
+      const center = m.unproject([clientWidth / 2, (clientHeight - visibleHeight) / 2]);
+      m.jumpTo({ center, padding: { top: 0, left: 0, right: 0, bottom: visibleHeight } });
+    },
+    [map, mapLoaded],
+  );
+
+  // A freshly built map takes the padding as it stands, without the compensation
+  // above: it has just opened at the saved centre, which was the centre of the
+  // visible part when it was saved, and that is where it should appear again.
   useEffect(() => {
-    const pane = mapPane.current;
-    if (!pane) return;
-    const update = () => setFurnitureFits(pane.clientHeight >= MAP_FURNITURE_MIN_HEIGHT_PX);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(pane);
-    return () => observer.disconnect();
+    if (!mapLoaded || !map.current) return;
+    const bottom = isMobile ? sheetCover.current : 0;
+    map.current.setPadding({ top: 0, left: 0, right: 0, bottom });
+  }, [mapLoaded, isMobile, map]);
+
+  // The top furniture needs room the sheet may not leave; this runs on every frame
+  // of a drag, and React drops the update whenever the answer has not changed.
+  const handleMapRoomChange = useCallback((room: number) => {
+    setFurnitureFits(room >= MAP_FURNITURE_MIN_HEIGHT_PX);
   }, []);
 
-  // The mobile sheet settles at a new height -> the map has more or less room.
-  const handleSheetHeightSettled = useCallback(() => {
-    map.current?.resize();
-  }, [map]);
-
   // Resize map when the layout switches between the desktop sidebar and the mobile
-  // sheet. Height changes *within* the sheet come through handleSheetHeightSettled.
+  // sheet. The sheet itself never resizes the map; it lies over it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: isMobile is an intentional trigger — the effect resizes the map when it changes, even though it is not read in the body.
   useEffect(() => {
     if (!map.current) return;
@@ -460,6 +475,9 @@ export default function RailwayMap({
   // sheet's tabs are the logger. The count is the one thing worth surfacing from
   // behind a closed sheet — routes are picked on the map, which is exactly when the
   // sheet is down and the selection is out of sight.
+  // Only the sheet can take the room away, so the desktop layout always has it.
+  const showFurniture = !isMobile || furnitureFits;
+
   const sheetLabel =
     selectedRoutes.length > 0 ? `Route Logger · ${selectedRoutes.length} selected` : "Route Logger";
 
@@ -487,7 +505,7 @@ export default function RailwayMap({
   );
 
   return (
-    <div className={`h-full relative ${isMobile ? "flex flex-col" : "flex"}`}>
+    <div className={`h-full relative ${isMobile ? "overflow-hidden" : "flex"}`}>
       {/* Desktop sidebar */}
       {!isMobile && (
         <>
@@ -503,19 +521,16 @@ export default function RailwayMap({
       )}
 
       {/* Map Container. `map-pane` is what globals.css keys on to lift MapLibre's
-          bottom controls clear of the sheet's overlapping top edge. */}
+          bottom controls above the sheet lying over it. On mobile it is the full
+          height of the column, whatever the sheet is doing. */}
       <div
-        ref={mapPane}
-        className={`map-pane flex-1 min-h-0 overflow-hidden relative ${
-          furnitureFits ? "" : "map-pane-short"
+        className={`map-pane overflow-hidden relative ${isMobile ? "h-full" : "flex-1 min-h-0"} ${
+          showFurniture ? "" : "map-pane-short"
         }`}
       >
         <div
           ref={mapContainer}
           className={`w-full h-full ${className}`}
-          // No min-height on mobile: the sheet can take 90% of the column, and a
-          // floor taller than what is left would leave the canvas clipped and
-          // off-centre behind the sheet.
           style={{ height: "100%", minHeight: isMobile ? undefined : "400px" }}
         />
 
@@ -533,13 +548,17 @@ export default function RailwayMap({
           map={map}
           region={region.id}
           isMobile={isMobile}
-          hidden={!furnitureFits}
+          hidden={!showFurniture}
         />
       </div>
 
-      {/* Mobile bottom sheet (the map keeps the space above it) */}
+      {/* Mobile bottom sheet, lying over the map */}
       {isMobile && (
-        <MobileBottomSheet onHeightSettled={handleSheetHeightSettled} collapsedLabel={sheetLabel}>
+        <MobileBottomSheet
+          onSettled={handleSheetSettled}
+          onMapRoomChange={handleMapRoomChange}
+          collapsedLabel={sheetLabel}
+        >
           {sidebarContent}
         </MobileBottomSheet>
       )}

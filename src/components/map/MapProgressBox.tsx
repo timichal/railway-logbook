@@ -51,7 +51,7 @@ export default function MapProgressBox({
         onClick={() => setCollapsed(false)}
         aria-expanded={false}
         aria-label={`Completed ${progress.percentage}% — show progress and layers`}
-        className="absolute bottom-12 left-3 z-10 min-h-11 px-3 flex items-center gap-1.5 bg-surface rounded-full shadow-lg text-fg transition-colors hover:bg-gray-50 active:bg-gray-100"
+        className="absolute bottom-[calc(var(--sheet-visible,0px)+3rem)] left-3 z-10 min-h-11 px-3 flex items-center gap-1.5 bg-surface rounded-full shadow-lg text-fg transition-colors hover:bg-gray-50 active:bg-gray-100"
       >
         <span className="font-bold text-green-600 text-base">{progress.percentage}%</span>
         <span className="text-xs text-gray-500">done</span>
@@ -77,7 +77,9 @@ export default function MapProgressBox({
   return (
     <div
       className={`absolute bg-surface p-3 rounded shadow-lg text-fg z-10 ${
-        isMobile ? "bottom-12 left-3 text-xs" : "bottom-10 right-4"
+        isMobile
+          ? "bottom-[calc(var(--sheet-visible,0px)+3rem)] left-3 text-xs"
+          : "bottom-10 right-4"
       }`}
     >
       {isMobile ? (
