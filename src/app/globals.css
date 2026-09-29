@@ -245,6 +245,22 @@ body,
   textarea {
     font-size: 16px;
   }
+
+  /* A date input's native appearance carries an intrinsic minimum width that
+     `w-full` cannot shrink below, so on a narrow phone it overflowed its column and
+     made the sheet scroll sideways. Without the appearance it sizes like any other
+     field; the tap still opens the system picker. The value then centres itself and
+     an empty one collapses to the padding, which the pseudo-element puts right. */
+  input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
+  input[type="date"]::-webkit-date-and-time-value {
+    min-height: 1.5em;
+    text-align: left;
+  }
 }
 
 /* The mobile bottom sheet lies over the map (MobileBottomSheet.tsx), so MapLibre's own
