@@ -3,6 +3,14 @@
 import { type ReactNode, useState } from "react";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import JourneyPlanner from "@/components/logbook/JourneyPlanner";
+import {
+  loggedLengthKm,
+  NEW_JOURNEY_FORM_ID,
+  type PlannedLeg,
+  type PlannedStops,
+  selectionLengthKm,
+  suggestJourneyName,
+} from "@/lib/selectedRoutes";
 import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
@@ -71,18 +79,39 @@ export default function RouteLogger({
   const [journeyDescription, setJourneyDescription] = useState("");
   const [pickedTripId, setPickedTripId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  /** The plans added to the selection, for the name suggestion (see suggestJourneyName). */
+  const [plannedLegs, setPlannedLegs] = useState<PlannedLeg[]>([]);
+
+  // An emptied selection — cleared, logged, or its last route removed — has no use
+  // for the plans that filled it
+  if (selectedRoutes.length === 0 && plannedLegs.length > 0) setPlannedLegs([]);
+
+  const handleAddFromPlanner = (routes: PlannerRoute[], stops: PlannedStops) => {
+    // Only the routes this plan brings in: one whose routes were all picked already
+    // added nothing, and says nothing about the journey's name
+    const trackIds = routes
+      .map((route) => route.track_id)
+      .filter((id) => !selectedRoutes.some((route) => route.track_id === id));
+    if (trackIds.length > 0) setPlannedLegs((legs) => [...legs, { stops, trackIds }]);
+    onAddRoutesFromPlanner?.(routes);
+  };
+
+  const suggestedName = suggestJourneyName(plannedLegs, selectedRoutes);
 
   // A pick counts only while it is still offered: trips are region-scoped, so a
   // region switch replaces the list and leaves the old pick naming nothing here
   const journeyTripId = trips?.some((trip) => trip.id === pickedTripId) ? pickedTripId : null;
 
-  const missingField = !journeyName.trim()
-    ? "Journey name is required"
-    : !journeyDate
-      ? "Date is required"
-      : selectedRoutes.length === 0
-        ? "Select at least one route"
-        : null;
+  // In the order the tab asks for them
+  const missingField =
+    selectedRoutes.length === 0
+      ? "Select at least one route, on the map or with the planner"
+      : !journeyName.trim()
+        ? "Give the journey a name"
+        : !journeyDate
+          ? "Pick the journey's date"
+          : null;
+  const disabledReason = blockedReason || missingField;
 
   const handleCreateJourney = async () => {
     if (missingField) {
@@ -123,7 +152,7 @@ export default function RouteLogger({
       {/* In the order of the task: find the routes, check them, then name the journey */}
       <JourneyPlanner
         onHighlightRoutes={onHighlightRoutes}
-        onAddRoutesToSelection={onAddRoutesFromPlanner}
+        onAddRoutesToSelection={onAddRoutesFromPlanner && handleAddFromPlanner}
         onStationClickHandler={onStationClickHandler}
       />
 
@@ -134,12 +163,13 @@ export default function RouteLogger({
         onUpdateRoutePartial={onUpdateRoutePartial}
       />
 
-      <div className="pt-3 border-t border-gray-200">
+      <div id={NEW_JOURNEY_FORM_ID} className="pt-3 border-t border-gray-200">
         <h3 className="text-lg font-bold mb-3">New Journey</h3>
         <JourneyMetaFields
           idPrefix="new-journey"
           name={journeyName}
           onNameChange={setJourneyName}
+          suggestedName={suggestedName}
           date={journeyDate}
           onDateChange={setJourneyDate}
           onDateFocus={refreshJourneyDate}
@@ -157,12 +187,22 @@ export default function RouteLogger({
         <button
           type="button"
           onClick={handleCreateJourney}
-          disabled={isSaving || !!missingField || !!blockedReason}
+          disabled={isSaving || !!disabledReason}
+          aria-describedby={disabledReason && !isSaving ? "new-journey-blocked" : undefined}
           className={`${btn("success", "md")} w-full`}
-          title={blockedReason || missingField || ""}
         >
-          {isSaving ? "Creating..." : `Create Journey & Log ${selectedRoutes.length} Routes`}
+          {isSaving
+            ? "Creating..."
+            : selectedRoutes.length === 0
+              ? "Create Journey"
+              : `Create Journey & Log ${selectedRoutes.length} Route${selectedRoutes.length === 1 ? "" : "s"}`}
         </button>
+        {/* Written out, not a `title`: a tooltip never shows on touch */}
+        {disabledReason && !isSaving && (
+          <p id="new-journey-blocked" className="mt-1.5 text-xs text-gray-500 text-center">
+            {disabledReason}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -181,7 +221,7 @@ function SelectedRoutesList({
   onClearSelection,
   onUpdateRoutePartial,
 }: SelectedRoutesListProps) {
-  const totalDistance = routes.reduce((sum, route) => sum + route.length_km, 0);
+  const totalDistance = selectionLengthKm(routes);
 
   return (
     <div className="pt-3 border-t border-gray-200">
@@ -189,7 +229,7 @@ function SelectedRoutesList({
         <h3 className="text-sm font-semibold text-gray-700">Selected Routes ({routes.length})</h3>
         {routes.length > 0 && (
           <button type="button" onClick={onClearSelection} className={LINK_BTN}>
-            Clear all
+            Clear selection
           </button>
         )}
       </div>
@@ -211,7 +251,12 @@ function SelectedRoutesList({
                     {route.from_station} ⟷ {route.to_station}
                   </div>
                   <div className="flex items-center gap-4 mt-1">
-                    <span className="text-gray-600">{route.length_km.toFixed(1)} km</span>
+                    <span className="text-gray-600">
+                      {loggedLengthKm(route).toFixed(1)} km
+                      {route.partial && route.travelled_length_km != null && (
+                        <span className="text-amber-700"> of {route.length_km.toFixed(1)}</span>
+                      )}
+                    </span>
                     <label className="flex items-center gap-1.5 text-xs text-gray-700 min-h-11 md:min-h-0 pr-2 md:pr-0">
                       <input
                         type="checkbox"

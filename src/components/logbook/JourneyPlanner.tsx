@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import StationSearchInput from "@/components/ui/StationSearchInput";
 import { findRoutePathBetweenStations } from "@/lib/plannerActions";
 import { useRegionId } from "@/lib/regionContext";
+import type { PlannedStops } from "@/lib/selectedRoutes";
 import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
 import type { HighlightRoutesFn, PlannerRoute, Station } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
@@ -22,7 +23,7 @@ type SearchField = "from" | "to" | number;
 
 interface JourneyPlannerProps {
   onHighlightRoutes?: HighlightRoutesFn;
-  onAddRoutesToSelection?: (routes: PlannerRoute[]) => void;
+  onAddRoutesToSelection?: (routes: PlannerRoute[], stops: PlannedStops) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
 }
 
@@ -38,6 +39,8 @@ export default function JourneyPlanner({
   const [toStation, setToStation] = useState<SelectedStation | null>(null);
 
   const [foundPath, setFoundPath] = useState<PlannerRoute[]>([]);
+  // Taken when the search ran: the inputs can be edited after it without a new one
+  const [foundStops, setFoundStops] = useState<PlannedStops | null>(null);
   const [totalDistance, setTotalDistance] = useState(0);
   const [pathError, setPathError] = useState<string | null>(null);
   const [isSearchingPath, setIsSearchingPath] = useState(false);
@@ -317,6 +320,11 @@ export default function JourneyPlanner({
         if (onHighlightRoutes) onHighlightRoutes([], "planner");
       } else {
         setFoundPath(result.routes);
+        setFoundStops({
+          from: fromStation.name,
+          via: viaStations.flatMap((s) => (s ? [s.name] : [])),
+          to: toStation.name,
+        });
         setTotalDistance(result.totalDistance);
         setPathError(null);
         if (onHighlightRoutes) {
@@ -343,9 +351,9 @@ export default function JourneyPlanner({
 
   // Add routes to selection
   const handleAddToSelection = () => {
-    if (foundPath.length === 0 || !onAddRoutesToSelection) return;
+    if (foundPath.length === 0 || !foundStops || !onAddRoutesToSelection) return;
 
-    onAddRoutesToSelection(foundPath);
+    onAddRoutesToSelection(foundPath, foundStops);
 
     // Reset form after adding to selection
     resetForm();
@@ -359,6 +367,7 @@ export default function JourneyPlanner({
   const resetForm = () => {
     cancelPathSearch();
     setFoundPath([]);
+    setFoundStops(null);
     setTotalDistance(0);
     setPathError(null);
     setFromStation(null);
@@ -418,7 +427,7 @@ export default function JourneyPlanner({
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-bold">Journey Planner</h3>
         <button type="button" onClick={resetForm} className={LINK_BTN}>
-          Clear all
+          Clear planner
         </button>
       </div>
 

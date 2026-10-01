@@ -341,4 +341,9 @@ export interface SelectedRoute {
    * extent nobody knows.
    */
   covered?: PartialRouteGeometry | null;
+  /**
+   * Length of `covered`, as the Journey Planner measured it. Set alongside it, and
+   * read only while `partial` is ticked: unticking claims the whole route.
+   */
+  travelled_length_km?: number | null;
 }

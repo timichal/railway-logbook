@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  createContext,
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -53,6 +56,14 @@ import {
  * behind dims in proportion to how far the sheet has come, and tapping the dimmed part
  * drops back to half. It is drawn upward from the sheet's own top edge, so the root's
  * `overflow-hidden` clips it to the map and the navbar is never dimmed.
+ *
+ * **At the peek snap it can show a summary instead** (`peekContent`): 120px is room
+ * for the tab bar and a heading, which says nothing, or for one line that does. The
+ * children stay mounted underneath (inert), so nothing in them is lost, and a drag
+ * from the summary uncovers them as soon as it moves.
+ *
+ * **Content can move the sheet** through `useBottomSheet()`, which is null outside
+ * one — so a component shared with the desktop sidebar asks, and does nothing there.
  */
 
 /** Peek shows the tab bar and the first line of content. */
@@ -103,10 +114,26 @@ interface MobileBottomSheetProps {
   onCoverChange?: (covered: number, room: number) => void;
   /** Shown on the handle bar while collapsed, to say what tapping it opens. */
   collapsedLabel?: ReactNode;
+  /** Shown in place of the children while the sheet rests at the peek snap. */
+  peekContent?: ReactNode;
   children: ReactNode;
 }
 
 type Phase = "idle" | "dragging" | "animating";
+
+/** The snap points by name, for content asking the sheet to move. */
+export type SheetSnap = "collapsed" | "peek" | "half" | "full";
+
+interface BottomSheetControls {
+  snapTo: (snap: SheetSnap) => void;
+}
+
+const BottomSheetContext = createContext<BottomSheetControls | null>(null);
+
+/** The sheet this component is rendered in, or null outside one (the desktop sidebar). */
+export function useBottomSheet(): BottomSheetControls | null {
+  return useContext(BottomSheetContext);
+}
 
 /**
  * Content heights to snap to. `budget` is the parent less the band, so the topmost
@@ -126,10 +153,20 @@ function nearestSnap(height: number, snaps: number[]): number {
   return snaps.reduce((best, s) => (Math.abs(s - height) < Math.abs(best - height) ? s : best));
 }
 
+/** The half snap, or whichever snap stands in for it on a viewport too short to have one. */
+function halfSnap(snaps: number[], budget: number): number {
+  return nearestSnap(budget * HALF_FRACTION, snaps);
+}
+
+/** The peek snap, or the collapsed one where there is no other. */
+function peekSnap(snaps: number[]): number {
+  return snaps.length > 1 ? snaps[1] : snaps[0];
+}
+
 /** Where a tap on the handle goes: up to half from below it, down to peek from half. */
 function tapTarget(current: number, snaps: number[], budget: number): number {
-  const half = nearestSnap(budget * HALF_FRACTION, snaps);
-  const peek = snaps.length > 1 ? snaps[1] : snaps[0];
+  const half = halfSnap(snaps, budget);
+  const peek = peekSnap(snaps);
   if (current < half) return half;
   if (current === half) return peek;
   return half;
@@ -144,6 +181,7 @@ export default function MobileBottomSheet({
   onSettled,
   onCoverChange,
   collapsedLabel,
+  peekContent,
   children,
 }: MobileBottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -170,8 +208,16 @@ export default function MobileBottomSheet({
 
   // Kept in refs so the window listeners and the layout effect read this render's
   // values without being re-created per render.
-  const live = useRef({ available, snaps, topSnap, dimFromSnap, onCoverChange, onSettled });
-  live.current = { available, snaps, topSnap, dimFromSnap, onCoverChange, onSettled };
+  const live = useRef({
+    available,
+    budget,
+    snaps,
+    topSnap,
+    dimFromSnap,
+    onCoverChange,
+    onSettled,
+  });
+  live.current = { available, budget, snaps, topSnap, dimFromSnap, onCoverChange, onSettled };
 
   const reportCover = useCallback((height: number) => {
     const { available, onCoverChange } = live.current;
@@ -243,7 +289,7 @@ export default function MobileBottomSheet({
     const points = snapPointsFor(budget);
     setSettled((current) =>
       current === null
-        ? nearestSnap(budget * HALF_FRACTION, points)
+        ? halfSnap(points, budget)
         : Math.min(Math.max(current, points[0]), points[points.length - 1]),
     );
   }, [available]);
@@ -300,6 +346,24 @@ export default function MobileBottomSheet({
       }, SNAP_TRANSITION_MS + 30);
     },
     [paint, setTransition, stopAnimation, reportCover],
+  );
+
+  const controls = useMemo<BottomSheetControls>(
+    () => ({
+      snapTo: (snap) => {
+        const { snaps, budget } = live.current;
+        const height =
+          snap === "collapsed"
+            ? snaps[0]
+            : snap === "peek"
+              ? peekSnap(snaps)
+              : snap === "half"
+                ? halfSnap(snaps, budget)
+                : snaps[snaps.length - 1];
+        snapTo(height);
+      },
+    }),
+    [snapTo],
   );
 
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -386,6 +450,8 @@ export default function MobileBottomSheet({
   };
 
   const collapsed = phase === "idle" && settled === 0;
+  const showPeek =
+    peekContent != null && phase === "idle" && snaps.length > 1 && settled === snaps[1];
   const scrimActive = phase === "idle" && settled !== null && settled > dimFromSnap;
 
   return (
@@ -454,10 +520,21 @@ export default function MobileBottomSheet({
         )}
       </button>
       <div
-        className="min-h-0 overflow-hidden flex flex-col"
+        className="relative min-h-0 overflow-hidden flex flex-col"
         style={{ height: settled === null ? `${HALF_FRACTION * 100}%` : `${contentHeight}px` }}
       >
-        {children}
+        <BottomSheetContext.Provider value={controls}>
+          <div inert={showPeek} className="flex-1 min-h-0 flex flex-col">
+            {children}
+          </div>
+          {/* A drag region like the tab bar it covers, so the sheet is raised from here
+              too; a tap on a control inside is still a click. */}
+          {showPeek && (
+            <div data-sheet-drag="" className="absolute inset-0 bg-surface touch-none select-none">
+              {peekContent}
+            </div>
+          )}
+        </BottomSheetContext.Provider>
       </div>
     </div>
   );

@@ -7,12 +7,14 @@ import type {
   PaddingOptions,
 } from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SelectionSummaryBar from "@/components/logbook/SelectionSummaryBar";
 import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
 import MapProgressBox from "@/components/map/MapProgressBox";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import MobileBottomSheet from "@/components/ui/MobileBottomSheet";
 import type { User } from "@/lib/authActions";
 import { createDataAccess, type DataAccess } from "@/lib/dataAccess";
+import * as localStore from "@/lib/localStorage";
 import {
   createPublicNotesSource,
   createPublicStationsSource,
@@ -28,6 +30,7 @@ import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
 import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
+import { NEW_JOURNEY_FORM_ID } from "@/lib/selectedRoutes";
 import { createUserMapLayers } from "@/lib/shared/map/userMapLayers";
 import { regionCountryCodes } from "@/lib/shared/regions";
 import type {
@@ -469,6 +472,7 @@ export default function RailwayMap({
       // ridden stretch attached, ready to be stored with the journey
       partial: route.partial ? true : null,
       covered: route.partial ?? null,
+      travelled_length_km: route.partial ? route.travelled_length_km : null,
       length_km: route.length_km,
     }));
 
@@ -682,6 +686,35 @@ export default function RailwayMap({
   const sheetLabel =
     selectedRoutes.length > 0 ? `Route Logger · ${selectedRoutes.length} selected` : "Route Logger";
 
+  // The summary bar's "Log journey": the sheet raises itself, this brings the form
+  // into view — after the commit that unhides the Route Logger, since a hidden
+  // element cannot be scrolled to. Its own scroll container only, never
+  // `scrollIntoView`: the sheet is still translated down at the start of its snap,
+  // and the browser would make up the difference by scrolling the overflow-hidden
+  // ancestors — the map root and the map pane — which then jump back when the
+  // transform comes off. Both rects sit under the same transform, so their
+  // difference is the form's offset in the container whatever the sheet is doing.
+  const handleLogFromSummary = useCallback(() => {
+    setActiveTab("routes");
+    requestAnimationFrame(() => {
+      const form = document.getElementById(NEW_JOURNEY_FORM_ID);
+      let scroller = form?.parentElement ?? null;
+      while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+        scroller = scroller.parentElement;
+      }
+      if (!form || !scroller) return;
+      const offset = form.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      scroller.scrollTo({ top: scroller.scrollTop + offset - 8, behavior: "smooth" });
+    });
+  }, [setActiveTab]);
+
+  // The same limit LocalTripLogger disables its form on, read per render as it is
+  // there: logging clears the selection, which re-renders this.
+  const summaryBlockedReason =
+    selectedRoutes.length > 0 && !user && !localStore.canAddMoreJourneys()
+      ? localStore.JOURNEY_LIMIT_MESSAGE
+      : null;
+
   // Sidebar content (shared between mobile drawer and desktop inline)
   const sidebarContent = (
     <UserSidebar
@@ -760,6 +793,15 @@ export default function RailwayMap({
           onSettled={handleSheetSettled}
           onCoverChange={handleSheetCoverChange}
           collapsedLabel={sheetLabel}
+          peekContent={
+            selectedRoutes.length > 0 ? (
+              <SelectionSummaryBar
+                routes={selectedRoutes}
+                onLog={handleLogFromSummary}
+                blockedReason={summaryBlockedReason}
+              />
+            ) : undefined
+          }
         >
           {sidebarContent}
         </MobileBottomSheet>

@@ -104,6 +104,17 @@ export default function UserSidebar({
         >
           <span className="md:hidden">Logger</span>
           <span className="hidden md:inline">Route Logger</span>
+          {/* The selection is built on the map, beside or under this panel, so the tab
+              says it grew. Re-keyed on the count so each change replays the bump. */}
+          {selectedRoutes.length > 0 && (
+            <span
+              key={selectedRoutes.length}
+              className="count-bump ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold leading-none align-[1px]"
+            >
+              {selectedRoutes.length}
+              <span className="sr-only"> selected</span>
+            </span>
+          )}
         </button>
         <button
           type="button"

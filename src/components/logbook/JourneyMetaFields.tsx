@@ -1,3 +1,5 @@
+import { btn } from "@/lib/ui/buttonStyles";
+
 interface TripPicker {
   value: number | null;
   options: { id: number; name: string }[];
@@ -11,6 +13,8 @@ interface JourneyMetaFieldsProps {
   compact?: boolean;
   name: string;
   onNameChange: (name: string) => void;
+  /** Offered as a one-tap fill while the name is empty. */
+  suggestedName?: string | null;
   date: string;
   onDateChange: (date: string) => void;
   onDateFocus?: () => void;
@@ -26,6 +30,7 @@ export default function JourneyMetaFields({
   compact = false,
   name,
   onNameChange,
+  suggestedName,
   date,
   onDateChange,
   onDateFocus,
@@ -53,6 +58,15 @@ export default function JourneyMetaFields({
           placeholder={compact ? undefined : "e.g., Prague to Vienna via Brno"}
           className={fieldClass}
         />
+        {suggestedName && !name.trim() && (
+          <button
+            type="button"
+            onClick={() => onNameChange(suggestedName)}
+            className={`${btn("softPrimary", "xs")} mt-1.5 max-w-full`}
+          >
+            <span className="truncate">Use “{suggestedName}”</span>
+          </button>
+        )}
       </div>
 
       <div>
