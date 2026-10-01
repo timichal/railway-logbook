@@ -34,16 +34,25 @@ async function createAccountJourney(journey: NewJourney): Promise<string> {
 }
 
 /** The Route Logger of a signed-in user: journeys go to the account, and may be filed under a trip. */
-export default function JourneyLogger(props: RouteSelectionProps) {
+export default function JourneyLogger({
+  tripsVersion,
+  ...props
+}: RouteSelectionProps & {
+  /** Bumped whenever My Trips changes something; this tab stays mounted behind it. */
+  tripsVersion: number;
+}) {
   const regionId = useRegionId();
   // Trips are region-scoped. A failed load leaves the picker empty, which only
   // costs filing the journey under a trip later.
+  // A reload empties the picker until it answers, which is why it waits for a change
+  // rather than running on every return to the tab.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tripsVersion is the reload trigger; the trips themselves come from the server.
   const { data: availableTrips } = useAsyncLoad(
     () =>
       getAllTrips(regionId)
         .then(unwrap)
         .then((result) => result.trips),
-    [regionId],
+    [regionId, tripsVersion],
     "trips",
   );
 

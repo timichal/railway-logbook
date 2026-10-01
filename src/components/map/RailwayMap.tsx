@@ -44,6 +44,26 @@ import { useResolvedTheme } from "@/lib/theme";
 import { useToast } from "@/lib/toast";
 import { getRoutesBounds } from "@/lib/userActions";
 
+/** One highlight set: whole routes by id, plus the stretches of those covered only in part. */
+interface HighlightSet {
+  ids: number[];
+  partials: PartialRouteGeometry[];
+}
+
+const EMPTY_HIGHLIGHT: HighlightSet = { ids: [], partials: [] };
+const NO_HIGHLIGHTS: Record<HighlightKind, HighlightSet> = {
+  planner: EMPTY_HIGHLIGHT,
+  view: EMPTY_HIGHLIGHT,
+};
+const NO_SELECTED_ROUTES: SelectedRoute[] = [];
+
+/** Whose highlights each tab shows. */
+const TAB_HIGHLIGHT_KIND: Record<ActiveTab, HighlightKind | null> = {
+  routes: "planner",
+  journeylog: "view",
+  filter: null,
+};
+
 /** One user's country filter saves: at most one running, the newest list waiting. */
 interface CountrySaveQueue {
   userId: number | null;
@@ -176,13 +196,13 @@ export default function RailwayMap({
     journeyContainsRouteRef.current = null;
   }, []);
 
-  // Highlighted routes state. `kind` controls the highlight color: 'planner'
-  // (gold) for pathfinder results, 'view' (orange) for My Trips browsing.
-  // `partialHighlights` carries the covered stretch of any route the highlight
-  // should only cover part of (Journey Planner joining a route mid-way).
-  const [highlightedRoutes, setHighlightedRoutes] = useState<number[]>([]);
-  const [highlightKind, setHighlightKind] = useState<HighlightKind>("view");
-  const [partialHighlights, setPartialHighlights] = useState<PartialRouteGeometry[]>([]);
+  // Highlighted routes, one set per kind: 'planner' (gold) is the Journey Planner's
+  // result, 'view' (orange) the My Trips item open. `partials` carries the covered
+  // stretch of any route the highlight should only cover part of (the planner
+  // joining a route mid-way). Each kind belongs to one tab and only the open tab's
+  // is drawn. The planner's set outlives a look at another tab, since the Route
+  // Logger stays mounted behind it; My Trips clears its own as it unmounts.
+  const [highlights, setHighlights] = useState<Record<HighlightKind, HighlightSet>>(NO_HIGHLIGHTS);
   // Bumped whenever journeys change, to refetch the ridden-stretch overlay
   const [coverageVersion, setCoverageVersion] = useState(0);
 
@@ -285,11 +305,23 @@ export default function RailwayMap({
     [map],
   );
 
+  // Read when a highlight arrives, which may be well after the tab that asked for it
+  // was left (a planner search, a trip's routes still loading).
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
   const handleHighlightRoutes = useCallback<HighlightRoutesFn>(
     (ids, kind = "view", partials = [], options = {}) => {
-      setHighlightedRoutes(ids);
-      setHighlightKind(kind);
-      setPartialHighlights(partials);
+      const onScreen = TAB_HIGHLIGHT_KIND[activeTabRef.current] === kind;
+      // My Trips mounts fresh each time it opens, so a highlight of its arriving after
+      // it closed is for a card nobody will see again; kept, it would come back
+      // orange the next time the tab opened with nothing open.
+      if (!onScreen && kind === "view" && ids.length > 0) return;
+      setHighlights((prev) => ({ ...prev, [kind]: { ids, partials } }));
+      // Only the tab on screen moves the camera. A planner result landing behind My
+      // Trips is kept for the way back, but flying to lines that are not drawn would
+      // also cancel the fit of whatever My Trips just opened.
+      if (!onScreen) return;
       if (options.fit && ids.length > 0) void fitToRoutes(ids, options.bounds);
       else fitRequest.current++;
     },
@@ -326,14 +358,17 @@ export default function RailwayMap({
     cacheBusterRef: routesCacheBusterRef,
   });
 
-  // Route highlighting hooks
+  // Only the open tab's highlights are drawn: the planner result and the selection
+  // on the Route Logger, the open trip or journey on My Trips, nothing on Countries.
+  const shownKind = TAB_HIGHLIGHT_KIND[activeTab];
+  const shownHighlight = shownKind ? highlights[shownKind] : EMPTY_HIGHLIGHT;
   useRouteHighlighting(
     map,
     mapLoaded,
-    highlightedRoutes,
-    highlightKind,
-    selectedRoutes,
-    partialHighlights,
+    shownHighlight.ids,
+    shownKind ?? "view",
+    activeTab === "routes" ? selectedRoutes : NO_SELECTED_ROUTES,
+    shownHighlight.partials,
   );
 
   // Ridden stretches of routes not yet finished, drawn over the route line
@@ -401,8 +436,7 @@ export default function RailwayMap({
   // biome-ignore lint/correctness/useExhaustiveDependencies: region.id is the trigger; the setters are stable and intentionally not read here.
   useEffect(() => {
     setSelectedRoutes([]);
-    setHighlightedRoutes([]);
-    setPartialHighlights([]);
+    setHighlights(NO_HIGHLIGHTS);
     fitRequest.current++;
   }, [region.id]);
 
@@ -477,6 +511,10 @@ export default function RailwayMap({
     previousUserIdRef.current = userId;
     if (previousUserId === undefined || previousUserId === userId) return;
     setSelectedCountries(initialSelectedCountries);
+    // The Route Logger is rebuilt for the new user (account or localStorage), and its
+    // planner with it, so a result still highlighted would have no form behind it.
+    setHighlights(NO_HIGHLIGHTS);
+    fitRequest.current++;
     refreshTiles();
   }, [userId, refreshTiles]);
 

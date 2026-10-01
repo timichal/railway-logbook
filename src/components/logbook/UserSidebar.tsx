@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import CountriesStatsTab from "@/components/logbook/CountriesStatsTab";
 import JourneyLogger from "@/components/logbook/JourneyLogger";
 import JourneysAndTripsTab from "@/components/logbook/JourneysAndTripsTab";
@@ -67,6 +67,14 @@ export default function UserSidebar({
 }: UserSidebarProps) {
   const region = useRegion();
 
+  // The Route Logger's trip picker loaded its trips once and stays mounted while My
+  // Trips is open, so a trip created, renamed or deleted there has to be passed on.
+  const [tripsVersion, bumpTripsVersion] = useReducer((v: number) => v + 1, 0);
+  const handleTripsChanged = useCallback(() => {
+    bumpTripsVersion();
+    onRoutesLogged?.();
+  }, [onRoutesLogged]);
+
   // A single-country region has nothing to filter, so its Countries tab is gone.
   // Switching into one while that tab is open would leave an empty pane, so the
   // sidebar falls back to the Route Logger.
@@ -131,35 +139,42 @@ export default function UserSidebar({
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === "routes" && user && (
-          <JourneyLogger
-            selectedRoutes={selectedRoutes}
-            onRemoveRoute={onRemoveRoute}
-            onClearSelection={onClearAll}
-            onUpdateRoutePartial={onUpdateRoutePartial}
-            onRoutesLogged={onRoutesLogged || (() => {})}
-            onHighlightRoutes={onHighlightRoutes}
-            onAddRoutesFromPlanner={onAddRoutesFromPlanner}
-            onStationClickHandler={onStationClickHandler}
-          />
-        )}
-        {activeTab === "routes" && !user && (
-          <LocalTripLogger
-            selectedRoutes={selectedRoutes}
-            onRemoveRoute={onRemoveRoute}
-            onClearSelection={onClearAll}
-            onUpdateRoutePartial={onUpdateRoutePartial}
-            onRoutesLogged={onRoutesLogged || (() => {})}
-            onHighlightRoutes={onHighlightRoutes}
-            onAddRoutesFromPlanner={onAddRoutesFromPlanner}
-            onStationClickHandler={onStationClickHandler}
-          />
-        )}
+        {/* The Route Logger stays mounted while another tab is open, so the planner's
+            stops and result and the half-filled journey form are still there on the
+            way back (a sign-in or sign-out still rebuilds it, for the other store).
+            Its highlights are another matter: RailwayMap shows only the open tab's.
+            The other tabs mount fresh each time. */}
+        <div hidden={activeTab !== "routes"}>
+          {user ? (
+            <JourneyLogger
+              tripsVersion={tripsVersion}
+              selectedRoutes={selectedRoutes}
+              onRemoveRoute={onRemoveRoute}
+              onClearSelection={onClearAll}
+              onUpdateRoutePartial={onUpdateRoutePartial}
+              onRoutesLogged={onRoutesLogged || (() => {})}
+              onHighlightRoutes={onHighlightRoutes}
+              onAddRoutesFromPlanner={onAddRoutesFromPlanner}
+              onStationClickHandler={onStationClickHandler}
+            />
+          ) : (
+            <LocalTripLogger
+              selectedRoutes={selectedRoutes}
+              onRemoveRoute={onRemoveRoute}
+              onClearSelection={onClearAll}
+              onUpdateRoutePartial={onUpdateRoutePartial}
+              onRoutesLogged={onRoutesLogged || (() => {})}
+              onHighlightRoutes={onHighlightRoutes}
+              onAddRoutesFromPlanner={onAddRoutesFromPlanner}
+              onStationClickHandler={onStationClickHandler}
+            />
+          )}
+        </div>
 
         {activeTab === "journeylog" && user && (
           <JourneysAndTripsTab
             onHighlightRoutes={onHighlightRoutes}
-            onJourneyChanged={onRoutesLogged}
+            onJourneyChanged={handleTripsChanged}
             onJourneyEditStart={onJourneyEditStart}
             onJourneyEditEnd={onJourneyEditEnd}
           />
