@@ -1,5 +1,6 @@
 "use client";
 
+import type { LngLatBoundsLike, MapLibreEvent } from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
 import MapProgressBox from "@/components/map/MapProgressBox";
@@ -30,11 +31,13 @@ import type {
   JourneyEditStartFn,
   PartialRouteGeometry,
   PlannerRoute,
+  RouteBounds,
   SelectedRoute,
   Station,
 } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
 import { useToast } from "@/lib/toast";
+import { getRoutesBounds } from "@/lib/userActions";
 
 /** One user's country filter saves: at most one running, the newest list waiting. */
 interface CountrySaveQueue {
@@ -65,6 +68,14 @@ interface RailwayMapProps {
  * and the attribution has to stay visible.
  */
 const MAP_FURNITURE_MIN_HEIGHT_PX = 180;
+
+/**
+ * Fitting to an opened journey, trip or plan: the margin left around its routes,
+ * on top of the camera padding the mobile sheet already holds, and how far in it
+ * may go — a single short route would otherwise fill the screen at street level.
+ */
+const FIT_PADDING_PX = { desktop: 64, mobile: 24 };
+const FIT_MAX_ZOOM = 12;
 
 export default function RailwayMap({
   className = "",
@@ -139,14 +150,6 @@ export default function RailwayMap({
   const [partialHighlights, setPartialHighlights] = useState<PartialRouteGeometry[]>([]);
   // Bumped whenever journeys change, to refetch the ridden-stretch overlay
   const [coverageVersion, setCoverageVersion] = useState(0);
-  const handleHighlightRoutes = useCallback<HighlightRoutesFn>(
-    (ids, kind = "view", partials = []) => {
-      setHighlightedRoutes(ids);
-      setHighlightKind(kind);
-      setPartialHighlights(partials);
-    },
-    [],
-  );
 
   // Selected routes state
   const [selectedRoutes, setSelectedRoutes] = useState<SelectedRoute[]>([]);
@@ -192,6 +195,80 @@ export default function RailwayMap({
     },
     [region.id],
   );
+
+  // The newest fit asked for. A fit may wait on the server for the routes' bounds,
+  // and is dropped if anything happens to the map meanwhile: another highlight (a
+  // different item opened, or this one closed) or a camera move (a pan, a station
+  // search's flight) — flying off afterwards would take the map away from whatever
+  // the user has moved on to.
+  const fitRequest = useRef(0);
+  const isMobileRef = useRef(isMobile);
+  isMobileRef.current = isMobile;
+  // A ref so the highlight callback stays stable across a region switch: the cards
+  // re-run effects on its identity.
+  const regionIdRef = useRef(region.id);
+  regionIdRef.current = region.id;
+
+  // `known` is the bounds the caller already had (see HighlightOptions); without
+  // them they are fetched, which only the local journeys need — they have no
+  // partial stretches, so the whole routes' box is the answer.
+  const fitToRoutes = useCallback(
+    async (ids: number[], known: RouteBounds | null | undefined) => {
+      const request = ++fitRequest.current;
+      let box = known;
+      if (box === undefined) {
+        try {
+          box = await getRoutesBounds(ids, regionIdRef.current);
+        } catch (error) {
+          // Nothing to tell the user: the routes are highlighted all the same
+          console.error("Error loading route bounds:", error);
+          return;
+        }
+      }
+      const m = map.current;
+      if (request !== fitRequest.current || !m || !box) return;
+      const [west, south, east, north] = box;
+      const bounds: LngLatBoundsLike = [
+        [west, south],
+        [east, north],
+      ];
+      // With the mobile sheet pulled up, the strip of map left may have no room for
+      // the margin, or for the routes at any zoom; cameraForBounds then gives up.
+      // The opened item is still centred in that strip rather than left off screen.
+      const padding = isMobileRef.current ? FIT_PADDING_PX.mobile : FIT_PADDING_PX.desktop;
+      const camera =
+        m.cameraForBounds(bounds, { padding, maxZoom: FIT_MAX_ZOOM }) ??
+        m.cameraForBounds(bounds, { maxZoom: FIT_MAX_ZOOM });
+      m.flyTo(camera ?? { center: [(west + east) / 2, (south + north) / 2] });
+    },
+    [map],
+  );
+
+  const handleHighlightRoutes = useCallback<HighlightRoutesFn>(
+    (ids, kind = "view", partials = [], options = {}) => {
+      setHighlightedRoutes(ids);
+      setHighlightKind(kind);
+      setPartialHighlights(partials);
+      if (options.fit && ids.length > 0) void fitToRoutes(ids, options.bounds);
+      else fitRequest.current++;
+    },
+    [fitToRoutes],
+  );
+
+  // A camera move cancels a pending fit (see fitRequest). The sheet's padding jump
+  // is the exception: it keeps what is on screen where it is, so it is not the user
+  // going somewhere else.
+  useEffect(() => {
+    const m = map.current;
+    if (!mapLoaded || !m) return;
+    const cancelFit = (event: MapLibreEvent & { sheetPadding?: boolean }) => {
+      if (!event.sheetPadding) fitRequest.current++;
+    };
+    m.on("movestart", cancelFit);
+    return () => {
+      m.off("movestart", cancelFit);
+    };
+  }, [map, mapLoaded]);
 
   // An anonymous visitor's rides, coloured from their localStorage log
   const refreshLocalRouteStates = useLocalRouteFeatureStates(map, mapLoaded, dataAccess, showError);
@@ -285,6 +362,7 @@ export default function RailwayMap({
     setSelectedRoutes([]);
     setHighlightedRoutes([]);
     setPartialHighlights([]);
+    fitRequest.current++;
   }, [region.id]);
 
   const handleRemoveRoute = useCallback((trackId: number) => {
@@ -461,7 +539,8 @@ export default function RailwayMap({
       }
       const { clientWidth, clientHeight } = m.getContainer();
       const center = m.unproject([clientWidth / 2, (clientHeight - bottom) / 2]);
-      m.jumpTo({ center, padding: { top: 0, left: 0, right: 0, bottom } });
+      // Tagged so the jump does not cancel a pending fit (see cancelFit)
+      m.jumpTo({ center, padding: { top: 0, left: 0, right: 0, bottom } }, { sheetPadding: true });
     };
     apply();
   }, [map]);

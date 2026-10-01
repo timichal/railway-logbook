@@ -236,10 +236,10 @@ export default function LocalJourneyLogTab({
     setEditDate(journeyData.journey.date);
     setEditDescription(journeyData.journey.description || "");
 
-    // Highlight routes on map
+    // Highlight routes on map, and bring them into view
     const routeIds = journeyData.parts.map((p) => p.track_id);
     if (onHighlightRoutes) {
-      onHighlightRoutes(routeIds);
+      onHighlightRoutes(routeIds, "view", undefined, { fit: true });
     }
 
     // Fetch route metadata for richer display

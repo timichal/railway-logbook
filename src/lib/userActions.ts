@@ -21,6 +21,7 @@ import {
   type UserProgress,
 } from "./progressQueries";
 import {
+  routeBoundsByIds,
   routeMetadataByIds,
   routeSummariesInRegion,
   searchStationsByName,
@@ -31,6 +32,7 @@ import type {
   CoveredRange,
   CoveredStretch,
   RailwayRoute,
+  RouteBounds,
   RouteSummary,
   Station,
 } from "./shared/types";
@@ -53,6 +55,18 @@ export async function getRouteSummaries(region: RegionId): Promise<RouteSummary[
 /** Metadata for a set of routes. No authentication required — route data is public. */
 export async function getRoutesByIds(trackIds: number[]): Promise<RailwayRoute[]> {
   return routeMetadataByIds(trackIds);
+}
+
+/**
+ * The bounding box of a set of routes in a region (see routeBoundsByIds). Public, as
+ * route geometry is. For the local journeys, which hold only track ids; the
+ * journey, trip and planner actions return their bounds with their result.
+ */
+export async function getRoutesBounds(
+  trackIds: number[],
+  region: RegionId,
+): Promise<RouteBounds | null> {
+  return routeBoundsByIds(trackIds, region);
 }
 
 /**

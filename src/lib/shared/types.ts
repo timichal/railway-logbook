@@ -233,7 +233,28 @@ export type HighlightRoutesFn = (
    * tile filter can only light up a whole route.
    */
   partials?: PartialRouteGeometry[],
+  options?: HighlightOptions,
 ) => void;
+
+export interface HighlightOptions {
+  /**
+   * Move the camera to the highlighted routes. Set when an item has just been
+   * opened (a journey, a trip, a planner result), and only then: a re-highlight of
+   * the same item — a route added or removed while editing it — leaves the view
+   * where the user put it.
+   */
+  fit?: boolean;
+  /**
+   * The highlighted routes' bounds, when the caller already has them — the journey,
+   * trip and planner actions return them with their result, which saves the map a
+   * round trip of its own. `null` means none of the routes is in this region, so
+   * there is nothing to fit to. Omitted, the map fetches them.
+   */
+  bounds?: RouteBounds | null;
+}
+
+/** A box around some routes, as [west, south, east, north]. */
+export type RouteBounds = [number, number, number, number];
 
 /**
  * A journey card opening for editing hands the map two things: the handler that

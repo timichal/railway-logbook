@@ -5,6 +5,7 @@ import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { deleteJourney, getJourney, saveJourneyEdits } from "@/lib/journeyActions";
+import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type {
   HighlightRoutesFn,
@@ -67,6 +68,7 @@ export default function JourneyCard({
   nested = false,
 }: JourneyCardProps) {
   const { showSuccess, showError } = useToast();
+  const regionId = useRegionId();
 
   const [viewedRoutes, setViewedRoutes] = useState<RailwayRoute[]>([]);
   const [editName, setEditName] = useState(journey.name);
@@ -115,7 +117,7 @@ export default function JourneyCard({
   );
 
   // Load journey details when this card opens
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes, onJourneyEditStart and onJourneyEditEnd are intentionally omitted; the effect should fire only when the card opens or the journey changes, not when the callback identity changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes, onJourneyEditStart, onJourneyEditEnd and regionId are intentionally omitted; the effect should fire only when the card opens or the journey changes, not when the callback identity changes, and the region only scopes the fit that opening does.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -124,7 +126,7 @@ export default function JourneyCard({
     setIsLoadingDetails(true);
     (async () => {
       try {
-        const result = unwrap(await getJourney(journey.id));
+        const result = unwrap(await getJourney(journey.id, regionId));
         if (cancelled) return;
         const routes = result.routes;
         setViewedRoutes(routes);
@@ -141,7 +143,15 @@ export default function JourneyCard({
             tripId: result.journey.trip_id,
           });
         }
-        onHighlightRoutes?.(routes.map((r) => r.track_id));
+        onHighlightRoutes?.(
+          routes.map((r) => r.track_id),
+          "view",
+          undefined,
+          {
+            fit: true,
+            bounds: result.bounds,
+          },
+        );
         onJourneyEditStart?.(stableHandleMapRouteClick, stableIsRouteInJourney);
         sessionStarted = true;
       } catch (error) {

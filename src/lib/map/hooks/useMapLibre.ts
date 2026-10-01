@@ -239,6 +239,11 @@ export function useMapLibre(
         attributionControl: false,
       });
 
+      // Pinch still zooms, but no longer turns the map: a two-finger zoom drifted it
+      // off north as often as not, and nothing on a railway map wants it rotated.
+      // The mouse paths are off above; this is the touch one.
+      map.current.touchZoomRotate.disableRotation();
+
       // The basemap asks for POI icons its own sprite does not carry.
       resolveMissingBasemapIcons(map.current);
 

@@ -10,7 +10,7 @@
 
 import { escapeLikePattern, query } from "./db";
 import { type RegionId, regionEnvelopeSql } from "./shared/regions";
-import type { RailwayRoute, RouteSummary, Station } from "./shared/types";
+import type { RailwayRoute, RouteBounds, RouteSummary, Station } from "./shared/types";
 
 /**
  * Station name search for the map search boxes and the Journey Planner.
@@ -126,6 +126,41 @@ export async function routeSummariesInRegion(region: RegionId): Promise<RouteSum
   `);
 
   return result.rows as RouteSummary[];
+}
+
+/**
+ * The bounding box of a set of routes, or null when none of them is there. What the
+ * user map fits to when a journey, trip or plan is opened: its highlights are
+ * tile-filter overlays carrying only ids, so the client has no geometry of its own
+ * to measure.
+ *
+ * Only the routes in `region` count. A journey or trip is not scoped to one — a
+ * trip may hold a ride in Czechia and one in Japan — and a box spanning both would
+ * fit the Europe view zoomed out to the whole continent. `null` takes every route,
+ * for a set that cannot straddle the two (a planner result).
+ */
+export async function routeBoundsByIds(
+  trackIds: number[],
+  region: RegionId | null,
+): Promise<RouteBounds | null> {
+  if (trackIds.length === 0) return null;
+
+  const inRegion = region ? `AND geometry && ${regionEnvelopeSql(region)}` : "";
+  const result = await query(
+    `
+    SELECT ST_XMin(box) AS west, ST_YMin(box) AS south, ST_XMax(box) AS east, ST_YMax(box) AS north
+    FROM (
+      SELECT ST_Extent(geometry) AS box
+      FROM railway_routes
+      WHERE track_id = ANY($1::int[]) ${inRegion}
+    ) e
+    WHERE box IS NOT NULL
+  `,
+    [trackIds],
+  );
+
+  const row = result.rows[0];
+  return row ? [row.west, row.south, row.east, row.north] : null;
 }
 
 /**

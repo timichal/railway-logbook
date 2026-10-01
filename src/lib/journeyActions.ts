@@ -21,13 +21,26 @@ import {
   type LoggedRange,
   saveJourneyEditsForUser,
 } from "./journeyQueries";
-import type { Journey, RailwayRoute } from "./shared/types";
+import { routeBoundsByIds } from "./routeQueries";
+import type { RegionId } from "./shared/regions";
+import type { Journey, RailwayRoute, RouteBounds } from "./shared/types";
 
-/** Get a single journey with all its logged routes. */
+/**
+ * Get a single journey with all its logged routes, and the bounds of those in
+ * `region` — what the map fits to when the journey is opened, returned here so it
+ * needs no request of its own.
+ */
 export async function getJourney(
   journeyId: number,
-): Promise<ActionResult<{ journey: Journey | null; routes: RailwayRoute[] }>> {
-  return asUser(async (userId) => inBand(await journeyForUser(userId, journeyId)));
+  region: RegionId,
+): Promise<
+  ActionResult<{ journey: Journey | null; routes: RailwayRoute[]; bounds: RouteBounds | null }>
+> {
+  return asUser(async (userId) => {
+    const result = inBand(await journeyForUser(userId, journeyId));
+    const trackIds = result.routes.map((r) => r.track_id);
+    return { ...result, bounds: await routeBoundsByIds(trackIds, region) };
+  });
 }
 
 /** Create a new journey and log routes to it (atomic operation). */

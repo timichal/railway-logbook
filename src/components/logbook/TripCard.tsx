@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { useRegionId } from "@/lib/regionContext";
@@ -71,25 +71,43 @@ export default function TripCard({
     setEditDescription(trip.description || "");
   }, [trip.name, trip.description]);
 
-  // When a nested journey is being edited, the journey card owns highlights.
-  // Otherwise, when the trip is open, highlight all routes in the trip.
-  const refreshTripHighlights = useCallback(async () => {
-    if (openNestedJourneyId !== null) return;
-    if (!isOpen) return;
-    try {
-      const result = unwrap(await getTrip(trip.id));
-      setJourneys(result.journeys);
-      onHighlightRoutes?.(result.routeIds);
-    } catch (error) {
-      console.error("Error loading trip:", error);
-    }
-  }, [isOpen, openNestedJourneyId, trip.id, onHighlightRoutes]);
+  // Read again once the trip has loaded: the card may have closed, or a nested
+  // journey opened, while it was on its way, and the highlight then belongs to
+  // someone else. The region too, so a switch does not re-run the effects below.
+  const latest = useRef({ isOpen, openNestedJourneyId, regionId });
+  latest.current = { isOpen, openNestedJourneyId, regionId };
 
+  // When a nested journey is being edited, the journey card owns highlights.
+  // Otherwise, when the trip is open, highlight all routes in the trip. `fit` brings
+  // them into view, which only opening the trip asks for — a nested journey closing
+  // or a journey assigned re-highlights a trip already being looked at.
+  const refreshTripHighlights = useCallback(
+    async (fit = false) => {
+      const ownsHighlight = () =>
+        latest.current.isOpen && latest.current.openNestedJourneyId === null;
+      if (!ownsHighlight()) return;
+      try {
+        const result = unwrap(await getTrip(trip.id, latest.current.regionId));
+        if (!ownsHighlight()) return;
+        setJourneys(result.journeys);
+        onHighlightRoutes?.(result.routeIds, "view", undefined, { fit, bounds: result.bounds });
+      } catch (error) {
+        console.error("Error loading trip:", error);
+      }
+    },
+    [trip.id, onHighlightRoutes],
+  );
+
+  // Whether the trip was open on the last run, so the run that opens it can tell
+  // itself apart from one where a nested journey closed.
+  const wasOpen = useRef(false);
   useEffect(() => {
+    const justOpened = isOpen && !wasOpen.current;
+    wasOpen.current = isOpen;
     if (!isOpen) return;
     if (openNestedJourneyId !== null) return;
     // (Re)highlight all trip routes whenever trip opens or nested journey closes
-    refreshTripHighlights();
+    void refreshTripHighlights(justOpened);
   }, [isOpen, openNestedJourneyId, refreshTripHighlights]);
 
   useEffect(() => {

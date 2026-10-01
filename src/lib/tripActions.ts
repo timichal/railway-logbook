@@ -13,8 +13,9 @@
 
 import { type ActionResult, inBand } from "./actionResult";
 import { asUser } from "./authHelpers";
+import { routeBoundsByIds } from "./routeQueries";
 import type { RegionId } from "./shared/regions";
-import type { Trip } from "./shared/types";
+import type { RouteBounds, Trip } from "./shared/types";
 import {
   assignJourneyToTripForUser,
   createTripForUser,
@@ -39,15 +40,25 @@ export async function getAllTrips(
   return asUser(async (userId) => inBand(await tripsForUser(userId, region)));
 }
 
-/** Get a single trip with its assigned journeys. */
-export async function getTrip(tripId: number): Promise<
+/**
+ * Get a single trip with its assigned journeys, and the bounds of its routes in
+ * `region` — what the map fits to when the trip is opened (see getJourney).
+ */
+export async function getTrip(
+  tripId: number,
+  region: RegionId,
+): Promise<
   ActionResult<{
     trip: Trip | null;
     journeys: JourneyInTrip[];
     routeIds: number[];
+    bounds: RouteBounds | null;
   }>
 > {
-  return asUser(async (userId) => inBand(await tripForUser(userId, tripId)));
+  return asUser(async (userId) => {
+    const result = inBand(await tripForUser(userId, tripId));
+    return { ...result, bounds: await routeBoundsByIds(result.routeIds, region) };
+  });
 }
 
 /** Create a new trip. */

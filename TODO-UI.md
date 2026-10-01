@@ -4,24 +4,6 @@ Found in a walkthrough of the main map (desktop, and a 390px-wide phone viewport
 2026-09-29. The mobile bottom sheet rewrite from that session is done; everything
 below is still open. Rough priority order within each section.
 
-## Map
-
-- [ ] **Zoom to what was just opened.** The user map never calls `fitBounds`
-  (only `AdminMap` does), so opening a journey, a trip or a planner result lights up
-  routes that may be off screen — opening "Jemnice" (Czechia) with the map on Aachen
-  showed nothing at all.
-  - Fit the highlighted routes' bounds when a journey/trip card opens
-    (`JourneyCard`, `TripCard`, local equivalents in `LocalJourneyLogTab`) and when
-    the planner returns a result (`JourneyPlanner` → `onHighlightRoutes`).
-  - The bounds need geometry the highlight path may not have client-side (tile-filter
-    overlays carry only ids); likely a small server query returning the bbox of a set
-    of track ids, or bounds computed where `PartialRouteGeometry` already exists.
-  - Mobile: the camera already carries the sheet as bottom padding
-    (`handleSheetSettled` in `RailwayMap`), so a plain `fitBounds` lands in the
-    visible part. Add some padding of its own on top of that; cap `maxZoom`.
-  - Don't refit on every re-highlight of the same set (e.g. a route added in edit
-    mode) — only when the opened item changes.
-
 ## Route Logger (`RouteLogger.tsx`)
 
 - [ ] **Reorder the tab to follow the task.** Routes are picked first, the journey is

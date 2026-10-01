@@ -326,6 +326,7 @@ export default function JourneyPlanner({
             // Terminal routes joined mid-way are highlighted along the travelled
             // stretch only, so the gold line stops at the station
             result.routes.flatMap((r) => (r.partial ? [r.partial] : [])),
+            { fit: true, bounds: result.bounds },
           );
         }
       }
