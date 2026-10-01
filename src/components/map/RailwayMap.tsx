@@ -1,6 +1,11 @@
 "use client";
 
-import type { LngLatBoundsLike, MapLibreEvent } from "maplibre-gl";
+import type {
+  LngLatBoundsLike,
+  MapLibreEvent,
+  Map as MapLibreMap,
+  PaddingOptions,
+} from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
 import MapProgressBox from "@/components/map/MapProgressBox";
@@ -76,6 +81,36 @@ const MAP_FURNITURE_MIN_HEIGHT_PX = 180;
  */
 const FIT_PADDING_PX = { desktop: 64, mobile: 24 };
 const FIT_MAX_ZOOM = 12;
+/** How far a fitted route is kept from the edge of the progress box. */
+const FIT_BOX_GAP_PX = 16;
+
+/**
+ * The paddings a fit may use to keep its routes out from under the progress box
+ * (`data-progress-box`), which sits in a corner of the map on top of it. A corner
+ * can be cleared from either of its two sides, so both are offered — widen the
+ * bottom margin past the box's top edge, or the side margin past its inner edge —
+ * and the caller takes whichever lets the routes fit closer. A box outside the
+ * padded view (or none at all) leaves the plain margin.
+ */
+function fitPaddings(m: MapLibreMap, margin: number): PaddingOptions[] {
+  const all = { top: margin, right: margin, bottom: margin, left: margin };
+  const box = m.getContainer().parentElement?.querySelector("[data-progress-box]");
+  if (!box) return [all];
+  const view = m.getContainer().getBoundingClientRect();
+  const rect = box.getBoundingClientRect();
+  const camera = m.getPadding();
+  const onRight = rect.left + rect.width / 2 > view.left + view.width / 2;
+  // How far the box reaches into the padded view from the bottom, and from its side
+  const intoBottom = view.bottom - (camera.bottom ?? 0) - rect.top;
+  const intoSide = onRight
+    ? view.right - (camera.right ?? 0) - rect.left
+    : rect.right - (view.left + (camera.left ?? 0));
+  if (intoBottom <= 0 || intoSide <= 0) return [all];
+  return [
+    { ...all, bottom: Math.max(margin, intoBottom + FIT_BOX_GAP_PX) },
+    { ...all, [onRight ? "right" : "left"]: Math.max(margin, intoSide + FIT_BOX_GAP_PX) },
+  ];
+}
 
 export default function RailwayMap({
   className = "",
@@ -232,11 +267,17 @@ export default function RailwayMap({
         [west, south],
         [east, north],
       ];
+      // Clear of the progress box if there is room, by whichever side zooms in further.
       // With the mobile sheet pulled up, the strip of map left may have no room for
-      // the margin, or for the routes at any zoom; cameraForBounds then gives up.
-      // The opened item is still centred in that strip rather than left off screen.
+      // that, for the margin, or for the routes at any zoom; cameraForBounds then
+      // gives up. The opened item is still centred in that strip rather than left off
+      // screen.
       const padding = isMobileRef.current ? FIT_PADDING_PX.mobile : FIT_PADDING_PX.desktop;
+      const clearOfBox = fitPaddings(m, padding)
+        .map((p) => m.cameraForBounds(bounds, { padding: p, maxZoom: FIT_MAX_ZOOM }))
+        .reduce((best, c) => (c && (!best || (c.zoom ?? 0) > (best.zoom ?? 0)) ? c : best));
       const camera =
+        clearOfBox ??
         m.cameraForBounds(bounds, { padding, maxZoom: FIT_MAX_ZOOM }) ??
         m.cameraForBounds(bounds, { maxZoom: FIT_MAX_ZOOM });
       m.flyTo(camera ?? { center: [(west + east) / 2, (south + north) / 2] });

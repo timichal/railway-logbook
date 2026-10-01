@@ -41,8 +41,8 @@ interface RouteLoggerProps extends RouteSelectionProps {
 }
 
 /**
- * The Route Logger tab: the new-journey form, the Journey Planner and the routes
- * picked on the map. Where the journey goes — the account or localStorage — is the
+ * The Route Logger tab: the Journey Planner, the routes picked on the map and the
+ * new-journey form. Where the journey goes — the account or localStorage — is the
  * caller's `onCreate`, which is the whole of the difference between `JourneyLogger`
  * and `LocalTripLogger`.
  */
@@ -120,7 +120,21 @@ export default function RouteLogger({
     <div className="p-4 text-fg space-y-4">
       {notice}
 
-      <div>
+      {/* In the order of the task: find the routes, check them, then name the journey */}
+      <JourneyPlanner
+        onHighlightRoutes={onHighlightRoutes}
+        onAddRoutesToSelection={onAddRoutesFromPlanner}
+        onStationClickHandler={onStationClickHandler}
+      />
+
+      <SelectedRoutesList
+        routes={selectedRoutes}
+        onRemoveRoute={onRemoveRoute}
+        onClearSelection={onClearSelection}
+        onUpdateRoutePartial={onUpdateRoutePartial}
+      />
+
+      <div className="pt-3 border-t border-gray-200">
         <h3 className="text-lg font-bold mb-3">New Journey</h3>
         <JourneyMetaFields
           idPrefix="new-journey"
@@ -139,22 +153,7 @@ export default function RouteLogger({
         />
       </div>
 
-      <div className="pt-3 border-t border-gray-200">
-        <JourneyPlanner
-          onHighlightRoutes={onHighlightRoutes}
-          onAddRoutesToSelection={onAddRoutesFromPlanner}
-          onStationClickHandler={onStationClickHandler}
-        />
-      </div>
-
-      <SelectedRoutesList
-        routes={selectedRoutes}
-        onRemoveRoute={onRemoveRoute}
-        onClearSelection={onClearSelection}
-        onUpdateRoutePartial={onUpdateRoutePartial}
-      />
-
-      <div className="pt-3 border-t border-gray-200">
+      <div>
         <button
           type="button"
           onClick={handleCreateJourney}
