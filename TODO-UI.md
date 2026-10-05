@@ -4,20 +4,6 @@ Found in a walkthrough of the main map (desktop, and a 390px-wide phone viewport
 2026-09-29. The mobile bottom sheet rewrite from that session is done; everything
 below is still open. Rough priority order within each section.
 
-## My Trips (`JourneysAndTripsTab`, `JourneyCard`, `TripCard`)
-
-- [ ] **Open read-only first.** "View / Edit" drops straight into edit mode (Save /
-  Cancel, and map taps now add/remove routes). Open to a view — routes, stats, the map
-  highlight — with an explicit Edit button that enters the current edit mode.
-- [ ] **Make the row the tap target and drop the per-row Delete.** Every row carries a
-  blue View / Edit and a red Delete; the red repeats down the list and the buttons
-  truncate names ("Malá Moráv…", "Trhov…"). Tap the row to open; move Delete into the
-  opened card (it already has a confirm step).
-- [ ] **Lower the sheet when map picking starts.** Editing a journey says "click routes
-  on the map", but at the sheet's 90% snap the map is a ~40px strip. On entering edit
-  mode on mobile, snap the sheet to half — `useBottomSheet()?.snapTo("half")` from
-  `MobileBottomSheet` (null on desktop, so the call is safe in shared components).
-
 ## Mobile sheet follow-ups (`MobileBottomSheet.tsx`)
 
 - [ ] **Tune on a real phone.** Flick feel was not testable in the session (the

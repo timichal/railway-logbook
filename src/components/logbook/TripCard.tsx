@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import CardHeader, { countOf } from "@/components/logbook/CardHeader";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { useRegionId } from "@/lib/regionContext";
@@ -54,6 +55,8 @@ export default function TripCard({
   const [journeys, setJourneys] = useState<JourneyInTrip[]>(initialJourneys);
   const [editName, setEditName] = useState(trip.name);
   const [editDescription, setEditDescription] = useState(trip.description || "");
+  // An open trip shows its journeys; the name and description form is behind Edit.
+  const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -112,6 +115,7 @@ export default function TripCard({
 
   useEffect(() => {
     if (isOpen) return;
+    setIsEditing(false);
     setShowPicker(false);
     setDeleteConfirm(false);
   }, [isOpen]);
@@ -125,6 +129,7 @@ export default function TripCard({
     try {
       unwrap(await updateTrip(trip.id, editName.trim(), editDescription.trim() || null));
       showSuccess("Trip updated");
+      setIsEditing(false);
       onChanged();
     } catch (error) {
       console.error("Error updating trip:", error);
@@ -134,9 +139,15 @@ export default function TripCard({
     }
   };
 
+  const handleStartEdit = () => {
+    setDeleteConfirm(false);
+    setIsEditing(true);
+  };
+
   const handleCancelEdit = () => {
     setEditName(trip.name);
     setEditDescription(trip.description || "");
+    setIsEditing(false);
   };
 
   const handleDelete = async () => {
@@ -186,116 +197,78 @@ export default function TripCard({
 
   return (
     <div className="bg-surface border border-purple-300 rounded shadow-sm">
-      <div className="px-3 py-2 flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2 overflow-hidden">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-800 flex-shrink-0 tracking-wide">
-              Trip
-            </span>
-            <span className="font-semibold text-sm truncate" title={trip.name}>
-              {trip.name}
-            </span>
-            {trip.description && (
-              <span className="text-xs text-gray-500 truncate" title={trip.description}>
-                {trip.description}
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-gray-600 mt-0.5">
-            {dateRange} · {trip.journey_count} journey
-            {trip.journey_count === 1 ? "" : "s"} · {trip.route_count} route
-            {trip.route_count === 1 ? "" : "s"} · {Number(trip.total_distance).toFixed(1)} km
-          </div>
-        </div>
-        {deleteConfirm ? (
-          <>
-            <button
-              type="button"
-              onClick={handleDelete}
-              className={`${btn("danger")} flex-shrink-0`}
-            >
-              Confirm Delete
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeleteConfirm(false)}
-              className={`${btn("subtle")} flex-shrink-0`}
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={isOpen ? onRequestClose : onRequestOpen}
-              className={`${btn(isOpen ? "warning" : "primary")} flex-shrink-0`}
-            >
-              {isOpen ? "Hide" : "View / Edit"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeleteConfirm(true)}
-              className={`${btn("danger")} flex-shrink-0`}
-            >
-              Delete
-            </button>
-          </>
-        )}
-      </div>
+      <CardHeader
+        title={trip.name}
+        badge={
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-800 flex-shrink-0 tracking-wide">
+            Trip
+          </span>
+        }
+        description={trip.description}
+        meta={[
+          dateRange,
+          countOf(trip.journey_count, "journey"),
+          countOf(trip.route_count, "route"),
+          `${Number(trip.total_distance).toFixed(1)} km`,
+        ].join(" · ")}
+        isOpen={isOpen}
+        onToggle={isOpen ? onRequestClose : onRequestOpen}
+      />
 
       {isOpen && (
         <div className="px-3 pb-3 pt-2 border-t border-gray-200 space-y-3">
-          <div className="space-y-2">
-            <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Trip</h5>
-            <div>
-              <label htmlFor={`trip-${trip.id}-name`} className="block text-xs font-medium mb-1">
-                Trip Name*
-              </label>
-              <input
-                id={`trip-${trip.id}-name`}
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={isSavingEdit}
-              />
+          {isEditing && (
+            <div className="space-y-2">
+              <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Trip</h5>
+              <div>
+                <label htmlFor={`trip-${trip.id}-name`} className="block text-xs font-medium mb-1">
+                  Trip Name*
+                </label>
+                <input
+                  id={`trip-${trip.id}-name`}
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isSavingEdit}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor={`trip-${trip.id}-description`}
+                  className="block text-xs font-medium mb-1"
+                >
+                  Description
+                </label>
+                <textarea
+                  id={`trip-${trip.id}-description`}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={2}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  disabled={isSavingEdit}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={isSavingEdit || !editName.trim()}
+                  className={`${btn("success", "xs")} flex-1`}
+                >
+                  {isSavingEdit ? "Saving..." : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={isSavingEdit}
+                  className={`${btn("subtle", "xs")} flex-1`}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-            <div>
-              <label
-                htmlFor={`trip-${trip.id}-description`}
-                className="block text-xs font-medium mb-1"
-              >
-                Description
-              </label>
-              <textarea
-                id={`trip-${trip.id}-description`}
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                rows={2}
-                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                disabled={isSavingEdit}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSaveEdit}
-                disabled={isSavingEdit || !editName.trim()}
-                className={`${btn("success", "xs")} flex-1`}
-              >
-                {isSavingEdit ? "Saving..." : "Save Changes"}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                disabled={isSavingEdit}
-                className={`${btn("subtle", "xs")} flex-1`}
-              >
-                Reset
-              </button>
-            </div>
-          </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -372,6 +345,42 @@ export default function TripCard({
               )}
             </div>
           )}
+
+          {!isEditing &&
+            (deleteConfirm ? (
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                <span className="flex-1 text-sm text-gray-700">
+                  Delete this trip? Its journeys are kept.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className={`${btn("danger")} flex-shrink-0`}
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(false)}
+                  className={`${btn("subtle")} flex-shrink-0`}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-200">
+                <button type="button" onClick={handleStartEdit} className={btn("outline")}>
+                  Edit trip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(true)}
+                  className={btn("softDanger")}
+                >
+                  Delete trip
+                </button>
+              </div>
+            ))}
         </div>
       )}
     </div>

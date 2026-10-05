@@ -14,7 +14,7 @@ language js
     $src <: r"\"@/lib/(?:admin[A-Za-z]*|journey|trip)Actions\"",
     $specs <: contains $f
   },
-  not $call <: within `unwrap(await $inner)` where { $inner <: $call } ,
-  not $call <: within `$inner.then(unwrap)` where { $inner <: $call } ,
+  not $call <: within `unwrap(await $inner)` where { $inner <: $call },
+  not $call <: within `$inner.then(unwrap)` where { $inner <: $call },
   register_diagnostic(span=$call, message="This action returns its refusal as { error }: write unwrap(await action(…)) or action(…).then(unwrap), or a refusal passes for success.")
 }
