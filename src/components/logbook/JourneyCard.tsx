@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import CardHeader, { countOf } from "@/components/logbook/CardHeader";
+import CardHeader from "@/components/logbook/CardHeader";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
 import { useBottomSheet } from "@/components/ui/MobileBottomSheet";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { deleteJourney, getJourney, saveJourneyEdits } from "@/lib/journeyActions";
+import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type {
@@ -19,6 +20,7 @@ import type {
 import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
+import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
   return {
@@ -93,9 +95,20 @@ export default function JourneyCard({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  // Until the journey has loaded there is nothing to view or edit, and the snapshot
+  // is what says it has — so the card reads as loading from its first render, not
+  // only once the load effect has run.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const isLoading = originalSnapshot === null && !loadFailed;
 
   const editing = isOpen && isEditing;
+
+  const focusAfterRender = useFocusAfterRender();
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
+  const editHeadingRef = useRef<HTMLHeadingElement>(null);
 
   // Mutable handler ref so the stable map click callback always sees fresh state
   const editStateRef = useRef({ editing, viewedRoutes });
@@ -137,28 +150,25 @@ export default function JourneyCard({
   }, []);
 
   // Load journey details when this card opens
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes and regionId are intentionally omitted; the effect should fire only when the card opens or the journey changes, not when the callback identity changes, and the region only scopes the fit that opening does.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes and regionId are intentionally omitted; the effect should fire only when the card opens, the journey changes or a retry is asked for, not when the callback identity changes, and the region only scopes the fit that opening does.
   useEffect(() => {
     if (!isOpen) return;
 
     let cancelled = false;
-    setIsLoadingDetails(true);
+    setLoadFailed(false);
     (async () => {
       try {
         const result = unwrap(await getJourney(journey.id, regionId));
         if (cancelled) return;
+        if (!result.journey) throw new Error("Journey not found");
         const routes = result.routes;
-        if (result.journey) {
-          applySnapshot({
-            routes,
-            name: result.journey.name,
-            date: result.journey.date,
-            description: result.journey.description || "",
-            tripId: result.journey.trip_id,
-          });
-        } else {
-          setViewedRoutes(routes);
-        }
+        applySnapshot({
+          routes,
+          name: result.journey.name,
+          date: result.journey.date,
+          description: result.journey.description || "",
+          tripId: result.journey.trip_id,
+        });
         onHighlightRoutes?.(
           routes.map((r) => r.track_id),
           "view",
@@ -172,15 +182,14 @@ export default function JourneyCard({
         if (cancelled) return;
         console.error("Error loading journey:", error);
         showError(actionErrorMessage(error, "Failed to load journey"));
-      } finally {
-        if (!cancelled) setIsLoadingDetails(false);
+        setLoadFailed(true);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [isOpen, journey.id]);
+  }, [isOpen, journey.id, loadAttempt]);
 
   // The map edit session lasts exactly as long as edit mode. The cleanup also
   // covers an unmount mid-edit: a card that leaves the list while being edited
@@ -200,6 +209,7 @@ export default function JourneyCard({
     setIsEditing(false);
     setViewedRoutes([]);
     setOriginalSnapshot(null);
+    setLoadFailed(false);
     setDeleteConfirm(false);
     // Don't clear highlights here — parent owns coordination across cards
   }, [isOpen]);
@@ -210,13 +220,27 @@ export default function JourneyCard({
     // Editing is picking routes on the map, which the sheet's top snap leaves as
     // a sliver. Null on desktop.
     sheet?.snapTo("half");
+    // The form's heading rather than its first field, which on a phone would
+    // raise the keyboard over the map the routes are picked on
+    focusAfterRender(() => editHeadingRef.current);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
+    focusAfterRender(() => editButtonRef.current);
     if (!originalSnapshot) return;
     applySnapshot(originalSnapshot);
     onHighlightRoutes?.(originalSnapshot.routes.map((r) => r.track_id));
+  };
+
+  const handleAskDelete = () => {
+    setDeleteConfirm(true);
+    focusAfterRender(() => confirmCancelRef.current);
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirm(false);
+    focusAfterRender(() => deleteButtonRef.current);
   };
 
   const handleTogglePartial = (trackId: number, nextPartial: boolean) => {
@@ -285,6 +309,7 @@ export default function JourneyCard({
           tripId: editTripId,
         });
         setIsEditing(false);
+        focusAfterRender(() => editButtonRef.current);
       }
       onChanged();
     } catch (error) {
@@ -304,10 +329,29 @@ export default function JourneyCard({
     } catch (error) {
       console.error("Error deleting journey:", error);
       showError(actionErrorMessage(error, "Failed to delete journey"));
-    } finally {
-      setDeleteConfirm(false);
+      handleCancelDelete();
     }
   };
+
+  // One list for both modes: editing adds the partial toggle and the remove button,
+  // the view shows the same rows read-only.
+  const routeList = (
+    <div className="space-y-1 max-h-64 overflow-y-auto">
+      {viewedRoutes.map((route) => (
+        <LoggedRouteRow
+          key={route.track_id}
+          title={`${route.from_station} ⟷ ${route.to_station}`}
+          lengthKm={route.length_km}
+          partial={route.partial ?? false}
+          covered={{ start: route.covered_start, end: route.covered_end }}
+          {...(editing && {
+            onPartialChange: (partial: boolean) => handleTogglePartial(route.track_id, partial),
+            onRemove: () => handleRemoveRoute(route.track_id),
+          })}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div
@@ -318,7 +362,7 @@ export default function JourneyCard({
         description={journey.description}
         meta={[
           formatDateOnly(journey.date),
-          countOf(journey.route_count, "route"),
+          plural(journey.route_count, "route"),
           `${Number(journey.total_distance).toFixed(1)} km`,
         ].join(" · ")}
         isOpen={isOpen}
@@ -328,7 +372,18 @@ export default function JourneyCard({
 
       {isOpen && (
         <div className="px-3 pb-3 pt-2 border-t border-gray-200 space-y-3">
-          {isLoadingDetails ? (
+          {loadFailed ? (
+            <div className="flex items-center gap-2">
+              <span className="flex-1 text-xs text-gray-600">Couldn't load this journey.</span>
+              <button
+                type="button"
+                onClick={() => setLoadAttempt((n) => n + 1)}
+                className={`${btn("subtle", "xs")} flex-shrink-0`}
+              >
+                Retry
+              </button>
+            </div>
+          ) : isLoading ? (
             <div className="text-xs text-gray-500 text-center py-2">Loading…</div>
           ) : editing ? (
             <>
@@ -337,7 +392,13 @@ export default function JourneyCard({
               </div>
 
               <div>
-                <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Journey</h5>
+                <h5
+                  ref={editHeadingRef}
+                  tabIndex={-1}
+                  className="text-sm font-semibold text-gray-700 mb-2 focus:outline-none"
+                >
+                  Edit Journey
+                </h5>
                 <JourneyMetaFields
                   idPrefix={`journey-${journey.id}`}
                   compact
@@ -360,18 +421,7 @@ export default function JourneyCard({
                     No routes — click routes on the map to add them.
                   </p>
                 ) : (
-                  <div className="space-y-1 max-h-64 overflow-y-auto">
-                    {viewedRoutes.map((route) => (
-                      <LoggedRouteRow
-                        key={route.track_id}
-                        title={`${route.from_station} ⟷ ${route.to_station}`}
-                        lengthKm={route.length_km}
-                        partial={route.partial ?? false}
-                        onPartialChange={(partial) => handleTogglePartial(route.track_id, partial)}
-                        onRemove={() => handleRemoveRoute(route.track_id)}
-                      />
-                    ))}
-                  </div>
+                  routeList
                 )}
               </div>
 
@@ -399,22 +449,7 @@ export default function JourneyCard({
               {viewedRoutes.length === 0 ? (
                 <p className="text-xs text-gray-500 italic">No routes in this journey.</p>
               ) : (
-                <ul className="space-y-1 max-h-64 overflow-y-auto">
-                  {viewedRoutes.map((route) => (
-                    <li
-                      key={route.track_id}
-                      className="flex items-baseline justify-between gap-2 text-xs"
-                    >
-                      <span className="min-w-0 truncate">
-                        {route.from_station} ⟷ {route.to_station}
-                      </span>
-                      <span className="flex-shrink-0 text-gray-500">
-                        {route.partial && <span className="text-orange-600">partial · </span>}
-                        {Number(route.length_km).toFixed(1)} km
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                routeList
               )}
 
               {deleteConfirm ? (
@@ -429,7 +464,8 @@ export default function JourneyCard({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDeleteConfirm(false)}
+                    ref={confirmCancelRef}
+                    onClick={handleCancelDelete}
                     className={`${btn("subtle")} flex-shrink-0`}
                   >
                     Cancel
@@ -437,12 +473,18 @@ export default function JourneyCard({
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2">
-                  <button type="button" onClick={handleStartEdit} className={btn("primary")}>
+                  <button
+                    type="button"
+                    ref={editButtonRef}
+                    onClick={handleStartEdit}
+                    className={btn("primary")}
+                  >
                     Edit
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDeleteConfirm(true)}
+                    ref={deleteButtonRef}
+                    onClick={handleAskDelete}
                     className={btn("softDanger")}
                   >
                     Delete

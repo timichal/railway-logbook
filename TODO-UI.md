@@ -4,6 +4,16 @@ Found in a walkthrough of the main map (desktop, and a 390px-wide phone viewport
 2026-09-29. The mobile bottom sheet rewrite from that session is done; everything
 below is still open. Rough priority order within each section.
 
+## My Trips (`JourneysAndTripsTab`, `JourneyCard`, `TripCard`)
+
+- [ ] **Guard an unsaved edit against everything that closes the card.** A card being
+  edited locks only its *own* header. Tapping the parent trip's header, another
+  card's header (single-open closes the edited one), Prev/Next or a search that
+  drops the card all close or unmount it, and the edit is thrown away without a
+  word. The fix belongs in `JourneysAndTripsTab`, which owns the open state: have
+  a card report that it is editing (journey or trip form), and refuse — or confirm —
+  any open-state change, page change or search while it is.
+
 ## Mobile sheet follow-ups (`MobileBottomSheet.tsx`)
 
 - [ ] **Tune on a real phone.** Flick feel was not testable in the session (the

@@ -51,6 +51,22 @@ export type TripWithStats = Trip & {
 };
 
 /**
+ * Whether the logged part `ulp` carries the stretch it covered. A partial ride
+ * ticked by hand has none, and like a whole ride it counts the route's full length
+ * — the same rule the Route Logger's total follows (`loggedLengthKm`).
+ */
+const HAS_STRETCH_SQL =
+  "ulp.partial AND ulp.covered_start IS NOT NULL AND ulp.covered_end IS NOT NULL";
+
+/**
+ * How far the logged part `ulp` of route `rr` went: the stretch travelled where it
+ * is known, the whole line otherwise.
+ */
+const LOGGED_KM_SQL = `CASE WHEN ${HAS_STRETCH_SQL}
+  THEN rr.length_km * (ulp.covered_end - ulp.covered_start)::numeric
+  ELSE rr.length_km END`;
+
+/**
  * Trip stats SELECT, shared by getAllTrips and getJourneysAndTrips.
  *
  * Journey and route stats are aggregated in separate subqueries rather than by
@@ -59,6 +75,11 @@ export type TripWithStats = Trip & {
  * journeys of the same trip. Both counts and the distance are therefore taken
  * over DISTINCT (trip_id, track_id) — a route ridden on several days of the
  * same trip counts once.
+ *
+ * Its distance is how much of it the trip covered: the whole line if any journey
+ * rode it whole (or partial with no known stretch, see HAS_STRETCH_SQL), otherwise
+ * the union of the journeys' stretches — so two rides over the same stretch count
+ * it once, and A–B plus B–C add up to A–C.
  *
  * `$1` must be the user id; callers may append further predicates on `ut`.
  */
@@ -83,12 +104,18 @@ const TRIP_STATS_SELECT = `
   LEFT JOIN (
     SELECT tr.trip_id,
            COUNT(*)::int AS route_count,
-           SUM(rr.length_km) AS total_distance
+           SUM(rr.length_km * CASE WHEN tr.whole THEN 1 ELSE (
+             SELECT SUM(upper(s) - lower(s)) FROM unnest(tr.stretches) s
+           ) END) AS total_distance
     FROM (
-      SELECT DISTINCT uj.trip_id, ulp.track_id
+      SELECT uj.trip_id, ulp.track_id,
+             bool_or(NOT (${HAS_STRETCH_SQL})) AS whole,
+             range_agg(numrange(ulp.covered_start::numeric, ulp.covered_end::numeric))
+               FILTER (WHERE ${HAS_STRETCH_SQL}) AS stretches
       FROM user_journeys uj
       JOIN user_logged_parts ulp ON ulp.journey_id = uj.id
       WHERE uj.user_id = $1 AND uj.trip_id IS NOT NULL
+      GROUP BY uj.trip_id, ulp.track_id
     ) tr
     JOIN railway_routes rr ON rr.track_id = tr.track_id
     GROUP BY tr.trip_id
@@ -103,15 +130,16 @@ export type JourneyInTrip = Journey & {
 
 /**
  * The journeys of the user in placeholder `userParam` (e.g. `"$1"`) matching
- * `where` (a condition on `uj`), each with the number and total length of its
- * logged routes. The user condition is written here, so no caller can forget it.
+ * `where` (a condition on `uj`), each with the number of its logged routes and how
+ * far they went (LOGGED_KM_SQL). The user condition is written here, so no caller
+ * can forget it.
  */
 function journeyStatsSql(userParam: string, where: string, orderBy?: string): string {
   return `
     SELECT
       uj.*,
       COUNT(ulp.id)::int AS route_count,
-      COALESCE(SUM(rr.length_km), 0) AS total_distance
+      COALESCE(SUM(${LOGGED_KM_SQL}), 0) AS total_distance
     FROM user_journeys uj
     LEFT JOIN user_logged_parts ulp ON uj.id = ulp.journey_id
     LEFT JOIN railway_routes rr ON ulp.track_id = rr.track_id

@@ -1,8 +1,5 @@
 import type { JourneyMigrationResult } from "./migrationActions";
-
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count !== 1 ? "s" : ""}`;
-}
+import { plural } from "./plural";
 
 /**
  * What a local-journey migration did, for the toast after sign-in or sign-up.

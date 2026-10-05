@@ -520,6 +520,7 @@ export default function LocalJourneyLogTab({
                               }
                               lengthKm={meta?.length_km}
                               partial={part.partial}
+                              covered={{ start: part.covered_start, end: part.covered_end }}
                               onPartialChange={(partial) => handleSetPartial(part.id, partial)}
                               onRemove={() => handleDeletePart(part.id)}
                             />

@@ -1,17 +1,12 @@
 import type { ReactNode } from "react";
 
-/** "1 route", "3 routes" — for the stats line. */
-export function countOf(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? "" : "s"}`;
-}
-
 interface CardHeaderProps {
   title: string;
   /** Before the title, on its line — the trip card's "Trip" tag. */
   badge?: ReactNode;
   description: string | null;
   /** The stats line under the description. */
-  meta: ReactNode;
+  meta: string;
   isOpen: boolean;
   onToggle: () => void;
   /**
@@ -50,10 +45,20 @@ export default function CardHeader({
       <span className="flex-1 min-w-0 block">
         <span className="flex items-baseline gap-2 min-w-0">
           {badge}
-          <span className={`font-semibold text-sm min-w-0 ${clamp}`}>{title}</span>
+          <span
+            className={`font-semibold text-sm min-w-0 ${clamp}`}
+            title={isOpen ? undefined : title}
+          >
+            {title}
+          </span>
         </span>
         {description && (
-          <span className={`block text-xs text-gray-500 mt-0.5 ${clamp}`}>{description}</span>
+          <span
+            className={`block text-xs text-gray-500 mt-0.5 ${clamp}`}
+            title={isOpen ? undefined : description}
+          >
+            {description}
+          </span>
         )}
         <span className="block text-xs text-gray-600 mt-0.5">{meta}</span>
       </span>

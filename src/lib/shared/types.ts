@@ -105,6 +105,9 @@ export type RailwayRoute = {
   date?: string | null; // From most recent journey
   journey_name?: string | null; // From most recent journey (renamed from 'note')
   partial?: boolean | null; // From most recent journey
+  // The stretch ridden, where a journey's routes are read (see LoggedPart)
+  covered_start?: number | null;
+  covered_end?: number | null;
 };
 
 /**

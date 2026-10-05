@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import CardHeader, { countOf } from "@/components/logbook/CardHeader";
+import CardHeader from "@/components/logbook/CardHeader";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
+import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly, formatDateOnlyRange } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
@@ -17,6 +18,7 @@ import {
   updateTrip,
 } from "@/lib/tripActions";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 
 interface TripCardProps {
   trip: TripWithStats;
@@ -64,15 +66,15 @@ export default function TripCard({
   const [unassignedJourneys, setUnassignedJourneys] = useState<JourneyInTrip[]>([]);
   const [isLoadingUnassigned, setIsLoadingUnassigned] = useState(false);
 
+  const focusAfterRender = useFocusAfterRender();
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
+
   // Sync from props when they change (after parent refreshes the list)
   useEffect(() => {
     setJourneys(initialJourneys);
   }, [initialJourneys]);
-
-  useEffect(() => {
-    setEditName(trip.name);
-    setEditDescription(trip.description || "");
-  }, [trip.name, trip.description]);
 
   // Read again once the trip has loaded: the card may have closed, or a nested
   // journey opened, while it was on its way, and the highlight then belongs to
@@ -130,6 +132,7 @@ export default function TripCard({
       unwrap(await updateTrip(trip.id, editName.trim(), editDescription.trim() || null));
       showSuccess("Trip updated");
       setIsEditing(false);
+      focusAfterRender(() => editButtonRef.current);
       onChanged();
     } catch (error) {
       console.error("Error updating trip:", error);
@@ -139,15 +142,28 @@ export default function TripCard({
     }
   };
 
+  // The form starts from the trip as it is now, whatever an abandoned edit left in it
   const handleStartEdit = () => {
+    setEditName(trip.name);
+    setEditDescription(trip.description || "");
     setDeleteConfirm(false);
     setIsEditing(true);
+    focusAfterRender(() => document.getElementById(`trip-${trip.id}-name`));
   };
 
   const handleCancelEdit = () => {
-    setEditName(trip.name);
-    setEditDescription(trip.description || "");
     setIsEditing(false);
+    focusAfterRender(() => editButtonRef.current);
+  };
+
+  const handleAskDelete = () => {
+    setDeleteConfirm(true);
+    focusAfterRender(() => confirmCancelRef.current);
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirm(false);
+    focusAfterRender(() => deleteButtonRef.current);
   };
 
   const handleDelete = async () => {
@@ -159,8 +175,7 @@ export default function TripCard({
     } catch (error) {
       console.error("Error deleting trip:", error);
       showError(actionErrorMessage(error, "Failed to delete trip"));
-    } finally {
-      setDeleteConfirm(false);
+      handleCancelDelete();
     }
   };
 
@@ -207,12 +222,13 @@ export default function TripCard({
         description={trip.description}
         meta={[
           dateRange,
-          countOf(trip.journey_count, "journey"),
-          countOf(trip.route_count, "route"),
+          plural(trip.journey_count, "journey"),
+          plural(trip.route_count, "route"),
           `${Number(trip.total_distance).toFixed(1)} km`,
         ].join(" · ")}
         isOpen={isOpen}
         onToggle={isOpen ? onRequestClose : onRequestOpen}
+        locked={isEditing}
       />
 
       {isOpen && (
@@ -361,7 +377,8 @@ export default function TripCard({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDeleteConfirm(false)}
+                  ref={confirmCancelRef}
+                  onClick={handleCancelDelete}
                   className={`${btn("subtle")} flex-shrink-0`}
                 >
                   Cancel
@@ -369,12 +386,18 @@ export default function TripCard({
               </div>
             ) : (
               <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-200">
-                <button type="button" onClick={handleStartEdit} className={btn("outline")}>
+                <button
+                  type="button"
+                  ref={editButtonRef}
+                  onClick={handleStartEdit}
+                  className={btn("outline")}
+                >
                   Edit trip
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDeleteConfirm(true)}
+                  ref={deleteButtonRef}
+                  onClick={handleAskDelete}
                   className={btn("softDanger")}
                 >
                   Delete trip
