@@ -29,10 +29,17 @@ import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/s
 export { HIGHLIGHT_LAYER_IDS } from "@/lib/shared/map/highlightLayers";
 
 /**
- * Add/update/remove the overlay sublayers for one highlight set.
+ * Add/update the overlay sublayers for one highlight set.
  *
  * A casing, where the variant asks for one, is added *before* its own layer so it
  * ends up underneath (`addLayer` appends).
+ *
+ * **An emptied set keeps its layers, filtered to nothing, rather than removing
+ * them.** MapLibre keeps each tile's parsed features per layer *id* and does not
+ * drop them when the layer is removed, so a layer re-added under the same id draws
+ * the features it had before its removal until the tiles are re-parsed for the new
+ * filter: closing one trip and opening another flashed the first trip's routes.
+ * A filter matching nothing re-parses the old features away instead.
  */
 function syncHighlightOverlay(
   m: maplibregl.Map,
@@ -43,14 +50,6 @@ function syncHighlightOverlay(
   for (const v of highlightVariants()) {
     const layerId = highlightLayerId(baseId, v);
     const casingId = highlightCasingLayerId(baseId, v);
-
-    if (ids.length === 0) {
-      // Casing first: removing the dash layer first would leave it briefly alone
-      if (m.getLayer(casingId)) m.removeLayer(casingId);
-      if (m.getLayer(layerId)) m.removeLayer(layerId);
-      continue;
-    }
-
     const filter = highlightFilter(ids, v.usageType) as maplibregl.FilterSpecification;
 
     if (m.getLayer(layerId)) {
@@ -62,6 +61,9 @@ function syncHighlightOverlay(
       m.setFilter(layerId, filter);
       continue;
     }
+
+    // Nothing to draw and nothing drawn yet
+    if (ids.length === 0) continue;
 
     if (v.casing) {
       m.addLayer(

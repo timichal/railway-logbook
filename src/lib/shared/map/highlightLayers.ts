@@ -75,8 +75,8 @@ export function highlightCasingLayerId(baseId: string, variant: HighlightVariant
 }
 
 /**
- * All overlay layer ids managed here — used on the web to remove them before a
- * source rebuild and to include them in route hit-testing. The casings are wide
+ * All overlay layer ids managed here — used on the web to include them in route
+ * hit-testing. The casings are wide
  * and solid, which also gives Heritage and Special routes the generous hit area
  * that `railway_routes_click` provides for Regular ones.
  */
