@@ -150,7 +150,12 @@ for REGION in ${REGIONS}; do
         # --fail keeps an HTTP error page from being written out as a .osm.pbf
         # (osmium would then fail on an "invalid BlobHeader size" that says
         # nothing about the download) and out of the file a resume appends to.
-        curl --fail -sS -C - -o "${DOWNLOAD_FILE}" "${URL:-${LATEST_URL}}" || {
+        # The progress meter is left on (no -s) so a stalled download shows as
+        # a falling "Current Speed": it goes to stderr whether or not that is a
+        # terminal, so it reaches deploy.log, and its frames are \r-separated,
+        # so the deploy's pty redraws one line in place. After a resume its
+        # totals count only the part still to fetch.
+        curl --fail -S -C - -o "${DOWNLOAD_FILE}" "${URL:-${LATEST_URL}}" || {
             echo "ERROR: Failed to download $(basename "${DOWNLOAD_FILE}")"
             exit 1
         }
