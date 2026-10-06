@@ -16,6 +16,7 @@ import {
   type SaveRouteData,
 } from "@/lib/adminRouteActions";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
+import { useRegion } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
@@ -95,6 +96,7 @@ export default function AdminSidebar({
   onScenicLinesChanged,
 }: AdminSidebarProps) {
   const { showError: showErrorToast } = useToast();
+  const region = useRegion();
   const showError = showErrorProp || showErrorToast;
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   // Read after an await, to tell whether the edit that asked is still the current one.
@@ -210,13 +212,16 @@ export default function AdminSidebar({
         >
           Create New
         </button>
-        <button
-          type="button"
-          onClick={() => switchTab("scenic")}
-          className={tabBtn(activeTab === "scenic")}
-        >
-          Scenic
-        </button>
+        {/* Only where the user map can show what is drawn here */}
+        {region.hasScenicHighlight && (
+          <button
+            type="button"
+            onClick={() => switchTab("scenic")}
+            className={tabBtn(activeTab === "scenic")}
+          >
+            Scenic
+          </button>
+        )}
         <button
           type="button"
           onClick={() => switchTab("notes")}

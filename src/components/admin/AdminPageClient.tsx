@@ -22,7 +22,7 @@ import {
 } from "@/lib/adminRouteActions";
 import { logout } from "@/lib/authActions";
 import { useRoutePreview } from "@/lib/map/hooks/useRoutePreview";
-import { RegionProvider, useRegionId } from "@/lib/regionContext";
+import { RegionProvider, useRegion } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
 import { useToast } from "@/lib/toast";
 import { btn } from "@/lib/ui/buttonStyles";
@@ -111,14 +111,20 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   const [selectedScenicLineId, setSelectedScenicLineId] = useState<number | null>(null);
   const [editingScenicLine, setEditingScenicLine] = useState<EditingScenicLine | null>(null);
   const [scenicRefreshTrigger, setScenicRefreshTrigger] = useState(0);
-  const regionId = useRegionId();
-  // A route's geometry edit is only ever shown on the create tab
-  const activeTab: AdminTab = editingGeometry ? "create" : selectedTab;
+  const region = useRegion();
+  const regionId = region.id;
+  // A route's geometry edit is only ever shown on the create tab, and the Scenic tab
+  // only in a region that shows scenic lines at all.
+  const activeTab: AdminTab = editingGeometry
+    ? "create"
+    : selectedTab === "scenic" && !region.hasScenicHighlight
+      ? "routes"
+      : selectedTab;
 
   // Switching regions drops everything picked out of the old one: the selected
   // route, a half-finished coordinate pick and its preview all point at track
   // the map has just stopped showing.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: regionId is the trigger; the setters are stable and intentionally not read here.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: regionId is the trigger; region follows it, and the setters are stable.
   useEffect(() => {
     setSelectedRouteId(null);
     setCreateFormCoordinates(NO_COORDINATES);
@@ -126,6 +132,11 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setFocusGeometry(null);
     setSelectedScenicLineId(null);
     setEditingScenicLine(null);
+    // Left on a Scenic tab the new region does not have, a map click would keep
+    // picking for a form no longer on screen.
+    if (!region.hasScenicHighlight) {
+      setSelectedTab((tab) => (tab === "scenic" ? "routes" : tab));
+    }
   }, [regionId]);
 
   // A route selected (on the map, or by a duplicate) opens the routes tab
