@@ -11,6 +11,7 @@
 export const ZOOM_RANGES = {
   railwayRoutes: { min: 4, max: 18 }, // Matches Martin configuration
   railwayParts: { min: 4, max: 18 }, // Matches Martin configuration
+  scenicLines: { min: 4, max: 18 }, // Matches Martin configuration
   stations: { min: 9, max: 18 }, // Matches Martin configuration
   adminNotes: { min: 4, max: 18 }, // Admin notes visible at all zooms
   publicNotes: { min: 7, max: 18 }, // Public Usage notes on the user map (from moderate zoom)

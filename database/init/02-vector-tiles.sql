@@ -227,7 +227,6 @@ BEGIN
             rr.usage_type,
             rr.frequency,
             rr.link,
-            rr.scenic,
             rr.line_class,
             rr.length_km,
             rr.start_country,
@@ -425,6 +424,8 @@ BEGIN
         NEW.coordinates_3857 := ST_Transform(NEW.coordinates, 3857);
     ELSIF TG_TABLE_NAME = 'admin_notes' THEN
         NEW.coordinate_3857 := ST_Transform(NEW.coordinate, 3857);
+    ELSIF TG_TABLE_NAME = 'scenic_lines' THEN
+        NEW.geometry_3857 := ST_Transform(NEW.geometry, 3857);
     END IF;
     RETURN NEW;
 END;
@@ -573,3 +574,89 @@ BEGIN
             EXECUTE FUNCTION sync_geometry_3857();
     END IF;
 END $$;
+
+-- Scenic lines: Web Mercator geometry, its sync trigger and index. Guarded, as
+-- admin_notes' are, because the deploy re-applies this file before the migration
+-- that creates the table (npm run migrateScenicLines) has run on the server.
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'scenic_lines') THEN
+        ALTER TABLE scenic_lines ADD COLUMN IF NOT EXISTS geometry_3857 GEOMETRY(LINESTRING, 3857);
+
+        UPDATE scenic_lines
+        SET geometry_3857 = ST_Transform(geometry, 3857)
+        WHERE geometry IS NOT NULL AND geometry_3857 IS NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_scenic_lines_geometry_3857
+        ON scenic_lines USING GIST (geometry_3857);
+
+        DROP TRIGGER IF EXISTS scenic_lines_sync_geometry ON scenic_lines;
+        CREATE TRIGGER scenic_lines_sync_geometry
+            BEFORE INSERT OR UPDATE OF geometry ON scenic_lines
+            FOR EACH ROW
+            EXECUTE FUNCTION sync_geometry_3857();
+    END IF;
+END $$;
+
+-- Function: scenic_lines_tile
+-- Every scenic line, for the user map's scenic highlight and the admin map alike.
+-- Nothing in it is private, so it is a Martin source. The countries ride along for
+-- the user map's country filter, which is applied client-side (a layer filter)
+-- rather than in the query, so a country toggle needs no tile refresh here; the
+-- names and validity are for the admin map. plpgsql, so creating it does not need
+-- the table to exist yet (see the guard above).
+CREATE OR REPLACE FUNCTION scenic_lines_tile(z integer, x integer, y integer)
+RETURNS bytea AS $$
+DECLARE
+    result bytea;
+    tile_envelope geometry;
+    query_envelope geometry;
+BEGIN
+    -- Martin publishes this as soon as the deploy restarts it, which is before
+    -- the migration has created the table: an empty tile until then, not a 500.
+    IF to_regclass('public.scenic_lines') IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    tile_envelope := ST_TileEnvelope(z, x, y);
+    -- Widened by the 64-unit MVT buffer: the band is up to 18px wide with round
+    -- caps, so a line ending just inside the next tile still spills into this
+    -- one, and selecting on the bare envelope cut its cap flat at the tile edge.
+    query_envelope := ST_Expand(
+        tile_envelope,
+        (ST_XMax(tile_envelope) - ST_XMin(tile_envelope)) * 64 / 4096
+    );
+
+    SELECT INTO result ST_AsMVT(mvtgeom.*, 'scenic_lines', 4096, 'geom', 'id')
+    FROM (
+        SELECT
+            id,
+            from_station,
+            to_station,
+            start_country,
+            end_country,
+            is_valid,
+            -- Simplified to about a pixel at this zoom first. The band is a wide,
+            -- translucent, blurred line, and MapLibre blends each join of a line
+            -- with the segments either side of it: at a vertex every pixel or two,
+            -- which an OSM-derived line has when zoomed out, the band turns into a
+            -- string of bright blotches. The routes are opaque and never show it.
+            ST_AsMVTGeom(
+                ST_Simplify(geometry_3857, 40075016.68 / (512 * 2 ^ z)),
+                tile_envelope,
+                4096,
+                64,
+                true
+            ) AS geom
+        FROM scenic_lines
+        WHERE geometry_3857 && query_envelope
+        ORDER BY id
+    ) AS mvtgeom
+    WHERE geom IS NOT NULL;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql
+STABLE
+STRICT
+PARALLEL SAFE;

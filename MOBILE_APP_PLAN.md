@@ -127,8 +127,7 @@ that has more than one branch**:
 | `match`, three branches               | works                |
 | **`all` condition + a second branch** | **`std::bad_alloc`** |
 
-`all` in a *filter* is fine — the scenic layer nests `REGULAR_ONLY_FILTER` inside
-one and runs. It is only fatal in a multi-branch `case`.
+`all` in a *filter* is fine — the scenic layer's country filter is one, and runs. It is only fatal in a multi-branch `case`.
 
 The fix needs no `all`, because the three-state visit logic is the same thing as
 single-condition nesting:
@@ -613,7 +612,7 @@ written up under "`mobile/` is a second app" in `CLAUDE.md`):
   the theme imports at `theme/types.ts` rather than the `"use client"` barrel.
 
 Two pieces of logic were *lifted into* the shared set on the way, rather than
-reimplemented on the native side: `scenicOutlineFilter` / `clickBufferFilter` in
+reimplemented on the native side: `scenicLinesFilter` / `clickBufferFilter` in
 `userMapLayers.ts` (what the layer toggles do to the filters — one decision, two
 mechanisms) and `map/routeFeature.ts` (`routeTitle`, `routeBadges`,
 `parseFrequencyTags` — what a route feature *says*, so the popup and the sheet
@@ -632,7 +631,7 @@ dash pattern or a zoom range.
 | `useBasemapStyle.ts`    | `loadBasemapStyle` for the resolved scheme, plus `version: 8`, the glyph endpoint and the fade layer; the raster fallback when it resolves null |
 | `tileUrls.ts`           | the shared URL templates with this build's host bound in — the native half of what `index.ts` does for the web                                  |
 | `LayerPrefsContext.tsx` | the three toggles in `AsyncStorage`, held above the map because the switches live in Settings                                                   |
-| `LayerToggles.tsx`      | those switches, with the region rules (Japan renames Special, offers no scenic outline)                                                         |
+| `LayerToggles.tsx`      | those switches, with the region rules (Japan renames Special, offers no scenic lines)                                                         |
 | `mapPosition.ts`        | one saved camera position per region                                                                                                            |
 | `mapFeatures.ts`        | what a press hit, read defensively off an MVT feature. `safeUrl` is `safeHref` minus the HTML escaping                                          |
 | `FeatureSheet.tsx`      | the route / station / note body as a bottom sheet                                                                                               |

@@ -11,8 +11,8 @@ export interface LayerPrefs {
   showHeritage: boolean;
   /** "Show special services" — reveals Special routes (usage_type=2, dashed). */
   showSpecial: boolean;
-  /** "Highlight scenic lines" — amber outline under scenic routes. */
-  showScenicOutline: boolean;
+  /** "Scenic lines" — the violet band under the admin-drawn scenic stretches. */
+  showScenicLines: boolean;
 }
 
 const LAYER_PREFS_KEY = "railway-map-layer-prefs";
@@ -20,7 +20,7 @@ const LAYER_PREFS_KEY = "railway-map-layer-prefs";
 const DEFAULTS: LayerPrefs = {
   showHeritage: false,
   showSpecial: false,
-  showScenicOutline: false,
+  showScenicLines: false,
 };
 
 export function loadLayerPrefs(): LayerPrefs {
@@ -31,7 +31,11 @@ export function loadLayerPrefs(): LayerPrefs {
 
     // `showSpecialLines` is the legacy single toggle (Heritage + Diversion
     // together). When present and the new keys aren't, seed both from it.
-    const parsed = JSON.parse(stored) as Partial<LayerPrefs> & { showSpecialLines?: boolean };
+    // `showScenicOutline` is the same switch from when scenic was a flag on routes.
+    const parsed = JSON.parse(stored) as Partial<LayerPrefs> & {
+      showSpecialLines?: boolean;
+      showScenicOutline?: boolean;
+    };
     const legacy =
       typeof parsed.showSpecialLines === "boolean" ? parsed.showSpecialLines : undefined;
     return {
@@ -43,10 +47,12 @@ export function loadLayerPrefs(): LayerPrefs {
         typeof parsed.showSpecial === "boolean"
           ? parsed.showSpecial
           : (legacy ?? DEFAULTS.showSpecial),
-      showScenicOutline:
-        typeof parsed.showScenicOutline === "boolean"
-          ? parsed.showScenicOutline
-          : DEFAULTS.showScenicOutline,
+      showScenicLines:
+        typeof parsed.showScenicLines === "boolean"
+          ? parsed.showScenicLines
+          : typeof parsed.showScenicOutline === "boolean"
+            ? parsed.showScenicOutline
+            : DEFAULTS.showScenicLines,
     };
   } catch (error) {
     console.warn("Failed to load layer prefs:", error);

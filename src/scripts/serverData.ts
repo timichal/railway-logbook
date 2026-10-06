@@ -11,8 +11,8 @@
  *                   server's, so the local database mirrors it
  *   restore <file>  replace the local route data with an earlier backup
  *
- * "Route data" is everything that is not rebuilt from OSM: the routes, the admin
- * notes, and every user's account, preferences, trips, journeys and logged parts.
+ * "Route data" is everything that is not rebuilt from OSM: the routes, the scenic
+ * lines, the admin notes, and every user's account, preferences, trips, journeys and logged parts.
  * "Map data" is `stations` and `railway_parts`. The map is never pulled on its own
  * because the server's routes were recalculated against that very map data by the
  * deploy that put it there. Pulling both makes recalculating the local routes
@@ -51,6 +51,7 @@ const PG_CONNECT = "-U $POSTGRES_USER -d $POSTGRES_DB";
 
 const ROUTE_TABLES = [
   "railway_routes",
+  "scenic_lines",
   "admin_notes",
   "users",
   "user_preferences",
@@ -59,6 +60,13 @@ const ROUTE_TABLES = [
   "user_logged_parts",
 ];
 const MAP_TABLES = ["stations", "railway_parts"];
+/**
+ * Route tables a dump may lack because it was taken from a database the
+ * migration that adds them had not reached yet (`scenic_lines`: a server between
+ * the app deploy and `npm run migrateScenicLines`). The backup is still whole for
+ * the data that existed; a restore of it simply leaves the table empty.
+ */
+const TABLES_ADDED_LATER = ["scenic_lines"];
 const ALL_TABLES = [...MAP_TABLES, ...ROUTE_TABLES];
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -167,7 +175,9 @@ function verifyDump(containerFile: string, tables: string[], name: string): void
   const inDump = [...listing.matchAll(/^\d+; \d+ \d+ TABLE DATA public (\S+) /gm)].map(
     (match) => match[1],
   );
-  const missing = tables.filter((table) => !inDump.includes(table));
+  const missing = tables.filter(
+    (table) => !inDump.includes(table) && !TABLES_ADDED_LATER.includes(table),
+  );
   const unexpected = inDump.filter((table) => !tables.includes(table));
   if (missing.length > 0 || unexpected.length > 0) {
     throw new Error(

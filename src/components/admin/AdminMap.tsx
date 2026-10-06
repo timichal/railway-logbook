@@ -21,13 +21,15 @@ import {
   createRailwayRoutesSource,
   createRailwayRoutesSpecialLayer,
   createRouteEndpointsLayer,
-  createScenicRoutesOutlineLayer,
+  createScenicLinesLayer,
+  createScenicLinesSource,
   createStationLabelsLayer,
   createStationsLayer,
   createStationsSource,
   lineClassColorExpression,
   OPACITIES,
   railwayRoutesTileUrl,
+  scenicLinesTileUrl,
 } from "@/lib/map";
 import { useAdminLayerVisibility } from "@/lib/map/hooks/useAdminLayerVisibility";
 import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
@@ -38,6 +40,7 @@ import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
 import { useRegionId } from "@/lib/regionContext";
+import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
 import {
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
@@ -129,6 +132,14 @@ interface AdminMapProps {
   };
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
+  /**
+   * The Scenic lines tab is open: routes are hidden, as while a route's geometry is
+   * re-picked, so a click anywhere on the track picks a point - a scenic line rarely
+   * starts where a route does, and a route over a part swallows the part's click.
+   */
+  scenicMode?: boolean;
+  selectedScenicLineId?: number | null;
+  scenicRefreshTrigger?: number;
   focusGeometry?: string | null;
   focusCoordinate?: { coordinate: [number, number]; nonce: number } | null;
   notesRefreshTrigger: number;
@@ -147,6 +158,9 @@ export default function AdminMap({
   selectedCoordinates,
   refreshTrigger,
   isEditingGeometry,
+  scenicMode = false,
+  selectedScenicLineId = null,
+  scenicRefreshTrigger = 0,
   focusGeometry,
   focusCoordinate,
   notesRefreshTrigger,
@@ -161,6 +175,8 @@ export default function AdminMap({
   // before a save.
   const routesCacheBusterRef = useRef(Date.now());
   const notesCacheBusterRef = useRef(Date.now());
+  const scenicCacheBusterRef = useRef(Date.now());
+  const hideRoutes = !!isEditingGeometry || scenicMode;
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
   const [validRoutesTotalKm, setValidRoutesTotalKm] = useState<number | null>(null);
   const isMobile = useIsMobile();
@@ -188,11 +204,14 @@ export default function AdminMap({
         railway_routes: createRailwayRoutesSource({ cacheBuster: routesCacheBusterRef.current }),
         stations: createStationsSource(),
         admin_notes: createAdminNotesSource(notesCacheBusterRef.current),
+        scenic_lines: createScenicLinesSource(scenicCacheBusterRef.current),
         "route-endpoints": routeEndpointsSource,
       }),
       layers: () => [
         createRailwayPartsLayer(),
-        createScenicRoutesOutlineLayer(),
+        // Over the parts, so a scenic stretch shows while points are picked on them;
+        // it takes no clicks of its own, which fall through to the parts.
+        createScenicLinesLayer({ visible: true }),
         createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }),
         createRailwayRoutesHeritageLayer(),
         createRailwayRoutesSpecialLayer(),
@@ -214,14 +233,14 @@ export default function AdminMap({
   );
 
   // Layer visibility management
-  const layerVisibility = useAdminLayerVisibility({ map, mapLoaded, isEditingGeometry });
+  const layerVisibility = useAdminLayerVisibility({ map, mapLoaded, hideRoutes });
 
   // GeoJSON overlay layers (preview route, selected points, route endpoints)
   useAdminMapOverlays(map, mapLoaded, {
     previewRoute,
     selectedCoordinates,
     routeEndpoints,
-    isEditingGeometry,
+    isEditingGeometry: hideRoutes,
   });
 
   // Notes popup system
@@ -252,6 +271,39 @@ export default function AdminMap({
     applyAdminRouteLinePaint(map.current, selectedRouteId ?? null);
   }, [selectedRouteId, mapLoaded, map]);
 
+  // Scenic lines: violet, grey when invalid, the selected one in the selected-route
+  // orange. Nested single-condition `case`s, per the house rule for data-driven paint.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !mapLoaded || !m.getLayer(SCENIC_LINES_LAYER_ID)) return;
+    const statusColor: maplibregl.ExpressionSpecification = [
+      "case",
+      ["==", ["get", "is_valid"], false],
+      COLORS.scenicLineInvalid,
+      COLORS.scenicLine,
+    ];
+    const selected = selectedScenicLineId;
+    m.setPaintProperty(
+      SCENIC_LINES_LAYER_ID,
+      "line-color",
+      selected === null
+        ? statusColor
+        : ["case", ["==", ["id"], selected], COLORS.railwayRoutes.selected, statusColor],
+    );
+    m.setPaintProperty(
+      SCENIC_LINES_LAYER_ID,
+      "line-opacity",
+      selected === null
+        ? OPACITIES.scenicLineAdmin
+        : [
+            "case",
+            ["==", ["id"], selected],
+            OPACITIES.scenicLineSelected,
+            OPACITIES.scenicLineAdmin,
+          ],
+    );
+  }, [selectedScenicLineId, mapLoaded, map]);
+
   // Refresh the route tiles when routes are saved/deleted, and the note tiles when
   // a note is, from the popup or the Notes tab.
   useSourceTileRefresh({
@@ -269,6 +321,14 @@ export default function AdminMap({
     signal: notesRefreshTrigger,
     cacheBusterRef: notesCacheBusterRef,
     tileUrl: adminNotesTileUrl,
+  });
+  useSourceTileRefresh({
+    map,
+    mapLoaded,
+    sourceId: "scenic_lines",
+    signal: scenicRefreshTrigger,
+    cacheBusterRef: scenicCacheBusterRef,
+    tileUrl: scenicLinesTileUrl,
   });
 
   // Focus on a single coordinate (e.g. admin note clicked in Notes tab)

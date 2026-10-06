@@ -111,35 +111,34 @@ type RouteOutcome =
   | { status: "invalid"; error: string };
 
 /**
- * Recalculate one route and write the outcome.
- *
- * The UPDATE is autocommitted, one per route — deliberately not wrapped in a
- * transaction spanning the whole run, which would hold row locks on
- * `railway_routes` for the length of the import.
+ * Recalculate a geometry from its stored click points and judge it against the
+ * stored length: what a route and a scenic line have in common. Writes nothing.
  */
-async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<RouteOutcome> {
-  const { track_id, start_lng, start_lat, end_lng, end_lat, length_km } = route;
-  const originalLength = parseFloat(length_km);
+async function recalculateGeometry(
+  db: Pool,
+  row: {
+    start_lng: string;
+    start_lat: string;
+    end_lng: string;
+    end_lat: string;
+    length_km: string;
+  },
+): Promise<
+  | { status: "invalid"; error: string }
+  | { status: "ok"; lineString: string; newLength: number; hasBacktracking: boolean }
+> {
+  const originalLength = parseFloat(row.length_km);
 
-  const startingCoordinate: [number, number] = [parseFloat(start_lng), parseFloat(start_lat)];
-  const endingCoordinate: [number, number] = [parseFloat(end_lng), parseFloat(end_lat)];
+  const startingCoordinate: [number, number] = [
+    parseFloat(row.start_lng),
+    parseFloat(row.start_lat),
+  ];
+  const endingCoordinate: [number, number] = [parseFloat(row.end_lng), parseFloat(row.end_lat)];
 
-  // Recalculate route from coordinates
+  // Recalculate from coordinates
   const recalcResult = await recalculateRoute(db, startingCoordinate, endingCoordinate);
 
   if (!recalcResult.success || !recalcResult.coordinates) {
-    // Mark route as invalid
-    await db.query(
-      `
-      UPDATE railway_routes
-      SET
-        is_valid = FALSE,
-        error_message = $1
-      WHERE track_id = $2
-    `,
-      [recalcResult.error, track_id],
-    );
-
     return { status: "invalid", error: recalcResult.error || "Unknown error" };
   }
 
@@ -158,7 +157,7 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
   const lengthDiff = Math.abs(newLength - originalLength);
   const lengthDiffPercent = (lengthDiff / originalLength) * 100;
 
-  // A route with no usable stored length (NULL or 0) has nothing to compare
+  // A row with no usable stored length (NULL or 0) has nothing to compare
   // against — the percentage would be NaN/Infinity — so accept the
   // recalculated geometry, which also backfills the missing length.
   const comparable = Number.isFinite(originalLength) && originalLength > 0;
@@ -166,9 +165,31 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
   // Check if the new length differs significantly from the original
   // Consider invalid if difference is more than 0.1 km AND more than 1%
   if (comparable && lengthDiff > 0.1 && lengthDiffPercent > 1) {
-    const errorMsg = `Distance mismatch: original ${originalLength.toFixed(2)} km, recalculated ${newLength.toFixed(2)} km (diff: ${lengthDiff.toFixed(2)} km, ${lengthDiffPercent.toFixed(1)}%)`;
+    return {
+      status: "invalid",
+      error: `Distance mismatch: original ${originalLength.toFixed(2)} km, recalculated ${newLength.toFixed(2)} km (diff: ${lengthDiff.toFixed(2)} km, ${lengthDiffPercent.toFixed(1)}%)`,
+    };
+  }
 
-    // Mark route as invalid due to distance mismatch
+  return {
+    status: "ok",
+    lineString,
+    newLength,
+    hasBacktracking: recalcResult.hasBacktracking || false,
+  };
+}
+
+/**
+ * Recalculate one route and write the outcome.
+ *
+ * The UPDATE is autocommitted, one per route — deliberately not wrapped in a
+ * transaction spanning the whole run, which would hold row locks on
+ * `railway_routes` for the length of the import.
+ */
+async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<RouteOutcome> {
+  const outcome = await recalculateGeometry(db, route);
+
+  if (outcome.status === "invalid") {
     await db.query(
       `
       UPDATE railway_routes
@@ -177,10 +198,10 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
         error_message = $1
       WHERE track_id = $2
     `,
-      [errorMsg, track_id],
+      [outcome.error, route.track_id],
     );
 
-    return { status: "invalid", error: errorMsg };
+    return outcome;
   }
 
   // Update route with new geometry and has_backtracking flag
@@ -199,10 +220,10 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
       under_repair = FALSE
     WHERE track_id = $4
   `,
-    [lineString, newLength, recalcResult.hasBacktracking || false, track_id],
+    [outcome.lineString, outcome.newLength, outcome.hasBacktracking, route.track_id],
   );
 
-  return { status: "recalculated", hasBacktracking: recalcResult.hasBacktracking || false };
+  return { status: "recalculated", hasBacktracking: outcome.hasBacktracking };
 }
 
 /**
@@ -289,8 +310,101 @@ export async function recalculateAllRoutes(
   return result;
 }
 
+/** One scenic line as read from the database, ready to recalculate. */
+interface ScenicLineRow {
+  id: number;
+  from_station: string;
+  to_station: string;
+  start_lng: string;
+  start_lat: string;
+  end_lng: string;
+  end_lat: string;
+  length_km: string;
+}
+
 /**
- * Verify and recalculate routes if they exist in the database
+ * Recalculate every scenic line from its stored click points, exactly as routes
+ * are (same pathfinder, same length check), and print a summary. A line that no
+ * longer routes is marked invalid and keeps its last geometry, which the user
+ * map goes on drawing — it is only a highlight. Skipped on a database the
+ * scenic-lines migration has not reached yet.
+ */
+async function recalculateScenicLines(db: Pool, options: RecalculationOptions): Promise<void> {
+  const exists = await db.query("SELECT to_regclass('scenic_lines') IS NOT NULL AS exists");
+  if (!exists.rows[0].exists) {
+    console.log("");
+    console.log("No scenic_lines table (run npm run migrateScenicLines) - skipping scenic lines");
+    return;
+  }
+
+  const lines = await db.query<ScenicLineRow>(`
+    SELECT
+      id,
+      from_station,
+      to_station,
+      ST_X(starting_coordinate) as start_lng,
+      ST_Y(starting_coordinate) as start_lat,
+      ST_X(ending_coordinate) as end_lng,
+      ST_Y(ending_coordinate) as end_lat,
+      length_km
+    FROM scenic_lines
+    ${options.validOnly ? "WHERE is_valid" : ""}
+    ORDER BY id
+  `);
+  if (lines.rows.length === 0) return;
+
+  console.log("");
+  console.log(`Recalculating ${lines.rows.length} scenic lines...`);
+  const outcomes = await runPool(
+    lines.rows,
+    options.concurrency ?? DEFAULT_RECALC_CONCURRENCY,
+    async (line) => {
+      const outcome = await recalculateGeometry(db, line);
+      if (outcome.status === "invalid") {
+        await db.query(
+          "UPDATE scenic_lines SET is_valid = FALSE, error_message = $1 WHERE id = $2",
+          [outcome.error, line.id],
+        );
+      } else {
+        await db.query(
+          `
+          UPDATE scenic_lines
+          SET geometry = ST_GeomFromText($1, 4326), length_km = $2, is_valid = TRUE, error_message = NULL
+          WHERE id = $3
+          `,
+          [outcome.lineString, outcome.newLength, line.id],
+        );
+      }
+      return outcome;
+    },
+  );
+
+  const invalid = lines.rows.flatMap((line, index) => {
+    const outcome = outcomes[index];
+    return outcome.status === "invalid" ? [{ line, error: outcome.error }] : [];
+  });
+  // Nothing is stored for it (a scenic line has no backtracking flags), but a path
+  // that now runs into a spur and back would draw the spur as part of the band.
+  const backtracking = lines.rows.filter((_, index) => {
+    const outcome = outcomes[index];
+    return outcome.status === "ok" && outcome.hasBacktracking;
+  });
+
+  console.log("");
+  console.log("=== Scenic Line Recalculation Summary ===");
+  console.log(`Total scenic lines: ${lines.rows.length}`);
+  console.log(`Invalid scenic lines: ${invalid.length}`);
+  for (const { line, error } of invalid) {
+    console.log(`  [${line.id}] ${line.from_station} → ${line.to_station}: ${error}`);
+  }
+  console.log(`Scenic lines that backtrack (check by hand): ${backtracking.length}`);
+  for (const line of backtracking) {
+    console.log(`  [${line.id}] ${line.from_station} → ${line.to_station}`);
+  }
+}
+
+/**
+ * Verify and recalculate routes if they exist in the database, then the scenic lines
  * Prints summary information to console
  */
 export async function verifyAndRecalculateRoutes(
@@ -309,6 +423,7 @@ export async function verifyAndRecalculateRoutes(
   if (!hasRoutes) {
     console.log("");
     console.log("No routes found - skipping recalculation");
+    await recalculateScenicLines(db, options);
     return;
   }
 
@@ -344,6 +459,9 @@ export async function verifyAndRecalculateRoutes(
       );
     }
   }
+
+  // Inside the route summary's span of the log, which deploy.sh prints again at the end
+  await recalculateScenicLines(db, options);
 }
 
 async function verifyRoutes(): Promise<void> {

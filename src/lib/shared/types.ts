@@ -91,7 +91,6 @@ export type RailwayRoute = {
   usage_type: UsageType; // 0=Regular, 1=Heritage, 2=Special
   frequency: string[]; // Array of frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
   link?: string | null; // External URL/link for the route
-  scenic?: boolean | null; // Flag to mark route as scenic
   line_class?: LineClass | null; // Line classification: highspeed, main, branch
   geometry: string; // GeoJSON string
   length_km?: number;

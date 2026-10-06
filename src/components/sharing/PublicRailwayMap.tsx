@@ -8,6 +8,7 @@ import {
   createPublicNotesSource,
   createPublicStationsSource,
   createRailwayRoutesSource,
+  createScenicLinesSource,
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
@@ -74,6 +75,7 @@ export default function PublicRailwayMap({
           selectedCountries: effectiveCountries,
         }),
         stations: createPublicStationsSource(),
+        scenic_lines: createScenicLinesSource(),
         public_notes: createPublicNotesSource(),
       }),
       layers: () => createUserMapLayers(theme),
@@ -91,8 +93,9 @@ export default function PublicRailwayMap({
     layerPrefs.showHeritage,
     layerPrefs.showSpecial,
     // The stored preference is shared across regions; one that offers no scenic
-    // outline keeps it off regardless of what the other region left switched on.
-    layerPrefs.showScenicOutline && region.hasScenicHighlight,
+    // lines keeps them off regardless of what the other region left switched on.
+    layerPrefs.showScenicLines && region.hasScenicHighlight,
+    effectiveCountries,
     mapLoaded,
   );
 

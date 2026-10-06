@@ -62,7 +62,6 @@ CREATE TABLE railway_routes (
     usage_type INTEGER NOT NULL CHECK (usage_type IN (0, 1, 2)), -- Usage type (0=Regular, 1=Heritage, 2=Special; 1 & 2 are non-regular)
     frequency TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
     link TEXT, -- External URL/link for the route
-    scenic BOOLEAN NOT NULL DEFAULT FALSE, -- Flag to mark route as scenic
     line_class VARCHAR(20) NOT NULL DEFAULT 'branch' CHECK (line_class IN ('highspeed', 'main', 'branch')), -- Line classification derived from OSM data
     geometry GEOMETRY(LINESTRING, 4326) NOT NULL, -- PostGIS LineString
     length_km NUMERIC NOT NULL, -- Route length in kilometers (calculated from geometry). NOT NULL: the planner costs a route by it, and a missing one would make the route free
@@ -80,6 +79,29 @@ CREATE TABLE railway_routes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Kept by the railway_routes_update_timestamp trigger below, so no write path
     -- has to remember it
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Scenic lines: stretches of track the user map can highlight as scenic.
+-- Deliberately not a flag on railway_routes: a scenic stretch is a piece of
+-- track, and almost never starts and ends where a route does. Built and
+-- recalculated exactly as a route is (two click points, the same pathfinder,
+-- the same validity rule), but carries nothing else - it is drawn, never logged.
+CREATE TABLE scenic_lines (
+    id SERIAL PRIMARY KEY,
+    from_station TEXT NOT NULL,
+    to_station TEXT NOT NULL,
+    geometry GEOMETRY(LINESTRING, 4326) NOT NULL,
+    length_km NUMERIC NOT NULL,
+    -- As on railway_routes: the user map's country filter shows a line only when
+    -- both ends are in a selected country
+    start_country VARCHAR(2) CHECK (start_country ~ '^[A-Z]{2}$'),
+    end_country VARCHAR(2) CHECK (end_country ~ '^[A-Z]{2}$'),
+    starting_coordinate GEOMETRY(POINT, 4326) NOT NULL,
+    ending_coordinate GEOMETRY(POINT, 4326) NOT NULL,
+    is_valid BOOLEAN NOT NULL DEFAULT TRUE,
+    error_message TEXT, -- Admin-only, like railway_routes.error_message
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -201,6 +223,7 @@ CREATE UNIQUE INDEX idx_logged_parts_unique ON user_logged_parts (journey_id, tr
 CREATE INDEX idx_logged_parts_user_track_partial ON user_logged_parts (user_id, track_id, partial); -- CRITICAL: Progress calculation performance
 
 CREATE INDEX idx_admin_notes_coordinate ON admin_notes USING GIST (coordinate);
+CREATE INDEX idx_scenic_lines_geometry ON scenic_lines USING GIST (geometry);
 
 -- Trigger function to auto-update updated_at timestamp (reusable across tables)
 CREATE OR REPLACE FUNCTION update_timestamp()
@@ -229,6 +252,11 @@ EXECUTE FUNCTION update_timestamp();
 -- Trigger to auto-update updated_at on user_journeys updates
 CREATE TRIGGER user_journeys_update_timestamp
 BEFORE UPDATE ON user_journeys
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER scenic_lines_update_timestamp
+BEFORE UPDATE ON scenic_lines
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 

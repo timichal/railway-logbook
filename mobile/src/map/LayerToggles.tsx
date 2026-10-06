@@ -5,7 +5,7 @@
  *
  * The region rules live here rather than in the map, for the same reason they do
  * there: a switch the map ignores would be worse than no switch. Japan renames
- * Special to "Non-JR lines" and offers no scenic outline at all
+ * Special to "Non-JR lines" and offers no scenic lines at all
  * (`Region.hasScenicHighlight`).
  */
 import type { ReactNode } from "react";
@@ -16,7 +16,7 @@ import { ToggleSwitch } from "@/ui/ToggleSwitch";
 
 export function LayerToggles(): ReactNode {
   const { region } = useRegion();
-  const { showHeritage, showSpecial, showScenicOutline, setPref } = useLayerPrefs();
+  const { showHeritage, showSpecial, showScenicLines, setPref } = useLayerPrefs();
 
   return (
     <View className="gap-1">
@@ -33,8 +33,8 @@ export function LayerToggles(): ReactNode {
       {region.hasScenicHighlight ? (
         <ToggleSwitch
           label="Scenic lines"
-          value={showScenicOutline}
-          onChange={(value) => setPref("showScenicOutline", value)}
+          value={showScenicLines}
+          onChange={(value) => setPref("showScenicLines", value)}
         />
       ) : null}
     </View>

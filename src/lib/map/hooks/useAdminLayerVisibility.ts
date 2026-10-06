@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 interface UseAdminLayerVisibilityOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
-  isEditingGeometry?: boolean;
+  /** Routes forced hidden: a geometry edit, or the Scenic lines tab (see AdminMap). */
+  hideRoutes?: boolean;
 }
 
 interface LayerVisibilityState {
@@ -18,6 +19,8 @@ interface LayerVisibilityState {
   setShowNotesLayer: React.Dispatch<React.SetStateAction<boolean>>;
   showEndpointsLayer: boolean;
   setShowEndpointsLayer: React.Dispatch<React.SetStateAction<boolean>>;
+  showScenicLayer: boolean;
+  setShowScenicLayer: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 /**
@@ -27,25 +30,26 @@ interface LayerVisibilityState {
 export function useAdminLayerVisibility({
   map,
   mapLoaded,
-  isEditingGeometry,
+  hideRoutes,
 }: UseAdminLayerVisibilityOptions): LayerVisibilityState {
   const [showPartsLayer, setShowPartsLayer] = useState(true);
   const [showRoutesLayer, setShowRoutesLayer] = useState(true);
   const [showStationsLayer, setShowStationsLayer] = useState(true);
   const [showNotesLayer, setShowNotesLayer] = useState(true);
   const [showEndpointsLayer, setShowEndpointsLayer] = useState(true);
+  const [showScenicLayer, setShowScenicLayer] = useState(true);
   const previousShowRoutesLayerRef = useRef(true);
 
-  // Sync Railway Routes checkbox with edit geometry mode
-  // biome-ignore lint/correctness/useExhaustiveDependencies: showRoutesLayer is intentionally omitted — we snapshot its current value only at the moment edit-geometry mode toggles; adding it as a trigger would re-run on every checkbox change.
+  // Sync Railway Routes checkbox with the forced-hidden modes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: showRoutesLayer is intentionally omitted — we snapshot its current value only at the moment the mode toggles; adding it as a trigger would re-run on every checkbox change.
   useEffect(() => {
-    if (isEditingGeometry) {
+    if (hideRoutes) {
       previousShowRoutesLayerRef.current = showRoutesLayer;
       setShowRoutesLayer(false);
     } else {
       setShowRoutesLayer(previousShowRoutesLayerRef.current);
     }
-  }, [isEditingGeometry]);
+  }, [hideRoutes]);
 
   // Apply visibility to all layers
   useEffect(() => {
@@ -59,17 +63,17 @@ export function useAdminLayerVisibility({
 
     setVisibility("railway_parts", showPartsLayer);
 
-    const routesVisible = isEditingGeometry ? false : showRoutesLayer;
+    const routesVisible = hideRoutes ? false : showRoutesLayer;
     setVisibility("railway_routes", routesVisible);
     setVisibility("railway_routes_heritage", routesVisible);
     setVisibility("railway_routes_special", routesVisible);
-    setVisibility("railway_routes_scenic_outline", routesVisible);
     setVisibility("railway_routes_click", routesVisible);
 
     setVisibility("stations", showStationsLayer);
     setVisibility("station_labels", showStationsLayer);
     setVisibility("admin_notes", showNotesLayer);
     setVisibility("route-endpoints", showEndpointsLayer);
+    setVisibility("scenic_lines", showScenicLayer);
   }, [
     map,
     mapLoaded,
@@ -78,7 +82,8 @@ export function useAdminLayerVisibility({
     showStationsLayer,
     showNotesLayer,
     showEndpointsLayer,
-    isEditingGeometry,
+    showScenicLayer,
+    hideRoutes,
   ]);
 
   return {
@@ -92,5 +97,7 @@ export function useAdminLayerVisibility({
     setShowNotesLayer,
     showEndpointsLayer,
     setShowEndpointsLayer,
+    showScenicLayer,
+    setShowScenicLayer,
   };
 }

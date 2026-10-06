@@ -9,7 +9,6 @@ import { COLORS, WIDTHS } from "../style";
  * Logic:
  * - For logged users: Uses 'date' property from tile data
  * - For unlogged users: Uses feature-state set from localStorage
- * Note: Scenic routes use same colors but with outline effect (separate layer)
  *
  * **Nested single-condition `case`s, and deliberately no `["all", ...]`.** The
  * flat five-branch form this replaced said the same thing more readably, but
@@ -172,23 +171,4 @@ export function getAdminRouteHeritageWidthExpression(
     WIDTHS.adminRoute.branch * WIDTHS.heritageDotMultiplier,
     selectedTrackId,
   );
-}
-
-/**
- * Outline width for scenic routes — same shape as the visible width but
- * fattened by ~6px at every stop. Done as a separate top-level interpolate
- * because MapLibre disallows wrapping a zoom-interpolate inside another
- * expression like ['+', ...].
- */
-export function getUserRouteScenicOutlineWidthExpression(): ExpressionSpecification {
-  const s = WIDTHS.scenicOutline;
-  return [
-    "interpolate",
-    ["linear"],
-    ["zoom"],
-    4,
-    widthByClass(s.z4),
-    7,
-    widthByClass(s.z7),
-  ] as ExpressionSpecification;
 }

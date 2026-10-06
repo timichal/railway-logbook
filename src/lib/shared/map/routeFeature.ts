@@ -44,7 +44,6 @@ export interface RouteTitleProperties {
 
 export interface RouteFeatureProperties extends RouteTitleProperties {
   usage_type: UsageType;
-  scenic?: boolean;
   line_class?: LineClass;
   /**
    * The frequency tags. A tile serialises a Postgres `TEXT[]` as
@@ -149,7 +148,7 @@ const LINE_CLASS_BADGE: Partial<Record<LineClass, Omit<RouteBadge, "label">>> = 
 
 /**
  * Every badge a route earns, in the order they are shown: line class (unless
- * branch, the unremarkable default), usage type, scenic, then one per frequency
+ * branch, the unremarkable default), usage type, then one per frequency
  * tag. Usage types are labelled per region — Japan calls them JR / non-JR lines.
  */
 export function routeBadges(properties: RouteFeatureProperties, regionId: RegionId): RouteBadge[] {
@@ -164,8 +163,6 @@ export function routeBadges(properties: RouteFeatureProperties, regionId: Region
     label: regionUsageLabel(regionId, properties.usage_type),
     ...getUsageBadgeColors(properties.usage_type),
   });
-
-  if (properties.scenic) badges.push({ label: "Scenic", ...COLORS.badges.scenic });
 
   for (const tag of parseFrequencyTags(properties.frequency)) {
     badges.push({ label: tag, ...COLORS.badges.frequency });

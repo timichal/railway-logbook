@@ -1,13 +1,14 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
-import { clickBufferFilter, scenicOutlineFilter } from "@/lib/shared/map/userMapLayers";
+import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
+import { clickBufferFilter, scenicLinesFilter } from "@/lib/shared/map/userMapLayers";
 
 /**
  * Manages filter and visibility toggles for user map layers:
  * - Heritage (usage_type=1, dotted) — "Show heritage lines" toggle.
  * - Special services (usage_type=2, dashed) — "Show special services" toggle.
  *   The two are independent.
- * - Scenic outline visibility
+ * - Scenic lines: visibility, and the country filter the routes have too
  *
  * Layer responsibilities:
  * - `railway_routes` (visible solid line): Regular only. Heritage and Special
@@ -24,7 +25,9 @@ export function useLayerFilters(
   map: React.MutableRefObject<maplibregl.Map | null>,
   showHeritage: boolean,
   showSpecial: boolean,
-  showScenicOutline: boolean,
+  showScenicLines: boolean,
+  /** The countries the routes are filtered to; the scenic lines follow them. */
+  selectedCountries: string[],
   /** Apply persisted preferences once the map's layers exist. */
   mapLoaded: boolean,
 ) {
@@ -56,22 +59,15 @@ export function useLayerFilters(
     if (m.getLayer("railway_routes_click")) {
       m.setFilter("railway_routes_click", clickBufferFilter(showHeritage, showSpecial));
     }
-
-    // Scenic outline: mirror the visible solid line (never Special routes).
-    if (m.getLayer("railway_routes_scenic_outline")) {
-      m.setFilter("railway_routes_scenic_outline", scenicOutlineFilter(showHeritage));
-    }
   }, [map, showHeritage, showSpecial, mapLoaded]);
 
-  // Scenic outline visibility
+  // Scenic lines: shown by their toggle, filtered by country as the routes are
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger (apply prefs once layers exist), not a value read inside the effect.
   useEffect(() => {
-    if (!map.current?.getLayer("railway_routes_scenic_outline")) return;
+    const m = map.current;
+    if (!m?.getLayer(SCENIC_LINES_LAYER_ID)) return;
 
-    map.current.setLayoutProperty(
-      "railway_routes_scenic_outline",
-      "visibility",
-      showScenicOutline ? "visible" : "none",
-    );
-  }, [map, showScenicOutline, mapLoaded]);
+    m.setLayoutProperty(SCENIC_LINES_LAYER_ID, "visibility", showScenicLines ? "visible" : "none");
+    m.setFilter(SCENIC_LINES_LAYER_ID, scenicLinesFilter(selectedCountries));
+  }, [map, showScenicLines, selectedCountries, mapLoaded]);
 }

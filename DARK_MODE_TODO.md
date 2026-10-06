@@ -31,7 +31,7 @@ it was noticed.
       *hues* rather than three temperatures of one, rather than nudging the existing
       values. Whatever comes out has to keep working for the colour-blind readings
       the light palette was chosen against.
-- [ ] **The popup badges stay bright.** The line-class, Scenic and frequency
+- [ ] **The popup badges stay bright.** The line-class, usage and frequency
       chips in `tooltipFormatting.ts` are pastel fills with dark text, and they
       read as chips on a dark popup rather than as a mistake — but they are the
       one thing in the app still lit from the light palette.

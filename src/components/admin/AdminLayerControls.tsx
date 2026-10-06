@@ -14,6 +14,8 @@ interface AdminLayerControlsProps {
   setShowEndpointsLayer: (v: boolean) => void;
   showNotesLayer: boolean;
   setShowNotesLayer: (v: boolean) => void;
+  showScenicLayer: boolean;
+  setShowScenicLayer: (v: boolean) => void;
   isMobile?: boolean;
 }
 
@@ -28,6 +30,8 @@ export default function AdminLayerControls({
   setShowEndpointsLayer,
   showNotesLayer,
   setShowNotesLayer,
+  showScenicLayer,
+  setShowScenicLayer,
   isMobile = false,
 }: AdminLayerControlsProps) {
   const [collapsed, setCollapsed] = useState(isMobile);
@@ -35,6 +39,7 @@ export default function AdminLayerControls({
   const layers = [
     { label: "Railway Parts", checked: showPartsLayer, toggle: setShowPartsLayer },
     { label: "Railway Routes", checked: showRoutesLayer, toggle: setShowRoutesLayer },
+    { label: "Scenic Lines", checked: showScenicLayer, toggle: setShowScenicLayer },
     { label: "Stations", checked: showStationsLayer, toggle: setShowStationsLayer },
     { label: "Route Endpoints", checked: showEndpointsLayer, toggle: setShowEndpointsLayer },
     { label: "Admin Notes", checked: showNotesLayer, toggle: setShowNotesLayer },

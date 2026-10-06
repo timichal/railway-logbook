@@ -3,8 +3,8 @@
  *
  * Anywhere a paint expression needs a color/width/opacity, pull it from
  * here rather than hardcoding it locally. Width stops are organized by
- * the zoom level they apply at so the user-map / scenic-outline / click-
- * buffer expressions all stay in sync.
+ * the zoom level they apply at so the user-map / click-buffer expressions all
+ * stay in sync.
  */
 
 // ============================================================================
@@ -37,8 +37,22 @@ export const COLORS = {
     planner: "#FFD700",
     view: "#ff6b35",
   },
-  // Amber outline drawn underneath scenic routes (separate layer).
-  scenicOutline: "#fbbf24",
+  /**
+   * Scenic lines (`createScenicLinesLayer`): a soft violet band drawn *under* the
+   * routes, like a highlighter stroke — wide, translucent and blurred at the
+   * edges, so it marks a stretch of country without competing with the route
+   * colours on top. It often runs over track with no route at all, so it has to
+   * read on the bare basemap too.
+   *
+   * **Violet because nothing else on the user map is.** The routes own green,
+   * orange and red; amber (the first try) sat on liberty's yellow motorways,
+   * which follow the same valleys as the railways; cyan read as the river
+   * beside them. (The admin map's under-repair violet is a different map.)
+   */
+  scenicLine: "#a855f7",
+  // The same band on the admin map, where an invalid line is greyed like an
+  // invalid route and the selected one is drawn in the selected-route orange.
+  scenicLineInvalid: "#9ca3af",
   // Bright preview line shown while creating/editing an admin route.
   preview: "#ff6600",
   stations: {
@@ -79,7 +93,7 @@ export const COLORS = {
    * **Neutral on purpose.** Zoomed out over Europe the routes are the only
    * saturated thing on the map, and a border has to be traceable through them
    * without joining in - anything with a hue reads as one more line of data, and
-   * the greens/oranges/reds and the scenic amber are all spoken for. A grey at
+   * the greens/oranges/reds and the scenic violet are all spoken for. A grey at
    * this contrast is the one thing that can be crisp without competing: it is the
    * only sharp element left on a basemap washed 25-40% toward its own ground.
    *
@@ -119,7 +133,6 @@ export const COLORS = {
   badges: {
     highspeed: { color: "#ffffff", bgColor: "#ef4444" },
     main: { color: "#1e40af", bgColor: "#bfdbfe" },
-    scenic: { color: "#78350f", bgColor: "#fbbf24" },
     frequency: { color: "#166534", bgColor: "#dcfce7" },
   },
 } as const;
@@ -137,19 +150,18 @@ export const WIDTHS = {
   },
   adminRoute: { branch: 2.5, main: 3, highspeed: 3 },
   // What the route layer factories draw with when the caller passes no width
-  // expression of its own. The scenic outline is the route's width plus
-  // `scenicOutlineOffset`, since a zoom-interpolate cannot be wrapped in a `+`.
-  fallback: { route: 3, clickBuffer: 16, scenicOutlineOffset: 6 },
+  // expression of its own.
+  fallback: { route: 3, clickBuffer: 16 },
   // Raw OSM parts on the admin map; a hovered part thickens from z7.
   railwayParts: { z4: 0.8, z7: 3, z7Hover: 5 },
   clickBuffer: {
     z4: { branch: 14, main: 14, highspeed: 14 },
     z12: { branch: 16, main: 16, highspeed: 16 },
   },
-  scenicOutline: {
-    z4: { branch: 6.5, main: 6.6, highspeed: 6.8 },
-    z7: { branch: 8, main: 8.5, highspeed: 9 },
-  },
+  // Scenic line band: a few times a route's width, growing with zoom so it stays
+  // a band around the line rather than shrinking into a second line beside it.
+  // `blur` softens its edges by that many pixels.
+  scenicLine: { z4: 5, z7: 10, z12: 18, blur: { z4: 1, z12: 4 } },
   // Special-usage routes are drawn a little fatter than branch (multiplier on
   // the branch width at each stop). A dashed line lays down less ink than a
   // solid one of the same width, so matching branch exactly reads as thinner
@@ -269,7 +281,11 @@ export const OPACITIES = {
   // light enough that the dashes on top still stand out against it.
   highlightCasing: 0.45,
   preview: 1.0,
-  scenicOutline: 0.6,
+  scenicLine: 0.5,
+  // The admin map draws them a little stronger (an invalid grey one all but
+  // vanishes over the parts otherwise), and the selected one near solid.
+  scenicLineAdmin: 0.55,
+  scenicLineSelected: 0.85,
   railwayParts: 0.7,
   stations: 0.8,
   // Country borders (createCountryBordersLayer). Just short of solid: they are

@@ -69,9 +69,9 @@ export interface Region {
    */
   hasRouteNames: boolean;
   /**
-   * Whether the "Highlight scenic lines" toggle is offered on the user map.
-   * `scenic` is still stored and editable by the admin everywhere; this only
-   * decides whether the region's map bothers to offer the outline.
+   * Whether the "Scenic lines" toggle is offered on the user map. Scenic lines
+   * (`scenic_lines`) can be drawn by the admin anywhere; this only decides
+   * whether the region's map offers to show them.
    */
   hasScenicHighlight: boolean;
   /**

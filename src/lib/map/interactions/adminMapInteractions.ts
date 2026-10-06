@@ -190,7 +190,6 @@ export function setupAdminMapInteractions(
         let formattedDescription = formatRouteMetadataBadges(
           {
             usage_type: properties.usage_type,
-            scenic: properties.scenic,
             line_class: properties.line_class,
             frequency: properties.frequency,
           },

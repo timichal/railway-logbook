@@ -26,7 +26,7 @@ export {
   createRailwayRoutesLayer,
   createRailwayRoutesSpecialLayer,
   createRouteEndpointsLayer,
-  createScenicRoutesOutlineLayer,
+  createScenicLinesLayer,
   createStationLabelsLayer,
   createStationsLayer,
   lineClassColorExpression,
@@ -73,6 +73,12 @@ export const createStationsSource = () => sources.createStationsSource(TILE_BASE
 export const createPublicStationsSource = () => sources.createPublicStationsSource(TILE_BASE_URL);
 
 export const createRailwayPartsSource = () => sources.createRailwayPartsSource(TILE_BASE_URL);
+
+export const createScenicLinesSource = (cacheBuster?: number) =>
+  sources.createScenicLinesSource(TILE_BASE_URL, cacheBuster);
+
+export const scenicLinesTileUrl = (cacheBuster?: number) =>
+  sources.scenicLinesTileUrl(TILE_BASE_URL, cacheBuster);
 
 export const createAdminNotesSource = (cacheBuster?: number) =>
   sources.createAdminNotesSource(APP_ORIGIN, cacheBuster);

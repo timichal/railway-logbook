@@ -7,6 +7,7 @@ import AdminCreateRouteTab, {
 } from "@/components/admin/AdminCreateRouteTab";
 import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
+import AdminScenicTab, { type EditingScenicLine } from "@/components/admin/AdminScenicTab";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import {
   type AdminRouteDetail,
@@ -18,7 +19,16 @@ import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
+export type AdminTab = "routes" | "create" | "scenic" | "notes";
+
 interface AdminSidebarProps {
+  /**
+   * The open tab, held by the page: the map behaves differently on the Scenic tab
+   * (routes hidden), and the mobile drawer unmounts this component, which would
+   * otherwise reopen on the routes tab mid-pick.
+   */
+  selectedTab: AdminTab;
+  onSelectedTabChange: (tab: AdminTab) => void;
   selectedRouteId?: number | null;
   /** The selected route's detail, loaded by the page (the map reads it too). */
   selectedRoute: AdminRouteDetail | null;
@@ -28,8 +38,6 @@ interface AdminSidebarProps {
   onReloadSelectedRoute: () => Promise<AdminRouteDetail | null>;
   /** `focus` flies the map to the route once it has loaded. */
   onRouteSelect?: (routeId: number | null, options?: { focus?: boolean }) => void;
-  /** Bumped per coordinate click on the map; switches to the create tab. */
-  coordinateClickTrigger?: number;
   /** The create form's points. Owned by the page, which fills them from map clicks. */
   createFormCoordinates: CreateFormCoordinates;
   onCreateFormCoordinatesChange: React.Dispatch<React.SetStateAction<CreateFormCoordinates>>;
@@ -48,16 +56,23 @@ interface AdminSidebarProps {
   onNoteChanged?: () => void;
   notesRefreshSignal?: number;
   showError?: (message: string) => void;
+  editingScenicLine: EditingScenicLine | null;
+  onEditingScenicLineChange: (editing: EditingScenicLine | null) => void;
+  selectedScenicLineId: number | null;
+  onScenicLineSelect: (id: number | null) => void;
+  onScenicLinesChanged: () => void;
 }
 
 export default function AdminSidebar({
+  // Already resolved by the page: a route's geometry edit is always on the create tab
+  selectedTab: activeTab,
+  onSelectedTabChange,
   selectedRouteId,
   selectedRoute,
   selectedRouteLoading,
   onSelectedRouteChange,
   onReloadSelectedRoute,
   onRouteSelect,
-  coordinateClickTrigger,
   createFormCoordinates,
   onCreateFormCoordinatesChange,
   editingGeometry,
@@ -73,15 +88,14 @@ export default function AdminSidebar({
   onNoteChanged,
   notesRefreshSignal,
   showError: showErrorProp,
+  editingScenicLine,
+  onEditingScenicLineChange,
+  selectedScenicLineId,
+  onScenicLineSelect,
+  onScenicLinesChanged,
 }: AdminSidebarProps) {
   const { showError: showErrorToast } = useToast();
   const showError = showErrorProp || showErrorToast;
-  const [selectedTab, setSelectedTab] = useState<"routes" | "create" | "notes">("routes");
-  // A geometry edit is only ever shown on the create tab. Derived rather than set,
-  // because the edit is the page's and this component's state is not: the mobile
-  // drawer unmounts it, and a remount mid-edit opened on the routes tab with every
-  // route still hidden on the map and no Cancel in sight.
-  const activeTab = editingGeometry ? "create" : selectedTab;
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   // Read after an await, to tell whether the edit that asked is still the current one.
   const editingGeometryRef = useRef(editingGeometry);
@@ -103,26 +117,15 @@ export default function AdminSidebar({
     loadTags();
   }, [loadTags]);
 
-  // Switch to create tab when a coordinate is clicked
-  useEffect(() => {
-    if (coordinateClickTrigger) {
-      setSelectedTab("create");
-    }
-  }, [coordinateClickTrigger]);
-
-  // Switch to routes tab when a route is selected
-  useEffect(() => {
-    if (selectedRouteId) {
-      setSelectedTab("routes");
-    }
-  }, [selectedRouteId]);
-
-  // Leaving the create tab abandons whatever was being picked there, a geometry
-  // edit included — it would otherwise keep the routes hidden on the map behind a
-  // tab that is no longer on screen.
-  const leaveCreateTab = () => {
+  // Switching tabs abandons whatever was being picked on the one left behind — the
+  // points, a route's geometry edit (it would otherwise keep the routes hidden behind
+  // a tab no longer on screen); the page drops the scenic tab's own state likewise.
+  const switchTab = (tab: AdminTab) => {
+    if (tab === activeTab) return;
     onFormReset();
     if (editingGeometryRef.current) onEditingGeometryChange(null);
+    if (tab !== "routes") onRouteSelect?.(null);
+    onSelectedTabChange(tab);
   };
 
   // Handle edit geometry button click
@@ -130,7 +133,7 @@ export default function AdminSidebar({
     async (trackId: number) => {
       const request = ++editRequestRef.current;
       onEditingGeometryChange({ trackId, routeInfo: null });
-      setSelectedTab("create");
+      onSelectedTabChange("create");
 
       // Fetch the route details to get starting_coordinate and ending_coordinate
       try {
@@ -169,15 +172,15 @@ export default function AdminSidebar({
         showError(`Failed to load route details: ${actionErrorMessage(error)}`);
       }
     },
-    [onEditingGeometryChange, onCreateFormCoordinatesChange, showError],
+    [onEditingGeometryChange, onCreateFormCoordinatesChange, onSelectedTabChange, showError],
   );
 
   // Ends a geometry edit, whether saved or cancelled: the form is cleared once, here.
   const endGeometryEdit = useCallback(() => {
     onEditingGeometryChange(null);
     onFormReset();
-    setSelectedTab("routes");
-  }, [onEditingGeometryChange, onFormReset]);
+    onSelectedTabChange("routes");
+  }, [onEditingGeometryChange, onFormReset, onSelectedTabChange]);
 
   // Handle cancel geometry edit
   const handleCancelGeometryEdit = useCallback(() => {
@@ -195,34 +198,28 @@ export default function AdminSidebar({
       <div className="flex border-b border-gray-200">
         <button
           type="button"
-          onClick={() => {
-            setSelectedTab("routes");
-            leaveCreateTab();
-          }}
+          onClick={() => switchTab("routes")}
           className={tabBtn(activeTab === "routes")}
         >
           Railway Routes
         </button>
         <button
           type="button"
-          onClick={() => {
-            setSelectedTab("create");
-            // Unselect any selected route when switching to Create New
-            if (onRouteSelect) {
-              onRouteSelect(null);
-            }
-          }}
+          onClick={() => switchTab("create")}
           className={tabBtn(activeTab === "create")}
         >
           Create New
         </button>
         <button
           type="button"
-          onClick={() => {
-            setSelectedTab("notes");
-            if (onRouteSelect) onRouteSelect(null);
-            leaveCreateTab();
-          }}
+          onClick={() => switchTab("scenic")}
+          className={tabBtn(activeTab === "scenic")}
+        >
+          Scenic
+        </button>
+        <button
+          type="button"
+          onClick={() => switchTab("notes")}
           className={tabBtn(activeTab === "notes")}
         >
           Notes
@@ -275,6 +272,21 @@ export default function AdminSidebar({
             onCancelGeometryEdit={handleCancelGeometryEdit}
             availableTags={availableTags}
             onTagsChanged={loadTags}
+          />
+        )}
+
+        {activeTab === "scenic" && (
+          <AdminScenicTab
+            createFormCoordinates={createFormCoordinates}
+            onCreateFormCoordinatesChange={onCreateFormCoordinatesChange}
+            previewRoute={previewRoute}
+            onFormReset={onFormReset}
+            editing={editingScenicLine}
+            onEditingChange={onEditingScenicLineChange}
+            selectedId={selectedScenicLineId}
+            onSelect={onScenicLineSelect}
+            onFocusGeometry={(geometry) => onRouteFocus?.(geometry)}
+            onChanged={onScenicLinesChanged}
           />
         )}
 

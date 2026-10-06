@@ -48,15 +48,14 @@ import {
   createRailwayRoutesHeritageLayer,
   createRailwayRoutesLayer,
   createRailwayRoutesSpecialLayer,
-  createScenicRoutesOutlineLayer,
+  createScenicLinesLayer,
   createStationLabelsLayer,
   createStationsLayer,
 } from "@shared/map/layers";
 import {
-  scenicOutlineFilter,
+  scenicLinesFilter,
   userHeritageLayerConfig,
   userRouteLayerConfig,
-  userScenicLayerConfig,
   userSpecialLayerConfig,
 } from "@shared/map/userMapLayers";
 import { REGIONS, type RegionId } from "@shared/regions";
@@ -80,7 +79,13 @@ import {
   toStationFeature,
 } from "@/map/mapFeatures";
 import { loadMapPosition, type MapPosition, saveMapPosition } from "@/map/mapPosition";
-import { notesTileUrl, routesTileUrl, stationsTileUrl, ZOOM_RANGES } from "@/map/tileUrls";
+import {
+  notesTileUrl,
+  routesTileUrl,
+  scenicTileUrl,
+  stationsTileUrl,
+  ZOOM_RANGES,
+} from "@/map/tileUrls";
 import { useBasemapStyle } from "@/map/useBasemapStyle";
 import { useRegion } from "@/region/RegionContext";
 import { useTheme } from "@/theme/ThemeContext";
@@ -110,7 +115,7 @@ function flatBounds(regionId: RegionId): [number, number, number, number] {
 export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   const { resolved: theme } = useTheme();
   const { regionId } = useRegion();
-  const { showHeritage, showSpecial, showScenicOutline } = useLayerPrefs();
+  const { showHeritage, showSpecial, showScenicLines } = useLayerPrefs();
   const { selected } = useSelection();
   const highlighted = useHighlight();
   // A journey logged anywhere in the app repaints this tile: the visit colours are
@@ -118,6 +123,8 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   const logVersion = useLogVersion();
 
   const basemapStyle = useBasemapStyle(theme);
+  // Memoised: a new array each render would be sent across to the native layer again
+  const scenicFilter = useMemo(() => scenicLinesFilter(countries), [countries]);
   const initialPosition = useInitialPosition(regionId);
 
   const cameraRef = useRef<CameraRef>(null);
@@ -247,6 +254,24 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
           maxBounds={flatBounds(regionId)}
         />
 
+        {/* The scenic band, under every route line, where the region offers it at
+            all. `beforeId` because a layer mounted after the map has loaded (the
+            toggle switched on) is otherwise appended to the very top. */}
+        <VectorSource
+          id="scenic_lines"
+          tiles={[scenicTileUrl()]}
+          minzoom={ZOOM_RANGES.scenicLines.min}
+          maxzoom={ZOOM_RANGES.scenicLines.max}
+        >
+          {showScenicLines && REGIONS[regionId].hasScenicHighlight ? (
+            <Layer
+              {...createScenicLinesLayer({ visible: true })}
+              filter={scenicFilter}
+              beforeId="railway_routes"
+            />
+          ) : null}
+        </VectorSource>
+
         <VectorSource
           id="railway_routes"
           tiles={[routesUrl]}
@@ -254,13 +279,6 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
           maxzoom={ZOOM_RANGES.railwayRoutes.max}
           onPress={(event) => takePress(event, toRouteFeature)}
         >
-          {/* Amber outline under scenic routes, where the region offers it at all. */}
-          {showScenicOutline && REGIONS[regionId].hasScenicHighlight ? (
-            <Layer
-              {...shown(createScenicRoutesOutlineLayer(userScenicLayerConfig))}
-              filter={scenicOutlineFilter(showHeritage)}
-            />
-          ) : null}
           <Layer {...createRailwayRoutesLayer(userRouteLayerConfig)} />
           {showHeritage ? (
             <Layer {...shown(createRailwayRoutesHeritageLayer(userHeritageLayerConfig))} />

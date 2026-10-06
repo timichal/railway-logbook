@@ -40,7 +40,6 @@ export interface SaveRouteData {
   usage_type: UsageType;
   frequency: string[];
   link: string;
-  scenic: boolean;
   intended_backtracking: boolean;
 }
 
@@ -53,7 +52,6 @@ export type AdminRouteSummary = {
   to_station: string;
   description: string | null;
   usage_type: UsageType;
-  scenic: boolean;
   line_class: LineClass;
   is_valid: boolean;
   error_message: string | null;
@@ -90,7 +88,7 @@ export async function getAllRailwayRoutes(
 ): Promise<ActionResult<AdminRouteSummary[]>> {
   return asAdmin(async () => {
     const result = await pool.query<AdminRouteSummary>(`
-    SELECT track_id, name, from_station, to_station, description, usage_type, scenic, line_class,
+    SELECT track_id, name, from_station, to_station, description, usage_type, line_class,
            is_valid, error_message, under_repair, intended_backtracking, has_backtracking
     FROM railway_routes
     WHERE geometry && ${regionEnvelopeSql(region)}
@@ -148,7 +146,7 @@ export async function getRailwayRoute(trackId: number): Promise<ActionResult<Adm
     // length_km is NUMERIC, which pg hands back as a string unless cast.
     const result = await pool.query<AdminRouteDetailRow>(
       `
-    SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, scenic, line_class,
+    SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, line_class,
            ST_AsGeoJSON(geometry) as geometry, length_km::float8 AS length_km,
            ST_AsGeoJSON(starting_coordinate)::json as starting_coordinate,
            ST_AsGeoJSON(ending_coordinate)::json as ending_coordinate,
@@ -459,7 +457,6 @@ export async function saveRailwayRoute(
           usage_type,
           frequency,
           link,
-          scenic,
           geometry,
           length_km,
           start_country,
@@ -477,16 +474,15 @@ export async function saveRailwayRoute(
           $5,
           $6,
           $7,
-          $8,
-          ST_GeomFromText($9, 4326),
-          ST_Length(ST_GeomFromText($9, 4326)::geography) / 1000,
+          ST_GeomFromText($8, 4326),
+          ST_Length(ST_GeomFromText($8, 4326)::geography) / 1000,
+          $9,
           $10,
-          $11,
+          ST_GeomFromText($11, 4326),
           ST_GeomFromText($12, 4326),
-          ST_GeomFromText($13, 4326),
           TRUE,
-          $14,
-          $15
+          $13,
+          $14
         )
         RETURNING track_id
       `;
@@ -499,7 +495,6 @@ export async function saveRailwayRoute(
           routeData.usage_type,
           routeData.frequency || [],
           routeData.link || null,
-          routeData.scenic,
           geometryWKT,
           startCountry,
           endCountry,
@@ -602,7 +597,6 @@ export async function updateRailwayRoute(
   usageType: UsageType,
   frequency: string[],
   link: string | null,
-  scenic: boolean,
   lineClass: LineClass,
   intendedBacktracking: boolean,
 ): Promise<ActionResult<void>> {
@@ -612,7 +606,7 @@ export async function updateRailwayRoute(
       `
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
-        link = $8, scenic = $9, line_class = $10, intended_backtracking = $11, is_valid = TRUE,
+        link = $8, line_class = $9, intended_backtracking = $10, is_valid = TRUE,
         error_message = NULL, under_repair = FALSE
     WHERE track_id = $1
   `,
@@ -625,7 +619,6 @@ export async function updateRailwayRoute(
         usageType,
         frequency || [],
         link,
-        scenic,
         lineClass,
         intendedBacktracking,
       ],
@@ -705,14 +698,14 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
       const insertRoute = await client.query(
         `
       INSERT INTO railway_routes (
-        name, from_station, to_station, description, usage_type, frequency, link, scenic,
+        name, from_station, to_station, description, usage_type, frequency, link,
         line_class, geometry, length_km, start_country, end_country,
         starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       )
       SELECT
         name, from_station || ' [duplicate]', to_station || ' [duplicate]', description,
-        usage_type, frequency, link, scenic, line_class, geometry, length_km,
+        usage_type, frequency, link, line_class, geometry, length_km,
         start_country, end_country, starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       FROM railway_routes

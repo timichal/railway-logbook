@@ -209,38 +209,64 @@ export function createRailwayRoutesHeritageLayer(
   };
 }
 
-export function createScenicRoutesOutlineLayer(
-  config: RailwayRoutesPaintConfig = {},
+export const SCENIC_LINES_LAYER_ID = "scenic_lines";
+
+/**
+ * Scenic lines: a soft band under the routes (see `COLORS.scenicLine`), from their
+ * own tile (`scenic_lines_tile`) — a scenic stretch is a piece of track, not a
+ * route, and rarely starts or ends where one does. Drawn first, so every route
+ * line sits on top of it.
+ *
+ * Hidden by default on the user map ("Scenic lines" toggle), shown on the admin
+ * map, which passes its own colour and opacity (invalid grey, the selected line
+ * solid orange).
+ */
+export function createScenicLinesLayer(
+  options: {
+    visible?: boolean;
+    colorExpression?: ExpressionSpecification;
+    opacity?: ExpressionSpecification | number;
+    filter?: FilterSpecification;
+  } = {},
 ): LineLayerSpecification {
-  const { widthExpression, defaultWidth = WIDTHS.fallback.route, filter } = config;
-
-  // MapLibre forbids wrapping a zoom-interpolate inside another expression like
-  // ['+', expr, 6], so the caller must supply a fully-formed width expression
-  // (typically getUserRouteScenicOutlineWidthExpression).
-  const outlineWidth: ExpressionSpecification | number =
-    widthExpression ?? defaultWidth + WIDTHS.fallback.scenicOutlineOffset;
-
+  const w = WIDTHS.scenicLine;
   const layer: LineLayerSpecification = {
-    id: "railway_routes_scenic_outline",
+    id: SCENIC_LINES_LAYER_ID,
     type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
+    source: "scenic_lines",
+    "source-layer": "scenic_lines",
+    minzoom: ZOOM_RANGES.scenicLines.min,
     layout: {
-      visibility: "none", // Default to hidden, controlled by "Highlight scenic lines" checkbox
+      visibility: options.visible ? "visible" : "none",
+      "line-cap": "round",
+      "line-join": "round",
     },
     paint: {
-      "line-color": COLORS.scenicOutline,
-      "line-width": outlineWidth,
-      "line-opacity": OPACITIES.scenicOutline,
+      "line-color": options.colorExpression ?? COLORS.scenicLine,
+      "line-width": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        4,
+        w.z4,
+        7,
+        w.z7,
+        12,
+        w.z12,
+      ] as ExpressionSpecification,
+      "line-blur": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        4,
+        w.blur.z4,
+        12,
+        w.blur.z12,
+      ] as ExpressionSpecification,
+      "line-opacity": options.opacity ?? OPACITIES.scenicLine,
     },
-    filter: [
-      "all",
-      ["==", ["get", "scenic"], true],
-      ...(filter ? [filter] : []),
-    ] as FilterSpecification,
   };
-
+  if (options.filter) layer.filter = options.filter;
   return layer;
 }
 

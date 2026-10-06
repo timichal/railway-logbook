@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import PickedPointField from "@/components/admin/PickedPointField";
 import RouteMetadataFields, {
   routeMetadataIncomplete,
 } from "@/components/admin/RouteMetadataFields";
@@ -9,7 +10,7 @@ import { type SaveRouteData, saveRailwayRoute } from "@/lib/adminRouteActions";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
-import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import { btn } from "@/lib/ui/buttonStyles";
 
 /** The create form's two picked points (also what a geometry edit re-picks). */
 export interface CreateFormCoordinates {
@@ -32,7 +33,6 @@ const EMPTY_FORM: SaveRouteData = {
   usage_type: 0,
   frequency: [],
   link: "",
-  scenic: false,
   intended_backtracking: false,
 };
 
@@ -130,7 +130,7 @@ export default function AdminCreateRouteTab({
     setIsSaving(true);
     try {
       // Use saveRailwayRoute with trackId to trigger UPDATE mode
-      // Metadata (name, description, usage_type, frequency, link, scenic, line_class, intended_backtracking) won't be used in update mode
+      // Metadata (name, description, usage_type, frequency, link, line_class, intended_backtracking) won't be used in update mode
       unwrap(
         await saveRailwayRoute(
           EMPTY_FORM, // Not used in UPDATE mode
@@ -158,12 +158,6 @@ export default function AdminCreateRouteTab({
 
   const isEditMode = !!editingGeometryForTrackId;
 
-  // Format coordinate for display
-  const formatCoordinate = (coord: [number, number] | null) => {
-    if (!coord) return "";
-    return `${coord[1].toFixed(6)}, ${coord[0].toFixed(6)}`;
-  };
-
   // Format header for edit mode
   const getEditModeHeader = () => {
     if (!isEditMode || !editingRouteInfo) {
@@ -183,69 +177,20 @@ export default function AdminCreateRouteTab({
       </p>
 
       <div className="space-y-4">
-        {/* Starting Coordinate */}
-        <div>
-          <label
-            htmlFor="route-starting-point"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Starting Point *
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="route-starting-point"
-              type="text"
-              value={formatCoordinate(startingCoordinate)}
-              readOnly
-              placeholder="Click a railway part on the map"
-              disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg ${
-                isPreviewMode ? "bg-gray-100 cursor-not-allowed" : "bg-gray-50"
-              }`}
-            />
-            <button
-              type="button"
-              onClick={clearStartingCoordinate}
-              className={`${iconBtn("sm", "danger")} self-center`}
-              title="Clear starting point"
-              aria-label="Clear starting point"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        {/* Ending Coordinate */}
-        <div>
-          <label
-            htmlFor="route-ending-point"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Ending Point *
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="route-ending-point"
-              type="text"
-              value={formatCoordinate(endingCoordinate)}
-              readOnly
-              placeholder="Click a railway part on the map"
-              disabled={isPreviewMode}
-              className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg ${
-                isPreviewMode ? "bg-gray-100 cursor-not-allowed" : "bg-gray-50"
-              }`}
-            />
-            <button
-              type="button"
-              onClick={clearEndingCoordinate}
-              className={`${iconBtn("sm", "danger")} self-center`}
-              title="Clear ending point"
-              aria-label="Clear ending point"
-            >
-              ×
-            </button>
-          </div>
-        </div>
+        <PickedPointField
+          id="route-starting-point"
+          label="Starting Point *"
+          coordinate={startingCoordinate}
+          locked={isPreviewMode}
+          onClear={clearStartingCoordinate}
+        />
+        <PickedPointField
+          id="route-ending-point"
+          label="Ending Point *"
+          coordinate={endingCoordinate}
+          locked={isPreviewMode}
+          onClear={clearEndingCoordinate}
+        />
 
         {/* Only show metadata fields in create mode */}
         {!isEditMode && (

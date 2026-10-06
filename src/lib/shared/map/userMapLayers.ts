@@ -6,7 +6,7 @@ import {
   createRailwayRoutesHeritageLayer,
   createRailwayRoutesLayer,
   createRailwayRoutesSpecialLayer,
-  createScenicRoutesOutlineLayer,
+  createScenicLinesLayer,
   createStationLabelsLayer,
   createStationsLayer,
   type RailwayRoutesPaintConfig,
@@ -15,7 +15,6 @@ import {
   getUserRouteClickBufferWidthExpression,
   getUserRouteColorExpression,
   getUserRouteHeritageWidthExpression,
-  getUserRouteScenicOutlineWidthExpression,
   getUserRouteWidthExpression,
 } from "./utils/userRouteStyling";
 
@@ -57,11 +56,6 @@ export const userHeritageLayerConfig: RailwayRoutesPaintConfig = {
   widthExpression: getUserRouteHeritageWidthExpression(),
 };
 
-export const userScenicLayerConfig: RailwayRoutesPaintConfig = {
-  widthExpression: getUserRouteScenicOutlineWidthExpression(),
-  filter: REGULAR_ONLY_FILTER,
-};
-
 export const userClickBufferLayerConfig: RailwayRoutesPaintConfig = {
   widthExpression: getUserRouteClickBufferWidthExpression(),
   filter: REGULAR_ONLY_FILTER,
@@ -78,14 +72,17 @@ export const userClickBufferLayerConfig: RailwayRoutesPaintConfig = {
  */
 
 /**
- * The scenic outline mirrors whatever the solid line is currently drawing, which is
- * Regular plus Heritage-when-shown. Never Special: a dashed route with an amber
- * casing under it reads as a solid amber line.
+ * Scenic lines follow the country filter as the routes do — both ends in a selected
+ * country — so a filtered-out country is not left with highlighted stretches on an
+ * otherwise empty map. Applied as a layer filter rather than in the tile query, so
+ * a country toggle needs no tile refresh for it.
  */
-export function scenicOutlineFilter(showHeritage: boolean): FilterSpecification {
-  return showHeritage
-    ? ["all", ["==", ["get", "scenic"], true], ["!=", ["get", "usage_type"], 2]]
-    : ["all", ["==", ["get", "scenic"], true], ["==", ["get", "usage_type"], 0]];
+export function scenicLinesFilter(selectedCountries: string[]): FilterSpecification {
+  return [
+    "all",
+    ["in", ["get", "start_country"], ["literal", selectedCountries]],
+    ["in", ["get", "end_country"], ["literal", selectedCountries]],
+  ];
 }
 
 /**
@@ -114,7 +111,9 @@ export function clickBufferFilter(
  */
 export function createUserMapLayers(theme: ResolvedTheme = "light"): LayerSpecification[] {
   return [
-    createScenicRoutesOutlineLayer(userScenicLayerConfig),
+    // Under everything: a band the route lines are drawn over. Hidden until the
+    // "Scenic lines" toggle shows it (useLayerFilters).
+    createScenicLinesLayer(),
     createRailwayRoutesLayer(userRouteLayerConfig),
     createRailwayRoutesHeritageLayer(userHeritageLayerConfig),
     createRailwayRoutesSpecialLayer(userSpecialLayerConfig),

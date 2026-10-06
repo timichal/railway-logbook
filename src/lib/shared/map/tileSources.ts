@@ -135,6 +135,28 @@ export function createRailwayPartsSource(tileBaseUrl: string): VectorSourceSpeci
   };
 }
 
+/**
+ * Scenic lines (`scenic_lines_tile`) — public, so Martin's. Both maps draw them;
+ * the admin map refreshes them after a save through `cacheBuster`.
+ */
+export function scenicLinesTileUrl(tileBaseUrl: string, cacheBuster?: number): string {
+  const params: [string, string][] =
+    cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];
+  return `${tileBaseUrl}/scenic_lines_tile/{z}/{x}/{y}${queryString(params)}`;
+}
+
+export function createScenicLinesSource(
+  tileBaseUrl: string,
+  cacheBuster?: number,
+): VectorSourceSpecification {
+  return {
+    type: "vector",
+    tiles: [scenicLinesTileUrl(tileBaseUrl, cacheBuster)],
+    minzoom: ZOOM_RANGES.scenicLines.min,
+    maxzoom: ZOOM_RANGES.scenicLines.max,
+  };
+}
+
 export function adminNotesTileUrl(appOrigin: string, cacheBuster?: number): string {
   const params: [string, string][] =
     cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];

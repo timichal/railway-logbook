@@ -9,7 +9,7 @@
  * choice, and needs no round trip to change.
  *
  * The stored value is region-agnostic, as on the web. What a region *offers* is not:
- * `hasScenicHighlight` decides whether the scenic outline is drawn at all, which is
+ * `hasScenicHighlight` decides whether the scenic lines are drawn at all, which is
  * `LayerToggles`' business and the map's, not this store's.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,14 +22,14 @@ export interface LayerPrefs {
   showHeritage: boolean;
   /** "Show special services" — reveals Special routes (usage_type=2, dashed). */
   showSpecial: boolean;
-  /** "Highlight scenic lines" — amber outline under scenic routes. */
-  showScenicOutline: boolean;
+  /** "Scenic lines" — the violet band under the admin-drawn scenic stretches. */
+  showScenicLines: boolean;
 }
 
 const DEFAULTS: LayerPrefs = {
   showHeritage: false,
   showSpecial: false,
-  showScenicOutline: false,
+  showScenicLines: false,
 };
 
 interface LayerPrefsValue extends LayerPrefs {
@@ -41,11 +41,13 @@ const LayerPrefsContext = createContext<LayerPrefsValue | null>(null);
 function parse(stored: string | null): LayerPrefs {
   if (!stored) return { ...DEFAULTS };
   try {
-    const parsed = JSON.parse(stored) as Partial<LayerPrefs>;
+    // `showScenicOutline` is the same switch from when scenic was a flag on routes.
+    const parsed = JSON.parse(stored) as Partial<LayerPrefs> & { showScenicOutline?: boolean };
     return {
       showHeritage: parsed.showHeritage ?? DEFAULTS.showHeritage,
       showSpecial: parsed.showSpecial ?? DEFAULTS.showSpecial,
-      showScenicOutline: parsed.showScenicOutline ?? DEFAULTS.showScenicOutline,
+      showScenicLines:
+        parsed.showScenicLines ?? parsed.showScenicOutline ?? DEFAULTS.showScenicLines,
     };
   } catch {
     return { ...DEFAULTS };

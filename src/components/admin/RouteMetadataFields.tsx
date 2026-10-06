@@ -24,9 +24,10 @@ export function routeMetadataIncomplete(value: SaveRouteData, hasRouteNames: boo
   );
 }
 
-const INPUT =
+/** The admin forms' text input and label classes, shared with the scenic form. */
+export const INPUT =
   "w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg";
-const LABEL = "block text-sm font-medium text-gray-700 mb-1";
+export const LABEL = "block text-sm font-medium text-gray-700 mb-1";
 const GROUP_LABEL = "block text-sm font-medium text-gray-700 mb-2";
 const CHECKBOX = "w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500";
 
@@ -65,18 +66,6 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
   // cannot follow that across the union, hence the cast.
   const set = (patch: Partial<EditRouteData>) =>
     props.onChange({ ...props.value, ...patch } as EditRouteData);
-
-  const scenic = (
-    <label className="flex items-center gap-2">
-      <input
-        type="checkbox"
-        checked={value.scenic}
-        onChange={(e) => set({ scenic: e.target.checked })}
-        className={CHECKBOX}
-      />
-      <span className="text-sm font-medium text-gray-700">Scenic route</span>
-    </label>
-  );
 
   const intendedBacktracking = (
     <label className="flex items-center gap-2">
@@ -218,16 +207,12 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
       <span className={GROUP_LABEL}>Other</span>
       {narrow ? (
         <>
-          <div>{scenic}</div>
           {lineClassSelect}
           <div>{intendedBacktracking}</div>
         </>
       ) : (
         <>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-[0_1_30%]">{scenic}</div>
-            <div className="flex-[0_1_30%]">{intendedBacktracking}</div>
-          </div>
+          <div>{intendedBacktracking}</div>
           {lineClassSelect}
         </>
       )}

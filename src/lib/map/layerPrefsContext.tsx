@@ -7,7 +7,7 @@ import { type LayerPrefs, loadLayerPrefs, saveLayerPref } from "./layerPrefs";
  * The user map's layer toggles, held above the map.
  *
  * They used to live in two places — `showHeritage`/`showSpecial` inside
- * `useRouteEditor`, `showScenicOutline` as its own `useState` copied into both map
+ * `useRouteEditor`, `showScenicLines` as its own `useState` copied into both map
  * components — which was fine while the only control was inside the map itself. It
  * stopped being fine when the switches moved into `MenuSheet`: the menu is a
  * sibling of the map, so a toggle there has to re-render the map, and two hooks

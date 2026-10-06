@@ -148,7 +148,7 @@ export async function journeyForUser(
     const routesResult = await pool.query<RailwayRoute & LoggedPart>(
       `SELECT
         rr.track_id, rr.name, rr.from_station, rr.to_station,
-        rr.description, rr.usage_type, rr.frequency, rr.link, rr.scenic, rr.line_class,
+        rr.description, rr.usage_type, rr.frequency, rr.link, rr.line_class,
         rr.length_km, rr.start_country, rr.end_country,
         rr.is_valid,
         ulp.partial, ulp.covered_start, ulp.covered_end

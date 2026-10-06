@@ -12,7 +12,7 @@ import { type Region, regionUsagePluralLabel } from "@/lib/shared/regions";
  * One component rather than two copies, because the region rules live here — the
  * usage types are named as the region names them (`regionUsagePluralLabel`, which
  * is how Japan's Special switch reads "Non-JR lines"), and not every region offers
- * the scenic outline (`Region.hasScenicHighlight`) — and a menu that offered a
+ * the scenic lines (`Region.hasScenicHighlight`) — and a menu that offered a
  * toggle the map ignores would be worse than no menu.
  */
 
@@ -40,8 +40,8 @@ export default function LayerToggles({ prefs, region, compact = false }: LayerTo
       {region.hasScenicHighlight && (
         <ToggleSwitch
           label="Scenic lines"
-          checked={prefs.showScenicOutline}
-          onChange={() => prefs.toggle("showScenicOutline")}
+          checked={prefs.showScenicLines}
+          onChange={() => prefs.toggle("showScenicLines")}
           compact={compact}
         />
       )}

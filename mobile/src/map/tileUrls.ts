@@ -20,6 +20,7 @@ import {
   publicStationsTileUrl,
   type RailwayRoutesSourceOptions,
   railwayRoutesTileUrl,
+  scenicLinesTileUrl,
 } from "@shared/map/tileSources";
 import { ZOOM_RANGES } from "@shared/map/zoomRanges";
 import { API_ORIGIN, TILE_BASE_URL } from "@/config";
@@ -43,6 +44,11 @@ export function routesTileUrl(options: Omit<RailwayRoutesSourceOptions, "rides">
 /** `near_route` stations only — the same tile the web user map draws. */
 export function stationsTileUrl(): string {
   return publicStationsTileUrl(TILE_BASE_URL);
+}
+
+/** The admin-drawn scenic stretches; filtered by country on the layer, not the URL. */
+export function scenicTileUrl(): string {
+  return scenicLinesTileUrl(TILE_BASE_URL);
 }
 
 /** Published `Usage` notes only. */

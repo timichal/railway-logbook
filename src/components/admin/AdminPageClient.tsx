@@ -7,7 +7,8 @@ import type {
   CreateFormCoordinates,
   EditingGeometry,
 } from "@/components/admin/AdminCreateRouteTab";
-import AdminSidebar from "@/components/admin/AdminSidebar";
+import type { EditingScenicLine } from "@/components/admin/AdminScenicTab";
+import AdminSidebar, { type AdminTab } from "@/components/admin/AdminSidebar";
 import Navbar from "@/components/layout/Navbar";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -81,8 +82,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   // on the map is already on screen). Held here, beside the load, rather than in
   // the list: the mobile drawer holding the list may close before the load ends.
   const focusOnLoadRef = useRef<number | null>(null);
-  // Bumped per coordinate click, so the sidebar can switch to its create tab.
-  const [coordinateClickTrigger, setCoordinateClickTrigger] = useState<number>(0);
+  const [selectedTab, setSelectedTab] = useState<AdminTab>("routes");
   // The create form's two picked points, held here and nowhere else: the map draws
   // them, the sidebar edits them, and the region switch below has to be able to
   // clear them. A second copy in the sidebar used to survive that clear and bring
@@ -106,7 +106,14 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     nonce: number;
   } | null>(null);
   const [notesRefreshTrigger, setNotesRefreshTrigger] = useState<number>(0);
+  // The Scenic tab's state, here rather than in the tab for the same reasons as the
+  // route's: the map reads it, and the mobile drawer unmounts the tab.
+  const [selectedScenicLineId, setSelectedScenicLineId] = useState<number | null>(null);
+  const [editingScenicLine, setEditingScenicLine] = useState<EditingScenicLine | null>(null);
+  const [scenicRefreshTrigger, setScenicRefreshTrigger] = useState(0);
   const regionId = useRegionId();
+  // A route's geometry edit is only ever shown on the create tab
+  const activeTab: AdminTab = editingGeometry ? "create" : selectedTab;
 
   // Switching regions drops everything picked out of the old one: the selected
   // route, a half-finished coordinate pick and its preview all point at track
@@ -117,7 +124,23 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setCreateFormCoordinates(NO_COORDINATES);
     setEditingGeometry(null);
     setFocusGeometry(null);
+    setSelectedScenicLineId(null);
+    setEditingScenicLine(null);
   }, [regionId]);
+
+  // A route selected (on the map, or by a duplicate) opens the routes tab
+  useEffect(() => {
+    if (selectedRouteId) setSelectedTab("routes");
+  }, [selectedRouteId]);
+
+  // Leaving the Scenic tab, however it happens (a tab click, a route selected, a
+  // route's geometry edit), drops its selection and any geometry re-pick: the map
+  // would otherwise keep highlighting a line no list shows.
+  useEffect(() => {
+    if (activeTab === "scenic") return;
+    setSelectedScenicLineId(null);
+    setEditingScenicLine(null);
+  }, [activeTab]);
 
   // However the selection moves on — a failed load, a region switch, a coordinate
   // click — a fly-to still waiting for the old route is dropped with it.
@@ -183,7 +206,8 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       if (!prev.endingCoordinate) return { ...prev, endingCoordinate: coordinate };
       return prev;
     });
-    setCoordinateClickTrigger((prev) => prev + 1);
+    // A click picks for whichever form is open: the scenic one, or else the route one
+    setSelectedTab((tab) => (tab === "scenic" ? tab : "create"));
     // Unselect any selected route when clicking a coordinate
     setSelectedRouteId(null);
   };
@@ -269,13 +293,14 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
 
   const sidebarContent = (
     <AdminSidebar
+      selectedTab={activeTab}
+      onSelectedTabChange={setSelectedTab}
       selectedRouteId={selectedRouteId}
       selectedRoute={selectedRouteDetail}
       selectedRouteLoading={selectedRouteLoading}
       onSelectedRouteChange={setSelectedRouteDetail}
       onReloadSelectedRoute={reloadSelectedRoute}
       onRouteSelect={handleRouteSelect}
-      coordinateClickTrigger={coordinateClickTrigger}
       createFormCoordinates={createFormCoordinates}
       onCreateFormCoordinatesChange={setCreateFormCoordinates}
       editingGeometry={editingGeometry}
@@ -291,6 +316,11 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       onNoteChanged={handleNoteChanged}
       notesRefreshSignal={notesRefreshTrigger}
       showError={showError}
+      editingScenicLine={editingScenicLine}
+      onEditingScenicLineChange={setEditingScenicLine}
+      selectedScenicLineId={selectedScenicLineId}
+      onScenicLineSelect={setSelectedScenicLineId}
+      onScenicLinesChanged={() => setScenicRefreshTrigger((prev) => prev + 1)}
     />
   );
 
@@ -351,6 +381,9 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
             selectedCoordinates={createFormCoordinates}
             refreshTrigger={refreshTrigger}
             isEditingGeometry={!!editingGeometry}
+            scenicMode={activeTab === "scenic"}
+            selectedScenicLineId={selectedScenicLineId}
+            scenicRefreshTrigger={scenicRefreshTrigger}
             focusGeometry={focusGeometry}
             focusCoordinate={focusCoordinate}
             notesRefreshTrigger={notesRefreshTrigger}

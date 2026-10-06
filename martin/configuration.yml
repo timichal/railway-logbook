@@ -53,6 +53,14 @@ postgres:
       maxzoom: 18
       # This function accepts z, x, y parameters
 
+    # Scenic lines (admin-drawn stretches of track, highlight only) — both maps.
+    # The user map filters them by country client-side.
+    scenic_lines_tile:
+      schema: public
+      function: scenic_lines_tile
+      minzoom: 4
+      maxzoom: 18
+
     # No admin_notes_tile: it carries every note, drafts included, and Martin
     # answers anyone. The admin map gets it from the Next handler under
     # src/app/api/tiles/admin_notes, which checks for the admin — never add it here.
