@@ -10,17 +10,16 @@ import {
 
 const args = process.argv.slice(2);
 
-if (args.length !== 1) {
-  console.error("Usage: tsx pruneData.ts region");
-  console.error("  region: Region name, used as the output file prefix (e.g., europe, japan)");
+// The .geojson check catches the old call form, which took a region name
+// ("pruneData.ts europe") and would now quietly write a file called "europe".
+if (args.length !== 1 || !args[0].toLowerCase().endsWith(".geojson")) {
+  console.error("Usage: tsx pruneData.ts <output.geojson>");
   console.error("");
-  console.error(
-    "Reads GeoJSON from stdin and writes pruned output to data/{region}-pruned.geojson",
-  );
+  console.error("Reads GeoJSON from stdin and writes the pruned output to the given path");
   process.exit(1);
 }
 
-const region = args[0];
+const outputFilePath = args[0];
 
 /**
  * Transliterates station names from Cyrillic and Greek to Latin characters.
@@ -409,15 +408,14 @@ async function writeFeatures(writeStream: ReturnType<typeof createWriteStream>) 
 
 // Main execution
 async function main() {
-  const outputFilePath = `data/${region}-pruned.geojson`;
   const partFilePath = `${outputFilePath}.part`;
 
-  console.log(`Processing ${region} from stdin...`);
+  console.log("Processing stdin...");
 
   // Written under .part and renamed only on success. A short file left at the
   // real name would be taken for finished work: remote-deploy.sh reuses a
-  // pruned file left by a failed deploy rather than preparing that region again
-  // - so a failure here would quietly ship truncated data.
+  // pruned file left by a failed deploy rather than preparing it again - so a
+  // failure here would quietly ship truncated data.
   try {
     await processStdin(partFilePath);
   } catch (error) {

@@ -18,10 +18,9 @@ async function loadGeoJSONData(): Promise<void> {
   let pool: ReturnType<typeof createRecalcPool> | undefined;
 
   try {
-    // Parse CLI args: every non-flag positional is a data file path. One file
-    // per region (see src/lib/shared/regions.ts) - they load into the same tables, and
-    // the tables are cleared once before the first file, so all regions must be
-    // passed to a single run.
+    // Parse CLI args: every non-flag positional is a data file path. prepare.sh
+    // writes one file holding every region; several load into the same tables,
+    // cleared once before the first file.
     const args = process.argv.slice(2);
     const validOnly = args.includes("--valid-only");
     const concurrency = parseConcurrencyArg(args);
@@ -31,9 +30,7 @@ async function loadGeoJSONData(): Promise<void> {
       console.error(
         "Usage: npm run importMapData <filepath> [<filepath> ...] [--valid-only] [--concurrency=N]",
       );
-      console.error(
-        "Example: npm run importMapData ./data/europe-pruned.geojson ./data/japan-pruned.geojson",
-      );
+      console.error("Example: npm run importMapData ./data/pruned.geojson");
     };
 
     if (dataPaths.length === 0) {

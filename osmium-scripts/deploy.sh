@@ -10,7 +10,7 @@
 #   --concurrency=N    how many routes the import recalculates at once
 #                      (see RECALC_PERFORMANCE.md)
 #   --fresh            discard what an earlier failed run left on the server
-#                      (pruned regions, finished extracts) instead of reusing it
+#                      (the pruned map, finished extracts) instead of reusing it
 #   --follow           start nothing; reattach to the run in progress, or
 #                      report on the last one
 # Example: npm run deployMapData -- --valid-only
@@ -164,17 +164,17 @@ case "${STATE}" in
     ;;
   143)
     echo "The deploy was stopped."
-    echo "Rerun to continue; regions already prepared are reused."
+    echo "Rerun to continue; finished extracts, and a map already prepared, are reused."
     exit 1
     ;;
   killed)
     echo "ERROR: the deploy died without finishing (killed - out of memory?)."
-    echo "Rerun to retry; regions already prepared are reused."
+    echo "Rerun to retry; finished extracts, and a map already prepared, are reused."
     exit 1
     ;;
   *)
     echo "ERROR: the deploy failed (exit status ${STATE}) - see the log above."
-    echo "Rerun to retry; regions already prepared are reused (--fresh to start over)."
+    echo "Rerun to retry; finished extracts, and a map already prepared, are reused (--fresh to start over)."
     exit 1
     ;;
 esac

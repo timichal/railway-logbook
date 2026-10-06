@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# The server half of deploy.sh: prepare every region's map data here, import
-# it, and record which data went in. deploy.sh drives it through four modes:
+# The server half of deploy.sh: prepare the map data here, import it, and
+# record which data went in. deploy.sh drives it through four modes:
 #
 #   --start [flags]  start a deploy, then follow it (as --follow)
 #   --follow         print the log of the deploy in progress as it grows, or
@@ -16,7 +16,7 @@
 # the hangup is the one reading of "Ctrl+C stops it" that does not depend on
 # how the local console delivers the key; the price is that a dropped
 # connection stops the deploy too, and a rerun resumes from what it finished
-# (filtered extracts, downloads, pruned regions).
+# (filtered extracts, downloads, the pruned map).
 #
 # The job itself runs in a session of its own (setsid), so the stop is always
 # this script's decision rather than a side effect of the hangup, and the job's
@@ -26,11 +26,10 @@
 # Flags: --valid-only and --concurrency=N go to importMapData. --fresh throws
 # away whatever an earlier failed run left behind and starts from scratch.
 #
-# A region whose pruned file was prepared after the last successful deploy is
-# reused rather than rebuilt: it was produced by a run that failed later (at
-# another region, or at the import), and preparing Europe again is half an
-# hour of downloads. A successful deploy leaves every pruned file older than
-# its record, so the next deploy prepares everything anew.
+# A pruned file prepared after the last successful deploy is reused rather
+# than rebuilt: it was produced by a run that failed later, at the import, and
+# preparing it again is half an hour of downloads. A successful deploy leaves
+# the pruned file older than its record, so the next deploy prepares anew.
 
 set -e
 
@@ -195,35 +194,25 @@ if ! command -v npm > /dev/null; then
   exit 1
 fi
 
-REGIONS="$(sh osmium-scripts/prepare.sh --list-regions)"
+PRUNED="${DATA_DIR}/pruned.geojson"
+SOURCES="${DATA_DIR}/pruned.sources"
 
 if [ -n "${FRESH}" ]; then
-  echo "--fresh: discarding pruned files and intermediates left by earlier runs"
-  for REGION in ${REGIONS}; do
-    rm -rf "${DATA_DIR}/${REGION}-extracts"
-    rm -f "${DATA_DIR}/${REGION}".tmp.* "${DATA_DIR}/${REGION}-pruned.geojson" "${DATA_DIR}/${REGION}-pruned.sources"*
-  done
+  echo "--fresh: discarding the pruned file and intermediates left by earlier runs"
+  rm -rf "${DATA_DIR}/extracts"
+  rm -f "${DATA_DIR}"/rail.tmp.* "${PRUNED}" "${SOURCES}"*
 fi
 
 # Reused only if it is also built from exactly the extracts listed now: a
 # country added to extracts.txt after the failed run would otherwise be left out
 # of the data without a word.
-TO_PREPARE=""
-for REGION in ${REGIONS}; do
-  PRUNED="${DATA_DIR}/${REGION}-pruned.geojson"
-  SOURCES="${DATA_DIR}/${REGION}-pruned.sources"
-  if [ -f "${PRUNED}" ] && [ -f "${SOURCES}" ] &&
-    { [ ! -f "${RECORD_FILE}" ] || [ "${PRUNED}" -nt "${RECORD_FILE}" ]; } &&
-    [ "$(cut -d: -f1 "${SOURCES}")" = "$(sh osmium-scripts/prepare.sh --list-extracts "${REGION}")" ]; then
-    echo "Reusing ${PRUNED}, prepared $(date -u -r "${PRUNED}" '+%Y-%m-%d %H:%M UTC') and not deployed yet (--fresh rebuilds it)"
-  else
-    TO_PREPARE="${TO_PREPARE} ${REGION}"
-  fi
-done
-
-if [ -n "${TO_PREPARE}" ]; then
+if [ -f "${PRUNED}" ] && [ -f "${SOURCES}" ] &&
+  { [ ! -f "${RECORD_FILE}" ] || [ "${PRUNED}" -nt "${RECORD_FILE}" ]; } &&
+  [ "$(cut -d: -f1 "${SOURCES}")" = "$(sh osmium-scripts/prepare.sh --list-extracts)" ]; then
+  echo "Reusing ${PRUNED}, prepared $(date -u -r "${PRUNED}" '+%Y-%m-%d %H:%M UTC') and not deployed yet (--fresh rebuilds it)"
+else
   # The largest single extract (France) is ~5GB, the merged and converted
-  # intermediates of a region a few more. Failing here beats failing an hour in.
+  # intermediates a few more. Failing here beats failing an hour in.
   AVAILABLE_GB=$(($(df -Pk "${DATA_DIR}" | awk 'NR == 2 { print $4 }') / 1024 / 1024))
   if [ "${AVAILABLE_GB}" -lt 10 ]; then
     echo "ERROR: only ${AVAILABLE_GB}GB free on the data disk, 10GB needed"
@@ -231,17 +220,11 @@ if [ -n "${TO_PREPARE}" ]; then
   fi
 
   echo ""
-  npm run prepareMapData -- ${TO_PREPARE}
+  npm run prepareMapData
 fi
 
-PRUNED_FILES=""
-for REGION in ${REGIONS}; do
-  PRUNED_FILES="${PRUNED_FILES} ${DATA_DIR}/${REGION}-pruned.geojson"
-done
-
 echo ""
-# One import for every region: the tables are cleared once, before the first file.
-npm run importMapData -- ${PRUNED_FILES} ${IMPORT_FLAGS}
+npm run importMapData -- "${PRUNED}" ${IMPORT_FLAGS}
 
 # Recorded only now that the data is in the database. deploy.sh copies this
 # into the repository as osmium-scripts/deployed-extracts.txt.
@@ -249,16 +232,10 @@ npm run importMapData -- ${PRUNED_FILES} ${IMPORT_FLAGS}
   echo "# The OSM data on the server: the date each Geofabrik extract was cut."
   echo "# Written by deploy.sh after a successful map data deploy."
   echo "# Deployed $(date -u '+%Y-%m-%d %H:%M UTC')"
-  for REGION in ${REGIONS}; do
-    echo ""
-    echo "# ${REGION}"
-    cat "${DATA_DIR}/${REGION}-pruned.sources"
-  done
+  echo ""
+  cat "${SOURCES}"
 } > "${RECORD_FILE}.part"
 mv "${RECORD_FILE}.part" "${RECORD_FILE}"
-
-# Pruned files from before extracts were tracked carried the date in their name.
-rm -f "${DATA_DIR}"/*-pruned-[0-9]*.geojson "${DATA_DIR}"/*-pruned-[0-9]*.geojson.gz
 
 echo ""
 echo "=== Map data deploy finished $(date -u '+%Y-%m-%d %H:%M UTC') ==="

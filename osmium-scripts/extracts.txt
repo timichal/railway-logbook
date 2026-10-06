@@ -1,12 +1,18 @@
-# The Geofabrik extracts each region is built from: one per line, the region,
-# then the extract's path on download.geofabrik.de without the -latest.osm.pbf.
+# The Geofabrik extracts the map is built from: one per line, the extract's
+# path on download.geofabrik.de without the -latest.osm.pbf.
 #
-# Europe is assembled from country extracts rather than downloaded whole: the
-# continent is 32GB+ and the server has less disk than that, while the largest
-# country is under 5GB. Each country is downloaded, filtered down to railways
-# and deleted before the next one comes in; prepare.sh then merges the filtered
-# files. Neighbouring extracts overlap at the border, and the merge keeps one
-# copy of every object - the newest, if the two extracts are a day apart.
+# Every extract is downloaded, filtered down to railways and deleted before the
+# next one comes in; prepare.sh then merges the filtered files into one map.
+# That is why Europe is listed country by country rather than downloaded whole:
+# the continent is 32GB+ and the server has less disk than that, while the
+# largest country is under 5GB. Neighbouring extracts overlap at the border, and
+# the merge keeps one copy of every object - the newest, if the two extracts
+# are a day apart.
+#
+# Nothing here says which region an extract belongs to, because nothing needs
+# to: a region is a bounding box (src/lib/shared/regions.ts), applied when the
+# data is read, and the regions are far enough apart that merging them changes
+# nothing.
 #
 # Europe's list is every region Geofabrik's Europe page lists
 # (download.geofabrik.de/europe.html), so the data is the same as the whole
@@ -26,61 +32,63 @@
 # - The page's "special sub regions" (Alps, DACH, Britain and Ireland, Great
 #   Britain) are left out: each is only a combination of countries listed here.
 #
-# Adding a region: add its line (the path of its -latest.osm.pbf on Geofabrik,
-# without the suffix), commit, push, deploy.
+# Adding an extract: add its line (the path of its -latest.osm.pbf on
+# Geofabrik, without the suffix), commit, push, deploy.
 
-europe europe/albania
-europe europe/andorra
-europe europe/austria
-europe europe/belarus
-europe europe/belgium
-europe europe/bosnia-herzegovina
-europe europe/bulgaria
-europe europe/croatia
-europe europe/cyprus
-europe europe/czech-republic
-europe europe/denmark
-europe europe/estonia
-europe europe/faroe-islands
-europe europe/finland
-europe europe/france
-europe europe/georgia
-europe europe/germany
-europe europe/greece
-europe europe/guernsey-jersey
-europe europe/hungary
-europe europe/ireland-and-northern-ireland
-europe europe/isle-of-man
-europe europe/italy
-europe europe/kosovo
-europe europe/latvia
-europe europe/liechtenstein
-europe europe/lithuania
-europe europe/luxembourg
-europe europe/macedonia
-europe europe/malta
-europe europe/moldova
-europe europe/monaco
-europe europe/montenegro
-europe europe/netherlands
-europe europe/norway
-europe europe/poland
-europe europe/portugal
-europe europe/romania
-europe europe/serbia
-europe europe/slovakia
-europe europe/slovenia
-europe europe/spain
-europe europe/sweden
-europe europe/switzerland
-europe europe/turkey
-europe europe/ukraine
-europe europe/united-kingdom
-europe russia/kaliningrad
-europe russia/northwestern-fed-district
-europe russia/central-fed-district
-europe russia/south-fed-district
-europe russia/north-caucasus-fed-district
-europe russia/volga-fed-district
+# Europe
+europe/albania
+europe/andorra
+europe/austria
+europe/belarus
+europe/belgium
+europe/bosnia-herzegovina
+europe/bulgaria
+europe/croatia
+europe/cyprus
+europe/czech-republic
+europe/denmark
+europe/estonia
+europe/faroe-islands
+europe/finland
+europe/france
+europe/georgia
+europe/germany
+europe/greece
+europe/guernsey-jersey
+europe/hungary
+europe/ireland-and-northern-ireland
+europe/isle-of-man
+europe/italy
+europe/kosovo
+europe/latvia
+europe/liechtenstein
+europe/lithuania
+europe/luxembourg
+europe/macedonia
+europe/malta
+europe/moldova
+europe/monaco
+europe/montenegro
+europe/netherlands
+europe/norway
+europe/poland
+europe/portugal
+europe/romania
+europe/serbia
+europe/slovakia
+europe/slovenia
+europe/spain
+europe/sweden
+europe/switzerland
+europe/turkey
+europe/ukraine
+europe/united-kingdom
+russia/kaliningrad
+russia/northwestern-fed-district
+russia/central-fed-district
+russia/south-fed-district
+russia/north-caucasus-fed-district
+russia/volga-fed-district
 
-japan asia/japan
+# Japan
+asia/japan
