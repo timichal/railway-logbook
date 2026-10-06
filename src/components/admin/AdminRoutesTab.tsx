@@ -225,11 +225,10 @@ export default function AdminRoutesTab({
     onTagsChanged?.();
     showSuccess("Route updated successfully!");
 
-    // Re-read the route rather than merging the form into it: the save also marks
-    // it valid and clears its error and under-repair flag, and a merge would leave
-    // the Invalid Route banner (and its toggle, which the server now refuses) on
-    // screen. One after the other, so the list reload's own `setIsLoading(false)`
-    // is the last thing to run and the form stays disabled until both are in.
+    // Re-read the route rather than merging the form into it, so the detail shows
+    // what the server stored. One after the other, so the list reload's own
+    // `setIsLoading(false)` is the last thing to run and the form stays disabled
+    // until both are in.
     try {
       // Null when another route was selected meanwhile, which has a detail of its own
       const routeDetail = await onReloadSelectedRoute();

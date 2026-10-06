@@ -585,8 +585,8 @@ export async function saveRailwayRoute(
 
 /**
  * Update route metadata (line name, endpoints, description, usage_type, etc.)
- * Also marks route as valid since admin is manually validating — which clears
- * `under_repair` too: the flag only ever qualifies an invalid route.
+ * Validity is left alone: a route is invalid because its geometry is, and only a
+ * geometry re-pick or a successful recalculation can say otherwise.
  */
 export async function updateRailwayRoute(
   trackId: number,
@@ -606,8 +606,7 @@ export async function updateRailwayRoute(
       `
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
-        link = $8, line_class = $9, intended_backtracking = $10, is_valid = TRUE,
-        error_message = NULL, under_repair = FALSE
+        link = $8, line_class = $9, intended_backtracking = $10
     WHERE track_id = $1
   `,
       [
@@ -641,8 +640,8 @@ export async function updateRailwayRoute(
  * on the admin map, while still counting as invalid everywhere else.
  *
  * It qualifies invalidity, so it is never set on a valid route and is cleared
- * the moment a route becomes valid again — on geometry re-pick, metadata save
- * and successful recalculation alike.
+ * the moment a route becomes valid again — on geometry re-pick and successful
+ * recalculation alike.
  */
 export async function setRouteUnderRepair(
   trackId: number,
