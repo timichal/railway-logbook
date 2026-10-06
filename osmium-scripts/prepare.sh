@@ -6,10 +6,11 @@
 # The map is built from the Geofabrik extracts listed in
 # osmium-scripts/extracts.txt - Europe one per country, Japan as one - into a
 # single file, data/pruned.geojson, which importMapData loads. Every extract is
-# downloaded, filtered down to railways and deleted before the next arrives, so
-# the disk never holds more than one raw extract; the filtered files are then
-# merged and pruned. The regions (src/lib/shared/regions.ts) are bounding boxes
-# applied when the data is read, so nothing here needs to know about them.
+# downloaded, filtered down to railways and deleted, the next one downloading
+# while the previous is filtered, so the disk never holds more than two raw
+# extracts; the filtered files are then merged and pruned. The regions
+# (src/lib/shared/regions.ts) are bounding boxes applied when the data is
+# read, so nothing here needs to know about them.
 #
 # Usage: prepare.sh [extract ...]
 #   With no arguments, every extract listed. Otherwise only the extracts named
@@ -60,10 +61,12 @@ if [ ! -f "${EXTRACTS_FILE}" ]; then
     exit 1
 fi
 
-# The extract paths listed in extracts.txt, comments and blanks dropped. The
-# \r is stripped because a Windows checkout may carry CRLF line endings.
+# The extract paths listed in extracts.txt, comments and blanks dropped, and
+# each once: a line listed twice would otherwise be filtered twice, the second
+# time from a download the first had already deleted. The \r is stripped
+# because a Windows checkout may carry CRLF line endings.
 all_extracts() {
-    awk '{ sub(/\r$/, "") } /^[ \t]*#/ || NF < 1 { next } { print $1 }' "${EXTRACTS_FILE}"
+    awk '{ sub(/\r$/, "") } /^[ \t]*#/ || NF < 1 { next } !seen[$1]++ { print $1 }' "${EXTRACTS_FILE}"
 }
 
 # The listed extracts one argument selects: the path itself, or every path
@@ -126,51 +129,137 @@ mkdir -p "${WORK_DIR}"
 # 1. Download and filter each extract. Each lives under its Geofabrik path
 # (data/extracts/europe/georgia.rail.pbf), since a bare name is not unique -
 # Geofabrik also has a north-america/us/georgia.
-FILTERED_NOW=""
-N=0
-for EXTRACT in ${EXTRACTS}; do
-    N=$((N + 1))
-    EXTRACT_DIR="${WORK_DIR}/$(dirname "${EXTRACT}")"
-    NAME="$(basename "${EXTRACT}")"
-    RAIL_FILE="${WORK_DIR}/${EXTRACT}.rail.pbf"
-    mkdir -p "${EXTRACT_DIR}"
+#
+# The two stages overlap: while one extract is being filtered, the next one
+# downloads in the background, so osmium usually has something waiting and the
+# run takes about as long as the downloads alone. That puts two raw extracts on
+# the disk at once - the one being filtered and the one coming in - so the next
+# download starts early only when the disk has room for the rest of it beside
+# what is there; otherwise it waits for the filter, as a run without the
+# overlap would. Either way it never starts before the previous download has
+# finished, or a slow filter would let the downloads run ahead and pile up.
 
-    if [ -f "${RAIL_FILE}" ]; then
-        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: already filtered, data from $(extract_date "${RAIL_FILE}")"
-        continue
+# Headroom left beside a download started early, for the filter's own output.
+DISK_MARGIN_MB=1024
+
+# The download in hand: where it is on the list, its extract, file and URL,
+# its size in MB (empty when the server did not say), and curl's pid while it
+# runs. Each function below keeps to its own prefix (DL_, W_, F_), since sh
+# has no locals and the caller still needs the previous extract's values.
+DL_N=""
+DL_EXTRACT=""
+DL_FILE=""
+DL_URL=""
+DL_TOTAL_MB=""
+DL_PID=""
+
+# A background curl ignores SIGINT (POSIX hands an asynchronous command of a
+# non-interactive shell SIGINT ignored), so Ctrl+C, or any failure that ends
+# the script, would leave it running on. It is stopped here instead, which
+# leaves its partial file for the next run to resume.
+stop_download() {
+    if [ -n "${DL_PID}" ]; then
+        kill "${DL_PID}" 2>/dev/null || true
+        DL_PID=""
     fi
+}
+trap stop_download EXIT
+trap 'exit 130' INT
+trap 'exit 129' HUP
+trap 'exit 143' TERM
 
-    # -latest answers with a redirect to the dated file. Where it serves the
-    # file directly instead (it sometimes does, mid-publish) there is no
-    # dated name to pin, and the download starts over rather than resuming.
-    LATEST_URL="${GEOFABRIK}/${EXTRACT}-latest.osm.pbf"
-    URL="$(curl -sfI -o /dev/null -w '%{redirect_url}' "${LATEST_URL}")" || {
-        echo "ERROR: ${LATEST_URL} is not available - is '${EXTRACT}' spelled as on Geofabrik?"
-        exit 1
+# Find where an extract ("N:path", N its place on the list) downloads from,
+# and how big it is. Returns non-zero, having said why, when Geofabrik does
+# not answer. Run in this shell, not in $(...), since it sets the DL_ globals.
+resolve_download() {
+    DL_N="${1%%:*}"
+    DL_EXTRACT="${1#*:}"
+    DL_DIR="${WORK_DIR}/$(dirname "${DL_EXTRACT}")"
+    DL_NAME="$(basename "${DL_EXTRACT}")"
+    mkdir -p "${DL_DIR}"
+
+    # -latest answers with a redirect to the dated file, which -L follows, so
+    # one call gives both the dated URL and its size. Where -latest serves the
+    # file directly instead (it sometimes does, mid-publish) there is no dated
+    # name to pin, and the download starts over rather than resuming. The
+    # size is parsed from the headers because %header{} needs curl 7.84; the
+    # last Content-Length is the file's, the redirect's own coming first.
+    DL_LATEST_URL="${GEOFABRIK}/${DL_EXTRACT}-latest.osm.pbf"
+    DL_HEADERS="$(curl -sfIL -w 'url=%{url_effective}\n' "${DL_LATEST_URL}")" || {
+        echo "ERROR: ${DL_LATEST_URL} is not available - is '${DL_EXTRACT}' spelled as on Geofabrik?"
+        return 1
     }
-    DOWNLOAD_FILE="${EXTRACT_DIR}/$(basename "${URL:-${LATEST_URL}}")"
+    DL_URL="$(echo "${DL_HEADERS}" | tr -d '\r' | awk '/^url=/ { print substr($0, 5) }')"
+    DL_TOTAL_MB="$(echo "${DL_HEADERS}" | tr -d '\r' |
+        awk 'tolower($1) == "content-length:" { mb = int($2 / 1048576) } END { print mb }')"
+    DL_FILE="${DL_DIR}/$(basename "${DL_URL}")"
     # A partial download of an older dated file can never be completed now.
-    for STALE in "${EXTRACT_DIR}/${NAME}"-[0-9]*.osm.pbf "${EXTRACT_DIR}/${NAME}-latest.osm.pbf"; do
-        if [ "${STALE}" != "${DOWNLOAD_FILE}" ] || [ -z "${URL}" ]; then
-            rm -f "${STALE}"
+    for DL_STALE in "${DL_DIR}/${DL_NAME}"-[0-9]*.osm.pbf "${DL_DIR}/${DL_NAME}-latest.osm.pbf"; do
+        if [ "${DL_STALE}" != "${DL_FILE}" ] || [ "${DL_URL}" = "${DL_LATEST_URL}" ]; then
+            rm -f "${DL_STALE}"
         fi
     done
+}
 
-    echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: downloading $(basename "${DOWNLOAD_FILE}")..."
+# Whether the disk has room for the rest of the resolved download, plus the
+# margin, beside what is on it now. An unknown size is taken as no room.
+room_for_download() {
+    DL_FREE_MB=$(($(df -Pk "${WORK_DIR}" | awk 'NR == 2 { print $4 }') / 1024))
+    DL_NEED_MB="?"
+    [ -n "${DL_TOTAL_MB}" ] || return 1
+    DL_HAVE_MB=0
+    if [ -f "${DL_FILE}" ]; then
+        DL_HAVE_MB=$(($(wc -c < "${DL_FILE}") / 1048576))
+    fi
+    DL_NEED_MB=$((DL_TOTAL_MB - DL_HAVE_MB + DISK_MARGIN_MB))
+    [ "${DL_NEED_MB}" -le "${DL_FREE_MB}" ]
+}
+
+# Start the resolved download in the background.
+start_download() {
+    echo "[1/4] (${DL_N}/${COUNT}) ${DL_EXTRACT}: downloading $(basename "${DL_FILE}")${DL_TOTAL_MB:+ (${DL_TOTAL_MB} MB)}..."
     # --fail keeps an HTTP error page from being written out as a .osm.pbf
     # (osmium would then fail on an "invalid BlobHeader size" that says
     # nothing about the download) and out of the file a resume appends to.
-    # The progress meter is left on (no -s) so a stalled download shows as
-    # a falling "Current Speed": it goes to stderr whether or not that is a
-    # terminal, so it reaches deploy.log, and its frames are \r-separated,
-    # so the deploy's pty redraws one line in place. After a resume its
-    # totals count only the part still to fetch.
-    curl --fail -S -C - -o "${DOWNLOAD_FILE}" "${URL:-${LATEST_URL}}" || {
-        echo "ERROR: Failed to download $(basename "${DOWNLOAD_FILE}")"
+    # Silent but for errors (-sS): the progress meter would be drawn over
+    # osmium's while the two run side by side. wait_download draws one
+    # instead, for the time the filter is actually kept waiting.
+    curl --fail -sS -C - -o "${DL_FILE}" "${DL_URL}" &
+    DL_PID=$!
+}
+
+# Wait for the download in flight to finish. While it runs, the size of the
+# file so far is redrawn on one line, so a stalled download shows as a number
+# that stops moving: \r-separated, so the deploy's pty redraws it in place.
+# kill -0 stops answering once curl has exited, the shell reaping it while it
+# waits on the sleep.
+wait_download() {
+    W_WAITED=""
+    while kill -0 "${DL_PID}" 2>/dev/null; do
+        if [ -f "${DL_FILE}" ]; then
+            printf '\r  %s: %d%s MB downloaded ' "${DL_EXTRACT}" \
+                "$(($(wc -c < "${DL_FILE}") / 1048576))" "${DL_TOTAL_MB:+ of ${DL_TOTAL_MB}}"
+            W_WAITED=1
+        fi
+        sleep 5
+    done
+    [ -z "${W_WAITED}" ] || echo ""
+    wait "${DL_PID}" || {
+        DL_PID=""
+        echo "ERROR: Failed to download $(basename "${DL_FILE}")"
         exit 1
     }
+    DL_PID=""
+}
 
-    echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: filtering rail features..."
+# Filter a downloaded extract down to railways and delete the download.
+filter_extract() {
+    F_N="$1"
+    F_EXTRACT="$2"
+    F_DOWNLOAD="$3"
+    F_RAIL_FILE="${WORK_DIR}/${F_EXTRACT}.rail.pbf"
+
+    echo "[1/4] (${F_N}/${COUNT}) ${F_EXTRACT}: filtering rail features..."
     # Stations are matched on nodes AND ways (nw/): plenty of them - most of
     # France, from the SNCF/cadastre import - carry railway=station on the
     # station building instead of a node. osmium export turns those closed ways
@@ -179,18 +268,61 @@ for EXTRACT in ${EXTRACTS}; do
     osmium tags-filter \
         --overwrite \
         -f pbf \
-        -o "${RAIL_FILE}.part" \
-        "${DOWNLOAD_FILE}" \
+        -o "${F_RAIL_FILE}.part" \
+        "${F_DOWNLOAD}" \
         w/railway=rail,narrow_gauge,light_rail,monorail \
         nw/railway=station,halt || {
-            echo "ERROR: Failed to filter ${EXTRACT}"
-            rm -f "${RAIL_FILE}.part"
+            echo "ERROR: Failed to filter ${F_EXTRACT}"
+            rm -f "${F_RAIL_FILE}.part"
             exit 1
         }
-    mv "${RAIL_FILE}.part" "${RAIL_FILE}"
-    rm -f "${DOWNLOAD_FILE}"
+    mv "${F_RAIL_FILE}.part" "${F_RAIL_FILE}"
+    rm -f "${F_DOWNLOAD}"
     FILTERED_NOW=1
-    echo "✓ ${EXTRACT}: data from $(extract_date "${RAIL_FILE}")"
+    echo "✓ ${F_EXTRACT}: data from $(extract_date "${F_RAIL_FILE}")"
+}
+
+# The extracts still to filter, as "N:path", in the positional parameters
+# (the selection arguments having been read above).
+set --
+N=0
+for EXTRACT in ${EXTRACTS}; do
+    N=$((N + 1))
+    RAIL_FILE="${WORK_DIR}/${EXTRACT}.rail.pbf"
+    if [ -f "${RAIL_FILE}" ]; then
+        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: already filtered, data from $(extract_date "${RAIL_FILE}")"
+    else
+        set -- "$@" "${N}:${EXTRACT}"
+    fi
+done
+
+# The head of the list is always the extract downloading: each pass waits for
+# it, starts the next one where there is room, and filters it.
+FILTERED_NOW=""
+if [ $# -gt 0 ]; then
+    resolve_download "$1" || exit 1
+    start_download
+fi
+while [ $# -gt 0 ]; do
+    wait_download
+    READY_N="${DL_N}"
+    READY_EXTRACT="${DL_EXTRACT}"
+    READY_FILE="${DL_FILE}"
+    shift
+    if [ $# -eq 0 ]; then
+        filter_extract "${READY_N}" "${READY_EXTRACT}" "${READY_FILE}"
+    elif ! resolve_download "$1"; then
+        # The next extract's failure must not cost this one its download.
+        filter_extract "${READY_N}" "${READY_EXTRACT}" "${READY_FILE}"
+        exit 1
+    elif room_for_download; then
+        start_download
+        filter_extract "${READY_N}" "${READY_EXTRACT}" "${READY_FILE}"
+    else
+        echo "[1/4] (${DL_N}/${COUNT}) ${DL_EXTRACT}: no room to download ahead (${DL_NEED_MB} MB needed, ${DL_FREE_MB} MB free), waiting for the filter"
+        filter_extract "${READY_N}" "${READY_EXTRACT}" "${READY_FILE}"
+        start_download
+    fi
 done
 echo ""
 

@@ -212,7 +212,10 @@ if [ -f "${PRUNED}" ] && [ -f "${SOURCES}" ] &&
   echo "Reusing ${PRUNED}, prepared $(date -u -r "${PRUNED}" '+%Y-%m-%d %H:%M UTC') and not deployed yet (--fresh rebuilds it)"
 else
   # The largest single extract (France) is ~5GB, the merged and converted
-  # intermediates a few more. Failing here beats failing an hour in.
+  # intermediates a few more. prepare.sh downloads the next extract during the
+  # current one's filter only where the disk has room for both, so this is
+  # enough either way; more only lets it overlap more often. Failing here
+  # beats failing an hour in.
   AVAILABLE_GB=$(($(df -Pk "${DATA_DIR}" | awk 'NR == 2 { print $4 }') / 1024 / 1024))
   if [ "${AVAILABLE_GB}" -lt 10 ]; then
     echo "ERROR: only ${AVAILABLE_GB}GB free on the data disk, 10GB needed"

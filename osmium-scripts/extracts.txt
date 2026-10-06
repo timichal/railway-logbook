@@ -1,11 +1,11 @@
 # The Geofabrik extracts the map is built from: one per line, the extract's
 # path on download.geofabrik.de without the -latest.osm.pbf.
 #
-# Every extract is downloaded, filtered down to railways and deleted before the
-# next one comes in; prepare.sh then merges the filtered files into one map.
-# That is why Europe is listed country by country rather than downloaded whole:
-# the continent is 32GB+ and the server has less disk than that, while the
-# largest country is under 5GB. Neighbouring extracts overlap at the border, and
+# Every extract is downloaded, filtered down to railways and deleted, the next
+# one downloading while the previous is filtered; prepare.sh then merges the
+# filtered files into one map. That is why Europe is listed country by country
+# rather than downloaded whole: the continent is 32GB+ and the server has less
+# disk than that, while the largest country is under 5GB. Neighbouring extracts overlap at the border, and
 # the merge keeps one copy of every object - the newest, if the two extracts
 # are a day apart.
 #
