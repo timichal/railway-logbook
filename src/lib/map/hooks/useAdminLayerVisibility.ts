@@ -1,5 +1,5 @@
 import type * as maplibregl from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface UseAdminLayerVisibilityOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
@@ -33,23 +33,27 @@ export function useAdminLayerVisibility({
   hideRoutes,
 }: UseAdminLayerVisibilityOptions): LayerVisibilityState {
   const [showPartsLayer, setShowPartsLayer] = useState(true);
-  const [showRoutesLayer, setShowRoutesLayer] = useState(true);
+  const [showRoutesLayer, setShowRoutesLayer] = useState(!hideRoutes);
   const [showStationsLayer, setShowStationsLayer] = useState(true);
   const [showNotesLayer, setShowNotesLayer] = useState(true);
   const [showEndpointsLayer, setShowEndpointsLayer] = useState(true);
   const [showScenicLayer, setShowScenicLayer] = useState(true);
-  const previousShowRoutesLayerRef = useRef(true);
+  const [routesHidden, setRoutesHidden] = useState(!!hideRoutes);
+  const [showRoutesBeforeHide, setShowRoutesBeforeHide] = useState(true);
 
-  // Sync Railway Routes checkbox with the forced-hidden modes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: showRoutesLayer is intentionally omitted — we snapshot its current value only at the moment the mode toggles; adding it as a trigger would re-run on every checkbox change.
-  useEffect(() => {
+  // Entering a forced-hidden mode unticks Railway Routes, and leaving it puts back
+  // what was ticked before. Only the default: re-ticking it mid-mode shows the routes.
+  // Adjusted during render rather than in an effect, so the layer is never applied
+  // with the stale value for a frame.
+  if (!!hideRoutes !== routesHidden) {
+    setRoutesHidden(!!hideRoutes);
     if (hideRoutes) {
-      previousShowRoutesLayerRef.current = showRoutesLayer;
+      setShowRoutesBeforeHide(showRoutesLayer);
       setShowRoutesLayer(false);
     } else {
-      setShowRoutesLayer(previousShowRoutesLayerRef.current);
+      setShowRoutesLayer(showRoutesBeforeHide);
     }
-  }, [hideRoutes]);
+  }
 
   // Apply visibility to all layers
   useEffect(() => {
@@ -63,11 +67,12 @@ export function useAdminLayerVisibility({
 
     setVisibility("railway_parts", showPartsLayer);
 
-    const routesVisible = hideRoutes ? false : showRoutesLayer;
-    setVisibility("railway_routes", routesVisible);
-    setVisibility("railway_routes_heritage", routesVisible);
-    setVisibility("railway_routes_special", routesVisible);
-    setVisibility("railway_routes_click", routesVisible);
+    setVisibility("railway_routes", showRoutesLayer);
+    setVisibility("railway_routes_heritage", showRoutesLayer);
+    setVisibility("railway_routes_special", showRoutesLayer);
+    // Routes re-shown mid-mode are for reference: the wide hit area stays off, so it
+    // neither swallows the clicks on the parts being picked nor selects a route.
+    setVisibility("railway_routes_click", showRoutesLayer && !hideRoutes);
 
     setVisibility("stations", showStationsLayer);
     setVisibility("station_labels", showStationsLayer);
