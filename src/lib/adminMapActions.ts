@@ -3,22 +3,36 @@
 import { RailwayPathFinder } from "../scripts/lib/railwayPathFinder";
 import type { ActionResult } from "./actionResult";
 import { asAdmin } from "./authHelpers";
+import { coordinatesToWKT } from "./coordinateUtils";
 import pool from "./db";
+import { lineLengthKmSql } from "./lineLength";
 import { searchStationsByName } from "./routeQueries";
 import type { RegionId } from "./shared/regions";
 import type { PathResult, Station } from "./shared/types";
 
 /**
- * Find a path between two coordinates using BFS pathfinding
- * This is the new coordinate-based pathfinding method
+ * Find a path between two coordinates using BFS pathfinding — the admin's route
+ * and scenic line preview.
+ *
+ * `lengthKm` is measured by PostGIS with the expression a save stores
+ * (`lineLengthKmSql`), so the preview shows the length the route will have.
+ * A path of fewer than two points is no line to measure — PostGIS would throw
+ * and take the preview down with it — so it comes back with no length.
  */
 export async function findRailwayPathFromCoordinates(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
-): Promise<ActionResult<PathResult | null>> {
+): Promise<ActionResult<(PathResult & { lengthKm: number | null }) | null>> {
   return asAdmin(async () => {
     const pathFinder = new RailwayPathFinder();
-    return pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
+    const path = await pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
+    if (!path) return null;
+    if (path.coordinates.length < 2) return { ...path, lengthKm: null };
+    const result = await pool.query<{ length_km: number }>(
+      `SELECT ${lineLengthKmSql("$1")} AS length_km`,
+      [coordinatesToWKT(path.coordinates)],
+    );
+    return { ...path, lengthKm: result.rows[0].length_km };
   });
 }
 

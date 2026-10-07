@@ -35,7 +35,6 @@ import { useAdminLayerVisibility } from "@/lib/map/hooks/useAdminLayerVisibility
 import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
-import { useRouteLength } from "@/lib/map/hooks/useRouteLength";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
@@ -182,7 +181,7 @@ export default function AdminMap({
   const isMobile = useIsMobile();
   const regionId = useRegionId();
 
-  const previewLength = useRouteLength(previewRoute);
+  const previewLength = previewRoute?.lengthKm ?? null;
 
   // Store callbacks in refs to avoid map recreation on changes
   const onCoordinateClickRef = useRef(onCoordinateClick);

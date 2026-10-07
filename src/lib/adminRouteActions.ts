@@ -7,6 +7,7 @@ import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool, { query } from "./db";
 import { ValidationError } from "./errors";
+import { lineLengthKmSql } from "./lineLength";
 import type { LineClass, UsageType } from "./shared/constants";
 import { type RegionId, regionEnvelopeSql } from "./shared/regions";
 import { MAX_TOLERANCE_FRACTION, UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
@@ -423,7 +424,7 @@ export async function saveRailwayRoute(
         UPDATE railway_routes
         SET
           geometry = ST_GeomFromText($1, 4326),
-          length_km = ST_Length(ST_GeomFromText($1, 4326)::geography) / 1000,
+          length_km = ${lineLengthKmSql("$1")},
           start_country = $2,
           end_country = $3,
           starting_coordinate = ST_GeomFromText($4, 4326),
@@ -475,7 +476,7 @@ export async function saveRailwayRoute(
           $6,
           $7,
           ST_GeomFromText($8, 4326),
-          ST_Length(ST_GeomFromText($8, 4326)::geography) / 1000,
+          ${lineLengthKmSql("$8")},
           $9,
           $10,
           ST_GeomFromText($11, 4326),

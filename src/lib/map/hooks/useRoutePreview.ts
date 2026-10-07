@@ -9,6 +9,8 @@ export interface PathPreview {
   startCoordinate: [number, number];
   endCoordinate: [number, number];
   hasBacktracking?: boolean;
+  /** Measured by the server as a save measures it, so the two agree; null for a path too short to measure. */
+  lengthKm: number | null;
 }
 
 /**
@@ -57,6 +59,7 @@ export function useRoutePreview(
           startCoordinate: start,
           endCoordinate: end,
           hasBacktracking: result.hasBacktracking,
+          lengthKm: result.lengthKm,
         });
       })
       .catch((error) => {

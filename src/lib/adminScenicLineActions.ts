@@ -6,6 +6,7 @@ import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
+import { lineLengthKmSql } from "./lineLength";
 import { type RegionId, regionEnvelopeSql } from "./shared/regions";
 
 /**
@@ -96,7 +97,7 @@ export async function createScenicLine(
         from_station, to_station, geometry, length_km, start_country, end_country,
         starting_coordinate, ending_coordinate
       ) VALUES (
-        $1, $2, ST_GeomFromText($3, 4326), ST_Length(ST_GeomFromText($3, 4326)::geography) / 1000,
+        $1, $2, ST_GeomFromText($3, 4326), ${lineLengthKmSql("$3")},
         $4, $5, ST_GeomFromText($6, 4326), ST_GeomFromText($7, 4326)
       )
       RETURNING id
@@ -128,7 +129,7 @@ export async function updateScenicLineGeometry(
       `
       UPDATE scenic_lines
       SET geometry = ST_GeomFromText($2, 4326),
-          length_km = ST_Length(ST_GeomFromText($2, 4326)::geography) / 1000,
+          length_km = ${lineLengthKmSql("$2")},
           start_country = $3,
           end_country = $4,
           starting_coordinate = ST_GeomFromText($5, 4326),

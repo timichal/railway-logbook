@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { type Client, Pool } from "pg";
 import { type Coord, coordinatesToWKT } from "../lib/coordinateUtils";
 import { getDbConfig } from "../lib/dbConfig";
+import { lineLengthKmSql } from "../lib/lineLength";
 import {
   refreshAllStationProximity,
   STATION_ROUTE_PROXIMITY_METERS,
@@ -148,7 +149,7 @@ async function recalculateGeometry(
   // Calculate the new length
   const lengthQuery = await db.query(
     `
-    SELECT ST_Length(ST_GeomFromText($1, 4326)::geography) / 1000 as new_length_km
+    SELECT ${lineLengthKmSql("$1")} as new_length_km
   `,
     [lineString],
   );

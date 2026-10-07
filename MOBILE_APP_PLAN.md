@@ -286,8 +286,8 @@ lives in `src/lib/shared/`, the only part of the web app `@shared/*` reaches:
 - `src/lib/shared/regions.ts`, `routeCoverage.ts`, `constants.ts`, `types.ts`. One
   trap in `regions.ts`: the binding's `LngLatBounds` is flat, so `bounds` needs
   converting.
-- Planned here but left web-only: `src/lib/map/utils/distance.ts` and
-  `src/lib/coordinateUtils.ts` (the native app never needed them), and
+- Planned here but left web-only: `src/lib/coordinateUtils.ts` (the native app
+  never needed it), and
   `src/lib/countryUtils.ts`, which pulls in country-coder — the native app got
   `getCountryFlag` by splitting it out into `shared/countryFlag.ts` instead.
 - `src/lib/routePathFinder.ts` stays **server-side** and is reached over HTTP —
