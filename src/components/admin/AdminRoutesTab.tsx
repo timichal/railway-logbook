@@ -108,9 +108,23 @@ export default function AdminRoutesTab({
     loadRoutes();
   }, [regionId]);
 
+  // A naming region lists its lines by name, the ones still unnamed after them
+  // (in the server's from/to order — the sort is stable). Elsewhere the
+  // server's from/to order is the order.
+  const hasRouteNames = region.hasRouteNames;
+  const orderedRoutes = useMemo(() => {
+    if (!hasRouteNames) return routes;
+    return routes.toSorted((a, b) => {
+      const aName = a.name?.trim();
+      const bName = b.name?.trim();
+      if (!aName || !bName) return (aName ? 0 : 1) - (bName ? 0 : 1);
+      return aName.localeCompare(bName);
+    });
+  }, [routes, hasRouteNames]);
+
   // Filtering and pagination
   const filteredRoutes = useMemo(() => {
-    let filtered = routes;
+    let filtered = orderedRoutes;
 
     // The two invalid filters split the failing routes between them: "invalid"
     // is the plain worklist, "under repair" the ones parked pending OSM works.
@@ -139,13 +153,15 @@ export default function AdminRoutesTab({
       filtered = filtered.filter((route) => {
         const fromMatch = route.from_station.toLowerCase().includes(query);
         const toMatch = route.to_station.toLowerCase().includes(query);
-        return fromMatch || toMatch;
+        const nameMatch = hasRouteNames && !!route.name?.toLowerCase().includes(query);
+        return fromMatch || toMatch || nameMatch;
       });
     }
 
     return filtered;
   }, [
-    routes,
+    orderedRoutes,
+    hasRouteNames,
     searchQuery,
     showInvalidOnly,
     showUnderRepairOnly,

@@ -122,7 +122,7 @@ export default function RoutesList({
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search by from or to..."
+          placeholder={hasRouteNames ? "Search by name, from or to..." : "Search by from or to..."}
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
         />
         {searchQuery && (
@@ -145,9 +145,20 @@ export default function RoutesList({
                 onClick={() => onRouteClick(route.track_id)}
                 className={`${optionRow(selectedRouteId === route.track_id)} p-3`}
               >
-                <div className="font-medium text-sm text-gray-900 truncate">
-                  {route.from_station} ⟷ {route.to_station}
-                </div>
+                {/* A naming region leads with the line name, endpoints beneath;
+                    a route still missing its name falls back to the endpoints. */}
+                {hasRouteNames && route.name ? (
+                  <>
+                    <div className="font-medium text-sm text-gray-900 truncate">{route.name}</div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {route.from_station} ⟷ {route.to_station}
+                    </div>
+                  </>
+                ) : (
+                  <div className="font-medium text-sm text-gray-900 truncate">
+                    {route.from_station} ⟷ {route.to_station}
+                  </div>
+                )}
                 {selectedRouteLoading && selectedRouteId === route.track_id && (
                   <div className="text-xs text-gray-500">Loading…</div>
                 )}
