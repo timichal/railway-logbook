@@ -2,9 +2,14 @@
 
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
-import { type StationSearchFn, useStationSearch } from "@/lib/map/hooks/useStationSearch";
-import type { RegionId } from "@/lib/shared/regions";
-import type { Station } from "@/lib/shared/types";
+import { fitCamera } from "@/lib/map/fitCamera";
+import {
+  type MapSearchResult,
+  type StationSearchFn,
+  useStationSearch,
+} from "@/lib/map/hooks/useStationSearch";
+import { plural } from "@/lib/plural";
+import { REGIONS, type RegionId } from "@/lib/shared/regions";
 import { optionRow } from "@/lib/ui/buttonStyles";
 import { useCombobox } from "@/lib/ui/useCombobox";
 
@@ -22,9 +27,9 @@ interface MapStationSearchProps {
 }
 
 /**
- * The search box in the map's top corner: type a station name, pick a result, and
- * the map flies to it. Shared by the interactive map, the read-only shared one and
- * the admin map.
+ * The search box in the map's top corner: type a station name — or, where the region
+ * names its lines, a line name — pick a result, and the map flies to it. Shared by
+ * the interactive map, the read-only shared one and the admin map.
  */
 export default function MapStationSearch({
   map,
@@ -57,10 +62,20 @@ export default function MapStationSearch({
   // biome-ignore lint/correctness/useExhaustiveDependencies: unmount only; the timer lives in a ref.
   useEffect(() => cancelBlurTimer, []);
 
-  const handleStationSelect = (station: Station) => {
-    if (!map.current) return;
-    const [lon, lat] = station.coordinates;
-    map.current.flyTo({ center: [lon, lat], zoom: 14, duration: 1500 });
+  const withLines = REGIONS[region].hasRouteNames;
+  const placeholder = withLines ? "Search lines and stations..." : "Search stations...";
+
+  const handleSelect = (result: MapSearchResult) => {
+    const m = map.current;
+    if (!m) return;
+    if (result.kind === "station") {
+      const [lon, lat] = result.station.coordinates;
+      m.flyTo({ center: [lon, lat], zoom: 14, duration: 1500 });
+    } else {
+      // The whole line in view, fitted as an opened journey is (clear of the
+      // progress box, within the mobile sheet's camera padding).
+      m.flyTo({ ...fitCamera(m, result.line.bounds, isMobile), duration: 1500 });
+    }
     stationSearch.setSearchQuery("");
     stationSearch.setShowSuggestions(false);
     stationSearch.setSelectedStationIndex(-1);
@@ -89,7 +104,7 @@ export default function MapStationSearch({
           stationSearch.selectedStationIndex >= 0 &&
           stationSearch.selectedStationIndex < stationSearch.searchResults.length
         ) {
-          handleStationSelect(stationSearch.searchResults[stationSearch.selectedStationIndex]);
+          handleSelect(stationSearch.searchResults[stationSearch.selectedStationIndex]);
         }
         break;
       case "Escape":
@@ -110,7 +125,7 @@ export default function MapStationSearch({
           ref={stationSearch.searchInputRef}
           {...combobox.inputProps}
           type="text"
-          aria-label="Search stations"
+          aria-label={withLines ? "Search lines and stations" : "Search stations"}
           value={stationSearch.searchQuery}
           onChange={(e) => stationSearch.setSearchQuery(e.target.value)}
           onKeyDown={handleSearchKeyDown}
@@ -122,7 +137,7 @@ export default function MapStationSearch({
             cancelBlurTimer();
             blurTimerRef.current = setTimeout(() => stationSearch.setShowSuggestions(false), 200);
           }}
-          placeholder="Search stations..."
+          placeholder={placeholder}
           className="w-full px-4 py-2 pr-10 bg-surface border border-gray-300 rounded-lg shadow-lg text-fg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
         <svg
@@ -145,26 +160,43 @@ export default function MapStationSearch({
           <div
             id={combobox.listId}
             role="listbox"
-            aria-label="Stations"
+            aria-label={withLines ? "Lines and stations" : "Stations"}
             // Keeps the focus in the input: without it the pointerdown blurs the
             // field and the 200ms blur timer above hides the list before the
             // click lands — on touch, even scrolling the list did it.
             onPointerDown={(e) => e.preventDefault()}
             className="absolute top-full mt-1 w-full bg-surface border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto z-20"
           >
-            {stationSearch.searchResults.map((station, index) => (
+            {stationSearch.searchResults.map((result, index) => (
               <button
                 type="button"
-                key={station.id}
+                key={
+                  result.kind === "line"
+                    ? `line:${result.line.name}`
+                    : `station:${result.station.id}`
+                }
                 {...combobox.optionProps(index)}
-                onClick={() => handleStationSelect(station)}
+                onClick={() => handleSelect(result)}
                 onMouseEnter={() => stationSearch.setSelectedStationIndex(index)}
                 className={`${optionRow(activeIndex === index)} px-4 py-2 text-sm text-fg border-b border-gray-100 last:border-b-0`}
               >
-                <div className="font-medium">{station.name}</div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {station.coordinates[1].toFixed(4)}, {station.coordinates[0].toFixed(4)}
-                </div>
+                {result.kind === "line" ? (
+                  <>
+                    <div className="font-medium">{result.line.name}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      Line · {plural(result.line.routeCount, "route")}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-medium">{result.station.name}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {withLines && "Station · "}
+                      {result.station.coordinates[1].toFixed(4)},{" "}
+                      {result.station.coordinates[0].toFixed(4)}
+                    </div>
+                  </>
+                )}
               </button>
             ))}
           </div>

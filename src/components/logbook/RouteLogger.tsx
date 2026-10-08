@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from "react";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import JourneyPlanner from "@/components/logbook/JourneyPlanner";
+import { useRegionId } from "@/lib/regionContext";
 import {
   loggedLengthKm,
   NEW_JOURNEY_FORM_ID,
@@ -11,6 +12,7 @@ import {
   selectionLengthKm,
   suggestJourneyName,
 } from "@/lib/selectedRoutes";
+import { routeTitle } from "@/lib/shared/map/routeFeature";
 import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
@@ -221,6 +223,7 @@ function SelectedRoutesList({
   onClearSelection,
   onUpdateRoutePartial,
 }: SelectedRoutesListProps) {
+  const regionId = useRegionId();
   const totalDistance = selectionLengthKm(routes);
 
   return (
@@ -241,46 +244,49 @@ function SelectedRoutesList({
       ) : (
         <>
           <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
-            {routes.map((route) => (
-              <div
-                key={route.track_id}
-                className="p-2 bg-gray-50 border border-gray-200 rounded text-xs flex items-start justify-between gap-2"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">
-                    {route.from_station} ⟷ {route.to_station}
+            {routes.map((route) => {
+              // A naming region leads with the line name, endpoints beneath
+              const { name, endpoints } = routeTitle(route, regionId);
+              return (
+                <div
+                  key={route.track_id}
+                  className="p-2 bg-gray-50 border border-gray-200 rounded text-xs flex items-start justify-between gap-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{name ?? endpoints}</div>
+                    {name && <div className="text-gray-500 truncate">{endpoints}</div>}
+                    <div className="flex items-center gap-4 mt-1">
+                      <span className="text-gray-600">
+                        {loggedLengthKm(route).toFixed(1)} km
+                        {route.partial && route.travelled_length_km != null && (
+                          <span className="text-amber-700"> of {route.length_km.toFixed(1)}</span>
+                        )}
+                      </span>
+                      <label className="flex items-center gap-1.5 text-xs text-gray-700 min-h-11 md:min-h-0 pr-2 md:pr-0">
+                        <input
+                          type="checkbox"
+                          checked={route.partial ?? false}
+                          onChange={(e) => onUpdateRoutePartial(route.track_id, e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span>Partial</span>
+                      </label>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 mt-1">
-                    <span className="text-gray-600">
-                      {loggedLengthKm(route).toFixed(1)} km
-                      {route.partial && route.travelled_length_km != null && (
-                        <span className="text-amber-700"> of {route.length_km.toFixed(1)}</span>
-                      )}
-                    </span>
-                    <label className="flex items-center gap-1.5 text-xs text-gray-700 min-h-11 md:min-h-0 pr-2 md:pr-0">
-                      <input
-                        type="checkbox"
-                        checked={route.partial ?? false}
-                        onChange={(e) => onUpdateRoutePartial(route.track_id, e.target.checked)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                      <span>Partial</span>
-                    </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onRemoveRoute(route.track_id)}
+                      className={`${iconBtn("responsive")} -my-2 -mr-1 md:my-0 md:mr-0 text-lg`}
+                      title="Remove route"
+                      aria-label="Remove route"
+                    >
+                      ×
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onRemoveRoute(route.track_id)}
-                    className={`${iconBtn("responsive")} -my-2 -mr-1 md:my-0 md:mr-0 text-lg`}
-                    title="Remove route"
-                    aria-label="Remove route"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="text-xs text-gray-600 mb-3 flex justify-between items-center bg-blue-50 px-3 py-2 rounded border border-blue-200">

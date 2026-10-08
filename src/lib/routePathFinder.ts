@@ -44,13 +44,14 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
   try {
     const result = await client.query<{
       track_id: number;
+      name: string | null;
       from_station: string;
       to_station: string;
       description: string;
       length_km: string | number;
     }>(
       `
-      SELECT track_id, from_station, to_station, description, length_km
+      SELECT track_id, name, from_station, to_station, description, length_km
       FROM railway_routes
       WHERE track_id = ANY($1)
       ORDER BY array_position($1, track_id)
@@ -63,6 +64,7 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
         typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km;
       return {
         track_id: row.track_id,
+        name: row.name,
         from_station: row.from_station,
         to_station: row.to_station,
         description: row.description,

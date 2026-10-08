@@ -7,6 +7,7 @@ import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import * as localStore from "@/lib/localStorage";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
+import { routeTitle } from "@/lib/shared/map/routeFeature";
 import type {
   HighlightRoutesFn,
   JourneyEditStartFn,
@@ -35,6 +36,7 @@ interface LocalJourneyLogTabProps {
 function buildRouteMetaFromSelected(route: SelectedRoute): RailwayRoute {
   return {
     track_id: route.track_id,
+    name: route.name,
     from_station: route.from_station,
     to_station: route.to_station,
     description: route.description,
@@ -510,14 +512,16 @@ export default function LocalJourneyLogTab({
                       <div className="space-y-1 max-h-64 overflow-y-auto">
                         {parts.map((part) => {
                           const meta = routeMeta[part.track_id];
+                          const heading = meta ? routeTitle(meta, regionId) : null;
                           return (
                             <LoggedRouteRow
                               key={part.id}
                               title={
-                                meta
-                                  ? `${meta.from_station} ⟷ ${meta.to_station}`
+                                heading
+                                  ? (heading.name ?? heading.endpoints)
                                   : `Route #${part.track_id}`
                               }
+                              subtitle={heading?.name ? heading.endpoints : undefined}
                               lengthKm={meta?.length_km}
                               partial={part.partial}
                               covered={{ start: part.covered_start, end: part.covered_end }}

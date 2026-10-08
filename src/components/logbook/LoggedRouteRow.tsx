@@ -3,6 +3,8 @@ import { iconBtn } from "@/lib/ui/buttonStyles";
 
 interface LoggedRouteRowProps {
   title: string;
+  /** A second line under the title — the endpoints, where the title is a line name. */
+  subtitle?: string;
   /**
    * A string as it arrives from a NUMERIC column, which pg does not parse.
    * Unknown while a local journey's route metadata is still loading.
@@ -23,6 +25,7 @@ interface LoggedRouteRowProps {
 /** One route of a journey, in the account and the local journey lists alike. */
 export default function LoggedRouteRow({
   title,
+  subtitle,
   lengthKm,
   partial,
   covered,
@@ -33,9 +36,16 @@ export default function LoggedRouteRow({
   return (
     <div className="p-2 bg-surface border border-gray-200 rounded text-xs">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium truncate" title={title}>
-          {title}
-        </span>
+        <div className="min-w-0">
+          <div className="font-medium truncate" title={title}>
+            {title}
+          </div>
+          {subtitle && (
+            <div className="text-gray-500 truncate" title={subtitle}>
+              {subtitle}
+            </div>
+          )}
+        </div>
         {editable && (
           <div className="flex items-center gap-2 flex-shrink-0">
             <label className="flex items-center gap-1.5 select-none min-h-11 md:min-h-0 px-1 md:px-0">

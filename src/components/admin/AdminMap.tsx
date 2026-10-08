@@ -6,7 +6,7 @@ import AdminLayerControls from "@/components/admin/AdminLayerControls";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { unwrap } from "@/lib/actionResult";
-import { searchAllStations } from "@/lib/adminMapActions";
+import { searchAdminMap } from "@/lib/adminMapActions";
 import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
 import {
   adminNotesTileUrl,
@@ -45,7 +45,7 @@ import {
   getAdminRouteWidthExpression,
 } from "@/lib/shared/map/utils/userRouteStyling";
 import type { RegionId } from "@/lib/shared/regions";
-import type { GeoJSONFeatureCollection, Station } from "@/lib/shared/types";
+import type { GeoJSONFeatureCollection, MapSearchResults } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
 
 // The base layer draws Regular routes solid; Heritage (dotted) and Special
@@ -54,10 +54,10 @@ import { useResolvedTheme } from "@/lib/theme";
 const REGULAR_ONLY_FILTER = ["==", ["get", "usage_type"], 0] as maplibregl.FilterSpecification;
 
 // The admin map draws every station, so its search offers every station too — not
-// only the near-route ones the user map's does. Module-level: the search hook
-// re-creates its search whenever the function changes.
-const searchAdminStations = (query: string, region: RegionId): Promise<Station[]> =>
-  searchAllStations(query, region).then(unwrap);
+// only the near-route ones the user map's does — and lines as the user map's does.
+// Module-level: the search hook re-creates its search whenever the function changes.
+const searchAdminStations = (query: string, region: RegionId): Promise<MapSearchResults> =>
+  searchAdminMap(query, region).then(unwrap);
 
 // The three colored route line layers. They share identical visit/selection
 // paint; only their dash style (baked into each factory) differs.

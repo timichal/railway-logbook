@@ -24,6 +24,7 @@ import {
   routeBoundsByIds,
   routeMetadataByIds,
   routeSummariesInRegion,
+  searchMapByName,
   searchStationsByName,
   trackIdsInRegion,
 } from "./routeQueries";
@@ -31,6 +32,7 @@ import type { RegionId } from "./shared/regions";
 import type {
   CoveredRange,
   CoveredStretch,
+  MapSearchResults,
   RailwayRoute,
   RouteBounds,
   RouteSummary,
@@ -40,6 +42,14 @@ import type {
 /** Station name search for the map search box and the Journey Planner. */
 export async function searchStations(searchQuery: string, region: RegionId): Promise<Station[]> {
   return searchStationsByName(searchQuery, region);
+}
+
+/**
+ * The map search box: near-route stations, and line names where the region names
+ * its lines. No authentication required — route data is public.
+ */
+export async function searchMap(searchQuery: string, region: RegionId): Promise<MapSearchResults> {
+  return searchMapByName(searchQuery, region);
 }
 
 /** The track ids of every route in a region. */

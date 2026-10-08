@@ -6,9 +6,9 @@ import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import pool from "./db";
 import { lineLengthKmSql } from "./lineLength";
-import { searchStationsByName } from "./routeQueries";
+import { searchMapByName } from "./routeQueries";
 import type { RegionId } from "./shared/regions";
-import type { PathResult, Station } from "./shared/types";
+import type { MapSearchResults, PathResult } from "./shared/types";
 
 /**
  * Find a path between two coordinates using BFS pathfinding — the admin's route
@@ -37,12 +37,12 @@ export async function findRailwayPathFromCoordinates(
 }
 
 /**
- * Station name search for the admin map's search box. Every station, not only the
- * `near_route` ones the user map's search offers: the admin map draws them all.
+ * The admin map's search box. Every station, not only the `near_route` ones the
+ * user map's search offers: the admin map draws them all. Lines as on the user map.
  */
-export async function searchAllStations(
+export async function searchAdminMap(
   searchQuery: string,
   region: RegionId,
-): Promise<ActionResult<Station[]>> {
-  return asAdmin(() => searchStationsByName(searchQuery, region, { nearRouteOnly: false }));
+): Promise<ActionResult<MapSearchResults>> {
+  return asAdmin(() => searchMapByName(searchQuery, region, { nearRouteOnly: false }));
 }

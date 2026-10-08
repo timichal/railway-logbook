@@ -1,19 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RegionId } from "@/lib/shared/regions";
-import type { Station } from "@/lib/shared/types";
-import { searchStations } from "@/lib/userActions";
+import type { LineSearchResult, MapSearchResults, Station } from "@/lib/shared/types";
+import { searchMap } from "@/lib/userActions";
 
-export type StationSearchFn = (query: string, region: RegionId) => Promise<Station[]>;
+export type StationSearchFn = (query: string, region: RegionId) => Promise<MapSearchResults>;
+
+/** One entry of the map search box's list. */
+export type MapSearchResult =
+  | { kind: "line"; line: LineSearchResult }
+  | { kind: "station"; station: Station };
 
 /**
- * Hook to manage station search with debouncing and keyboard navigation.
+ * Hook to manage the map's search box with debouncing and keyboard navigation.
  * Results are limited to `region` - the map is locked to it, so a hit anywhere
  * else could not be flown to. `search` defaults to the user map's (near-route
  * stations only); pass a stable function, since a new one re-creates the search.
+ * In a region that names its lines (`hasRouteNames`) it returns line names too, and
+ * the lines lead the list: a query that names a line
+ * means it, where a station name turning up inside a line name is incidental.
  */
-export function useStationSearch(region: RegionId, search: StationSearchFn = searchStations) {
+export function useStationSearch(region: RegionId, search: StationSearchFn = searchMap) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Station[]>([]);
+  const [searchResults, setSearchResults] = useState<MapSearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedStationIndex, setSelectedStationIndex] = useState(-1);
   const [isSearching, setIsSearching] = useState(false);
@@ -37,8 +45,12 @@ export function useStationSearch(region: RegionId, search: StationSearchFn = sea
 
       setIsSearching(true);
       try {
-        const results = await search(query, region);
+        const { lines, stations } = await search(query, region);
         if (requestId !== searchRequestRef.current) return;
+        const results: MapSearchResult[] = [
+          ...lines.map((line) => ({ kind: "line" as const, line })),
+          ...stations.map((station) => ({ kind: "station" as const, station })),
+        ];
         setSearchResults(results);
         setShowSuggestions(results.length > 0);
         setSelectedStationIndex(-1);

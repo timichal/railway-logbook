@@ -10,6 +10,7 @@ import { deleteJourney, getJourney, saveJourneyEdits } from "@/lib/journeyAction
 import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
+import { routeTitle } from "@/lib/shared/map/routeFeature";
 import type {
   HighlightRoutesFn,
   Journey,
@@ -25,6 +26,7 @@ import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
   return {
     track_id: route.track_id,
+    name: route.name,
     from_station: route.from_station,
     to_station: route.to_station,
     description: route.description,
@@ -337,19 +339,24 @@ export default function JourneyCard({
   // the view shows the same rows read-only.
   const routeList = (
     <div className="space-y-1 max-h-64 overflow-y-auto">
-      {viewedRoutes.map((route) => (
-        <LoggedRouteRow
-          key={route.track_id}
-          title={`${route.from_station} ⟷ ${route.to_station}`}
-          lengthKm={route.length_km}
-          partial={route.partial ?? false}
-          covered={{ start: route.covered_start, end: route.covered_end }}
-          {...(editing && {
-            onPartialChange: (partial: boolean) => handleTogglePartial(route.track_id, partial),
-            onRemove: () => handleRemoveRoute(route.track_id),
-          })}
-        />
-      ))}
+      {viewedRoutes.map((route) => {
+        // A naming region leads with the line name, endpoints beneath
+        const { name, endpoints } = routeTitle(route, regionId);
+        return (
+          <LoggedRouteRow
+            key={route.track_id}
+            title={name ?? endpoints}
+            subtitle={name ? endpoints : undefined}
+            lengthKm={route.length_km}
+            partial={route.partial ?? false}
+            covered={{ start: route.covered_start, end: route.covered_end }}
+            {...(editing && {
+              onPartialChange: (partial: boolean) => handleTogglePartial(route.track_id, partial),
+              onRemove: () => handleRemoveRoute(route.track_id),
+            })}
+          />
+        );
+      })}
     </div>
   );
 

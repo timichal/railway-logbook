@@ -259,6 +259,23 @@ export interface HighlightOptions {
 export type RouteBounds = [number, number, number, number];
 
 /**
+ * A named line, as the map's search box offers it in a region that names its lines:
+ * every route carrying the name, as one result to fly to.
+ */
+export interface LineSearchResult {
+  name: string;
+  /** How many routes carry the name — a line is usually split at its junctions. */
+  routeCount: number;
+  bounds: RouteBounds;
+}
+
+/** What the map's search box offers for a query; `lines` is empty where lines are not named. */
+export interface MapSearchResults {
+  lines: LineSearchResult[];
+  stations: Station[];
+}
+
+/**
  * A journey card opening for editing hands the map two things: the handler that
  * toggles a route in and out of that journey, and a predicate saying whether a
  * route is in it already.
@@ -312,6 +329,8 @@ export interface CoveredStretch extends PartialRouteGeometry {
 /** One route in a Journey Planner result. */
 export interface PlannerRoute {
   track_id: number;
+  /** Line name, where the region names its lines (see RailwayRoute.name). */
+  name: string | null;
   from_station: string;
   to_station: string;
   description: string;
@@ -326,6 +345,8 @@ export interface PlannerRoute {
 // Selected route for user map (used in JourneyLogger and map interactions)
 export interface SelectedRoute {
   track_id: number;
+  /** Line name, where the region names its lines (see RailwayRoute.name). */
+  name?: string | null;
   from_station: string;
   to_station: string;
   description: string;

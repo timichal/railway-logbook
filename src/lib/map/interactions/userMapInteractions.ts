@@ -461,6 +461,7 @@ export function setupUserMapInteractions(
 
     const route: SelectedRoute = {
       track_id: Number(trackId),
+      name: properties.name ?? null,
       from_station: properties.from_station,
       to_station: properties.to_station,
       description: properties.description,

@@ -9,8 +9,15 @@
  */
 
 import { escapeLikePattern, query } from "./db";
-import { type RegionId, regionContainsSql } from "./shared/regions";
-import type { RailwayRoute, RouteBounds, RouteSummary, Station } from "./shared/types";
+import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
+import type {
+  LineSearchResult,
+  MapSearchResults,
+  RailwayRoute,
+  RouteBounds,
+  RouteSummary,
+  Station,
+} from "./shared/types";
 
 /**
  * Station name search for the map search boxes and the Journey Planner.
@@ -64,6 +71,85 @@ export async function searchStationsByName(
     name: row.name,
     coordinates: [row.lon, row.lat],
   }));
+}
+
+/**
+ * Line name search for the map search box, in a region that names its lines
+ * (`hasRouteNames`); nothing elsewhere, where `name` is never set. The routes
+ * sharing a name come back as one line, boxed round all of them, so picking it
+ * shows the whole line. Every usage type: a line is a place to look at, whichever
+ * layers happen to be on. Matched as station names are — diacritic-insensitive,
+ * start matches first. Unindexed, which a region's few thousand routes do not need.
+ *
+ * The five names are picked before anything is boxed: `ST_Extent` reads each
+ * route's whole (TOASTed) line, and a query like "Li" matches nearly every route
+ * in Japan. A line with no geometry to box is dropped rather than returned with
+ * bounds nobody can fly to.
+ */
+export async function searchLinesByName(
+  searchQuery: string,
+  region: RegionId,
+): Promise<LineSearchResult[]> {
+  if (!REGIONS[region].hasRouteNames || searchQuery.trim().length < 2) {
+    return [];
+  }
+
+  const pattern = escapeLikePattern(searchQuery);
+
+  const result = await query(
+    `
+    WITH matched AS (
+      SELECT name,
+             CASE WHEN immutable_unaccent(name) ILIKE immutable_unaccent($2) THEN 0 ELSE 1 END AS rank
+      FROM railway_routes
+      WHERE name IS NOT NULL
+        AND ${regionContainsSql(region, "starting_coordinate")}
+        AND immutable_unaccent(name) ILIKE immutable_unaccent($1)
+      GROUP BY name
+      ORDER BY rank, name
+      LIMIT 5
+    )
+    SELECT name, route_count,
+           ST_XMin(box) AS west, ST_YMin(box) AS south, ST_XMax(box) AS east, ST_YMax(box) AS north
+    FROM (
+      SELECT m.name, m.rank, count(*)::int AS route_count, ST_Extent(rr.geometry) AS box
+      FROM matched m
+      JOIN railway_routes rr ON rr.name = m.name
+      WHERE ${regionContainsSql(region, "rr.starting_coordinate")}
+      GROUP BY m.name, m.rank
+    ) lines
+    WHERE box IS NOT NULL
+    ORDER BY rank, name
+  `,
+    [`%${pattern}%`, `${pattern}%`],
+  );
+
+  return result.rows.map((row) => ({
+    name: row.name,
+    routeCount: row.route_count,
+    bounds: [row.west, row.south, row.east, row.north],
+  }));
+}
+
+/**
+ * Everything the map's search box offers for a query, in one call: a server action
+ * is dispatched one at a time per client, so two actions per keystroke would run
+ * back to back. Lines only where the region names them (see searchLinesByName), and
+ * a failed line search costs only the lines — the stations are what the box is for.
+ */
+export async function searchMapByName(
+  searchQuery: string,
+  region: RegionId,
+  { nearRouteOnly = true }: { nearRouteOnly?: boolean } = {},
+): Promise<MapSearchResults> {
+  const [lines, stations] = await Promise.all([
+    searchLinesByName(searchQuery, region).catch((error) => {
+      console.error("Error searching lines:", error);
+      return [];
+    }),
+    searchStationsByName(searchQuery, region, { nearRouteOnly }),
+  ]);
+  return { lines, stations };
 }
 
 /**
