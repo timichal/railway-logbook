@@ -10,7 +10,7 @@
  */
 
 import { query } from "./db";
-import { REGIONS, type RegionId, regionEnvelopeSql } from "./shared/regions";
+import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
 import type { CoveredRange, CoveredStretch } from "./shared/types";
 
 /**
@@ -62,7 +62,7 @@ export async function progressForUser(
     FROM railway_routes
     WHERE length_km IS NOT NULL
       AND usage_type = 0
-      AND geometry && ${regionEnvelopeSql(region)}
+      AND ${regionContainsSql(region, "starting_coordinate")}
       ${hasCountries ? "AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])" : ""}`,
     hasCountries ? [selectedCountries] : [],
   );
@@ -79,7 +79,7 @@ export async function progressForUser(
     FROM railway_routes rr
     WHERE rr.usage_type = 0
       AND rr.length_km IS NOT NULL
-      AND rr.geometry && ${regionEnvelopeSql(region)}
+      AND ${regionContainsSql(region, "rr.starting_coordinate")}
       ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}
       AND rr.track_id IN (${FULLY_RIDDEN_TRACK_IDS})`,
     hasCountries ? [userId, selectedCountries] : [userId],
@@ -142,7 +142,7 @@ export async function progressByCountryForUser(
        LEFT JOIN (${FULLY_RIDDEN_TRACK_IDS}) done ON done.track_id = rr.track_id
        WHERE rr.usage_type = 0
          AND rr.length_km IS NOT NULL
-         AND rr.geometry && ${regionEnvelopeSql(region)}
+         AND ${regionContainsSql(region, "rr.starting_coordinate")}
      )
      SELECT
        GROUPING(country) AS is_total,

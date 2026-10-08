@@ -9,7 +9,7 @@ import pool, { query } from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
 import type { LineClass, UsageType } from "./shared/constants";
-import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import { type RegionId, regionContainsSql } from "./shared/regions";
 import { MAX_TOLERANCE_FRACTION, UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
 import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./shared/types";
 import { getStationsNearRoute, refreshStationProximityFor } from "./stationProximity";
@@ -83,6 +83,9 @@ export type AdminRouteDetail = AdminRouteSummary & {
  * create a route anywhere OSM has track, including countries outside
  * SUPPORTED_COUNTRIES, and those must still show up in the list of the region
  * they were drawn in.
+ *
+ * Unordered, because the list sorts itself (`AdminRoutesTab`): a text sort
+ * under the database's collation was ~340ms of a ~510ms query.
  */
 export async function getAllRailwayRoutes(
   region: RegionId,
@@ -92,8 +95,7 @@ export async function getAllRailwayRoutes(
     SELECT track_id, name, from_station, to_station, description, usage_type, line_class,
            is_valid, error_message, under_repair, intended_backtracking, has_backtracking
     FROM railway_routes
-    WHERE geometry && ${regionEnvelopeSql(region)}
-    ORDER BY from_station, to_station
+    WHERE ${regionContainsSql(region, "starting_coordinate")}
   `);
 
     return result.rows;
@@ -110,7 +112,7 @@ export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionRes
     SELECT COALESCE(SUM(length_km), 0) AS total_km
     FROM railway_routes
     WHERE is_valid = true
-      AND geometry && ${regionEnvelopeSql(region)}
+      AND ${regionContainsSql(region, "starting_coordinate")}
   `);
 
     return Math.round((parseFloat(result.rows[0].total_km) || 0) * 10) / 10;
@@ -187,7 +189,7 @@ export async function getAllRouteEndpoints(
       ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
       ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json
     FROM railway_routes
-    WHERE geometry && ${regionEnvelopeSql(region)}
+    WHERE ${regionContainsSql(region, "starting_coordinate")}
   `);
 
     const features: GeoJSONFeature[] = [];

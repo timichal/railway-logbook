@@ -16,6 +16,7 @@ import {
 } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
 import { ConfirmDialog, useToast } from "@/lib/toast";
+import { compareByEndpoints, compareText } from "@/lib/ui/adminListSort";
 
 function editFormFromRoute(route: AdminRouteDetail): EditRouteData {
   return {
@@ -108,17 +109,23 @@ export default function AdminRoutesTab({
     loadRoutes();
   }, [regionId]);
 
-  // A naming region lists its lines by name, the ones still unnamed after them
-  // (in the server's from/to order — the sort is stable). Elsewhere the
-  // server's from/to order is the order.
+  // The list arrives unordered (see getAllRailwayRoutes) and is sorted here, by
+  // from/to — or, where the region names its lines, by name first, the ones
+  // still unnamed after them. track_id last, so two routes between the same
+  // stations (two lines, say) keep their order from one reload to the next.
   const hasRouteNames = region.hasRouteNames;
   const orderedRoutes = useMemo(() => {
-    if (!hasRouteNames) return routes;
     return routes.toSorted((a, b) => {
-      const aName = a.name?.trim();
-      const bName = b.name?.trim();
-      if (!aName || !bName) return (aName ? 0 : 1) - (bName ? 0 : 1);
-      return aName.localeCompare(bName);
+      if (hasRouteNames) {
+        const aName = a.name?.trim();
+        const bName = b.name?.trim();
+        if (!aName !== !bName) return aName ? -1 : 1;
+        if (aName && bName) {
+          const byName = compareText(aName, bName);
+          if (byName !== 0) return byName;
+        }
+      }
+      return compareByEndpoints(a, b) || a.track_id - b.track_id;
     });
   }, [routes, hasRouteNames]);
 

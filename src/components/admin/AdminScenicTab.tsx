@@ -17,6 +17,7 @@ import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegionId } from "@/lib/regionContext";
 import { ConfirmDialog, useToast } from "@/lib/toast";
+import { compareByEndpoints } from "@/lib/ui/adminListSort";
 import { btn, optionRow } from "@/lib/ui/buttonStyles";
 
 /** A scenic line whose geometry is being re-picked. */
@@ -110,15 +111,18 @@ export default function AdminScenicTab({
     loadLines();
   }, [regionId]);
 
+  // Sorted here, not by the query — the same order as the routes list.
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return lines.filter(
-      (line) =>
-        (!invalidOnly || !line.is_valid) &&
-        (!query ||
-          line.from_station.toLowerCase().includes(query) ||
-          line.to_station.toLowerCase().includes(query)),
-    );
+    return lines
+      .toSorted((a, b) => compareByEndpoints(a, b) || a.id - b.id)
+      .filter(
+        (line) =>
+          (!invalidOnly || !line.is_valid) &&
+          (!query ||
+            line.from_station.toLowerCase().includes(query) ||
+            line.to_station.toLowerCase().includes(query)),
+      );
   }, [lines, search, invalidOnly]);
   const invalidCount = lines.filter((line) => !line.is_valid).length;
 

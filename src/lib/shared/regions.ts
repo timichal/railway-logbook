@@ -176,15 +176,30 @@ export function regionCountryCodes(regionId: RegionId): string[] {
 }
 
 /**
- * A PostGIS envelope literal for a region, for use in SQL as a bbox filter:
+ * The point columns a region is decided on: a route's or scenic line's start,
+ * a station's position, a note's. Never a line — see `regionContainsSql`.
+ */
+type RegionPointColumn =
+  | "starting_coordinate"
+  | "rr.starting_coordinate"
+  | "coordinates"
+  | "coordinate";
+
+/**
+ * The one test of what belongs to a region, as a SQL condition: `point` lies in
+ * the region's box.
  *
- *   WHERE rr.geometry && ${regionEnvelopeSql(region)}
+ *   WHERE ${regionContainsSql(region, "rr.starting_coordinate")}
  *
- * The `&&` bbox operator is GIST-index-backed, and the regions are far enough
- * apart that a bbox overlap is as good as a containment test. The numbers come
+ * Always a **point**, which the column type holds callers to. `geometry && box`
+ * reads the whole (TOASTed) line to get at its bbox, ~100ms over the route table,
+ * to decide something the start point already decides for everything we draw:
+ * Japan is an island chain, and Europe's box reaches well past the mainland we
+ * route on. The OSM import does carry track beyond the box (European Russia
+ * east of 40°E), but a route is only ever drawn inside it. The numbers come
  * from this module (never from user input), so interpolating them is safe.
  */
-export function regionEnvelopeSql(regionId: RegionId): string {
+export function regionContainsSql(regionId: RegionId, point: RegionPointColumn): string {
   const [[west, south], [east, north]] = REGIONS[regionId].bounds;
-  return `ST_MakeEnvelope(${west}, ${south}, ${east}, ${north}, 4326)`;
+  return `${point} && ST_MakeEnvelope(${west}, ${south}, ${east}, ${north}, 4326)`;
 }

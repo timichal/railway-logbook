@@ -5,7 +5,7 @@ import { asAdmin } from "./authHelpers";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { type NoteType, noteTypeOptions } from "./shared/constants";
-import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import { type RegionId, regionContainsSql } from "./shared/regions";
 import type { AdminNote } from "./shared/types";
 
 type AdminNoteRow = {
@@ -67,7 +67,7 @@ export async function getAllAdminNotes(region: RegionId): Promise<ActionResult<A
       created_at,
       updated_at
     FROM admin_notes
-    WHERE coordinate && ${regionEnvelopeSql(region)}
+    WHERE ${regionContainsSql(region, "coordinate")}
     ORDER BY updated_at DESC
   `);
 

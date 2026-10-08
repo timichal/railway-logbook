@@ -7,7 +7,7 @@ import { getRouteCountries } from "./countryUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
-import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import { type RegionId, regionContainsSql } from "./shared/regions";
 
 /**
  * Scenic lines: stretches of track the user map highlights as scenic.
@@ -60,6 +60,7 @@ const pointWKT = ([lng, lat]: [number, number]) => `POINT(${lng} ${lat})`;
  * The region's scenic lines, by bounding box as the admin routes list is — a
  * line may run through a country outside SUPPORTED_COUNTRIES. Geometry included:
  * there are few of them, and a line picked from the list is flown to at once.
+ * Unordered: the tab sorts it, as the routes list is sorted (`adminListSort.ts`).
  */
 export async function getScenicLines(region: RegionId): Promise<ActionResult<AdminScenicLine[]>> {
   return asAdmin(async () => {
@@ -69,8 +70,7 @@ export async function getScenicLines(region: RegionId): Promise<ActionResult<Adm
              ST_AsGeoJSON(starting_coordinate)::json AS starting_coordinate,
              ST_AsGeoJSON(ending_coordinate)::json AS ending_coordinate
       FROM scenic_lines
-      WHERE geometry && ${regionEnvelopeSql(region)}
-      ORDER BY from_station, to_station, id
+      WHERE ${regionContainsSql(region, "starting_coordinate")}
     `);
     return result.rows.map((row) => ({
       ...row,

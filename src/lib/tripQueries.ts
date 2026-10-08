@@ -9,7 +9,7 @@
  */
 
 import pool, { escapeLikePattern } from "./db";
-import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import { type RegionId, regionContainsSql } from "./shared/regions";
 import type { Journey, Trip } from "./shared/types";
 
 /**
@@ -24,7 +24,7 @@ import type { Journey, Trip } from "./shared/types";
  */
 function journeyInRegionSql(region: RegionId, journeyIdExpr: string): string {
   return `COALESCE((
-    SELECT bool_or(rr.geometry && ${regionEnvelopeSql(region)})
+    SELECT bool_or(${regionContainsSql(region, "rr.starting_coordinate")})
     FROM user_logged_parts ulp_r
     JOIN railway_routes rr ON rr.track_id = ulp_r.track_id
     WHERE ulp_r.journey_id = ${journeyIdExpr}
@@ -33,7 +33,7 @@ function journeyInRegionSql(region: RegionId, journeyIdExpr: string): string {
 
 function tripInRegionSql(region: RegionId, tripIdExpr: string): string {
   return `COALESCE((
-    SELECT bool_or(rr.geometry && ${regionEnvelopeSql(region)})
+    SELECT bool_or(${regionContainsSql(region, "rr.starting_coordinate")})
     FROM user_journeys uj_r
     JOIN user_logged_parts ulp_r ON ulp_r.journey_id = uj_r.id
     JOIN railway_routes rr ON rr.track_id = ulp_r.track_id

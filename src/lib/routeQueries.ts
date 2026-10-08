@@ -9,7 +9,7 @@
  */
 
 import { escapeLikePattern, query } from "./db";
-import { type RegionId, regionEnvelopeSql } from "./shared/regions";
+import { type RegionId, regionContainsSql } from "./shared/regions";
 import type { RailwayRoute, RouteBounds, RouteSummary, Station } from "./shared/types";
 
 /**
@@ -46,7 +46,7 @@ export async function searchStationsByName(
            ST_Y(coordinates) as lat
     FROM stations
     WHERE ($3 OR near_route)
-      AND coordinates && ${regionEnvelopeSql(region)}
+      AND ${regionContainsSql(region, "coordinates")}
       AND immutable_unaccent(name) ILIKE immutable_unaccent($1)
     ORDER BY
       CASE
@@ -78,7 +78,7 @@ export async function trackIdsInRegion(region: RegionId): Promise<number[]> {
   const result = await query(`
     SELECT track_id
     FROM railway_routes
-    WHERE geometry && ${regionEnvelopeSql(region)}
+    WHERE ${regionContainsSql(region, "starting_coordinate")}
   `);
 
   return result.rows.map((row) => row.track_id as number);
@@ -103,7 +103,7 @@ export async function routesInRegion(region: RegionId): Promise<RailwayRoute[]> 
       start_country,
       end_country
     FROM railway_routes
-    WHERE geometry && ${regionEnvelopeSql(region)}
+    WHERE ${regionContainsSql(region, "starting_coordinate")}
     ORDER BY track_id
   `);
 
@@ -120,7 +120,7 @@ export async function routeSummariesInRegion(region: RegionId): Promise<RouteSum
   const result = await query(`
     SELECT track_id, usage_type, length_km, start_country, end_country
     FROM railway_routes
-    WHERE geometry && ${regionEnvelopeSql(region)}
+    WHERE ${regionContainsSql(region, "starting_coordinate")}
     ORDER BY track_id
   `);
 
@@ -144,7 +144,7 @@ export async function routeBoundsByIds(
 ): Promise<RouteBounds | null> {
   if (trackIds.length === 0) return null;
 
-  const inRegion = region ? `AND geometry && ${regionEnvelopeSql(region)}` : "";
+  const inRegion = region ? `AND ${regionContainsSql(region, "starting_coordinate")}` : "";
   const result = await query(
     `
     SELECT ST_XMin(box) AS west, ST_YMin(box) AS south, ST_XMax(box) AS east, ST_YMax(box) AS north
