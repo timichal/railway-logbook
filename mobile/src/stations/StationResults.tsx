@@ -12,6 +12,7 @@
  * dismissal of the keyboard on a pick, which the callers do — a list of results is
  * useless under a keyboard covering the map it is about to fly to.
  */
+import { MIN_SEARCH_QUERY_LENGTH } from "@shared/constants";
 import type { Station } from "@shared/types";
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
@@ -24,16 +25,14 @@ interface StationResultsProps {
   onSelect(station: Station): void;
 }
 
-/** Matches the server's floor: under this it answers with none, which is not "no match". */
-const MIN_QUERY_LENGTH = 2;
-
 export function StationResults({
   results,
   searching,
   queryLength,
   onSelect,
 }: StationResultsProps): ReactNode {
-  if (queryLength < MIN_QUERY_LENGTH) return null;
+  // Under the server's floor it answers with none, which is not "no match"
+  if (queryLength < MIN_SEARCH_QUERY_LENGTH) return null;
 
   if (results.length === 0) {
     return (

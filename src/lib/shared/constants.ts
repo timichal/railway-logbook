@@ -21,6 +21,11 @@
  * national network is 2. Both are "special" (non-regular): excluded from stats and
  * the planner. Each has its own independent toggle.
  */
+/** Under this many characters the station and line search answers with nothing, so no client asks. */
+export const MIN_SEARCH_QUERY_LENGTH = 2;
+/** How long both apps' search fields wait after a keystroke before asking. */
+export const SEARCH_DEBOUNCE_MS = 300;
+
 export const usageOptions = [
   {
     id: 0,

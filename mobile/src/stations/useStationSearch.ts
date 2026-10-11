@@ -1,10 +1,10 @@
 /**
  * Station-name autocomplete: what the map's search box and every planner field ask.
  *
- * The web app's `useStationSearch` in all the parts that are not a browser — the same
+ * The web app's `useSearchCombobox` in all the parts that are not a browser — the same
  * 300ms debounce and the same two-character floor, which is where the server stops
  * answering anyway. What it drops is the keyboard navigation (there is no keyboard to
- * navigate with) and the "show/hide suggestions" flag, since a native field's results
+ * navigate with) and the focus and blur handling, since a native field's results
  * are a list that is either rendered or not.
  *
  * What it adds is the **abort**. On the web every search is a server action and a
@@ -16,14 +16,11 @@
  * not be flown to, and a station in the other region would plan a path the map cannot
  * show. A region switch empties the field for the same reason.
  */
+import { MIN_SEARCH_QUERY_LENGTH, SEARCH_DEBOUNCE_MS } from "@shared/constants";
 import type { RegionId } from "@shared/regions";
 import type { Station } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as api from "@/api/endpoints";
-
-/** Below this the server answers with nothing, so there is no request worth sending. */
-const MIN_QUERY_LENGTH = 2;
-const DEBOUNCE_MS = 300;
 
 export interface StationSearch {
   query: string;
@@ -54,7 +51,7 @@ export function useStationSearch(regionId: RegionId): StationSearch {
   }, [regionId, reset]);
 
   useEffect(() => {
-    if (query.trim().length < MIN_QUERY_LENGTH) {
+    if (query.trim().length < MIN_SEARCH_QUERY_LENGTH) {
       setResults([]);
       setSearching(false);
       return;
@@ -77,7 +74,7 @@ export function useStationSearch(regionId: RegionId): StationSearch {
             setSearching(false);
           }
         });
-    }, DEBOUNCE_MS);
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timer);

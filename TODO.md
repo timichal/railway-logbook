@@ -37,17 +37,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   hydration queries. Use `Promise.all` on each independent group. That takes a
   trip open from 3 serial round trips to 2, and a logbook page from 5 to 3.
 
-- [ ] **One search hook for `StationSearchInput` and `MapStationSearch`** (~60 lines).
-  Since the Journey Planner refactor, `StationSearchInput` runs its own search: the
-  300ms debounce, the 2-character minimum, the latest-request guard,
-  ArrowUp/ArrowDown/Enter/Escape and the 200ms blur timer. `useStationSearch` +
-  `MapStationSearch` carry a second copy of all of it, and the two already differ
-  (Escape in the field cancels a pending or in-flight search; in the map box it only
-  hides the list). Make one hook over a `search(query, region)` function returning
-  the options, with the open/focus/keyboard handling included. The map box's
-  lines-plus-stations results and its spinner stay its own. Both already share
-  `useCombobox` for the ARIA side.
-
 - [ ] **Shared user-map core for `RailwayMap` and `PublicRailwayMap`** (~50 lines).
   Both maps repeat the same setup:
   - `effectiveCountries`

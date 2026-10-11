@@ -9,6 +9,7 @@
  */
 
 import { escapeLikePattern, query } from "./db";
+import { MIN_SEARCH_QUERY_LENGTH } from "./shared/constants";
 import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
 import type {
   LineGeometry,
@@ -41,7 +42,7 @@ export async function searchStationsByName(
   region: RegionId,
   { nearRouteOnly = true }: { nearRouteOnly?: boolean } = {},
 ): Promise<Station[]> {
-  if (searchQuery.trim().length < 2) {
+  if (searchQuery.trim().length < MIN_SEARCH_QUERY_LENGTH) {
     return [];
   }
 
@@ -91,7 +92,7 @@ export async function searchLinesByName(
   searchQuery: string,
   region: RegionId,
 ): Promise<LineSearchResult[]> {
-  if (!REGIONS[region].hasRouteNames || searchQuery.trim().length < 2) {
+  if (!REGIONS[region].hasRouteNames || searchQuery.trim().length < MIN_SEARCH_QUERY_LENGTH) {
     return [];
   }
 

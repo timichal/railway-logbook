@@ -240,7 +240,7 @@ project, so it is recorded here rather than in the deleted spike.
   hierarchical lookup stops the bundler resolving those too.
 - **`tsconfig.json` must exclude the RN directory.** The root `include` is
   `**/*.ts`, so otherwise React Native's global `setTimeout` declaration leaks into
-  the web app's program and breaks `JourneyPlanner.tsx` and `useStationSearch.ts`
+  the web app's program and breaks the web app's timer code
   with `Type 'number' is not assignable to type 'Timeout'`. **`biome.json` should
   exclude it too** — different toolchain, and the `next` lint domain has nothing
   useful to say about RN code.
@@ -297,7 +297,7 @@ lives in `src/lib/shared/`, the only part of the web app `@shared/*` reaches:
 ### Rewritten
 
 - **Every hook in `src/lib/map/hooks/`** — `useMapLibre`, `useRouteEditor`,
-  `useStationSearch`, `useRouteHighlighting`, `useCoverageOverlay`,
+  `useRouteHighlighting`, `useCoverageOverlay`,
   `useLayerFilters`, `useMapTileRefresh`. The RN binding is declarative
   (`<Map>`, `<Camera>`, `<VectorSource>`, `<Layer>`) rather than the imperative
   `map.addLayer` / `moveLayer` / `setFilter` these are built on. Layer *ordering*
