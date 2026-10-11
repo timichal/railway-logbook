@@ -37,14 +37,16 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   hydration queries. Use `Promise.all` on each independent group. That takes a
   trip open from 3 serial round trips to 2, and a logbook page from 5 to 3.
 
-- [ ] **`JourneyPlanner.tsx`: one state per station field** (608 → ~350 lines). From,
-  via and to each have their own state and their own branch in `handleSearchChange`,
-  `handleStationSelect` and `handleStationClickFromMap`, and the last two duplicate
-  each other. Model the stops as one array (`{ station, query }[]`, from first, to
-  last). Then make `StationSearchInput` own its query, results, debounce and keyboard
-  index (a hook like `useStationSearch`). The planner would only hold the picked
-  stations, and the ~10 search props on `StationSearchInput` go away. A focused field
-  already guarantees only one dropdown is open.
+- [ ] **One search hook for `StationSearchInput` and `MapStationSearch`** (~60 lines).
+  Since the Journey Planner refactor, `StationSearchInput` runs its own search: the
+  300ms debounce, the 2-character minimum, the latest-request guard,
+  ArrowUp/ArrowDown/Enter/Escape and the 200ms blur timer. `useStationSearch` +
+  `MapStationSearch` carry a second copy of all of it, and the two already differ
+  (Escape in the field cancels a pending or in-flight search; in the map box it only
+  hides the list). Make one hook over a `search(query, region)` function returning
+  the options, with the open/focus/keyboard handling included. The map box's
+  lines-plus-stations results and its spinner stay its own. Both already share
+  `useCombobox` for the ARIA side.
 
 - [ ] **Shared user-map core for `RailwayMap` and `PublicRailwayMap`** (~50 lines).
   Both maps repeat the same setup:
@@ -271,7 +273,7 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   `export function|const|type` under `src/` and count word-boundary hits in every
   other file under `src`, `tests`, `mobile/src` and `mobile/app`.)
 - [ ] Manual plurals (`x !== 1 ? "s" : ""`) where `plural()` exists: `RoutesList`,
-  `JourneyPlanner` ×2, `LoginForm`.
+  `LoginForm`.
 
 ---
 
@@ -328,6 +330,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   "// Trigger map refresh", "// Calculate totals", "// Remove hover from previous
   part", "// Cleanup function", and so on. They are concentrated in
   `LocalJourneyLogTab`, `adminMapInteractions`, `AdminRoutesTab`,
-  `AdminCreateRouteTab`, `JourneyPlanner` and `dataAccess`.
+  `AdminCreateRouteTab` and `dataAccess`.
 - [ ] Replace `if (onX) { onX(); }` with `onX?.()`, and `onX || (() => {})` with an
   optional prop. Same files.
