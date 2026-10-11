@@ -23,13 +23,21 @@
  * it: logging a journey is exactly what changes which stretches are ridden.
  */
 import { GeoJSONSource, Layer } from "@maplibre/maplibre-react-native";
-import { COVERAGE_SOURCE_ID, coverageData, createCoverageLayer } from "@shared/map/coverageLayer";
+import type { UsageType } from "@shared/constants";
+import { COVERAGE_SOURCE_ID, coverageData, createCoverageLayers } from "@shared/map/coverageLayer";
 import type { CoveredStretch } from "@shared/types";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import * as api from "@/api/endpoints";
 import { useLogVersion } from "@/logbook/logVersion";
 
-export function CoverageOverlay({ countries }: { countries: string[] }): ReactNode {
+export function CoverageOverlay({
+  countries,
+  shownTypes,
+}: {
+  countries: string[];
+  /** The usage types the map draws (`shownUsageTypes`), which the overlay follows. */
+  shownTypes: readonly UsageType[];
+}): ReactNode {
   const logVersion = useLogVersion();
   const [stretches, setStretches] = useState<CoveredStretch[]>([]);
 
@@ -48,11 +56,17 @@ export function CoverageOverlay({ countries }: { countries: string[] }): ReactNo
   }, [logVersion]);
 
   const data = useMemo(() => coverageData(stretches), [stretches]);
-  const layer = useMemo(() => createCoverageLayer(countries), [countries]);
+  const layers = useMemo(
+    () => createCoverageLayers(countries, shownTypes),
+    [countries, shownTypes],
+  );
 
   return (
     <GeoJSONSource id={COVERAGE_SOURCE_ID} data={data}>
-      <Layer {...layer} beforeId="stations" />
+      {/* One per usage type, so a dashed line keeps its dashes where it was ridden */}
+      {layers.map((layer) => (
+        <Layer key={layer.id} {...layer} beforeId="stations" />
+      ))}
     </GeoJSONSource>
   );
 }

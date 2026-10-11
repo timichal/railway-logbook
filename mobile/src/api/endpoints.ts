@@ -9,6 +9,7 @@
  * modules alongside `pg` — server-only code. Only dependency-free modules cross
  * over; see `@shared` in `tsconfig.json`.
  */
+import type { UsageType } from "@shared/constants";
 import type { RegionId } from "@shared/regions";
 import type {
   CoveredStretch,
@@ -99,13 +100,18 @@ export async function routeMetadata(trackIds: number[]): Promise<RailwayRoute[]>
 /**
  * The journey planner. **"No path found" is a 200 with an `error` string**, not a
  * failure: the request was fine, the network simply doesn't connect those two
- * stations by regular-service routes, and that belongs next to the form rather than
- * in a catch block.
+ * stations by the routes searched, and that belongs next to the form rather than in a
+ * catch block.
+ *
+ * `includeSpecial` lets the search ride Special routes too, where the region counts
+ * them as ordinary (`ordinaryUsageTypes` — Japan's non-JR lines; in Europe it changes
+ * nothing). Absent means false.
  */
 export function plan(input: {
   fromStationId: number;
   toStationId: number;
   viaStationIds?: number[];
+  includeSpecial?: boolean;
 }): Promise<PlannerResult> {
   return request<PlannerResult>("/planner", { method: "POST", body: input, auth: false });
 }
@@ -133,15 +139,25 @@ export interface CountryProgress {
   completedKm: number;
 }
 
+/** One usage type's share of the region — Japan's JR lines against its non-JR ones. */
+export interface UsageProgress {
+  usageType: UsageType;
+  totalKm: number;
+  completedKm: number;
+}
+
 export interface ProgressByCountry {
   byCountry: CountryProgress[];
+  /** One row per usage type the region counts (`ordinaryUsageTypes`), ridden or not. */
+  byUsage: UsageProgress[];
   total: { totalKm: number; completedKm: number };
 }
 
 /**
- * Per-country km plus the grand total — one row per country the region declares,
- * ridden or not, so the list is the region's countries and not just the visited ones.
- * Unfiltered by the user's own selection: this is what the selection is *made* from.
+ * Per-country and per-line-type km plus the grand total — one row per country the
+ * region declares and per usage type it counts, ridden or not, so the lists are the
+ * region's and not just the visited ones. Unfiltered by the user's own selection:
+ * this is what the selection is *made* from.
  */
 export function progressByCountry(region: RegionId): Promise<ProgressByCountry> {
   return request<ProgressByCountry>("/progress/countries", { query: { region } });

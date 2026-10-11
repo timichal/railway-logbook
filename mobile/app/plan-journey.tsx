@@ -9,7 +9,11 @@
  * the in-memory route graph; `API.md` says so and this screen only sends two station
  * ids. "No path found" comes back as a 200 with an `error` string, not as a failure —
  * the request was fine, the network simply doesn't connect those two stations by
- * regular-service routes — so it is rendered beside the form rather than caught.
+ * the routes searched — so it is rendered beside the form rather than caught.
+ *
+ * **Special routes are searched only where the region counts them** (`ordinaryUsageTypes`):
+ * in Japan they are the non-JR operators' lines, behind a switch that starts on, as
+ * the web planner's does. Europe's are irregular services and never searched.
  *
  * **A found path highlights the map immediately**, before anything is added to the
  * selection. On the web the planner sits in a sidebar next to the map and the gold
@@ -21,17 +25,20 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
+import { hasOrdinaryNonRegular, regionUsagePluralLabel } from "@shared/regions";
 import type { PlannerRoute, Station } from "@shared/types";
 import { useRouter } from "expo-router";
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useCallback, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useSelection } from "@/logbook/SelectionContext";
 import { routeFeatureFromMetadata } from "@/map/mapFeatures";
+import { useRegion } from "@/region/RegionContext";
 import { StationField } from "@/stations/StationField";
 import { Button } from "@/ui/Button";
 import { Screen } from "@/ui/Screen";
+import { ToggleSwitch } from "@/ui/ToggleSwitch";
 
 /** A station id is `string | number` off the API, and may be negative (see `API.md`). */
 function stationId(station: Station): number {
@@ -42,6 +49,11 @@ export default function PlanJourneyScreen(): ReactNode {
   const router = useRouter();
   const { add } = useSelection();
   const { highlight, clear: clearHighlight } = useHighlight();
+  const { regionId } = useRegion();
+
+  // Offered only where the region counts lines beyond Regular; on by default
+  const offersSpecial = hasOrdinaryNonRegular(regionId);
+  const [includeSpecial, setIncludeSpecial] = useState(true);
 
   const [from, setFrom] = useState<Station | null>(null);
   const [to, setTo] = useState<Station | null>(null);
@@ -53,6 +65,9 @@ export default function PlanJourneyScreen(): ReactNode {
   const [totalDistance, setTotalDistance] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  // Only the latest search may write: flipping the non-JR switch drops one still
+  // running, whose answer would be a plan over lines just excluded
+  const searchRef = useRef(0);
   const [adding, setAdding] = useState(false);
 
   const setVia = (index: number, station: Station | null): void => {
@@ -90,6 +105,7 @@ export default function PlanJourneyScreen(): ReactNode {
       return;
     }
 
+    const request = ++searchRef.current;
     setSearching(true);
     resetResult();
     try {
@@ -97,7 +113,9 @@ export default function PlanJourneyScreen(): ReactNode {
         fromStationId: stationId(from),
         toStationId: stationId(to),
         viaStationIds: vias.flatMap((s) => (s ? [stationId(s)] : [])),
+        includeSpecial: offersSpecial && includeSpecial,
       });
+      if (request !== searchRef.current) return;
 
       if (result.error) {
         setError(result.error);
@@ -116,11 +134,12 @@ export default function PlanJourneyScreen(): ReactNode {
         ownerKey: "planner",
       });
     } catch (caught) {
+      if (request !== searchRef.current) return;
       setError(caught instanceof Error ? caught.message : "Could not plan that journey.");
     } finally {
-      setSearching(false);
+      if (request === searchRef.current) setSearching(false);
     }
-  }, [from, to, vias, highlight, clearHighlight, resetResult]);
+  }, [from, to, vias, offersSpecial, includeSpecial, highlight, clearHighlight, resetResult]);
 
   const addToSelection = useCallback(async (): Promise<void> => {
     if (routes.length === 0) return;
@@ -234,6 +253,22 @@ export default function PlanJourneyScreen(): ReactNode {
               resetResult();
             }}
           />
+
+          {offersSpecial ? (
+            <ToggleSwitch
+              label={`Include ${regionUsagePluralLabel(regionId, 2)}`}
+              value={includeSpecial}
+              onChange={(value) => {
+                // The result, its gold line and any search still running were all
+                // for the other setting
+                searchRef.current++;
+                setSearching(false);
+                setIncludeSpecial(value);
+                resetResult();
+                clearHighlight();
+              }}
+            />
+          ) : null}
 
           <Button
             label="Find path"

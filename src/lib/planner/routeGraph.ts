@@ -1,6 +1,6 @@
 /**
- * The journey planner's model of the route network: every regular-usage route,
- * endpoints only, and which routes meet which. Pure — `routeGraphCache.ts`
+ * The journey planner's model of the route network: the routes a search may
+ * ride (`PlannerOptions`), endpoints only, and which routes meet which. Pure — `routeGraphCache.ts`
  * loads it from the database, so a test can build one by hand.
  */
 
@@ -52,6 +52,17 @@ export class RouteGraph {
   getNeighbors(routeId: number): number[] {
     return Array.from(this.adjacencyList.get(routeId) || []);
   }
+}
+
+/**
+ * What a search may ride. Regular routes always; with `includeSpecial`, also the
+ * other usage types a region counts as ordinary service (`ordinaryUsageTypes` in
+ * regions.ts — Japan's non-JR lines). Only ever inside such a region: Europe's
+ * Special routes are irregular services, and asking for them there changes nothing.
+ * Heritage is never ridden.
+ */
+export interface PlannerOptions {
+  includeSpecial?: boolean;
 }
 
 /** The graph and the routes it connects, which is what every search runs over. */

@@ -88,8 +88,8 @@ Bearer token required.
 
 | | |
 | --- | --- |
-| `GET /progress?region=&countries=` | km and route counts. `countries` absent = no filter; `countries=` (empty) = filter everything out, which answers zeros. Regular routes only |
-| `GET /progress/countries?region=` | `{ byCountry, total }` — one row per country the region declares, ridden or not |
+| `GET /progress?region=&countries=` | km and route counts. `countries` absent = no filter; `countries=` (empty) = filter everything out, which answers zeros. Over the usage types the region counts (`ordinaryUsageTypes`): Regular, plus Japan's non-JR lines |
+| `GET /progress/countries?region=` | `{ byCountry, byUsage, total }` — one `byCountry` row per country the region declares and one `byUsage` row (`{ usageType, totalKm, completedKm }`) per usage type it counts, ridden or not. Japan's two `byUsage` rows (JR, non-JR) are its statistics screen; Europe's one equals the total |
 | `GET /coverage` | `{ stretches }` — ridden stretches of routes not yet finished |
 | `GET /preferences` | `{ selectedCountries }`, defaulted to every supported country on first read |
 | `PUT /preferences` | `{ selectedCountries }` — a whole-list replacement, empty list allowed. Codes are upper-cased and deduplicated, anything that is not ISO 3166-1 alpha-2 is dropped, and the response echoes the list as stored |
@@ -158,13 +158,23 @@ a larger set.
 
 ## Journey planner
 
-`POST /planner` — `{ fromStationId, toStationId, viaStationIds? }` →
+`POST /planner` — `{ fromStationId, toStationId, viaStationIds?, includeSpecial? }` →
 `{ routes, totalDistance, error? }`. No token: route data is public and the
 planner writes nothing.
 
+The search rides Regular routes only, unless `includeSpecial` (boolean, default
+`false`) adds the other usage types the route's region counts as ordinary
+service (`ordinaryUsageTypes` in `src/lib/shared/regions.ts`) — Japan's non-JR
+lines, where the web planner's "Include Non-JR lines" switch starts on. Offer it
+where the region counts more than Regular (`hasOrdinaryNonRegular`). It is
+enforced by the server, not left to the client: Europe's Special routes are
+irregular services, never in the searched network whatever is asked, so there
+the flag changes nothing. Heritage routes are never searched.
+
 **"No path found" is a 200 with an `error` string**, not an HTTP failure: the
 request was fine, the network simply doesn't connect those stations by
-regular-service routes, and that message belongs next to the form.
+the lines searched (the message names them as the region does — "JR lines or
+Non-JR lines"), and that message belongs next to the form.
 
 Station ids may be **negative** — a station whose OSM feature was an area is
 stored under a negated id (see `CLAUDE.md`), so don't validate them as positive.

@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import StationSearchInput from "@/components/ui/StationSearchInput";
+import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import { findRoutePathBetweenStations } from "@/lib/plannerActions";
 import { plural } from "@/lib/plural";
-import { useRegionId } from "@/lib/regionContext";
+import { useRegion } from "@/lib/regionContext";
 import type { PlannedStops } from "@/lib/selectedRoutes";
 import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
+import { hasOrdinaryNonRegular, regionUsagePluralLabel } from "@/lib/shared/regions";
 import type { HighlightRoutesFn, PlannerRoute, Station } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
@@ -32,8 +34,14 @@ export default function JourneyPlanner({
   onAddRoutesToSelection,
   onStationClickHandler,
 }: JourneyPlannerProps) {
-  const regionId = useRegionId();
+  const regionId = useRegion().id;
   const { showSuccess } = useToast();
+
+  // Whether the search may ride the region's non-Regular ordinary lines (Japan's
+  // non-JR ones). Offered only where there are any; on by default, since they are
+  // ordinary service there.
+  const offersSpecial = hasOrdinaryNonRegular(regionId);
+  const [includeSpecial, setIncludeSpecial] = useState(true);
 
   const nextKeyRef = useRef(0);
   const newStop = (): Stop => ({ key: nextKeyRef.current++, station: null, query: "" });
@@ -129,6 +137,7 @@ export default function JourneyPlanner({
         Number(fromStation.id),
         Number(toStation.id),
         viaStations.map((s) => Number(s.id)),
+        { includeSpecial: offersSpecial && includeSpecial },
       );
       if (requestId !== pathRequestRef.current) return;
 
@@ -163,17 +172,22 @@ export default function JourneyPlanner({
     }
   };
 
-  const resetForm = () => {
+  // Drops the result and its highlight, keeping the stops
+  const clearResult = () => {
     cancelPathSearch();
     setFoundPath([]);
     setFoundStops(null);
     setTotalDistance(0);
     setPathError(null);
+    onHighlightRoutes?.([], "planner");
+  };
+
+  const resetForm = () => {
+    clearResult();
     // From and To keep their keys, so their inputs stay mounted
     setStops((prev) =>
       [prev[0], prev[prev.length - 1]].map((s) => ({ ...s, station: null, query: "" })),
     );
-    onHighlightRoutes?.([], "planner");
   };
 
   const handleAddToSelection = () => {
@@ -317,6 +331,19 @@ export default function JourneyPlanner({
         onClear={clearEndpoint(to)}
         {...fieldProps(to)}
       />
+
+      {/* Flipping it drops the result: a plan over lines just excluded must not
+          stay one tap from the selection. */}
+      {offersSpecial && (
+        <ToggleSwitch
+          label={`Include ${regionUsagePluralLabel(regionId, 2)}`}
+          checked={includeSpecial}
+          onChange={(checked) => {
+            clearResult();
+            setIncludeSpecial(checked);
+          }}
+        />
+      )}
 
       <button
         type="button"

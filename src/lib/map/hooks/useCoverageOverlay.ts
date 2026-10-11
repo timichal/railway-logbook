@@ -1,12 +1,13 @@
 import type * as maplibregl from "maplibre-gl";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { DataAccess } from "@/lib/dataAccess";
+import type { UsageType } from "@/lib/shared/constants";
 import {
-  COVERAGE_LAYER_ID,
+  COVERAGE_LAYER_IDS,
   COVERAGE_SOURCE_ID,
   coverageData,
-  coverageFilter,
-  createCoverageLayer,
+  coverageFilters,
+  createCoverageLayers,
 } from "@/lib/shared/map/coverageLayer";
 import type { CoveredStretch } from "@/lib/shared/types";
 
@@ -22,9 +23,10 @@ function syncCoverageOverlay(
   m: maplibregl.Map,
   stretches: CoveredStretch[],
   selectedCountries: string[],
+  shownTypes: readonly UsageType[],
 ): void {
   if (stretches.length === 0) {
-    if (m.getLayer(COVERAGE_LAYER_ID)) m.removeLayer(COVERAGE_LAYER_ID);
+    for (const id of COVERAGE_LAYER_IDS) if (m.getLayer(id)) m.removeLayer(id);
     if (m.getSource(COVERAGE_SOURCE_ID)) m.removeSource(COVERAGE_SOURCE_ID);
     return;
   }
@@ -38,15 +40,17 @@ function syncCoverageOverlay(
     m.addSource(COVERAGE_SOURCE_ID, { type: "geojson", data });
   }
 
-  if (m.getLayer(COVERAGE_LAYER_ID)) {
-    m.setFilter(COVERAGE_LAYER_ID, coverageFilter(selectedCountries));
-  } else {
-    m.addLayer(createCoverageLayer(selectedCountries) as maplibregl.LayerSpecification);
+  for (const layer of createCoverageLayers(selectedCountries, shownTypes)) {
+    if (m.getLayer(layer.id)) {
+      if (layer.filter) m.setFilter(layer.id, layer.filter);
+    } else {
+      m.addLayer(layer as maplibregl.LayerSpecification);
+    }
+    // Sit above the route lines but below the stations — and therefore below the
+    // selection/planner highlights, which are added on top of everything. In
+    // order, so the variants keep their own stacking.
+    if (m.getLayer("stations")) m.moveLayer(layer.id, "stations");
   }
-
-  // Sit above the route lines but below the stations — and therefore below the
-  // selection/planner highlights, which are added on top of everything.
-  if (m.getLayer("stations")) m.moveLayer(COVERAGE_LAYER_ID, "stations");
 }
 
 /**
@@ -57,9 +61,15 @@ export function useCoverageOverlay(
   mapLoaded: boolean,
   dataAccess: DataAccess,
   selectedCountries: string[],
+  /** The usage types the map draws (`shownUsageTypes`), which the overlay follows. */
+  shownTypes: readonly UsageType[],
   /** Bumped when journeys change, so the overlay refetches. */
   coverageVersion: number,
 ) {
+  // Read by the fetch when it lands, so a filter change alone never refetches
+  const filtersRef = useRef({ selectedCountries, shownTypes });
+  filtersRef.current = { selectedCountries, shownTypes };
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: coverageVersion is an intentional trigger — it refetches the stretches after journeys change.
   useEffect(() => {
     const m = map.current;
@@ -76,7 +86,8 @@ export function useCoverageOverlay(
         // style is loaded, and isStyleLoaded() is false for as long as any source
         // is still fetching tiles — which is exactly when this lands after a tile
         // refresh. Its fallback, once("load"), fires once per map and so never did.
-        syncCoverageOverlay(m, stretches, selectedCountries);
+        const filters = filtersRef.current;
+        syncCoverageOverlay(m, stretches, filters.selectedCountries, filters.shownTypes);
       })
       .catch((error) => {
         if (!cancelled) console.error("Error loading ridden stretches:", error);
@@ -85,5 +96,15 @@ export function useCoverageOverlay(
     return () => {
       cancelled = true;
     };
-  }, [map, mapLoaded, dataAccess, selectedCountries, coverageVersion]);
+  }, [map, mapLoaded, dataAccess, coverageVersion]);
+
+  // A country or layer toggle only refilters what is already there: the stretches
+  // are the same, and refetching them is a server action queued behind the rest
+  useEffect(() => {
+    const m = map.current;
+    if (!mapLoaded || !m) return;
+    for (const { id, filter } of coverageFilters(selectedCountries, shownTypes)) {
+      if (m.getLayer(id)) m.setFilter(id, filter);
+    }
+  }, [map, mapLoaded, selectedCountries, shownTypes]);
 }

@@ -36,6 +36,13 @@ export default function HowToUseArticle() {
           without any traffic at the moment.
         </p>
         <p className="mb-4">
+          In Japan the dashed lines are the <b>Non-JR lines</b> instead - private and third-sector
+          railways, timetabled like the JR network. They are shown from the start, count towards
+          your progress (the <b>Statistics</b> tab gives JR and non-JR lines separately, then
+          together), and the journey planner uses them unless you turn off its{" "}
+          <b>Include Non-JR lines</b> switch.
+        </p>
+        <p className="mb-4">
           While in the <b>Route Logger</b> mode, you can either click on individual line parts or
           use the <b>Journey Planner</b> to find a route between two stations. You can then save the
           result as a journey - a basic unit of your log. Saved journeys are added to the{" "}

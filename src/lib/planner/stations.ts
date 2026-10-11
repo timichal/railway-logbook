@@ -5,6 +5,8 @@
 
 import pool from "../db";
 import { withinMetersSql } from "../mercatorDistance";
+import type { PlannerOptions } from "./routeGraph";
+import { plannerRouteSql } from "./routeGraphCache";
 
 /** Progressive tolerance levels (meters) for matching routes to a station */
 const STATION_TOLERANCES = [100, 500, 1000, 2000, 5000];
@@ -38,9 +40,13 @@ export interface StationRouteMatch {
  * nearest the station, which is where a journey changing lines at a via gets on
  * or off it (see `changeCosts`). Both are kept for every route within the widest
  * tolerance, not only the matched ones — nothing asks about any other.
+ *
+ * Only the routes the search may ride (`options`) are matched: a station served
+ * by nothing else would otherwise be "near" a route the graph does not hold.
  */
 export async function findRoutesNearStations(
   stationIds: number[],
+  options: PlannerOptions = {},
 ): Promise<Map<number, StationRouteMatch>> {
   const matches = new Map<number, StationRouteMatch>();
   for (const stationId of stationIds) {
@@ -76,7 +82,7 @@ export async function findRoutesNearStations(
         ST_Y(ST_ClosestPoint(r.geometry, s.coordinates)) AS lat
       FROM s
       JOIN railway_routes r
-        ON r.usage_type = 0
+        ON ${plannerRouteSql("r", options)}
        AND ${withinMetersSql("r.geometry_3857", "s.geom_3857", "$2", "ST_Y(s.coordinates)")}
       ORDER BY s.id, distance_m
       `,

@@ -8,7 +8,8 @@ import { progressForUser } from "@/lib/progressQueries";
  *
  * `countries` absent means no country filter; `countries=` (empty) means the
  * filter excludes everything, which is a real state the web app can be in and
- * answers zeros. Only Regular routes count, as on the web.
+ * answers zeros. Only the usage types the region counts as ordinary service count
+ * (`ordinaryUsageTypes` — Regular, plus Japan's non-JR lines), as on the web.
  */
 export async function GET(request: Request): Promise<Response> {
   return apiHandler(async () => {

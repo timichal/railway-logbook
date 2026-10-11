@@ -107,8 +107,14 @@ export function useUserMap(
     if (mapLoaded) void refreshProgress();
   }, [mapLoaded, refreshProgress]);
 
+  // The usage types drawn, which the ridden stretches and the searched line follow
+  const shownTypes = useMemo(
+    () => shownUsageTypes(layerPrefs.showHeritage, layerPrefs.showSpecial),
+    [layerPrefs.showHeritage, layerPrefs.showSpecial],
+  );
+
   // Ridden stretches of routes not yet finished, drawn over the route line
-  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, coverageVersion);
+  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, shownTypes, coverageVersion);
 
   // mapLoaded applies the persisted switches once the layers exist
   useLayerFilters(
@@ -123,10 +129,6 @@ export function useUserMap(
   );
 
   // The line picked in the search box, highlighted on the map
-  const shownTypes = useMemo(
-    () => shownUsageTypes(layerPrefs.showHeritage, layerPrefs.showSpecial),
-    [layerPrefs.showHeritage, layerPrefs.showSpecial],
-  );
   const lineHighlight = useLineSearchHighlight(
     map,
     mapLoaded,

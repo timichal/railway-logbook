@@ -1,70 +1,43 @@
 /**
- * Persists user-map layer toggle preferences (the sidebar checkboxes) to
- * localStorage so they survive reloads and navigation.
+ * Persists user-map layer toggle preferences (the menu's switches) to
+ * localStorage so they survive reloads and navigation. The stored form and what
+ * it means in a region are `shared/map/layerPrefs.ts`, shared with the native app.
  *
  * Only used on the user map, which is loaded with `ssr: false`, so it is safe
  * to read these synchronously in a useState initializer.
  */
 
-export interface LayerPrefs {
-  /** "Show heritage & tourist lines" — reveals Heritage routes (usage_type=1, dotted). */
-  showHeritage: boolean;
-  /** "Show special services" — reveals Special routes (usage_type=2, dashed). */
-  showSpecial: boolean;
-  /** "Scenic lines" — the violet band under the admin-drawn scenic stretches. */
-  showScenicLines: boolean;
-}
+import {
+  type LayerPrefs,
+  parseStoredLayerPrefs,
+  type StoredLayerPrefs,
+  withLayerPref,
+} from "@/lib/shared/map/layerPrefs";
+import type { RegionId } from "@/lib/shared/regions";
+
+export type { LayerPrefs } from "@/lib/shared/map/layerPrefs";
 
 const LAYER_PREFS_KEY = "railway-map-layer-prefs";
 
-const DEFAULTS: LayerPrefs = {
-  showHeritage: false,
-  showSpecial: false,
-  showScenicLines: false,
-};
-
-export function loadLayerPrefs(): LayerPrefs {
-  if (typeof window === "undefined") return { ...DEFAULTS };
+export function loadLayerPrefs(): StoredLayerPrefs {
+  if (typeof window === "undefined") return {};
   try {
-    const stored = localStorage.getItem(LAYER_PREFS_KEY);
-    if (!stored) return { ...DEFAULTS };
-
-    // `showSpecialLines` is the legacy single toggle (Heritage + Diversion
-    // together). When present and the new keys aren't, seed both from it.
-    // `showScenicOutline` is the same switch from when scenic was a flag on routes.
-    const parsed = JSON.parse(stored) as Partial<LayerPrefs> & {
-      showSpecialLines?: boolean;
-      showScenicOutline?: boolean;
-    };
-    const legacy =
-      typeof parsed.showSpecialLines === "boolean" ? parsed.showSpecialLines : undefined;
-    return {
-      showHeritage:
-        typeof parsed.showHeritage === "boolean"
-          ? parsed.showHeritage
-          : (legacy ?? DEFAULTS.showHeritage),
-      showSpecial:
-        typeof parsed.showSpecial === "boolean"
-          ? parsed.showSpecial
-          : (legacy ?? DEFAULTS.showSpecial),
-      showScenicLines:
-        typeof parsed.showScenicLines === "boolean"
-          ? parsed.showScenicLines
-          : typeof parsed.showScenicOutline === "boolean"
-            ? parsed.showScenicOutline
-            : DEFAULTS.showScenicLines,
-    };
+    return parseStoredLayerPrefs(localStorage.getItem(LAYER_PREFS_KEY));
   } catch (error) {
     console.warn("Failed to load layer prefs:", error);
-    return { ...DEFAULTS };
+    return {};
   }
 }
 
-/** Update a single preference, merging with whatever else is stored. */
-export function saveLayerPref<K extends keyof LayerPrefs>(key: K, value: LayerPrefs[K]): void {
+/**
+ * Set one switch, merged into what is stored *now* rather than into this tab's
+ * copy: another tab may have changed the others since this one loaded, and
+ * writing a whole stale copy back would undo those.
+ */
+export function saveLayerPref(regionId: RegionId, key: keyof LayerPrefs, value: boolean): void {
   if (typeof window === "undefined") return;
   try {
-    const next: LayerPrefs = { ...loadLayerPrefs(), [key]: value };
+    const next = withLayerPref(loadLayerPrefs(), regionId, key, value);
     localStorage.setItem(LAYER_PREFS_KEY, JSON.stringify(next));
   } catch (error) {
     console.warn("Failed to save layer prefs:", error);

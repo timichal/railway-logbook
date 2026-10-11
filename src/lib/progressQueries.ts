@@ -10,7 +10,8 @@
  */
 
 import { query } from "./db";
-import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
+import type { UsageType } from "./shared/constants";
+import { ordinaryUsageSql, REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
 import type { CoveredRange, CoveredStretch } from "./shared/types";
 
 /**
@@ -54,20 +55,22 @@ export async function progressForUser(
     };
   }
 
-  // Get total distance and count of all routes (only Regular usage_type=0 counts; Heritage & Special excluded, optionally filtered by countries)
+  // Get total distance and count of all routes the region counts as ordinary
+  // service (Regular, plus Japan's non-JR lines — see `ordinaryUsageTypes`),
+  // optionally filtered by countries
   const totalResult = await query(
     `SELECT
       COALESCE(SUM(length_km), 0) as total_km,
       COUNT(*) as total_routes
     FROM railway_routes
     WHERE length_km IS NOT NULL
-      AND usage_type = 0
+      AND ${ordinaryUsageSql(region, "usage_type")}
       AND ${regionContainsSql(region, "starting_coordinate")}
       ${hasCountries ? "AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])" : ""}`,
     hasCountries ? [selectedCountries] : [],
   );
 
-  // Get completed distance and count (routes ridden whole, only Regular usage_type=0)
+  // Get completed distance and count (routes ridden whole, over the same routes)
   // "Most permissive wins": a route is complete if any journey logged it whole,
   // or if its partial stretches add up to all of it (FULLY_RIDDEN_TRACK_IDS).
   // The subquery yields distinct ids, so a route counts once however many
@@ -77,7 +80,7 @@ export async function progressForUser(
       COALESCE(SUM(rr.length_km), 0) as completed_km,
       COUNT(*) as completed_routes
     FROM railway_routes rr
-    WHERE rr.usage_type = 0
+    WHERE ${ordinaryUsageSql(region, "rr.usage_type")}
       AND rr.length_km IS NOT NULL
       AND ${regionContainsSql(region, "rr.starting_coordinate")}
       ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}
@@ -110,8 +113,20 @@ export interface CountryProgress {
   completedKm: number;
 }
 
+/** One usage type's share of the region — Japan's JR lines against its non-JR ones. */
+export interface UsageProgress {
+  usageType: UsageType;
+  totalKm: number;
+  completedKm: number;
+}
+
 export interface ProgressByCountry {
   byCountry: CountryProgress[];
+  /**
+   * One row per usage type the region counts (`ordinaryUsageTypes`), ridden or not.
+   * A single row equal to the total where only Regular counts, as in Europe.
+   */
+  byUsage: UsageProgress[];
   total: {
     totalKm: number;
     completedKm: number;
@@ -119,44 +134,49 @@ export interface ProgressByCountry {
 }
 
 /**
- * Get progress statistics broken down by country
- * Returns stats for each country (routes starting AND ending in that country)
- * Plus overall total across all countries
+ * Get progress statistics broken down by country and by usage type
+ * Returns stats for each country (routes starting AND ending in that country),
+ * for each usage type the region counts, plus the overall total
  */
 export async function progressByCountryForUser(
   userId: number,
   region: RegionId,
 ): Promise<ProgressByCountry> {
-  // One pass over the Regular routes, aggregated twice via GROUPING SETS:
+  // One pass over the routes the region counts as ordinary service, aggregated
+  // three times via GROUPING SETS:
   // - per `country` (non-NULL only for routes that both start and end in the
   //   same country — cross-border routes land in the NULL bucket and are ignored)
-  // - the grand total over every Regular route, cross-border included
-  // `is_total` (GROUPING) tells the two NULL-country rows apart.
+  // - per `usage_type` (Japan's JR and non-JR lines), cross-border included
+  // - the grand total over every counted route, cross-border included
+  // GROUPING tells the sets apart: bit 1 is `country` rolled up, bit 0 `usage_type`.
   const result = await query(
-    `WITH regular AS (
+    `WITH counted AS (
        SELECT
          rr.length_km,
+         rr.usage_type,
          CASE WHEN rr.start_country = rr.end_country THEN rr.start_country END AS country,
          (done.track_id IS NOT NULL) AS completed
        FROM railway_routes rr
        LEFT JOIN (${FULLY_RIDDEN_TRACK_IDS}) done ON done.track_id = rr.track_id
-       WHERE rr.usage_type = 0
+       WHERE ${ordinaryUsageSql(region, "rr.usage_type")}
          AND rr.length_km IS NOT NULL
          AND ${regionContainsSql(region, "rr.starting_coordinate")}
      )
      SELECT
-       GROUPING(country) AS is_total,
+       GROUPING(country, usage_type) AS grouping,
        country,
+       usage_type,
        COALESCE(SUM(length_km), 0) AS total_km,
        COALESCE(SUM(length_km) FILTER (WHERE completed), 0) AS completed_km
-     FROM regular
-     GROUP BY GROUPING SETS ((country), ())`,
+     FROM counted
+     GROUP BY GROUPING SETS ((country), (usage_type), ())`,
     [userId],
   );
 
   const round1 = (value: number) => Math.round(value * 10) / 10;
 
   const byCode = new Map<string, { totalKm: number; completedKm: number }>();
+  const byType = new Map<number, { totalKm: number; completedKm: number }>();
   let overallTotalKm = 0;
   let overallCompletedKm = 0;
 
@@ -164,9 +184,14 @@ export async function progressByCountryForUser(
     const totalKm = parseFloat(row.total_km) || 0;
     const completedKm = parseFloat(row.completed_km) || 0;
 
-    if (row.is_total === 1) {
+    // GROUPING comes back as an int: 3 = grand total, 2 = per usage type
+    // (country rolled up), 1 = per country (usage type rolled up)
+    const grouping = Number(row.grouping);
+    if (grouping === 3) {
       overallTotalKm = totalKm;
       overallCompletedKm = completedKm;
+    } else if (grouping === 2) {
+      byType.set(Number(row.usage_type), { totalKm, completedKm });
     } else if (row.country) {
       byCode.set(row.country, { totalKm, completedKm });
     }
@@ -182,8 +207,18 @@ export async function progressByCountryForUser(
     };
   });
 
+  const usageStats: UsageProgress[] = REGIONS[region].ordinaryUsageTypes.map((usageType) => {
+    const stats = byType.get(usageType);
+    return {
+      usageType,
+      totalKm: round1(stats?.totalKm ?? 0),
+      completedKm: round1(stats?.completedKm ?? 0),
+    };
+  });
+
   return {
     byCountry: countryStats,
+    byUsage: usageStats,
     total: {
       totalKm: round1(overallTotalKm),
       completedKm: round1(overallCompletedKm),

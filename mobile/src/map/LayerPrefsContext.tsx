@@ -8,84 +8,79 @@
  * `user_preferences`, matching the web app's localStorage — it is the viewer's
  * choice, and needs no round trip to change.
  *
- * The stored value is region-agnostic, as on the web. What a region *offers* is not:
- * `hasScenicHighlight` decides whether the scenic lines are drawn at all, which is
- * `LayerToggles`' business and the map's, not this store's.
+ * The stored form, and what it means in a region, are the web app's own
+ * (`@shared/map/layerPrefs`): the Special switch is kept per region and starts on
+ * where Special is ordinary service (Japan's non-JR lines). What a region *offers*
+ * beyond that — `hasScenicHighlight` deciding whether the scenic lines are drawn at
+ * all — is `LayerToggles`' business and the map's, not this store's.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import {
+  type LayerPrefs,
+  parseStoredLayerPrefs,
+  resolveLayerPrefs,
+  type StoredLayerPrefs,
+  withLayerPref,
+} from "@shared/map/layerPrefs";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useRegion } from "@/region/RegionContext";
+
+export type { LayerPrefs } from "@shared/map/layerPrefs";
 
 const STORAGE_KEY = "railwayLogbook.layerPrefs";
 
-export interface LayerPrefs {
-  /** "Show heritage & tourist lines" — reveals Heritage routes (usage_type=1, dotted). */
-  showHeritage: boolean;
-  /** "Show special services" — reveals Special routes (usage_type=2, dashed). */
-  showSpecial: boolean;
-  /** "Scenic lines" — the violet band under the admin-drawn scenic stretches. */
-  showScenicLines: boolean;
-}
-
-const DEFAULTS: LayerPrefs = {
-  showHeritage: false,
-  showSpecial: false,
-  showScenicLines: false,
-};
-
 interface LayerPrefsValue extends LayerPrefs {
-  setPref<K extends keyof LayerPrefs>(key: K, value: LayerPrefs[K]): void;
+  setPref(key: keyof LayerPrefs, value: boolean): void;
 }
 
 const LayerPrefsContext = createContext<LayerPrefsValue | null>(null);
 
-function parse(stored: string | null): LayerPrefs {
-  if (!stored) return { ...DEFAULTS };
-  try {
-    // `showScenicOutline` is the same switch from when scenic was a flag on routes.
-    const parsed = JSON.parse(stored) as Partial<LayerPrefs> & { showScenicOutline?: boolean };
-    return {
-      showHeritage: parsed.showHeritage ?? DEFAULTS.showHeritage,
-      showSpecial: parsed.showSpecial ?? DEFAULTS.showSpecial,
-      showScenicLines:
-        parsed.showScenicLines ?? parsed.showScenicOutline ?? DEFAULTS.showScenicLines,
-    };
-  } catch {
-    return { ...DEFAULTS };
-  }
-}
-
 export function LayerPrefsProvider({ children }: { children: ReactNode }): ReactNode {
-  const [prefs, setPrefs] = useState<LayerPrefs>(DEFAULTS);
+  const { regionId } = useRegion();
+  const [stored, setStored] = useState<StoredLayerPrefs>({});
 
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(STORAGE_KEY)
-      .then((stored) => {
-        if (!cancelled) setPrefs(parse(stored));
+      .then((json) => {
+        if (!cancelled) setStored(parseStoredLayerPrefs(json));
       })
       .catch(() => {
-        // Every default is "off", which is already what is on screen.
+        // The defaults are already what is on screen.
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // No gate on hydration, unlike the region: all three default to off, and a layer
-  // that appears a frame late is a layer appearing, not a wrong first paint.
-  const setPref = useCallback(<K extends keyof LayerPrefs>(key: K, value: LayerPrefs[K]) => {
-    setPrefs((current) => {
-      const next = { ...current, [key]: value };
-      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  return (
-    <LayerPrefsContext.Provider value={{ ...prefs, setPref }}>
-      {children}
-    </LayerPrefsContext.Provider>
+  // No gate on hydration, unlike the region: before the read lands the region's
+  // defaults are drawn, and a layer that changes a frame late is a layer changing,
+  // not a wrong first paint.
+  const setPref = useCallback(
+    (key: keyof LayerPrefs, value: boolean) => {
+      setStored((current) => {
+        const next = withLayerPref(current, regionId, key, value);
+        void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    [regionId],
   );
+
+  const value = useMemo(
+    () => ({ ...resolveLayerPrefs(stored, regionId), setPref }),
+    [stored, regionId, setPref],
+  );
+
+  return <LayerPrefsContext.Provider value={value}>{children}</LayerPrefsContext.Provider>;
 }
 
 export function useLayerPrefs(): LayerPrefsValue {

@@ -118,7 +118,7 @@ export async function getPublicProgressByCountry(
 ): Promise<ProgressByCountry> {
   const owner = await publicMapOwner(token);
   if (!owner) {
-    return { byCountry: [], total: { totalKm: 0, completedKm: 0 } };
+    return { byCountry: [], byUsage: [], total: { totalKm: 0, completedKm: 0 } };
   }
 
   return progressByCountryForUser(owner.userId, region);

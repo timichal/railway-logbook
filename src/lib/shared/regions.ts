@@ -76,6 +76,18 @@ export interface Region {
    */
   hasScenicHighlight: boolean;
   /**
+   * The usage types that are ordinary timetabled service here — what progress
+   * counts, what the planner may ride, and what the map draws without being asked.
+   * Regular everywhere. In Europe a Special route is national track used
+   * irregularly — a diversion, a festival run — which nobody can plan a journey
+   * over or be expected to have ridden. In Japan Special is the non-JR operators'
+   * lines, timetabled like any other, so it counts: the progress total takes both,
+   * the statistics give each its own row, the planner offers them behind a switch
+   * that starts on, and their map layer starts shown (`map/layerPrefs.ts`).
+   * Heritage is never ordinary — a line of its own, outside the timetable.
+   */
+  ordinaryUsageTypes: readonly UsageType[];
+  /**
    * Usage types this region renames. The axis (whose track, whose timetable) is
    * the same everywhere, but Japan's split falls exactly on the JR / non-JR
    * operator line, which is what a Japanese reader recognises — so Regular reads
@@ -100,6 +112,7 @@ export const REGIONS: Record<RegionId, Region> = {
     hasCountryFilter: true,
     hasRouteNames: false,
     hasScenicHighlight: true,
+    ordinaryUsageTypes: [0],
   },
   japan: {
     id: "japan",
@@ -115,6 +128,7 @@ export const REGIONS: Record<RegionId, Region> = {
     hasCountryFilter: false,
     hasRouteNames: true,
     hasScenicHighlight: false,
+    ordinaryUsageTypes: [0, 2],
     usageLabels: { 0: "JR line", 2: "Non-JR line" },
   },
 };
@@ -182,6 +196,7 @@ export function regionCountryCodes(regionId: RegionId): string[] {
 type RegionPointColumn =
   | "starting_coordinate"
   | "rr.starting_coordinate"
+  | "r.starting_coordinate"
   | "coordinates"
   | "coordinate";
 
@@ -202,4 +217,65 @@ type RegionPointColumn =
 export function regionContainsSql(regionId: RegionId, point: RegionPointColumn): string {
   const [[west, south], [east, north]] = REGIONS[regionId].bounds;
   return `${point} && ST_MakeEnvelope(${west}, ${south}, ${east}, ${north}, 4326)`;
+}
+
+/** Whether a usage type is ordinary service in this region (`ordinaryUsageTypes`). */
+export function isOrdinaryUsage(regionId: RegionId, usageType: UsageType): boolean {
+  return REGIONS[regionId].ordinaryUsageTypes.includes(usageType);
+}
+
+/**
+ * Whether a region counts more than Regular as ordinary — and so whether its
+ * statistics break the total down by usage type, and its planner offers the
+ * switch for the rest.
+ */
+export function hasOrdinaryNonRegular(regionId: RegionId): boolean {
+  return REGIONS[regionId].ordinaryUsageTypes.length > 1;
+}
+
+/**
+ * The SQL condition "`column` is a usage type this region counts", for a query
+ * already scoped to the region. The numbers come from this module.
+ */
+export function ordinaryUsageSql(regionId: RegionId, column: string): string {
+  return `${column} IN (${REGIONS[regionId].ordinaryUsageTypes.join(", ")})`;
+}
+
+/**
+ * The SQL condition "route `alias` is ordinary service in whichever region it is
+ * in", for the queries that are not region-scoped — the planner's network, which is
+ * one graph over both regions. Regular anywhere; any other usage type only inside a
+ * region that counts it, so a Special route in Europe never qualifies however the
+ * caller asks.
+ */
+export function ordinaryRouteSql(alias: "r" | "rr"): string {
+  const clauses = [`${alias}.usage_type = 0`];
+  for (const id of REGION_IDS) {
+    const others = REGIONS[id].ordinaryUsageTypes.filter((type) => type !== 0);
+    if (others.length === 0) continue;
+    clauses.push(
+      `(${alias}.usage_type IN (${others.join(", ")}) AND ${regionContainsSql(id, `${alias}.starting_coordinate`)})`,
+    );
+  }
+  return `(${clauses.join(" OR ")})`;
+}
+
+/**
+ * Whether a region has a statistics view at all — the web sidebar's third tab, the
+ * native app's Countries/Statistics screen: the countries where it can filter by
+ * them, the per-line-type numbers where it counts more than Regular. One test, so
+ * the row that opens the view and the view itself cannot disagree.
+ */
+export function hasStatsView(regionId: RegionId): boolean {
+  return REGIONS[regionId].hasCountryFilter || hasOrdinaryNonRegular(regionId);
+}
+
+/** The region whose box holds a [lng, lat] point, or null for one outside them all. */
+export function regionOfPoint([lng, lat]: [number, number]): RegionId | null {
+  return (
+    REGION_IDS.find((id) => {
+      const [[west, south], [east, north]] = REGIONS[id].bounds;
+      return lng >= west && lng <= east && lat >= south && lat <= north;
+    }) ?? null
+  );
 }

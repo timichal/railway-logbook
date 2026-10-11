@@ -9,6 +9,7 @@ import LocalTripLogger from "@/components/logbook/LocalTripLogger";
 import type { User } from "@/lib/authActions";
 import type { DataAccess } from "@/lib/dataAccess";
 import { useRegion } from "@/lib/regionContext";
+import { hasStatsView } from "@/lib/shared/regions";
 import type {
   HighlightRoutesFn,
   JourneyEditStartFn,
@@ -75,12 +76,15 @@ export default function UserSidebar({
     onRoutesLogged?.();
   }, [onRoutesLogged]);
 
-  // A single-country region has nothing to filter, so its Countries tab is gone.
-  // Switching into one while that tab is open would leave an empty pane, so the
-  // sidebar falls back to the Route Logger.
+  // The third tab is the countries and their numbers where there is a country
+  // filter, the numbers alone where the region breaks them down by line type
+  // instead (Japan: JR, non-JR, total), and absent where there is neither.
+  // Switching into such a region while it is open would leave an empty pane, so
+  // the sidebar falls back to the Route Logger.
+  const hasStatsTab = hasStatsView(region.id);
   useEffect(() => {
-    if (!region.hasCountryFilter && activeTab === "filter") setActiveTab("routes");
-  }, [region.hasCountryFilter, activeTab, setActiveTab]);
+    if (!hasStatsTab && activeTab === "filter") setActiveTab("routes");
+  }, [hasStatsTab, activeTab, setActiveTab]);
 
   return (
     <div
@@ -124,7 +128,7 @@ export default function UserSidebar({
           <span className="md:hidden">{user ? "Trips" : "Journeys"}</span>
           <span className="hidden md:inline">{user ? "My Trips" : "My Journeys"}</span>
         </button>
-        {region.hasCountryFilter && (
+        {hasStatsTab && (
           <button
             type="button"
             onClick={() => setActiveTab("filter")}
@@ -143,7 +147,7 @@ export default function UserSidebar({
                 clipRule="evenodd"
               />
             </svg>
-            Countries
+            {region.hasCountryFilter ? "Countries" : "Statistics"}
           </button>
         )}
       </div>
@@ -200,7 +204,7 @@ export default function UserSidebar({
           />
         )}
 
-        {activeTab === "filter" && region.hasCountryFilter && (
+        {activeTab === "filter" && hasStatsTab && (
           <CountriesStatsTab
             dataAccess={dataAccess}
             selectedCountries={selectedCountries}

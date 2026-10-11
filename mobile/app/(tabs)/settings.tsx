@@ -4,7 +4,7 @@
  * features they belong to.
  */
 
-import { REGIONS, type RegionId } from "@shared/regions";
+import { hasStatsView, REGIONS, type RegionId } from "@shared/regions";
 import { useRouter } from "expo-router";
 import { type ReactNode, useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
@@ -56,13 +56,21 @@ export default function SettingsScreen(): ReactNode {
           />
         </Section>
 
-        {/* Only where there is something to tick: a single-country region pins its
-            filter to itself, and the screen would be one row that cannot be turned
-            off. */}
+        {/* The countries where there is something to tick; a single-country region
+            pins its filter to itself, so there the screen is the numbers alone — and
+            only where they break down further, by line type (Japan: JR, non-JR). */}
         {region.hasCountryFilter ? (
           <Section title="Countries" hint="Which of them to count, and how far you are in each.">
             <Button
               label="Countries & statistics"
+              variant="outline"
+              onPress={() => router.push("/countries")}
+            />
+          </Section>
+        ) : hasStatsView(regionId) ? (
+          <Section title="Statistics" hint="How far you are on each kind of line.">
+            <Button
+              label="Statistics"
               variant="outline"
               onPress={() => router.push("/countries")}
             />

@@ -14,8 +14,7 @@ import {
   getPublicProgress,
   getPublicProgressByCountry,
 } from "./publicMapActions";
-import { isSpecialUsage } from "./shared/constants";
-import { REGIONS, type RegionId } from "./shared/regions";
+import { isOrdinaryUsage, REGIONS, type RegionId } from "./shared/regions";
 import { isRouteFullyRidden } from "./shared/routeCoverage";
 import type { CoveredRange, CoveredStretch, LocalLoggedPart, RouteSummary } from "./shared/types";
 import {
@@ -191,8 +190,11 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
           );
         }
 
-        // Filter out non-regular routes (Heritage + Special); only Regular counts.
-        filteredRoutes = filteredRoutes.filter((route) => !isSpecialUsage(route.usage_type));
+        // Only the usage types the region counts as ordinary service (Regular, plus
+        // Japan's non-JR lines), as progressForUser does
+        filteredRoutes = filteredRoutes.filter((route) =>
+          isOrdinaryUsage(region, route.usage_type),
+        );
 
         // Calculate totals
         const totalRoutes = filteredRoutes.length;
@@ -242,61 +244,41 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
       try {
         const allRoutes = await ensureRoutes();
         const completedRouteIds = fullyRiddenTrackIds(allRoutes);
+        // The routes the region counts as ordinary service, as progressByCountryForUser
+        const counted = allRoutes.filter((route) => isOrdinaryUsage(region, route.usage_type));
 
-        // Calculate stats for each country
-        const byCountry = REGIONS[region].countries.map((country) => {
-          // Filter routes where BOTH start AND end are in this country (excluding special)
-          const countryRoutes = allRoutes.filter(
-            (route) =>
-              !isSpecialUsage(route.usage_type) &&
-              route.start_country === country.code &&
-              route.end_country === country.code,
-          );
-
-          const totalKm = countryRoutes.reduce(
-            (sum, route) => sum + (Number(route.length_km) || 0),
-            0,
-          );
-
-          const completedCountryRoutes = countryRoutes.filter((route) =>
-            completedRouteIds.has(route.track_id),
-          );
-
-          const completedKm = completedCountryRoutes.reduce(
-            (sum, route) => sum + (Number(route.length_km) || 0),
-            0,
-          );
-
+        // Ridden against total km over some of them, rounded as the server rounds
+        const kmOf = (routes: RouteSummary[]) => {
+          let totalKm = 0;
+          let completedKm = 0;
+          for (const route of routes) {
+            const km = Number(route.length_km) || 0;
+            totalKm += km;
+            if (completedRouteIds.has(route.track_id)) completedKm += km;
+          }
           return {
-            countryCode: country.code,
-            countryName: country.name,
             totalKm: Math.round(totalKm * 10) / 10,
             completedKm: Math.round(completedKm * 10) / 10,
           };
-        });
-
-        // Calculate overall total (excluding special)
-        const allNonSpecialRoutes = allRoutes.filter((route) => !isSpecialUsage(route.usage_type));
-        const overallTotalKm = allNonSpecialRoutes.reduce(
-          (sum, route) => sum + (Number(route.length_km) || 0),
-          0,
-        );
-
-        const overallCompletedRoutes = allNonSpecialRoutes.filter((route) =>
-          completedRouteIds.has(route.track_id),
-        );
-        const overallCompletedKm = overallCompletedRoutes.reduce(
-          (sum, route) => sum + (Number(route.length_km) || 0),
-          0,
-        );
-
-        return {
-          byCountry,
-          total: {
-            totalKm: Math.round(overallTotalKm * 10) / 10,
-            completedKm: Math.round(overallCompletedKm * 10) / 10,
-          },
         };
+
+        // Each country: routes that both start AND end in it
+        const byCountry = REGIONS[region].countries.map((country) => ({
+          countryCode: country.code,
+          countryName: country.name,
+          ...kmOf(
+            counted.filter(
+              (route) => route.start_country === country.code && route.end_country === country.code,
+            ),
+          ),
+        }));
+
+        const byUsage = REGIONS[region].ordinaryUsageTypes.map((usageType) => ({
+          usageType,
+          ...kmOf(counted.filter((route) => route.usage_type === usageType)),
+        }));
+
+        return { byCountry, byUsage, total: kmOf(counted) };
       } catch (error) {
         console.error("Error calculating progress by country for localStorage user:", error);
         // Return default values on error
@@ -304,6 +286,11 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
           byCountry: REGIONS[region].countries.map((country) => ({
             countryCode: country.code,
             countryName: country.name,
+            totalKm: 0,
+            completedKm: 0,
+          })),
+          byUsage: REGIONS[region].ordinaryUsageTypes.map((usageType) => ({
+            usageType,
             totalKm: 0,
             completedKm: 0,
           })),

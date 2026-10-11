@@ -8,6 +8,7 @@
  * no session: route data is public, and the planner writes nothing.
  */
 
+import type { PlannerOptions } from "./planner/routeGraph";
 import { findRoutePathBetweenStations as findPath, type PathResult } from "./routePathFinder";
 import { routeBoundsByIds } from "./routeQueries";
 import type { RouteBounds } from "./shared/types";
@@ -22,8 +23,9 @@ export async function findRoutePathBetweenStations(
   fromStationId: number,
   toStationId: number,
   viaStationIds: number[] = [],
+  options: PlannerOptions = {},
 ): Promise<PathResult & { bounds: RouteBounds | null }> {
-  const result = await findPath(fromStationId, toStationId, viaStationIds);
+  const result = await findPath(fromStationId, toStationId, viaStationIds, options);
   if (result.error) return { ...result, bounds: null };
 
   const whole = result.routes.filter((r) => !r.partial).map((r) => r.track_id);

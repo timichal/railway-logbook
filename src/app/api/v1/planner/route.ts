@@ -1,10 +1,15 @@
-import { readJsonBody, requireInt, requireIntArray } from "@/lib/api/params";
+import { readJsonBody, requireBoolean, requireInt, requireIntArray } from "@/lib/api/params";
 import { ApiError, apiHandler, jsonResponse } from "@/lib/api/response";
 import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
 import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
 
 /**
- * POST /api/v1/planner — { fromStationId, toStationId, viaStationIds? }.
+ * POST /api/v1/planner — { fromStationId, toStationId, viaStationIds?, includeSpecial? }.
+ *
+ * `includeSpecial` (default false) lets the search ride, besides Regular routes,
+ * those its region counts as ordinary (`ordinaryUsageTypes`) — the planner's
+ * "Include Non-JR lines" switch in Japan. Enforced in the query, not trusted to the
+ * client: Europe's Special routes are never in the network, whatever is asked.
  *
  * The search stays on the server for good: it needs Postgres and the in-memory
  * route graph, neither of which belongs on a phone.
@@ -35,13 +40,19 @@ export async function POST(request: Request): Promise<Response> {
     if (viaStationIds.length > MAX_VIA_STATIONS) {
       throw new ApiError(400, `viaStationIds must hold at most ${MAX_VIA_STATIONS} items`);
     }
+    const includeSpecial =
+      body.includeSpecial === undefined || body.includeSpecial === null
+        ? false
+        : requireBoolean(body, "includeSpecial");
     const stops = [fromStationId, ...viaStationIds, toStationId];
     if (stops.some((id, i) => i > 0 && id === stops[i - 1])) {
       throw new ApiError(400, "Consecutive stops must be different stations");
     }
 
     return jsonResponse(
-      await findRoutePathBetweenStations(fromStationId, toStationId, viaStationIds),
+      await findRoutePathBetweenStations(fromStationId, toStationId, viaStationIds, {
+        includeSpecial,
+      }),
     );
   });
 }

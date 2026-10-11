@@ -54,6 +54,7 @@ import {
 } from "@shared/map/layers";
 import {
   scenicLinesFilter,
+  shownUsageTypes,
   userHeritageLayerConfig,
   userRouteLayerConfig,
   userSpecialLayerConfig,
@@ -125,6 +126,10 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   const basemapStyle = useBasemapStyle(theme);
   // Memoised: a new array each render would be sent across to the native layer again
   const scenicFilter = useMemo(() => scenicLinesFilter(countries), [countries]);
+  const shownTypes = useMemo(
+    () => shownUsageTypes(showHeritage, showSpecial),
+    [showHeritage, showSpecial],
+  );
   const initialPosition = useInitialPosition(regionId);
 
   const cameraRef = useRef<CameraRef>(null);
@@ -309,7 +314,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
         {/* The stretches already ridden of routes not yet finished, in the visited
             green over their own partial-orange line. Mounted here, with the map, so
             it settles below every highlight set — see `CoverageOverlay`. */}
-        <CoverageOverlay countries={countries} />
+        <CoverageOverlay countries={countries} shownTypes={shownTypes} />
 
         <PartialHighlightSource
           baseId="highlighted_routes"

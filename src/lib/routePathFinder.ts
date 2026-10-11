@@ -16,6 +16,7 @@
  */
 
 import pool from "./db";
+import type { PlannerOptions } from "./planner/routeGraph";
 import { getRouteNetwork } from "./planner/routeGraphCache";
 import {
   changeCosts,
@@ -25,7 +26,8 @@ import {
 } from "./planner/routeSearch";
 import { planTrims, planVisits, type TrimSpec } from "./planner/routeVisits";
 import { findRoutesNearStations } from "./planner/stations";
-import { MAX_VIA_STATIONS } from "./shared/constants";
+import { getUsagePluralLabel, MAX_VIA_STATIONS, type UsageType } from "./shared/constants";
+import { REGIONS, type RegionId, regionOfPoint, regionUsagePluralLabel } from "./shared/regions";
 import type { PartialRouteGeometry, PlannerRoute } from "./shared/types";
 
 export interface PathResult {
@@ -78,6 +80,19 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
 }
 
 /**
+ * The lines a search rode, named as its region names them — "Regular lines" in
+ * Europe, "JR lines or Non-JR lines" in Japan with the non-JR switch on — for the
+ * message that says they do not connect the stations.
+ */
+function searchedLinesLabel(regionId: RegionId | null, options: PlannerOptions): string {
+  const types: readonly UsageType[] =
+    regionId && options.includeSpecial ? REGIONS[regionId].ordinaryUsageTypes : [0];
+  return types
+    .map((type) => (regionId ? regionUsagePluralLabel(regionId, type) : getUsagePluralLabel(type)))
+    .join(" or ");
+}
+
+/**
  * Cut each route down to the fraction range `planTrims` picked, with the length
  * of what is left, by track id.
  */
@@ -127,12 +142,14 @@ async function cutTravelledStretches(
 }
 
 /**
- * Find the shortest path of routes connecting from -> via -> to stations
+ * Find the shortest path of routes connecting from -> via -> to stations, over
+ * Regular routes — and Special ones too where `options` asks (see `PlannerOptions`)
  */
 export async function findRoutePathBetweenStations(
   fromStationId: number,
   toStationId: number,
   viaStationIds: number[] = [],
+  options: PlannerOptions = {},
 ): Promise<PathResult> {
   // Refused here rather than in each caller, so the cap holds for the web action,
   // the HTTP handler and the CLI alike (see MAX_VIA_STATIONS)
@@ -162,8 +179,8 @@ export async function findRoutePathBetweenStations(
 
   try {
     const [stations, network] = await Promise.all([
-      findRoutesNearStations([...new Set(stationSequence)]),
-      getRouteNetwork(),
+      findRoutesNearStations([...new Set(stationSequence)], options),
+      getRouteNetwork(options),
     ]);
 
     // Every id in the sequence was asked about, so each has an entry
@@ -206,10 +223,14 @@ export async function findRoutePathBetweenStations(
 
       const segment = searchSegment(network, from.routes, to.routes, fractions, startCosts);
       if (!segment) {
+        // The plan's region, from a route its first station is on: the search is
+        // over both regions' one graph and never needed to know it before now
+        const firstRoute = network.routeInfo.get(stops[0].routes[0]);
+        const regionId = firstRoute ? regionOfPoint(firstRoute.startCoord) : null;
         return {
           routes: [],
           totalDistance: 0,
-          error: `No path found for segment ${i + 1}. The stations might not be connected by regular-service routes. Try adding via stations to break up the journey.`,
+          error: `No path found for segment ${i + 1}. The stations might not be connected by ${searchedLinesLabel(regionId, options)}. Try adding via stations to break up the journey.`,
         };
       }
 

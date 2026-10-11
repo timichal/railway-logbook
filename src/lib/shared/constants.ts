@@ -19,7 +19,9 @@
  * So types 1 and 2 split on whose track and whose timetable, not on what kind of
  * train: a tourist railway on its own line is 1, a tourist special routed over the
  * national network is 2. Both are "special" (non-regular): excluded from stats and
- * the planner. Each has its own independent toggle.
+ * the planner — except where a region counts one as ordinary service
+ * (`ordinaryUsageTypes` in regions.ts): Japan's Special is its non-JR lines, which
+ * are counted and planned over. Each has its own independent toggle.
  */
 /** Under this many characters the station and line search answers with nothing, so no client asks. */
 export const MIN_SEARCH_QUERY_LENGTH = 2;
@@ -60,9 +62,6 @@ export const usageOptions = [
 
 // Extract the usage type ID as a union type (0 | 1 | 2)
 export type UsageType = (typeof usageOptions)[number]["id"];
-
-/** A route is "special" (non-regular) when it is anything other than Regular. */
-export const isSpecialUsage = (usageType: UsageType): boolean => usageType !== 0;
 
 export const getUsageLabel = (usageType: UsageType): string => {
   const option = usageOptions.find((opt) => opt.id === usageType);

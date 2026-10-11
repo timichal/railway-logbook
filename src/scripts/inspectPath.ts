@@ -8,17 +8,20 @@
  * normal (endpoints are hand-picked click points); a few hundred means the path
  * probably skipped a short connecting route.
  *
- * Usage: npm run inspectPath -- "Waren (Müritz)" "Rostock Hauptbahnhof" [via...]
+ * Usage: npm run inspectPath -- "Waren (Müritz)" "Rostock Hauptbahnhof" [via...] [--special]
  *        Arguments are station names (exact, or a unique prefix) or station ids.
+ *        --special searches Special routes too, as Japan's planner does by default.
  */
 import dotenv from "dotenv";
 
 dotenv.config();
 
 async function main() {
-  const args = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const includeSpecial = argv.includes("--special");
+  const args = argv.filter((arg) => arg !== "--special");
   if (args.length < 2) {
-    console.error('Usage: npm run inspectPath -- "<from>" "<to>" ["<via>"...]');
+    console.error('Usage: npm run inspectPath -- "<from>" "<to>" ["<via>"...] [--special]');
     process.exit(1);
   }
 
@@ -48,7 +51,7 @@ async function main() {
   const [from, to, ...via] = await Promise.all(args.map(resolve));
 
   const started = performance.now();
-  const res = await findRoutePathBetweenStations(from, to, via);
+  const res = await findRoutePathBetweenStations(from, to, via, { includeSpecial });
   const elapsed = performance.now() - started;
   console.log(`search took ${elapsed.toFixed(0)} ms`);
 

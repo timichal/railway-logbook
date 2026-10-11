@@ -4,29 +4,63 @@
  */
 
 import pool from "../db";
-import { buildRouteGraph, type NetworkRoute, type RouteNetwork } from "./routeGraph";
+import { ordinaryRouteSql } from "../shared/regions";
+import {
+  buildRouteGraph,
+  type NetworkRoute,
+  type PlannerOptions,
+  type RouteNetwork,
+} from "./routeGraph";
 
-interface CachedRouteNetwork extends RouteNetwork {
-  /** Network fingerprint the graph was built from — see getNetworkSignature. */
-  signature: string;
+/**
+ * The SQL condition for the routes a search with these options may ride (see
+ * `PlannerOptions`): Regular, plus whatever else the route's own region counts as
+ * ordinary. Shared with the station matching, which must not find a route the
+ * graph does not hold.
+ */
+export function plannerRouteSql(alias: "r", options: PlannerOptions): string {
+  return options.includeSpecial ? ordinaryRouteSql(alias) : `${alias}.usage_type = 0`;
 }
 
 /**
- * Load the whole regular-usage route network and connect routes whose endpoints
- * meet (see `buildRouteGraph`).
+ * Both networks a search can ask for, from one load: the Regular routes alone,
+ * and those plus the non-Regular routes their region counts as ordinary
+ * (`PlannerOptions`). One query, since reading the endpoints is the expensive
+ * part and the second network is a superset of the first. The Regular graph is
+ * built at once; the other only when a search first asks for it, which a
+ * Europe-only day never does.
+ */
+interface CachedRouteNetworks {
+  /** Network fingerprint the graphs were built from — see getNetworkSignature. */
+  signature: string;
+  regular: RouteNetwork;
+  /** Every loaded route, Regular included — the input of `withOrdinary`. */
+  ordinaryRoutes: Map<number, NetworkRoute>;
+  withOrdinary: RouteNetwork | null;
+}
+
+function networkOf(routeInfo: Map<number, NetworkRoute>): RouteNetwork {
+  return { graph: buildRouteGraph(routeInfo), routeInfo };
+}
+
+/**
+ * Load every route a search can ride — each one its region counts as ordinary
+ * service — and build the Regular graph from them (see `buildRouteGraph`).
  *
  * The network is small enough (a few thousand routes, endpoints only) to load in
  * one query, so there is no buffering around the stations: pathfinding used to
  * retry with 50km/100km/.../1000km buffers, re-querying and rebuilding the graph
  * each time a segment failed.
  */
-async function loadRouteNetwork(signature: string): Promise<CachedRouteNetwork> {
+async function loadRouteNetworks(signature: string): Promise<CachedRouteNetworks> {
   const client = await pool.connect();
-  const routeInfo = new Map<number, NetworkRoute>();
+  const regular = new Map<number, NetworkRoute>();
+  const ordinaryRoutes = new Map<number, NetworkRoute>();
 
   try {
     const result = await client.query<{
       track_id: number;
+      usage_type: number;
       length_km: string | number;
       line_class: string | null;
       start_x: number;
@@ -41,6 +75,7 @@ async function loadRouteNetwork(signature: string): Promise<CachedRouteNetwork> 
       `
       SELECT
         r.track_id,
+        r.usage_type,
         r.length_km,
         r.line_class,
         ST_X(ST_PointN(r.geometry, 1)) as start_x,
@@ -52,7 +87,7 @@ async function loadRouteNetwork(signature: string): Promise<CachedRouteNetwork> 
         ST_X(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_x,
         ST_Y(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_y
       FROM railway_routes r
-      WHERE r.usage_type = 0
+      WHERE ${ordinaryRouteSql("r")}
         AND ST_NPoints(r.geometry) >= 2
       `,
     );
@@ -60,7 +95,7 @@ async function loadRouteNetwork(signature: string): Promise<CachedRouteNetwork> 
     for (const row of result.rows) {
       const lengthKm =
         typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km;
-      routeInfo.set(row.track_id, {
+      const route: NetworkRoute = {
         track_id: row.track_id,
         length_km: lengthKm,
         line_class: row.line_class,
@@ -68,17 +103,19 @@ async function loadRouteNetwork(signature: string): Promise<CachedRouteNetwork> 
         nearStartCoord: [row.near_start_x, row.near_start_y],
         nearEndCoord: [row.near_end_x, row.near_end_y],
         endCoord: [row.end_x, row.end_y],
-      });
+      };
+      ordinaryRoutes.set(row.track_id, route);
+      if (row.usage_type === 0) regular.set(row.track_id, route);
     }
 
-    return { graph: buildRouteGraph(routeInfo), routeInfo, signature };
+    return { signature, regular: networkOf(regular), ordinaryRoutes, withOrdinary: null };
   } finally {
     client.release();
   }
 }
 
-let cachedNetwork: CachedRouteNetwork | null = null;
-let networkInFlight: { signature: string; promise: Promise<CachedRouteNetwork> } | null = null;
+let cachedNetwork: CachedRouteNetworks | null = null;
+let networkInFlight: { signature: string; promise: Promise<CachedRouteNetworks> } | null = null;
 
 /**
  * Cheap fingerprint of the route network: the row count and the sum of every
@@ -105,20 +142,27 @@ async function getNetworkSignature(): Promise<string> {
 }
 
 /**
- * Route network for the current state of `railway_routes`, reused across
- * requests.
+ * The network a search with these options rides (see `PlannerOptions`), for the
+ * current state of `railway_routes`, reused across requests.
  *
  * Extracting endpoint coordinates costs ~450ms because every ST_PointN has to
- * walk the full linestring, so the built graph is kept in memory and only
- * rebuilt when the network fingerprint changes.
+ * walk the full linestring, so the loaded routes and the graphs built from them
+ * are kept in memory and only reloaded when the network fingerprint changes.
  */
-export async function getRouteNetwork(): Promise<RouteNetwork> {
+export async function getRouteNetwork(options: PlannerOptions = {}): Promise<RouteNetwork> {
+  const networks = await getRouteNetworks();
+  if (!options.includeSpecial) return networks.regular;
+  networks.withOrdinary ??= networkOf(networks.ordinaryRoutes);
+  return networks.withOrdinary;
+}
+
+async function getRouteNetworks(): Promise<CachedRouteNetworks> {
   const signature = await getNetworkSignature();
   if (cachedNetwork?.signature === signature) return cachedNetwork;
 
   // Concurrent searches share one rebuild, as long as they want the same network
   if (networkInFlight?.signature !== signature) {
-    networkInFlight = { signature, promise: loadRouteNetwork(signature) };
+    networkInFlight = { signature, promise: loadRouteNetworks(signature) };
   }
 
   const pending = networkInFlight;
