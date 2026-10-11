@@ -11,7 +11,13 @@
 
 import { query } from "./db";
 import type { UsageType } from "./shared/constants";
-import { ordinaryUsageSql, REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
+import {
+  countedUsageTypes,
+  ordinaryUsageSql,
+  REGIONS,
+  type RegionId,
+  regionContainsSql,
+} from "./shared/regions";
 import type { CoveredRange, CoveredStretch } from "./shared/types";
 
 /**
@@ -37,14 +43,23 @@ export async function progressForUser(
   userId: number,
   region: RegionId,
   selectedCountries?: string[],
+  /**
+   * The usage types shown on the map, to narrow the count to (`countedUsageTypes`);
+   * undefined counts every type the region counts.
+   */
+  shownUsageTypes?: readonly unknown[],
 ): Promise<UserProgress> {
   // If selectedCountries is provided (even if empty), apply filtering
   // undefined = no filter (show all), [] = empty filter (show nothing), [...] = specific countries
   const applyCountryFilter = selectedCountries !== undefined;
   const hasCountries = selectedCountries && selectedCountries.length > 0;
 
-  // If empty array, return zeros immediately
-  if (applyCountryFilter && !hasCountries) {
+  // If empty array, return zeros immediately - and the same where every usage
+  // type counted here has been switched off
+  if (
+    (applyCountryFilter && !hasCountries) ||
+    countedUsageTypes(region, shownUsageTypes).length === 0
+  ) {
     return {
       totalKm: 0,
       completedKm: 0,
@@ -56,15 +71,15 @@ export async function progressForUser(
   }
 
   // Get total distance and count of all routes the region counts as ordinary
-  // service (Regular, plus Japan's non-JR lines — see `ordinaryUsageTypes`),
-  // optionally filtered by countries
+  // service (Regular, plus Japan's non-JR lines — see `ordinaryUsageTypes`) and
+  // the map shows, optionally filtered by countries
   const totalResult = await query(
     `SELECT
       COALESCE(SUM(length_km), 0) as total_km,
       COUNT(*) as total_routes
     FROM railway_routes
     WHERE length_km IS NOT NULL
-      AND ${ordinaryUsageSql(region, "usage_type")}
+      AND ${ordinaryUsageSql(region, "usage_type", shownUsageTypes)}
       AND ${regionContainsSql(region, "starting_coordinate")}
       ${hasCountries ? "AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])" : ""}`,
     hasCountries ? [selectedCountries] : [],
@@ -80,7 +95,7 @@ export async function progressForUser(
       COALESCE(SUM(rr.length_km), 0) as completed_km,
       COUNT(*) as completed_routes
     FROM railway_routes rr
-    WHERE ${ordinaryUsageSql(region, "rr.usage_type")}
+    WHERE ${ordinaryUsageSql(region, "rr.usage_type", shownUsageTypes)}
       AND rr.length_km IS NOT NULL
       AND ${regionContainsSql(region, "rr.starting_coordinate")}
       ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}

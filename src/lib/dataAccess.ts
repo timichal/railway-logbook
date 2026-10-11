@@ -14,7 +14,8 @@ import {
   getPublicProgress,
   getPublicProgressByCountry,
 } from "./publicMapActions";
-import { isOrdinaryUsage, REGIONS, type RegionId } from "./shared/regions";
+import type { UsageType } from "./shared/constants";
+import { countedUsageTypes, isOrdinaryUsage, REGIONS, type RegionId } from "./shared/regions";
 import { isRouteFullyRidden } from "./shared/routeCoverage";
 import type { CoveredRange, CoveredStretch, LocalLoggedPart, RouteSummary } from "./shared/types";
 import {
@@ -37,8 +38,12 @@ export interface LocalRouteStatus {
 }
 
 export interface DataAccess {
-  // Progress operations
-  getUserProgress(selectedCountries?: string[]): Promise<UserProgress>;
+  // Progress operations. `shownUsageTypes` narrows the count to the usage types the
+  // map shows (`countedUsageTypes`); undefined counts all the region counts.
+  getUserProgress(
+    selectedCountries?: string[],
+    shownUsageTypes?: UsageType[],
+  ): Promise<UserProgress>;
   getProgressByCountry(): Promise<ProgressByCountry>;
 
   // Ridden stretches of routes that aren't finished yet (drawn as a map overlay)
@@ -88,8 +93,8 @@ export function createDataAccess(user: User | null, region: RegionId): DataAcces
  */
 function createDatabaseDataAccess(region: RegionId): DataAccess {
   return {
-    async getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
-      return await dbGetUserProgress(region, selectedCountries);
+    async getUserProgress(selectedCountries, shownUsageTypes): Promise<UserProgress> {
+      return await dbGetUserProgress(region, selectedCountries, shownUsageTypes);
     },
 
     async getProgressByCountry(): Promise<ProgressByCountry> {
@@ -171,7 +176,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
   };
 
   return {
-    async getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
+    async getUserProgress(selectedCountries, shownUsageTypes): Promise<UserProgress> {
       try {
         const allRoutes = await ensureRoutes();
 
@@ -191,10 +196,9 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
         }
 
         // Only the usage types the region counts as ordinary service (Regular, plus
-        // Japan's non-JR lines), as progressForUser does
-        filteredRoutes = filteredRoutes.filter((route) =>
-          isOrdinaryUsage(region, route.usage_type),
-        );
+        // Japan's non-JR lines) and the map shows, as progressForUser does
+        const counted = countedUsageTypes(region, shownUsageTypes);
+        filteredRoutes = filteredRoutes.filter((route) => counted.includes(route.usage_type));
 
         // Calculate totals
         const totalRoutes = filteredRoutes.length;
@@ -363,8 +367,8 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
  */
 export function createPublicDataAccess(token: string, region: RegionId): DataAccess {
   return {
-    async getUserProgress(selectedCountries?: string[]): Promise<UserProgress> {
-      return await getPublicProgress(token, region, selectedCountries);
+    async getUserProgress(selectedCountries, shownUsageTypes): Promise<UserProgress> {
+      return await getPublicProgress(token, region, selectedCountries, shownUsageTypes);
     },
 
     async getProgressByCountry(): Promise<ProgressByCountry> {

@@ -13,8 +13,9 @@ import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import type { UserProgress } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
+import type { UsageType } from "@/lib/shared/constants";
 import { createUserMapLayers, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
-import { regionCountryCodes } from "@/lib/shared/regions";
+import { countedUsageTypes, regionCountryCodes } from "@/lib/shared/regions";
 import { useResolvedTheme } from "@/lib/theme";
 
 interface UseUserMapOptions {
@@ -33,6 +34,13 @@ interface UseUserMapOptions {
   coverageVersion?: number;
   /** Stands the searched-line band down — see `useLineSearchHighlight`. */
   lineHighlightHidden?: boolean;
+  /**
+   * Whether the progress box counts only the usage types the map shows. True on the
+   * user's own map, where the switches are their filter; false on a shared one,
+   * whose box is the owner's figures and must not depend on the visitor's
+   * switches — there they change what is drawn and nothing else.
+   */
+  progressFollowsLayers?: boolean;
 }
 
 /**
@@ -50,6 +58,7 @@ export function useUserMap(
     rebuildOn = [],
     coverageVersion = 0,
     lineHighlightHidden = false,
+    progressFollowsLayers = true,
   }: UseUserMapOptions,
 ) {
   const region = useRegion();
@@ -84,6 +93,28 @@ export function useUserMap(
     [region.id, ...rebuildOn],
   );
 
+  // The usage types drawn, which the progress box, the ridden stretches and the
+  // searched line follow
+  const { showRegular, showHeritage, showSpecial } = layerPrefs;
+  const shownTypes = useMemo(
+    () => shownUsageTypes({ showRegular, showHeritage, showSpecial }),
+    [showRegular, showHeritage, showSpecial],
+  );
+
+  // The progress box counts the region's ordinary types (Japan's JR and non-JR
+  // lines) among those, so unticking one in the statistics takes it out of the
+  // numbers as unticking a country does. Memoised on the counted list's content,
+  // not on the shown one: Europe counts Regular only, and its heritage/special
+  // switches must not refetch. Undefined - every type the region counts - where
+  // the progress does not follow the switches.
+  const countedKey = progressFollowsLayers
+    ? countedUsageTypes(region.id, shownTypes).join(",")
+    : null;
+  const countedTypes = useMemo((): UsageType[] | undefined => {
+    if (countedKey === null) return undefined;
+    return countedKey === "" ? [] : (countedKey.split(",").map(Number) as UsageType[]);
+  }, [countedKey]);
+
   // Each answer is kept with the data access it was asked of, and shown only while
   // that is still the current one: a region switch or a login replaces it, and the
   // rebuilt map sends nothing until it has loaded, so the old answer could otherwise
@@ -96,22 +127,16 @@ export function useUserMap(
   const refreshProgress = useCallback(async () => {
     const request = ++progressRequest.current;
     try {
-      const next = await dataAccess.getUserProgress(effectiveCountries);
+      const next = await dataAccess.getUserProgress(effectiveCountries, countedTypes);
       if (request === progressRequest.current) setAnswer({ from: dataAccess, progress: next });
     } catch (error) {
       console.error("Error refreshing progress:", error);
     }
-  }, [dataAccess, effectiveCountries]);
+  }, [dataAccess, effectiveCountries, countedTypes]);
 
   useEffect(() => {
     if (mapLoaded) void refreshProgress();
   }, [mapLoaded, refreshProgress]);
-
-  // The usage types drawn, which the ridden stretches and the searched line follow
-  const shownTypes = useMemo(
-    () => shownUsageTypes(layerPrefs.showHeritage, layerPrefs.showSpecial),
-    [layerPrefs.showHeritage, layerPrefs.showSpecial],
-  );
 
   // Ridden stretches of routes not yet finished, drawn over the route line
   useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, shownTypes, coverageVersion);
@@ -119,8 +144,7 @@ export function useUserMap(
   // mapLoaded applies the persisted switches once the layers exist
   useLayerFilters(
     map,
-    layerPrefs.showHeritage,
-    layerPrefs.showSpecial,
+    shownTypes,
     // The stored preference is shared across regions; one that offers no scenic
     // lines keeps them off regardless of what the other region left switched on.
     layerPrefs.showScenicLines && region.hasScenicHighlight,

@@ -1,5 +1,5 @@
 /**
- * The user map's three layer switches — what they are, how they are stored, and
+ * The user map's layer switches — what they are, how they are stored, and
  * what they read as in a region. Shared, so the web app (localStorage) and the
  * native app (AsyncStorage) keep one stored form and resolve it the same way; each
  * only does its own reading and writing of the string.
@@ -11,11 +11,21 @@
  * about the other's — turning Japan's non-JR lines off must not hide them in
  * Europe or the other way round. The heritage and scenic switches mean the same
  * thing everywhere and stay one value each.
+ *
+ * **The Regular switch exists only where Regular is not the only ordinary type**
+ * (`hasOrdinaryNonRegular` — Japan's JR lines beside its non-JR ones), and is
+ * stored per region for the same reason as Special. There the two are a filter in
+ * the Statistics tab, as Europe's countries are: an unticked type is hidden on the
+ * map and left out of the progress box. Elsewhere Regular is the map itself, there
+ * is nothing to switch it with, and it always reads as shown.
  */
 
-import { isOrdinaryUsage, isRegionId, type RegionId } from "../regions";
+import type { UsageType } from "../constants";
+import { hasOrdinaryNonRegular, isOrdinaryUsage, isRegionId, type RegionId } from "../regions";
 
 export interface LayerPrefs {
+  /** "JR lines" — Regular routes (usage_type=0, solid), switchable only in Japan. */
+  showRegular: boolean;
   /** "Show heritage & tourist lines" — reveals Heritage routes (usage_type=1, dotted). */
   showHeritage: boolean;
   /** "Show special services" / "Non-JR lines" — Special routes (usage_type=2, dashed). */
@@ -29,6 +39,30 @@ export interface StoredLayerPrefs {
   showHeritage?: boolean;
   showScenicLines?: boolean;
   showSpecialByRegion?: Partial<Record<RegionId, boolean>>;
+  showRegularByRegion?: Partial<Record<RegionId, boolean>>;
+}
+
+/** The switches kept per region rather than once for every region. */
+const PER_REGION_KEY = {
+  showRegular: "showRegularByRegion",
+  showSpecial: "showSpecialByRegion",
+} as const satisfies Partial<Record<keyof LayerPrefs, keyof StoredLayerPrefs>>;
+
+/**
+ * The usage types a region has a switch for: Heritage and Special everywhere,
+ * Regular only where it is not the only ordinary type — elsewhere it is the map
+ * itself. Where a switch is shown and whether a stored value is honoured both
+ * follow this, so a region can't offer a switch its map ignores.
+ */
+export function switchableUsageTypes(regionId: RegionId): UsageType[] {
+  return hasOrdinaryNonRegular(regionId) ? [0, 1, 2] : [1, 2];
+}
+
+/** The switch that shows or hides a usage type's routes. */
+export function usageTypeLayerPref(usageType: UsageType): keyof LayerPrefs {
+  if (usageType === 0) return "showRegular";
+  if (usageType === 1) return "showHeritage";
+  return "showSpecial";
 }
 
 /**
@@ -55,25 +89,34 @@ export function parseStoredLayerPrefs(json: string | null): StoredLayerPrefs {
 
   const legacyBoth = bool(raw.showSpecialLines);
 
-  const showSpecialByRegion: Partial<Record<RegionId, boolean>> = {};
-  const legacySpecial = bool(raw.showSpecial) ?? legacyBoth;
-  if (legacySpecial !== undefined) showSpecialByRegion.europe = legacySpecial;
-  if (typeof raw.showSpecialByRegion === "object" && raw.showSpecialByRegion !== null) {
-    for (const [id, value] of Object.entries(raw.showSpecialByRegion)) {
-      if (isRegionId(id) && typeof value === "boolean") showSpecialByRegion[id] = value;
+  const byRegion = (value: unknown): Partial<Record<RegionId, boolean>> => {
+    const values: Partial<Record<RegionId, boolean>> = {};
+    if (typeof value === "object" && value !== null) {
+      for (const [id, shown] of Object.entries(value)) {
+        if (isRegionId(id) && typeof shown === "boolean") values[id] = shown;
+      }
     }
-  }
+    return values;
+  };
+
+  const showSpecialByRegion = byRegion(raw.showSpecialByRegion);
+  const legacySpecial = bool(raw.showSpecial) ?? legacyBoth;
+  if (legacySpecial !== undefined) showSpecialByRegion.europe ??= legacySpecial;
 
   return {
     showHeritage: bool(raw.showHeritage) ?? legacyBoth,
     showScenicLines: bool(raw.showScenicLines) ?? bool(raw.showScenicOutline),
     showSpecialByRegion,
+    showRegularByRegion: byRegion(raw.showRegularByRegion),
   };
 }
 
 /** The switches as they stand in a region: stored where chosen, default otherwise. */
 export function resolveLayerPrefs(stored: StoredLayerPrefs, regionId: RegionId): LayerPrefs {
   return {
+    showRegular:
+      !switchableUsageTypes(regionId).includes(0) ||
+      (stored.showRegularByRegion?.[regionId] ?? true),
     showHeritage: stored.showHeritage ?? false,
     showSpecial: stored.showSpecialByRegion?.[regionId] ?? isOrdinaryUsage(regionId, 2),
     showScenicLines: stored.showScenicLines ?? false,
@@ -87,8 +130,9 @@ export function withLayerPref(
   key: keyof LayerPrefs,
   value: boolean,
 ): StoredLayerPrefs {
-  if (key === "showSpecial") {
-    return { ...stored, showSpecialByRegion: { ...stored.showSpecialByRegion, [regionId]: value } };
+  if (key === "showRegular" || key === "showSpecial") {
+    const storedKey = PER_REGION_KEY[key];
+    return { ...stored, [storedKey]: { ...stored[storedKey], [regionId]: value } };
   }
   return { ...stored, [key]: value };
 }

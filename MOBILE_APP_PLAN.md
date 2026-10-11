@@ -895,6 +895,18 @@ Three more pieces moved into the shared set, on the same terms as the highlights
   right — each positioned against the safe-area inset on its own. They do not overlap
   at any width this app will meet, but nothing enforces that, and a wider chip would
   be the first thing to find out.
+- **Japan's JR / Non-JR checkboxes are web-only so far** (added 2026-10-12). On the
+  web, the Statistics tab ticks each line type like a country: unticked, it is hidden
+  on the map and left out of the progress box, and the menu no longer carries the
+  Non-JR switch. They are the layer switches `showRegular` (new, Japan only) and
+  `showSpecial`, stored per region (`shared/map/layerPrefs.ts`). To port it:
+  checkboxes on the `byUsage` rows of `mobile/app/countries.tsx` driving those two
+  prefs; drop the Non-JR switch from `mobile/src/map/LayerToggles.tsx` where the
+  region counts it as ordinary (the web's `LayerToggles` has the rule); stop
+  hard-coding `showRegular: true` in `mobile/src/map/RailwayMap.tsx` and hide the
+  Regular layer when it is off; and give `GET /api/v1/progress` a usage-type
+  parameter passed to `progressForUser`'s `shownUsageTypes`, since today it always
+  counts both types.
 - **The planner's result survives nothing.** Closing the modal keeps the gold
   highlight on the map but throws away the legs and the form, so looking at the path
   and then adding it to the selection means planning it twice. The highlight chip is

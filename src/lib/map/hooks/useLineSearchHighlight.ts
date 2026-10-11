@@ -8,8 +8,8 @@ import {
   LINE_SEARCH_HIGHLIGHT_TOLERANCE,
   lineSearchHighlightColor,
   lineSearchHighlightData,
-  lineSearchHighlightFilter,
 } from "@/lib/shared/map/highlightLayers";
+import { usageTypeFilter } from "@/lib/shared/map/layers";
 import type { RegionId } from "@/lib/shared/regions";
 import type { LineGeometry, LineSearchResult } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
@@ -130,7 +130,7 @@ export function useLineSearchHighlight(
     if (!mapLoaded || !m?.getLayer(LINE_SEARCH_HIGHLIGHT_LAYER_ID)) return;
     m.setFilter(
       LINE_SEARCH_HIGHLIGHT_LAYER_ID,
-      lineSearchHighlightFilter(usageTypes) as maplibregl.FilterSpecification,
+      usageTypeFilter(usageTypes) as maplibregl.FilterSpecification,
     );
   }, [map, mapLoaded, usageTypes]);
 

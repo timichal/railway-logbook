@@ -1,19 +1,23 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
+import type { UsageType } from "@/lib/shared/constants";
 import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
 import { clickBufferFilter, scenicLinesFilter } from "@/lib/shared/map/userMapLayers";
 
 /**
  * Manages filter and visibility toggles for user map layers:
+ * - Regular (usage_type=0, solid) — shown everywhere, except that Japan's JR lines
+ *   can be unticked in the Statistics tab.
  * - Heritage (usage_type=1, dotted) — "Show heritage lines" toggle.
- * - Special services (usage_type=2, dashed) — "Show special services" toggle.
- *   The two are independent.
+ * - Special services (usage_type=2, dashed) — "Show special services" toggle, or
+ *   Japan's non-JR lines, ticked in the Statistics tab.
+ *   All three are independent.
  * - Scenic lines: visibility, and the country filter the routes have too
  *
  * Layer responsibilities:
  * - `railway_routes` (visible solid line): Regular only. Heritage and Special
  *   each have their own non-solid layer; a solid line under them would fill the
- *   dash/dot gaps.
+ *   dash/dot gaps. Hidden when Regular is switched off.
  * - `railway_routes_heritage` (visible dotted line): only Heritage routes,
  *   toggled visible/hidden with the heritage checkbox.
  * - `railway_routes_special` (visible dashed line): only Special routes, toggled
@@ -23,8 +27,8 @@ import { clickBufferFilter, scenicLinesFilter } from "@/lib/shared/map/userMapLa
  */
 export function useLayerFilters(
   map: React.MutableRefObject<maplibregl.Map | null>,
-  showHeritage: boolean,
-  showSpecial: boolean,
+  /** The usage types shown (`shownUsageTypes`). */
+  shownTypes: UsageType[],
   showScenicLines: boolean,
   /** The countries the routes are filtered to; the scenic lines follow them. */
   selectedCountries: string[],
@@ -36,30 +40,28 @@ export function useLayerFilters(
   useEffect(() => {
     const m = map.current;
     if (!m?.getLayer("railway_routes")) return;
+    const visibility = (type: UsageType) => (shownTypes.includes(type) ? "visible" : "none");
 
     // Visible solid line: Regular only. Heritage (dotted) and Special (dashed)
     // are drawn by their own layers.
     m.setFilter("railway_routes", ["==", ["get", "usage_type"], 0]);
+    m.setLayoutProperty("railway_routes", "visibility", visibility(0));
 
     // Dotted Heritage layer: visible only when heritage lines are shown.
     if (m.getLayer("railway_routes_heritage")) {
-      m.setLayoutProperty(
-        "railway_routes_heritage",
-        "visibility",
-        showHeritage ? "visible" : "none",
-      );
+      m.setLayoutProperty("railway_routes_heritage", "visibility", visibility(1));
     }
 
     // Dashed Special layer: visible only when special services are shown.
     if (m.getLayer("railway_routes_special")) {
-      m.setLayoutProperty("railway_routes_special", "visibility", showSpecial ? "visible" : "none");
+      m.setLayoutProperty("railway_routes_special", "visibility", visibility(2));
     }
 
     // Click/hit buffer: every currently-visible usage type should be clickable.
     if (m.getLayer("railway_routes_click")) {
-      m.setFilter("railway_routes_click", clickBufferFilter(showHeritage, showSpecial));
+      m.setFilter("railway_routes_click", clickBufferFilter(shownTypes));
     }
-  }, [map, showHeritage, showSpecial, mapLoaded]);
+  }, [map, shownTypes, mapLoaded]);
 
   // Scenic lines: shown by their toggle, filtered by country as the routes are
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger (apply prefs once layers exist), not a value read inside the effect.

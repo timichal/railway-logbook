@@ -234,11 +234,31 @@ export function hasOrdinaryNonRegular(regionId: RegionId): boolean {
 }
 
 /**
- * The SQL condition "`column` is a usage type this region counts", for a query
- * already scoped to the region. The numbers come from this module.
+ * The usage types a region's progress counts: its ordinary ones, narrowed to
+ * `shown` where given — the map's usage switches, so a type unticked in the
+ * statistics leaves the progress box as it leaves the map, the way an unticked
+ * country does. Anything in `shown` the region does not count is ignored, which
+ * also keeps a list sent by a client from widening the count; anything but an
+ * array counts every type. The result holds this module's numbers only, so it
+ * may be interpolated into SQL.
  */
-export function ordinaryUsageSql(regionId: RegionId, column: string): string {
-  return `${column} IN (${REGIONS[regionId].ordinaryUsageTypes.join(", ")})`;
+export function countedUsageTypes(regionId: RegionId, shown?: readonly unknown[]): UsageType[] {
+  const ordinary = REGIONS[regionId].ordinaryUsageTypes;
+  // Not trusted to be an array: a server action's arguments are whatever was posted
+  return Array.isArray(shown) ? ordinary.filter((type) => shown.includes(type)) : [...ordinary];
+}
+
+/**
+ * The SQL condition "`column` is a usage type this region counts", for a query
+ * already scoped to the region — narrowed to `shown` as `countedUsageTypes` is.
+ */
+export function ordinaryUsageSql(
+  regionId: RegionId,
+  column: string,
+  shown?: readonly unknown[],
+): string {
+  const counted = countedUsageTypes(regionId, shown);
+  return counted.length > 0 ? `${column} IN (${counted.join(", ")})` : "FALSE";
 }
 
 /**

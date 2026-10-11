@@ -1,6 +1,7 @@
 import type { FilterSpecification, LayerSpecification } from "@maplibre/maplibre-gl-style-spec";
 import { type UsageType, usageOptions } from "../constants";
 import type { ResolvedTheme } from "../theme/types";
+import type { LayerPrefs } from "./layerPrefs";
 import {
   createPublicNotesLayer,
   createRailwayRoutesClickLayer,
@@ -11,6 +12,7 @@ import {
   createStationLabelsLayer,
   createStationsLayer,
   type RailwayRoutesPaintConfig,
+  usageTypeFilter,
 } from "./layers";
 import {
   getUserRouteClickBufferWidthExpression,
@@ -73,11 +75,18 @@ export const userClickBufferLayerConfig: RailwayRoutesPaintConfig = {
  */
 
 /**
- * The usage types the user map draws under the heritage/special switches — Regular
- * always — for what has to follow them, like a searched line's highlight.
+ * The usage types the user map draws under the usage switches, for what has to
+ * follow them: the ridden stretches, a searched line's highlight, the progress box.
+ * Regular is always among them except where the region lets it be switched off
+ * (`LayerPrefs.showRegular` — Japan's JR lines).
  */
-export function shownUsageTypes(showHeritage: boolean, showSpecial: boolean): UsageType[] {
-  const shown: UsageType[] = [0];
+export function shownUsageTypes({
+  showRegular,
+  showHeritage,
+  showSpecial,
+}: Pick<LayerPrefs, "showRegular" | "showHeritage" | "showSpecial">): UsageType[] {
+  const shown: UsageType[] = [];
+  if (showRegular) shown.push(0);
   if (showHeritage) shown.push(1);
   if (showSpecial) shown.push(2);
   return shown;
@@ -104,13 +113,8 @@ export function scenicLinesFilter(selectedCountries: string[]): FilterSpecificat
  * Web-only in effect: the native app has no click-buffer layer, because a press
  * arrives through the source's own 44×44pt hitbox instead.
  */
-export function clickBufferFilter(
-  showHeritage: boolean,
-  showSpecial: boolean,
-): FilterSpecification | null {
-  const clickable = shownUsageTypes(showHeritage, showSpecial);
-  if (clickable.length === usageOptions.length) return null;
-  return ["match", ["get", "usage_type"], clickable, true, false] as FilterSpecification;
+export function clickBufferFilter(clickable: readonly UsageType[]): FilterSpecification | null {
+  return clickable.length === usageOptions.length ? null : usageTypeFilter(clickable);
 }
 
 /**

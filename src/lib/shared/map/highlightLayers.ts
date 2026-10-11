@@ -6,7 +6,7 @@ import type {
 import type { UsageType } from "../constants";
 import type { ResolvedTheme } from "../theme/types";
 import type { LineGeometry, PartialRouteGeometry } from "../types";
-import { highlighterBandPaint } from "./layers";
+import { highlighterBandPaint, usageTypeFilter } from "./layers";
 import { COLORS, DASHES, OPACITIES, WIDTHS } from "./style";
 import {
   getUserRouteHeritageWidthExpression,
@@ -240,12 +240,6 @@ export function lineSearchHighlightData(lines: readonly LineGeometry[]): GeoJSON
   };
 }
 
-/** The shown usage types' features; none shown matches nothing. */
-export function lineSearchHighlightFilter(usageTypes: readonly UsageType[]): FilterSpecification {
-  if (usageTypes.length === 0) return false;
-  return ["match", ["get", "usage_type"], [...usageTypes], true, false];
-}
-
 export function lineSearchHighlightColor(theme: ResolvedTheme): string {
   return theme === "dark" ? COLORS.lineSearchHighlightDark : COLORS.lineSearchHighlight;
 }
@@ -264,7 +258,7 @@ export function createLineSearchHighlightLayer(
       ...highlighterBandPaint(),
       "line-opacity": OPACITIES.lineSearchHighlight,
     },
-    filter: lineSearchHighlightFilter(usageTypes),
+    filter: usageTypeFilter(usageTypes),
   };
 }
 

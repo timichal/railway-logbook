@@ -95,6 +95,7 @@ export async function getPublicProgress(
   token: string,
   region: RegionId,
   selectedCountries?: string[],
+  shownUsageTypes?: number[],
 ): Promise<UserProgress> {
   const owner = await publicMapOwner(token);
   if (!owner) {
@@ -108,7 +109,7 @@ export async function getPublicProgress(
     };
   }
 
-  return progressForUser(owner.userId, region, selectedCountries);
+  return progressForUser(owner.userId, region, selectedCountries, shownUsageTypes);
 }
 
 /** Per-country progress for a shared map. */

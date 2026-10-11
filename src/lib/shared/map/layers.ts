@@ -5,11 +5,22 @@ import type {
   LineLayerSpecification,
   SymbolLayerSpecification,
 } from "@maplibre/maplibre-gl-style-spec";
-import { getNoteTypeColor, noteTypeOptions } from "../constants";
+import { getNoteTypeColor, noteTypeOptions, type UsageType } from "../constants";
 import type { ResolvedTheme } from "../theme/types";
 import { BASEMAP_FONT_BOLD } from "./basemap";
 import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
 import { ZOOM_RANGES } from "./zoomRanges";
+
+/**
+ * The features of the given usage types, as a filter; none given matches nothing,
+ * since a `match` needs at least one label. One expression for every layer that
+ * follows the usage switches (the click buffer, the searched line), so its shape —
+ * which MapLibre Native is particular about — is written once.
+ */
+export function usageTypeFilter(usageTypes: readonly UsageType[]): FilterSpecification {
+  if (usageTypes.length === 0) return false;
+  return ["match", ["get", "usage_type"], [...usageTypes], true, false];
+}
 
 /**
  * Every layer the two clients draw over the basemap, as MapLibre layer

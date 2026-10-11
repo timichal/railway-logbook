@@ -96,13 +96,14 @@ export async function getRoutesBounds(
 export async function getUserProgress(
   region: RegionId,
   selectedCountries?: string[],
+  shownUsageTypes?: number[],
 ): Promise<UserProgress> {
   const user = await getUser();
   if (!user) {
     throw new Error("User not authenticated");
   }
 
-  return progressForUser(user.id, region, selectedCountries);
+  return progressForUser(user.id, region, selectedCountries, shownUsageTypes);
 }
 
 /**

@@ -5,11 +5,14 @@ import {
   resolveLayerPrefs,
   withLayerPref,
 } from "@/lib/shared/map/layerPrefs";
+import { clickBufferFilter, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
+import { countedUsageTypes, ordinaryUsageSql } from "@/lib/shared/regions";
 
 describe("layer prefs", () => {
   test("nothing stored: Special shown only where it is ordinary service", () => {
     const stored = parseStoredLayerPrefs(null);
     assert.deepEqual(resolveLayerPrefs(stored, "europe"), {
+      showRegular: true,
       showHeritage: false,
       showSpecial: false,
       showScenicLines: false,
@@ -62,5 +65,53 @@ describe("layer prefs", () => {
       showSpecialByRegion: { ...stored.showSpecialByRegion, mars: true },
     });
     assert.deepEqual(parseStoredLayerPrefs(json).showSpecialByRegion, { japan: false });
+  });
+
+  test("Regular is switched per region, and only where it is not alone", () => {
+    const stored = withLayerPref({}, "japan", "showRegular", false);
+    assert.equal(resolveLayerPrefs(stored, "japan").showRegular, false);
+    assert.equal(resolveLayerPrefs(stored, "europe").showRegular, true);
+
+    // Europe has no switch for it, so a stored value cannot hide its map
+    const europeOff = withLayerPref({}, "europe", "showRegular", false);
+    assert.equal(resolveLayerPrefs(europeOff, "europe").showRegular, true);
+
+    const json = JSON.stringify(stored);
+    assert.deepEqual(parseStoredLayerPrefs(json).showRegularByRegion, { japan: false });
+  });
+});
+
+describe("usage type filtering", () => {
+  test("shown types follow all three switches", () => {
+    assert.deepEqual(
+      shownUsageTypes({ showRegular: true, showHeritage: false, showSpecial: true }),
+      [0, 2],
+    );
+    assert.deepEqual(
+      shownUsageTypes({ showRegular: false, showHeritage: false, showSpecial: false }),
+      [],
+    );
+  });
+
+  test("the click buffer filters nothing when all are shown, everything when none", () => {
+    assert.equal(clickBufferFilter([0, 1, 2]), null);
+    assert.equal(clickBufferFilter([]), false);
+    assert.deepEqual(clickBufferFilter([2]), ["match", ["get", "usage_type"], [2], true, false]);
+  });
+
+  test("progress counts the ordinary types the map shows, and nothing else", () => {
+    assert.deepEqual(countedUsageTypes("japan"), [0, 2]);
+    assert.deepEqual(countedUsageTypes("japan", [2, 1]), [2]);
+    assert.deepEqual(countedUsageTypes("japan", []), []);
+    // Europe counts Regular only, whatever else is shown
+    assert.deepEqual(countedUsageTypes("europe", [0, 1, 2]), [0]);
+    // Not an array (a crafted server action call): everything the region counts
+    assert.deepEqual(countedUsageTypes("japan", "2" as unknown as unknown[]), [0, 2]);
+    // Nothing from the caller reaches the SQL
+    assert.equal(
+      ordinaryUsageSql("japan", "usage_type", ["0); DROP TABLE x; --", 2]),
+      "usage_type IN (2)",
+    );
+    assert.equal(ordinaryUsageSql("japan", "usage_type", []), "FALSE");
   });
 });

@@ -99,7 +99,7 @@ export default function MapProgressBox({
       )}
       {withLayerToggles && (
         <div className="mt-2 pt-2 border-t border-gray-200 md:space-y-1">
-          <LayerToggles prefs={layerPrefs} region={region} compact />
+          <LayerToggles prefs={layerPrefs} region={region} compact withOrdinaryTypes />
         </div>
       )}
     </div>

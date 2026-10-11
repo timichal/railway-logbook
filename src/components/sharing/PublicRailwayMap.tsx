@@ -50,6 +50,8 @@ export default function PublicRailwayMap({
     routesSource: (countries) =>
       createRailwayRoutesSource({ rides: { shareToken: token }, selectedCountries: countries }),
     rebuildOn: [token, selectedCountries.join(",")],
+    // The owner's numbers, whatever the visitor has switched off
+    progressFollowsLayers: false,
   });
 
   // Read-only: `onRouteClick` is deliberately omitted, so there is nothing to

@@ -40,7 +40,9 @@ export default function HowToUseArticle() {
           railways, timetabled like the JR network. They are shown from the start, count towards
           your progress (the <b>Statistics</b> tab gives JR and non-JR lines separately, then
           together), and the journey planner uses them unless you turn off its{" "}
-          <b>Include Non-JR lines</b> switch.
+          <b>Include Non-JR lines</b> switch. The <b>Statistics</b> tab is also where you tick which
+          of the two the map shows - as you would countries in Europe, an unticked one is hidden
+          from the map and left out of the progress box.
         </p>
         <p className="mb-4">
           While in the <b>Route Logger</b> mode, you can either click on individual line parts or
