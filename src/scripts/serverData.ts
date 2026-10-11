@@ -21,6 +21,8 @@
  * pg_dump, i.e. one snapshot: two dumps would straddle anything committed between
  * them. The backup pull-all also leaves behind is a dump of its own.
  *
+ * A dump is checked by reading it here (pgDumpArchive.ts), so a backup needs
+ * nothing local but plink/ssh; only a restore needs the local database container.
  * A restore replaces the tables whole inside one transaction: if any part fails,
  * the local database is left as it was.
  */
@@ -34,6 +36,7 @@ import {
   refreshAllStationProximity,
   STATION_ROUTE_PROXIMITY_METERS,
 } from "../lib/stationProximity";
+import { readDumpContents } from "./lib/pgDumpArchive";
 
 const REMOTE_HOST = "railmap@railmap.zlatkovsky.cz";
 const REMOTE_DIR = "/home/railmap/osm-trains";
@@ -141,11 +144,7 @@ function megabytes(file: string): string {
   return `${(fs.statSync(file).size / 1024 / 1024).toFixed(1)}MB`;
 }
 
-/**
- * Copy a local dump into the container for as long as `use` runs, so the
- * verification and the restore read one copy rather than each streaming the file
- * in again.
- */
+/** Copy a local dump into the local database container for as long as `use` runs. */
 function inContainer(file: string, use: (containerFile: string) => void): void {
   const containerFile = `/tmp/${path.basename(file)}`;
   try {
@@ -161,20 +160,12 @@ function inContainer(file: string, use: (containerFile: string) => void): void {
 }
 
 /**
- * Check that a dump (already in the container) holds data for exactly `tables`
- * and reads to the end. The full read is what catches a truncated download: the
- * table of contents comes first, so a listing alone would pass one.
+ * Check that a dump holds data for exactly `tables` and reads to the end. The
+ * full read is what catches a truncated download: the table of contents comes
+ * first, so a listing alone would pass one.
  */
-function verifyDump(containerFile: string, tables: string[], name: string): void {
-  const listing = run(
-    `Reading the table list of ${name}`,
-    "docker",
-    ["exec", CONTAINER, "pg_restore", "--list", containerFile],
-    ["ignore", "pipe", "inherit"],
-  );
-  const inDump = [...listing.matchAll(/^\d+; \d+ \d+ TABLE DATA public (\S+) /gm)].map(
-    (match) => match[1],
-  );
+function verifyDump(file: string, tables: string[], name: string): void {
+  const inDump = readDumpContents(file, name).tables;
   const missing = tables.filter(
     (table) => !inDump.includes(table) && !TABLES_ADDED_LATER.includes(table),
   );
@@ -184,24 +175,14 @@ function verifyDump(containerFile: string, tables: string[], name: string): void
       `${name} is not the expected dump (missing: ${missing.join(", ") || "none"}; unexpected: ${unexpected.join(", ") || "none"})`,
     );
   }
-
-  run(`Reading ${name} to the end`, "docker", [
-    "exec",
-    CONTAINER,
-    "pg_restore",
-    "-f",
-    "/dev/null",
-    containerFile,
-  ]);
 }
 
 /**
- * Dump `tables` from the server's database straight into a local file, verify
- * it, and hand its container copy to `andThen`. Written under a temporary name
- * until verified, so an interrupted download never leaves a file that looks like
- * a finished one.
+ * Dump `tables` from the server's database straight into a local file and
+ * verify it. Written under a temporary name until verified, so an interrupted
+ * download never leaves a file that looks like a finished one.
  */
-function download(tables: string[], file: string, andThen?: (containerFile: string) => void): void {
+function download(tables: string[], file: string): void {
   const partFile = `${file}.part`;
   const tableArgs = tables.map((table) => `--table=public.${table}`).join(" ");
   try {
@@ -215,25 +196,21 @@ function download(tables: string[], file: string, andThen?: (containerFile: stri
     } finally {
       fs.closeSync(fd);
     }
-    inContainer(partFile, (containerFile) => {
-      verifyDump(containerFile, tables, path.basename(file));
-      fs.renameSync(partFile, file);
-      andThen?.(containerFile);
-    });
+    verifyDump(partFile, tables, path.basename(file));
+    fs.renameSync(partFile, file);
   } finally {
     fs.rmSync(partFile, { force: true });
   }
 }
 
-function downloadRouteBackup(andThen?: (containerFile: string) => void): void {
+function downloadRouteBackup(): string {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
   const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
   const file = path.join(BACKUP_DIR, `railway_data_${timestamp}.dump`);
   console.log("Downloading route data from the server...");
-  download(ROUTE_TABLES, file, (containerFile) => {
-    console.log(`✓ Saved to ${path.relative(process.cwd(), file)} (${megabytes(file)})`);
-    andThen?.(containerFile);
-  });
+  download(ROUTE_TABLES, file);
+  console.log(`✓ Saved to ${path.relative(process.cwd(), file)} (${megabytes(file)})`);
+  return file;
 }
 
 /**
@@ -354,10 +331,9 @@ async function main(): Promise<void> {
 
     case "pull-routes": {
       checkNoDeploy(true);
-      downloadRouteBackup((containerFile) => {
-        console.log("\nReplacing the local route data...");
-        restore(containerFile, ROUTE_TABLES);
-      });
+      const file = downloadRouteBackup();
+      console.log("\nReplacing the local route data...");
+      inContainer(file, (containerFile) => restore(containerFile, ROUTE_TABLES));
       await repairOwnership();
       await printLocalCounts(ROUTE_TABLES);
       await refreshProximity();
@@ -374,11 +350,10 @@ async function main(): Promise<void> {
       console.log("\nDownloading map and route data from the server...");
       const file = path.join(DATA_DIR, "server_data.dump");
       try {
-        download(ALL_TABLES, file, (containerFile) => {
-          console.log(`✓ Downloaded (${megabytes(file)})`);
-          console.log("\nReplacing the local map and route data...");
-          restore(containerFile, ALL_TABLES);
-        });
+        download(ALL_TABLES, file);
+        console.log(`✓ Downloaded (${megabytes(file)})`);
+        console.log("\nReplacing the local map and route data...");
+        inContainer(file, (containerFile) => restore(containerFile, ALL_TABLES));
       } finally {
         fs.rmSync(file, { force: true });
       }
@@ -392,11 +367,9 @@ async function main(): Promise<void> {
         throw new Error(fileArg ? `File not found: ${fileArg}` : USAGE);
       }
       assertCustomFormat(fileArg);
-      inContainer(fileArg, (containerFile) => {
-        verifyDump(containerFile, ROUTE_TABLES, path.basename(fileArg));
-        console.log(`Replacing the local route data with ${fileArg}...`);
-        restore(containerFile, ROUTE_TABLES);
-      });
+      verifyDump(fileArg, ROUTE_TABLES, path.basename(fileArg));
+      console.log(`Replacing the local route data with ${fileArg}...`);
+      inContainer(fileArg, (containerFile) => restore(containerFile, ROUTE_TABLES));
       await repairOwnership();
       await printLocalCounts(ROUTE_TABLES);
       await refreshProximity();
