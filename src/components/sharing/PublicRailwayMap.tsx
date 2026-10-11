@@ -1,26 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import MapProgressBox from "@/components/map/MapProgressBox";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { createPublicDataAccess } from "@/lib/dataAccess";
-import {
-  createPublicNotesSource,
-  createPublicStationsSource,
-  createRailwayRoutesSource,
-  createScenicLinesSource,
-} from "@/lib/map";
-import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
-import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
-import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
-import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
-import { useRouteEditor } from "@/lib/map/hooks/useRouteEditor";
+import { createRailwayRoutesSource } from "@/lib/map";
+import { useUserMap } from "@/lib/map/hooks/useUserMap";
 import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
-import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
-import { createUserMapLayers, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
-import { regionCountryCodes } from "@/lib/shared/regions";
-import { useResolvedTheme } from "@/lib/theme";
 
 interface PublicRailwayMapProps {
   /**
@@ -52,77 +39,32 @@ export default function PublicRailwayMap({
 }: PublicRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const region = useRegion();
-  const layerPrefs = useLayerPrefs();
   const dataAccess = useMemo(() => createPublicDataAccess(token, region.id), [token, region.id]);
 
-  // Same rule as the interactive map: a single-country region pins the filter to
-  // its own list, which is what keeps the other region's network out of view.
-  const effectiveCountries = useMemo(
-    () => (region.hasCountryFilter ? selectedCountries : regionCountryCodes(region.id)),
-    [region, selectedCountries],
-  );
-
-  // The station dots and their labels are picked against the basemap under them, so
-  // they follow the scheme. useMapLibre rebuilds the map when it changes.
-  const theme = useResolvedTheme();
-
-  const { map, mapLoaded } = useMapLibre(
-    mapContainer,
-    {
-      region: region.id,
-      sources: () => ({
-        railway_routes: createRailwayRoutesSource({
-          rides: { shareToken: token },
-          selectedCountries: effectiveCountries,
-        }),
-        stations: createPublicStationsSource(),
-        scenic_lines: createScenicLinesSource(),
-        public_notes: createPublicNotesSource(),
-      }),
-      layers: () => createUserMapLayers(theme),
-    },
-    [token, effectiveCountries, region.id],
-  );
-
-  // Progress figures and the heritage/special toggles. Nothing here logs a
-  // journey, so there is no tile refresh to drive.
-  const routeEditor = useRouteEditor(dataAccess, effectiveCountries);
-
-  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, 0);
-  useLayerFilters(
-    map,
-    layerPrefs.showHeritage,
-    layerPrefs.showSpecial,
-    // The stored preference is shared across regions; one that offers no scenic
-    // lines keeps them off regardless of what the other region left switched on.
-    layerPrefs.showScenicLines && region.hasScenicHighlight,
-    effectiveCountries,
-    mapLoaded,
-  );
-
-  useEffect(() => {
-    if (mapLoaded) routeEditor.refreshProgress();
-  }, [mapLoaded, routeEditor.refreshProgress]);
+  // Nothing here logs a journey, so there is no tile refresh to drive: the token and
+  // the owner's filter are fixed for the page, and a change to either rebuilds. The
+  // filter by content, so a parent handing down a fresh but equal array costs nothing.
+  const { map, mapLoaded, progress, lineHighlight } = useUserMap(mapContainer, {
+    dataAccess,
+    selectedCountries,
+    routesSource: (countries) =>
+      createRailwayRoutesSource({ rides: { shareToken: token }, selectedCountries: countries }),
+    rebuildOn: [token, selectedCountries.join(",")],
+  });
 
   // Read-only: `onRouteClick` is deliberately omitted, so there is nothing to
   // select. A tap on a route still opens its info sheet — on a phone that is the
   // only way to read one here.
   useUserMapInteractions(map, mapLoaded, { region: region.id });
 
-  const shownTypes = useMemo(
-    () => shownUsageTypes(layerPrefs.showHeritage, layerPrefs.showSpecial),
-    [layerPrefs.showHeritage, layerPrefs.showSpecial],
-  );
-  const lineHighlight = useLineSearchHighlight(map, mapLoaded, region.id, shownTypes);
-
   return (
     <div className="h-full w-full relative">
       <div ref={mapContainer} className="w-full h-full" style={{ minHeight: "400px" }} />
 
       {/* Progress Stats Box */}
-      {routeEditor.progress && (
+      {progress && (
         <MapProgressBox
-          progress={routeEditor.progress}
+          progress={progress}
           isMobile={isMobile}
           // A shared map has no menu to move them into.
           withLayerToggles

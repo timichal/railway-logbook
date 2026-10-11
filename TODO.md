@@ -37,19 +37,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   hydration queries. Use `Promise.all` on each independent group. That takes a
   trip open from 3 serial round trips to 2, and a logbook page from 5 to 3.
 
-- [ ] **Shared user-map core for `RailwayMap` and `PublicRailwayMap`** (~50 lines).
-  Both maps repeat the same setup:
-  - `effectiveCountries`
-  - the `useMapLibre` sources and layers
-  - `useRouteEditor` + `refreshProgress` on load
-  - `useCoverageOverlay`
-  - `useLayerFilters` with the scenic-region rule
-  - `shownTypes` + `useLineSearchHighlight`
-
-  Move these into one hook (e.g. `useUserMapCore({ rides, countries })`). While doing
-  it, fold in or rename `useRouteEditor`: it only tracks progress, and its header
-  comment ("Trip management has been replaced…") is stale.
-
 - [ ] **Admin route filters as a table** (~80 lines). `AdminRoutesTab` keeps four
   filter booleans and four counts, each with its own predicate written twice (once for
   the count, once for the filter). `RoutesList` takes 4 × 3 props for them and renders
@@ -83,6 +70,19 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 ---
 
 ## Medium
+
+- [ ] **`useUserMap` follow-ups** (from the review of the shared-map refactor).
+  - `routesSource` and `rebuildOn` have to be kept in step by hand: a value the
+    source factory captures rebuilds the map only if the caller also lists it in
+    `rebuildOn`, and neither tsc nor Biome checks the spread. Pass the source's
+    inputs as data (e.g. `rides` + cache-buster ref) and derive the rebuild keys in
+    the hook.
+  - On login/logout progress is fetched twice: `dataAccess` changes first (request
+    with the visitor's countries), then `RailwayMap`'s user-change effect sets the
+    account's countries (second request). The first is discarded but still costs a
+    round trip. This was already the case with `useRouteEditor`.
+  - If the newest progress request fails, the box keeps figures for an older
+    country filter with nothing saying so. Consider a quiet "couldn't update" state.
 
 - [ ] **`dataAccess.ts`** (~90 lines).
   - `getJourneyCount` / `canAddMoreJourneys` are on the `DataAccess` interface with

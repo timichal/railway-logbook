@@ -296,7 +296,7 @@ lives in `src/lib/shared/`, the only part of the web app `@shared/*` reaches:
 
 ### Rewritten
 
-- **Every hook in `src/lib/map/hooks/`** — `useMapLibre`, `useRouteEditor`,
+- **Every hook in `src/lib/map/hooks/`** — `useMapLibre`, `useUserMap`,
   `useRouteHighlighting`, `useCoverageOverlay`,
   `useLayerFilters`, `useMapTileRefresh`. The RN binding is declarative
   (`<Map>`, `<Camera>`, `<VectorSource>`, `<Layer>`) rather than the imperative

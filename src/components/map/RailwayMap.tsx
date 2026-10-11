@@ -10,27 +10,15 @@ import MobileBottomSheet from "@/components/ui/MobileBottomSheet";
 import type { User } from "@/lib/authActions";
 import { createDataAccess, type DataAccess } from "@/lib/dataAccess";
 import * as localStore from "@/lib/localStorage";
-import {
-  createPublicNotesSource,
-  createPublicStationsSource,
-  createRailwayRoutesSource,
-  createScenicLinesSource,
-} from "@/lib/map";
+import { createRailwayRoutesSource } from "@/lib/map";
 import { fitCamera } from "@/lib/map/fitCamera";
-import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
-import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
-import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useLocalRouteFeatureStates } from "@/lib/map/hooks/useLocalRouteFeatureStates";
-import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useMapTileRefresh } from "@/lib/map/hooks/useMapTileRefresh";
-import { useRouteEditor } from "@/lib/map/hooks/useRouteEditor";
 import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
+import { useUserMap } from "@/lib/map/hooks/useUserMap";
 import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
-import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
 import { NEW_JOURNEY_FORM_ID } from "@/lib/selectedRoutes";
-import { createUserMapLayers, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
-import { regionCountryCodes } from "@/lib/shared/regions";
 import type {
   HighlightKind,
   HighlightRoutesFn,
@@ -41,7 +29,6 @@ import type {
   SelectedRoute,
   Station,
 } from "@/lib/shared/types";
-import { useResolvedTheme } from "@/lib/theme";
 import { useToast } from "@/lib/toast";
 import { getRoutesBounds } from "@/lib/userActions";
 
@@ -112,22 +99,11 @@ export default function RailwayMap({
 
   const userId = user?.id || null;
   const region = useRegion();
-  const layerPrefs = useLayerPrefs();
   const dataAccess = useMemo(() => createDataAccess(user, region.id), [user, region.id]);
   const { showError } = useToast();
 
   // Country filter state
   const [selectedCountries, setSelectedCountries] = useState<string[]>(initialSelectedCountries);
-
-  // The country list everything on the map actually filters by. A region the
-  // user can't filter by country (Japan, one country) pins it to its own list,
-  // which is what keeps the other region's routes, stats and ridden stretches
-  // out of this view - the country filter was already doing that job for the
-  // European countries, and the regions just happen to be disjoint sets of it.
-  const effectiveCountries = useMemo(
-    () => (region.hasCountryFilter ? selectedCountries : regionCountryCodes(region.id)),
-    [region, selectedCountries],
-  );
 
   // Station click handler from Journey Planner
   const [journeyStationClickHandler, setJourneyStationClickHandler] = useState<
@@ -172,46 +148,41 @@ export default function RailwayMap({
   const selectedRoutesRef = useRef<SelectedRoute[]>([]);
   selectedRoutesRef.current = selectedRoutes;
 
-  // Initialize map
-  // The station dots and their labels are picked against the basemap under them, so
-  // they follow the scheme. useMapLibre rebuilds the map when it changes.
-  //
-  // The user and the country filter are deliberately not deps: they only change the
-  // railway_routes source, and rebuilding the map for them threw away the WebGL
-  // context and the basemap on every country checkbox. The sources below are read
-  // once, at construction; a later change reaches the map through refreshTiles.
-  const theme = useResolvedTheme();
   // The route tiles' `v`, shared with useMapTileRefresh: a map rebuilt for a region
   // or scheme change has to carry the latest one, or it would be back on a URL from
   // before the last refresh — a stale tile, the moment anything caches them.
   const routesCacheBusterRef = useRef<number | undefined>(undefined);
 
-  const { map, mapLoaded } = useMapLibre(
-    mapContainer,
-    {
-      region: region.id,
-      sources: () => {
+  // Only the sheet can take the room away, so the desktop layout always has it.
+  const showFurniture = !isMobile || furnitureFits;
+
+  // The user and the country filter are deliberately not rebuild triggers: they only
+  // change the railway_routes source, and rebuilding the map for them threw away the
+  // WebGL context and the basemap on every country checkbox. The source is built
+  // once, at construction; a later change reaches the map through refreshTiles.
+  //
+  // The searched line stands down with the search box, whose chip is the only way to
+  // clear it.
+  const { map, mapLoaded, effectiveCountries, progress, refreshProgress, lineHighlight } =
+    useUserMap(mapContainer, {
+      dataAccess,
+      selectedCountries,
+      routesSource: (countries) => {
         // A session tile is coloured by this user's rides, so it has a `v` from its
         // first request: without one its URL would be the same across page loads and
         // across everyone who signs in on this browser. A visitor's tile is Martin's,
         // the same for everyone, and gets none until a refresh needs one, so it
         // stays cacheable.
         if (userId) routesCacheBusterRef.current ??= Date.now();
-        return {
-          railway_routes: createRailwayRoutesSource({
-            rides: userId ? "session" : undefined,
-            cacheBuster: routesCacheBusterRef.current,
-            selectedCountries: effectiveCountries,
-          }),
-          stations: createPublicStationsSource(),
-          scenic_lines: createScenicLinesSource(),
-          public_notes: createPublicNotesSource(),
-        };
+        return createRailwayRoutesSource({
+          rides: userId ? "session" : undefined,
+          cacheBuster: routesCacheBusterRef.current,
+          selectedCountries: countries,
+        });
       },
-      layers: () => createUserMapLayers(theme),
-    },
-    [region.id],
-  );
+      coverageVersion,
+      lineHighlightHidden: !showFurniture,
+    });
 
   // The newest fit asked for. A fit may wait on the server for the routes' bounds,
   // and is dropped if anything happens to the map meanwhile: another highlight (a
@@ -290,9 +261,6 @@ export default function RailwayMap({
   // An anonymous visitor's rides, coloured from their localStorage log
   const refreshLocalRouteStates = useLocalRouteFeatureStates(map, mapLoaded, dataAccess, showError);
 
-  // Route editor hook
-  const routeEditor = useRouteEditor(dataAccess, effectiveCountries);
-
   // Tile refresh hook: a logged route, a new user or a new country filter
   const { refreshTiles } = useMapTileRefresh({
     map,
@@ -313,21 +281,6 @@ export default function RailwayMap({
     shownKind ?? "view",
     activeTab === "routes" ? selectedRoutes : NO_SELECTED_ROUTES,
     shownHighlight.partials,
-  );
-
-  // Ridden stretches of routes not yet finished, drawn over the route line
-  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, coverageVersion);
-
-  // Layer filter hooks. mapLoaded applies persisted prefs once layers exist.
-  useLayerFilters(
-    map,
-    layerPrefs.showHeritage,
-    layerPrefs.showSpecial,
-    // The stored preference is shared across regions; one that offers no scenic
-    // lines keeps them off regardless of what the other region left switched on.
-    layerPrefs.showScenicLines && region.hasScenicHighlight,
-    effectiveCountries,
-    mapLoaded,
   );
 
   // Route click handler
@@ -428,16 +381,12 @@ export default function RailwayMap({
   }, []);
 
   const handleRoutesLogged = useCallback(() => {
-    if (user) {
-      refreshTiles();
-      routeEditor.refreshProgress();
-    } else {
-      void refreshLocalRouteStates();
-      routeEditor.refreshProgress();
-    }
+    if (user) refreshTiles();
+    else void refreshLocalRouteStates();
+    void refreshProgress();
     // Journeys changed, so the ridden stretches of unfinished routes may have too
     setCoverageVersion((v) => v + 1);
-  }, [user, refreshTiles, refreshLocalRouteStates, routeEditor.refreshProgress]);
+  }, [user, refreshTiles, refreshLocalRouteStates, refreshProgress]);
 
   // Refresh the route tiles when the user changes (login/logout): the map outlives
   // it, and the tiles must switch between this user's rides and none. The mount
@@ -472,11 +421,6 @@ export default function RailwayMap({
     region: region.id,
     routeTapAction,
   });
-
-  // Fetch progress stats on mount
-  useEffect(() => {
-    if (mapLoaded) routeEditor.refreshProgress();
-  }, [mapLoaded, routeEditor.refreshProgress]);
 
   // Country filter saves run one at a time, and while one is in flight only the
   // newest list waits behind it: toggling fast used to send concurrent saves
@@ -619,23 +563,6 @@ export default function RailwayMap({
     };
   }, [isMobile, map]);
 
-  // Only the sheet can take the room away, so the desktop layout always has it.
-  const showFurniture = !isMobile || furnitureFits;
-
-  // The line picked in the search box, highlighted on the map. It stands down with the
-  // box, whose chip is the only way to clear it.
-  const shownTypes = useMemo(
-    () => shownUsageTypes(layerPrefs.showHeritage, layerPrefs.showSpecial),
-    [layerPrefs.showHeritage, layerPrefs.showSpecial],
-  );
-  const lineHighlight = useLineSearchHighlight(
-    map,
-    mapLoaded,
-    region.id,
-    shownTypes,
-    !showFurniture,
-  );
-
   // What the collapsed sheet calls itself. Not the active tab: all three of the
   // sheet's tabs are the logger. The count is the one thing worth surfacing from
   // behind a closed sheet — routes are picked on the map, which is exactly when the
@@ -727,9 +654,9 @@ export default function RailwayMap({
         />
 
         {/* Progress Stats Box */}
-        {routeEditor.progress && (
+        {progress && (
           <MapProgressBox
-            progress={routeEditor.progress}
+            progress={progress}
             isMobile={isMobile}
             // The switches live in the hamburger menu at every width — see MenuSheet.
             withLayerToggles={false}

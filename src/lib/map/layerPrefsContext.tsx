@@ -6,12 +6,9 @@ import { type LayerPrefs, loadLayerPrefs, saveLayerPref } from "./layerPrefs";
 /**
  * The user map's layer toggles, held above the map.
  *
- * They used to live in two places — `showHeritage`/`showSpecial` inside
- * `useRouteEditor`, `showScenicLines` as its own `useState` copied into both map
- * components — which was fine while the only control was inside the map itself. It
- * stopped being fine when the switches moved into `MenuSheet`: the menu is a
- * sibling of the map, so a toggle there has to re-render the map, and two hooks
- * reading the same localStorage key would simply disagree.
+ * The switches are driven from `MenuSheet`, a sibling of the map rather than a
+ * child of it, so a toggle there has to re-render the map — and two hooks reading
+ * the same localStorage key would simply disagree.
  *
  * `loadLayerPrefs` is read in the initializer, which returns the defaults on the
  * server. Nothing rendered during SSR consumes these (the map is `ssr: false`, the

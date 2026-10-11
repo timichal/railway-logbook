@@ -368,11 +368,11 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 /**
  * Read-only data access for a shared public map (`/shared/<token>`).
  *
- * Same interface as the other two, so `useRouteEditor` and `useCoverageOverlay`
- * work unchanged; the token stands in for a session, and every call re-checks it
- * server-side (a link switched off mid-visit simply stops answering). Nothing
- * here writes: an anonymous visitor has no journeys to log and no preferences of
- * their own, and the country filter is the owner's, shown as they set it.
+ * Same interface as the other two, so `useUserMap` works unchanged; the token
+ * stands in for a session, and every call re-checks it server-side (a link
+ * switched off mid-visit simply stops answering). Nothing here writes: an
+ * anonymous visitor has no journeys to log and no preferences of their own, and
+ * the country filter is the owner's, shown as they set it.
  */
 export function createPublicDataAccess(token: string, region: RegionId): DataAccess {
   return {
