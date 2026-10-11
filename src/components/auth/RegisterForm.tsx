@@ -31,7 +31,7 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
     try {
       // Export localStorage data before registration
       const { journeys, parts } = localStore.exportJourneysData();
-      const localPreferences = localStore.exportPreferences();
+      const localPreferences = localStore.getPreferences();
 
       // Register with auto-migration
       const result = await register(formData, localPreferences);

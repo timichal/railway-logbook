@@ -7,17 +7,11 @@ import RouteLogger, {
 import * as localStore from "@/lib/localStorage";
 
 async function createLocalJourney(journey: NewJourney): Promise<string> {
-  const newJourney = localStore.addJourney({
-    name: journey.name,
-    description: journey.description,
-    date: journey.date,
-  });
-
-  localStore.addLoggedParts(
+  const newJourney = localStore.addJourneyWithParts(
+    { name: journey.name, description: journey.description, date: journey.date },
     journey.routes.map((r) => {
       const partial = r.partial ?? false;
       return {
-        journey_id: newJourney.id,
         track_id: r.track_id,
         partial,
         // Only a partial ride has a meaningful stretch, and only the Journey

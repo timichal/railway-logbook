@@ -9,24 +9,10 @@
 import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
 import type { LocalJourney, LocalLoggedPart } from "./shared/types";
 
-interface LocalJourneysData {
-  version: number;
-  journeys: LocalJourney[];
-}
-
-interface LocalLoggedPartsData {
-  version: number;
-  parts: LocalLoggedPart[];
-}
-
-interface LocalPreferencesData {
-  version: number;
-  selected_countries: string[];
-}
-
 const JOURNEYS_KEY = "railway_journeys";
 const LOGGED_PARTS_KEY = "railway_logged_parts";
 const PREFS_KEY = "railway_preferences";
+const STORAGE_KEYS = [JOURNEYS_KEY, LOGGED_PARTS_KEY, PREFS_KEY];
 /**
  * The cap on locally stored journeys. Exported because the number is also shown
  * to the user (the Route Logger's storage banner, the disabled-button title),
@@ -60,459 +46,237 @@ const isLocalLoggedPart = (entry: unknown): entry is LocalLoggedPart =>
   typeof entry.journey_id === "string" &&
   typeof entry.track_id === "number";
 
+/** What a write says when the list it would replace cannot be read. */
+const UNREADABLE_MESSAGE =
+  "The journeys saved in this browser could not be read, so nothing was saved over them. Clearing this site's data in the browser settings starts them afresh.";
+
 /**
  * The array under `field` in the JSON stored at `key`, keeping only the entries
- * `isEntry` accepts; null when nothing of that shape is stored. The callers' try/catch
- * only covers a value that fails to parse: one that parses to the wrong shape —
- * `{"journeys":{}}`, `null`, a journey with no name — used to be returned as it was
- * and crash the tabs at their first `.filter` or property read. Storage is the
- * browser's, not ours: anything (an old version, an extension, a hand edit) can
- * have written it.
+ * `isEntry` accepts; null when nothing is stored (or on the server).
+ *
+ * Something stored that is not such an array — it fails to parse, or parses to
+ * `{"journeys":{}}` or `null` — throws instead of passing for an empty list,
+ * because every write re-saves what its read returned: an empty list there would
+ * overwrite whatever the user had with the one new entry. The display readers
+ * (`readForDisplay`) turn the throw into an empty list; the writers let it stop
+ * the write. Storage is the browser's, not ours: anything (an old version, an
+ * extension, a hand edit) can have written it.
  */
 function readStoredArray<T>(
   key: string,
   field: string,
   isEntry: (entry: unknown) => entry is T,
 ): T[] | null {
+  if (typeof window === "undefined") return null;
   const data = localStorage.getItem(key);
   if (!data) return null;
-  const parsed: unknown = JSON.parse(data);
-  const entries = isRecord(parsed) ? parsed[field] : undefined;
-  return Array.isArray(entries) ? entries.filter(isEntry) : null;
+  let entries: unknown;
+  try {
+    const parsed: unknown = JSON.parse(data);
+    entries = isRecord(parsed) ? parsed[field] : undefined;
+  } catch {
+    // Unparseable: falls through to the shape check, which refuses it
+  }
+  if (!Array.isArray(entries)) throw new Error(UNREADABLE_MESSAGE);
+  return entries.filter(isEntry);
 }
 
-// ===== Journey Operations =====
+/** `readStoredArray` for a reader that only shows the list: unreadable reads as nothing stored. */
+function readForDisplay<T>(
+  key: string,
+  field: string,
+  isEntry: (entry: unknown) => entry is T,
+): T[] | null {
+  try {
+    return readStoredArray(key, field, isEntry);
+  } catch (error) {
+    console.error(`Error reading ${key} from localStorage:`, error);
+    return null;
+  }
+}
 
 /**
- * Get all journeys from localStorage
+ * Stores `list` under `field` at `key`. Given `what` (plural), a full quota becomes
+ * a message meant for the user — "register to save more <what>" — since the callers
+ * show a thrown message as it is; without it the browser's error is rethrown.
  */
+function writeStoredArray(key: string, field: string, list: unknown[], what?: string): void {
+  try {
+    localStorage.setItem(key, JSON.stringify({ version: 1, [field]: list }));
+  } catch (error) {
+    if (what && error instanceof Error && error.name === "QuotaExceededError") {
+      throw new Error(`Storage limit reached. Please register to save more ${what}.`);
+    }
+    throw error;
+  }
+}
+
+// The lists a write starts from: these throw rather than return an unreadable list as empty.
+const journeysToWrite = () => readStoredArray(JOURNEYS_KEY, "journeys", isLocalJourney) ?? [];
+const partsToWrite = () => readStoredArray(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? [];
+const writeJourneys = (journeys: LocalJourney[]) =>
+  writeStoredArray(JOURNEYS_KEY, "journeys", journeys, "journeys");
+const writeParts = (parts: LocalLoggedPart[]) =>
+  writeStoredArray(LOGGED_PARTS_KEY, "parts", parts, "routes");
+
+// ===== Journeys =====
+
 export function getJourneys(): LocalJourney[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    return readStoredArray(JOURNEYS_KEY, "journeys", isLocalJourney) ?? [];
-  } catch (error) {
-    console.error("Error reading journeys from localStorage:", error);
-    return [];
-  }
+  return readForDisplay(JOURNEYS_KEY, "journeys", isLocalJourney) ?? [];
 }
 
-/**
- * Get a specific journey by ID
- */
-export function getJourney(journeyId: string): LocalJourney | null {
-  return getJourneys().find((j) => j.id === journeyId) || null;
-}
-
-/**
- * Add a new journey to localStorage
- * @throws Error if journey limit exceeded or quota exceeded
- */
-export function addJourney(
-  journey: Omit<LocalJourney, "id" | "created_at" | "updated_at">,
-): LocalJourney {
-  if (typeof window === "undefined") throw new Error("Cannot add journey on server");
-
-  // Check limit before adding
-  if (!canAddMoreJourneys()) {
-    throw new Error(JOURNEY_LIMIT_MESSAGE);
-  }
-
-  try {
-    const journeys = getJourneys();
-    const newJourney: LocalJourney = {
-      ...journey,
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    journeys.push(newJourney);
-
-    const data: LocalJourneysData = {
-      version: 1,
-      journeys,
-    };
-
-    localStorage.setItem(JOURNEYS_KEY, JSON.stringify(data));
-    return newJourney;
-  } catch (error) {
-    if (error instanceof Error && error.name === "QuotaExceededError") {
-      throw new Error("Storage limit reached. Please register to save more journeys.");
-    }
-    throw error;
-  }
-}
-
-/**
- * Update an existing journey
- */
-export function updateJourney(
-  id: string,
-  updates: Partial<Omit<LocalJourney, "id" | "created_at" | "updated_at">>,
-): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    const journeys = getJourneys();
-    const index = journeys.findIndex((journey) => journey.id === id);
-
-    if (index === -1) {
-      throw new Error(`Journey with id ${id} not found`);
-    }
-
-    journeys[index] = {
-      ...journeys[index],
-      ...updates,
-      updated_at: new Date().toISOString(),
-    };
-
-    const data: LocalJourneysData = {
-      version: 1,
-      journeys,
-    };
-
-    localStorage.setItem(JOURNEYS_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.error("Error updating journey in localStorage:", error);
-    throw error;
-  }
-}
-
-/**
- * Delete a journey and all its logged parts
- */
-export function deleteJourney(id: string): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    // Delete journey
-    const journeys = getJourneys();
-    const filtered = journeys.filter((journey) => journey.id !== id);
-
-    const data: LocalJourneysData = {
-      version: 1,
-      journeys: filtered,
-    };
-
-    localStorage.setItem(JOURNEYS_KEY, JSON.stringify(data));
-
-    // Delete all logged parts for this journey
-    const parts = getLoggedParts();
-    const filteredParts = parts.filter((part) => part.journey_id !== id);
-
-    const partsData: LocalLoggedPartsData = {
-      version: 1,
-      parts: filteredParts,
-    };
-
-    localStorage.setItem(LOGGED_PARTS_KEY, JSON.stringify(partsData));
-  } catch (error) {
-    console.error("Error deleting journey from localStorage:", error);
-    throw error;
-  }
-}
-
-/**
- * Get total journey count
- */
 export function getJourneyCount(): number {
   return getJourneys().length;
 }
 
-/**
- * Check if user can add more journeys (under the MAX_JOURNEYS limit)
- */
 export function canAddMoreJourneys(): boolean {
   return getJourneyCount() < MAX_JOURNEYS;
 }
 
 /**
- * Clear all journeys
+ * Adds a journey with its routes. Both or neither: a journey left behind by a
+ * failed routes write would hold one of the MAX_JOURNEYS slots with nothing in it.
+ * @throws Error if the journey limit or the storage quota is reached
  */
-export function clearJourneys(): void {
-  if (typeof window === "undefined") return;
+export function addJourneyWithParts(
+  journey: Omit<LocalJourney, "id" | "created_at" | "updated_at">,
+  parts: Omit<LocalLoggedPart, "id" | "journey_id" | "created_at">[],
+): LocalJourney {
+  const journeys = journeysToWrite();
+  if (journeys.length >= MAX_JOURNEYS) throw new Error(JOURNEY_LIMIT_MESSAGE);
+  const existingParts = partsToWrite();
 
+  const now = new Date().toISOString();
+  const newJourney: LocalJourney = {
+    ...journey,
+    id: crypto.randomUUID(),
+    created_at: now,
+    updated_at: now,
+  };
+  writeJourneys([...journeys, newJourney]);
   try {
-    localStorage.removeItem(JOURNEYS_KEY);
+    writeParts([
+      ...existingParts,
+      ...parts.map((part) => newLoggedPart({ ...part, journey_id: newJourney.id }, now)),
+    ]);
   } catch (error) {
-    console.error("Error clearing journeys from localStorage:", error);
+    // The list it puts back is shorter than the one just stored, so it fits.
+    writeJourneys(journeys);
+    throw error;
   }
+  return newJourney;
 }
 
-// ===== Logged Parts Operations =====
+export function updateJourney(
+  id: string,
+  updates: Partial<Omit<LocalJourney, "id" | "created_at" | "updated_at">>,
+): void {
+  const journeys = journeysToWrite();
+  const index = journeys.findIndex((journey) => journey.id === id);
+  if (index === -1) throw new Error(`Journey with id ${id} not found`);
 
-/**
- * Get all logged parts from localStorage
- */
+  journeys[index] = { ...journeys[index], ...updates, updated_at: new Date().toISOString() };
+  writeJourneys(journeys);
+}
+
+/** Deletes the journey and every part logged in it. */
+export function deleteJourney(id: string): void {
+  // Both read before either is written, so an unreadable parts list stops the
+  // delete before the journey is gone.
+  const journeys = journeysToWrite();
+  const parts = partsToWrite();
+  writeJourneys(journeys.filter((journey) => journey.id !== id));
+  writeParts(parts.filter((part) => part.journey_id !== id));
+}
+
+// ===== Logged parts =====
+
 export function getLoggedParts(): LocalLoggedPart[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    return readStoredArray(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? [];
-  } catch (error) {
-    console.error("Error reading logged parts from localStorage:", error);
-    return [];
-  }
+  return readForDisplay(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? [];
 }
 
-/**
- * Get logged parts for a specific journey
- */
 export function getLoggedPartsByJourneyId(journeyId: string): LocalLoggedPart[] {
   return getLoggedParts().filter((part) => part.journey_id === journeyId);
 }
 
-/**
- * Get all logged parts for a specific track (across all journeys)
- */
-export function getLoggedPartsByTrackId(trackId: number): LocalLoggedPart[] {
-  return getLoggedParts().filter((part) => part.track_id === trackId);
-}
-
-/**
- * Add a new logged part to localStorage
- * @throws Error if quota exceeded
- */
+/** @throws Error if the route is already in the journey, or the quota is reached */
 export function addLoggedPart(part: Omit<LocalLoggedPart, "id" | "created_at">): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    const parts = getLoggedParts();
-
-    // Check if this route already exists in this journey
-    const exists = parts.some(
-      (p) => p.journey_id === part.journey_id && p.track_id === part.track_id,
-    );
-
-    if (exists) {
-      throw new Error("This route is already logged in this journey");
-    }
-
-    const newPart: LocalLoggedPart = {
-      ...part,
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
-    };
-
-    parts.push(newPart);
-
-    const data: LocalLoggedPartsData = {
-      version: 1,
-      parts,
-    };
-
-    localStorage.setItem(LOGGED_PARTS_KEY, JSON.stringify(data));
-  } catch (error) {
-    if (error instanceof Error && error.name === "QuotaExceededError") {
-      throw new Error("Storage limit reached. Please register to save more routes.");
-    }
-    throw error;
+  const parts = partsToWrite();
+  if (parts.some((p) => p.journey_id === part.journey_id && p.track_id === part.track_id)) {
+    throw new Error("This route is already logged in this journey");
   }
+  writeParts([...parts, newLoggedPart(part, new Date().toISOString())]);
 }
 
-/**
- * Add multiple logged parts at once (for creating a journey)
- */
-export function addLoggedParts(parts: Omit<LocalLoggedPart, "id" | "created_at">[]): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    const existingParts = getLoggedParts();
-
-    const newParts: LocalLoggedPart[] = parts.map((part) => ({
-      ...part,
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
-    }));
-
-    const allParts = [...existingParts, ...newParts];
-
-    const data: LocalLoggedPartsData = {
-      version: 1,
-      parts: allParts,
-    };
-
-    localStorage.setItem(LOGGED_PARTS_KEY, JSON.stringify(data));
-  } catch (error) {
-    if (error instanceof Error && error.name === "QuotaExceededError") {
-      throw new Error("Storage limit reached. Please register to save more routes.");
-    }
-    throw error;
-  }
-}
+const newLoggedPart = (
+  part: Omit<LocalLoggedPart, "id" | "created_at">,
+  created_at: string,
+): LocalLoggedPart => ({ ...part, id: crypto.randomUUID(), created_at });
 
 /**
- * Update a logged part's partial flag
+ * Sets a logged part's partial flag. Clearing it clears the stretch with it, as
+ * the server does (`journeyQueries.ts`): a stretch kept here would come back when
+ * the flag is ticked again, claiming a range nobody re-entered.
  */
 export function updateLoggedPart(id: string, partial: boolean): void {
-  if (typeof window === "undefined") return;
+  const parts = partsToWrite();
+  const index = parts.findIndex((part) => part.id === id);
+  if (index === -1) throw new Error(`Logged part with id ${id} not found`);
 
-  try {
-    const parts = getLoggedParts();
-    const index = parts.findIndex((part) => part.id === id);
-
-    if (index === -1) {
-      throw new Error(`Logged part with id ${id} not found`);
-    }
-
-    parts[index] = {
-      ...parts[index],
-      partial,
-    };
-
-    const data: LocalLoggedPartsData = {
-      version: 1,
-      parts,
-    };
-
-    localStorage.setItem(LOGGED_PARTS_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.error("Error updating logged part in localStorage:", error);
-    throw error;
-  }
+  parts[index] = partial
+    ? { ...parts[index], partial }
+    : { ...parts[index], partial, covered_start: null, covered_end: null };
+  writeParts(parts);
 }
 
-/**
- * Delete a logged part
- */
 export function deleteLoggedPart(id: string): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    const parts = getLoggedParts();
-    const filtered = parts.filter((part) => part.id !== id);
-
-    const data: LocalLoggedPartsData = {
-      version: 1,
-      parts: filtered,
-    };
-
-    localStorage.setItem(LOGGED_PARTS_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.error("Error deleting logged part from localStorage:", error);
-    throw error;
-  }
+  writeParts(partsToWrite().filter((part) => part.id !== id));
 }
 
-/**
- * Clear all logged parts
- */
-export function clearLoggedParts(): void {
-  if (typeof window === "undefined") return;
+// ===== Preferences =====
 
-  try {
-    localStorage.removeItem(LOGGED_PARTS_KEY);
-  } catch (error) {
-    console.error("Error clearing logged parts from localStorage:", error);
-  }
-}
-
-// ===== Preferences Operations =====
-
-/**
- * Get country preferences from localStorage
- */
 export function getPreferences(): string[] {
-  if (typeof window === "undefined") return defaultCountries();
-
-  try {
-    // The same cleanup every other reader of the filter applies (upper case, no
-    // duplicates, two letters), so a hand-edited "cz" still matches the tiles.
-    const codes = readStoredArray(
-      PREFS_KEY,
-      "selected_countries",
-      (code): code is string => typeof code === "string",
-    );
-    return codes ? normalizeCountryCodes(codes) : defaultCountries();
-  } catch (error) {
-    console.error("Error reading preferences from localStorage:", error);
-    return defaultCountries();
-  }
+  // The same cleanup every other reader of the filter applies (upper case, no
+  // duplicates, two letters), so a hand-edited "cz" still matches the tiles.
+  const codes = readForDisplay(
+    PREFS_KEY,
+    "selected_countries",
+    (code): code is string => typeof code === "string",
+  );
+  return codes ? normalizeCountryCodes(codes) : defaultCountries();
 }
 
-/**
- * Save country preferences to localStorage
- */
 export function setPreferences(countries: string[]): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    const data: LocalPreferencesData = {
-      version: 1,
-      selected_countries: countries,
-    };
-
-    localStorage.setItem(PREFS_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.error("Error saving preferences to localStorage:", error);
-    throw error;
-  }
+  writeStoredArray(PREFS_KEY, "selected_countries", countries);
 }
 
-/**
- * Clear preferences
- */
-export function clearPreferences(): void {
-  if (typeof window === "undefined") return;
+// ===== Migration and sync =====
 
-  try {
-    localStorage.removeItem(PREFS_KEY);
-  } catch (error) {
-    console.error("Error clearing preferences from localStorage:", error);
-  }
-}
-
-/**
- * Export preferences for migration
- */
-export function exportPreferences(): string[] {
-  return getPreferences();
-}
-
-// ===== Export for Migration =====
-
-/**
- * Export all journeys and logged parts for migration
- */
+/** All journeys and logged parts, for migration on login. */
 export function exportJourneysData(): { journeys: LocalJourney[]; parts: LocalLoggedPart[] } {
-  return {
-    journeys: getJourneys(),
-    parts: getLoggedParts(),
-  };
+  return { journeys: getJourneys(), parts: getLoggedParts() };
 }
 
-// ===== Multi-tab Sync =====
-
-/**
- * Listen for storage changes in other tabs.
- * Returns cleanup function to remove listener.
- */
+/** Calls `callback` when another tab changes the railway data. Returns the unsubscribe. */
 export function onStorageChange(callback: () => void): () => void {
   if (typeof window === "undefined") return () => {};
 
   const handler = (event: StorageEvent) => {
-    // Only trigger if railway data changed
-    if (event.key === JOURNEYS_KEY || event.key === LOGGED_PARTS_KEY || event.key === PREFS_KEY) {
-      callback();
-    }
+    // A null key is a `localStorage.clear()`, which took ours with it.
+    if (event.storageArea !== localStorage) return;
+    if (event.key === null || STORAGE_KEYS.includes(event.key)) callback();
   };
-
   window.addEventListener("storage", handler);
-
-  // Return cleanup function
-  return () => {
-    window.removeEventListener("storage", handler);
-  };
+  return () => window.removeEventListener("storage", handler);
 }
 
-// ===== Clear All Data =====
-
-/**
- * Clear all railway data from localStorage
- */
 export function clearAll(): void {
-  clearJourneys();
-  clearLoggedParts();
-  clearPreferences();
+  // Each key on its own, so one failing does not leave the others behind.
+  for (const key of STORAGE_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error(`Error clearing ${key} from localStorage:`, error);
+    }
+  }
 }

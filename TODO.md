@@ -37,13 +37,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   hydration queries. Use `Promise.all` on each independent group. That takes a
   trip open from 3 serial round trips to 2, and a logbook page from 5 to 3.
 
-- [ ] **Rewrite `localStorage.ts`** (518 → ~250 lines). The
-  `{ version: 1, … }` + `setItem` write is repeated 7 times, and so is the
-  `QuotaExceededError` rethrow. Use `writeJourneys(list)` / `writeParts(list)` and a
-  single quota wrapper. Also covered under dead code below: `getJourney`,
-  `getLoggedPartsByTrackId`, `exportPreferences` (identical to `getPreferences`), and
-  the three `clear*` functions, which only `clearAll` calls.
-
 - [ ] **`JourneyPlanner.tsx`: one state per station field** (608 → ~350 lines). From,
   via and to each have their own state and their own branch in `handleSearchChange`,
   `handleStationSelect` and `handleStationClickFromMap`, and the last two duplicate
@@ -248,8 +241,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Dead code (small, safe)
 
-- [ ] `localStorage.ts`: `getJourney`, `getLoggedPartsByTrackId`, and
-  `exportPreferences` (call `getPreferences` instead).
 - [ ] `constants.ts`: `isPublicNoteType` and the `public` field on `noteTypeOptions`.
   Nothing reads them; public visibility is the hard-coded `note_type = 'Usage'` in SQL.
   CLAUDE.md mentions `isPublicNoteType`.
@@ -336,7 +327,7 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 - [ ] Delete comments that repeat the next line: "// Handle save route functionality",
   "// Trigger map refresh", "// Calculate totals", "// Remove hover from previous
   part", "// Cleanup function", and so on. They are concentrated in
-  `LocalJourneyLogTab`, `adminMapInteractions`, `localStorage`, `AdminRoutesTab`,
+  `LocalJourneyLogTab`, `adminMapInteractions`, `AdminRoutesTab`,
   `AdminCreateRouteTab`, `JourneyPlanner` and `dataAccess`.
 - [ ] Replace `if (onX) { onX(); }` with `onX?.()`, and `onX || (() => {})` with an
   optional prop. Same files.
