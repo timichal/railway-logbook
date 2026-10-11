@@ -6,7 +6,7 @@ import {
   requireLoggedRoutes,
   requireString,
 } from "@/lib/api/params";
-import { apiHandler, assertOk, jsonResponse } from "@/lib/api/response";
+import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { createJourneyForUser } from "@/lib/journeyQueries";
 
 /**
@@ -23,7 +23,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const { trackIds, partialFlags, coveredRanges } = requireLoggedRoutes(body, "routes");
 
-    const result = await createJourneyForUser(
+    const journey = await createJourneyForUser(
       user.id,
       requireString(body, "name"),
       optionalString(body, "description"),
@@ -33,8 +33,7 @@ export async function POST(request: Request): Promise<Response> {
       optionalPositiveInt(body, "tripId"),
       coveredRanges,
     );
-    assertOk(result);
 
-    return jsonResponse({ journey: result.journey }, 201);
+    return jsonResponse({ journey }, 201);
   });
 }

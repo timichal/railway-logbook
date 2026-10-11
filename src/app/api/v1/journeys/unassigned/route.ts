@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/api/auth";
 import { requireRegion } from "@/lib/api/params";
-import { apiHandler, assertOk, jsonResponse } from "@/lib/api/response";
+import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { unassignedJourneysForUser } from "@/lib/tripQueries";
 
 /**
@@ -13,9 +13,8 @@ export async function GET(request: Request): Promise<Response> {
     const user = await requireUser(request);
     const region = requireRegion(new URL(request.url));
 
-    const result = await unassignedJourneysForUser(user.id, region);
-    assertOk(result);
+    const journeys = await unassignedJourneysForUser(user.id, region);
 
-    return jsonResponse({ journeys: result.journeys });
+    return jsonResponse({ journeys });
   });
 }

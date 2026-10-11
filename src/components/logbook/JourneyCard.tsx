@@ -162,7 +162,6 @@ export default function JourneyCard({
       try {
         const result = unwrap(await getJourney(journey.id, regionId));
         if (cancelled) return;
-        if (!result.journey) throw new Error("Journey not found");
         const routes = result.routes;
         applySnapshot({
           routes,

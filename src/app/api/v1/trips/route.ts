@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/api/auth";
 import { optionalString, readJsonBody, requireRegion, requireString } from "@/lib/api/params";
-import { apiHandler, assertOk, jsonResponse } from "@/lib/api/response";
+import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { createTripForUser, tripsForUser } from "@/lib/tripQueries";
 
 /**
@@ -15,10 +15,7 @@ export async function GET(request: Request): Promise<Response> {
     const user = await requireUser(request);
     const region = requireRegion(new URL(request.url));
 
-    const result = await tripsForUser(user.id, region);
-    assertOk(result);
-
-    return jsonResponse({ trips: result.trips });
+    return jsonResponse({ trips: await tripsForUser(user.id, region) });
   });
 }
 
@@ -28,13 +25,12 @@ export async function POST(request: Request): Promise<Response> {
     const user = await requireUser(request);
     const body = await readJsonBody(request);
 
-    const result = await createTripForUser(
+    const trip = await createTripForUser(
       user.id,
       requireString(body, "name"),
       optionalString(body, "description"),
     );
-    assertOk(result);
 
-    return jsonResponse({ trip: result.trip }, 201);
+    return jsonResponse({ trip }, 201);
   });
 }

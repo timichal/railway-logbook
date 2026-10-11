@@ -6,13 +6,15 @@
  * handlers resolve a bearer token and call the same functions
  * (MOBILE_APP_PLAN.md, Phase 1).
  *
- * Failures come back in-band as `{ error }` rather than as thrown exceptions:
- * the route handlers turn the message into a status code (see
- * `src/lib/api/response.ts`), and the web actions into an `ActionResult`
- * (`inBand` in `actionResult.ts`).
+ * A rejection meant for the caller is thrown as a `ValidationError` or a
+ * `NotFoundError` (`errors.ts`), which the route handlers turn into a 400 or a
+ * 404 and the web actions into `{ error }`; anything else propagates as the
+ * exception it is.
  */
 
-import pool from "./db";
+import type { PoolClient } from "pg";
+import pool, { asMissingRow } from "./db";
+import { NotFoundError, ValidationError } from "./errors";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
 import type { Journey, LoggedPart, RailwayRoute } from "./shared/types";
 
@@ -39,43 +41,68 @@ export function sanitizeRange(
   return { covered_start: start, covered_end: end };
 }
 
-/** The message for a journey's name and date that can't be written, or null if they can. */
-function journeyMetaError(name: unknown, date: unknown): string | null {
+/** Throws unless a journey's name and date can be written. */
+function assertJourneyMeta(name: unknown, date: unknown): void {
   // Typed loosely because a server action's arguments are whatever the client sent
-  if (typeof name !== "string" || name.trim() === "") return "Journey name is required";
-  if (typeof date !== "string" || !date) return "Journey date is required";
+  if (typeof name !== "string" || name.trim() === "") {
+    throw new ValidationError("Journey name is required");
+  }
+  if (typeof date !== "string" || !date) throw new ValidationError("Journey date is required");
   // Checked here rather than left to Postgres, which would reject a malformed or
-  // non-existent day with an error that surfaces as the generic "Failed to …"
-  if (!isDateOnly(date)) return "Journey date must be a real day, as YYYY-MM-DD";
-  return null;
+  // non-existent day with an error that surfaces as an opaque 500
+  if (!isDateOnly(date)) {
+    throw new ValidationError("Journey date must be a real day, as YYYY-MM-DD");
+  }
+}
+
+function assertAligned(trackIds: unknown, partialFlags: unknown): void {
+  if (!Array.isArray(trackIds) || !Array.isArray(partialFlags)) {
+    throw new ValidationError("Track IDs and partial flags must be lists");
+  }
+  if (trackIds.length !== partialFlags.length) {
+    throw new ValidationError("Track IDs and partial flags length mismatch");
+  }
 }
 
 /**
- * The in-band message for a foreign key violation, or null for any other error.
- *
- * The ids a write references arrive from the client, so an unknown or deleted
- * route is the caller's mistake, not a server failure — and it answers like the
- * other rows that "aren't there" (a 404 over HTTP, see `statusForMessage`).
- *
- * Told apart by the table the missing key was looked for in, which Postgres names
- * in the error's detail, rather than by constraint name: the ownership FKs were
- * added to existing databases by migration, and nothing guarantees their names
- * match `01-schema.sql`.
+ * Run `body` in a transaction on a connection of its own, rolling back on any
+ * failure and rethrowing it — a foreign key violation as the `NotFoundError` it
+ * means.
  */
-function missingRowMessage(error: unknown): string | null {
-  const pgError = error as { code?: string; detail?: string } | null;
-  if (pgError?.code !== "23503") return null;
-  const table = /is not present in table "([^"]+)"/.exec(pgError.detail ?? "")?.[1];
-  switch (table) {
-    case "railway_routes":
-      return "Route not found";
-    case "user_journeys":
-      return "Journey not found";
-    case "user_trips":
-      return "Trip not found";
-    default:
-      return null;
+async function inTransaction<T>(body: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  let brokenConnection: Error | undefined;
+  try {
+    await client.query("BEGIN");
+    const result = await body(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    // A failed ROLLBACK means the connection itself is gone: keep the original
+    // error, and have the pool discard the client (see migrationActions)
+    await client.query("ROLLBACK").catch((rollbackError: Error) => {
+      brokenConnection = rollbackError;
+    });
+    throw asMissingRow(error);
+  } finally {
+    client.release(brokenConnection);
   }
+}
+
+/**
+ * Throws unless `tripId` is one of the user's own trips: it arrives from the
+ * client, and an unchecked one files the journey under someone else's trip. A
+ * trip that exists but isn't theirs answers exactly like one that doesn't exist.
+ * The composite FK on user_journeys (trip_id, user_id) enforces the same. FOR
+ * KEY SHARE holds off a concurrent delete of the trip until COMMIT, which would
+ * otherwise turn a passed check into an FK error on the write.
+ */
+async function assertOwnTrip(client: PoolClient, userId: number, tripId: number): Promise<void> {
+  const tripCheck = await client.query(
+    "SELECT 1 FROM user_trips WHERE id = $1 AND user_id = $2 FOR KEY SHARE",
+    [tripId, userId],
+  );
+  if (tripCheck.rows.length === 0) throw new NotFoundError("Trip not found");
 }
 
 /**
@@ -122,56 +149,37 @@ function loggedPartRows(
   return { placeholders: valuePlaceholders.join(", "), values };
 }
 
-/**
- * Get a single journey with all its logged routes
- */
+/** A single journey with all its logged routes. */
 export async function journeyForUser(
   userId: number,
   journeyId: number,
-): Promise<{
-  journey: Journey | null;
-  routes: RailwayRoute[];
-  error?: string;
-}> {
-  try {
-    // Fetch journey metadata
-    const journeyResult = await pool.query<Journey>(
-      "SELECT * FROM user_journeys WHERE id = $1 AND user_id = $2",
-      [journeyId, userId],
-    );
+): Promise<{ journey: Journey; routes: RailwayRoute[] }> {
+  const journeyResult = await pool.query<Journey>(
+    "SELECT * FROM user_journeys WHERE id = $1 AND user_id = $2",
+    [journeyId, userId],
+  );
+  const journey = journeyResult.rows[0];
+  if (!journey) throw new NotFoundError("Journey not found");
 
-    if (journeyResult.rows.length === 0) {
-      return { journey: null, routes: [], error: "Journey not found" };
-    }
+  // Exclude the heavy geometry column
+  const routesResult = await pool.query<RailwayRoute & LoggedPart>(
+    `SELECT
+      rr.track_id, rr.name, rr.from_station, rr.to_station,
+      rr.description, rr.usage_type, rr.frequency, rr.link, rr.line_class,
+      rr.length_km, rr.start_country, rr.end_country,
+      rr.is_valid,
+      ulp.partial, ulp.covered_start, ulp.covered_end
+    FROM user_logged_parts ulp
+    JOIN railway_routes rr ON ulp.track_id = rr.track_id
+    WHERE ulp.journey_id = $1 AND ulp.user_id = $2
+    ORDER BY ulp.created_at ASC`,
+    [journeyId, userId],
+  );
 
-    // Fetch all routes in this journey (exclude heavy geometry column)
-    const routesResult = await pool.query<RailwayRoute & LoggedPart>(
-      `SELECT
-        rr.track_id, rr.name, rr.from_station, rr.to_station,
-        rr.description, rr.usage_type, rr.frequency, rr.link, rr.line_class,
-        rr.length_km, rr.start_country, rr.end_country,
-        rr.is_valid,
-        ulp.partial, ulp.covered_start, ulp.covered_end
-      FROM user_logged_parts ulp
-      JOIN railway_routes rr ON ulp.track_id = rr.track_id
-      WHERE ulp.journey_id = $1 AND ulp.user_id = $2
-      ORDER BY ulp.created_at ASC`,
-      [journeyId, userId],
-    );
-
-    return {
-      journey: journeyResult.rows[0],
-      routes: routesResult.rows,
-    };
-  } catch (error) {
-    console.error("Error fetching journey:", error);
-    return { journey: null, routes: [], error: "Failed to fetch journey" };
-  }
+  return { journey, routes: routesResult.rows };
 }
 
-/**
- * Create a new journey and log routes to it (atomic operation)
- */
+/** Create a new journey and log routes to it, in one transaction. */
 export async function createJourneyForUser(
   userId: number,
   name: string,
@@ -185,50 +193,21 @@ export async function createJourneyForUser(
    * extent isn't known (see user_logged_parts.covered_start).
    */
   coveredRanges?: (LoggedRange | null)[],
-): Promise<{ journey: Journey | null; error?: string }> {
-  const client = await pool.connect();
-  let brokenConnection: Error | undefined;
+): Promise<Journey> {
+  assertJourneyMeta(name, date);
+  assertAligned(trackIds, partialFlags);
 
-  try {
-    const metaError = journeyMetaError(name, date);
-    if (metaError) {
-      return { journey: null, error: metaError };
-    }
+  return inTransaction(async (client) => {
+    if (tripId) await assertOwnTrip(client, userId, tripId);
 
-    if (trackIds.length !== partialFlags.length) {
-      return { journey: null, error: "Track IDs and partial flags length mismatch" };
-    }
-
-    await client.query("BEGIN");
-
-    // The trip must be the caller's own: tripId arrives from the client, and an
-    // unchecked one files this journey under someone else's trip. A trip that
-    // exists but isn't theirs answers exactly like one that doesn't exist. The
-    // composite FK on user_journeys (trip_id, user_id) enforces the same. FOR
-    // KEY SHARE holds off a concurrent delete of the trip until COMMIT, which
-    // would otherwise turn a passed check into an FK error on the insert.
-    if (tripId) {
-      const tripCheck = await client.query(
-        "SELECT 1 FROM user_trips WHERE id = $1 AND user_id = $2 FOR KEY SHARE",
-        [tripId, userId],
-      );
-      if (tripCheck.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return { journey: null, error: "Trip not found" };
-      }
-    }
-
-    // Create journey
     const journeyResult = await client.query<Journey>(
       `INSERT INTO user_journeys (user_id, name, description, date, trip_id)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [userId, name.trim(), description, date, tripId || null],
     );
-
     const journey = journeyResult.rows[0];
 
-    // Log routes to journey (batch insert)
     if (trackIds.length > 0) {
       const rows = loggedPartRows(userId, journey.id, trackIds, partialFlags, coveredRanges);
       await client.query(
@@ -238,86 +217,41 @@ export async function createJourneyForUser(
       );
     }
 
-    await client.query("COMMIT");
-
-    return { journey };
-  } catch (error) {
-    // A failed ROLLBACK means the connection itself is gone: keep the original
-    // error, and have the pool discard the client (see migrationActions)
-    await client.query("ROLLBACK").catch((rollbackError: Error) => {
-      brokenConnection = rollbackError;
-    });
-    const missing = missingRowMessage(error);
-    if (missing) return { journey: null, error: missing };
-    console.error("Error creating journey:", error);
-    return { journey: null, error: "Failed to create journey" };
-  } finally {
-    client.release(brokenConnection);
-  }
+    return journey;
+  });
 }
 
-/**
- * Update journey metadata (name, description, date)
- */
+/** Update journey metadata (name, description, date). */
 export async function updateJourneyForUser(
   userId: number,
   journeyId: number,
   name: string,
   description: string | null,
   date: string,
-): Promise<{ journey: Journey | null; error?: string }> {
-  try {
-    const metaError = journeyMetaError(name, date);
-    if (metaError) {
-      return { journey: null, error: metaError };
-    }
+): Promise<Journey> {
+  assertJourneyMeta(name, date);
 
-    const result = await pool.query<Journey>(
-      `UPDATE user_journeys
-       SET name = $1, description = $2, date = $3
-       WHERE id = $4 AND user_id = $5
-       RETURNING *`,
-      [name.trim(), description, date, journeyId, userId],
-    );
-
-    if (result.rows.length === 0) {
-      return { journey: null, error: "Journey not found" };
-    }
-
-    return { journey: result.rows[0] };
-  } catch (error) {
-    console.error("Error updating journey:", error);
-    return { journey: null, error: "Failed to update journey" };
-  }
+  const result = await pool.query<Journey>(
+    `UPDATE user_journeys
+     SET name = $1, description = $2, date = $3
+     WHERE id = $4 AND user_id = $5
+     RETURNING *`,
+    [name.trim(), description, date, journeyId, userId],
+  );
+  if (result.rows.length === 0) throw new NotFoundError("Journey not found");
+  return result.rows[0];
 }
 
-/**
- * Delete a journey and all its logged parts
- */
-export async function deleteJourneyForUser(
-  userId: number,
-  journeyId: number,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const result = await pool.query("DELETE FROM user_journeys WHERE id = $1 AND user_id = $2", [
-      journeyId,
-      userId,
-    ]);
-
-    if (result.rowCount === 0) {
-      return { success: false, error: "Journey not found" };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error deleting journey:", error);
-    return { success: false, error: "Failed to delete journey" };
-  }
+/** Delete a journey and all its logged parts. */
+export async function deleteJourneyForUser(userId: number, journeyId: number): Promise<void> {
+  const result = await pool.query("DELETE FROM user_journeys WHERE id = $1 AND user_id = $2", [
+    journeyId,
+    userId,
+  ]);
+  if (result.rowCount === 0) throw new NotFoundError("Journey not found");
 }
 
-/**
- * Add routes to an existing journey
- */
+/** Add routes to an existing journey. */
 export async function addRoutesToJourneyForUser(
   userId: number,
   journeyId: number,
@@ -325,81 +259,44 @@ export async function addRoutesToJourneyForUser(
   partialFlags: boolean[],
   /** Stretch ridden per route, positionally aligned with trackIds (see createJourney). */
   coveredRanges?: (LoggedRange | null)[],
-): Promise<{ success: boolean; error?: string }> {
-  const client = await pool.connect();
-  let brokenConnection: Error | undefined;
+): Promise<void> {
+  assertAligned(trackIds, partialFlags);
 
-  try {
-    if (trackIds.length !== partialFlags.length) {
-      return { success: false, error: "Track IDs and partial flags length mismatch" };
-    }
+  const journeyCheck = await pool.query(
+    "SELECT id FROM user_journeys WHERE id = $1 AND user_id = $2",
+    [journeyId, userId],
+  );
+  if (journeyCheck.rows.length === 0) throw new NotFoundError("Journey not found");
+  if (trackIds.length === 0) return;
 
-    // Verify journey belongs to user
-    const journeyCheck = await client.query(
-      "SELECT id FROM user_journeys WHERE id = $1 AND user_id = $2",
-      [journeyId, userId],
-    );
-
-    if (journeyCheck.rows.length === 0) {
-      return { success: false, error: "Journey not found" };
-    }
-
-    await client.query("BEGIN");
-
-    if (trackIds.length > 0) {
-      const rows = loggedPartRows(userId, journeyId, trackIds, partialFlags, coveredRanges);
-      await client.query(
-        `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
-         VALUES ${rows.placeholders}
-         ON CONFLICT (journey_id, track_id) DO UPDATE SET
-           partial = EXCLUDED.partial,
-           covered_start = EXCLUDED.covered_start,
-           covered_end = EXCLUDED.covered_end`,
-        rows.values,
-      );
-    }
-
-    await client.query("COMMIT");
-
-    return { success: true };
-  } catch (error) {
-    // A failed ROLLBACK means the connection itself is gone: keep the original
-    // error, and have the pool discard the client (see migrationActions)
-    await client.query("ROLLBACK").catch((rollbackError: Error) => {
-      brokenConnection = rollbackError;
+  // One statement, so it is atomic without a transaction of its own
+  const rows = loggedPartRows(userId, journeyId, trackIds, partialFlags, coveredRanges);
+  await pool
+    .query(
+      `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
+       VALUES ${rows.placeholders}
+       ON CONFLICT (journey_id, track_id) DO UPDATE SET
+         partial = EXCLUDED.partial,
+         covered_start = EXCLUDED.covered_start,
+         covered_end = EXCLUDED.covered_end`,
+      rows.values,
+    )
+    .catch((error: unknown) => {
+      throw asMissingRow(error);
     });
-    const missing = missingRowMessage(error);
-    if (missing) return { success: false, error: missing };
-    console.error("Error adding routes to journey:", error);
-    return { success: false, error: "Failed to add routes to journey" };
-  } finally {
-    client.release(brokenConnection);
-  }
 }
 
-/**
- * Remove a single route from a journey
- */
+/** Remove a single route from a journey. */
 export async function removeRouteFromJourneyForUser(
   userId: number,
   journeyId: number,
   trackId: number,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const result = await pool.query(
-      "DELETE FROM user_logged_parts WHERE journey_id = $1 AND track_id = $2 AND user_id = $3",
-      [journeyId, trackId, userId],
-    );
-
-    if (result.rowCount === 0) {
-      return { success: false, error: "Route not found in journey" };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error removing route from journey:", error);
-    return { success: false, error: "Failed to remove route from journey" };
-  }
+): Promise<void> {
+  const result = await pool.query(
+    "DELETE FROM user_logged_parts WHERE journey_id = $1 AND track_id = $2 AND user_id = $3",
+    [journeyId, trackId, userId],
+  );
+  if (result.rowCount === 0) throw new NotFoundError("Route not found in journey");
 }
 
 /**
@@ -415,26 +312,16 @@ export async function updateLoggedPartPartialForUser(
   journeyId: number,
   trackId: number,
   partial: boolean,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const result = await pool.query(
-      `UPDATE user_logged_parts
-       SET partial = $1,
-           covered_start = CASE WHEN $1 THEN covered_start ELSE NULL END,
-           covered_end = CASE WHEN $1 THEN covered_end ELSE NULL END
-       WHERE journey_id = $2 AND track_id = $3 AND user_id = $4`,
-      [partial, journeyId, trackId, userId],
-    );
-
-    if (result.rowCount === 0) {
-      return { success: false, error: "Route not found in journey" };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error updating logged part partial:", error);
-    return { success: false, error: "Failed to update partial flag" };
-  }
+): Promise<void> {
+  const result = await pool.query(
+    `UPDATE user_logged_parts
+     SET partial = $1,
+         covered_start = CASE WHEN $1 THEN covered_start ELSE NULL END,
+         covered_end = CASE WHEN $1 THEN covered_end ELSE NULL END
+     WHERE journey_id = $2 AND track_id = $3 AND user_id = $4`,
+    [partial, journeyId, trackId, userId],
+  );
+  if (result.rowCount === 0) throw new NotFoundError("Route not found in journey");
 }
 
 /** An edit of a journey as a whole — see `saveJourneyEditsForUser`. */
@@ -468,39 +355,20 @@ export async function saveJourneyEditsForUser(
   userId: number,
   journeyId: number,
   edits: JourneyEdits,
-): Promise<{ success: boolean; error?: string }> {
-  const metaError = journeyMetaError(edits?.name, edits?.date);
-  if (metaError) {
-    return { success: false, error: metaError };
-  }
+): Promise<void> {
+  assertJourneyMeta(edits?.name, edits?.date);
   const validRoutes =
     Array.isArray(edits.upsert) &&
     Array.isArray(edits.remove) &&
     edits.upsert.every((u) => Number.isInteger(u?.trackId) && typeof u.partial === "boolean") &&
     edits.remove.every((trackId) => Number.isInteger(trackId));
-  if (!validRoutes) {
-    return { success: false, error: "Malformed route changes" };
-  }
+  if (!validRoutes) throw new ValidationError("Malformed route changes");
   if (edits.description !== null && typeof edits.description !== "string") {
-    return { success: false, error: "Journey description must be text" };
+    throw new ValidationError("Journey description must be text");
   }
 
-  const client = await pool.connect();
-  let brokenConnection: Error | undefined;
-  try {
-    await client.query("BEGIN");
-
-    // The trip must be the caller's own — see createJourneyForUser
-    if (edits.tripId) {
-      const tripCheck = await client.query(
-        "SELECT 1 FROM user_trips WHERE id = $1 AND user_id = $2 FOR KEY SHARE",
-        [edits.tripId, userId],
-      );
-      if (tripCheck.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return { success: false, error: "Trip not found" };
-      }
-    }
+  await inTransaction(async (client) => {
+    if (edits.tripId) await assertOwnTrip(client, userId, edits.tripId);
 
     // First, so the journey row is locked against a concurrent delete for the
     // rest of the transaction; a journey that isn't the caller's stops here
@@ -519,10 +387,7 @@ export async function saveJourneyEditsForUser(
         userId,
       ],
     );
-    if (updated.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return { success: false, error: "Journey not found" };
-    }
+    if (updated.rowCount === 0) throw new NotFoundError("Journey not found");
 
     if (edits.remove.length > 0) {
       await client.query(
@@ -548,20 +413,5 @@ export async function saveJourneyEditsForUser(
         rows.values,
       );
     }
-
-    await client.query("COMMIT");
-    return { success: true };
-  } catch (error) {
-    // A failed ROLLBACK means the connection itself is gone: keep the original
-    // error, and have the pool discard the client (see migrationActions)
-    await client.query("ROLLBACK").catch((rollbackError: Error) => {
-      brokenConnection = rollbackError;
-    });
-    const missing = missingRowMessage(error);
-    if (missing) return { success: false, error: missing };
-    console.error("Error saving journey:", error);
-    return { success: false, error: "Failed to save journey" };
-  } finally {
-    client.release(brokenConnection);
-  }
+  });
 }

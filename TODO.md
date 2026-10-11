@@ -15,23 +15,35 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Larger refactors (the biggest wins)
 
-- [ ] **One error model for the journey/trip queries** (~150 lines). `journeyQueries.ts`
-  and `tripQueries.ts` report failure in-band as `{ x: null, error }`. Every function
-  wraps its body in try/catch and turns any exception into a "Failed to …" string.
-  The API then turns that string back into a status (`statusForMessage`, `assertOk`),
-  and the web actions turn it back into a throw (`inBand`). Instead, have the queries
-  throw `ValidationError` and a new `NotFoundError` (→ 404 in `apiHandler`, `{ error }`
-  in `asActionResult`), and let unexpected errors propagate. That removes about 15
-  try/catch blocks, the `{ trip: null, … }` return shapes, `inBand`, `assertOk` and
-  `statusForMessage`. Update the "Two transports" section of CLAUDE.md to match.
-
-- [ ] **`withTransaction(fn)` in `db.ts`** (~60 lines). The pattern
-  `connect / BEGIN / COMMIT / ROLLBACK-with-brokenConnection / release` is copied 7
+- [ ] **`withTransaction(fn)` in `db.ts`** (~40 lines). The pattern
+  `connect / BEGIN / COMMIT / ROLLBACK-with-brokenConnection / release` is copied 4
   times, each with the same three-line comment: `adminRouteActions.ts` (save,
-  duplicate, delete), `journeyQueries.ts` (create, add routes, save edits) and
-  `migrationActions.ts`. Also pull the trip-ownership check (`SELECT 1 FROM user_trips
-  … FOR KEY SHARE`) into a helper. It appears 3 times (`journeyQueries.ts` ×2,
-  `tripQueries.ts`).
+  duplicate, delete) and `migrationActions.ts`. `journeyQueries.ts` already has it as
+  a local `inTransaction` (which also turns an FK violation into a `NotFoundError`
+  through `asMissingRow`, already in `db.ts`): move it to `db.ts` beside
+  `asMissingRow` and use it everywhere.
+
+- [ ] **Let the ownership FKs do the ownership checks** (~30 lines, one round trip
+  per write). The composite FKs `(trip_id, user_id)` and `(journey_id, user_id)`
+  already refuse a trip or journey that isn't the caller's, and `asMissingRow` now
+  turns that refusal into the same 404 "Trip/Journey not found" the pre-checks give.
+  So these are redundant:
+  - `assertOwnTrip` (`SELECT … FOR KEY SHARE`) in `createJourneyForUser` and
+    `saveJourneyEditsForUser`;
+  - the trip `SELECT` in `assignJourneyToTripForUser` (its UPDATE already maps the
+    FK violation);
+  - the journey `SELECT` in `addRoutesToJourneyForUser`. It is still needed when
+    `trackIds` is empty, since then no row is inserted and nothing checks the FK.
+
+  The pre-checks were written on purpose (see `assertOwnTrip`'s comment), so before
+  dropping them, confirm the server's FKs exist with the expected tables. The
+  constraint names don't matter, because `asMissingRow` keys on the table name.
+
+- [ ] **Run the independent trip reads in parallel** (latency, not lines).
+  `tripForUser` runs its journeys and route-id queries one after the other;
+  `journeysAndTripsForUser` does the same with count + page, then with its three
+  hydration queries. Use `Promise.all` on each independent group. That takes a
+  trip open from 3 serial round trips to 2, and a logbook page from 5 to 3.
 
 - [ ] **Rewrite `localStorage.ts`** (518 → ~250 lines). The
   `{ version: 1, … }` + `setItem` write is repeated 7 times, and so is the

@@ -5,7 +5,7 @@ import RouteLogger, {
   type RouteSelectionProps,
 } from "@/components/logbook/RouteLogger";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
-import { unwrap } from "@/lib/actionResult";
+import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { createJourney } from "@/lib/journeyActions";
 import { useRegionId } from "@/lib/regionContext";
 import type { TripWithStats } from "@/lib/tripActions";
@@ -13,24 +13,32 @@ import { getAllTrips } from "@/lib/tripActions";
 
 const NO_TRIPS: TripWithStats[] = [];
 
+/**
+ * RouteLogger shows a failure's own message, which is right for the local store's
+ * errors; an action's is only fit to show when it is an `ActionError`.
+ */
 async function createAccountJourney(journey: NewJourney): Promise<string> {
-  const { journey: created } = unwrap(
-    await createJourney(
-      journey.name,
-      journey.description,
-      journey.date,
-      journey.routes.map((r) => r.track_id),
-      journey.routes.map((r) => r.partial ?? false),
-      journey.tripId,
-      // Ridden stretch, known only for routes the Journey Planner joined mid-way
-      journey.routes.map((r) =>
-        r.covered
-          ? { covered_start: r.covered.covered_start, covered_end: r.covered.covered_end }
-          : null,
+  try {
+    const created = unwrap(
+      await createJourney(
+        journey.name,
+        journey.description,
+        journey.date,
+        journey.routes.map((r) => r.track_id),
+        journey.routes.map((r) => r.partial ?? false),
+        journey.tripId,
+        // Ridden stretch, known only for routes the Journey Planner joined mid-way
+        journey.routes.map((r) =>
+          r.covered
+            ? { covered_start: r.covered.covered_start, covered_end: r.covered.covered_end }
+            : null,
+        ),
       ),
-    ),
-  );
-  return `Journey "${created?.name}" created successfully!`;
+    );
+    return `Journey "${created.name}" created successfully!`;
+  } catch (error) {
+    throw new Error(actionErrorMessage(error, "Failed to create journey"), { cause: error });
+  }
 }
 
 /** The Route Logger of a signed-in user: journeys go to the account, and may be filed under a trip. */
@@ -48,10 +56,7 @@ export default function JourneyLogger({
   // rather than running on every return to the tab.
   // biome-ignore lint/correctness/useExhaustiveDependencies: tripsVersion is the reload trigger; the trips themselves come from the server.
   const { data: availableTrips } = useAsyncLoad(
-    () =>
-      getAllTrips(regionId)
-        .then(unwrap)
-        .then((result) => result.trips),
+    () => getAllTrips(regionId).then(unwrap),
     [regionId, tripsVersion],
     "trips",
   );

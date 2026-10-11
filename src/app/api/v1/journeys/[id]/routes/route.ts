@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/api/auth";
 import { readJsonBody, requireIdParam, requireLoggedRoutes } from "@/lib/api/params";
-import { apiHandler, assertOk, jsonResponse } from "@/lib/api/response";
+import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { addRoutesToJourneyForUser } from "@/lib/journeyQueries";
 
 type Context = { params: Promise<{ id: string }> };
@@ -20,14 +20,7 @@ export async function POST(request: Request, context: Context): Promise<Response
     const body = await readJsonBody(request);
     const { trackIds, partialFlags, coveredRanges } = requireLoggedRoutes(body, "routes");
 
-    const result = await addRoutesToJourneyForUser(
-      user.id,
-      journeyId,
-      trackIds,
-      partialFlags,
-      coveredRanges,
-    );
-    assertOk(result);
+    await addRoutesToJourneyForUser(user.id, journeyId, trackIds, partialFlags, coveredRanges);
 
     return jsonResponse({ success: true });
   });

@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/api/auth";
 import { optionalString, readJsonBody, requireIdParam, requireString } from "@/lib/api/params";
-import { apiHandler, assertOk, jsonResponse } from "@/lib/api/response";
+import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { deleteJourneyForUser, journeyForUser, updateJourneyForUser } from "@/lib/journeyQueries";
 
 type Context = { params: Promise<{ id: string }> };
@@ -14,10 +14,9 @@ async function journeyId(context: Context): Promise<number> {
 export async function GET(request: Request, context: Context): Promise<Response> {
   return apiHandler(async () => {
     const user = await requireUser(request);
-    const result = await journeyForUser(user.id, await journeyId(context));
-    assertOk(result);
+    const { journey, routes } = await journeyForUser(user.id, await journeyId(context));
 
-    return jsonResponse({ journey: result.journey, routes: result.routes });
+    return jsonResponse({ journey, routes });
   });
 }
 
@@ -28,16 +27,15 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
     const id = await journeyId(context);
     const body = await readJsonBody(request);
 
-    const result = await updateJourneyForUser(
+    const journey = await updateJourneyForUser(
       user.id,
       id,
       requireString(body, "name"),
       optionalString(body, "description"),
       requireString(body, "date"),
     );
-    assertOk(result);
 
-    return jsonResponse({ journey: result.journey });
+    return jsonResponse({ journey });
   });
 }
 
@@ -45,8 +43,7 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
 export async function DELETE(request: Request, context: Context): Promise<Response> {
   return apiHandler(async () => {
     const user = await requireUser(request);
-    const result = await deleteJourneyForUser(user.id, await journeyId(context));
-    assertOk(result);
+    await deleteJourneyForUser(user.id, await journeyId(context));
 
     return jsonResponse({ success: true });
   });

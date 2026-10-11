@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { dbConfig } from "./dbConfig";
+import { NotFoundError } from "./errors";
 
 // Create a connection pool for better performance
 const pool = new Pool(dbConfig);
@@ -23,6 +24,33 @@ export async function query(text: string, params?: unknown[]) {
 }
 
 export default pool;
+
+const MISSING_ROW_NAMES: Record<string, string> = {
+  railway_routes: "Route",
+  user_journeys: "Journey",
+  user_trips: "Trip",
+};
+
+/**
+ * `error` as the `NotFoundError` it means when it is a foreign key violation, and
+ * unchanged otherwise.
+ *
+ * The ids a write references arrive from the client, so an unknown or deleted
+ * route is the caller's mistake, not a server failure — and it answers like the
+ * other rows that "aren't there".
+ *
+ * Told apart by the table the missing key was looked for in, which Postgres names
+ * in the error's detail, rather than by constraint name: the ownership FKs were
+ * added to existing databases by migration, and nothing guarantees their names
+ * match `01-schema.sql`.
+ */
+export function asMissingRow(error: unknown): unknown {
+  const pgError = error as { code?: string; detail?: string } | null;
+  if (pgError?.code !== "23503") return error;
+  const table = /is not present in table "([^"]+)"/.exec(pgError.detail ?? "")?.[1];
+  const what = table ? MISSING_ROW_NAMES[table] : undefined;
+  return what ? new NotFoundError(`${what} not found`) : error;
+}
 
 /**
  * Escape the LIKE/ILIKE metacharacters in a user's search string before it is

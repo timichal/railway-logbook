@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/api/auth";
 import { readJsonBody, requireBoolean, requireIdParam } from "@/lib/api/params";
-import { apiHandler, assertOk, jsonResponse } from "@/lib/api/response";
+import { apiHandler, jsonResponse } from "@/lib/api/response";
 import {
   removeRouteFromJourneyForUser,
   updateLoggedPartPartialForUser,
@@ -29,13 +29,12 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
     const { journeyId, trackId } = await ids(context);
     const body = await readJsonBody(request);
 
-    const result = await updateLoggedPartPartialForUser(
+    await updateLoggedPartPartialForUser(
       user.id,
       journeyId,
       trackId,
       requireBoolean(body, "partial"),
     );
-    assertOk(result);
 
     return jsonResponse({ success: true });
   });
@@ -47,8 +46,7 @@ export async function DELETE(request: Request, context: Context): Promise<Respon
     const user = await requireUser(request);
     const { journeyId, trackId } = await ids(context);
 
-    const result = await removeRouteFromJourneyForUser(user.id, journeyId, trackId);
-    assertOk(result);
+    await removeRouteFromJourneyForUser(user.id, journeyId, trackId);
 
     return jsonResponse({ success: true });
   });

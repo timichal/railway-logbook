@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/api/auth";
 import { optionalInt, requireRegion } from "@/lib/api/params";
-import { apiHandler, assertOk, jsonResponse } from "@/lib/api/response";
+import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { journeysAndTripsForUser } from "@/lib/tripQueries";
 
 /**
@@ -23,7 +23,6 @@ export async function GET(request: Request): Promise<Response> {
       url.searchParams.get("search") ?? "",
       region,
     );
-    assertOk(result);
 
     return jsonResponse({ items: result.items, total: result.total });
   });

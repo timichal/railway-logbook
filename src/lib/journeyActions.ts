@@ -6,12 +6,11 @@
  * handlers can call them after resolving a bearer token instead
  * (MOBILE_APP_PLAN.md, Phase 1).
  *
- * The queries report failure in-band, for the API's sake; these return it as an
- * `ActionResult` like every other action (`inBand`, `asUser`), so a call site
- * reads it through `unwrap`.
+ * `asUser` returns the queries' thrown rejections as an `ActionResult`, so a call
+ * site reads it through `unwrap`.
  */
 
-import { type ActionResult, inBand } from "./actionResult";
+import type { ActionResult } from "./actionResult";
 import { asUser } from "./authHelpers";
 import {
   createJourneyForUser,
@@ -33,11 +32,9 @@ import type { Journey, RailwayRoute, RouteBounds } from "./shared/types";
 export async function getJourney(
   journeyId: number,
   region: RegionId,
-): Promise<
-  ActionResult<{ journey: Journey | null; routes: RailwayRoute[]; bounds: RouteBounds | null }>
-> {
+): Promise<ActionResult<{ journey: Journey; routes: RailwayRoute[]; bounds: RouteBounds | null }>> {
   return asUser(async (userId) => {
-    const result = inBand(await journeyForUser(userId, journeyId));
+    const result = await journeyForUser(userId, journeyId);
     const trackIds = result.routes.map((r) => r.track_id);
     return { ...result, bounds: await routeBoundsByIds(trackIds, region) };
   });
@@ -52,19 +49,17 @@ export async function createJourney(
   partialFlags: boolean[],
   tripId?: number | null,
   coveredRanges?: (LoggedRange | null)[],
-): Promise<ActionResult<{ journey: Journey | null }>> {
-  return asUser(async (userId) =>
-    inBand(
-      await createJourneyForUser(
-        userId,
-        name,
-        description,
-        date,
-        trackIds,
-        partialFlags,
-        tripId,
-        coveredRanges,
-      ),
+): Promise<ActionResult<Journey>> {
+  return asUser((userId) =>
+    createJourneyForUser(
+      userId,
+      name,
+      description,
+      date,
+      trackIds,
+      partialFlags,
+      tripId,
+      coveredRanges,
     ),
   );
 }
@@ -77,14 +72,10 @@ export async function saveJourneyEdits(
   journeyId: number,
   edits: JourneyEdits,
 ): Promise<ActionResult<void>> {
-  return asUser(async (userId) => {
-    inBand(await saveJourneyEditsForUser(userId, journeyId, edits));
-  });
+  return asUser((userId) => saveJourneyEditsForUser(userId, journeyId, edits));
 }
 
 /** Delete a journey and all its logged parts. */
 export async function deleteJourney(journeyId: number): Promise<ActionResult<void>> {
-  return asUser(async (userId) => {
-    inBand(await deleteJourneyForUser(userId, journeyId));
-  });
+  return asUser((userId) => deleteJourneyForUser(userId, journeyId));
 }

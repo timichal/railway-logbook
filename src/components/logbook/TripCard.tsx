@@ -183,7 +183,7 @@ export default function TripCard({
     setShowPicker(true);
     setIsLoadingUnassigned(true);
     try {
-      setUnassignedJourneys(unwrap(await getUnassignedJourneys(regionId)).journeys);
+      setUnassignedJourneys(unwrap(await getUnassignedJourneys(regionId)));
     } catch (error) {
       console.error("Error loading unassigned journeys:", error);
       showError(actionErrorMessage(error, "Failed to load unassigned journeys"));

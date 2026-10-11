@@ -6,12 +6,11 @@
  * handlers can call them after resolving a bearer token instead
  * (MOBILE_APP_PLAN.md, Phase 1).
  *
- * The queries report failure in-band, for the API's sake; these return it as an
- * `ActionResult` like every other action (`inBand`, `asUser`), so a call site
- * reads it through `unwrap`.
+ * `asUser` returns the queries' thrown rejections as an `ActionResult`, so a call
+ * site reads it through `unwrap`.
  */
 
-import { type ActionResult, inBand } from "./actionResult";
+import type { ActionResult } from "./actionResult";
 import { asUser } from "./authHelpers";
 import { routeBoundsByIds } from "./routeQueries";
 import type { RegionId } from "./shared/regions";
@@ -34,10 +33,8 @@ import {
 export type { JourneyInTrip, StandaloneJourneyWithStats, TripsAndJourneysItem, TripWithStats };
 
 /** All of the current user's trips with computed stats, scoped to `region`. */
-export async function getAllTrips(
-  region: RegionId,
-): Promise<ActionResult<{ trips: TripWithStats[] }>> {
-  return asUser(async (userId) => inBand(await tripsForUser(userId, region)));
+export async function getAllTrips(region: RegionId): Promise<ActionResult<TripWithStats[]>> {
+  return asUser((userId) => tripsForUser(userId, region));
 }
 
 /**
@@ -49,24 +46,23 @@ export async function getTrip(
   region: RegionId,
 ): Promise<
   ActionResult<{
-    trip: Trip | null;
+    trip: Trip;
     journeys: JourneyInTrip[];
     routeIds: number[];
     bounds: RouteBounds | null;
   }>
 > {
   return asUser(async (userId) => {
-    const result = inBand(await tripForUser(userId, tripId));
+    const result = await tripForUser(userId, tripId);
     return { ...result, bounds: await routeBoundsByIds(result.routeIds, region) };
   });
 }
 
-/** Create a new trip. */
 export async function createTrip(
   name: string,
   description: string | null,
-): Promise<ActionResult<{ trip: Trip | null }>> {
-  return asUser(async (userId) => inBand(await createTripForUser(userId, name, description)));
+): Promise<ActionResult<Trip>> {
+  return asUser((userId) => createTripForUser(userId, name, description));
 }
 
 /** Update trip metadata (name, description). */
@@ -74,27 +70,20 @@ export async function updateTrip(
   tripId: number,
   name: string,
   description: string | null,
-): Promise<ActionResult<{ trip: Trip | null }>> {
-  return asUser(async (userId) =>
-    inBand(await updateTripForUser(userId, tripId, name, description)),
-  );
+): Promise<ActionResult<Trip>> {
+  return asUser((userId) => updateTripForUser(userId, tripId, name, description));
 }
 
 /** Delete a trip (journeys get unassigned via ON DELETE SET NULL). */
 export async function deleteTrip(tripId: number): Promise<ActionResult<void>> {
-  return asUser(async (userId) => {
-    inBand(await deleteTripForUser(userId, tripId));
-  });
+  return asUser((userId) => deleteTripForUser(userId, tripId));
 }
 
-/** Assign a journey to a trip. */
 export async function assignJourneyToTrip(
   journeyId: number,
   tripId: number,
 ): Promise<ActionResult<void>> {
-  return asUser(async (userId) => {
-    inBand(await assignJourneyToTripForUser(userId, journeyId, tripId));
-  });
+  return asUser((userId) => assignJourneyToTripForUser(userId, journeyId, tripId));
 }
 
 /**
@@ -107,14 +96,12 @@ export async function getJourneysAndTrips(
   search: string,
   region: RegionId,
 ): Promise<ActionResult<{ items: TripsAndJourneysItem[]; total: number }>> {
-  return asUser(async (userId) =>
-    inBand(await journeysAndTripsForUser(userId, page, pageSize, search, region)),
-  );
+  return asUser((userId) => journeysAndTripsForUser(userId, page, pageSize, search, region));
 }
 
 /** Journeys not assigned to any trip (for the assignment picker), scoped to `region`. */
 export async function getUnassignedJourneys(
   region: RegionId,
-): Promise<ActionResult<{ journeys: JourneyInTrip[] }>> {
-  return asUser(async (userId) => inBand(await unassignedJourneysForUser(userId, region)));
+): Promise<ActionResult<JourneyInTrip[]>> {
+  return asUser((userId) => unassignedJourneysForUser(userId, region));
 }

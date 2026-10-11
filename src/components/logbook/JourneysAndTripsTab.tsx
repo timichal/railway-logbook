@@ -99,7 +99,7 @@ export default function JourneysAndTripsTab({
     // A failure leaves the picker as it was, which only costs filing a journey
     // under a trip later.
     try {
-      setAvailableTrips(unwrap(await getAllTrips(regionId)).trips);
+      setAvailableTrips(unwrap(await getAllTrips(regionId)));
     } catch (error) {
       console.error("Error loading trips:", error);
     }
@@ -174,10 +174,8 @@ export default function JourneysAndTripsTab({
     }
     setIsSavingNewTrip(true);
     try {
-      const { trip } = unwrap(
-        await createTrip(newTripName.trim(), newTripDescription.trim() || null),
-      );
-      showSuccess(`Trip "${trip?.name}" created`);
+      const trip = unwrap(await createTrip(newTripName.trim(), newTripDescription.trim() || null));
+      showSuccess(`Trip "${trip.name}" created`);
       setNewTripName("");
       setNewTripDescription("");
       setIsCreatingTrip(false);

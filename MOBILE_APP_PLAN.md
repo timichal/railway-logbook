@@ -407,6 +407,8 @@ that did not exist: a rejected password is for the user, a Postgres error is not
 `ValidationError` (`src/lib/errors.ts`) is that line — 400 with its message,
 while a plain exception is logged and returned as an opaque 500. Found by the
 smoke test, which had `register` with a short password coming back as a 500.
+(Since 2026-10-11 the journey and trip modules throw too — `ValidationError`, or
+`NotFoundError` for the 404 — and `statusForMessage` is gone.)
 
 **Region scoping** is an explicit `?region=` and a 400 when it is missing —
 never a default, since a missing region is a query answering for the other

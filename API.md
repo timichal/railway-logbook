@@ -212,5 +212,6 @@ server-only modules taking a `userId`, shared with the web app's server actions 
 **a handler never imports a `"use server"` action**, and the reason is in
 `progressQueries.ts`'s header. Shared plumbing lives in `src/lib/api/`:
 `auth.ts` (bearer + token issue), `params.ts` (every validation helper),
-`response.ts` (status mapping, including how an in-band `{ error }` message
-becomes a status code).
+`response.ts` (`apiHandler`, which maps the query modules' thrown error classes
+to status codes — `ValidationError` 400, `NotFoundError` 404, anything else an
+opaque 500).

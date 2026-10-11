@@ -4,14 +4,14 @@
  * It has to be *returned*: a production build replaces the message of anything
  * thrown out of a server function with a generic "An error occurred in the
  * Server Components render", so a thrown "Route not found" reads the same as a
- * crash. Only the two classes whose messages are written for the user are
- * caught; anything else still throws and stays opaque, as it should — a
- * Postgres error text is for the log.
+ * crash. Only the classes whose messages are written for the user are caught;
+ * anything else still throws and stays opaque, as it should — a Postgres error
+ * text is for the log.
  *
  * A plain module rather than a `"use server"` one: `unwrap` runs on the client.
  */
 
-import { RateLimitError, ValidationError } from "./errors";
+import { NotFoundError, RateLimitError, ValidationError } from "./errors";
 
 export type ActionResult<T> =
   | { value: T; error?: undefined }
@@ -21,25 +21,15 @@ export async function asActionResult<T>(attempt: () => Promise<T>): Promise<Acti
   try {
     return { value: await attempt() };
   } catch (error) {
-    if (error instanceof ValidationError || error instanceof RateLimitError) {
+    if (
+      error instanceof ValidationError ||
+      error instanceof NotFoundError ||
+      error instanceof RateLimitError
+    ) {
       return { error: error.message };
     }
     throw error;
   }
-}
-
-/**
- * A query module's in-band `{ …, error }` result, with its message thrown as the
- * `ValidationError` it is — so that inside `asActionResult` it comes back out as
- * `{ error }`. The journey and trip queries report failure that way because the
- * HTTP API turns the message into a status code (`statusForMessage` in
- * `lib/api/response.ts`); their web actions translate at the boundary, so the web
- * app reads every action one way, through `unwrap`.
- */
-export function inBand<R extends { error?: string }>(result: R): Omit<R, "error"> {
-  const { error, ...value } = result;
-  if (error) throw new ValidationError(error);
-  return value;
 }
 
 /** A rejection an action returned for the user to read, re-thrown on the client by `unwrap`. */

@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/api/auth";
 import { optionalString, readJsonBody, requireIdParam, requireString } from "@/lib/api/params";
-import { apiHandler, assertOk, jsonResponse } from "@/lib/api/response";
+import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { deleteTripForUser, tripForUser, updateTripForUser } from "@/lib/tripQueries";
 
 type Context = { params: Promise<{ id: string }> };
@@ -17,14 +17,9 @@ async function tripId(context: Context): Promise<number> {
 export async function GET(request: Request, context: Context): Promise<Response> {
   return apiHandler(async () => {
     const user = await requireUser(request);
-    const result = await tripForUser(user.id, await tripId(context));
-    assertOk(result);
+    const { trip, journeys, routeIds } = await tripForUser(user.id, await tripId(context));
 
-    return jsonResponse({
-      trip: result.trip,
-      journeys: result.journeys,
-      routeIds: result.routeIds,
-    });
+    return jsonResponse({ trip, journeys, routeIds });
   });
 }
 
@@ -35,15 +30,14 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
     const id = await tripId(context);
     const body = await readJsonBody(request);
 
-    const result = await updateTripForUser(
+    const trip = await updateTripForUser(
       user.id,
       id,
       requireString(body, "name"),
       optionalString(body, "description"),
     );
-    assertOk(result);
 
-    return jsonResponse({ trip: result.trip });
+    return jsonResponse({ trip });
   });
 }
 
@@ -51,8 +45,7 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
 export async function DELETE(request: Request, context: Context): Promise<Response> {
   return apiHandler(async () => {
     const user = await requireUser(request);
-    const result = await deleteTripForUser(user.id, await tripId(context));
-    assertOk(result);
+    await deleteTripForUser(user.id, await tripId(context));
 
     return jsonResponse({ success: true });
   });
