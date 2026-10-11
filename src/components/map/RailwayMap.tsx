@@ -622,7 +622,7 @@ export default function RailwayMap({
   // Only the sheet can take the room away, so the desktop layout always has it.
   const showFurniture = !isMobile || furnitureFits;
 
-  // The line picked in the search box, outlined on the map. It stands down with the
+  // The line picked in the search box, highlighted on the map. It stands down with the
   // box, whose chip is the only way to clear it.
   const shownTypes = useMemo(
     () => shownUsageTypes(layerPrefs.showHeritage, layerPrefs.showSpecial),

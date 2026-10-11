@@ -23,7 +23,7 @@ interface LayerVisibilityState {
   setShowScenicLayer: React.Dispatch<React.SetStateAction<boolean>>;
   /**
    * Routes shown and not merely re-ticked for reference during a forced-hidden mode:
-   * what may be clicked, and what a searched line's outline is drawn round — in
+   * what may be clicked, and where a searched line's band is drawn — in
    * those modes it would lie over the parts being picked.
    */
   routesInteractive: boolean;

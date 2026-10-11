@@ -229,17 +229,20 @@ export default function MapStationSearch({
           list would open below the chip rather than under the input. */}
       {lineHighlight?.line && (
         <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-surface border border-gray-300 shadow-lg pl-3 pr-1 text-sm text-fg">
-          {/* The outline in miniature: two lines with the route's gap between them */}
+          {/* The band in miniature */}
           <span
             aria-hidden="true"
-            className={`w-4 h-2 flex-shrink-0 border-y-2 ${lineHighlight.drawn ? "" : "opacity-40"}`}
-            style={{ borderColor: lineHighlight.color }}
+            className={`w-4 h-2.5 flex-shrink-0 rounded-full blur-[1px] ${lineHighlight.status === "drawn" ? "opacity-60" : "opacity-25"}`}
+            style={{ backgroundColor: lineHighlight.color }}
           />
           <span className="truncate py-1">{lineHighlight.line.name}</span>
-          {/* Every route of it is on a layer switched off: say so, rather than
-              name a highlight that draws nothing */}
-          {!lineHighlight.drawn && (
+          {/* Nothing drawn for it: say why, rather than name a highlight that draws
+              nothing. Picking the line again retries a failed load. */}
+          {lineHighlight.status === "hidden" && (
             <span className="flex-shrink-0 text-xs text-gray-500">layer hidden</span>
+          )}
+          {lineHighlight.status === "failed" && (
+            <span className="flex-shrink-0 text-xs text-red-600">failed to load</span>
           )}
           <button
             type="button"

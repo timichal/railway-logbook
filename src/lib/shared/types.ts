@@ -271,6 +271,16 @@ export interface LineSearchResult {
   bounds: RouteBounds;
 }
 
+/**
+ * A searched line drawn as one band: its routes of one usage type, merged where they
+ * meet (see `lineGeometryByName`). Multi where they do not join up into one line —
+ * a branch, or a gap between two stretches of the name.
+ */
+export interface LineGeometry {
+  usageType: UsageType;
+  geometry: GeoJSON.LineString | GeoJSON.MultiLineString;
+}
+
 /** What the map's search box offers for a query; `lines` is empty where lines are not named. */
 export interface MapSearchResults {
   lines: LineSearchResult[];

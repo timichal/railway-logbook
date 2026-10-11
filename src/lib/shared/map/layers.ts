@@ -209,6 +209,21 @@ export function createRailwayRoutesHeritageLayer(
   };
 }
 
+/**
+ * The width and soft edges of a highlighter band drawn under the routes — the scenic
+ * lines, and the line picked in the search box, which is meant to read the same way.
+ */
+export function highlighterBandPaint(): {
+  "line-width": ExpressionSpecification;
+  "line-blur": ExpressionSpecification;
+} {
+  const w = WIDTHS.scenicLine;
+  return {
+    "line-width": ["interpolate", ["linear"], ["zoom"], 4, w.z4, 7, w.z7, 12, w.z12],
+    "line-blur": ["interpolate", ["linear"], ["zoom"], 4, w.blur.z4, 12, w.blur.z12],
+  };
+}
+
 export const SCENIC_LINES_LAYER_ID = "scenic_lines";
 
 /**
@@ -229,7 +244,6 @@ export function createScenicLinesLayer(
     filter?: FilterSpecification;
   } = {},
 ): LineLayerSpecification {
-  const w = WIDTHS.scenicLine;
   const layer: LineLayerSpecification = {
     id: SCENIC_LINES_LAYER_ID,
     type: "line",
@@ -243,26 +257,7 @@ export function createScenicLinesLayer(
     },
     paint: {
       "line-color": options.colorExpression ?? COLORS.scenicLine,
-      "line-width": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        4,
-        w.z4,
-        7,
-        w.z7,
-        12,
-        w.z12,
-      ] as ExpressionSpecification,
-      "line-blur": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        4,
-        w.blur.z4,
-        12,
-        w.blur.z12,
-      ] as ExpressionSpecification,
+      ...highlighterBandPaint(),
       "line-opacity": options.opacity ?? OPACITIES.scenicLine,
     },
   };

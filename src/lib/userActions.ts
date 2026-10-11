@@ -21,6 +21,7 @@ import {
   type UserProgress,
 } from "./progressQueries";
 import {
+  lineGeometryByName,
   routeBoundsByIds,
   routeMetadataByIds,
   routeSummariesInRegion,
@@ -32,6 +33,7 @@ import type { RegionId } from "./shared/regions";
 import type {
   CoveredRange,
   CoveredStretch,
+  LineGeometry,
   MapSearchResults,
   RailwayRoute,
   RouteBounds,
@@ -50,6 +52,14 @@ export async function searchStations(searchQuery: string, region: RegionId): Pro
  */
 export async function searchMap(searchQuery: string, region: RegionId): Promise<MapSearchResults> {
   return searchMapByName(searchQuery, region);
+}
+
+/**
+ * A line picked in the map search box, as the geometry its highlight is drawn from.
+ * No authentication required — route data is public.
+ */
+export async function getLineGeometry(name: string, region: RegionId): Promise<LineGeometry[]> {
+  return lineGeometryByName(name, region);
 }
 
 /** The track ids of every route in a region. */

@@ -11,6 +11,7 @@
 import { escapeLikePattern, query } from "./db";
 import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
 import type {
+  LineGeometry,
   LineSearchResult,
   MapSearchResults,
   RailwayRoute,
@@ -132,6 +133,82 @@ export async function searchLinesByName(
     usageTypes: row.usage_types,
     bounds: [row.west, row.south, row.east, row.north],
   }));
+}
+
+/**
+ * A searched line's geometry, for its highlight band on the map: the routes carrying
+ * the name merged into as few lines as they make, one entry per usage type among
+ * them (so the map can leave out what its layer switches hide).
+ *
+ * Merged because the band is translucent, and MapLibre blends wherever a layer's
+ * features overlap: drawn per route, every junction between two of the line's routes
+ * is a pair of round caps on top of each other, i.e. a dark blot. Consecutive routes
+ * do not share their endpoint exactly — each is its own hand-picked click point, a
+ * few metres from the next — so each endpoint is first moved to the midpoint between
+ * it and the nearest endpoint of *another* route within `LINE_ENDPOINT_SNAP`, after
+ * which `ST_LineMerge` can join the two. Pairwise rather than clustered: a cluster
+ * chains (A near B near C), so it can drag an end further than the snap distance,
+ * and it can take in both ends of a short connector and collapse it to a point. An
+ * end moves at most half the snap distance, and never towards its own route's other
+ * end. Endpoints of one line's routes sit within ~20m of each other or hundreds of
+ * metres apart, nothing in between, so the snap neither misses a junction nor joins
+ * two that are not one.
+ *
+ * Simplified only to what no zoom shows (`LINE_SIMPLIFY`, ~2m): the per-zoom
+ * simplification the scenic tile does in SQL is done here by the GeoJSON source
+ * itself, and the long Japanese main lines come to some 50KB.
+ */
+const LINE_ENDPOINT_SNAP = 50; // EPSG:3857 units, ~40m in Europe and Japan
+const LINE_SIMPLIFY = 3; // EPSG:3857 units
+
+export async function lineGeometryByName(name: string, region: RegionId): Promise<LineGeometry[]> {
+  const result = await query(
+    `
+    WITH routes AS (
+      SELECT track_id, usage_type, geometry_3857 AS geom
+      FROM railway_routes
+      WHERE name = $1
+        AND geometry_3857 IS NOT NULL
+        AND ${regionContainsSql(region, "starting_coordinate")}
+    ),
+    ends AS (
+      SELECT track_id, true AS is_start, ST_StartPoint(geom) AS pt FROM routes
+      UNION ALL
+      SELECT track_id, false, ST_EndPoint(geom) FROM routes
+    ),
+    snapped_ends AS (
+      SELECT e.track_id, e.is_start,
+             CASE WHEN partner.pt IS NULL THEN e.pt
+                  ELSE ST_Centroid(ST_Collect(e.pt, partner.pt)) END AS pt
+      FROM ends e
+      LEFT JOIN LATERAL (
+        SELECT o.pt
+        FROM ends o
+        WHERE o.track_id <> e.track_id AND ST_DWithin(o.pt, e.pt, $2)
+        ORDER BY o.pt <-> e.pt
+        LIMIT 1
+      ) partner ON true
+    ),
+    snapped AS (
+      SELECT r.usage_type,
+             ST_SetPoint(ST_SetPoint(r.geom, 0, s.pt), ST_NPoints(r.geom) - 1, e.pt) AS geom
+      FROM routes r
+      JOIN snapped_ends s ON s.track_id = r.track_id AND s.is_start
+      JOIN snapped_ends e ON e.track_id = r.track_id AND NOT e.is_start
+    )
+    SELECT usage_type,
+           ST_AsGeoJSON(
+             ST_Transform(ST_Simplify(ST_LineMerge(ST_Collect(geom)), $3), 4326),
+             6
+           )::json AS geometry
+    FROM snapped
+    GROUP BY usage_type
+    ORDER BY usage_type
+  `,
+    [name, LINE_ENDPOINT_SNAP, LINE_SIMPLIFY],
+  );
+
+  return result.rows.map((row) => ({ usageType: row.usage_type, geometry: row.geometry }));
 }
 
 /**
