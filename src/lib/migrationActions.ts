@@ -1,13 +1,8 @@
 "use server";
 
 import { getUser } from "./authActions";
-import pool from "./db";
+import { withTransaction } from "./db";
 import { sanitizeRange } from "./journeyQueries";
-
-export interface MigrationResult {
-  migrated: number;
-  skipped: number;
-}
 
 export interface JourneyMigrationResult {
   journeysMigrated: number;
@@ -45,22 +40,18 @@ export async function migrateLocalJourneys(
     throw new Error("You must be logged in to migrate journeys");
   }
 
-  const result: JourneyMigrationResult = {
-    journeysMigrated: 0,
-    journeysSkipped: 0,
-    partsMigrated: 0,
-    partsSkipped: 0,
-    missingRoutes: 0,
-  };
+  return withTransaction(async (client) => {
+    const result: JourneyMigrationResult = {
+      journeysMigrated: 0,
+      journeysSkipped: 0,
+      partsMigrated: 0,
+      partsSkipped: 0,
+      missingRoutes: 0,
+    };
 
-  // Map local journey IDs to database journey IDs
-  const journeyIdMap = new Map<string, number>();
-  const missingTrackIds = new Set<number>();
-
-  const client = await pool.connect();
-  let brokenConnection: Error | undefined;
-  try {
-    await client.query("BEGIN");
+    // Map local journey IDs to database journey IDs
+    const journeyIdMap = new Map<string, number>();
+    const missingTrackIds = new Set<number>();
 
     for (const localJourney of localJourneys) {
       // A journey already on the account with the same name and date is taken
@@ -145,21 +136,7 @@ export async function migrateLocalJourneys(
       }
     }
 
-    await client.query("COMMIT");
     result.missingRoutes = missingTrackIds.size;
     return result;
-  } catch (error) {
-    // A failed ROLLBACK means the connection itself is gone (the likeliest
-    // cause of the failure in the first place): keep the original error, and
-    // have the pool discard the client rather than hand it to the next caller
-    await client.query("ROLLBACK").catch((rollbackError: Error) => {
-      brokenConnection = rollbackError;
-    });
-    console.error("Error migrating local journeys:", error);
-    throw new Error(
-      `Failed to migrate journeys: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  } finally {
-    client.release(brokenConnection);
-  }
+  });
 }

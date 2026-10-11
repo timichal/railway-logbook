@@ -15,14 +15,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Larger refactors (the biggest wins)
 
-- [ ] **`withTransaction(fn)` in `db.ts`** (~40 lines). The pattern
-  `connect / BEGIN / COMMIT / ROLLBACK-with-brokenConnection / release` is copied 4
-  times, each with the same three-line comment: `adminRouteActions.ts` (save,
-  duplicate, delete) and `migrationActions.ts`. `journeyQueries.ts` already has it as
-  a local `inTransaction` (which also turns an FK violation into a `NotFoundError`
-  through `asMissingRow`, already in `db.ts`): move it to `db.ts` beside
-  `asMissingRow` and use it everywhere.
-
 - [ ] **Let the ownership FKs do the ownership checks** (~30 lines, one round trip
   per write). The composite FKs `(trip_id, user_id)` and `(journey_id, user_id)`
   already refuse a trip or journey that isn't the caller's, and `asMissingRow` now
@@ -258,7 +250,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 - [ ] `localStorage.ts`: `getJourney`, `getLoggedPartsByTrackId`, and
   `exportPreferences` (call `getPreferences` instead).
-- [ ] `migrationActions.ts`: `MigrationResult`, an unused interface.
 - [ ] `constants.ts`: `isPublicNoteType` and the `public` field on `noteTypeOptions`.
   Nothing reads them; public visibility is the hard-coded `note_type = 'Usage'` in SQL.
   CLAUDE.md mentions `isPublicNoteType`.

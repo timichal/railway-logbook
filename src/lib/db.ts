@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { dbConfig } from "./dbConfig";
 import { NotFoundError } from "./errors";
 
@@ -50,6 +50,33 @@ export function asMissingRow(error: unknown): unknown {
   const table = /is not present in table "([^"]+)"/.exec(pgError.detail ?? "")?.[1];
   const what = table ? MISSING_ROW_NAMES[table] : undefined;
   return what ? new NotFoundError(`${what} not found`) : error;
+}
+
+/**
+ * Run `body` in a transaction on a connection of its own, rolling back on any
+ * failure and rethrowing it unchanged. A caller whose ids come from the client
+ * wants `asMissingRow` on top (see `journeyQueries.ts`); elsewhere a foreign key
+ * violation is a fault, not a missing row.
+ */
+export async function withTransaction<T>(body: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  let brokenConnection: Error | undefined;
+  try {
+    await client.query("BEGIN");
+    const result = await body(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    // A failed ROLLBACK means the connection itself is gone (the likeliest
+    // cause of the failure in the first place): keep the original error, and
+    // have the pool discard the client rather than hand it to the next caller
+    await client.query("ROLLBACK").catch((rollbackError: Error) => {
+      brokenConnection = rollbackError;
+    });
+    throw error;
+  } finally {
+    client.release(brokenConnection);
+  }
 }
 
 /**

@@ -13,7 +13,7 @@
  */
 
 import type { PoolClient } from "pg";
-import pool, { asMissingRow } from "./db";
+import pool, { asMissingRow, withTransaction } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
 import type { Journey, LoggedPart, RailwayRoute } from "./shared/types";
@@ -64,29 +64,11 @@ function assertAligned(trackIds: unknown, partialFlags: unknown): void {
   }
 }
 
-/**
- * Run `body` in a transaction on a connection of its own, rolling back on any
- * failure and rethrowing it — a foreign key violation as the `NotFoundError` it
- * means.
- */
-async function inTransaction<T>(body: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  let brokenConnection: Error | undefined;
-  try {
-    await client.query("BEGIN");
-    const result = await body(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    // A failed ROLLBACK means the connection itself is gone: keep the original
-    // error, and have the pool discard the client (see migrationActions)
-    await client.query("ROLLBACK").catch((rollbackError: Error) => {
-      brokenConnection = rollbackError;
-    });
+/** `withTransaction`, with a foreign key violation rethrown as the `NotFoundError` it means. */
+function inTransaction<T>(body: (client: PoolClient) => Promise<T>): Promise<T> {
+  return withTransaction(body).catch((error: unknown) => {
     throw asMissingRow(error);
-  } finally {
-    client.release(brokenConnection);
-  }
+  });
 }
 
 /**

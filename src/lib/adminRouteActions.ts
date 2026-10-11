@@ -5,7 +5,7 @@ import type { ActionResult } from "./actionResult";
 import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
-import pool, { query } from "./db";
+import pool, { query, withTransaction } from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
 import type { LineClass, UsageType } from "./shared/constants";
@@ -390,15 +390,10 @@ export async function saveRailwayRoute(
   trackId?: number,
 ): Promise<ActionResult<number>> {
   return asAdmin(async () => {
-    const client = await pool.connect();
-    let brokenConnection: Error | undefined;
-
-    try {
-      // The write, the line_class reclassification and the station-proximity
-      // refresh are one change: a failure between them would leave the route at
-      // the default 'branch', or the user map showing stations no route reaches.
-      await client.query("BEGIN");
-
+    // The write, the line_class reclassification and the station-proximity
+    // refresh are one change: a failure between them would leave the route at
+    // the default 'branch', or the user map showing stations no route reaches.
+    const savedTrackId = await withTransaction(async (client) => {
       // Use the truncated/merged coordinates from pathResult
       // The pathfinder already handles truncation and merging correctly
       const sortedCoordinates = pathResult.coordinates;
@@ -528,7 +523,7 @@ export async function saveRailwayRoute(
         // Only an edit can match nothing: the route was deleted since it was opened
         throw new ValidationError(`Route ${trackId} no longer exists`);
       }
-      const savedTrackId = result.rows[0].track_id;
+      const id: number = result.rows[0].track_id;
 
       const classifyLineClassSQL = `
       WITH part_lengths AS (
@@ -555,34 +550,23 @@ export async function saveRailwayRoute(
       WHERE track_id = $1
     `;
 
-      await client.query(classifyLineClassSQL, [savedTrackId]);
+      await client.query(classifyLineClassSQL, [id]);
       // Stations the user map draws follow the routes, so a new or moved route
       // reveals (or hides) the stations along it right away
       await refreshStationProximityFor(client, {
-        trackId: savedTrackId,
+        trackId: id,
         stationIds: stationsOnOldGeometry,
       });
 
-      await client.query("COMMIT");
-      console.log(
-        `${trackId ? "Updated" : "Saved"} railway route ${savedTrackId}: ${routeData.name.trim() || `${routeData.from_station} ⟷ ${routeData.to_station}`}`,
-      );
-
-      return savedTrackId as number;
-    } catch (error) {
-      // A failed ROLLBACK means the connection itself is gone: keep the original
-      // error, and have the pool discard the client (see migrationActions)
-      await client.query("ROLLBACK").catch((rollbackError: Error) => {
-        brokenConnection = rollbackError;
-      });
-      // A ValidationError is an answer for the admin, not a fault for the log
-      if (!(error instanceof ValidationError)) {
-        console.error("Error saving railway route:", error);
-      }
-      throw error;
-    } finally {
-      client.release(brokenConnection);
-    }
+      return id;
+    });
+    // An update writes the geometry only, so routeData carries no name for it
+    console.log(
+      trackId
+        ? `Updated geometry of railway route ${trackId}`
+        : `Saved railway route ${savedTrackId}: ${routeData.name.trim() || `${routeData.from_station} ⟷ ${routeData.to_station}`}`,
+    );
+    return savedTrackId;
   });
 }
 
@@ -689,12 +673,7 @@ export async function setRouteUnderRepair(
  */
 export async function duplicateRailwayRoute(trackId: number): Promise<ActionResult<number>> {
   return asAdmin(async () => {
-    const client = await pool.connect();
-    let brokenConnection: Error | undefined;
-
-    try {
-      await client.query("BEGIN");
-
+    const newTrackId = await withTransaction(async (client) => {
       // Clone the route row (track_id is SERIAL; created_at/updated_at default;
       // the Web Mercator geom columns are repopulated by the INSERT triggers).
       const insertRoute = await client.query(
@@ -721,7 +700,7 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
         throw new ValidationError(`Route with track_id ${trackId} not found`);
       }
 
-      const newTrackId = insertRoute.rows[0].track_id as number;
+      const id = insertRoute.rows[0].track_id as number;
 
       // Clone the user logs, remapping track_id to the new route.
       await client.query(
@@ -731,27 +710,13 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
       FROM user_logged_parts
       WHERE track_id = $1
       `,
-        [trackId, newTrackId],
+        [trackId, id],
       );
 
-      await client.query("COMMIT");
-
-      console.log("Duplicated railway route", trackId, "→", newTrackId);
-      return newTrackId;
-    } catch (error) {
-      // A failed ROLLBACK means the connection itself is gone: keep the original
-      // error, and have the pool discard the client (see migrationActions)
-      await client.query("ROLLBACK").catch((rollbackError: Error) => {
-        brokenConnection = rollbackError;
-      });
-      // A ValidationError is an answer for the admin, not a fault for the log
-      if (!(error instanceof ValidationError)) {
-        console.error("Error duplicating railway route:", error);
-      }
-      throw error;
-    } finally {
-      client.release(brokenConnection);
-    }
+      return id;
+    });
+    console.log("Duplicated railway route", trackId, "→", newTrackId);
+    return newTrackId;
   });
 }
 
@@ -760,14 +725,9 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
  */
 export async function deleteRailwayRoute(trackId: number): Promise<ActionResult<void>> {
   return asAdmin(async () => {
-    const client = await pool.connect();
-    let brokenConnection: Error | undefined;
-
-    try {
-      // As in saveRailwayRoute: the delete and the proximity refresh are one
-      // change, and the stations it needs can no longer be found afterwards.
-      await client.query("BEGIN");
-
+    // As in saveRailwayRoute: the delete and the proximity refresh are one
+    // change, and the stations it needs can no longer be found afterwards.
+    await withTransaction(async (client) => {
       console.log("Deleting railway route with track_id:", trackId);
 
       // Collected before the delete — afterwards the geometry is gone and there is
@@ -783,23 +743,7 @@ export async function deleteRailwayRoute(trackId: number): Promise<ActionResult<
       }
 
       await refreshStationProximityFor(client, { stationIds: affectedStations });
-
-      await client.query("COMMIT");
-
-      console.log("Successfully deleted railway route:", trackId);
-    } catch (error) {
-      // A failed ROLLBACK means the connection itself is gone: keep the original
-      // error, and have the pool discard the client (see migrationActions)
-      await client.query("ROLLBACK").catch((rollbackError: Error) => {
-        brokenConnection = rollbackError;
-      });
-      // A ValidationError is an answer for the admin, not a fault for the log
-      if (!(error instanceof ValidationError)) {
-        console.error("Error deleting railway route:", error);
-      }
-      throw error;
-    } finally {
-      client.release(brokenConnection);
-    }
+    });
+    console.log("Successfully deleted railway route:", trackId);
   });
 }
