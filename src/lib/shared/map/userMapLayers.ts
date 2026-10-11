@@ -1,4 +1,5 @@
 import type { FilterSpecification, LayerSpecification } from "@maplibre/maplibre-gl-style-spec";
+import { type UsageType, usageOptions } from "../constants";
 import type { ResolvedTheme } from "../theme/types";
 import {
   createPublicNotesLayer,
@@ -72,6 +73,17 @@ export const userClickBufferLayerConfig: RailwayRoutesPaintConfig = {
  */
 
 /**
+ * The usage types the user map draws under the heritage/special switches — Regular
+ * always — for what has to follow them, like a searched line's highlight.
+ */
+export function shownUsageTypes(showHeritage: boolean, showSpecial: boolean): UsageType[] {
+  const shown: UsageType[] = [0];
+  if (showHeritage) shown.push(1);
+  if (showSpecial) shown.push(2);
+  return shown;
+}
+
+/**
  * Scenic lines follow the country filter as the routes do — both ends in a selected
  * country — so a filtered-out country is not left with highlighted stretches on an
  * otherwise empty map. Applied as a layer filter rather than in the tile query, so
@@ -96,10 +108,8 @@ export function clickBufferFilter(
   showHeritage: boolean,
   showSpecial: boolean,
 ): FilterSpecification | null {
-  const clickable = [0]; // Regular always
-  if (showHeritage) clickable.push(1);
-  if (showSpecial) clickable.push(2);
-  if (clickable.length === 3) return null;
+  const clickable = shownUsageTypes(showHeritage, showSpecial);
+  if (clickable.length === usageOptions.length) return null;
   return ["match", ["get", "usage_type"], clickable, true, false] as FilterSpecification;
 }
 

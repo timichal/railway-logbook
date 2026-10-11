@@ -12,12 +12,13 @@ import {
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
+import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useRouteEditor } from "@/lib/map/hooks/useRouteEditor";
 import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
-import { createUserMapLayers } from "@/lib/shared/map/userMapLayers";
+import { createUserMapLayers, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
 import { regionCountryCodes } from "@/lib/shared/regions";
 import { useResolvedTheme } from "@/lib/theme";
 
@@ -108,6 +109,12 @@ export default function PublicRailwayMap({
   // only way to read one here.
   useUserMapInteractions(map, mapLoaded, { region: region.id });
 
+  const shownTypes = useMemo(
+    () => shownUsageTypes(layerPrefs.showHeritage, layerPrefs.showSpecial),
+    [layerPrefs.showHeritage, layerPrefs.showSpecial],
+  );
+  const lineHighlight = useLineSearchHighlight(map, mapLoaded, region.id, shownTypes);
+
   return (
     <div className="h-full w-full relative">
       <div ref={mapContainer} className="w-full h-full" style={{ minHeight: "400px" }} />
@@ -122,7 +129,12 @@ export default function PublicRailwayMap({
         />
       )}
 
-      <MapStationSearch map={map} region={region.id} isMobile={isMobile} />
+      <MapStationSearch
+        map={map}
+        lineHighlight={lineHighlight}
+        region={region.id}
+        isMobile={isMobile}
+      />
     </div>
   );
 }

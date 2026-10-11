@@ -109,10 +109,12 @@ export async function searchLinesByName(
       ORDER BY rank, name
       LIMIT 5
     )
-    SELECT name, route_count,
+    SELECT name, route_count, usage_types,
            ST_XMin(box) AS west, ST_YMin(box) AS south, ST_XMax(box) AS east, ST_YMax(box) AS north
     FROM (
-      SELECT m.name, m.rank, count(*)::int AS route_count, ST_Extent(rr.geometry) AS box
+      SELECT m.name, m.rank, count(*)::int AS route_count,
+             array_agg(DISTINCT rr.usage_type ORDER BY rr.usage_type) AS usage_types,
+             ST_Extent(rr.geometry) AS box
       FROM matched m
       JOIN railway_routes rr ON rr.name = m.name
       WHERE ${regionContainsSql(region, "rr.starting_coordinate")}
@@ -127,6 +129,7 @@ export async function searchLinesByName(
   return result.rows.map((row) => ({
     name: row.name,
     routeCount: row.route_count,
+    usageTypes: row.usage_types,
     bounds: [row.west, row.south, row.east, row.north],
   }));
 }

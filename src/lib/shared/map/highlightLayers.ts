@@ -3,6 +3,8 @@ import type {
   FilterSpecification,
   LineLayerSpecification,
 } from "@maplibre/maplibre-gl-style-spec";
+import type { UsageType } from "../constants";
+import type { ResolvedTheme } from "../theme/types";
 import type { PartialRouteGeometry } from "../types";
 import { COLORS, DASHES, OPACITIES, WIDTHS } from "./style";
 import {
@@ -199,6 +201,99 @@ export function partialHighlightData(partials: PartialRouteGeometry[]): GeoJSON.
 export function wholeRouteIds(ids: number[], partials: PartialRouteGeometry[]): number[] {
   const partialIds = new Set(partials.map((p) => p.track_id));
   return ids.filter((id) => !partialIds.has(id));
+}
+
+/**
+ * The line picked in the map's search box, in a region that names its lines.
+ *
+ * Drawn as a thin outline either side of its routes (`line-offset`), not as an
+ * overlay or a band. An overlay hides what has been ridden of the line, which is
+ * the first thing someone looking a line up wants to see. A band underneath was
+ * tried and fails either way: translucent, it blots darker at every junction (the
+ * band is one feature per route, and overlapping translucent features blend
+ * twice); opaque, it shows through the routes, which are drawn at 0.8 opacity, and
+ * tints their colours. Offset to either side, the outline lies over nothing of the
+ * route, so it can be opaque and the route between keeps its exact colour.
+ *
+ * One pair covers every usage type, since an outline has no dashes to keep aligned —
+ * but only the usage types whose route layers are shown, or a layer switched off
+ * would half-reappear as an outline round nothing. Matched on the tile's `name`,
+ * which is what the search grouped the routes by, so it needs no list of ids, and
+ * a route named while its line is highlighted joins the outline on the next tile.
+ */
+export const LINE_SEARCH_HIGHLIGHT_LAYER_IDS = [
+  "line_search_highlight_left",
+  "line_search_highlight_right",
+] as const;
+
+/**
+ * The shown routes of the named line; `null`, or no usage type shown, matches
+ * nothing (see syncHighlightOverlay for why it is filtered empty, not removed).
+ */
+export function lineSearchHighlightFilter(
+  name: string | null,
+  usageTypes: readonly UsageType[],
+): FilterSpecification {
+  if (name === null || usageTypes.length === 0) return false;
+  return [
+    "all",
+    ["==", ["get", "name"], name],
+    ["in", ["get", "usage_type"], ["literal", [...usageTypes]]],
+  ];
+}
+
+export function lineSearchHighlightColor(theme: ResolvedTheme): string {
+  return theme === "dark" ? COLORS.lineSearchHighlightDark : COLORS.lineSearchHighlight;
+}
+
+/**
+ * Both sides of the outline, in `LINE_SEARCH_HIGHLIGHT_LAYER_IDS` order. A route's
+ * left depends on which way its geometry runs, so the two sides of a line made of
+ * routes running both ways are each a mix of both layers — which is why there are
+ * always two, drawn alike.
+ */
+export function createLineSearchHighlightLayers(
+  name: string | null,
+  usageTypes: readonly UsageType[],
+  theme: ResolvedTheme = "light",
+): LineLayerSpecification[] {
+  const { width, offset } = WIDTHS.lineSearchHighlight;
+  return LINE_SEARCH_HIGHLIGHT_LAYER_IDS.map((id, side) => {
+    const sign = side === 0 ? -1 : 1;
+    return {
+      id,
+      type: "line",
+      source: "railway_routes",
+      "source-layer": "railway_routes",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": lineSearchHighlightColor(theme),
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          width.z4,
+          7,
+          width.z7,
+          12,
+          width.z12,
+        ],
+        "line-offset": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          sign * offset.z4,
+          7,
+          sign * offset.z7,
+          12,
+          sign * offset.z12,
+        ],
+      },
+      filter: lineSearchHighlightFilter(name, usageTypes),
+    };
+  });
 }
 
 /** Which colour a highlight set is drawn in. */

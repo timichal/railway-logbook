@@ -3,6 +3,7 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import { fitCamera } from "@/lib/map/fitCamera";
+import type { LineHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import {
   type MapSearchResult,
   type StationSearchFn,
@@ -10,11 +11,17 @@ import {
 } from "@/lib/map/hooks/useStationSearch";
 import { plural } from "@/lib/plural";
 import { REGIONS, type RegionId } from "@/lib/shared/regions";
-import { optionRow } from "@/lib/ui/buttonStyles";
+import { iconBtn, optionRow } from "@/lib/ui/buttonStyles";
 import { useCombobox } from "@/lib/ui/useCombobox";
 
 interface MapStationSearchProps {
   map: React.MutableRefObject<maplibregl.Map | null>;
+  /**
+   * The map's searched-line highlight (`useLineSearchHighlight`): a picked line is
+   * handed to it, and the box shows the chip that names and clears it. Without it a
+   * line is only flown to.
+   */
+  lineHighlight?: LineHighlight;
   /** Results are limited to the region the map is locked to. */
   region: RegionId;
   isMobile: boolean;
@@ -28,11 +35,15 @@ interface MapStationSearchProps {
 
 /**
  * The search box in the map's top corner: type a station name — or, where the region
- * names its lines, a line name — pick a result, and the map flies to it. Shared by
- * the interactive map, the read-only shared one and the admin map.
+ * names its lines, a line name — pick a result, and the map flies to it. A picked
+ * line is also handed to the map's `lineHighlight` and named in a chip under the
+ * box until the chip's x or the next line picked; a station picked meanwhile leaves
+ * it be, since looking at a station on the line is the obvious next step. Shared by the interactive map, the
+ * read-only shared one and the admin map.
  */
 export default function MapStationSearch({
   map,
+  lineHighlight,
   region,
   isMobile,
   hidden = false,
@@ -75,6 +86,7 @@ export default function MapStationSearch({
       // The whole line in view, fitted as an opened journey is (clear of the
       // progress box, within the mobile sheet's camera padding).
       m.flyTo({ ...fitCamera(m, result.line.bounds, isMobile), duration: 1500 });
+      lineHighlight?.setLine(result.line);
     }
     stationSearch.setSearchQuery("");
     stationSearch.setShowSuggestions(false);
@@ -212,6 +224,46 @@ export default function MapStationSearch({
           </div>
         )}
       </div>
+
+      {/* Outside the wrapper above, which the dropdown hangs from: inside it, the
+          list would open below the chip rather than under the input. */}
+      {lineHighlight?.line && (
+        <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-surface border border-gray-300 shadow-lg pl-3 pr-1 text-sm text-fg">
+          {/* The outline in miniature: two lines with the route's gap between them */}
+          <span
+            aria-hidden="true"
+            className={`w-4 h-2 flex-shrink-0 border-y-2 ${lineHighlight.drawn ? "" : "opacity-40"}`}
+            style={{ borderColor: lineHighlight.color }}
+          />
+          <span className="truncate py-1">{lineHighlight.line.name}</span>
+          {/* Every route of it is on a layer switched off: say so, rather than
+              name a highlight that draws nothing */}
+          {!lineHighlight.drawn && (
+            <span className="flex-shrink-0 text-xs text-gray-500">layer hidden</span>
+          )}
+          <button
+            type="button"
+            aria-label={`Stop highlighting ${lineHighlight.line.name}`}
+            onClick={() => lineHighlight.setLine(null)}
+            className={iconBtn("responsive")}
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

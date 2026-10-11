@@ -21,6 +21,12 @@ interface LayerVisibilityState {
   setShowEndpointsLayer: React.Dispatch<React.SetStateAction<boolean>>;
   showScenicLayer: boolean;
   setShowScenicLayer: React.Dispatch<React.SetStateAction<boolean>>;
+  /**
+   * Routes shown and not merely re-ticked for reference during a forced-hidden mode:
+   * what may be clicked, and what a searched line's outline is drawn round — in
+   * those modes it would lie over the parts being picked.
+   */
+  routesInteractive: boolean;
 }
 
 /**
@@ -40,6 +46,7 @@ export function useAdminLayerVisibility({
   const [showScenicLayer, setShowScenicLayer] = useState(true);
   const [routesHidden, setRoutesHidden] = useState(!!hideRoutes);
   const [showRoutesBeforeHide, setShowRoutesBeforeHide] = useState(true);
+  const routesInteractive = showRoutesLayer && !hideRoutes;
 
   // Entering a forced-hidden mode unticks Railway Routes, and leaving it puts back
   // what was ticked before. Only the default: re-ticking it mid-mode shows the routes.
@@ -72,7 +79,7 @@ export function useAdminLayerVisibility({
     setVisibility("railway_routes_special", showRoutesLayer);
     // Routes re-shown mid-mode are for reference: the wide hit area stays off, so it
     // neither swallows the clicks on the parts being picked nor selects a route.
-    setVisibility("railway_routes_click", showRoutesLayer && !hideRoutes);
+    setVisibility("railway_routes_click", routesInteractive);
 
     setVisibility("stations", showStationsLayer);
     setVisibility("station_labels", showStationsLayer);
@@ -88,7 +95,7 @@ export function useAdminLayerVisibility({
     showNotesLayer,
     showEndpointsLayer,
     showScenicLayer,
-    hideRoutes,
+    routesInteractive,
   ]);
 
   return {
@@ -104,5 +111,6 @@ export function useAdminLayerVisibility({
     setShowEndpointsLayer,
     showScenicLayer,
     setShowScenicLayer,
+    routesInteractive,
   };
 }

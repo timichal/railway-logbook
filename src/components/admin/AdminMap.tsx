@@ -34,11 +34,13 @@ import {
 import { useAdminLayerVisibility } from "@/lib/map/hooks/useAdminLayerVisibility";
 import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
+import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
 import { useRegionId } from "@/lib/regionContext";
+import { type UsageType, usageOptions } from "@/lib/shared/constants";
 import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
 import {
   getAdminRouteHeritageWidthExpression,
@@ -58,6 +60,9 @@ const REGULAR_ONLY_FILTER = ["==", ["get", "usage_type"], 0] as maplibregl.Filte
 // Module-level: the search hook re-creates its search whenever the function changes.
 const searchAdminStations = (query: string, region: RegionId): Promise<MapSearchResults> =>
   searchAdminMap(query, region).then(unwrap);
+
+const ALL_USAGE_TYPES: UsageType[] = usageOptions.map((option) => option.id);
+const NO_USAGE_TYPES: UsageType[] = [];
 
 // The three colored route line layers. They share identical visit/selection
 // paint; only their dash style (baked into each factory) differs.
@@ -234,6 +239,14 @@ export default function AdminMap({
   // Layer visibility management
   const layerVisibility = useAdminLayerVisibility({ map, mapLoaded, hideRoutes });
 
+  // The admin switches all three route layers together
+  const lineHighlight = useLineSearchHighlight(
+    map,
+    mapLoaded,
+    regionId,
+    layerVisibility.routesInteractive ? ALL_USAGE_TYPES : NO_USAGE_TYPES,
+  );
+
   // GeoJSON overlay layers (preview route, selected points, route endpoints)
   useAdminMapOverlays(map, mapLoaded, {
     previewRoute,
@@ -365,6 +378,7 @@ export default function AdminMap({
 
       <MapStationSearch
         map={map}
+        lineHighlight={lineHighlight}
         region={regionId}
         isMobile={isMobile}
         search={searchAdminStations}

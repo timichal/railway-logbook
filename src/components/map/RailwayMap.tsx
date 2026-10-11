@@ -19,6 +19,7 @@ import {
 import { fitCamera } from "@/lib/map/fitCamera";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
+import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useLocalRouteFeatureStates } from "@/lib/map/hooks/useLocalRouteFeatureStates";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useMapTileRefresh } from "@/lib/map/hooks/useMapTileRefresh";
@@ -28,7 +29,7 @@ import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
 import { NEW_JOURNEY_FORM_ID } from "@/lib/selectedRoutes";
-import { createUserMapLayers } from "@/lib/shared/map/userMapLayers";
+import { createUserMapLayers, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
 import { regionCountryCodes } from "@/lib/shared/regions";
 import type {
   HighlightKind,
@@ -621,6 +622,20 @@ export default function RailwayMap({
   // Only the sheet can take the room away, so the desktop layout always has it.
   const showFurniture = !isMobile || furnitureFits;
 
+  // The line picked in the search box, outlined on the map. It stands down with the
+  // box, whose chip is the only way to clear it.
+  const shownTypes = useMemo(
+    () => shownUsageTypes(layerPrefs.showHeritage, layerPrefs.showSpecial),
+    [layerPrefs.showHeritage, layerPrefs.showSpecial],
+  );
+  const lineHighlight = useLineSearchHighlight(
+    map,
+    mapLoaded,
+    region.id,
+    shownTypes,
+    !showFurniture,
+  );
+
   // What the collapsed sheet calls itself. Not the active tab: all three of the
   // sheet's tabs are the logger. The count is the one thing worth surfacing from
   // behind a closed sheet — routes are picked on the map, which is exactly when the
@@ -723,6 +738,7 @@ export default function RailwayMap({
 
         <MapStationSearch
           map={map}
+          lineHighlight={lineHighlight}
           region={region.id}
           isMobile={isMobile}
           hidden={!showFurniture}

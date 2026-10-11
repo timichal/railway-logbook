@@ -53,6 +53,15 @@ export const COLORS = {
   // The same band on the admin map, where an invalid line is greyed like an
   // invalid route and the selected one is drawn in the selected-route orange.
   scenicLineInvalid: "#9ca3af",
+  /**
+   * A line picked in the map's search box (`createLineSearchHighlightLayers`): a
+   * thin outline either side of its routes. Blue because it must not read as either
+   * of the overlays drawn over routes (planner gold, selection orange) nor as a
+   * scenic stretch; strong, because a 1-2px line has little area to be seen by.
+   * Lighter over the dark basemap, where the strong blue sinks into the ground.
+   */
+  lineSearchHighlight: "#2563eb",
+  lineSearchHighlightDark: "#60a5fa",
   // Bright preview line shown while creating/editing an admin route.
   preview: "#ff6600",
   stations: {
@@ -162,6 +171,16 @@ export const WIDTHS = {
   // a band around the line rather than shrinking into a second line beside it.
   // `blur` softens its edges by that many pixels.
   scenicLine: { z4: 5, z7: 10, z12: 18, blur: { z4: 1, z12: 4 } },
+  // The searched-line band: wider than the scenic one, since it is usually looked
+  // at zoomed out to the whole line, where a route is under a pixel wide.
+  // The searched-line outline: each side's own width, and how far its centre sits
+  // from the route's. The offset clears half the widest line it runs beside — a
+  // heritage dot at z7 (3.6px), the admin's selected route at z12 (5px) — plus a
+  // pixel or so of gap, so the route between the two outlines is never covered.
+  lineSearchHighlight: {
+    width: { z4: 1.2, z7: 1.5, z12: 2 },
+    offset: { z4: 2.2, z7: 3.8, z12: 4.8 },
+  },
   // Special-usage routes are drawn a little fatter than branch (multiplier on
   // the branch width at each stop). A dashed line lays down less ink than a
   // solid one of the same width, so matching branch exactly reads as thinner

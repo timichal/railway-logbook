@@ -266,6 +266,8 @@ export interface LineSearchResult {
   name: string;
   /** How many routes carry the name — a line is usually split at its junctions. */
   routeCount: number;
+  /** The usage types among them, so a client can tell when its layer switches hide them all. */
+  usageTypes: UsageType[];
   bounds: RouteBounds;
 }
 
