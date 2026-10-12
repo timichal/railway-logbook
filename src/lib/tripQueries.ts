@@ -256,13 +256,12 @@ export async function assignJourneyToTripForUser(
   journeyId: number,
   tripId: number,
 ): Promise<void> {
-  const tripCheck = await pool.query("SELECT id FROM user_trips WHERE id = $1 AND user_id = $2", [
-    tripId,
-    userId,
-  ]);
-  if (tripCheck.rows.length === 0) throw new NotFoundError("Trip not found");
+  // A null would pass the FK (MATCH SIMPLE skips it) and unfile the journey,
+  // which is unassignJourneyFromTripForUser's job, not this one's
+  if (!Number.isInteger(tripId)) throw new ValidationError("Trip id is required");
 
-  // A trip deleted since the check fails the composite FK, which answers the same
+  // A trip that isn't the user's fails the composite FK (trip_id, user_id),
+  // which asMissingRow answers as "Trip not found"
   const result = await pool
     .query("UPDATE user_journeys SET trip_id = $1 WHERE id = $2 AND user_id = $3", [
       tripId,

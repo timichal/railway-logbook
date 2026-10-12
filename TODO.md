@@ -15,22 +15,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Larger refactors (the biggest wins)
 
-- [ ] **Let the ownership FKs do the ownership checks** (~30 lines, one round trip
-  per write). The composite FKs `(trip_id, user_id)` and `(journey_id, user_id)`
-  already refuse a trip or journey that isn't the caller's, and `asMissingRow` now
-  turns that refusal into the same 404 "Trip/Journey not found" the pre-checks give.
-  So these are redundant:
-  - `assertOwnTrip` (`SELECT … FOR KEY SHARE`) in `createJourneyForUser` and
-    `saveJourneyEditsForUser`;
-  - the trip `SELECT` in `assignJourneyToTripForUser` (its UPDATE already maps the
-    FK violation);
-  - the journey `SELECT` in `addRoutesToJourneyForUser`. It is still needed when
-    `trackIds` is empty, since then no row is inserted and nothing checks the FK.
-
-  The pre-checks were written on purpose (see `assertOwnTrip`'s comment), so before
-  dropping them, confirm the server's FKs exist with the expected tables. The
-  constraint names don't matter, because `asMissingRow` keys on the table name.
-
 - [ ] **Run the independent trip reads in parallel** (latency, not lines).
   `tripForUser` runs its journeys and route-id queries one after the other;
   `journeysAndTripsForUser` does the same with count + page, then with its three

@@ -72,22 +72,6 @@ function inTransaction<T>(body: (client: PoolClient) => Promise<T>): Promise<T> 
 }
 
 /**
- * Throws unless `tripId` is one of the user's own trips: it arrives from the
- * client, and an unchecked one files the journey under someone else's trip. A
- * trip that exists but isn't theirs answers exactly like one that doesn't exist.
- * The composite FK on user_journeys (trip_id, user_id) enforces the same. FOR
- * KEY SHARE holds off a concurrent delete of the trip until COMMIT, which would
- * otherwise turn a passed check into an FK error on the write.
- */
-async function assertOwnTrip(client: PoolClient, userId: number, tripId: number): Promise<void> {
-  const tripCheck = await client.query(
-    "SELECT 1 FROM user_trips WHERE id = $1 AND user_id = $2 FOR KEY SHARE",
-    [tripId, userId],
-  );
-  if (tripCheck.rows.length === 0) throw new NotFoundError("Trip not found");
-}
-
-/**
  * The VALUES rows for logging `trackIds` to a journey, one per track_id.
  *
  * Postgres rejects an ON CONFLICT DO UPDATE whose statement touches the same
@@ -180,8 +164,8 @@ export async function createJourneyForUser(
   assertAligned(trackIds, partialFlags);
 
   return inTransaction(async (client) => {
-    if (tripId) await assertOwnTrip(client, userId, tripId);
-
+    // The trip id arrives from the client: one that isn't the user's fails the
+    // composite FK (trip_id, user_id), which inTransaction answers as "Trip not found"
     const journeyResult = await client.query<Journey>(
       `INSERT INTO user_journeys (user_id, name, description, date, trip_id)
        VALUES ($1, $2, $3, $4, $5)
@@ -244,6 +228,9 @@ export async function addRoutesToJourneyForUser(
 ): Promise<void> {
   assertAligned(trackIds, partialFlags);
 
+  // Not left to the composite FK: where someone else's journey already logs one
+  // of these routes, the insert conflicts and DO UPDATE rewrites *their* row, and
+  // an update that leaves journey_id and user_id alone is never FK-checked
   const journeyCheck = await pool.query(
     "SELECT id FROM user_journeys WHERE id = $1 AND user_id = $2",
     [journeyId, userId],
@@ -350,10 +337,9 @@ export async function saveJourneyEditsForUser(
   }
 
   await inTransaction(async (client) => {
-    if (edits.tripId) await assertOwnTrip(client, userId, edits.tripId);
-
     // First, so the journey row is locked against a concurrent delete for the
-    // rest of the transaction; a journey that isn't the caller's stops here
+    // rest of the transaction; a journey that isn't the caller's stops here, and a
+    // trip that isn't fails the composite FK (trip_id, user_id) as "Trip not found"
     const updated = await client.query(
       `UPDATE user_journeys
        SET name = $1, description = $2, date = $3,
