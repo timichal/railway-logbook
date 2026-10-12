@@ -28,18 +28,26 @@
 # data/pruned.sources; deploy.sh turns that into
 # osmium-scripts/deployed-extracts.txt.
 #
+# The filtered extracts are kept from one run to the next, each with the name
+# of the dated file it was filtered from and the filter it went through, and
+# an extract is downloaded again only when Geofabrik has a newer file than that
+# or the filter has changed. Geofabrik's countries are often days behind, so a
+# daily run would otherwise fetch ~35GB to rebuild what it already has; kept,
+# they take ~300MB.
+#
 # Every stage writes to a .part file and renames it only once the tool has
 # exited cleanly, so "the file exists" means "the file is finished" and the
 # skip-if-present checks below can trust it. Without that, interrupting osmium
 # (Ctrl-C, OOM, full disk) leaves a truncated file that the next run silently
-# reuses. A failed run keeps its finished extracts, so a retry picks up where
-# it stopped.
+# reuses. A failed run's finished extracts are therefore reused by the retry,
+# as anyone's are: unless Geofabrik has published a newer file since.
 
 set -e  # Exit on error
 
 DATA_DIR="data"
 # Overridable so the pipeline can be tried on a list of its own.
-EXTRACTS_FILE="${EXTRACTS_FILE:-osmium-scripts/extracts.txt}"
+LISTED_EXTRACTS_FILE="osmium-scripts/extracts.txt"
+EXTRACTS_FILE="${EXTRACTS_FILE:-${LISTED_EXTRACTS_FILE}}"
 GEOFABRIK="https://download.geofabrik.de"
 
 WORK_DIR="${DATA_DIR}/extracts"
@@ -168,6 +176,28 @@ trap 'exit 130' INT
 trap 'exit 129' HUP
 trap 'exit 143' TERM
 
+# Ask Geofabrik for an extract's newest file: P_URL is the dated file -latest
+# redirects to, P_TOTAL_MB its size (empty when the server did not say).
+# Returns non-zero, having said why, when Geofabrik does not answer. Run in
+# this shell, not in $(...), since it sets the P_ globals.
+probe_latest() {
+    # -latest answers with a redirect to the dated file, which -L follows, so
+    # one call gives both the dated URL and its size. Where -latest serves the
+    # file directly instead (it sometimes does, mid-publish) P_URL is -latest
+    # itself: there is no dated name to pin, so the download starts over
+    # rather than resuming, and a kept extract is never taken to match it. The
+    # size is parsed from the headers because %header{} needs curl 7.84; the
+    # last Content-Length is the file's, the redirect's own coming first.
+    P_LATEST_URL="${GEOFABRIK}/$1-latest.osm.pbf"
+    P_HEADERS="$(curl -sfIL --retry 3 -w 'url=%{url_effective}\n' "${P_LATEST_URL}")" || {
+        echo "ERROR: ${P_LATEST_URL} is not available - is '$1' spelled as on Geofabrik?"
+        return 1
+    }
+    P_URL="$(echo "${P_HEADERS}" | tr -d '\r' | awk '/^url=/ { print substr($0, 5) }')"
+    P_TOTAL_MB="$(echo "${P_HEADERS}" | tr -d '\r' |
+        awk 'tolower($1) == "content-length:" { mb = int($2 / 1048576) } END { print mb }')"
+}
+
 # Find where an extract ("N:path", N its place on the list) downloads from,
 # and how big it is. Returns non-zero, having said why, when Geofabrik does
 # not answer. Run in this shell, not in $(...), since it sets the DL_ globals.
@@ -178,20 +208,10 @@ resolve_download() {
     DL_NAME="$(basename "${DL_EXTRACT}")"
     mkdir -p "${DL_DIR}"
 
-    # -latest answers with a redirect to the dated file, which -L follows, so
-    # one call gives both the dated URL and its size. Where -latest serves the
-    # file directly instead (it sometimes does, mid-publish) there is no dated
-    # name to pin, and the download starts over rather than resuming. The
-    # size is parsed from the headers because %header{} needs curl 7.84; the
-    # last Content-Length is the file's, the redirect's own coming first.
-    DL_LATEST_URL="${GEOFABRIK}/${DL_EXTRACT}-latest.osm.pbf"
-    DL_HEADERS="$(curl -sfIL -w 'url=%{url_effective}\n' "${DL_LATEST_URL}")" || {
-        echo "ERROR: ${DL_LATEST_URL} is not available - is '${DL_EXTRACT}' spelled as on Geofabrik?"
-        return 1
-    }
-    DL_URL="$(echo "${DL_HEADERS}" | tr -d '\r' | awk '/^url=/ { print substr($0, 5) }')"
-    DL_TOTAL_MB="$(echo "${DL_HEADERS}" | tr -d '\r' |
-        awk 'tolower($1) == "content-length:" { mb = int($2 / 1048576) } END { print mb }')"
+    probe_latest "${DL_EXTRACT}" || return 1
+    DL_URL="${P_URL}"
+    DL_TOTAL_MB="${P_TOTAL_MB}"
+    DL_LATEST_URL="${P_LATEST_URL}"
     DL_FILE="${DL_DIR}/$(basename "${DL_URL}")"
     # A partial download of an older dated file can never be completed now.
     for DL_STALE in "${DL_DIR}/${DL_NAME}"-[0-9]*.osm.pbf "${DL_DIR}/${DL_NAME}-latest.osm.pbf"; do
@@ -252,6 +272,17 @@ wait_download() {
     DL_PID=""
 }
 
+# What tags-filter keeps (see filter_extract), as its expressions separated by
+# spaces. Recorded with every filtered extract, so a change here refilters the
+# kept ones instead of mixing two filters in one map.
+RAIL_FILTER="w/railway=rail,narrow_gauge,light_rail,monorail nw/railway=station,halt"
+
+# What a filtered extract's .source holds: the dated file it was filtered from,
+# then RAIL_FILTER.
+source_record() {
+    printf '%s\n%s\n' "$1" "${RAIL_FILTER}"
+}
+
 # Filter a downloaded extract down to railways and delete the download.
 filter_extract() {
     F_N="$1"
@@ -265,33 +296,76 @@ filter_extract() {
     # station building instead of a node. osmium export turns those closed ways
     # into (Multi)Polygons, which pruneData.ts reduces back to a Point.
     # -f pbf is explicit because the .part suffix hides the format.
+    # RAIL_FILTER is unquoted on purpose: one argument per expression.
+    # shellcheck disable=SC2086
     osmium tags-filter \
         --overwrite \
         -f pbf \
         -o "${F_RAIL_FILE}.part" \
         "${F_DOWNLOAD}" \
-        w/railway=rail,narrow_gauge,light_rail,monorail \
-        nw/railway=station,halt || {
+        ${RAIL_FILTER} || {
             echo "ERROR: Failed to filter ${F_EXTRACT}"
             rm -f "${F_RAIL_FILE}.part"
             exit 1
         }
+    # Its .source is removed before the rename and written only after the
+    # download is gone, so a .source always describes the filtered file beside
+    # it, and an extract taken as current never has a download left behind
+    # (only resolve_download sweeps those, and a reused extract skips it). One
+    # missing - an interruption in between, or an undated -latest download -
+    # only means the extract is fetched again.
+    rm -f "${F_RAIL_FILE}.source"
     mv "${F_RAIL_FILE}.part" "${F_RAIL_FILE}"
     rm -f "${F_DOWNLOAD}"
+    case "${F_DOWNLOAD}" in
+        *-latest.osm.pbf) ;;
+        *) source_record "$(basename "${F_DOWNLOAD}")" > "${F_RAIL_FILE}.source" ;;
+    esac
     FILTERED_NOW=1
     echo "✓ ${F_EXTRACT}: data from $(extract_date "${F_RAIL_FILE}")"
 }
 
+# Filtered extracts are kept from run to run; one no longer listed in
+# extracts.txt would only take up room. Against the whole list, not this run's
+# selection, so a partial run leaves the other extracts alone - and not at all
+# when the list is a trial one of its own (EXTRACTS_FILE), which would
+# otherwise cost the next real run every extract it leaves out.
+if [ "${EXTRACTS_FILE}" = "${LISTED_EXTRACTS_FILE}" ]; then
+    ALL_EXTRACTS="$(all_extracts)"
+    find "${WORK_DIR}" -type f -name '*.rail.pbf' | while read -r KEPT; do
+        KEPT_EXTRACT="${KEPT#"${WORK_DIR}/"}"
+        KEPT_EXTRACT="${KEPT_EXTRACT%.rail.pbf}"
+        if ! echo "${ALL_EXTRACTS}" | grep -qxF "${KEPT_EXTRACT}"; then
+            echo "Removing ${KEPT}: ${KEPT_EXTRACT} is no longer listed"
+            rm -f "${KEPT}" "${KEPT}.source"
+        fi
+    done
+fi
+
 # The extracts still to filter, as "N:path", in the positional parameters
-# (the selection arguments having been read above).
+# (the selection arguments having been read above): those with no filtered
+# file kept, and those Geofabrik has a newer file of than the one kept, or
+# that were kept from another RAIL_FILTER.
 set --
 N=0
 for EXTRACT in ${EXTRACTS}; do
     N=$((N + 1))
     RAIL_FILE="${WORK_DIR}/${EXTRACT}.rail.pbf"
-    if [ -f "${RAIL_FILE}" ]; then
-        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: already filtered, data from $(extract_date "${RAIL_FILE}")"
+    if [ ! -f "${RAIL_FILE}" ]; then
+        set -- "$@" "${N}:${EXTRACT}"
+        continue
+    fi
+    probe_latest "${EXTRACT}" || exit 1
+    LATEST_NAME="$(basename "${P_URL}")"
+    KEPT_RECORD="$(cat "${RAIL_FILE}.source" 2>/dev/null || true)"
+    KEPT_NAME="$(echo "${KEPT_RECORD}" | head -n 1)"
+    if [ -n "${KEPT_RECORD}" ] && [ "${KEPT_RECORD}" = "$(source_record "${LATEST_NAME}")" ]; then
+        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: no newer extract than ${KEPT_NAME}, reusing it (data from $(extract_date "${RAIL_FILE}"))"
+    elif [ -n "${KEPT_NAME}" ] && [ "${KEPT_NAME}" = "${LATEST_NAME}" ]; then
+        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: kept ${KEPT_NAME} went through another filter - fetching it again"
+        set -- "$@" "${N}:${EXTRACT}"
     else
+        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: Geofabrik has ${LATEST_NAME}, kept ${KEPT_NAME:-an unknown file} - fetching it again"
         set -- "$@" "${N}:${EXTRACT}"
     fi
 done
@@ -401,13 +475,9 @@ echo "✓ Pruning complete"
 echo ""
 
 # 5. Cleanup: remove this run's intermediate files. Only reached once pruning
-# succeeded, so a failed run keeps its intermediates for the retry. Only this
-# run's extracts: a partial run must not take the finished extracts a failed
-# full run left behind for its own retry.
+# succeeded, so a failed run keeps its intermediates for the retry. The
+# filtered extracts stay, for the next run to reuse (see step 1).
 echo "Cleaning up intermediate files..."
-for EXTRACT in ${EXTRACTS}; do
-    rm -f "${WORK_DIR}/${EXTRACT}.rail.pbf"
-done
 rm -f "${MERGED_FILE}"
 find "${WORK_DIR}" -depth -type d -empty -exec rmdir {} \;
 rm -f "${FILTERED_FILE}" "${MERGED_LIST_FILE}" "${GEOJSON_FILE}"

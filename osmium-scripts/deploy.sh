@@ -9,8 +9,9 @@
 #   --valid-only       recalculate only routes not already invalid
 #   --concurrency=N    how many routes the import recalculates at once
 #                      (see RECALC_PERFORMANCE.md)
-#   --fresh            discard what an earlier failed run left on the server
-#                      (the pruned map, finished extracts) instead of reusing it
+#   --fresh            discard what earlier runs left on the server - a pruned
+#                      map not deployed yet, and every filtered extract kept
+#                      (~35GB to download again) - instead of reusing it
 #   --follow           start nothing; reattach to the run in progress, or
 #                      report on the last one
 # Example: npm run deployMapData -- --valid-only

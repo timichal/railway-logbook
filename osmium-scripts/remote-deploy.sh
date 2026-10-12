@@ -24,7 +24,8 @@
 # npm and node together.
 #
 # Flags: --valid-only and --concurrency=N go to importMapData. --fresh throws
-# away whatever an earlier failed run left behind and starts from scratch.
+# away whatever earlier runs left behind - a failed run's pruned map, and the
+# filtered extracts every run keeps - and starts from scratch.
 #
 # A pruned file prepared after the last successful deploy is reused rather
 # than rebuilt: it was produced by a run that failed later, at the import, and
