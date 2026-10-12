@@ -50,23 +50,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   a `toggle(key)`, and a `{ key, label, layerIds }` list. The effect that applies
   visibility and the controls' `layers` array would both read from that list.
 
-- [ ] **Map interaction modules** (~120 lines across `userMapInteractions.ts` and
-  `adminMapInteractions.ts`):
-  - The admin map's route popup body (title + badges + note + website) and station
-    body duplicate `buildRouteBody` / `buildStationBody` in the user map. Move both
-    into `tooltipFormatting.ts`.
-  - The `<a … style=…>Website/Source</a> (double-click to open)` markup is written 3
-    times. Make it a `popupLink(href, label, hint?)` helper.
-  - The admin map has four hover popups, each with its own `let popup` and the same
-    remove/create code. One `showHover(lngLat, className, html)` would replace them.
-    The feature-state hover tracking for parts and notes is also duplicated.
-  - In the user map, the three cursor enter/leave pairs are identical. The `on` and
-    `off` registration lists repeat each other, so one `[event, layer, handler]` table
-    can drive both. The route-layer list + `queryRenderedFeatures` call is built twice
-    (`handleRouteClick`, `handleDblClick`).
-  - `formatRouteMetadataBadges({ usage_type, line_class, frequency })` copies three
-    fields out of `properties`; passing `properties` directly does the same.
-
 ---
 
 ## Medium
@@ -213,6 +196,14 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   label + input + junction-shortcut block appears 4 times in RouteMetadataFields
   (name/from/to/link) and 4 more in the scenic tab (two From/To pairs). Use a small
   `TextField` component.
+
+- [ ] **One "features under this point" helper for both maps** (~15 lines, from the
+  review of the interaction-modules refactor). "Keep the layers that exist, then
+  `queryRenderedFeatures`" is still written three ways: the admin map's `hits()`, the
+  user map's `routeFeatureAt()`, and the inline `public_notes`/`stations` checks in
+  the user map's `handleRouteClick` and `handleDblClick`. The route hit layers
+  (`railway_routes_click`, `railway_routes`) are also listed in both modules. Put one
+  `featuresAt(map, point, layers)` and the shared list beside them in `src/lib/map/`.
 
 - [ ] **Smaller duplicates across layout files** (~30 lines).
   - The `dynamic(…, { loading: "Loading map..." })` placeholder is written 3 times

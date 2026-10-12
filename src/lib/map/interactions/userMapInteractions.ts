@@ -2,14 +2,13 @@ import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import { HIGHLIGHT_LAYER_IDS } from "@/lib/map/hooks/useRouteHighlighting";
 import {
+  DOUBLE_CLICK_HINT,
   escapeHtml,
-  formatRouteMetadataBadges,
-  formatRouteTitle,
-  POPUP_DIVIDER,
-  POPUP_ROW_STYLE,
+  formatRouteBody,
+  formatStationBody,
+  popupLink,
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
-import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type { RegionId } from "@/lib/shared/regions";
 import type { SelectedRoute, Station } from "@/lib/shared/types";
 import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
@@ -354,53 +353,9 @@ export function setupUserMapInteractions(
     if (safeHref(value)) window.open(String(value), "_blank", "noopener,noreferrer");
   };
 
-  /**
-   * The body of a route popup, shared by the hover popup and the touch sheet.
-   * Title, badge row, then one block per piece of body text — each its own element
-   * rather than `<br />`-separated runs, so the note never continues the badge
-   * line. `linkRow` is the hover popup's link-plus-instruction line; the sheet
-   * carries a button in its place.
-   */
-  const buildRouteBody = (properties: FeatureProperties, { linkRow }: { linkRow: boolean }) => {
-    const { region } = getCallbacks();
-    let body = formatRouteTitle(properties, region);
-
-    body += formatRouteMetadataBadges(
-      {
-        usage_type: properties.usage_type,
-        line_class: properties.line_class,
-        frequency: properties.frequency,
-      },
-      region,
-    );
-
-    if (properties.description) {
-      body += `<div style="${POPUP_ROW_STYLE}"><b>Note:</b> ${escapeHtml(properties.description)}</div>`;
-    }
-    const routeHref = linkRow ? safeHref(properties.link) : "";
-    if (routeHref) {
-      body += `<div style="${POPUP_ROW_STYLE}"><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">Website</a> <span style="color: var(--color-gray-500); font-size: 0.85em;">(double-click to open)</span></div>`;
-    }
-
-    // `date` and `journey_name` are populated together from the most-recent
-    // logged journey (both NOT NULL in user_journeys), so either both are
-    // present or neither is.
-    if (properties.date) {
-      const dateStr = escapeHtml(formatDateOnly(properties.date));
-      body += POPUP_DIVIDER;
-      body += `<div style="${POPUP_ROW_STYLE} color: var(--color-gray-700);">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</div>`;
-    }
-
-    return body;
-  };
-
-  const buildStationBody = (properties: FeatureProperties) => {
-    if (!properties.name) return "";
-    return (
-      `<h3 class="font-bold text-base mb-1" style="color: var(--color-fg);">${escapeHtml(properties.name)}</h3>` +
-      `<div class="text-xs text-gray-600">Station</div>`
-    );
-  };
+  /** The route popup's body; the sheet carries a button in place of the link row. */
+  const buildRouteBody = (properties: FeatureProperties, { linkRow }: { linkRow: boolean }) =>
+    formatRouteBody(properties, getCallbacks().region, { linkRow, linkHint: DOUBLE_CLICK_HINT });
 
   /** `sourceRow` mirrors `linkRow` above: the sheet gets a button, not a hint. */
   const buildNoteBody = (properties: FeatureProperties, { sourceRow }: { sourceRow: boolean }) => {
@@ -408,14 +363,20 @@ export function setupUserMapInteractions(
     if (properties.text) {
       body += `<div style="white-space: pre-wrap;">${escapeHtml(properties.text)}</div>`;
     }
-    const sourceHref = sourceRow ? safeHref(properties.source) : "";
-    if (sourceHref) {
-      body += `<div style="margin-top: 6px;"><a href="${sourceHref}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">Source</a> <span style="color: var(--color-gray-500); font-size: 0.85em;">(double-click to open)</span></div>`;
-    }
+    const source = sourceRow ? popupLink(properties.source, "Source", DOUBLE_CLICK_HINT) : "";
+    if (source) body += `<div style="margin-top: 6px;">${source}</div>`;
     return body;
   };
 
-  // Click handler for routes — queries all route-related layers (base + click buffer + highlights)
+  /** The route under a point, through the click buffer and the highlights on top. */
+  const routeFeatureAt = (point: maplibreglType.PointLike) => {
+    const layers = ["railway_routes_click", "railway_routes", ...HIGHLIGHT_LAYER_IDS].filter((id) =>
+      mapInstance.getLayer(id),
+    );
+    if (layers.length === 0) return undefined;
+    return mapInstance.queryRenderedFeatures(point, { layers })[0];
+  };
+
   const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
     // Map-wide, so this fires for every tap and is where an open sheet is taken
     // away — including a tap on bare map, which the layer-scoped handlers miss.
@@ -444,20 +405,10 @@ export function setupUserMapInteractions(
       if (stationHit.length > 0) return;
     }
 
-    const routeLayers = ["railway_routes_click", "railway_routes", ...HIGHLIGHT_LAYER_IDS].filter(
-      (id) => mapInstance.getLayer(id),
-    );
-    if (routeLayers.length === 0) return;
-
-    const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
-    if (features.length === 0) return;
-
-    const feature = features[0];
-    const properties = feature.properties;
-    if (!properties) return;
-
-    const trackId = feature.id;
-    if (!trackId) return;
+    const feature = routeFeatureAt(e.point);
+    const properties = feature?.properties;
+    const trackId = feature?.id;
+    if (!properties || !trackId) return;
 
     const route: SelectedRoute = {
       track_id: Number(trackId),
@@ -519,7 +470,6 @@ export function setupUserMapInteractions(
     onRouteClick?.(route);
   };
 
-  // Hover handler for route popups
   const handleRouteMouseMove = (e: maplibreglType.MapLayerMouseEvent) => {
     if (lastPointerWasTouch) return;
 
@@ -547,16 +497,16 @@ export function setupUserMapInteractions(
 
     openHoverPopup(e.lngLat, "station", properties, () => ({
       className: "station-popup",
-      body: buildStationBody(properties),
+      body: formatStationBody(properties),
     }));
   };
 
-  // Cursor handlers for routes
-  const handleRouteMouseEnter = () => {
+  // Every layer here has a popup: the cursor says it can be clicked, and the popup
+  // goes when the pointer does.
+  const handleMouseEnter = () => {
     mapInstance.getCanvas().style.cursor = "pointer";
   };
-
-  const handleRouteMouseLeave = () => {
+  const handleMouseLeave = () => {
     mapInstance.getCanvas().style.cursor = "";
     // A tap synthesizes a mouseleave of its own; letting it through would take the
     // sheet away in the very gesture that opened it.
@@ -602,26 +552,6 @@ export function setupUserMapInteractions(
     );
   };
 
-  const handleNoteMouseEnter = () => {
-    mapInstance.getCanvas().style.cursor = "pointer";
-  };
-
-  const handleNoteMouseLeave = () => {
-    mapInstance.getCanvas().style.cursor = "";
-    if (!lastPointerWasTouch) removePopup();
-  };
-
-  // Cursor handlers for stations
-  const handleStationMouseEnter = () => {
-    mapInstance.getCanvas().style.cursor = "pointer";
-  };
-
-  const handleStationMouseLeave = () => {
-    mapInstance.getCanvas().style.cursor = "";
-    if (!lastPointerWasTouch) removePopup();
-  };
-
-  // Click handler for stations (Journey Planner)
   const handleStationClick = (e: maplibreglType.MapLayerMouseEvent) => {
     if (sheetTookThisClick(e)) return;
     if (!e.features || e.features.length === 0) return;
@@ -636,16 +566,14 @@ export function setupUserMapInteractions(
     // the planner field below — a text field is cheap to change, so there is
     // nothing here worth putting behind a button of its own.
     if (lastPointerWasTouch) {
-      openTouchSheet(e.lngLat, "station-popup", buildStationBody(properties), []);
+      openTouchSheet(e.lngLat, "station-popup", formatStationBody(properties), []);
     }
 
     const { onStationClick } = getCallbacks();
     if (!onStationClick || !geometry || geometry.type !== "Point") return;
 
-    // Validate station data before creating Station object
     if (!properties.id || !properties.name || !geometry.coordinates) return;
 
-    // Convert to Station type
     const station: Station = {
       id: properties.id,
       name: properties.name,
@@ -672,39 +600,34 @@ export function setupUserMapInteractions(
       }
     }
 
-    const routeLayers = ["railway_routes_click", "railway_routes", ...HIGHLIGHT_LAYER_IDS].filter(
-      (id) => mapInstance.getLayer(id),
-    );
-    if (routeLayers.length === 0) return;
-    const features = mapInstance.queryRenderedFeatures(e.point, { layers: routeLayers });
-    if (features.length > 0) {
+    const route = routeFeatureAt(e.point);
+    if (route) {
       e.preventDefault();
-      openLink(features[0].properties?.link);
+      openLink(route.properties?.link);
     }
   };
-  mapInstance.on("dblclick", handleDblClick);
 
-  // Attach route click as general map handler (works through highlight layers on top).
-  // Hover/cursor handlers fire from the wide click-buffer layer so thin visible
-  // lines don't make hover/cursor feedback finicky.
-  mapInstance.on("click", handleRouteClick);
-  mapInstance.on("mousemove", "railway_routes_click", handleRouteMouseMove);
-  mapInstance.on("mouseenter", "railway_routes_click", handleRouteMouseEnter);
-  mapInstance.on("mouseleave", "railway_routes_click", handleRouteMouseLeave);
+  // The route click is map-wide, so it works through the highlight layers on top
+  // and sees every tap (see `sheetTookThisClick`). Hover and cursor go off the wide
+  // click buffer, so the thin visible lines don't make them finicky. Stations and
+  // then notes are registered after the routes: they draw on top, and of the hover
+  // offers one `mousemove` makes, the last one wins.
+  const subscriptions = [
+    mapInstance.on("dblclick", handleDblClick),
+    mapInstance.on("click", handleRouteClick),
+    mapInstance.on("mousemove", "railway_routes_click", handleRouteMouseMove),
+    mapInstance.on("mouseenter", "railway_routes_click", handleMouseEnter),
+    mapInstance.on("mouseleave", "railway_routes_click", handleMouseLeave),
+    mapInstance.on("click", "stations", handleStationClick),
+    mapInstance.on("mousemove", "stations", handleStationMouseMove),
+    mapInstance.on("mouseenter", "stations", handleMouseEnter),
+    mapInstance.on("mouseleave", "stations", handleMouseLeave),
+    mapInstance.on("click", "public_notes", handleNoteClick),
+    mapInstance.on("mousemove", "public_notes", handleNoteMouseMove),
+    mapInstance.on("mouseenter", "public_notes", handleMouseEnter),
+    mapInstance.on("mouseleave", "public_notes", handleMouseLeave),
+  ];
 
-  // Attach station handlers (added after routes, so they take precedence due to layer order)
-  mapInstance.on("click", "stations", handleStationClick);
-  mapInstance.on("mousemove", "stations", handleStationMouseMove);
-  mapInstance.on("mouseenter", "stations", handleStationMouseEnter);
-  mapInstance.on("mouseleave", "stations", handleStationMouseLeave);
-
-  // Attach public note handlers (notes render on top, so these take precedence)
-  mapInstance.on("click", "public_notes", handleNoteClick);
-  mapInstance.on("mousemove", "public_notes", handleNoteMouseMove);
-  mapInstance.on("mouseenter", "public_notes", handleNoteMouseEnter);
-  mapInstance.on("mouseleave", "public_notes", handleNoteMouseLeave);
-
-  // Cleanup function
   return () => {
     tornDown = true;
     removePopup();
@@ -714,21 +637,6 @@ export function setupUserMapInteractions(
     resumeDoubleClickZoom();
     canvasContainer.removeEventListener("pointerdown", handlePointer);
     canvasContainer.removeEventListener("pointermove", handlePointer);
-    // Remove route handlers
-    mapInstance.off("dblclick", handleDblClick);
-    mapInstance.off("click", handleRouteClick);
-    mapInstance.off("mousemove", "railway_routes_click", handleRouteMouseMove);
-    mapInstance.off("mouseenter", "railway_routes_click", handleRouteMouseEnter);
-    mapInstance.off("mouseleave", "railway_routes_click", handleRouteMouseLeave);
-    // Remove station handlers
-    mapInstance.off("click", "stations", handleStationClick);
-    mapInstance.off("mousemove", "stations", handleStationMouseMove);
-    mapInstance.off("mouseenter", "stations", handleStationMouseEnter);
-    mapInstance.off("mouseleave", "stations", handleStationMouseLeave);
-    // Remove public note handlers
-    mapInstance.off("click", "public_notes", handleNoteClick);
-    mapInstance.off("mousemove", "public_notes", handleNoteMouseMove);
-    mapInstance.off("mouseenter", "public_notes", handleNoteMouseEnter);
-    mapInstance.off("mouseleave", "public_notes", handleNoteMouseLeave);
+    for (const subscription of subscriptions) subscription.unsubscribe();
   };
 }

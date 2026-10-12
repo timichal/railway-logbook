@@ -1,3 +1,4 @@
+import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import {
   type RouteFeatureProperties,
   type RouteTitleProperties,
@@ -5,6 +6,9 @@ import {
   routeTitle,
 } from "@/lib/shared/map/routeFeature";
 import type { RegionId } from "@/lib/shared/regions";
+
+/** Straight off an MVT feature, so every field is loosely typed. */
+type FeatureProperties = { [key: string]: unknown };
 
 /**
  * Escape a value for interpolation into popup HTML (MapLibre popups are built as
@@ -55,10 +59,10 @@ const BADGE_ROW_STYLE = "display: flex; flex-wrap: wrap; gap: 4px; align-items: 
  * rows carry their spacing on top rather than on the bottom, so the popup has no
  * trailing gap whichever row happens to be last.
  */
-export const POPUP_ROW_STYLE = "margin-top: 6px; line-height: 1.4;";
+const POPUP_ROW_STYLE = "margin-top: 6px; line-height: 1.4;";
 
 /** The rule above the "most recent journey" line. */
-export const POPUP_DIVIDER =
+const POPUP_DIVIDER =
   '<hr style="margin: 8px 0 0; border: none; border-top: 1px solid var(--color-gray-200);" />';
 
 /**
@@ -71,11 +75,7 @@ export const POPUP_DIVIDER =
  * are the title, as they always were. An unnamed route in a naming region falls
  * back to the endpoints rather than showing a blank line.
  */
-export function formatRouteTitle(
-  /** Straight off an MVT feature, so every field is loosely typed. */
-  properties: { [key: string]: unknown },
-  regionId: RegionId,
-): string {
+function formatRouteTitle(properties: FeatureProperties, regionId: RegionId): string {
   const { name, endpoints } = routeTitle(properties as RouteTitleProperties, regionId);
   const escapedEndpoints = escapeHtml(endpoints);
 
@@ -98,7 +98,7 @@ export function formatRouteTitle(
  * native app, which draws the same list as views. All that is left here is the
  * markup.
  */
-export function formatRouteMetadataBadges(
+function formatRouteMetadataBadges(
   properties: RouteFeatureProperties,
   /** Usage types are labelled per region — Japan calls them JR / non-JR lines. */
   regionId: RegionId,
@@ -109,4 +109,62 @@ export function formatRouteMetadataBadges(
   );
 
   return `<div style="${BADGE_ROW_STYLE}">${badges.join("")}</div>`;
+}
+
+/** What a mouse is told about a popup link it can't reach before the popup moves. */
+export const DOUBLE_CLICK_HINT = "double-click to open";
+
+/**
+ * A link out of a popup, opened in a new tab, or "" when `url` isn't http(s) (see
+ * `safeHref`). `hint` follows it in grey.
+ */
+export function popupLink(url: unknown, label: string, hint?: string): string {
+  const href = safeHref(url);
+  if (!href) return "";
+  const link = `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">${escapeHtml(label)}</a>`;
+  if (!hint) return link;
+  return `${link} <span style="color: var(--color-gray-500); font-size: 0.85em;">(${escapeHtml(hint)})</span>`;
+}
+
+/**
+ * The body of a route popup: the user map's hover popup and touch sheet, and the
+ * admin map's hover popup. Title, badge row, then one block per piece of body text
+ * — each its own element rather than `<br />`-separated runs, so the note never
+ * continues the badge line.
+ *
+ * `linkRow` is off in the touch sheet, which carries a button in its place;
+ * `linkHint` says how a mouse opens it where the map supports that. The "most
+ * recent" row appears only on a tile coloured by someone's rides — never the admin's.
+ */
+export function formatRouteBody(
+  properties: FeatureProperties,
+  regionId: RegionId,
+  { linkRow, linkHint }: { linkRow: boolean; linkHint?: string },
+): string {
+  let body = formatRouteTitle(properties, regionId);
+  body += formatRouteMetadataBadges(properties as unknown as RouteFeatureProperties, regionId);
+
+  if (properties.description) {
+    body += `<div style="${POPUP_ROW_STYLE}"><b>Note:</b> ${escapeHtml(properties.description)}</div>`;
+  }
+  const link = linkRow ? popupLink(properties.link, "Website", linkHint) : "";
+  if (link) body += `<div style="${POPUP_ROW_STYLE}">${link}</div>`;
+
+  // `date` and `journey_name` are populated together from the most-recent logged
+  // journey (both NOT NULL in user_journeys), so either both are present or neither is.
+  if (properties.date) {
+    const dateStr = escapeHtml(formatDateOnly(String(properties.date)));
+    body += POPUP_DIVIDER;
+    body += `<div style="${POPUP_ROW_STYLE} color: var(--color-gray-700);">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</div>`;
+  }
+
+  return body;
+}
+
+/** The body of a station popup, on either map. */
+export function formatStationBody(properties: FeatureProperties): string {
+  return (
+    `<h3 class="font-bold text-base mb-1" style="color: var(--color-fg);">${escapeHtml(properties.name) || "Unknown station"}</h3>` +
+    `<div class="text-xs text-gray-600">Station</div>`
+  );
 }

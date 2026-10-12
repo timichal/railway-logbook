@@ -2,10 +2,11 @@ import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import type { MutableRefObject } from "react";
 import {
+  DOUBLE_CLICK_HINT,
   escapeHtml,
-  formatRouteMetadataBadges,
-  formatRouteTitle,
-  POPUP_ROW_STYLE,
+  formatRouteBody,
+  formatStationBody,
+  popupLink,
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
 import { getNoteTypeLabel } from "@/lib/shared/constants";
@@ -18,389 +19,194 @@ interface AdminMapCallbacks {
   region: RegionId;
 }
 
-/**
- * Setup all map interactions for admin map
- */
+/** A route's wide click buffer included, so a route always wins over the part under it. */
+const ROUTE_LAYERS = ["railway_routes_click", "railway_routes"];
+
 export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
-  callbacks: AdminMapCallbacks,
+  { onCoordinateClickRef, onRouteSelectRef, region }: AdminMapCallbacks,
 ) {
-  const { onCoordinateClickRef, onRouteSelectRef, region } = callbacks;
-
-  // Click handler for railway_parts - extracts exact click coordinate
-  const handlePartClick = (e: maplibreglType.MapLayerMouseEvent) => {
-    if (!e.features || e.features.length === 0) return;
-
-    // Don't handle part clicks if we clicked on a route endpoint; its own handler does
-    if (mapInstance.queryRenderedFeatures(e.point, { layers: ["route-endpoints"] }).length > 0) {
-      return;
-    }
-
-    // Don't handle part clicks if we also clicked on a route (wide hit-area buffer included)
-    const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ["railway_routes_click", "railway_routes"],
-    });
-    if (routeFeatures && routeFeatures.length > 0) {
-      return;
-    }
-
-    // Don't capture a coordinate when clicking a note (it has its own interactions)
-    if (mapInstance.getLayer("admin_notes")) {
-      const noteFeatures = mapInstance.queryRenderedFeatures(e.point, { layers: ["admin_notes"] });
-      if (noteFeatures && noteFeatures.length > 0) return;
-    }
-
-    if (!onCoordinateClickRef.current) return;
-
-    // Extract exact click coordinate
-    const clickedCoordinate: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-    console.log("adminMapInteractions: Part clicked at coordinate:", clickedCoordinate);
-    onCoordinateClickRef.current(clickedCoordinate);
+  const hits = (point: maplibreglType.PointLike, layers: string[]) => {
+    const present = layers.filter((id) => mapInstance.getLayer(id));
+    return (
+      present.length > 0 && mapInstance.queryRenderedFeatures(point, { layers: present }).length > 0
+    );
   };
 
-  // Click handler for railway_parts
-  mapInstance.on("click", "railway_parts", handlePartClick);
+  const setCursor = (cursor: string) => {
+    mapInstance.getCanvas().style.cursor = cursor;
+  };
 
-  // Click handler for route endpoints: reuses the endpoint's exact coordinate. The
-  // layer is built with the map (empty until the endpoints load), so it can take a
-  // layer-scoped handler like any other.
+  /**
+   * The hover popups, one per layer (keyed by class name), so leaving a route does
+   * not take down the popup of a station on it that is still under the pointer.
+   */
+  const hoverPopups = new Map<string, maplibregl.Popup>();
+  const showHover = (lngLat: maplibreglType.LngLatLike, className: string, html: string) => {
+    hoverPopups.get(className)?.remove();
+    const popup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 10,
+      className,
+    })
+      .setLngLat(lngLat)
+      .setHTML(`<div style="color: var(--color-fg);">${html}</div>`)
+      .addTo(mapInstance);
+    hoverPopups.set(className, popup);
+  };
+  const hideHover = (className: string) => {
+    hoverPopups.get(className)?.remove();
+    hoverPopups.delete(className);
+  };
+
+  /** The `hover` feature state of one tiled layer, which its paint reads. */
+  const featureHover = (source: string) => {
+    let hoveredId: number | string | null = null;
+    const setHover = (id: number | string, hover: boolean) =>
+      mapInstance.setFeatureState({ source, sourceLayer: source, id }, { hover });
+    return {
+      enter(id: number | string | undefined) {
+        if (id === undefined || id === hoveredId) return;
+        if (hoveredId !== null) setHover(hoveredId, false);
+        hoveredId = id;
+        setHover(id, true);
+      },
+      leave() {
+        if (hoveredId === null) return;
+        setHover(hoveredId, false);
+        hoveredId = null;
+      },
+    };
+  };
+  const partHover = featureHover("railway_parts");
+  const noteHover = featureHover("admin_notes");
+
+  // A part click captures the exact coordinate clicked — unless an endpoint, a
+  // route or a note is there too, each of which takes the click itself.
+  mapInstance.on("click", "railway_parts", (e) => {
+    if (hits(e.point, ["route-endpoints", ...ROUTE_LAYERS, "admin_notes"])) return;
+    onCoordinateClickRef.current?.([e.lngLat.lng, e.lngLat.lat]);
+  });
+
+  // An endpoint click reuses the endpoint's exact coordinate. The layer is built
+  // with the map (empty until the endpoints load), so it can take a layer-scoped
+  // handler like any other.
   mapInstance.on("click", "route-endpoints", (e) => {
     const feature = e.features?.[0];
-    if (feature?.geometry.type === "Point" && onCoordinateClickRef.current) {
-      onCoordinateClickRef.current(feature.geometry.coordinates as [number, number]);
+    if (feature?.geometry.type === "Point") {
+      onCoordinateClickRef.current?.(feature.geometry.coordinates as [number, number]);
     }
   });
 
-  // Click handler for railway routes (uses wide invisible click buffer layer for easier tapping)
   mapInstance.on("click", "railway_routes_click", (e) => {
-    if (!e.features || e.features.length === 0) return;
-
-    // Routes pass through their own start/end markers, so a click on a route-endpoint
-    // dot also lands on the route. The endpoint handler already set the coordinate —
-    // don't also select the route.
-    if (mapInstance.queryRenderedFeatures(e.point, { layers: ["route-endpoints"] }).length > 0) {
-      return;
-    }
-
-    const feature = e.features[0];
-
-    if (!onRouteSelectRef.current) return;
-
-    // track_id is the feature ID (not in properties)
-    const trackId = Number(feature.id);
-    onRouteSelectRef.current(trackId);
-
-    // Stop event propagation to prevent map click handler from firing
+    // Routes pass through their own start/end markers, so a click on an endpoint
+    // dot also lands on the route. The endpoint handler already set the coordinate
+    // — don't also select the route.
+    if (hits(e.point, ["route-endpoints"])) return;
+    const feature = e.features?.[0];
+    if (!feature || !onRouteSelectRef.current) return;
+    // track_id is the feature id, not a property
+    onRouteSelectRef.current(Number(feature.id));
     e.preventDefault();
   });
 
-  // Click handler for map (when clicking outside features) to unselect route
+  // A click on nothing at all unselects the route.
   mapInstance.on("click", (e) => {
-    // Check if we clicked on any features (use click buffer layer for routes)
-    const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ["railway_routes_click", "railway_routes"],
-    });
-    const partFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ["railway_parts"],
-    });
-
-    const endpointFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ["route-endpoints"],
-    });
-
-    // If we didn't click on any features, unselect the route
-    if (
-      (!routeFeatures || routeFeatures.length === 0) &&
-      (!partFeatures || partFeatures.length === 0) &&
-      (!endpointFeatures || endpointFeatures.length === 0)
-    ) {
-      if (onRouteSelectRef.current) {
-        onRouteSelectRef.current(null); // null to unselect
-      }
+    if (!hits(e.point, [...ROUTE_LAYERS, "railway_parts", "route-endpoints"])) {
+      onRouteSelectRef.current?.(null);
     }
   });
-
-  // Hover effects for railway parts
-  let hoveredPartId: number | string | null = null;
 
   mapInstance.on("mouseenter", "railway_parts", (e) => {
-    // Check if we're also hovering over a railway route (wide hit-area buffer included)
-    const routeFeatures = mapInstance.queryRenderedFeatures(e.point, {
-      layers: ["railway_routes_click", "railway_routes"],
-    });
-
-    // If hovering over a route, don't show part hover
-    if (routeFeatures && routeFeatures.length > 0) {
-      return;
-    }
-
-    mapInstance.getCanvas().style.cursor = "pointer";
-
-    // Set hover state for the feature
-    if (e.features && e.features.length > 0) {
-      const feature = e.features[0];
-      // Use the MVT feature ID (numeric id from database)
-      const partId = feature.id;
-
-      if (partId !== undefined && partId !== hoveredPartId) {
-        // Remove hover from previous part
-        if (hoveredPartId !== null) {
-          mapInstance.setFeatureState(
-            { source: "railway_parts", sourceLayer: "railway_parts", id: hoveredPartId },
-            { hover: false },
-          );
-        }
-
-        // Add hover to current part
-        hoveredPartId = partId;
-        mapInstance.setFeatureState(
-          { source: "railway_parts", sourceLayer: "railway_parts", id: partId },
-          { hover: true },
-        );
-      }
-    }
+    if (hits(e.point, ROUTE_LAYERS)) return;
+    setCursor("pointer");
+    partHover.enter(e.features?.[0]?.id);
   });
-
   mapInstance.on("mouseleave", "railway_parts", () => {
-    mapInstance.getCanvas().style.cursor = "";
-
-    // Remove hover state from the last hovered feature
-    if (hoveredPartId !== null) {
-      mapInstance.setFeatureState(
-        { source: "railway_parts", sourceLayer: "railway_parts", id: hoveredPartId },
-        { hover: false },
-      );
-      hoveredPartId = null;
-    }
+    setCursor("");
+    partHover.leave();
   });
-
-  // Hover effects for railway routes with popup
-  let routeHoverPopup: maplibregl.Popup | null = null;
 
   mapInstance.on("mouseenter", "railway_routes_click", (e) => {
-    mapInstance.getCanvas().style.cursor = "pointer";
-
-    if (e.features && e.features.length > 0) {
-      const feature = e.features[0];
-      const properties = feature.properties;
-
-      if (properties) {
-        // Same shape as the user map's popup (see userMapInteractions): the badge
-        // row spaces itself, and each piece of body text is its own block.
-        let formattedDescription = formatRouteMetadataBadges(
-          {
-            usage_type: properties.usage_type,
-            line_class: properties.line_class,
-            frequency: properties.frequency,
-          },
-          region,
-        );
-        if (properties.description) {
-          formattedDescription += `<div style="${POPUP_ROW_STYLE}"><b>Note:</b> ${escapeHtml(properties.description)}</div>`;
-        }
-        const routeHref = safeHref(properties.link);
-        if (routeHref) {
-          formattedDescription += `<div style="${POPUP_ROW_STYLE}"><a href="${routeHref}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">Website</a></div>`;
-        }
-
-        if (routeHoverPopup) {
-          routeHoverPopup.remove();
-        }
-
-        routeHoverPopup = new maplibregl.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 10,
-          className: "railway-route-hover-popup",
-        })
-          .setLngLat(e.lngLat)
-          .setHTML(
-            `<div style="color: var(--color-fg);">${formatRouteTitle(properties, region)}${formattedDescription}</div>`,
-          )
-          .addTo(mapInstance);
-      }
-    }
+    setCursor("pointer");
+    const properties = e.features?.[0]?.properties;
+    if (!properties) return;
+    showHover(
+      e.lngLat,
+      "railway-route-hover-popup",
+      formatRouteBody(properties, region, { linkRow: true }),
+    );
   });
-
   mapInstance.on("mouseleave", "railway_routes_click", () => {
-    mapInstance.getCanvas().style.cursor = "";
-
-    if (routeHoverPopup) {
-      routeHoverPopup.remove();
-      routeHoverPopup = null;
-    }
+    setCursor("");
+    hideHover("railway-route-hover-popup");
   });
-
-  // Hover effects for stations with popup
-  let stationHoverPopup: maplibregl.Popup | null = null;
 
   mapInstance.on("mouseenter", "stations", (e) => {
-    mapInstance.getCanvas().style.cursor = "pointer";
-
-    if (e.features && e.features.length > 0) {
-      const feature = e.features[0];
-      const properties = feature.properties;
-
-      if (properties) {
-        if (stationHoverPopup) {
-          stationHoverPopup.remove();
-        }
-
-        stationHoverPopup = new maplibregl.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 10,
-          className: "station-hover-popup",
-        })
-          .setLngLat(e.lngLat)
-          .setHTML(`
-            <div style="color: var(--color-fg);">
-              <h3 style="font-weight: bold; margin-bottom: 2px;">${escapeHtml(properties.name) || "Unknown Station"}</h3>
-              <div style="font-size: 0.75rem; color: var(--color-gray-500);">Station</div>
-            </div>
-          `)
-          .addTo(mapInstance);
-      }
-    }
+    setCursor("pointer");
+    const properties = e.features?.[0]?.properties;
+    if (!properties) return;
+    showHover(e.lngLat, "station-hover-popup", formatStationBody(properties));
   });
-
   mapInstance.on("mouseleave", "stations", () => {
-    mapInstance.getCanvas().style.cursor = "";
-
-    if (stationHoverPopup) {
-      stationHoverPopup.remove();
-      stationHoverPopup = null;
-    }
+    setCursor("");
+    hideHover("station-hover-popup");
   });
-
-  // Hover effects for route endpoints with popup
-  let endpointHoverPopup: maplibregl.Popup | null = null;
 
   mapInstance.on("mouseenter", "route-endpoints", (e) => {
     const properties = e.features?.[0]?.properties;
     if (!properties) return;
-    mapInstance.getCanvas().style.cursor = "pointer";
-
-    if (endpointHoverPopup) {
-      endpointHoverPopup.remove();
-    }
-
+    setCursor("pointer");
     const endpointTypeLabel = properties.endpoint_type === "start" ? "Start" : "End";
-
-    endpointHoverPopup = new maplibregl.Popup({
-      closeButton: false,
-      closeOnClick: false,
-      offset: 10,
-      className: "endpoint-hover-popup",
-    })
-      .setLngLat(e.lngLat)
-      .setHTML(`
-        <div style="color: var(--color-fg);">
-          <h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
-          <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.route_name)}</div>
-          <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">Click to use this coordinate</div>
-        </div>
-      `)
-      .addTo(mapInstance);
+    showHover(
+      e.lngLat,
+      "endpoint-hover-popup",
+      `<h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
+      <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.route_name)}</div>
+      <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">Click to use this coordinate</div>`,
+    );
   });
-
   mapInstance.on("mouseleave", "route-endpoints", () => {
-    mapInstance.getCanvas().style.cursor = "";
-    if (endpointHoverPopup) {
-      endpointHoverPopup.remove();
-      endpointHoverPopup = null;
-    }
+    setCursor("");
+    hideHover("endpoint-hover-popup");
   });
-
-  // Hover effects for admin notes with popup
-  let noteHoverPopup: maplibregl.Popup | null = null;
-  let hoveredNoteId: number | string | null = null;
 
   mapInstance.on("mouseenter", "admin_notes", (e) => {
-    mapInstance.getCanvas().style.cursor = "pointer";
+    setCursor("pointer");
+    const feature = e.features?.[0];
+    if (!feature) return;
+    noteHover.enter(feature.id);
 
-    if (e.features && e.features.length > 0) {
-      const feature = e.features[0];
-      const properties = feature.properties;
-      const noteId = feature.id;
-
-      // Set hover state for the feature
-      if (noteId !== undefined && noteId !== hoveredNoteId) {
-        // Remove hover from previous note
-        if (hoveredNoteId !== null) {
-          mapInstance.setFeatureState(
-            { source: "admin_notes", sourceLayer: "admin_notes", id: hoveredNoteId },
-            { hover: false },
-          );
-        }
-
-        // Add hover to current note
-        hoveredNoteId = noteId;
-        mapInstance.setFeatureState(
-          { source: "admin_notes", sourceLayer: "admin_notes", id: noteId },
-          { hover: true },
-        );
-      }
-
-      if (properties) {
-        if (noteHoverPopup) {
-          noteHoverPopup.remove();
-        }
-
-        const updatedAtStr = properties.updated_at
-          ? new Date(properties.updated_at).toISOString().replace("T", " ").slice(0, 19)
-          : "";
-
-        const noteTypeLabel = getNoteTypeLabel(properties.note_type);
-
-        noteHoverPopup = new maplibregl.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          offset: 10,
-          className: "admin-note-hover-popup",
-        })
-          .setLngLat(e.lngLat)
-          .setHTML(`
-            <div style="color: var(--color-fg);">
-              <h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note: ${escapeHtml(noteTypeLabel)}</h3>
-              <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.text)}</div>
-              ${safeHref(properties.source) ? `<div style="font-size: 0.8rem; margin-top: 4px;"><a href="${safeHref(properties.source)}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">Source ↗</a> <span style="color: var(--color-gray-500);">(double-click to open)</span></div>` : ""}
-              ${updatedAtStr ? `<div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
-              <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Right-click to edit</div>
-            </div>
-          `)
-          .addTo(mapInstance);
-      }
-    }
+    const properties = feature.properties;
+    const updatedAtStr = properties.updated_at
+      ? new Date(properties.updated_at).toISOString().replace("T", " ").slice(0, 19)
+      : "";
+    const source = popupLink(properties.source, "Source ↗", DOUBLE_CLICK_HINT);
+    showHover(
+      e.lngLat,
+      "admin-note-hover-popup",
+      `<h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note: ${escapeHtml(getNoteTypeLabel(properties.note_type))}</h3>
+      <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.text)}</div>
+      ${source ? `<div style="font-size: 0.8rem; margin-top: 4px;">${source}</div>` : ""}
+      ${updatedAtStr ? `<div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
+      <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Right-click to edit</div>`,
+    );
   });
-
   mapInstance.on("mouseleave", "admin_notes", () => {
-    mapInstance.getCanvas().style.cursor = "";
-
-    // Remove hover state from the last hovered note
-    if (hoveredNoteId !== null) {
-      mapInstance.setFeatureState(
-        { source: "admin_notes", sourceLayer: "admin_notes", id: hoveredNoteId },
-        { hover: false },
-      );
-      hoveredNoteId = null;
-    }
-
-    if (noteHoverPopup) {
-      noteHoverPopup.remove();
-      noteHoverPopup = null;
-    }
+    setCursor("");
+    noteHover.leave();
+    hideHover("admin-note-hover-popup");
   });
 
   // Double-click / double-tap a note opens its source link in a new tab
   // (works on touch where the hover popup link can't be tapped).
   mapInstance.on("dblclick", (e) => {
     if (!mapInstance.getLayer("admin_notes")) return;
-    const noteFeatures = mapInstance.queryRenderedFeatures(e.point, { layers: ["admin_notes"] });
-    if (noteFeatures && noteFeatures.length > 0) {
-      e.preventDefault();
-      const source = noteFeatures[0].properties?.source;
-      if (safeHref(source)) window.open(source, "_blank", "noopener,noreferrer");
-    }
+    const note = mapInstance.queryRenderedFeatures(e.point, { layers: ["admin_notes"] })[0];
+    if (!note) return;
+    e.preventDefault();
+    const source = note.properties?.source;
+    if (safeHref(source)) window.open(source, "_blank", "noopener,noreferrer");
   });
 }
