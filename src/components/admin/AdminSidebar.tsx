@@ -52,7 +52,7 @@ interface AdminSidebarProps {
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
   onRouteFocus?: (geometry: string) => void;
-  sidebarWidth?: number | null;
+  sidebarWidth?: string | null;
   onFocusNote?: (coordinate: [number, number]) => void;
   onNoteChanged?: () => void;
   notesRefreshSignal?: number;
@@ -193,7 +193,7 @@ export default function AdminSidebar({
 
   return (
     <div
-      style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined}
+      style={sidebarWidth != null ? { width: sidebarWidth } : undefined}
       className="bg-surface border-r border-gray-200 flex flex-col flex-shrink-0"
     >
       {/* Tab Headers */}

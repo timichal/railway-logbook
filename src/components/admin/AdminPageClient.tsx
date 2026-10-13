@@ -187,7 +187,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
 
   // Resizable sidebar hook
   const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } =
-    useResizableSidebar({ isMobile });
+    useResizableSidebar({ storageKey: "railway-admin-sidebar-width", isMobile });
 
   const handleRouteSelect = useCallback((routeId: number | null, { focus = false } = {}) => {
     // Any other selection drops a fly-to still waiting for its route

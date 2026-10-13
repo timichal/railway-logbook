@@ -40,7 +40,10 @@ export default function MainLayout({
   // in button lands on the login form rather than making the user find it).
   const [menuView, setMenuView] = useState<MenuView | null>(null);
   const isMobile = useIsMobile();
-  const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar({ isMobile });
+  const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar({
+    storageKey: "railway-sidebar-width",
+    isMobile,
+  });
 
   // Wrap logout to also switch to Route Logger tab
   const handleLogout = () => {

@@ -40,7 +40,7 @@ interface UserSidebarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
-  sidebarWidth?: number | null;
+  sidebarWidth?: string | null;
   onJourneyEditStart?: JourneyEditStartFn;
   onJourneyEditEnd?: () => void;
 }
@@ -74,7 +74,7 @@ export default function UserSidebar({
 
   return (
     <div
-      style={sidebarWidth != null ? { width: `${sidebarWidth}px` } : undefined}
+      style={sidebarWidth != null ? { width: sidebarWidth } : undefined}
       // The right border belongs to the desktop sidebar, which has a map beside it.
       // In the mobile sheet it is a hairline down the inside of a rounded panel.
       className={`bg-surface flex flex-col ${

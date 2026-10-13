@@ -64,7 +64,7 @@ interface RailwayMapProps {
   initialSelectedCountries: string[];
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
-  sidebarWidth: number;
+  sidebarWidth: string;
   onSidebarResize: () => void;
   isResizing: boolean;
   isMobile: boolean;
