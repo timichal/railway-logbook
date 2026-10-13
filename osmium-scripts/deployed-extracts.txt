@@ -1,6 +1,6 @@
 # The OSM data on the server: the date each Geofabrik extract was cut.
 # Written by deploy.sh after a successful map data deploy.
-# Deployed 2026-10-12 09:16 UTC
+# Deployed 2026-10-12 09:40 UTC
 
 europe/albania: 2026-10-11
 europe/andorra: 2026-10-11
