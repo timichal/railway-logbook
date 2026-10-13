@@ -1,5 +1,35 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useState } from "react";
+import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
+import type { Region } from "@/lib/shared/regions";
+
+/** The three coloured route line layers, one per usage type. */
+export const ROUTE_LINE_LAYERS = [
+  "railway_routes",
+  "railway_routes_heritage",
+  "railway_routes_special",
+] as const;
+
+/**
+ * The admin map's layer switches, in the order the controls list them. `offeredIn`
+ * hides a switch in regions where its layer never has anything to show.
+ */
+export const ADMIN_LAYERS = [
+  { key: "parts", label: "Railway Parts", layerIds: ["railway_parts"] },
+  { key: "routes", label: "Railway Routes", layerIds: ROUTE_LINE_LAYERS },
+  {
+    key: "scenic",
+    label: "Scenic Lines",
+    layerIds: [SCENIC_LINES_LAYER_ID],
+    offeredIn: (region: Region) => region.hasScenicHighlight,
+  },
+  { key: "stations", label: "Stations", layerIds: ["stations", "station_labels"] },
+  { key: "endpoints", label: "Route Endpoints", layerIds: ["route-endpoints"] },
+  { key: "notes", label: "Admin Notes", layerIds: ["admin_notes"] },
+] as const;
+
+export type AdminLayerKey = (typeof ADMIN_LAYERS)[number]["key"];
+export type AdminLayerVisibility = Record<AdminLayerKey, boolean>;
 
 interface UseAdminLayerVisibilityOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
@@ -9,18 +39,8 @@ interface UseAdminLayerVisibilityOptions {
 }
 
 interface LayerVisibilityState {
-  showPartsLayer: boolean;
-  setShowPartsLayer: React.Dispatch<React.SetStateAction<boolean>>;
-  showRoutesLayer: boolean;
-  setShowRoutesLayer: React.Dispatch<React.SetStateAction<boolean>>;
-  showStationsLayer: boolean;
-  setShowStationsLayer: React.Dispatch<React.SetStateAction<boolean>>;
-  showNotesLayer: boolean;
-  setShowNotesLayer: React.Dispatch<React.SetStateAction<boolean>>;
-  showEndpointsLayer: boolean;
-  setShowEndpointsLayer: React.Dispatch<React.SetStateAction<boolean>>;
-  showScenicLayer: boolean;
-  setShowScenicLayer: React.Dispatch<React.SetStateAction<boolean>>;
+  visible: AdminLayerVisibility;
+  toggle: (key: AdminLayerKey) => void;
   /**
    * Routes shown and not merely re-ticked for reference during a forced-hidden mode:
    * what may be clicked, and where a searched line's band is drawn — in
@@ -29,24 +49,19 @@ interface LayerVisibilityState {
   routesInteractive: boolean;
 }
 
-/**
- * Manages visibility toggles for all admin map layers.
- * Consolidates individual layer visibility useEffects and edit-geometry mode sync.
- */
+/** Visibility switches for the admin map's layers, and the forced-hidden routes mode. */
 export function useAdminLayerVisibility({
   map,
   mapLoaded,
   hideRoutes,
 }: UseAdminLayerVisibilityOptions): LayerVisibilityState {
-  const [showPartsLayer, setShowPartsLayer] = useState(true);
-  const [showRoutesLayer, setShowRoutesLayer] = useState(!hideRoutes);
-  const [showStationsLayer, setShowStationsLayer] = useState(true);
-  const [showNotesLayer, setShowNotesLayer] = useState(true);
-  const [showEndpointsLayer, setShowEndpointsLayer] = useState(true);
-  const [showScenicLayer, setShowScenicLayer] = useState(true);
+  const [visible, setVisible] = useState<AdminLayerVisibility>(() => ({
+    ...(Object.fromEntries(ADMIN_LAYERS.map(({ key }) => [key, true])) as AdminLayerVisibility),
+    routes: !hideRoutes,
+  }));
   const [routesHidden, setRoutesHidden] = useState(!!hideRoutes);
   const [showRoutesBeforeHide, setShowRoutesBeforeHide] = useState(true);
-  const routesInteractive = showRoutesLayer && !hideRoutes;
+  const routesInteractive = visible.routes && !hideRoutes;
 
   // Entering a forced-hidden mode unticks Railway Routes, and leaving it puts back
   // what was ticked before. Only the default: re-ticking it mid-mode shows the routes.
@@ -54,63 +69,29 @@ export function useAdminLayerVisibility({
   // with the stale value for a frame.
   if (!!hideRoutes !== routesHidden) {
     setRoutesHidden(!!hideRoutes);
-    if (hideRoutes) {
-      setShowRoutesBeforeHide(showRoutesLayer);
-      setShowRoutesLayer(false);
-    } else {
-      setShowRoutesLayer(showRoutesBeforeHide);
-    }
+    if (hideRoutes) setShowRoutesBeforeHide(visible.routes);
+    setVisible((v) => ({ ...v, routes: hideRoutes ? false : showRoutesBeforeHide }));
   }
 
-  // Apply visibility to all layers
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+    const m = map.current;
+    if (!m || !mapLoaded) return;
 
-    const setVisibility = (layerId: string, visible: boolean) => {
-      if (map.current!.getLayer(layerId)) {
-        map.current!.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+    const setVisibility = (layerId: string, shown: boolean) => {
+      if (m.getLayer(layerId)) {
+        m.setLayoutProperty(layerId, "visibility", shown ? "visible" : "none");
       }
     };
 
-    setVisibility("railway_parts", showPartsLayer);
-
-    setVisibility("railway_routes", showRoutesLayer);
-    setVisibility("railway_routes_heritage", showRoutesLayer);
-    setVisibility("railway_routes_special", showRoutesLayer);
+    for (const { key, layerIds } of ADMIN_LAYERS) {
+      for (const id of layerIds) setVisibility(id, visible[key]);
+    }
     // Routes re-shown mid-mode are for reference: the wide hit area stays off, so it
     // neither swallows the clicks on the parts being picked nor selects a route.
     setVisibility("railway_routes_click", routesInteractive);
+  }, [map, mapLoaded, visible, routesInteractive]);
 
-    setVisibility("stations", showStationsLayer);
-    setVisibility("station_labels", showStationsLayer);
-    setVisibility("admin_notes", showNotesLayer);
-    setVisibility("route-endpoints", showEndpointsLayer);
-    setVisibility("scenic_lines", showScenicLayer);
-  }, [
-    map,
-    mapLoaded,
-    showPartsLayer,
-    showRoutesLayer,
-    showStationsLayer,
-    showNotesLayer,
-    showEndpointsLayer,
-    showScenicLayer,
-    routesInteractive,
-  ]);
+  const toggle = (key: AdminLayerKey) => setVisible((v) => ({ ...v, [key]: !v[key] }));
 
-  return {
-    showPartsLayer,
-    setShowPartsLayer,
-    showRoutesLayer,
-    setShowRoutesLayer,
-    showStationsLayer,
-    setShowStationsLayer,
-    showNotesLayer,
-    setShowNotesLayer,
-    showEndpointsLayer,
-    setShowEndpointsLayer,
-    showScenicLayer,
-    setShowScenicLayer,
-    routesInteractive,
-  };
+  return { visible, toggle, routesInteractive };
 }

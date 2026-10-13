@@ -1,49 +1,28 @@
 "use client";
 
 import { useState } from "react";
+import {
+  ADMIN_LAYERS,
+  type AdminLayerKey,
+  type AdminLayerVisibility,
+} from "@/lib/map/hooks/useAdminLayerVisibility";
+import { useRegion } from "@/lib/regionContext";
 import { iconBtn } from "@/lib/ui/buttonStyles";
 
 interface AdminLayerControlsProps {
-  showPartsLayer: boolean;
-  setShowPartsLayer: (v: boolean) => void;
-  showRoutesLayer: boolean;
-  setShowRoutesLayer: (v: boolean) => void;
-  showStationsLayer: boolean;
-  setShowStationsLayer: (v: boolean) => void;
-  showEndpointsLayer: boolean;
-  setShowEndpointsLayer: (v: boolean) => void;
-  showNotesLayer: boolean;
-  setShowNotesLayer: (v: boolean) => void;
-  showScenicLayer: boolean;
-  setShowScenicLayer: (v: boolean) => void;
+  visible: AdminLayerVisibility;
+  toggle: (key: AdminLayerKey) => void;
   isMobile?: boolean;
 }
 
 export default function AdminLayerControls({
-  showPartsLayer,
-  setShowPartsLayer,
-  showRoutesLayer,
-  setShowRoutesLayer,
-  showStationsLayer,
-  setShowStationsLayer,
-  showEndpointsLayer,
-  setShowEndpointsLayer,
-  showNotesLayer,
-  setShowNotesLayer,
-  showScenicLayer,
-  setShowScenicLayer,
+  visible,
+  toggle,
   isMobile = false,
 }: AdminLayerControlsProps) {
   const [collapsed, setCollapsed] = useState(isMobile);
-
-  const layers = [
-    { label: "Railway Parts", checked: showPartsLayer, toggle: setShowPartsLayer },
-    { label: "Railway Routes", checked: showRoutesLayer, toggle: setShowRoutesLayer },
-    { label: "Scenic Lines", checked: showScenicLayer, toggle: setShowScenicLayer },
-    { label: "Stations", checked: showStationsLayer, toggle: setShowStationsLayer },
-    { label: "Route Endpoints", checked: showEndpointsLayer, toggle: setShowEndpointsLayer },
-    { label: "Admin Notes", checked: showNotesLayer, toggle: setShowNotesLayer },
-  ];
+  const region = useRegion();
+  const layers = ADMIN_LAYERS.filter((layer) => !("offeredIn" in layer) || layer.offeredIn(region));
 
   if (isMobile && collapsed) {
     return (
@@ -77,12 +56,12 @@ export default function AdminLayerControls({
         )}
       </div>
       <div className="space-y-2">
-        {layers.map(({ label, checked, toggle }) => (
-          <label key={label} className="flex items-center">
+        {layers.map(({ key, label }) => (
+          <label key={key} className="flex items-center">
             <input
               type="checkbox"
-              checked={checked}
-              onChange={() => toggle(!checked)}
+              checked={visible[key]}
+              onChange={() => toggle(key)}
               className="mr-2"
             />
             {label}

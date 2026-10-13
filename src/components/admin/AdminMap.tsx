@@ -31,7 +31,10 @@ import {
   railwayRoutesTileUrl,
   scenicLinesTileUrl,
 } from "@/lib/map";
-import { useAdminLayerVisibility } from "@/lib/map/hooks/useAdminLayerVisibility";
+import {
+  ROUTE_LINE_LAYERS,
+  useAdminLayerVisibility,
+} from "@/lib/map/hooks/useAdminLayerVisibility";
 import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
@@ -63,14 +66,6 @@ const searchAdminStations = (query: string, region: RegionId): Promise<MapSearch
 
 const ALL_USAGE_TYPES: UsageType[] = usageOptions.map((option) => option.id);
 const NO_USAGE_TYPES: UsageType[] = [];
-
-// The three colored route line layers. They share identical visit/selection
-// paint; only their dash style (baked into each factory) differs.
-const ROUTE_LINE_LAYERS = [
-  "railway_routes",
-  "railway_routes_heritage",
-  "railway_routes_special",
-] as const;
 
 /**
  * Apply the admin route paint (selected-route highlight + invalid-route grey,
@@ -387,7 +382,11 @@ export default function AdminMap({
         positionClassName={isMobile ? "top-3 left-20 right-14" : undefined}
       />
 
-      <AdminLayerControls {...layerVisibility} isMobile={isMobile} />
+      <AdminLayerControls
+        visible={layerVisibility.visible}
+        toggle={layerVisibility.toggle}
+        isMobile={isMobile}
+      />
 
       {validRoutesTotalKm !== null && (
         <div

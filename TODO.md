@@ -13,15 +13,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ---
 
-## Larger refactors (the biggest wins)
-
-- [ ] **`useAdminLayerVisibility` + `AdminLayerControls` as a table** (~70 lines). Six
-  `useState` pairs and a 12-prop interface could be one `Record<LayerKey, boolean>`,
-  a `toggle(key)`, and a `{ key, label, layerIds }` list. The effect that applies
-  visibility and the controls' `layers` array would both read from that list.
-
----
-
 ## Medium
 
 - [ ] **`useUserMap` follow-ups** (from the review of the shared-map refactor).
@@ -174,6 +165,12 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   the user map's `handleRouteClick` and `handleDblClick`. The route hit layers
   (`railway_routes_click`, `railway_routes`) are also listed in both modules. Put one
   `featuresAt(map, point, layers)` and the shared list beside them in `src/lib/map/`.
+  Route layer ids are spelled out in more places still: `ROUTE_LINE_LAYERS` (now
+  exported from `useAdminLayerVisibility.ts`, used by `AdminMap`'s paint), the
+  literal `railway_routes_click` there, and `useLayerFilters.ts`. Move
+  `ROUTE_LINE_LAYERS` and the click layer id into that shared module (or
+  `shared/map/layers.ts`, where the factories define them) and import them
+  everywhere.
 
 - [ ] **Smaller duplicates across layout files** (~30 lines).
   - The `dynamic(…, { loading: "Loading map..." })` placeholder is written 3 times
