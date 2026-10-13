@@ -63,13 +63,6 @@ const ROUTE_TABLES = [
   "user_logged_parts",
 ];
 const MAP_TABLES = ["stations", "railway_parts"];
-/**
- * Route tables a dump may lack because it was taken from a database the
- * migration that adds them had not reached yet (`scenic_lines`: a server between
- * the app deploy and `npm run migrateScenicLines`). The backup is still whole for
- * the data that existed; a restore of it simply leaves the table empty.
- */
-const TABLES_ADDED_LATER = ["scenic_lines"];
 const ALL_TABLES = [...MAP_TABLES, ...ROUTE_TABLES];
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -166,9 +159,7 @@ function inContainer(file: string, use: (containerFile: string) => void): void {
  */
 function verifyDump(file: string, tables: string[], name: string): void {
   const inDump = readDumpContents(file, name).tables;
-  const missing = tables.filter(
-    (table) => !inDump.includes(table) && !TABLES_ADDED_LATER.includes(table),
-  );
+  const missing = tables.filter((table) => !inDump.includes(table));
   const unexpected = inDump.filter((table) => !tables.includes(table));
   if (missing.length > 0 || unexpected.length > 0) {
     throw new Error(
@@ -305,10 +296,7 @@ function assertCustomFormat(file: string): void {
     fs.closeSync(fd);
   }
   if (magic.toString("latin1") !== "PGDMP") {
-    throw new Error(
-      `${file} is not a backup made by backupRouteData. Old .sql exports are a different ` +
-        'format and cannot be restored by this script - see "Server data" in CLAUDE.md.',
-    );
+    throw new Error(`${file} is not a backup made by backupRouteData (no PGDMP header).`);
   }
 }
 

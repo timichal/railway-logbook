@@ -4,8 +4,7 @@ Found in an audit of the web app on 2026-10-11, looking for code that could be s
 without becoming harder to read: dead code, duplication, and verbosity. It covers
 `src/`, `database/`, the scripts and the docs. `mobile/` was **not** audited.
 
-Line counts are rough estimates of the net saving. Items marked **verify** depend on
-something only the server or the mobile plan can confirm, so check that before cutting.
+Line counts are rough estimates of the net saving.
 
 Some things were left out on purpose. The long *why* comments are this codebase's
 style, and most of them guard against a real regression, so they are not listed as
@@ -206,34 +205,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   `export function|const|type` under `src/` and count word-boundary hits in every
   other file under `src`, `tests`, `mobile/src` and `mobile/app`.)
 - [ ] Manual plural (`x !== 1 ? "s" : ""`) where `plural()` exists: `LoginForm`.
-
----
-
-## Verify before removing
-
-- [ ] **verify** `migrateScenicLines.ts`, its npm script, and the matching CLAUDE.md
-  entries. It is a one-off migration (2026-10). Once it has run on the server, it is
-  dead weight.
-- [ ] **verify** The one-time migrations inside `02-vector-tiles.sql`, which is
-  re-applied on every deploy:
-  - `ALTER TABLE admin_notes ADD COLUMN note_type / source` and the CHECK re-add (both
-    are in `01-schema.sql` now)
-  - `DROP FUNCTION route_is_fully_ridden`
-  - the `IF EXISTS admin_notes` / `IF EXISTS scenic_lines` guards: `admin_notes` is in
-    `01-schema.sql`, and `scenic_lines` exists once the migration has run
-
-  Check that the server's schema has them, then delete.
-- [ ] **verify** `GET /api/v1/routes` (every route *with geometry*, ~50MB for
-  Europe). No client calls it. The web app replaced its equivalent with
-  `routeSummariesInRegion` for exactly that size. If MOBILE_APP_PLAN.md doesn't need
-  it, drop the handler, `routesInRegion`, and the API.md row. Several other endpoints
-  (`/journeys/:id/*`, `/trips/:id`, `/coverage/stretches`, `/routes/track-ids`,
-  `/journeys/unassigned`) have no mobile caller yet either. They are presumably planned
-  phases, so leave them.
-- [ ] **verify** `listStations` — a debug script that lists distinct
-  from/to names. Delete it if it's no longer used.
-- [ ] CLAUDE.md's paragraph on loading the old `.sql` exports by hand. Drop it once
-  none of those files are kept anywhere.
 
 ---
 

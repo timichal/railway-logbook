@@ -424,8 +424,13 @@ region guard, the auth failures, and a full write lifecycle (create a trip and a
 journey → assign → flip `partial` → add and remove routes → delete both → 404),
 which also confirmed a `covered` fraction range round-trips. The planner endpoint
 returns exactly what `npm run inspectPath` does for the same pair (Praha hl.n. →
-Kolín: 4 routes, 62.2 km, same ids). `/routes?region=europe` is 5530 routes in
-~1.9s — the one call worth caching on the device rather than repeating.
+Kolín: 4 routes, 62.2 km, same ids). `/routes?region=europe` was 5530 routes in
+~1.9s. **That endpoint has since been removed** (2026-10-14): no client called it,
+and every route *with geometry* is ~50MB for Europe — the web app had already
+replaced its equivalent with route summaries for that size. The app draws routes
+from tiles and describes them through `POST /routes/metadata`. If Phase 5 needs
+geometry held on the device, prefer the offline packs (which cover the route
+tiles) or a new endpoint shaped for that, over bringing the full list back.
 
 One thing to know for Phase 2: a **station id can be negative**. An OSM area
 station is stored under a negated id, so `fromStationId` is validated as non-zero
@@ -923,6 +928,8 @@ every time you log a ride — so a downloaded route tile goes stale the moment i
 is useful. Likely resolution: pack the basemap and the route *geometry*, and
 carry visit status locally, applying it as a style filter over a locally-held id
 set rather than baking it into the tile. Decide this properly before building it.
+(There is no "every route with geometry" endpoint any more — `GET /routes` was
+removed unused; see Phase 1.)
 
 Logging offline is the other half: an `expo-sqlite` mirror of the logged parts
 plus a write queue and a sync story. Conflicts are mild here — journeys are

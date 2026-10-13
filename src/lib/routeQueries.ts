@@ -252,36 +252,10 @@ export async function trackIdsInRegion(region: RegionId): Promise<number[]> {
 }
 
 /**
- * Every railway route in a region, with geometry and without user-specific
- * data. Used by not-logged-in visitors to work out progress client-side.
- */
-export async function routesInRegion(region: RegionId): Promise<RailwayRoute[]> {
-  const result = await query(`
-    SELECT
-      track_id,
-      from_station,
-      to_station,
-      description,
-      usage_type,
-      frequency,
-      link,
-      ST_AsGeoJSON(geometry) as geometry,
-      length_km,
-      start_country,
-      end_country
-    FROM railway_routes
-    WHERE ${regionContainsSql(region, "starting_coordinate")}
-    ORDER BY track_id
-  `);
-
-  return result.rows as RailwayRoute[];
-}
-
-/**
  * Every route in a region, reduced to what progress needs (`RouteSummary`). The
  * logged-out map works out its progress and colouring from this client-side, and
- * waits for it to do so: with geometry (`routesInRegion`) the list is ~50MB for
- * Europe, which held the local rides off the map for seconds on every load.
+ * waits for it to do so: with geometry the list is ~50MB for Europe, which held
+ * the local rides off the map for seconds on every load.
  */
 export async function routeSummariesInRegion(region: RegionId): Promise<RouteSummary[]> {
   const result = await query(`

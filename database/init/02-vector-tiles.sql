@@ -119,10 +119,6 @@ PARALLEL SAFE;
 CREATE INDEX IF NOT EXISTS idx_logged_parts_stretches
 ON user_logged_parts (user_id, track_id) WHERE covered_start IS NOT NULL;
 
--- Superseded by user_fully_ridden_routes below; dropped so re-applying this file
--- cleans up a database that got the earlier per-route version.
-DROP FUNCTION IF EXISTS route_is_fully_ridden(integer, integer, numeric);
-
 -- Function: user_fully_ridden_routes
 -- The routes a user has ridden the whole of, one row per track_id.
 --
@@ -449,32 +445,15 @@ CREATE TRIGGER stations_sync_geometry
     FOR EACH ROW
     EXECUTE FUNCTION sync_geometry_3857();
 
--- Add Web Mercator geometry for admin_notes (if table exists)
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_notes') THEN
-        ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS coordinate_3857 GEOMETRY(POINT, 3857);
+-- Add Web Mercator geometry for admin_notes
+ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS coordinate_3857 GEOMETRY(POINT, 3857);
 
-        UPDATE admin_notes
-        SET coordinate_3857 = ST_Transform(coordinate, 3857)
-        WHERE coordinate IS NOT NULL AND coordinate_3857 IS NULL;
+UPDATE admin_notes
+SET coordinate_3857 = ST_Transform(coordinate, 3857)
+WHERE coordinate IS NOT NULL AND coordinate_3857 IS NULL;
 
-        CREATE INDEX IF NOT EXISTS idx_admin_notes_coordinate_3857
-        ON admin_notes USING GIST (coordinate_3857);
-
-        -- Ensure note_type column exists for tile function reference
-        ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS note_type VARCHAR(20);
-
-        -- Ensure source column exists (optional external link shown in note popup)
-        ALTER TABLE admin_notes ADD COLUMN IF NOT EXISTS source TEXT;
-
-        -- Keep the note_type CHECK in sync with the supported values
-        -- (drop the auto-named constraint from 01-schema if present, then re-add)
-        ALTER TABLE admin_notes DROP CONSTRAINT IF EXISTS admin_notes_note_type_check;
-        ALTER TABLE admin_notes ADD CONSTRAINT admin_notes_note_type_check
-        CHECK (note_type IN ('Usage', 'UsageInternal', 'Works', 'Todo'));
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS idx_admin_notes_coordinate_3857
+ON admin_notes USING GIST (coordinate_3857);
 
 -- Function: admin_notes_tile
 -- Serves admin notes as vector tiles (admin-only), all notes at all zoom levels.
@@ -563,48 +542,35 @@ STABLE
 STRICT
 PARALLEL SAFE;
 
--- Add trigger for admin_notes Web Mercator sync (if table exists)
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'admin_notes') THEN
-        DROP TRIGGER IF EXISTS admin_notes_sync_geometry ON admin_notes;
-        CREATE TRIGGER admin_notes_sync_geometry
-            BEFORE INSERT OR UPDATE OF coordinate ON admin_notes
-            FOR EACH ROW
-            EXECUTE FUNCTION sync_geometry_3857();
-    END IF;
-END $$;
+-- Add trigger for admin_notes Web Mercator sync
+DROP TRIGGER IF EXISTS admin_notes_sync_geometry ON admin_notes;
+CREATE TRIGGER admin_notes_sync_geometry
+    BEFORE INSERT OR UPDATE OF coordinate ON admin_notes
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_geometry_3857();
 
--- Scenic lines: Web Mercator geometry, its sync trigger and index. Guarded, as
--- admin_notes' are, because the deploy re-applies this file before the migration
--- that creates the table (npm run migrateScenicLines) has run on the server.
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'scenic_lines') THEN
-        ALTER TABLE scenic_lines ADD COLUMN IF NOT EXISTS geometry_3857 GEOMETRY(LINESTRING, 3857);
+-- Scenic lines: Web Mercator geometry, its sync trigger and index
+ALTER TABLE scenic_lines ADD COLUMN IF NOT EXISTS geometry_3857 GEOMETRY(LINESTRING, 3857);
 
-        UPDATE scenic_lines
-        SET geometry_3857 = ST_Transform(geometry, 3857)
-        WHERE geometry IS NOT NULL AND geometry_3857 IS NULL;
+UPDATE scenic_lines
+SET geometry_3857 = ST_Transform(geometry, 3857)
+WHERE geometry IS NOT NULL AND geometry_3857 IS NULL;
 
-        CREATE INDEX IF NOT EXISTS idx_scenic_lines_geometry_3857
-        ON scenic_lines USING GIST (geometry_3857);
+CREATE INDEX IF NOT EXISTS idx_scenic_lines_geometry_3857
+ON scenic_lines USING GIST (geometry_3857);
 
-        DROP TRIGGER IF EXISTS scenic_lines_sync_geometry ON scenic_lines;
-        CREATE TRIGGER scenic_lines_sync_geometry
-            BEFORE INSERT OR UPDATE OF geometry ON scenic_lines
-            FOR EACH ROW
-            EXECUTE FUNCTION sync_geometry_3857();
-    END IF;
-END $$;
+DROP TRIGGER IF EXISTS scenic_lines_sync_geometry ON scenic_lines;
+CREATE TRIGGER scenic_lines_sync_geometry
+    BEFORE INSERT OR UPDATE OF geometry ON scenic_lines
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_geometry_3857();
 
 -- Function: scenic_lines_tile
 -- Every scenic line, for the user map's scenic highlight and the admin map alike.
 -- Nothing in it is private, so it is a Martin source. The countries ride along for
 -- the user map's country filter, which is applied client-side (a layer filter)
 -- rather than in the query, so a country toggle needs no tile refresh here; the
--- names and validity are for the admin map. plpgsql, so creating it does not need
--- the table to exist yet (see the guard above).
+-- names and validity are for the admin map.
 CREATE OR REPLACE FUNCTION scenic_lines_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
 DECLARE
@@ -612,12 +578,6 @@ DECLARE
     tile_envelope geometry;
     query_envelope geometry;
 BEGIN
-    -- Martin publishes this as soon as the deploy restarts it, which is before
-    -- the migration has created the table: an empty tile until then, not a 500.
-    IF to_regclass('public.scenic_lines') IS NULL THEN
-        RETURN NULL;
-    END IF;
-
     tile_envelope := ST_TileEnvelope(z, x, y);
     -- Widened by the 64-unit MVT buffer: the band is up to 18px wide with round
     -- caps, so a line ending just inside the next tile still spills into this

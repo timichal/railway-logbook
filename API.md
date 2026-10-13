@@ -77,7 +77,6 @@ No token. These are the same data the tiles already serve to anyone.
 | | |
 | --- | --- |
 | `GET /stations?region=&q=` | `{ stations }` — at most 10, `near_route` only, diacritic-insensitive. Under two characters returns none |
-| `GET /routes?region=` | `{ routes }` — every route with geometry. Large: ~5500 for Europe, ~1300 for Japan |
 | `GET /routes/track-ids?region=` | `{ trackIds }` — a few thousand integers, for telling which locally-held journeys belong to the region on screen |
 | `POST /routes/metadata` | `{ trackIds }` → `{ routes }` without geometry, `name` included. A POST for a read because the id list is the argument |
 | `POST /coverage/stretches` | `{ ranges: [{ track_id, covered_start, covered_end }] }` → `{ stretches }` — fraction ranges cut into drawable geometry, for journeys held on the device. Validated and capped at 2000 |

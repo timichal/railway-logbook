@@ -327,17 +327,9 @@ interface ScenicLineRow {
  * Recalculate every scenic line from its stored click points, exactly as routes
  * are (same pathfinder, same length check), and print a summary. A line that no
  * longer routes is marked invalid and keeps its last geometry, which the user
- * map goes on drawing — it is only a highlight. Skipped on a database the
- * scenic-lines migration has not reached yet.
+ * map goes on drawing — it is only a highlight.
  */
 async function recalculateScenicLines(db: Pool, options: RecalculationOptions): Promise<void> {
-  const exists = await db.query("SELECT to_regclass('scenic_lines') IS NOT NULL AS exists");
-  if (!exists.rows[0].exists) {
-    console.log("");
-    console.log("No scenic_lines table (run npm run migrateScenicLines) - skipping scenic lines");
-    return;
-  }
-
   const lines = await db.query<ScenicLineRow>(`
     SELECT
       id,
