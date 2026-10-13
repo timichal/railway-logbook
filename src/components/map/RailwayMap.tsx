@@ -173,15 +173,23 @@ export default function RailwayMap({
   // A login, a logout or a country checkbox reloads the route tiles by itself (see
   // useUserMap); a logged ride asks with refreshTiles. The searched line stands down
   // with the search box, whose chip is the only way to clear it.
-  const { map, mapLoaded, progress, progressStale, refreshProgress, refreshTiles, lineHighlight } =
-    useUserMap(mapContainer, {
-      dataAccess,
-      selectedCountries,
-      // A visitor's tile is Martin's; their rides are laid on as feature state below
-      rides: userId ? "session" : undefined,
-      coverageVersion,
-      lineHighlightHidden: !showFurniture,
-    });
+  const {
+    map,
+    mapLoaded,
+    progress,
+    progressFailed,
+    progressPending,
+    refreshProgress,
+    refreshTiles,
+    lineHighlight,
+  } = useUserMap(mapContainer, {
+    dataAccess,
+    selectedCountries,
+    // A visitor's tile is Martin's; their rides are laid on as feature state below
+    rides: userId ? "session" : undefined,
+    coverageVersion,
+    lineHighlightHidden: !showFurniture,
+  });
 
   // The newest fit asked for. A fit may wait on the server for the routes' bounds,
   // and is dropped if anything happens to the map meanwhile: another highlight (a
@@ -623,15 +631,15 @@ export default function RailwayMap({
         />
 
         {/* Progress Stats Box */}
-        {progress && (
-          <MapProgressBox
-            progress={progress}
-            stale={progressStale}
-            isMobile={isMobile}
-            // The switches live in the hamburger menu at every width — see MenuSheet.
-            withLayerToggles={false}
-          />
-        )}
+        <MapProgressBox
+          progress={progress}
+          failed={progressFailed}
+          pending={progressPending}
+          onRetry={refreshProgress}
+          isMobile={isMobile}
+          // The switches live in the hamburger menu at every width — see MenuSheet.
+          withLayerToggles={false}
+        />
 
         <MapStationSearch
           map={map}

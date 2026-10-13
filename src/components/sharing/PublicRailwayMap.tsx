@@ -42,7 +42,15 @@ export default function PublicRailwayMap({
 
   // Nothing here logs a journey, so the route tiles never need a refresh asked for;
   // the token and the owner's filter are fixed for the page.
-  const { map, mapLoaded, progress, progressStale, lineHighlight } = useUserMap(mapContainer, {
+  const {
+    map,
+    mapLoaded,
+    progress,
+    progressFailed,
+    progressPending,
+    refreshProgress,
+    lineHighlight,
+  } = useUserMap(mapContainer, {
     dataAccess,
     selectedCountries,
     rides: { shareToken: token },
@@ -60,15 +68,15 @@ export default function PublicRailwayMap({
       <div ref={mapContainer} className="w-full h-full" style={{ minHeight: "400px" }} />
 
       {/* Progress Stats Box */}
-      {progress && (
-        <MapProgressBox
-          progress={progress}
-          stale={progressStale}
-          isMobile={isMobile}
-          // A shared map has no menu to move them into.
-          withLayerToggles
-        />
-      )}
+      <MapProgressBox
+        progress={progress}
+        failed={progressFailed}
+        pending={progressPending}
+        onRetry={refreshProgress}
+        isMobile={isMobile}
+        // A shared map has no menu to move them into.
+        withLayerToggles
+      />
 
       <MapStationSearch
         map={map}

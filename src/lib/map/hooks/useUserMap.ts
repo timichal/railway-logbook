@@ -186,30 +186,42 @@ export function useUserMap(
   // rebuilt map sends nothing until it has loaded, so the old answer could otherwise
   // still land after the switch and show the other region's numbers.
   //
-  // `stale` marks an answer the newest request failed to replace. Its figures are
+  // `failed` marks an answer the newest request failed to replace. Its figures are
   // for an older filter, or from before a ride was logged, and the box says so
-  // rather than passing them off as current.
+  // rather than passing them off as current. A failure with no earlier answer for
+  // this data access (first load, region switch, login) is kept too, with no
+  // figures, so the box can say it has none and offer to ask again.
   const [answer, setAnswer] = useState<{
     from: DataAccess;
-    progress: UserProgress;
-    stale: boolean;
+    progress: UserProgress | null;
+    failed: boolean;
   } | null>(null);
   const shownAnswer = answer?.from === dataAccess ? answer : null;
   // Only the newest request's answer is kept: toggling countries fast sends
   // several, and they need not come back in order
   const progressRequest = useRef(0);
+  // Whether the newest request is still out, whatever started it — a retry, a
+  // country toggle or a logged ride — so the box can tell "asking" from "failed"
+  const [progressPending, setProgressPending] = useState(false);
   const refreshProgress = useCallback(async () => {
     const request = ++progressRequest.current;
+    setProgressPending(true);
     try {
       const next = await dataAccess.getUserProgress(effectiveCountries, countedTypes);
       if (request === progressRequest.current) {
-        setAnswer({ from: dataAccess, progress: next, stale: false });
+        setAnswer({ from: dataAccess, progress: next, failed: false });
       }
     } catch (error) {
       console.error("Error refreshing progress:", error);
       if (request === progressRequest.current) {
-        setAnswer((previous) => previous && { ...previous, stale: true });
+        setAnswer((previous) => ({
+          from: dataAccess,
+          progress: previous?.from === dataAccess ? previous.progress : null,
+          failed: true,
+        }));
       }
+    } finally {
+      if (request === progressRequest.current) setProgressPending(false);
     }
   }, [dataAccess, effectiveCountries, countedTypes]);
 
@@ -244,7 +256,8 @@ export function useUserMap(
     map,
     mapLoaded,
     progress: shownAnswer?.progress ?? null,
-    progressStale: shownAnswer?.stale ?? false,
+    progressFailed: shownAnswer?.failed ?? false,
+    progressPending,
     refreshProgress,
     refreshTiles,
     lineHighlight,

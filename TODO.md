@@ -15,15 +15,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **Progress box when a request fails** (from the review of the `useUserMap`
-  follow-ups). A failed refresh marks the shown figures `stale` ("Couldn't update —
-  not current" in `MapProgressBox`). But nothing retries, so the note stays until
-  something else refetches: a country toggle or a logged ride. And when there is no
-  earlier answer for the current data access (first load, region switch, login), a
-  failure leaves no box and no message at all. Consider a retry tap on the stale
-  note, and a small "Progress unavailable — retry" box for the no-answer case.
-  `refreshProgress` is already returned by `useUserMap`.
-
 - [ ] **`dataAccess.ts`** (~90 lines).
   - `getJourneyCount` / `canAddMoreJourneys` are on the `DataAccess` interface with
     three implementations, and nobody calls them through it. Callers use
