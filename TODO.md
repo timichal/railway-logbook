@@ -209,7 +209,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 - [ ] `constants.ts`: `isPublicNoteType` and the `public` field on `noteTypeOptions`.
   Nothing reads them; public visibility is the hard-coded `note_type = 'Usage'` in SQL.
-  CLAUDE.md mentions `isPublicNoteType`.
 - [ ] `basemap.ts`: `BASEMAP_FONT`. Only `BASEMAP_FONT_BOLD` is used.
 - [ ] `highlightLayers.ts`: the `HighlightBaseId` type.
 - [ ] `style.ts`:
@@ -266,25 +265,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   from/to names. Delete it if it's no longer used.
 - [ ] CLAUDE.md's paragraph on loading the old `.sql` exports by hand. Drop it once
   none of those files are kept anywhere.
-
----
-
-## Docs
-
-- [ ] **CLAUDE.md is ~150KB (~37k tokens), loaded into every session.** The biggest
-  sections are "Key architectural decisions" (38KB) and "Map styling" (18KB). Much of
-  it repeats, nearly word for word, the rationale comments already in the code. For
-  example, the MapLibre Native `bad_alloc` story is in CLAUDE.md, `userRouteStyling.ts`,
-  `AdminMap.tsx`, `layers.ts` and MOBILE_APP_PLAN.md. It also narrates history in ~50
-  places ("used to", "once"). Trim each section to the rule plus a pointer to the file
-  that explains it. Keep the commands, invariants and gotchas; let the code comments
-  carry the reasoning.
-- [ ] **`ZOOM_CONFIGURATION.md` is stale.** It points to `ZOOM_RANGES` in
-  `src/lib/map/index.ts`, says stations show from zoom 10, and refers to an "OSM
-  background". The header of `zoomRanges.ts` now covers the subject. Delete it, or
-  shrink it to a line in CLAUDE.md.
-- [ ] Local only: `mobile-spike/` is an untracked leftover containing nothing but
-  `node_modules`. Delete it from disk.
 
 ---
 

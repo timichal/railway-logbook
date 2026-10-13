@@ -48,7 +48,7 @@ export interface RailwayRoutesPaintConfig {
  *
  * A `match` rather than a chain of `["==", ["get", "line_class"], ...]` cases:
  * one property read instead of three, and it is a shape MapLibre Native's
- * binding converts without trouble. See "Route colours" in CLAUDE.md for why
+ * binding converts without trouble. See `userRouteStyling.ts` for why
  * that second point matters here.
  */
 export function lineClassColorExpression(colors: {
