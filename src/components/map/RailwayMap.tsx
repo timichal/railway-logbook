@@ -10,10 +10,8 @@ import MobileBottomSheet from "@/components/ui/MobileBottomSheet";
 import type { User } from "@/lib/authActions";
 import { createDataAccess, type DataAccess } from "@/lib/dataAccess";
 import * as localStore from "@/lib/localStorage";
-import { createRailwayRoutesSource } from "@/lib/map";
 import { fitCamera } from "@/lib/map/fitCamera";
 import { useLocalRouteFeatureStates } from "@/lib/map/hooks/useLocalRouteFeatureStates";
-import { useMapTileRefresh } from "@/lib/map/hooks/useMapTileRefresh";
 import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
 import { useUserMap } from "@/lib/map/hooks/useUserMap";
 import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
@@ -99,7 +97,9 @@ export default function RailwayMap({
 
   const userId = user?.id || null;
   const region = useRegion();
-  const dataAccess = useMemo(() => createDataAccess(user, region.id), [user, region.id]);
+  // On the user's id, not the object: a server render hands down a fresh `user` for
+  // the same account, and a new data access means a new owner to useUserMap.
+  const dataAccess = useMemo(() => createDataAccess(userId, region.id), [userId, region.id]);
   const { showError } = useToast();
 
   // Country filter state
@@ -140,6 +140,25 @@ export default function RailwayMap({
   // is drawn. The planner's set outlives a look at another tab, since the Route
   // Logger stays mounted behind it; My Trips clears its own as it unmounts.
   const [highlights, setHighlights] = useState<Record<HighlightKind, HighlightSet>>(NO_HIGHLIGHTS);
+
+  // The country list is taken over from the server along with the user. The state
+  // only reads its prop on mount, so it kept the visitor's list across a login —
+  // and the next checkbox then saved that list over the account's own. The server
+  // render that brings the new user brings the new list with it. Taken over during
+  // render rather than in an effect, so no render pairs the new user with the old
+  // list: the progress figures and the ridden stretches, which refetch on either,
+  // would ask twice, the first time for figures nobody sees.
+  //
+  // The highlights go with them. The Route Logger is rebuilt for the new user
+  // (account or localStorage), and its planner with it, so a result still
+  // highlighted would have no form behind it.
+  const [stateUserId, setStateUserId] = useState(userId);
+  if (stateUserId !== userId) {
+    setStateUserId(userId);
+    setSelectedCountries(initialSelectedCountries);
+    setHighlights(NO_HIGHLIGHTS);
+  }
+
   // Bumped whenever journeys change, to refetch the ridden-stretch overlay
   const [coverageVersion, setCoverageVersion] = useState(0);
 
@@ -148,38 +167,18 @@ export default function RailwayMap({
   const selectedRoutesRef = useRef<SelectedRoute[]>([]);
   selectedRoutesRef.current = selectedRoutes;
 
-  // The route tiles' `v`, shared with useMapTileRefresh: a map rebuilt for a region
-  // or scheme change has to carry the latest one, or it would be back on a URL from
-  // before the last refresh — a stale tile, the moment anything caches them.
-  const routesCacheBusterRef = useRef<number | undefined>(undefined);
-
   // Only the sheet can take the room away, so the desktop layout always has it.
   const showFurniture = !isMobile || furnitureFits;
 
-  // The user and the country filter are deliberately not rebuild triggers: they only
-  // change the railway_routes source, and rebuilding the map for them threw away the
-  // WebGL context and the basemap on every country checkbox. The source is built
-  // once, at construction; a later change reaches the map through refreshTiles.
-  //
-  // The searched line stands down with the search box, whose chip is the only way to
-  // clear it.
-  const { map, mapLoaded, effectiveCountries, progress, refreshProgress, lineHighlight } =
+  // A login, a logout or a country checkbox reloads the route tiles by itself (see
+  // useUserMap); a logged ride asks with refreshTiles. The searched line stands down
+  // with the search box, whose chip is the only way to clear it.
+  const { map, mapLoaded, progress, progressStale, refreshProgress, refreshTiles, lineHighlight } =
     useUserMap(mapContainer, {
       dataAccess,
       selectedCountries,
-      routesSource: (countries) => {
-        // A session tile is coloured by this user's rides, so it has a `v` from its
-        // first request: without one its URL would be the same across page loads and
-        // across everyone who signs in on this browser. A visitor's tile is Martin's,
-        // the same for everyone, and gets none until a refresh needs one, so it
-        // stays cacheable.
-        if (userId) routesCacheBusterRef.current ??= Date.now();
-        return createRailwayRoutesSource({
-          rides: userId ? "session" : undefined,
-          cacheBuster: routesCacheBusterRef.current,
-          selectedCountries: countries,
-        });
-      },
+      // A visitor's tile is Martin's; their rides are laid on as feature state below
+      rides: userId ? "session" : undefined,
       coverageVersion,
       lineHighlightHidden: !showFurniture,
     });
@@ -260,15 +259,6 @@ export default function RailwayMap({
 
   // An anonymous visitor's rides, coloured from their localStorage log
   const refreshLocalRouteStates = useLocalRouteFeatureStates(map, mapLoaded, dataAccess, showError);
-
-  // Tile refresh hook: a logged route, a new user or a new country filter
-  const { refreshTiles } = useMapTileRefresh({
-    map,
-    mapLoaded,
-    userId,
-    selectedCountries: effectiveCountries,
-    cacheBusterRef: routesCacheBusterRef,
-  });
 
   // Only the open tab's highlights are drawn: the planner result and the selection
   // on the Route Logger, the open trip or journey on My Trips, nothing on Countries.
@@ -388,31 +378,12 @@ export default function RailwayMap({
     setCoverageVersion((v) => v + 1);
   }, [user, refreshTiles, refreshLocalRouteStates, refreshProgress]);
 
-  // Refresh the route tiles when the user changes (login/logout): the map outlives
-  // it, and the tiles must switch between this user's rides and none. The mount
-  // run is skipped: useMapLibre has just built the route source for this user.
-  // Deliberately not gated on the map existing — a map still being built took its
-  // source from before the change, and useMapTileRefresh applies a refresh asked
-  // for before load once the map has loaded.
-  //
-  // The country list is taken over from the server along with the user. The state
-  // only reads its prop on mount, so it kept the visitor's list across a login —
-  // and the next checkbox then saved that list over the account's own. The server
-  // render that brings the new user brings the new list with it, and setting the
-  // two together means the refresh runs with the right countries.
-  const previousUserIdRef = useRef<number | null | undefined>(undefined);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the user is the trigger; initialSelectedCountries arrives with it and must not re-run this on its own, or a server refresh would undo an unsaved country toggle.
+  // A login or logout clears the highlights (with the country list, above), and a
+  // fit still waiting on one is dropped with them
+  // biome-ignore lint/correctness/useExhaustiveDependencies: userId is the trigger.
   useEffect(() => {
-    const previousUserId = previousUserIdRef.current;
-    previousUserIdRef.current = userId;
-    if (previousUserId === undefined || previousUserId === userId) return;
-    setSelectedCountries(initialSelectedCountries);
-    // The Route Logger is rebuilt for the new user (account or localStorage), and its
-    // planner with it, so a result still highlighted would have no form behind it.
-    setHighlights(NO_HIGHLIGHTS);
     fitRequest.current++;
-    refreshTiles();
-  }, [userId, refreshTiles]);
+  }, [userId]);
 
   useUserMapInteractions(map, mapLoaded, {
     onRouteClick: handleRouteClick,
@@ -465,11 +436,9 @@ export default function RailwayMap({
   };
 
   // Country filter handler. The tiles take the filter from their URL, not from the
-  // saved preference, so the refresh need not wait for the save; batched with the
-  // state update, it runs with the new list.
+  // saved preference, so their refresh (useUserMap) need not wait for the save.
   const handleCountriesChange = (countries: string[]) => {
     setSelectedCountries(countries);
-    refreshTiles();
     void saveCountries(countries);
   };
 
@@ -657,6 +626,7 @@ export default function RailwayMap({
         {progress && (
           <MapProgressBox
             progress={progress}
+            stale={progressStale}
             isMobile={isMobile}
             // The switches live in the hamburger menu at every width — see MenuSheet.
             withLayerToggles={false}

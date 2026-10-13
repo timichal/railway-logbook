@@ -1,35 +1,54 @@
-import type * as maplibregl from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DataAccess } from "@/lib/dataAccess";
 import {
   createPublicNotesSource,
   createPublicStationsSource,
+  createRailwayRoutesSource,
   createScenicLinesSource,
+  railwayRoutesTileUrl,
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
 import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
+import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import type { UserProgress } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
 import type { UsageType } from "@/lib/shared/constants";
+import type { RouteTileRides } from "@/lib/shared/map/tileSources";
 import { createUserMapLayers, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
 import { countedUsageTypes, regionCountryCodes } from "@/lib/shared/regions";
 import { useResolvedTheme } from "@/lib/theme";
 
+/** A number per data access, for the route tiles' refresh signal. */
+const dataAccessIds = new WeakMap<DataAccess, number>();
+let lastDataAccessId = 0;
+function dataAccessId(dataAccess: DataAccess): number {
+  let id = dataAccessIds.get(dataAccess);
+  if (id === undefined) {
+    id = ++lastDataAccessId;
+    dataAccessIds.set(dataAccess, id);
+  }
+  return id;
+}
+
 interface UseUserMapOptions {
-  /** Whose numbers and ridden stretches: the session, localStorage or a share token. */
+  /**
+   * Whose numbers, ridden stretches and route tile colours: the session,
+   * localStorage or a share token. A new one is a new owner — another account
+   * reloads the route tiles even where their URL stays the same — so memoise it on
+   * who it is, not on objects that are replaced without that changing.
+   */
   dataAccess: DataAccess;
   /** The country filter as stored, before a single-country region pins it. */
   selectedCountries: string[];
   /**
-   * The `railway_routes` source, given the countries it opens on. Called once per
-   * map, at construction, as `useMapLibre`'s factories are.
+   * Whose rides colour the route tiles: the session's or a share token's. Omitted,
+   * they are Martin's, every route unvisited (an anonymous visitor's rides are laid
+   * on as feature state by the caller).
    */
-  routesSource: (countries: string[]) => maplibregl.SourceSpecification;
-  /** What rebuilds the map besides the region and the scheme, which always do. */
-  rebuildOn?: React.DependencyList;
+  rides?: RouteTileRides;
   /** Bumped when journeys change, to refetch the ridden-stretch overlay. */
   coverageVersion?: number;
   /** Stands the searched-line band down — see `useLineSearchHighlight`. */
@@ -45,17 +64,16 @@ interface UseUserMapOptions {
 
 /**
  * The map both user maps draw — the signed-in or anonymous one and the shared one:
- * the sources and layers, the progress figures, the ridden stretches, the layer
- * switches and the searched line. What either adds on top (selection, highlights,
- * tile refreshes, interactions) stays with it.
+ * the sources and layers, the route tiles' refreshes, the progress figures, the
+ * ridden stretches, the layer switches and the searched line. What either adds on
+ * top (selection, highlights, interactions) stays with it.
  */
 export function useUserMap(
   mapContainer: React.RefObject<HTMLDivElement | null>,
   {
     dataAccess,
     selectedCountries,
-    routesSource,
-    rebuildOn = [],
+    rides,
     coverageVersion = 0,
     lineHighlightHidden = false,
     progressFollowsLayers = true,
@@ -78,20 +96,68 @@ export function useUserMap(
   // they follow the scheme. useMapLibre rebuilds the map when it changes.
   const theme = useResolvedTheme();
 
+  // The route tiles' `v`. A map rebuilt for a region or scheme change has to carry
+  // the latest one, or it would be back on a URL from before the last refresh — a
+  // stale tile, the moment anything caches them.
+  const routesCacheBusterRef = useRef<number | undefined>(undefined);
+
+  // The route source is the one thing here that changes without the map being
+  // rebuilt: a login, a logout, a country checkbox or a logged ride only point it at
+  // new tiles (`setTiles`), since rebuilding would throw away the WebGL context and
+  // the basemap to change one source. So its inputs are the refresh signal: the URL
+  // can't change without its tiles being reloaded, and nothing outside has to keep
+  // the two in step. Beside them, a counter for a ride logged (`refreshTiles`), and
+  // the data access, which stands for whose rides: a session tile's URL doesn't name
+  // its user, so going from one account straight to another changes nothing else.
+  const [refreshCount, setRefreshCount] = useState(0);
+  const ridesKey = rides === undefined ? "" : rides === "session" ? "session" : rides.shareToken;
+  const routesSignal = [
+    refreshCount,
+    dataAccessId(dataAccess),
+    ridesKey,
+    effectiveCountries.join(","),
+  ].join("|");
+
   const { map, mapLoaded } = useMapLibre(
     mapContainer,
     {
       region: region.id,
-      sources: () => ({
-        railway_routes: routesSource(effectiveCountries),
-        stations: createPublicStationsSource(),
-        scenic_lines: createScenicLinesSource(),
-        public_notes: createPublicNotesSource(),
-      }),
+      sources: () => {
+        // Runs once the map is being built, well after this render has declared it
+        routesSourceBuilt(routesSignal);
+        // A tile coloured by someone's rides has a `v` from its first request:
+        // without one its URL would be the same across page loads, and for the
+        // session across everyone who signs in on this browser. Martin's tile is the
+        // same for everyone and gets none until a refresh needs one, so it stays
+        // cacheable.
+        if (rides) routesCacheBusterRef.current ??= Date.now();
+        return {
+          railway_routes: createRailwayRoutesSource({
+            rides,
+            cacheBuster: routesCacheBusterRef.current,
+            selectedCountries: effectiveCountries,
+          }),
+          stations: createPublicStationsSource(),
+          scenic_lines: createScenicLinesSource(),
+          public_notes: createPublicNotesSource(),
+        };
+      },
       layers: () => createUserMapLayers(theme),
     },
-    [region.id, ...rebuildOn],
+    [region.id],
   );
+
+  const routesSourceBuilt = useSourceTileRefresh({
+    map,
+    mapLoaded,
+    sourceId: "railway_routes",
+    signal: routesSignal,
+    cacheBusterRef: routesCacheBusterRef,
+    tileUrl: (cacheBuster) =>
+      railwayRoutesTileUrl({ rides, cacheBuster, selectedCountries: effectiveCountries }),
+  });
+  // Stable identity: consumers list it in effect/callback dependency arrays.
+  const refreshTiles = useCallback(() => setRefreshCount((count) => count + 1), []);
 
   // The usage types drawn, which the progress box, the ridden stretches and the
   // searched line follow
@@ -118,9 +184,17 @@ export function useUserMap(
   // Each answer is kept with the data access it was asked of, and shown only while
   // that is still the current one: a region switch or a login replaces it, and the
   // rebuilt map sends nothing until it has loaded, so the old answer could otherwise
-  // still land after the switch and show the other region's numbers
-  const [answer, setAnswer] = useState<{ from: DataAccess; progress: UserProgress } | null>(null);
-  const progress = answer?.from === dataAccess ? answer.progress : null;
+  // still land after the switch and show the other region's numbers.
+  //
+  // `stale` marks an answer the newest request failed to replace. Its figures are
+  // for an older filter, or from before a ride was logged, and the box says so
+  // rather than passing them off as current.
+  const [answer, setAnswer] = useState<{
+    from: DataAccess;
+    progress: UserProgress;
+    stale: boolean;
+  } | null>(null);
+  const shownAnswer = answer?.from === dataAccess ? answer : null;
   // Only the newest request's answer is kept: toggling countries fast sends
   // several, and they need not come back in order
   const progressRequest = useRef(0);
@@ -128,9 +202,14 @@ export function useUserMap(
     const request = ++progressRequest.current;
     try {
       const next = await dataAccess.getUserProgress(effectiveCountries, countedTypes);
-      if (request === progressRequest.current) setAnswer({ from: dataAccess, progress: next });
+      if (request === progressRequest.current) {
+        setAnswer({ from: dataAccess, progress: next, stale: false });
+      }
     } catch (error) {
       console.error("Error refreshing progress:", error);
+      if (request === progressRequest.current) {
+        setAnswer((previous) => previous && { ...previous, stale: true });
+      }
     }
   }, [dataAccess, effectiveCountries, countedTypes]);
 
@@ -161,5 +240,13 @@ export function useUserMap(
     lineHighlightHidden,
   );
 
-  return { map, mapLoaded, effectiveCountries, progress, refreshProgress, lineHighlight };
+  return {
+    map,
+    mapLoaded,
+    progress: shownAnswer?.progress ?? null,
+    progressStale: shownAnswer?.stale ?? false,
+    refreshProgress,
+    refreshTiles,
+    lineHighlight,
+  };
 }

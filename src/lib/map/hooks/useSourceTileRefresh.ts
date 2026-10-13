@@ -1,13 +1,16 @@
 import type * as maplibregl from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface UseSourceTileRefreshOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
   /** A vector source on the map. */
   sourceId: string;
-  /** Each new value is one refresh. */
-  signal: number;
+  /**
+   * Each new value is one refresh: a counter, or a key of the URL's own inputs so
+   * that changing them is the refresh.
+   */
+  signal: number | string;
   /**
    * The tile URL's `v`. Owned by the caller so the map's construction can use the
    * latest one — a map rebuilt after a refresh must not go back to a URL from
@@ -32,7 +35,10 @@ interface UseSourceTileRefreshOptions {
  * A refresh asked for while the map is still loading cannot be applied yet, and
  * the map under construction took its sources from a render before it — so it is
  * applied on load instead of dropped. The initial signal is what the map's own
- * construction already stands for.
+ * construction already stands for. A map rebuilt later may stand for a newer one,
+ * built from the inputs the signal keys; the returned `sourceBuilt(signal)`, called
+ * from its sources factory, records that, so the rebuilt map isn't refreshed again
+ * on load.
  */
 export function useSourceTileRefresh({
   map,
@@ -41,7 +47,7 @@ export function useSourceTileRefresh({
   signal,
   cacheBusterRef,
   tileUrl,
-}: UseSourceTileRefreshOptions) {
+}: UseSourceTileRefreshOptions): (signal: number | string) => void {
   const appliedRef = useRef(signal);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: signal is the trigger, and mapLoaded only catches up on one that arrived before the map could take it. tileUrl is read at refresh time and must not trigger a refresh of its own.
@@ -57,4 +63,8 @@ export function useSourceTileRefresh({
     cacheBusterRef.current = Math.max(Date.now(), (cacheBusterRef.current ?? 0) + 1);
     source.setTiles([tileUrl(cacheBusterRef.current)]);
   }, [signal, mapLoaded]);
+
+  return useCallback((built: number | string) => {
+    appliedRef.current = built;
+  }, []);
 }

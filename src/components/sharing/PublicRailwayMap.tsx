@@ -4,7 +4,6 @@ import { useMemo, useRef } from "react";
 import MapProgressBox from "@/components/map/MapProgressBox";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { createPublicDataAccess } from "@/lib/dataAccess";
-import { createRailwayRoutesSource } from "@/lib/map";
 import { useUserMap } from "@/lib/map/hooks/useUserMap";
 import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
 import { useRegion } from "@/lib/regionContext";
@@ -41,15 +40,12 @@ export default function PublicRailwayMap({
   const region = useRegion();
   const dataAccess = useMemo(() => createPublicDataAccess(token, region.id), [token, region.id]);
 
-  // Nothing here logs a journey, so there is no tile refresh to drive: the token and
-  // the owner's filter are fixed for the page, and a change to either rebuilds. The
-  // filter by content, so a parent handing down a fresh but equal array costs nothing.
-  const { map, mapLoaded, progress, lineHighlight } = useUserMap(mapContainer, {
+  // Nothing here logs a journey, so the route tiles never need a refresh asked for;
+  // the token and the owner's filter are fixed for the page.
+  const { map, mapLoaded, progress, progressStale, lineHighlight } = useUserMap(mapContainer, {
     dataAccess,
     selectedCountries,
-    routesSource: (countries) =>
-      createRailwayRoutesSource({ rides: { shareToken: token }, selectedCountries: countries }),
-    rebuildOn: [token, selectedCountries.join(",")],
+    rides: { shareToken: token },
     // The owner's numbers, whatever the visitor has switched off
     progressFollowsLayers: false,
   });
@@ -67,6 +63,7 @@ export default function PublicRailwayMap({
       {progress && (
         <MapProgressBox
           progress={progress}
+          stale={progressStale}
           isMobile={isMobile}
           // A shared map has no menu to move them into.
           withLayerToggles

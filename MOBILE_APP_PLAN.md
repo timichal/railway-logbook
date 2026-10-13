@@ -298,7 +298,7 @@ lives in `src/lib/shared/`, the only part of the web app `@shared/*` reaches:
 
 - **Every hook in `src/lib/map/hooks/`** — `useMapLibre`, `useUserMap`,
   `useRouteHighlighting`, `useCoverageOverlay`,
-  `useLayerFilters`, `useMapTileRefresh`. The RN binding is declarative
+  `useLayerFilters`, `useSourceTileRefresh`. The RN binding is declarative
   (`<Map>`, `<Camera>`, `<VectorSource>`, `<Layer>`) rather than the imperative
   `map.addLayer` / `moveLayer` / `setFilter` these are built on. Layer *ordering*
   survives the move: `<Layer>` takes `beforeId` / `afterId` / `layerIndex`, which
@@ -800,7 +800,7 @@ Three smaller ones:
 - **A tile is cached by URL, so the log version is spent as `cacheBuster`.** Visit
   colours are rendered into the route tile per user, so logging a journey has to
   produce a *new* URL — `railwayRoutesTileUrl` already takes one, for exactly the
-  reason the web app's `useMapTileRefresh` needs it. `logVersion.ts` is a
+  reason the web app's route tile refresh needs it. `logVersion.ts` is a
   `useSyncExternalStore` rather than a context because the write happens in a modal
   and the readers are a tab away: the map's tile URL, the map's numbers, and the
   logbook list.

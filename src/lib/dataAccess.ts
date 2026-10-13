@@ -6,7 +6,6 @@
  * based on authentication state
  */
 
-import type { User } from "./authActions";
 import * as localStore from "./localStorage";
 import type { ProgressByCountry, UserProgress } from "./progressQueries";
 import {
@@ -78,8 +77,8 @@ export interface DataAccess {
  * @param region - The region currently being viewed
  * @returns DataAccess implementation
  */
-export function createDataAccess(user: User | null, region: RegionId): DataAccess {
-  if (user) {
+export function createDataAccess(userId: number | null, region: RegionId): DataAccess {
+  if (userId !== null) {
     // User is logged in - use database operations
     return createDatabaseDataAccess(region);
   } else {

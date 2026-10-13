@@ -16,9 +16,9 @@ it was noticed.
       `#155e34`) are close to muddy on it. Re-picking them is not the hard part;
       *delivering* them is: `userMapLayers.ts` builds its paint configs as
       module-level constants at import time, on purpose (stable references for
-      `useMapTileRefresh`, and both maps must draw identical lines), so a
+      the tile refresh, and both maps must draw identical lines), so a
       per-scheme palette means turning those constants into memoised functions
-      and threading the scheme through `RailwayMap`'s tile-refresh configs too.
+      and threading the scheme through `useUserMap`'s tile refresh too.
       The stations layers show the shape of it — they take the scheme as an
       argument because they were the only two whose colours depend on the ground
       under them rather than on the data in them.

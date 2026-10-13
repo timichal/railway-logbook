@@ -12,7 +12,7 @@
  * only a version: every reader re-reads from the server, and this says when.
  *
  * On the map it is spent as the tile URL's `cacheBuster` (`v=`), which is the same
- * mechanism the web app's `useMapTileRefresh` uses and the reason
+ * mechanism the web app's route tile refresh (`useUserMap`) uses and the reason
  * `railwayRoutesTileUrl` takes one: a tile is cached by URL, so a *new* URL is the
  * only way to be sure the old colours are gone.
  */

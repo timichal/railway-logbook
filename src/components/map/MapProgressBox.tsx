@@ -30,6 +30,8 @@ import { useRegion } from "@/lib/regionContext";
 
 interface MapProgressBoxProps {
   progress: UserProgress;
+  /** The figures are an older answer the newest request failed to replace. */
+  stale: boolean;
   isMobile: boolean;
   /** Draw the layer switches inside the box (false where a menu carries them). */
   withLayerToggles: boolean;
@@ -37,6 +39,7 @@ interface MapProgressBoxProps {
 
 export default function MapProgressBox({
   progress,
+  stale,
   isMobile,
   withLayerToggles,
 }: MapProgressBoxProps) {
@@ -50,12 +53,14 @@ export default function MapProgressBox({
         type="button"
         onClick={() => setCollapsed(false)}
         aria-expanded={false}
-        aria-label={`Completed ${progress.percentage}% — show progress and layers`}
+        aria-label={`Completed ${progress.percentage}%${stale ? " (not up to date)" : ""} — show progress and layers`}
         data-progress-box
         className="absolute bottom-[calc(var(--sheet-visible,0px)+3rem)] left-3 z-10 min-h-11 px-3 flex items-center gap-1.5 bg-surface rounded-full shadow-lg text-fg transition-colors hover:bg-gray-50 active:bg-gray-100"
       >
-        <span className="font-bold text-green-600 text-base">{progress.percentage}%</span>
-        <span className="text-xs text-gray-500">done</span>
+        <span className={`font-bold text-base ${stale ? "text-gray-500" : "text-green-600"}`}>
+          {progress.percentage}%
+        </span>
+        <span className="text-xs text-gray-500">{stale ? "not up to date" : "done"}</span>
       </button>
     );
   }
@@ -72,6 +77,7 @@ export default function MapProgressBox({
       <div className="text-xs text-gray-600 mt-1">
         {progress.completedRoutes}/{progress.totalRoutes} ({progress.routePercentage}%) routes
       </div>
+      {stale && <div className="text-xs text-amber-700 mt-1">Couldn't update — not current</div>}
     </>
   );
 
@@ -89,7 +95,7 @@ export default function MapProgressBox({
           type="button"
           onClick={() => setCollapsed(true)}
           aria-expanded={true}
-          aria-label={`Completed ${progress.percentage}% — hide progress`}
+          aria-label={`Completed ${progress.percentage}%${stale ? " (not up to date)" : ""} — hide progress`}
           className="block w-full text-left"
         >
           {stats}

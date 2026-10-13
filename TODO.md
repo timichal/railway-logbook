@@ -15,18 +15,14 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **`useUserMap` follow-ups** (from the review of the shared-map refactor).
-  - `routesSource` and `rebuildOn` have to be kept in step by hand: a value the
-    source factory captures rebuilds the map only if the caller also lists it in
-    `rebuildOn`, and neither tsc nor Biome checks the spread. Pass the source's
-    inputs as data (e.g. `rides` + cache-buster ref) and derive the rebuild keys in
-    the hook.
-  - On login/logout progress is fetched twice: `dataAccess` changes first (request
-    with the visitor's countries), then `RailwayMap`'s user-change effect sets the
-    account's countries (second request). The first is discarded but still costs a
-    round trip. This was already the case with `useRouteEditor`.
-  - If the newest progress request fails, the box keeps figures for an older
-    country filter with nothing saying so. Consider a quiet "couldn't update" state.
+- [ ] **Progress box when a request fails** (from the review of the `useUserMap`
+  follow-ups). A failed refresh marks the shown figures `stale` ("Couldn't update —
+  not current" in `MapProgressBox`). But nothing retries, so the note stays until
+  something else refetches: a country toggle or a logged ride. And when there is no
+  earlier answer for the current data access (first load, region switch, login), a
+  failure leaves no box and no message at all. Consider a retry tap on the stale
+  note, and a small "Progress unavailable — retry" box for the no-answer case.
+  `refreshProgress` is already returned by `useUserMap`.
 
 - [ ] **`dataAccess.ts`** (~90 lines).
   - `getJourneyCount` / `canAddMoreJourneys` are on the `DataAccess` interface with
