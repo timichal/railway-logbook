@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import ShareMapDialog from "@/components/sharing/ShareMapDialog";
 import RegionSwitch from "@/components/ui/RegionSwitch";
+import ThemeSwitch, { ThemeCycleButton } from "@/components/ui/ThemeSwitch";
 import type { User } from "@/lib/authActions";
 import { useRegion } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
@@ -106,10 +107,12 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
                 </button>
               )}
 
-          {/* The admin page has no menu, so its region switch has to live in the bar.
-              The user map's is in the menu, where a setting that changes what the
-              whole app is showing belongs. */}
+          {/* The admin page has no menu, so its region and colour-scheme switches have
+              to live in the bar. The user map's are in the menu, where settings that
+              change the whole app belong. The scheme is one cycling button here: three
+              more 44pt segments would not fit beside the region switch on a phone. */}
           {isAdminPage && <RegionSwitch compact />}
+          {isAdminPage && <ThemeCycleButton />}
 
           {/* Share as the platform share glyph. */}
           {user && !isAdminPage && (
@@ -181,6 +184,7 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
           <div className="flex items-center gap-4">
             {/* Admin only — see the mobile bar above. */}
             {isAdminPage && <RegionSwitch />}
+            {isAdminPage && <ThemeSwitch compact />}
 
             {/* Share map — a logged-in user's own map is the only one there is to
               publish, so this is hidden for anonymous visitors and on the admin page. */}

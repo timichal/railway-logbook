@@ -4,8 +4,7 @@ Dark mode shipped as a beta: the colour-scheme setting (Light / System / Dark, i
 the menu), the palette re-pointing that carries the whole app with it, and the
 basemap's dark style. `CLAUDE.md`'s **Dark mode** section documents all of that —
 read it first. What is below is the rest: three things the beta deliberately did
-not attempt, plus one found by using it. Each says why it costs more than it looks
-like it should.
+not attempt. Each says why it costs more than it looks like it should.
 
 - [ ] **The route colours are still the light ones.** `COLORS.railwayRoutes` —
       visited green, partial orange, unvisited red, each with a darker highspeed
@@ -33,7 +32,3 @@ like it should.
       chips in `tooltipFormatting.ts` are pastel fills with dark text, and they
       read as chips on a dark popup rather than as a mistake — but they are the
       one thing in the app still lit from the light palette.
-- [ ] **The admin page cannot change the scheme.** It has no menu (its hamburger
-      opens the sidebar drawer), so the switch is not reachable there; it follows
-      whatever the main map set. Either put a compact switch in the admin bar
-      beside the region switch, or leave it — "Back to Main Map" is one click.

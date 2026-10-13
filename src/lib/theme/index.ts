@@ -135,7 +135,7 @@ function subscribe(onStoreChange: () => void): () => void {
  * `useSyncExternalStore` for the same reason as `useIsMobile`: the snapshot is read
  * during render. The server snapshot has to be something and "light" is the one
  * that matters least — everything that consumes this is inside a client-only
- * subtree (both maps are `ssr: false`; the switch lives in the menu sheet).
+ * subtree (both maps are `ssr: false`).
  */
 export function useResolvedTheme(): ResolvedTheme {
   return useSyncExternalStore(
@@ -145,7 +145,12 @@ export function useResolvedTheme(): ResolvedTheme {
   );
 }
 
-/** The stored choice, which is what the switch shows as pressed. */
+/**
+ * The stored choice, which is what the switch shows as pressed. The admin bar's
+ * switch is server-rendered with the navbar, so it paints "system" first and moves
+ * to a stored explicit choice on hydration — a pressed segment, not the page colours,
+ * which the init script has already set.
+ */
 export function useThemePreference(): ThemePreference {
   return useSyncExternalStore(subscribe, readThemePreference, () => "system" as ThemePreference);
 }

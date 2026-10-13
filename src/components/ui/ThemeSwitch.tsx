@@ -1,6 +1,7 @@
 "use client";
 
 import { setThemePreference, type ThemePreference, useThemePreference } from "@/lib/theme";
+import { iconBtn } from "@/lib/ui/buttonStyles";
 
 /**
  * Light / System / Dark, as a segmented control shaped like `RegionSwitch`.
@@ -31,12 +32,22 @@ const OPTIONS: { value: ThemePreference; label: string; icon: string }[] = [
   { value: "dark", label: "Dark", icon: "M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" },
 ];
 
-export default function ThemeSwitch() {
+interface ThemeSwitchProps {
+  /**
+   * Icon-only segments in a strip of their own width, for the admin bar beside the
+   * region switch (whose height it matches). The menu's is labelled and full-width.
+   */
+  compact?: boolean;
+}
+
+export default function ThemeSwitch({ compact = false }: ThemeSwitchProps) {
   const preference = useThemePreference();
 
   return (
     <fieldset
-      className="flex w-full h-10 rounded-md border border-gray-300 overflow-hidden"
+      className={`h-10 rounded-md border border-gray-300 overflow-hidden ${
+        compact ? "inline-flex" : "flex w-full"
+      }`}
       aria-label="Colour scheme"
     >
       {OPTIONS.map((option) => {
@@ -47,10 +58,12 @@ export default function ThemeSwitch() {
             type="button"
             onClick={() => setThemePreference(option.value)}
             aria-pressed={isActive}
+            aria-label={compact ? option.label : undefined}
+            title={compact ? option.label : undefined}
             // The fieldset clips to round the strip's ends, so the base focus ring —
             // drawn 2px outside the segment — would be invisible. Inset it, as
             // RegionSwitch does for the same reason.
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 text-sm font-medium transition-colors focus-visible:-outline-offset-2 border-r border-gray-300 last:border-r-0 ${
+            className={`${compact ? "px-3" : "flex-1 px-2"} inline-flex items-center justify-center gap-1.5 text-sm font-medium transition-colors focus-visible:-outline-offset-2 border-r border-gray-300 last:border-r-0 ${
               isActive
                 ? "bg-blue-600 text-white"
                 : "bg-surface text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200"
@@ -70,10 +83,42 @@ export default function ThemeSwitch() {
                 d={option.icon}
               />
             </svg>
-            {option.label}
+            {!compact && option.label}
           </button>
         );
       })}
     </fieldset>
+  );
+}
+
+/**
+ * The same setting as one 44pt bar button that steps Light → System → Dark, showing
+ * the current choice — for the admin page's phone bar, which has no menu to hold the
+ * switch and no room for three more targets beside the region switch.
+ */
+export function ThemeCycleButton() {
+  const preference = useThemePreference();
+  const index = OPTIONS.findIndex((option) => option.value === preference);
+  const current = OPTIONS[index];
+  const next = OPTIONS[(index + 1) % OPTIONS.length];
+
+  return (
+    <button
+      type="button"
+      onClick={() => setThemePreference(next.value)}
+      className={iconBtn("md")}
+      aria-label={`Colour scheme: ${current.label}. Switch to ${next.label}`}
+      title={`Colour scheme: ${current.label}`}
+    >
+      <svg
+        className="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={current.icon} />
+      </svg>
+    </button>
   );
 }
