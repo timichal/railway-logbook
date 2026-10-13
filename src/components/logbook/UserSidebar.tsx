@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useReducer } from "react";
-import CountriesStatsTab from "@/components/logbook/CountriesStatsTab";
+import { useCallback, useReducer } from "react";
 import JourneyLogger from "@/components/logbook/JourneyLogger";
 import JourneysAndTripsTab from "@/components/logbook/JourneysAndTripsTab";
 import LocalJourneyLogTab from "@/components/logbook/LocalJourneyLogTab";
 import LocalTripLogger from "@/components/logbook/LocalTripLogger";
+import MapStatsTab from "@/components/logbook/MapStatsTab";
 import type { User } from "@/lib/authActions";
 import type { DataAccess } from "@/lib/dataAccess";
-import { useRegion } from "@/lib/regionContext";
-import { hasStatsView } from "@/lib/shared/regions";
 import type {
   HighlightRoutesFn,
   JourneyEditStartFn,
@@ -20,12 +18,12 @@ import type {
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
 /**
- * The sidebar is the three logging tabs and nothing else. "howto"/"notes" used to be
- * tabs here too, taking over the whole pane with their own close button; they are
- * rows in the hamburger menu now, which is where the rest of the app's reading and
- * settings live.
+ * The sidebar is the logging tabs and the map's own controls (Map & Stats), nothing
+ * else. "howto"/"notes" used to be tabs here too, taking over the whole pane with
+ * their own close button; they are rows in the hamburger menu now, beside the
+ * app-wide settings (region, colour scheme).
  */
-export type ActiveTab = "routes" | "journeylog" | "filter";
+export type ActiveTab = "routes" | "journeylog" | "map";
 
 interface UserSidebarProps {
   user: User | null;
@@ -66,8 +64,6 @@ export default function UserSidebar({
   onJourneyEditStart,
   onJourneyEditEnd,
 }: UserSidebarProps) {
-  const region = useRegion();
-
   // The Route Logger's trip picker loaded its trips once and stays mounted while My
   // Trips is open, so a trip created, renamed or deleted there has to be passed on.
   const [tripsVersion, bumpTripsVersion] = useReducer((v: number) => v + 1, 0);
@@ -75,16 +71,6 @@ export default function UserSidebar({
     bumpTripsVersion();
     onRoutesLogged?.();
   }, [onRoutesLogged]);
-
-  // The third tab is the countries and their numbers where there is a country
-  // filter, the numbers alone where the region breaks them down by line type
-  // instead (Japan: JR, non-JR, total), and absent where there is neither.
-  // Switching into such a region while it is open would leave an empty pane, so
-  // the sidebar falls back to the Route Logger.
-  const hasStatsTab = hasStatsView(region.id);
-  useEffect(() => {
-    if (!hasStatsTab && activeTab === "filter") setActiveTab("routes");
-  }, [hasStatsTab, activeTab, setActiveTab]);
 
   return (
     <div
@@ -128,28 +114,31 @@ export default function UserSidebar({
           <span className="md:hidden">{user ? "Trips" : "Journeys"}</span>
           <span className="hidden md:inline">{user ? "My Trips" : "My Journeys"}</span>
         </button>
-        {hasStatsTab && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("filter")}
-            className={tabBtn(activeTab === "filter")}
+        {/* Every region has it: the layer switches are there even where there is
+            nothing to count (see MapStatsTab). A map glyph, not the cog it had as
+            the Countries tab: the app-wide settings are in the hamburger menu, and a
+            cog here would send someone looking for them to the wrong place. */}
+        <button
+          type="button"
+          onClick={() => setActiveTab("map")}
+          className={tabBtn(activeTab === "map")}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="inline-block w-4 h-4 mr-1 -mt-0.5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="inline-block w-4 h-4 mr-1 -mt-0.5"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                fillRule="evenodd"
-                d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
-                clipRule="evenodd"
-              />
-            </svg>
-            {region.hasCountryFilter ? "Countries" : "Statistics"}
-          </button>
-        )}
+            <path
+              fillRule="evenodd"
+              d="M12 1.586l-4 4v12.828l4-4V1.586zM3.707 3.293A1 1 0 002 4v10a1 1 0 00.293.707L6 18.414V5.586L3.707 3.293zM17.707 5.293L14 1.586v12.828l2.293 2.293A1 1 0 0018 16V6a1 1 0 00-.293-.707z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span className="md:hidden">Map</span>
+          <span className="hidden md:inline">Map &amp; Stats</span>
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -204,8 +193,8 @@ export default function UserSidebar({
           />
         )}
 
-        {activeTab === "filter" && hasStatsTab && (
-          <CountriesStatsTab
+        {activeTab === "map" && (
+          <MapStatsTab
             dataAccess={dataAccess}
             selectedCountries={selectedCountries}
             onCountryChange={onCountryChange}

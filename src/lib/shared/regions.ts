@@ -22,7 +22,7 @@
  * routes carry `start_country`/`end_country`, and each region declares the
  * countries it contains, so the existing `selected_countries` tile filter already
  * keeps the regions apart (Japan view asks for `['JP']`). Regions with a single
- * country (`hasCountryFilter: false`) hide the Countries tab and simply pass
+ * country (`hasCountryFilter: false`) hide the country list and simply pass
  * their own country list.
  */
 
@@ -55,7 +55,7 @@ export interface Region {
   countries: readonly { readonly code: string; readonly name: string }[];
   /**
    * Whether the user can filter this region by country. False for a
-   * single-country region, where the Countries tab is hidden and the country
+   * single-country region, where the country list is hidden and the country
    * filter is pinned to the region's own list.
    */
   hasCountryFilter: boolean;
@@ -281,10 +281,11 @@ export function ordinaryRouteSql(alias: "r" | "rr"): string {
 }
 
 /**
- * Whether a region has a statistics view at all — the web sidebar's third tab, the
- * native app's Countries/Statistics screen: the countries where it can filter by
- * them, the per-line-type numbers where it counts more than Regular. One test, so
- * the row that opens the view and the view itself cannot disagree.
+ * Whether a region has a statistics view at all — the counted half of the web
+ * sidebar's Map & Stats tab, the native app's Countries/Statistics screen: the
+ * countries where it can filter by them, the per-line-type numbers where it counts
+ * more than Regular. One test, so the row that opens the view and the view itself
+ * cannot disagree.
  */
 export function hasStatsView(regionId: RegionId): boolean {
   return REGIONS[regionId].hasCountryFilter || hasOrdinaryNonRegular(regionId);

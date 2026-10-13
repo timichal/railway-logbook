@@ -6,12 +6,9 @@ import HowToUseArticle from "@/components/articles/HowToUseArticle";
 import RailwayNotesArticle from "@/components/articles/RailwayNotesArticle";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
-import LayerToggles from "@/components/map/LayerToggles";
 import RegionSwitch from "@/components/ui/RegionSwitch";
 import ThemeSwitch from "@/components/ui/ThemeSwitch";
 import type { User } from "@/lib/authActions";
-import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
-import { useRegion } from "@/lib/regionContext";
 import { btn, iconBtn } from "@/lib/ui/buttonStyles";
 import { useModalDialog } from "@/lib/ui/useModalDialog";
 
@@ -25,13 +22,16 @@ import { useModalDialog } from "@/lib/ui/useModalDialog";
  * ~300px box. Here the form gets the whole sheet.
  *
  * **Desktop uses the same menu rather than the navbar it used to have.** The region
- * switch, the layer switches and the two articles were spread across three places —
- * the top bar, the map's progress box, and a pair of sidebar tabs that took over the
- * whole sidebar — none of which is where a *setting* belongs, and all of which cost
- * permanent screen space to say nothing most of the time. Gathering them behind one
- * hamburger leaves the bar to identity and auth, the map corner to the numbers, and
- * the sidebar to the three tabs that actually log journeys. One component and one
- * set of contents for both widths, so the two cannot drift.
+ * switch and the two articles were spread across the top bar and a pair of sidebar
+ * tabs that took over the whole sidebar, costing permanent screen space to say
+ * nothing most of the time. Gathering them behind one hamburger leaves the bar to
+ * identity and auth. One component and one set of contents for both widths, so the
+ * two cannot drift.
+ *
+ * **It holds the app-wide settings only — region and colour scheme.** The map's layer
+ * switches were here for a while, but they are used while looking at the map, which
+ * this sheet covers; they live in the sidebar's Map & Stats tab now, beside the
+ * country and line-type ticks that also decide what the map draws.
  *
  * The articles open as a **drill-down of the menu** rather than as a sidebar tab:
  * they are full-screen reading, they have nothing to do with logging a journey, and
@@ -151,8 +151,6 @@ export default function MenuSheet({
   onAuthSuccess,
   initialView = "menu",
 }: MenuSheetProps) {
-  const region = useRegion();
-  const layerPrefs = useLayerPrefs();
   const [view, setView] = useState<MenuView>(initialView);
   const dialogRef = useModalDialog(onClose);
   const titleId = useId();
@@ -262,25 +260,14 @@ export default function MenuSheet({
           <RegionSwitch stretch />
         </div>
 
-        {/* Under the region, and above the map's own switches: it is a setting for
-            the whole app rather than for the map, but the two read as one group of
-            appearance controls and a visitor looking for one will scan for the other. */}
+        {/* Under the region: the other setting for the whole app rather than for the
+            map, which is why it stayed here when the layer switches moved to the
+            sidebar's Map & Stats tab. */}
         <div className="px-4 py-4 border-b border-gray-100">
           <span className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
             Appearance
           </span>
           <ThemeSwitch />
-        </div>
-
-        {/* The layer switches used to sit in the map's own corner box. They are
-            settings, not readouts, and the corner of a map is for readouts — so they
-            live here and the box keeps only the numbers. (The shared map has no
-            menu of its own, so that one still carries them in the box.) */}
-        <div className="px-4 py-4 border-b border-gray-100">
-          <span className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-1">
-            Show on map
-          </span>
-          <LayerToggles prefs={layerPrefs} region={region} />
         </div>
 
         <nav className="divide-y divide-gray-100">

@@ -47,7 +47,7 @@ const NO_SELECTED_ROUTES: SelectedRoute[] = [];
 const TAB_HIGHLIGHT_KIND: Record<ActiveTab, HighlightKind | null> = {
   routes: "planner",
   journeylog: "view",
-  filter: null,
+  map: null,
 };
 
 /** One user's country filter saves: at most one running, the newest list waiting. */
@@ -540,12 +540,21 @@ export default function RailwayMap({
     };
   }, [isMobile, map]);
 
-  // What the collapsed sheet calls itself. Not the active tab: all three of the
-  // sheet's tabs are the logger. The count is the one thing worth surfacing from
-  // behind a closed sheet — routes are picked on the map, which is exactly when the
-  // sheet is down and the selection is out of sight.
+  // What the collapsed sheet calls itself: the tab that tapping it opens again, now
+  // that one of them (Map & Stats) is no part of the logger. The count is the one
+  // thing worth surfacing from behind a closed sheet, whichever tab is open — routes
+  // are picked on the map, which is exactly when the sheet is down and the selection
+  // is out of sight.
+  const tabName =
+    activeTab === "routes"
+      ? "Route Logger"
+      : activeTab === "journeylog"
+        ? user
+          ? "My Trips"
+          : "My Journeys"
+        : "Map & Stats";
   const sheetLabel =
-    selectedRoutes.length > 0 ? `Route Logger · ${selectedRoutes.length} selected` : "Route Logger";
+    selectedRoutes.length > 0 ? `${tabName} · ${selectedRoutes.length} selected` : tabName;
 
   // The summary bar's "Log journey": the sheet raises itself, this brings the form
   // into view — after the commit that unhides the Route Logger, since a hidden
@@ -637,7 +646,7 @@ export default function RailwayMap({
           pending={progressPending}
           onRetry={refreshProgress}
           isMobile={isMobile}
-          // The switches live in the hamburger menu at every width — see MenuSheet.
+          // The switches live in the sidebar's Map & Stats tab at every width.
           withLayerToggles={false}
         />
 

@@ -74,7 +74,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
   - Dark green = fully completed routes
   - Dark orange = partially completed routes
   - Red = unvisited routes
-  - Scenic lines (a soft violet band under the routes, toggled in the menu; Europe only)
+  - Scenic lines (a soft violet band under the routes, toggled in the sidebar's Map & Stats tab; Europe only)
 - Progress tracking (km/% of total distance, respects country filter, excludes partial routes)
 - **Journey-based logging** - Organize routes into named journeys with dates and descriptions
 - Journey planner with multi-station routing (from → via → to with drag-and-drop)

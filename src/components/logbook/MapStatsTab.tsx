@@ -1,17 +1,18 @@
 "use client";
 
 import type { ReactNode } from "react";
+import LayerToggles from "@/components/map/LayerToggles";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import type { DataAccess } from "@/lib/dataAccess";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
 import { getCountryFlag } from "@/lib/shared/countryFlag";
 import { usageTypeLayerPref } from "@/lib/shared/map/layerPrefs";
-import { hasOrdinaryNonRegular, regionUsagePluralLabel } from "@/lib/shared/regions";
+import { hasOrdinaryNonRegular, hasStatsView, regionUsagePluralLabel } from "@/lib/shared/regions";
 import { btn } from "@/lib/ui/buttonStyles";
 import { FORM_ERROR } from "@/lib/ui/inputStyles";
 
-interface CountriesStatsTabProps {
+interface MapStatsTabProps {
   dataAccess: DataAccess;
   selectedCountries: string[];
   onCountryChange: (countries: string[]) => void;
@@ -24,17 +25,71 @@ const percent = (completedKm: number, totalKm: number) =>
   totalKm > 0 ? `${((completedKm / totalKm) * 100).toFixed(1)}%` : null;
 
 /**
- * The sidebar's statistics tab, in two parts a region may have either or both of:
- * the countries — the map's filter, each with its km — where the region has more
- * than one (`hasCountryFilter`), and the split by line type where the region counts
- * more than Regular (`ordinaryUsageTypes` — Japan's JR and non-JR lines), ticked
- * the same way. Europe shows the first, Japan the second, both end on the total.
+ * The sidebar's Map & Stats tab: everything that decides what the map draws, beside
+ * the numbers it counts. It used to be the statistics alone, with the layer switches
+ * in the hamburger menu — but a switch is used while looking at the map, and the
+ * menu covers the map (the whole screen on a phone, a dimmed page on desktop), so
+ * every flip was made blind. Here the map stays in view beside the sidebar, or above
+ * the half-raised sheet. And in Japan, where JR and non-JR lines were already ticked
+ * in this tab, Heritage was switched in the menu: two places for one kind of choice.
+ *
+ * Two groups, split by **what is counted**, which is also why they are two kinds of
+ * control:
+ * - "Show on map" — switches for the lines that are drawn but never counted
+ *   (Heritage, Europe's Special services) and, where the region has it, the scenic
+ *   highlight — which is no line of its own, only a band over routes already counted,
+ *   so the hint says so rather than lumping it in. Short, so it goes first, where
+ *   Europe's long country list can't bury it (`LayerToggles`).
+ * - the counted rows (`CountedStats`), ticked like checkboxes beside their km: the
+ *   countries where the region has more than one (`hasCountryFilter`), and the split
+ *   by line type where it counts more than Regular (`ordinaryUsageTypes` — Japan's JR
+ *   and non-JR lines). Unticked is hidden on the map *and* left out of the numbers.
+ *   Absent where the region has neither (`hasStatsView`).
  */
-export default function CountriesStatsTab({
+export default function MapStatsTab({
   dataAccess,
   selectedCountries,
   onCountryChange,
-}: CountriesStatsTabProps) {
+}: MapStatsTabProps) {
+  const region = useRegion();
+  const layerPrefs = useLayerPrefs();
+
+  return (
+    <div className="p-4 text-fg space-y-6">
+      <section>
+        <SectionHeading
+          title="Show on map"
+          hint={`These lines aren't counted in your progress.${
+            region.hasScenicHighlight
+              ? " Scenic lines only highlight routes already on the map."
+              : ""
+          }`}
+        />
+        <LayerToggles prefs={layerPrefs} region={region} />
+      </section>
+
+      {hasStatsView(region.id) && (
+        <CountedStats
+          dataAccess={dataAccess}
+          selectedCountries={selectedCountries}
+          onCountryChange={onCountryChange}
+        />
+      )}
+    </div>
+  );
+}
+
+function SectionHeading({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div className="mb-2">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-gray-500">{title}</h3>
+      <p className="text-xs text-gray-500 mt-0.5">{hint}</p>
+    </div>
+  );
+}
+
+/** The counted rows and the total; mounted only where there is something to count. */
+function CountedStats({ dataAccess, selectedCountries, onCountryChange }: MapStatsTabProps) {
   // Only this region's countries and line types - the other region is a separate
   // view entirely.
   const region = useRegion();
@@ -72,10 +127,11 @@ export default function CountriesStatsTab({
   };
 
   return (
-    <div className="p-4 text-fg">
-      <h3 className="text-lg font-bold mb-4">
-        {showCountries ? "Countries & Statistics" : "Statistics"}
-      </h3>
+    <section>
+      <SectionHeading
+        title={showCountries ? "Countries" : "Line types"}
+        hint={`Ticked ${showCountries ? "countries" : "line types"} are shown and counted.`}
+      />
 
       {showCountries && (
         <>
@@ -209,7 +265,7 @@ export default function CountriesStatsTab({
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 

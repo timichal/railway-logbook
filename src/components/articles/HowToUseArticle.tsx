@@ -28,21 +28,21 @@ export default function HowToUseArticle() {
           <i>Heritage &amp; tourist</i> lines (lines of their own, outside the national timetable
           and published through the operator's own channels - museum and preserved railways, but
           also tourist lines such as rack railways and funiculars, some of which run daily) are
-          revealed by the <b>Heritage &amp; tourist lines</b> switch under <b>Show on map</b> in the
-          menu, and drawn as dotted lines. <i>Special</i> services (regular national tracks used
-          only irregularly by passenger trains - diversions during engineering works, festival or
-          anniversary runs, occasional tourist trains) are revealed by the <b>Special services</b>{" "}
-          switch there, and drawn as dashed lines. Some of these may be missing and some may be
-          without any traffic at the moment.
+          revealed by the <b>Heritage &amp; tourist lines</b> switch under <b>Show on map</b> in the{" "}
+          <b>Map &amp; Stats</b> tab (<b>Map</b> on a phone), and drawn as dotted lines.{" "}
+          <i>Special</i> services (regular national tracks used only irregularly by passenger trains
+          - diversions during engineering works, festival or anniversary runs, occasional tourist
+          trains) are revealed by the <b>Special services</b> switch there, and drawn as dashed
+          lines. Some of these may be missing and some may be without any traffic at the moment.
         </p>
         <p className="mb-4">
           In Japan the dashed lines are the <b>Non-JR lines</b> instead - private and third-sector
           railways, timetabled like the JR network. They are shown from the start, count towards
-          your progress (the <b>Statistics</b> tab gives JR and non-JR lines separately, then
+          your progress (the <b>Map &amp; Stats</b> tab gives JR and non-JR lines separately, then
           together), and the journey planner uses them unless you turn off its{" "}
-          <b>Include Non-JR lines</b> switch. The <b>Statistics</b> tab is also where you tick which
-          of the two the map shows - as you would countries in Europe, an unticked one is hidden
-          from the map and left out of the progress box.
+          <b>Include Non-JR lines</b> switch. The <b>Map &amp; Stats</b> tab is also where you tick
+          which of the two the map shows - as you would countries in Europe, an unticked one is
+          hidden from the map and left out of the progress box.
         </p>
         <p className="mb-4">
           While in the <b>Route Logger</b> mode, you can either click on individual line parts or
@@ -64,10 +64,12 @@ export default function HowToUseArticle() {
           stations.
         </p>
         <p className="mb-4">
-          In the <b>Countries</b> tab, you can choose to display or hide railways by each country.
-          Croos-border lines are shown only when both countries are enabled. The stats section shows
-          your progress per country and for the whole network. Heritage &amp; tourist lines and
-          special services are not counted in the stats.
+          In the <b>Map &amp; Stats</b> tab, you can choose to display or hide railways by each
+          country. Cross-border lines are shown only when both countries are enabled. The same list
+          shows your progress per country and for the whole network. Heritage &amp; tourist lines
+          and special services - switched at the top of the tab - are not counted in the stats. The{" "}
+          <b>Scenic lines</b> switch beside them adds no lines: it highlights particularly scenic
+          stretches of the routes already on the map.
         </p>
         <p className="mb-4">
           Made by Michal Zlatkovský with a lot of help from the Claude Code AI tool. The code is{" "}

@@ -14,8 +14,8 @@ export async function GET(request: Request): Promise<Response> {
 /**
  * PUT /api/v1/preferences — { selectedCountries }.
  *
- * A whole-list replacement rather than a patch: that is what the Countries tab
- * does (Select All / None included), and an empty list is a legitimate value.
+ * A whole-list replacement rather than a patch: that is what the web's country list
+ * (Map & Stats tab) does (Select All / None included), and an empty list is a legitimate value.
  *
  * The response echoes the list as stored, not as sent: the codes are
  * normalized on the way in (see `updateSelectedCountriesForUser`), so a client

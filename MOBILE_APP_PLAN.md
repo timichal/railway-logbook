@@ -896,9 +896,9 @@ Three more pieces moved into the shared set, on the same terms as the highlights
   at any width this app will meet, but nothing enforces that, and a wider chip would
   be the first thing to find out.
 - **Japan's JR / Non-JR checkboxes are web-only so far** (added 2026-10-12). On the
-  web, the Statistics tab ticks each line type like a country: unticked, it is hidden
-  on the map and left out of the progress box, and the menu no longer carries the
-  Non-JR switch. They are the layer switches `showRegular` (new, Japan only) and
+  web, the Map & Stats tab (formerly Statistics) ticks each line type like a country:
+  unticked, it is hidden on the map and left out of the progress box; the tab's own
+  layer switches don't repeat the Non-JR one. They are the layer switches `showRegular` (new, Japan only) and
   `showSpecial`, stored per region (`shared/map/layerPrefs.ts`). To port it:
   checkboxes on the `byUsage` rows of `mobile/app/countries.tsx` driving those two
   prefs; drop the Non-JR switch from `mobile/src/map/LayerToggles.tsx` where the

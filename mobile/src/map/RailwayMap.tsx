@@ -127,7 +127,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   // Memoised: a new array each render would be sent across to the native layer again
   const scenicFilter = useMemo(() => scenicLinesFilter(countries), [countries]);
   // Regular is always drawn here: the native app has no JR-lines switch yet (the
-  // web app's is a checkbox in its Statistics tab)
+  // web app's is a checkbox in its Map & Stats tab)
   const shownTypes = useMemo(
     () => shownUsageTypes({ showRegular: true, showHeritage, showSpecial }),
     [showHeritage, showSpecial],

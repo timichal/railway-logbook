@@ -15,7 +15,7 @@ import { btn } from "@/lib/ui/buttonStyles";
  * bug nobody notices until someone opens the link.
  *
  * The layer switches are the shared map's alone: the user map moved them into the
- * hamburger menu, which the shared map has none of. So the prop stays rather than
+ * sidebar's Map & Stats tab, which the shared map has none of. So the prop stays rather than
  * the switches being deleted outright, and it is `false` on every other caller.
  *
  * On mobile it **collapses to a percentage pill** (the pattern `AdminLayerControls`

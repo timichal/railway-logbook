@@ -5,8 +5,7 @@
  * to aim at.
  *
  * It sits above the map's own bottom-right attribution rather than beside it, and
- * carries no layer switches: those are in the Settings tab, which is this app's
- * hamburger menu.
+ * carries no layer switches: those are in the Settings tab.
  */
 import type { ReactNode } from "react";
 import { useState } from "react";

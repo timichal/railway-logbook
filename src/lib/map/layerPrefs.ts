@@ -1,5 +1,5 @@
 /**
- * Persists user-map layer toggle preferences (the menu's switches) to
+ * Persists user-map layer toggle preferences (the Map & Stats tab's switches) to
  * localStorage so they survive reloads and navigation. The stored form and what
  * it means in a region are `shared/map/layerPrefs.ts`, shared with the native app.
  *

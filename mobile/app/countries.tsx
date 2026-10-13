@@ -1,5 +1,5 @@
 /**
- * Countries & statistics — the web app's `CountriesStatsTab`, as a screen of its own.
+ * Countries & statistics — the counted half of the web app's `MapStatsTab`, as a screen of its own.
  *
  * Where the region has a country filter (`hasCountryFilter`), two things in one list,
  * as on the web, because they are one decision: which countries the map and the

@@ -7,10 +7,10 @@ import { clickBufferFilter, scenicLinesFilter } from "@/lib/shared/map/userMapLa
 /**
  * Manages filter and visibility toggles for user map layers:
  * - Regular (usage_type=0, solid) — shown everywhere, except that Japan's JR lines
- *   can be unticked in the Statistics tab.
+ *   can be unticked in the Map & Stats tab.
  * - Heritage (usage_type=1, dotted) — "Show heritage lines" toggle.
  * - Special services (usage_type=2, dashed) — "Show special services" toggle, or
- *   Japan's non-JR lines, ticked in the Statistics tab.
+ *   Japan's non-JR lines, ticked in the Map & Stats tab.
  *   All three are independent.
  * - Scenic lines: visibility, and the country filter the routes have too
  *

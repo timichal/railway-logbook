@@ -15,7 +15,7 @@
  * **The Regular switch exists only where Regular is not the only ordinary type**
  * (`hasOrdinaryNonRegular` — Japan's JR lines beside its non-JR ones), and is
  * stored per region for the same reason as Special. There the two are a filter in
- * the Statistics tab, as Europe's countries are: an unticked type is hidden on the
+ * the Map & Stats tab, as Europe's countries are: an unticked type is hidden on the
  * map and left out of the progress box. Elsewhere Regular is the map itself, there
  * is nothing to switch it with, and it always reads as shown.
  */

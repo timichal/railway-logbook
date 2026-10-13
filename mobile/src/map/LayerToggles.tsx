@@ -1,7 +1,8 @@
 /**
  * The three layer switches, as `LayerToggles` is on the web — same labels, same
- * region rules, in the Settings tab instead of the hamburger menu (which is what the
- * Settings tab is here).
+ * region rules, in the Settings tab rather than beside the counted rows in the web
+ * sidebar's Map & Stats tab (this app's Countries/Statistics screen is a separate
+ * screen reached from Settings).
  *
  * The region rules live here rather than in the map, for the same reason they do
  * there: a switch the map ignores would be worse than no switch. Japan renames
