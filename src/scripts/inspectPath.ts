@@ -12,9 +12,9 @@
  *        Arguments are station names (exact, or a unique prefix) or station ids.
  *        --special searches Special routes too, as Japan's planner does by default.
  */
-import dotenv from "dotenv";
-
-dotenv.config();
+import pool from "../lib/db";
+import { haversineDistance } from "../lib/geoUtils";
+import { findRoutePathBetweenStations } from "../lib/routePathFinder";
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -24,10 +24,6 @@ async function main() {
     console.error('Usage: npm run inspectPath -- "<from>" "<to>" ["<via>"...] [--special]');
     process.exit(1);
   }
-
-  const { findRoutePathBetweenStations } = await import("../lib/routePathFinder");
-  const pool = (await import("../lib/db")).default;
-  const { haversineDistance } = await import("../lib/geoUtils");
 
   const resolve = async (arg: string): Promise<number> => {
     // A numeric argument is taken as a station id verbatim — the way to inspect a
@@ -118,4 +114,7 @@ async function main() {
   await pool.end();
 }
 
-main();
+main().catch((error) => {
+  console.error("Script error:", error instanceof Error ? error.message : error);
+  process.exit(1);
+});

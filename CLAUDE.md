@@ -153,7 +153,7 @@ Martin (port 3001) serves `railway_routes_tile` (`selected_countries` filter, no
 - **Nothing Martin publishes may depend on who is asking** — Martin answers anyone, with no session in sight.
 - **`railway_routes_mvt`, the tile coloured by someone's rides, must never be added to `martin/configuration.yml`.** It is served by `api/tiles/railway_routes/[z]/[x]/[y]`, which resolves whose rides on every tile: `?share=<token>` (only while sharing is on), else a bearer token, else the session cookie. A missing or dead credential is a 401/404, never an uncoloured tile that would pass for an unridden map. The client never names a user — `createRailwayRoutesSource({ rides: "session" | { shareToken } })`; without `rides` the source stays on Martin. It queries through its own pool (`routeTileQueries.ts`).
 - **`admin_notes_tile` is kept out of Martin too**, served by `api/tiles/admin_notes/[z]/[x]/[y]` with an admin session check on every tile (401 / 403). These two handlers are the only ones that read the cookie; they share `lib/api/tiles.ts`.
-- **Every `pg` pool needs an `error` listener**, or an idle connection dying takes the process down.
+- **Every `pg` pool needs an `error` listener**, or an idle connection dying takes the process down — so every pool is made by `createPool` (`db.ts`), which attaches it.
 - Zoom ranges: `ZOOM_RANGES` in `lib/shared/map/zoomRanges.ts` (its header lists what else must match).
 - **An MVT property is a scalar**: `frequency` arrives as a Postgres array literal. Decode with `parsePgTextArray` / `parseFrequencyTags` (`map/routeFeature.ts`), never `split(",")`.
 
@@ -319,7 +319,7 @@ Click a railway part → exact start/end coordinate. Right-click → create a no
 ## Development workflow
 
 ### Database migrations
-Schema changes and data transforms are a TS script in `src/scripts/`: import `pool` from `@/lib/db`, run SQL, log progress, exit. Reference: `markAllRoutesInvalid.ts`. Register it in `package.json` and document it under "Database ops" and "Scripts" here.
+Schema changes and data transforms are a TS script in `src/scripts/`: import `pool` from `../lib/db`, run SQL, log progress, exit. Reference: `markAllRoutesInvalid.ts`. Register it in `package.json` and document it under "Database ops" and "Scripts" here.
 
 ### Route recalculation performance
 Read `RECALC_PERFORMANCE.md` before touching `verifyRouteData.ts`, `scripts/lib/railwayPathFinder.ts`, `partNetwork.ts` or `partGeometry.ts` for performance. Don't shrink the pathfinder's buffer, don't wrap the run in a transaction, don't silence the pathfinder from outside.

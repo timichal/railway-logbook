@@ -28,14 +28,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   - The database and public implementations are `async f() { return await g() }`
     wrappers. Write them as `f: (…) => g(…)`.
 
-- [ ] **Scripts bootstrap** (~40 lines). Eight scripts repeat `dotenv.config()` +
-  `getDbConfig()` + `new Pool(...)`. `dbConfig.ts` exports both `getDbConfig()` and
-  `dbConfig` only because of ESM import ordering. Put `import "dotenv/config"` at the
-  top of `dbConfig.ts` (`serverData.ts` already does this), drop `getDbConfig`, and let
-  scripts import `pool` from `@/lib/db`. That is the pattern CLAUDE.md already
-  prescribes for migrations, which `markAllRoutesInvalid.ts`, the stated reference,
-  doesn't follow.
-
 - [ ] **`db.ts`'s `query()` wrapper** (~10 lines, plus typing). It does
   connect/query/release, which is exactly what `pool.query` already does, and it loses
   `pool.query<T>`'s row typing. It is used in 8 modules. Replace with `pool.query`.

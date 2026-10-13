@@ -1,17 +1,24 @@
-import { Pool, type PoolClient } from "pg";
+import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { dbConfig } from "./dbConfig";
 import { NotFoundError } from "./errors";
 
-// Create a connection pool for better performance
-const pool = new Pool(dbConfig);
+/**
+ * A pool on the app's database, `overrides` on top of `dbConfig`. Every pool is
+ * made here, so none can miss the listener: an idle connection that dies
+ * (Postgres restarted, an idle timeout) is reported as an 'error' on the pool.
+ * Unlistened, that is an uncaught exception, and it would take the whole process
+ * down with it — the Next server, or a deploy part-way through its import; the
+ * pool has already dropped the connection and opens a new one on the next query.
+ */
+export function createPool(overrides: PoolConfig = {}): Pool {
+  const pool = new Pool({ ...dbConfig, ...overrides });
+  pool.on("error", (error) => {
+    console.error("Idle database connection failed:", error.message);
+  });
+  return pool;
+}
 
-// An idle connection that dies (Postgres restarted, an idle timeout) is reported
-// as an 'error' on the pool. Unlistened, that is an uncaught exception, and it
-// would take the whole Next process down with it; the pool has already dropped
-// the connection and opens a new one on the next query.
-pool.on("error", (error) => {
-  console.error("Idle database connection failed:", error.message);
-});
+const pool = createPool();
 
 export async function query(text: string, params?: unknown[]) {
   const client = await pool.connect();

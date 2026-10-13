@@ -13,12 +13,8 @@
  * an argument, so it does not end up in shell history or a process listing.
  */
 
-import dotenv from "dotenv";
-import { Pool } from "pg";
-import { getDbConfig } from "../lib/dbConfig";
+import pool from "../lib/db";
 import { hashPassword } from "../lib/passwordHash";
-
-dotenv.config();
 
 const MIN_PASSWORD_LENGTH = 12;
 const USAGE = "Usage: npm run createAdmin -- <email> [name] [--reset]";
@@ -124,13 +120,6 @@ async function createAdmin() {
     console.error(`Not an email address: "${email}"`);
     process.exit(1);
   }
-
-  const pool = new Pool(getDbConfig());
-  // The connection sits idle while the password is typed; if it dies then, the
-  // pool reports it here and reconnects for the insert instead of crashing.
-  pool.on("error", (error) => {
-    console.error("Idle database connection failed:", error.message);
-  });
 
   try {
     const existing = await pool.query("SELECT email FROM users WHERE id = 1");

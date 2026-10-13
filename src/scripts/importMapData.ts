@@ -1,4 +1,3 @@
-import dotenv from "dotenv";
 import {
   refreshAllStationProximity,
   STATION_ROUTE_PROXIMITY_METERS,
@@ -9,8 +8,6 @@ import {
   parseConcurrencyArg,
   verifyAndRecalculateRoutes,
 } from "./verifyRouteData";
-
-dotenv.config();
 
 async function loadGeoJSONData(): Promise<void> {
   // A pool rather than a single client: step 2 recalculates several routes at

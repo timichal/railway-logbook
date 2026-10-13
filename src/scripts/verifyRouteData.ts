@@ -1,7 +1,6 @@
-import dotenv from "dotenv";
-import { type Client, Pool } from "pg";
+import type { Client, Pool } from "pg";
 import { type Coord, coordinatesToWKT } from "../lib/coordinateUtils";
-import { getDbConfig } from "../lib/dbConfig";
+import { createPool } from "../lib/db";
 import { lineLengthKmSql } from "../lib/lineLength";
 import {
   refreshAllStationProximity,
@@ -9,11 +8,6 @@ import {
 } from "../lib/stationProximity";
 import { RailwayPathFinder } from "./lib/railwayPathFinder";
 import { runPool } from "./lib/runPool";
-
-dotenv.config();
-
-// Get database config after dotenv loads environment variables
-const dbConfig = getDbConfig();
 
 /**
  * How many routes are recalculated at once by default.
@@ -41,7 +35,7 @@ export function parseConcurrencyArg(args: string[]): number {
 
 /** A pool sized for `concurrency` workers, plus headroom for their UPDATEs. */
 export function createRecalcPool(concurrency: number): Pool {
-  return new Pool({ ...dbConfig, max: concurrency + 2 });
+  return createPool({ max: concurrency + 2 });
 }
 
 interface RecalculationResult {

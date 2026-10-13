@@ -27,7 +27,6 @@
  * the local database is left as it was.
  */
 
-import "dotenv/config";
 import { type StdioOptions, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";

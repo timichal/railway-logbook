@@ -6,16 +6,7 @@
  * for all routes in the database.
  */
 
-import dotenv from "dotenv";
-import { Pool } from "pg";
-import { getDbConfig } from "../lib/dbConfig";
-
-// Load environment variables from .env file
-dotenv.config();
-
-// Create pool after loading environment variables
-const dbConfig = getDbConfig();
-const pool = new Pool(dbConfig);
+import pool from "../lib/db";
 
 async function markAllRoutesInvalid() {
   const client = await pool.connect();

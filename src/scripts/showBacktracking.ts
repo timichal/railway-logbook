@@ -23,13 +23,10 @@
  * Usage: npm run showBacktracking [--concurrency=N]
  *        --concurrency  routes searched at once (default as for recalculation)
  */
-import dotenv from "dotenv";
 import type { Pool } from "pg";
 import { RailwayPathFinder } from "./lib/railwayPathFinder";
 import { runPool } from "./lib/runPool";
 import { createRecalcPool, parseConcurrencyArg } from "./verifyRouteData";
-
-dotenv.config();
 
 interface RouteRow {
   track_id: number;

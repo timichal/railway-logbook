@@ -14,13 +14,7 @@
  * repeatedly.
  */
 
-import dotenv from "dotenv";
-import { Pool } from "pg";
-import { getDbConfig } from "../lib/dbConfig";
-
-dotenv.config();
-
-const pool = new Pool(getDbConfig());
+import pool from "../lib/db";
 
 interface OwnedSequence {
   sequence_name: string;

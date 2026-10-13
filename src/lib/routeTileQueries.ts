@@ -12,9 +12,8 @@
  * inside the tile query itself (see `routeTile`).
  */
 
-import { Pool } from "pg";
 import type { TokenClaims } from "./authTokens";
-import { dbConfig } from "./dbConfig";
+import { createPool } from "./db";
 import { isPlausibleShareToken, sharedMapOwnerIdSql } from "./publicMapQueries";
 import { currentAccountIdSql, issuedAtParam } from "./sessionQueries";
 
@@ -26,15 +25,7 @@ import { currentAccountIdSql, issuedAtParam } from "./sessionQueries";
  * its own 20. Exported for the app's other tile, the admin notes
  * (`adminNotesTileQueries.ts`), for the same reason.
  */
-export const tilePool = new Pool({ ...dbConfig, max: 10 });
-
-// An idle connection that dies (Postgres restarted, an idle timeout) is reported
-// as an 'error' on the pool. Unlistened, that is an uncaught exception, and it
-// would take the whole Next process down with it; the pool has already dropped
-// the connection and opens a new one on the next query.
-tilePool.on("error", (error) => {
-  console.error("Idle route tile connection failed:", error.message);
-});
+export const tilePool = createPool({ max: 10 });
 
 /**
  * Whose rides: a session's or access token's claims (signature checked, account

@@ -12,9 +12,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import dotenv from "dotenv";
 import { Client } from "pg";
-import { getDbConfig } from "@/lib/dbConfig";
+import { dbConfig } from "@/lib/dbConfig";
 import { isRouteFullyRidden, type RiddenPart } from "@/lib/shared/routeCoverage";
 
 interface Case {
@@ -92,8 +91,7 @@ function randomCases(count: number): Omit<Case, "trackId">[] {
 }
 
 async function connect(): Promise<Client | null> {
-  dotenv.config({ quiet: true });
-  const client = new Client({ ...getDbConfig(), connectionTimeoutMillis: 3000 });
+  const client = new Client({ ...dbConfig, connectionTimeoutMillis: 3000 });
   try {
     await client.connect();
     return client;
