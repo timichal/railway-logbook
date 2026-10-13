@@ -15,8 +15,52 @@ import {
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
+import type { Region } from "@/lib/shared/regions";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints, compareText } from "@/lib/ui/adminListSort";
+
+type RouteFilterKey = "invalid" | "underRepair" | "unintendedBacktracking" | "withoutName";
+
+interface RouteFilter {
+  key: RouteFilterKey;
+  label: string;
+  predicate: (route: AdminRouteSummary) => boolean;
+  /** Ticked filters sharing a group are OR'd; groups are AND'd. Defaults to the key. */
+  group?: string;
+  /** Offered only in the regions this returns true for. */
+  onlyWhen?: (region: Region) => boolean;
+}
+
+const ROUTE_FILTERS: RouteFilter[] = [
+  // The two invalid filters split the failing routes between them: "invalid" is
+  // the plain worklist, "under repair" the ones parked pending OSM works. Ticking
+  // both is how you see every invalid route.
+  {
+    key: "invalid",
+    label: "Invalid",
+    predicate: (route) => route.is_valid === false && route.under_repair !== true,
+    group: "invalid",
+  },
+  {
+    key: "underRepair",
+    label: "Under repair",
+    predicate: (route) => route.is_valid === false && route.under_repair === true,
+    group: "invalid",
+  },
+  {
+    key: "unintendedBacktracking",
+    label: "Unintended backtracking",
+    predicate: (route) => route.has_backtracking === true && route.intended_backtracking !== true,
+  },
+  // The worklist of routes still waiting for a name; only regions that name
+  // their lines have one to miss.
+  {
+    key: "withoutName",
+    label: "Without name",
+    predicate: (route) => !route.name?.trim(),
+    onlyWhen: (region) => region.hasRouteNames,
+  },
+];
 
 function editFormFromRoute(route: AdminRouteDetail): EditRouteData {
   return {
@@ -44,7 +88,7 @@ interface AdminRoutesTabProps {
   onRouteSelect?: (routeId: number | null, options?: { focus?: boolean }) => void;
   onRouteDeleted?: () => void;
   onRouteUpdated?: () => void;
-  onEditGeometry?: (trackId: number) => void;
+  onEditGeometry: (trackId: number) => void;
   onRouteFocus?: (geometry: string) => void;
   availableTags?: string[];
   onTagsChanged?: () => void;
@@ -68,15 +112,25 @@ export default function AdminRoutesTab({
   const regionId = region.id;
   const { showError, showSuccess } = useToast();
 
-  // State
   const [routes, setRoutes] = useState<AdminRouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [showInvalidOnly, setShowInvalidOnly] = useState(false);
-  const [showUnderRepairOnly, setShowUnderRepairOnly] = useState(false);
-  const [showUnintendedBacktrackingOnly, setShowUnintendedBacktrackingOnly] = useState(false);
-  const [showWithoutNameOnly, setShowWithoutNameOnly] = useState(false);
+  const [checkedFilters, setCheckedFilters] = useState<ReadonlySet<RouteFilterKey>>(new Set());
+  const regionFilters = useMemo(
+    () => ROUTE_FILTERS.filter((filter) => filter.onlyWhen?.(region) ?? true),
+    [region],
+  );
+  // A region switch goes back to page 1 and unticks the filters the new region
+  // doesn't offer, so none is left applying unseen or comes back on return.
+  const [filtersRegionId, setFiltersRegionId] = useState(regionId);
+  if (filtersRegionId !== regionId) {
+    setFiltersRegionId(regionId);
+    setCurrentPage(1);
+    setCheckedFilters(
+      (prev) => new Set(regionFilters.filter((f) => prev.has(f.key)).map((f) => f.key)),
+    );
+  }
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const itemsPerPage = 100;
   const [editForm, setEditForm] = useState<EditRouteData | null>(null);
@@ -90,7 +144,6 @@ export default function AdminRoutesTab({
     setEditForm(selectedRoute ? editFormFromRoute(selectedRoute) : null);
   }
 
-  // Data loading
   const loadRoutes = async () => {
     try {
       setIsLoading(true);
@@ -131,29 +184,16 @@ export default function AdminRoutesTab({
 
   // Filtering and pagination
   const filteredRoutes = useMemo(() => {
-    let filtered = orderedRoutes;
-
-    // The two invalid filters split the failing routes between them: "invalid"
-    // is the plain worklist, "under repair" the ones parked pending OSM works.
-    // Ticking both is how you see every invalid route.
-    if (showInvalidOnly || showUnderRepairOnly) {
-      filtered = filtered.filter((route) => {
-        if (route.is_valid !== false) return false;
-        return route.under_repair === true ? showUnderRepairOnly : showInvalidOnly;
-      });
+    const groups = new Map<string, RouteFilter["predicate"][]>();
+    for (const filter of ROUTE_FILTERS) {
+      if (!checkedFilters.has(filter.key)) continue;
+      const group = filter.group ?? filter.key;
+      groups.set(group, [...(groups.get(group) ?? []), filter.predicate]);
     }
-
-    if (showUnintendedBacktrackingOnly) {
-      filtered = filtered.filter(
-        (route) => route.has_backtracking === true && route.intended_backtracking !== true,
-      );
-    }
-
-    // Only offered where the region names its lines — the worklist of routes
-    // still waiting for a name.
-    if (showWithoutNameOnly) {
-      filtered = filtered.filter((route) => !route.name?.trim());
-    }
+    const ticked = [...groups.values()];
+    let filtered = orderedRoutes.filter((route) =>
+      ticked.every((predicates) => predicates.some((predicate) => predicate(route))),
+    );
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -166,15 +206,7 @@ export default function AdminRoutesTab({
     }
 
     return filtered;
-  }, [
-    orderedRoutes,
-    hasRouteNames,
-    searchQuery,
-    showInvalidOnly,
-    showUnderRepairOnly,
-    showUnintendedBacktrackingOnly,
-    showWithoutNameOnly,
-  ]);
+  }, [orderedRoutes, hasRouteNames, searchQuery, checkedFilters]);
 
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   const paginatedRoutes = useMemo(() => {
@@ -182,27 +214,28 @@ export default function AdminRoutesTab({
     return filteredRoutes.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredRoutes, currentPage]);
 
-  const invalidRouteCount = routes.filter(
-    (route) => route.is_valid === false && route.under_repair !== true,
-  ).length;
-  const underRepairCount = routes.filter(
-    (route) => route.is_valid === false && route.under_repair === true,
-  ).length;
-  const unintendedBacktrackingCount = routes.filter(
-    (route) => route.has_backtracking === true && route.intended_backtracking !== true,
-  ).length;
-  const withoutNameCount = routes.filter((route) => !route.name?.trim()).length;
+  const filterCounts = useMemo(
+    () => regionFilters.map((filter) => routes.filter(filter.predicate).length),
+    [regionFilters, routes],
+  );
+  const filterOptions = regionFilters.map((filter, i) => ({
+    key: filter.key,
+    label: filter.label,
+    count: filterCounts[i],
+    checked: checkedFilters.has(filter.key),
+    onChange: (checked: boolean) =>
+      setCheckedFilters((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(filter.key);
+        else next.delete(filter.key);
+        return next;
+      }),
+  }));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the filter states are intentional triggers to reset pagination to page 1 when filtering changes.
   useEffect(() => {
     setCurrentPage(1);
-  }, [
-    searchQuery,
-    showInvalidOnly,
-    showUnderRepairOnly,
-    showUnintendedBacktrackingOnly,
-    showWithoutNameOnly,
-  ]);
+  }, [searchQuery, checkedFilters]);
 
   // Route selection. The page flies the map to a route picked here once it has
   // loaded; one already loaded has nothing to wait for.
@@ -277,9 +310,7 @@ export default function AdminRoutesTab({
       await loadRoutes();
 
       // Repaints the admin map: the flag decides violet vs grey.
-      if (onRouteUpdated) {
-        onRouteUpdated();
-      }
+      onRouteUpdated?.();
 
       showSuccess(
         underRepair ? "Route marked as under repair." : "Route no longer marked as under repair.",
@@ -307,13 +338,8 @@ export default function AdminRoutesTab({
 
       await loadRoutes();
 
-      if (onRouteSelect) {
-        onRouteSelect(null);
-      }
-
-      if (onRouteDeleted) {
-        onRouteDeleted();
-      }
+      onRouteSelect?.(null);
+      onRouteDeleted?.();
 
       // Deleting a route may have removed the last use of a tag.
       onTagsChanged?.();
@@ -341,9 +367,7 @@ export default function AdminRoutesTab({
       // Select the new copy so the admin can immediately edit it.
       onRouteSelect?.(newTrackId);
 
-      if (onRouteUpdated) {
-        onRouteUpdated();
-      }
+      onRouteUpdated?.();
 
       showSuccess(
         `Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" duplicated successfully.`,
@@ -379,30 +403,18 @@ export default function AdminRoutesTab({
 
       <div className="h-full flex">
         <RoutesList
-          routes={routes}
           paginatedRoutes={paginatedRoutes}
           totalRoutes={routes.length}
-          invalidRouteCount={invalidRouteCount}
-          underRepairCount={underRepairCount}
-          unintendedBacktrackingCount={unintendedBacktrackingCount}
-          withoutNameCount={withoutNameCount}
+          filters={filterOptions}
           hasRouteNames={region.hasRouteNames}
           isLoading={isLoading && !selectedRoute}
           selectedRouteId={selectedRouteId}
           selectedRouteLoading={selectedRouteLoading}
           searchQuery={searchQuery}
-          showInvalidOnly={showInvalidOnly}
-          showUnderRepairOnly={showUnderRepairOnly}
-          showUnintendedBacktrackingOnly={showUnintendedBacktrackingOnly}
-          showWithoutNameOnly={showWithoutNameOnly}
           currentPage={currentPage}
           totalPages={totalPages}
           filteredCount={filteredRoutes.length}
           onSearchChange={setSearchQuery}
-          onInvalidOnlyChange={setShowInvalidOnly}
-          onUnderRepairOnlyChange={setShowUnderRepairOnly}
-          onUnintendedBacktrackingOnlyChange={setShowUnintendedBacktrackingOnly}
-          onWithoutNameOnlyChange={setShowWithoutNameOnly}
           onRouteClick={handleRouteClick}
           onPageChange={setCurrentPage}
         />
@@ -417,7 +429,7 @@ export default function AdminRoutesTab({
           onSave={handleSaveRoute}
           onDelete={handleDeleteRoute}
           onDuplicate={handleDuplicateRoute}
-          onEditGeometry={onEditGeometry || (() => {})}
+          onEditGeometry={onEditGeometry}
           onToggleUnderRepair={handleToggleUnderRepair}
           onUnselect={handleUnselect}
         />

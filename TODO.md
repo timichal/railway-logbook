@@ -15,14 +15,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Larger refactors (the biggest wins)
 
-- [ ] **Admin route filters as a table** (~80 lines). `AdminRoutesTab` keeps four
-  filter booleans and four counts, each with its own predicate written twice (once for
-  the count, once for the filter). `RoutesList` takes 4 × 3 props for them and renders
-  four near-identical checkbox blocks. Use one `ROUTE_FILTERS` table
-  (`{ key, label, predicate, onlyWhen? }`) and drive state, counts, filtering and
-  rendering from it. Invalid and under-repair are OR'd with each other; the rest are
-  AND'd. Also: `RoutesList`'s `routes` prop is passed in but never read.
-
 - [ ] **`useAdminLayerVisibility` + `AdminLayerControls` as a table** (~70 lines). Six
   `useState` pairs and a 12-prop interface could be one `Record<LayerKey, boolean>`,
   a `toggle(key)`, and a `{ key, label, layerIds }` list. The effect that applies
@@ -229,8 +221,7 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
   Re-run the scan to get the full list. (The scan: list every
   `export function|const|type` under `src/` and count word-boundary hits in every
   other file under `src`, `tests`, `mobile/src` and `mobile/app`.)
-- [ ] Manual plurals (`x !== 1 ? "s" : ""`) where `plural()` exists: `RoutesList`,
-  `LoginForm`.
+- [ ] Manual plural (`x !== 1 ? "s" : ""`) where `plural()` exists: `LoginForm`.
 
 ---
 

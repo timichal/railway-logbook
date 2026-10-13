@@ -1,35 +1,34 @@
 "use client";
 
 import type { AdminRouteSummary } from "@/lib/adminRouteActions";
+import { plural } from "@/lib/plural";
 import { btn, optionRow } from "@/lib/ui/buttonStyles";
 
+interface RouteFilterOption {
+  key: string;
+  label: string;
+  /** Routes matching the filter, out of the whole list. */
+  count: number;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
 interface RoutesListProps {
-  routes: AdminRouteSummary[];
   paginatedRoutes: AdminRouteSummary[];
   totalRoutes: number;
-  invalidRouteCount: number;
-  underRepairCount: number;
-  unintendedBacktrackingCount: number;
-  withoutNameCount: number;
-  /** Whether this region names its lines — gates the "Without name" filter. */
+  /** The filters the region offers, in display order. */
+  filters: RouteFilterOption[];
+  /** Whether this region names its lines. */
   hasRouteNames: boolean;
   isLoading: boolean;
   /** The selected route's detail is still loading; its row says so. */
   selectedRouteLoading: boolean;
   selectedRouteId?: number | null;
   searchQuery: string;
-  showInvalidOnly: boolean;
-  showUnderRepairOnly: boolean;
-  showUnintendedBacktrackingOnly: boolean;
-  showWithoutNameOnly: boolean;
   currentPage: number;
   totalPages: number;
   filteredCount: number;
   onSearchChange: (query: string) => void;
-  onInvalidOnlyChange: (checked: boolean) => void;
-  onUnderRepairOnlyChange: (checked: boolean) => void;
-  onUnintendedBacktrackingOnlyChange: (checked: boolean) => void;
-  onWithoutNameOnlyChange: (checked: boolean) => void;
   onRouteClick: (trackId: number) => void;
   onPageChange: (page: number) => void;
 }
@@ -37,27 +36,16 @@ interface RoutesListProps {
 export default function RoutesList({
   paginatedRoutes,
   totalRoutes,
-  invalidRouteCount,
-  underRepairCount,
-  unintendedBacktrackingCount,
-  withoutNameCount,
+  filters,
   hasRouteNames,
   isLoading,
   selectedRouteLoading,
   selectedRouteId,
   searchQuery,
-  showInvalidOnly,
-  showUnderRepairOnly,
-  showUnintendedBacktrackingOnly,
-  showWithoutNameOnly,
   currentPage,
   totalPages,
   filteredCount,
   onSearchChange,
-  onInvalidOnlyChange,
-  onUnderRepairOnlyChange,
-  onUnintendedBacktrackingOnlyChange,
-  onWithoutNameOnlyChange,
   onRouteClick,
   onPageChange,
 }: RoutesListProps) {
@@ -67,54 +55,20 @@ export default function RoutesList({
       <div className="p-3 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-gray-900">Routes ({totalRoutes})</h3>
-          {/* Filters */}
           <div className="flex flex-col items-start gap-1">
-            {/* Invalid Only Filter */}
-            <label className="flex justify-center items-center text-sm">
-              <input
-                type="checkbox"
-                checked={showInvalidOnly}
-                onChange={(e) => onInvalidOnlyChange(e.target.checked)}
-                className="mr-2"
-              />
-              <span className="text-gray-700">Invalid ({invalidRouteCount})</span>
-            </label>
-            {/* Under Repair Filter — invalid routes parked pending OSM works.
-                Disjoint from "Invalid": tick both to see every invalid route. */}
-            <label className="flex justify-center items-center text-sm">
-              <input
-                type="checkbox"
-                checked={showUnderRepairOnly}
-                onChange={(e) => onUnderRepairOnlyChange(e.target.checked)}
-                className="mr-2"
-              />
-              <span className="text-gray-700">Under repair ({underRepairCount})</span>
-            </label>
-            {/* Unintended Backtracking Filter */}
-            <label className="flex justify-center items-center text-sm">
-              <input
-                type="checkbox"
-                checked={showUnintendedBacktrackingOnly}
-                onChange={(e) => onUnintendedBacktrackingOnlyChange(e.target.checked)}
-                className="mr-2"
-              />
-              <span className="text-gray-700">
-                Unintended backtracking ({unintendedBacktrackingCount})
-              </span>
-            </label>
-            {/* Without Name Filter — the worklist of routes still missing their
-                line name. Only regions that name their lines have one to miss. */}
-            {hasRouteNames && (
-              <label className="flex justify-center items-center text-sm">
+            {filters.map((filter) => (
+              <label key={filter.key} className="flex justify-center items-center text-sm">
                 <input
                   type="checkbox"
-                  checked={showWithoutNameOnly}
-                  onChange={(e) => onWithoutNameOnlyChange(e.target.checked)}
+                  checked={filter.checked}
+                  onChange={(e) => filter.onChange(e.target.checked)}
                   className="mr-2"
                 />
-                <span className="text-gray-700">Without name ({withoutNameCount})</span>
+                <span className="text-gray-700">
+                  {filter.label} ({filter.count})
+                </span>
               </label>
-            )}
+            ))}
           </div>
         </div>
         {/* Search Box */}
@@ -126,9 +80,7 @@ export default function RoutesList({
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg"
         />
         {searchQuery && (
-          <div className="text-xs text-gray-500 mt-1">
-            Found {filteredCount} route{filteredCount !== 1 ? "s" : ""}
-          </div>
+          <div className="text-xs text-gray-500 mt-1">Found {plural(filteredCount, "route")}</div>
         )}
       </div>
 
