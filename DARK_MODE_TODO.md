@@ -4,10 +4,8 @@ Dark mode shipped as a beta: the colour-scheme setting (Light / System / Dark, i
 the menu), the palette re-pointing that carries the whole app with it, and the
 basemap's dark style. `CLAUDE.md`'s **Dark mode** section documents all of that —
 read it first. What is below is the rest: three things the beta deliberately did
-not attempt, plus two found by using it. Each says why it costs more than it looks
-like it should. The last of them — country borders — is not really a dark-mode item
-at all: it is wanted in both schemes, and lives here because the dark map is where
-it was noticed.
+not attempt, plus one found by using it. Each says why it costs more than it looks
+like it should.
 
 - [ ] **The route colours are still the light ones.** `COLORS.railwayRoutes` —
       visited green, partial orange, unvisited red, each with a darker highspeed
@@ -39,14 +37,3 @@ it was noticed.
       opens the sidebar drawer), so the switch is not reachable there; it follows
       whatever the main map set. Either put a compact switch in the admin bar
       beside the region switch, or leave it — "Back to Main Map" is one click.
-- [ ] **Country borders are not visible on either map.** The basemap styles draw
-      boundaries themselves, but `createBasemapFadeLayer` sits above the whole
-      basemap and washes them out along with everything else (0.25 toward white in
-      light, 0.4 toward near-black in dark) — so on a map whose whole point is which
-      country a line runs through, the borders are the one piece of context missing.
-      Wanted in **both** schemes, not just dark. The fix has the shape the station
-      labels already have: the boundary layers want to be lifted above the fade (or
-      re-added over it) rather than left under it, which means finding them by what
-      they draw in each of the two styles — liberty's ~110 layers and dark's 47 do
-      not share an id list — and giving them a colour per scheme, since a border
-      drawn above the fade is picked against the ground rather than washed into it.
