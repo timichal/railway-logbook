@@ -83,8 +83,16 @@ const LOGGED_KM_SQL = `CASE WHEN ${HAS_STRETCH_SQL}
  * it once, and A–B plus B–C add up to A–C.
  *
  * `$1` must be the user id; callers may append further predicates on `ut`.
+ * `tripIdsParam` (e.g. `"$2"`, an int[]) limits the aggregates to those trips:
+ * the planner doesn't carry an outer `ut.id = ANY(...)` into the grouped
+ * subqueries, so without it every trip the user has is aggregated and all but a
+ * page of them thrown away.
  */
-const TRIP_STATS_SELECT = `
+function tripStatsSql(tripIdsParam?: string): string {
+  const tripsWhere = tripIdsParam
+    ? `uj.trip_id = ANY(${tripIdsParam}::int[])`
+    : "uj.trip_id IS NOT NULL";
+  return `
   SELECT
     ut.*,
     COALESCE(j.journey_count, 0) AS journey_count,
@@ -99,7 +107,7 @@ const TRIP_STATS_SELECT = `
            MIN(uj.date)::text AS start_date,
            MAX(uj.date)::text AS end_date
     FROM user_journeys uj
-    WHERE uj.user_id = $1 AND uj.trip_id IS NOT NULL
+    WHERE uj.user_id = $1 AND ${tripsWhere}
     GROUP BY uj.trip_id
   ) j ON j.trip_id = ut.id
   LEFT JOIN (
@@ -115,13 +123,14 @@ const TRIP_STATS_SELECT = `
                FILTER (WHERE ${HAS_STRETCH_SQL}) AS stretches
       FROM user_journeys uj
       JOIN user_logged_parts ulp ON ulp.journey_id = uj.id
-      WHERE uj.user_id = $1 AND uj.trip_id IS NOT NULL
+      WHERE uj.user_id = $1 AND ${tripsWhere}
       GROUP BY uj.trip_id, ulp.track_id
     ) tr
     JOIN railway_routes rr ON rr.track_id = tr.track_id
     GROUP BY tr.trip_id
   ) r ON r.trip_id = ut.id
 `;
+}
 
 // Journey with route stats (used in trip detail view)
 export type JourneyInTrip = Journey & {
@@ -160,7 +169,7 @@ function journeyStatsSql(userParam: string, where: string, orderBy?: string): st
  */
 export async function tripsForUser(userId: number, region: RegionId): Promise<TripWithStats[]> {
   const result = await pool.query<TripWithStats>(
-    `${TRIP_STATS_SELECT}
+    `${tripStatsSql()}
      WHERE ut.user_id = $1
        AND ${tripInRegionSql(region, "ut.id")}
      ORDER BY j.end_date DESC NULLS LAST, ut.created_at DESC`,
@@ -174,25 +183,24 @@ export async function tripForUser(
   userId: number,
   tripId: number,
 ): Promise<{ trip: Trip; journeys: JourneyInTrip[]; routeIds: number[] }> {
-  const tripResult = await pool.query<Trip>(
-    "SELECT * FROM user_trips WHERE id = $1 AND user_id = $2",
-    [tripId, userId],
-  );
+  // All three at once: the journey and route reads are scoped to the user, so
+  // for someone else's trip they come back empty and are discarded with the 404
+  const [tripResult, journeysResult, routeIdsResult] = await Promise.all([
+    pool.query<Trip>("SELECT * FROM user_trips WHERE id = $1 AND user_id = $2", [tripId, userId]),
+    pool.query<JourneyInTrip>(journeyStatsSql("$2", "uj.trip_id = $1", "uj.date ASC"), [
+      tripId,
+      userId,
+    ]),
+    pool.query<{ track_id: number }>(
+      `SELECT DISTINCT ulp.track_id
+      FROM user_logged_parts ulp
+      JOIN user_journeys uj ON ulp.journey_id = uj.id
+      WHERE uj.trip_id = $1 AND uj.user_id = $2`,
+      [tripId, userId],
+    ),
+  ]);
   const trip = tripResult.rows[0];
   if (!trip) throw new NotFoundError("Trip not found");
-
-  const journeysResult = await pool.query<JourneyInTrip>(
-    journeyStatsSql("$2", "uj.trip_id = $1", "uj.date ASC"),
-    [tripId, userId],
-  );
-
-  const routeIdsResult = await pool.query<{ track_id: number }>(
-    `SELECT DISTINCT ulp.track_id
-    FROM user_logged_parts ulp
-    JOIN user_journeys uj ON ulp.journey_id = uj.id
-    WHERE uj.trip_id = $1 AND uj.user_id = $2`,
-    [tripId, userId],
-  );
 
   return {
     trip,
@@ -346,71 +354,65 @@ export async function journeysAndTripsForUser(
     )
   `;
 
-  // Total count for pagination UI
-  const countParams: (string | number)[] = [userId];
-  if (searchPattern) countParams.push(searchPattern);
-  const countResult = await pool.query<{ total: string }>(
-    `${baseCte} SELECT COUNT(*)::text AS total FROM ordered`,
-    countParams,
-  );
-  const total = parseInt(countResult.rows[0]?.total ?? "0", 10);
-
-  // Page of (type, id) ordered by effective_date desc, then created_at desc as tiebreaker
-  const pageParams: (string | number)[] = [userId];
-  if (searchPattern) pageParams.push(searchPattern);
-  const limitIdx = pageParams.length + 1;
-  const offsetIdx = pageParams.length + 2;
-  pageParams.push(safePageSize, offset);
-
-  const pageResult = await pool.query<{ type: "trip" | "journey"; item_id: number }>(
+  // Page of (type, id) ordered by effective_date desc, then created_at desc as
+  // tiebreaker, each row carrying the total count for the pagination UI (the
+  // window runs before LIMIT) — one statement, so the count matches the page
+  const params: (string | number)[] = searchPattern ? [userId, searchPattern] : [userId];
+  const pageResult = await pool.query<{ type: "trip" | "journey"; item_id: number; total: number }>(
     `${baseCte}
-     SELECT type, item_id FROM ordered
+     SELECT type, item_id, COUNT(*) OVER ()::int AS total FROM ordered
      ORDER BY effective_date DESC NULLS FIRST, sort_created_at DESC
-     LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-    pageParams,
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, safePageSize, offset],
   );
+  // A page past the end has no row to carry the count, so it is asked for apart
+  const total =
+    pageResult.rows[0]?.total ??
+    (offset > 0
+      ? (
+          await pool.query<{ total: number }>(
+            `${baseCte} SELECT COUNT(*)::int AS total FROM ordered`,
+            params,
+          )
+        ).rows[0].total
+      : 0);
 
   const tripIds = pageResult.rows.filter((r) => r.type === "trip").map((r) => r.item_id);
   const journeyIds = pageResult.rows.filter((r) => r.type === "journey").map((r) => r.item_id);
 
-  // Hydrate trips on the page (with stats)
-  const tripsById = new Map<number, TripWithStats>();
-  if (tripIds.length > 0) {
-    const tripsResult = await pool.query<TripWithStats>(
-      `${TRIP_STATS_SELECT}
-       WHERE ut.user_id = $1 AND ut.id = ANY($2::int[])`,
-      [userId, tripIds],
-    );
-    tripsResult.rows.forEach((t) => {
-      tripsById.set(t.id, t);
-    });
-  }
+  // Hydrate the page: its trips (with stats), the journeys assigned to those
+  // trips (one query for all), and its standalone journeys
+  const [trips, tripJourneys, journeys] = await Promise.all([
+    tripIds.length > 0
+      ? pool
+          .query<TripWithStats>(
+            `${tripStatsSql("$2")}
+             WHERE ut.user_id = $1 AND ut.id = ANY($2::int[])`,
+            [userId, tripIds],
+          )
+          .then((r) => r.rows)
+      : [],
+    tripIds.length > 0
+      ? pool
+          .query<JourneyInTrip>(
+            journeyStatsSql("$1", "uj.trip_id = ANY($2::int[])", "uj.date ASC"),
+            [userId, tripIds],
+          )
+          .then((r) => r.rows)
+      : [],
+    journeyIds.length > 0
+      ? pool
+          .query<StandaloneJourneyWithStats>(journeyStatsSql("$1", "uj.id = ANY($2::int[])"), [
+            userId,
+            journeyIds,
+          ])
+          .then((r) => r.rows)
+      : [],
+  ]);
 
-  // Hydrate journeys assigned to those trips (one query for all)
-  const tripJourneysByTripId = new Map<number, JourneyInTrip[]>();
-  if (tripIds.length > 0) {
-    const tripJourneysResult = await pool.query<JourneyInTrip>(
-      journeyStatsSql("$1", "uj.trip_id = ANY($2::int[])", "uj.date ASC"),
-      [userId, tripIds],
-    );
-    tripJourneysResult.rows.forEach((j) => {
-      const arr = tripJourneysByTripId.get(j.trip_id!) ?? [];
-      arr.push(j);
-      tripJourneysByTripId.set(j.trip_id!, arr);
-    });
-  }
-
-  // Hydrate standalone journeys on the page
-  const journeysById = new Map<number, StandaloneJourneyWithStats>();
-  if (journeyIds.length > 0) {
-    const journeysResult = await pool.query<StandaloneJourneyWithStats>(
-      journeyStatsSql("$1", "uj.id = ANY($2::int[])"),
-      [userId, journeyIds],
-    );
-    journeysResult.rows.forEach((j) => {
-      journeysById.set(j.id, j);
-    });
-  }
+  const tripsById = new Map(trips.map((t) => [t.id, t]));
+  const journeysById = new Map(journeys.map((j) => [j.id, j]));
+  const tripJourneysByTripId = Map.groupBy(tripJourneys, (j) => j.trip_id);
 
   // Reassemble in the page's original order
   const items: TripsAndJourneysItem[] = [];

@@ -15,12 +15,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Larger refactors (the biggest wins)
 
-- [ ] **Run the independent trip reads in parallel** (latency, not lines).
-  `tripForUser` runs its journeys and route-id queries one after the other;
-  `journeysAndTripsForUser` does the same with count + page, then with its three
-  hydration queries. Use `Promise.all` on each independent group. That takes a
-  trip open from 3 serial round trips to 2, and a logbook page from 5 to 3.
-
 - [ ] **Admin route filters as a table** (~80 lines). `AdminRoutesTab` keeps four
   filter booleans and four counts, each with its own predicate written twice (once for
   the count, once for the filter). `RoutesList` takes 4 × 3 props for them and renders
