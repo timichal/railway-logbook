@@ -92,8 +92,9 @@ export function useUserMap(
     [region, selectedCountries],
   );
 
-  // The station dots and their labels are picked against the basemap under them, so
-  // they follow the scheme. useMapLibre rebuilds the map when it changes.
+  // The route colours, the ridden stretches and the station dots and labels are
+  // picked against the basemap under them, so they follow the scheme. useMapLibre
+  // rebuilds the map when it changes.
   const theme = useResolvedTheme();
 
   // The route tiles' `v`. A map rebuilt for a region or scheme change has to carry
@@ -230,7 +231,15 @@ export function useUserMap(
   }, [mapLoaded, refreshProgress]);
 
   // Ridden stretches of routes not yet finished, drawn over the route line
-  useCoverageOverlay(map, mapLoaded, dataAccess, effectiveCountries, shownTypes, coverageVersion);
+  useCoverageOverlay(
+    map,
+    mapLoaded,
+    dataAccess,
+    effectiveCountries,
+    shownTypes,
+    coverageVersion,
+    theme,
+  );
 
   // mapLoaded applies the persisted switches once the layers exist
   useLayerFilters(

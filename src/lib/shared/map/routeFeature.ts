@@ -1,4 +1,5 @@
 import {
+  type BadgeColors,
   getLineClassLabel,
   getUsageBadgeColors,
   type LineClass,
@@ -23,12 +24,8 @@ import { COLORS } from "./style";
  * business, and React Native has no such hazard.
  */
 
-export interface RouteBadge {
+export interface RouteBadge extends BadgeColors {
   label: string;
-  /** Text colour. */
-  color: string;
-  /** Badge background. */
-  bgColor: string;
 }
 
 /**
@@ -141,9 +138,14 @@ export function parseFrequencyTags(value: string | string[] | undefined): string
 }
 
 /** Line class is only worth a badge when it is not the unremarkable default. */
-const LINE_CLASS_BADGE: Partial<Record<LineClass, Omit<RouteBadge, "label">>> = {
-  highspeed: COLORS.badges.highspeed,
-  main: COLORS.badges.main,
+const LINE_CLASS_BADGE: Partial<Record<LineClass, BadgeColors>> = {
+  highspeed: { ...COLORS.badges.highspeed, dark: COLORS.badgesDark.highspeed },
+  main: { ...COLORS.badges.main, dark: COLORS.badgesDark.main },
+};
+
+const FREQUENCY_BADGE: BadgeColors = {
+  ...COLORS.badges.frequency,
+  dark: COLORS.badgesDark.frequency,
 };
 
 /**
@@ -165,7 +167,7 @@ export function routeBadges(properties: RouteFeatureProperties, regionId: Region
   });
 
   for (const tag of parseFrequencyTags(properties.frequency)) {
-    badges.push({ label: tag, ...COLORS.badges.frequency });
+    badges.push({ label: tag, ...FREQUENCY_BADGE });
   }
 
   return badges;

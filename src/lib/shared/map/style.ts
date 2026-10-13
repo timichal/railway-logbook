@@ -7,6 +7,8 @@
  * stay in sync.
  */
 
+import type { ResolvedTheme } from "../theme/types";
+
 // ============================================================================
 // COLORS
 // ============================================================================
@@ -29,6 +31,35 @@ export const COLORS = {
     // Violet for invalid routes the admin flagged as under repair — the OSM
     // layout is only temporarily broken, so they are parked, not a worklist item.
     underRepair: "#8b5cf6",
+  },
+  /**
+   * The visit states over the dark basemap (`routeColors`). Not the light values
+   * brightened: on white the three states were three temperatures of one warm
+   * hue (green aside), and the orange/brick pair that read apart on paper ran
+   * together on near-black. Here they are three hues — a blue-leaning green,
+   * amber, a crimson leaning to rose — and they differ in lightness too, so they
+   * survive the colour-blind readings: under each of the three simulated
+   * dichromacies every pair stays at least ΔE 20 apart (the light palette's
+   * visited/unvisited falls to 4 under deuteranopia).
+   *
+   * **Unvisited is the dark one** on purpose: it is most of the map, and on a dark
+   * ground the network not yet ridden should recede while the user's own rides
+   * carry. **Highspeed goes lighter, not darker** — on white the stronger line is
+   * the one with more ink, on black it is the one with more light; a darker
+   * shade is what turned the light palette's highspeed muddy here.
+   *
+   * Partial stays amber rather than yellow, so it is not mistaken for the Journey
+   * Planner's gold highlight; its highspeed shade sits as far from the gold as the
+   * branch shade does. Any further toward orange and it meets the rose under
+   * tritanopia.
+   *
+   * The admin map keeps the light palette: it colours routes by status, not by
+   * visit, and its violet under-repair routes need the brick red beside them.
+   */
+  railwayRoutesDark: {
+    visited: { branch: "#33c28a", main: "#33c28a", highspeed: "#86ebbd" },
+    unvisited: { branch: "#a8456a", main: "#a8456a", highspeed: "#d4688c" },
+    partial: { branch: "#e8a01c", main: "#e8a01c", highspeed: "#f4b23c" },
   },
   // Highlight overlays drawn on top of railway_routes.
   // 'planner' — Journey Planner pathfinder result (gold).
@@ -144,7 +175,29 @@ export const COLORS = {
     main: { color: "#1e40af", bgColor: "#bfdbfe" },
     frequency: { color: "#166534", bgColor: "#dcfce7" },
   },
+  /**
+   * The same badges on a dark popup: a deep fill with light text, the dark-mode
+   * chip, rather than the pastel fill that would be the brightest thing on screen.
+   * Highspeed, a solid red chip on white, follows the others down to a deep fill:
+   * at full strength it outshone everything else in the popup.
+   */
+  badgesDark: {
+    highspeed: { color: "#fecaca", bgColor: "#991b1b" },
+    main: { color: "#dbeafe", bgColor: "#1e40af" },
+    frequency: { color: "#bbf7d0", bgColor: "#14532d" },
+  },
 } as const;
+
+type LineClassColors = { branch: string; main: string; highspeed: string };
+
+/** The user map's visit-state colours for a scheme. */
+export function routeColors(theme: ResolvedTheme): {
+  visited: LineClassColors;
+  partial: LineClassColors;
+  unvisited: LineClassColors;
+} {
+  return theme === "dark" ? COLORS.railwayRoutesDark : COLORS.railwayRoutes;
+}
 
 // ============================================================================
 // WIDTHS

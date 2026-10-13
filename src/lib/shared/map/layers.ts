@@ -277,10 +277,9 @@ export function createScenicLinesLayer(
 }
 
 /**
- * The dots and their names are the only two of our layers whose colours depend on
- * the basemap under them rather than on the data in them, so they are the only two
- * that take the scheme. Everything else (routes, notes, admin markers) is drawn in
- * a saturated colour that carries on either ground.
+ * The dots and their names depend on the basemap under them rather than on the
+ * data in them, so they take the scheme — as do the route colours (`routeColors`).
+ * Notes and admin markers are drawn in a saturated colour that carries on either ground.
  */
 function stationColors(theme: ResolvedTheme) {
   return theme === "dark" ? COLORS.stationsDark : COLORS.stations;

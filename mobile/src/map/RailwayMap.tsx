@@ -55,9 +55,7 @@ import {
 import {
   scenicLinesFilter,
   shownUsageTypes,
-  userHeritageLayerConfig,
-  userRouteLayerConfig,
-  userSpecialLayerConfig,
+  userRouteLayerConfigs,
 } from "@shared/map/userMapLayers";
 import { REGIONS, type RegionId } from "@shared/regions";
 import type { Station } from "@shared/types";
@@ -115,6 +113,16 @@ function flatBounds(regionId: RegionId): [number, number, number, number] {
 
 export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   const { resolved: theme } = useTheme();
+  // Built once per scheme rather than on every render, which would hand each <Layer>
+  // a new paint object
+  const routeLayers = useMemo(() => {
+    const configs = userRouteLayerConfigs(theme);
+    return {
+      route: createRailwayRoutesLayer(configs.route),
+      heritage: shown(createRailwayRoutesHeritageLayer(configs.heritage)),
+      special: shown(createRailwayRoutesSpecialLayer(configs.special)),
+    };
+  }, [theme]);
   const { regionId } = useRegion();
   const { showHeritage, showSpecial, showScenicLines } = useLayerPrefs();
   const { selected } = useSelection();
@@ -286,13 +294,9 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
           maxzoom={ZOOM_RANGES.railwayRoutes.max}
           onPress={(event) => takePress(event, toRouteFeature)}
         >
-          <Layer {...createRailwayRoutesLayer(userRouteLayerConfig)} />
-          {showHeritage ? (
-            <Layer {...shown(createRailwayRoutesHeritageLayer(userHeritageLayerConfig))} />
-          ) : null}
-          {showSpecial ? (
-            <Layer {...shown(createRailwayRoutesSpecialLayer(userSpecialLayerConfig))} />
-          ) : null}
+          <Layer {...routeLayers.route} />
+          {showHeritage ? <Layer {...routeLayers.heritage} /> : null}
+          {showSpecial ? <Layer {...routeLayers.special} /> : null}
           {/* What the logbook or the planner pointed the map at — gold or orange. */}
           <HighlightLayers
             baseId="highlighted_routes"
@@ -316,7 +320,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
         {/* The stretches already ridden of routes not yet finished, in the visited
             green over their own partial-orange line. Mounted here, with the map, so
             it settles below every highlight set — see `CoverageOverlay`. */}
-        <CoverageOverlay countries={countries} shownTypes={shownTypes} />
+        <CoverageOverlay countries={countries} shownTypes={shownTypes} theme={theme} />
 
         <PartialHighlightSource
           baseId="highlighted_routes"

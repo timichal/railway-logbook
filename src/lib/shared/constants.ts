@@ -37,6 +37,7 @@ export const usageOptions = [
     // Blue
     color: "#2563eb",
     bgColor: "#dbeafe",
+    dark: { color: "#93c5fd", bgColor: "#172554" },
   },
   {
     id: 1,
@@ -46,6 +47,7 @@ export const usageOptions = [
     // Purple
     color: "#9333ea",
     bgColor: "#f3e8ff",
+    dark: { color: "#d8b4fe", bgColor: "#3b0764" },
   },
   {
     id: 2,
@@ -57,6 +59,7 @@ export const usageOptions = [
     // Teal
     color: "#0d9488",
     bgColor: "#ccfbf1",
+    dark: { color: "#5eead4", bgColor: "#134e4a" },
   },
 ] as const;
 
@@ -79,11 +82,18 @@ export const getUsagePluralLabel = (usageType: UsageType): string => {
   return option ? option.pluralLabel : "Unknown";
 };
 
-export const getUsageBadgeColors = (usageType: UsageType): { color: string; bgColor: string } => {
+/** A badge's colours: light by default, `dark` on a dark ground. */
+export interface BadgeColors {
+  color: string;
+  bgColor: string;
+  dark: { color: string; bgColor: string };
+}
+
+export const getUsageBadgeColors = (usageType: UsageType): BadgeColors => {
   const option = usageOptions.find((opt) => opt.id === usageType);
   return option
-    ? { color: option.color, bgColor: option.bgColor }
-    : { color: "#374151", bgColor: "#e5e7eb" };
+    ? { color: option.color, bgColor: option.bgColor, dark: option.dark }
+    : { color: "#374151", bgColor: "#e5e7eb", dark: { color: "#e5e7eb", bgColor: "#374151" } };
 };
 
 /**

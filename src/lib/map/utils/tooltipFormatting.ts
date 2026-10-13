@@ -96,7 +96,11 @@ function formatRouteTitle(properties: FeatureProperties, regionId: RegionId): st
  *
  * Which badges and which colours is `routeBadges`' decision — shared with the
  * native app, which draws the same list as views. All that is left here is the
- * markup.
+ * markup. Both schemes' colours go in through `light-dark()`, which follows the
+ * `color-scheme` the theme sets on the root, so the popup needs no theme of its own
+ * and one left open across a scheme change follows it. Each is preceded by the
+ * light colour alone: a browser without `light-dark()` (Safari before 17.5) drops
+ * the declaration, and the badge would otherwise lose its chip altogether.
  */
 function formatRouteMetadataBadges(
   properties: RouteFeatureProperties,
@@ -104,8 +108,8 @@ function formatRouteMetadataBadges(
   regionId: RegionId,
 ): string {
   const badges = routeBadges(properties, regionId).map(
-    ({ label, color, bgColor }) =>
-      `<span style="${BADGE_STYLE} background-color: ${bgColor}; color: ${color};">${escapeHtml(label)}</span>`,
+    ({ label, color, bgColor, dark }) =>
+      `<span style="${BADGE_STYLE} background-color: ${bgColor}; background-color: light-dark(${bgColor}, ${dark.bgColor}); color: ${color}; color: light-dark(${color}, ${dark.color});">${escapeHtml(label)}</span>`,
   );
 
   return `<div style="${BADGE_ROW_STYLE}">${badges.join("")}</div>`;

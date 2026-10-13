@@ -23,12 +23,12 @@ import {
 
 /**
  * The user map's route layers, shared by the interactive map and the read-only
- * shared view (`/shared/<token>`).
+ * shared view (`/shared/<token>`), and by the native app.
  *
- * The route configs below are module-level constants rather than per-component
- * memos: none of them depends on anything. Both maps must draw the same lines in the same colours — a shared map
- * that styled its routes differently from the owner's own would be a bug that
- * only shows up once someone opens the link.
+ * Both maps must draw the same lines in the same colours — a shared map that
+ * styled its routes differently from the owner's own would be a bug that only
+ * shows up once someone opens the link — so the configs are built here, from
+ * nothing but the scheme.
  */
 
 // Default to Regular-only (usage_type=0); the "Show heritage lines" and "Show
@@ -39,30 +39,32 @@ export const REGULAR_ONLY_FILTER: ["==", ["get", string], number] = [
   0,
 ];
 
-export const userRouteLayerConfig: RailwayRoutesPaintConfig = {
-  colorExpression: getUserRouteColorExpression(),
-  widthExpression: getUserRouteWidthExpression(),
-  filter: REGULAR_ONLY_FILTER,
-};
+export interface UserRouteLayerConfigs {
+  /** The solid Regular line. */
+  route: RailwayRoutesPaintConfig;
+  /**
+   * Dashed Special / dotted Heritage: same visit-status colours as the solid line,
+   * rendered dashed / dotted. Their usage_type filter and hidden-by-default
+   * visibility are baked into the factories; useLayerFilters toggles visibility.
+   */
+  special: RailwayRoutesPaintConfig;
+  heritage: RailwayRoutesPaintConfig;
+  clickBuffer: RailwayRoutesPaintConfig;
+}
 
-// Dashed Special / dotted Heritage layers: same visit-status colors as the
-// solid line, but rendered dashed / dotted. Their usage_type filter and
-// hidden-by-default visibility are baked into the factories; useLayerFilters
-// toggles visibility.
-export const userSpecialLayerConfig: RailwayRoutesPaintConfig = {
-  colorExpression: getUserRouteColorExpression(),
-  widthExpression: getUserRouteWidthExpression(),
-};
-
-export const userHeritageLayerConfig: RailwayRoutesPaintConfig = {
-  colorExpression: getUserRouteColorExpression(),
-  widthExpression: getUserRouteHeritageWidthExpression(),
-};
-
-export const userClickBufferLayerConfig: RailwayRoutesPaintConfig = {
-  widthExpression: getUserRouteClickBufferWidthExpression(),
-  filter: REGULAR_ONLY_FILTER,
-};
+export function userRouteLayerConfigs(theme: ResolvedTheme): UserRouteLayerConfigs {
+  const colorExpression = getUserRouteColorExpression(theme);
+  const widthExpression = getUserRouteWidthExpression();
+  return {
+    route: { colorExpression, widthExpression, filter: REGULAR_ONLY_FILTER },
+    special: { colorExpression, widthExpression },
+    heritage: { colorExpression, widthExpression: getUserRouteHeritageWidthExpression() },
+    clickBuffer: {
+      widthExpression: getUserRouteClickBufferWidthExpression(),
+      filter: REGULAR_ONLY_FILTER,
+    },
+  };
+}
 
 /**
  * What the three layer toggles do to the filters, as expressions.
@@ -124,14 +126,15 @@ export function clickBufferFilter(clickable: readonly UsageType[]): FilterSpecif
  * absence of a click handler makes that map read-only.
  */
 export function createUserMapLayers(theme: ResolvedTheme = "light"): LayerSpecification[] {
+  const configs = userRouteLayerConfigs(theme);
   return [
     // Under everything: a band the route lines are drawn over. Hidden until the
     // "Scenic lines" toggle shows it (useLayerFilters).
     createScenicLinesLayer(),
-    createRailwayRoutesLayer(userRouteLayerConfig),
-    createRailwayRoutesHeritageLayer(userHeritageLayerConfig),
-    createRailwayRoutesSpecialLayer(userSpecialLayerConfig),
-    createRailwayRoutesClickLayer(userClickBufferLayerConfig),
+    createRailwayRoutesLayer(configs.route),
+    createRailwayRoutesHeritageLayer(configs.heritage),
+    createRailwayRoutesSpecialLayer(configs.special),
+    createRailwayRoutesClickLayer(configs.clickBuffer),
     createStationsLayer(theme),
     createStationLabelsLayer(theme),
     // Public Usage notes render on top (route tile refresh re-inserts route

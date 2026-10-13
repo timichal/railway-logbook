@@ -9,6 +9,7 @@ import {
   coverageFilters,
   createCoverageLayers,
 } from "@/lib/shared/map/coverageLayer";
+import type { ResolvedTheme } from "@/lib/shared/theme/types";
 import type { CoveredStretch } from "@/lib/shared/types";
 
 /**
@@ -24,6 +25,7 @@ function syncCoverageOverlay(
   stretches: CoveredStretch[],
   selectedCountries: string[],
   shownTypes: readonly UsageType[],
+  theme: ResolvedTheme,
 ): void {
   if (stretches.length === 0) {
     for (const id of COVERAGE_LAYER_IDS) if (m.getLayer(id)) m.removeLayer(id);
@@ -40,7 +42,7 @@ function syncCoverageOverlay(
     m.addSource(COVERAGE_SOURCE_ID, { type: "geojson", data });
   }
 
-  for (const layer of createCoverageLayers(selectedCountries, shownTypes)) {
+  for (const layer of createCoverageLayers(selectedCountries, shownTypes, theme)) {
     if (m.getLayer(layer.id)) {
       if (layer.filter) m.setFilter(layer.id, layer.filter);
     } else {
@@ -65,10 +67,12 @@ export function useCoverageOverlay(
   shownTypes: readonly UsageType[],
   /** Bumped when journeys change, so the overlay refetches. */
   coverageVersion: number,
+  /** The visited colour's scheme. A scheme change rebuilds the map, which re-adds the layers. */
+  theme: ResolvedTheme,
 ) {
   // Read by the fetch when it lands, so a filter change alone never refetches
-  const filtersRef = useRef({ selectedCountries, shownTypes });
-  filtersRef.current = { selectedCountries, shownTypes };
+  const filtersRef = useRef({ selectedCountries, shownTypes, theme });
+  filtersRef.current = { selectedCountries, shownTypes, theme };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: coverageVersion is an intentional trigger — it refetches the stretches after journeys change.
   useEffect(() => {
@@ -87,7 +91,13 @@ export function useCoverageOverlay(
         // is still fetching tiles — which is exactly when this lands after a tile
         // refresh. Its fallback, once("load"), fires once per map and so never did.
         const filters = filtersRef.current;
-        syncCoverageOverlay(m, stretches, filters.selectedCountries, filters.shownTypes);
+        syncCoverageOverlay(
+          m,
+          stretches,
+          filters.selectedCountries,
+          filters.shownTypes,
+          filters.theme,
+        );
       })
       .catch((error) => {
         if (!cancelled) console.error("Error loading ridden stretches:", error);

@@ -1,6 +1,7 @@
 import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
+import type { ResolvedTheme } from "../../theme/types";
 import { lineClassColorExpression } from "../layers";
-import { COLORS, WIDTHS } from "../style";
+import { routeColors, WIDTHS } from "../style";
 
 /**
  * Get color expression for user railway routes based on visit status AND line class
@@ -24,8 +25,11 @@ import { COLORS, WIDTHS } from "../style";
  * The tile branches still take precedence over the feature-state ones, as
  * before: a logged-in user's `date` decides it outright and the localStorage
  * path is only consulted when there is none.
+ *
+ * The colours follow the scheme (`routeColors`); the logic doesn't.
  */
-export function getUserRouteColorExpression(): ExpressionSpecification {
+export function getUserRouteColorExpression(theme: ResolvedTheme): ExpressionSpecification {
+  const colors = routeColors(theme);
   return [
     "case",
     // Logged users: the tile carries this user's trips.
@@ -34,8 +38,8 @@ export function getUserRouteColorExpression(): ExpressionSpecification {
       "case",
       // At least one complete trip → green shades, else orange.
       ["==", ["get", "has_complete_trip"], true],
-      lineClassColorExpression(COLORS.railwayRoutes.visited),
-      lineClassColorExpression(COLORS.railwayRoutes.partial),
+      lineClassColorExpression(colors.visited),
+      lineClassColorExpression(colors.partial),
     ],
     // Unlogged users: feature-state, set from localStorage.
     [
@@ -45,11 +49,11 @@ export function getUserRouteColorExpression(): ExpressionSpecification {
         "case",
         // Partial → orange shades, whole → green.
         ["==", ["feature-state", "partial"], true],
-        lineClassColorExpression(COLORS.railwayRoutes.partial),
-        lineClassColorExpression(COLORS.railwayRoutes.visited),
+        lineClassColorExpression(colors.partial),
+        lineClassColorExpression(colors.visited),
       ],
       // No trips → red shades
-      lineClassColorExpression(COLORS.railwayRoutes.unvisited),
+      lineClassColorExpression(colors.unvisited),
     ],
   ] as ExpressionSpecification;
 }

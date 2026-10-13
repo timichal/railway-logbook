@@ -25,6 +25,7 @@
 import { GeoJSONSource, Layer } from "@maplibre/maplibre-react-native";
 import type { UsageType } from "@shared/constants";
 import { COVERAGE_SOURCE_ID, coverageData, createCoverageLayers } from "@shared/map/coverageLayer";
+import type { ResolvedTheme } from "@shared/theme/types";
 import type { CoveredStretch } from "@shared/types";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import * as api from "@/api/endpoints";
@@ -33,10 +34,13 @@ import { useLogVersion } from "@/logbook/logVersion";
 export function CoverageOverlay({
   countries,
   shownTypes,
+  theme,
 }: {
   countries: string[];
   /** The usage types the map draws (`shownUsageTypes`), which the overlay follows. */
   shownTypes: readonly UsageType[];
+  /** The visited colour's scheme. */
+  theme: ResolvedTheme;
 }): ReactNode {
   const logVersion = useLogVersion();
   const [stretches, setStretches] = useState<CoveredStretch[]>([]);
@@ -57,8 +61,8 @@ export function CoverageOverlay({
 
   const data = useMemo(() => coverageData(stretches), [stretches]);
   const layers = useMemo(
-    () => createCoverageLayers(countries, shownTypes),
-    [countries, shownTypes],
+    () => createCoverageLayers(countries, shownTypes, theme),
+    [countries, shownTypes, theme],
   );
 
   return (

@@ -1,8 +1,9 @@
 import type { FilterSpecification, LineLayerSpecification } from "@maplibre/maplibre-gl-style-spec";
 import type { UsageType } from "../constants";
+import type { ResolvedTheme } from "../theme/types";
 import type { CoveredStretch } from "../types";
 import { lineClassColorExpression } from "./layers";
-import { COLORS, DASHES, OPACITIES } from "./style";
+import { DASHES, OPACITIES, routeColors } from "./style";
 import {
   getUserRouteHeritageWidthExpression,
   getUserRouteWidthExpression,
@@ -120,6 +121,7 @@ export function coverageFilters(
 export function createCoverageLayers(
   selectedCountries: string[],
   shownTypes: readonly UsageType[],
+  theme: ResolvedTheme,
 ): LineLayerSpecification[] {
   return COVERAGE_VARIANTS.map((variant) => ({
     id: variant.id,
@@ -127,7 +129,7 @@ export function createCoverageLayers(
     source: COVERAGE_SOURCE_ID,
     ...("roundCap" in variant ? { layout: { "line-cap": "round" } } : {}),
     paint: {
-      "line-color": lineClassColorExpression(COLORS.railwayRoutes.visited),
+      "line-color": lineClassColorExpression(routeColors(theme).visited),
       "line-width": variant.width,
       "line-opacity": OPACITIES.defaultRoute,
       ...("dash" in variant ? { "line-dasharray": [...variant.dash] } : {}),
