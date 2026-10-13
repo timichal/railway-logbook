@@ -24,7 +24,7 @@ const K_OFFSET_NO_DATA = 3;
 const BLK_DATA = 1;
 const ARCHIVE_CUSTOM = 1;
 
-export interface DumpContents {
+interface DumpContents {
   /** Tables with a TABLE DATA entry, unqualified. */
   tables: string[];
   /** e.g. "17.6" — the server the dump was taken from. */

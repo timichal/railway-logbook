@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 
-export interface AsyncLoad<T> {
+interface AsyncLoad<T> {
   /** The result of the latest load for the current deps; null while loading or after a failure. */
   data: T | null;
   loading: boolean;

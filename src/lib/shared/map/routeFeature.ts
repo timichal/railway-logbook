@@ -24,7 +24,7 @@ import { COLORS } from "./style";
  * business, and React Native has no such hazard.
  */
 
-export interface RouteBadge extends BadgeColors {
+interface RouteBadge extends BadgeColors {
   label: string;
 }
 

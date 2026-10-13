@@ -12,7 +12,7 @@
 import { query } from "./db";
 
 /** The owner of a shared map, as resolved from a token. */
-export interface PublicMapOwner {
+interface PublicMapOwner {
   userId: number;
   /** Display name, falling back to the part of the email before the @. */
   displayName: string;

@@ -21,7 +21,6 @@ import {
   deleteTripForUser,
   type JourneyInTrip,
   journeysAndTripsForUser,
-  type StandaloneJourneyWithStats,
   type TripsAndJourneysItem,
   type TripWithStats,
   tripForUser,
@@ -30,7 +29,7 @@ import {
   updateTripForUser,
 } from "./tripQueries";
 
-export type { JourneyInTrip, StandaloneJourneyWithStats, TripsAndJourneysItem, TripWithStats };
+export type { JourneyInTrip, TripsAndJourneysItem, TripWithStats };
 
 /** All of the current user's trips with computed stats, scoped to `region`. */
 export async function getAllTrips(region: RegionId): Promise<ActionResult<TripWithStats[]>> {

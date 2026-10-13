@@ -52,7 +52,7 @@ Run locally. The server only runs `pg_dump` in its `db` container, streamed back
 
 A restore runs in the local `db` container in **one transaction** with `session_replication_role = replica`; `COMMIT` is sent only after `pg_restore` succeeds under `pipefail` (otherwise psql rolls back at EOF and exits 0). With FK checks off, every restore then unfiles any journey sitting in another user's trip, and stops listing any logged part whose user differs from its journey's. Pulls refuse to start while a map data deploy is running (`remote-deploy.sh --state`); a backup only warns.
 ### Map data deploy
-`npm run deployMapData -- [--valid-only] [--concurrency=N] [--fresh] [--follow]` — run locally; the work happens **on the server** (`osmium-scripts/deploy.sh`, one plink call per step into `remote-deploy.sh`).
+`npm run deployMapData -- [--valid-only] [--concurrency=N] [--fresh] [--follow]` (`npm run deployValidMapData` is the `--valid-only` shorthand) — run locally; the work happens **on the server** (`osmium-scripts/deploy.sh`, one plink call per step into `remote-deploy.sh`).
 - Pulls the server's checkout of `main`; refuses while local commits are unpushed or `osmium-scripts/`, `src/scripts/` or `package*.json` have uncommitted changes (`src/lib` only warns). Runs `npm ci` when `node_modules` wasn't installed from the current lockfile.
 - Prepares the map there (no date — always the latest extracts) and imports it. The log (`data/deploy.log`) streams over `plink -t`, and **the deploy stops when that session ends** — Ctrl+C, closed terminal or dropped connection alike, since Windows plink never forwards Ctrl+C and the hangup is the only signal. Rerun to resume: a pruned file prepared from the current extract list since the last successful deploy is reused. `--follow` shows a running deploy (Ctrl+C there stops it too) or the last log; `--fresh` discards prepared files.
 - At the end it prints the recalculation summary again and writes `osmium-scripts/deployed-extracts.txt` — **commit it**.
@@ -174,7 +174,7 @@ Invariants (the modules carry the reasoning):
 
 ### Map styling
 
-`src/lib/shared/map/style.ts` is the **single source of truth** for colours, widths and opacities (`COLORS`, `WIDTHS`, `CIRCLES`, `LABELS`, `OPACITIES`). Route colour = visit status × line_class; width is one z4→z7 interpolate. An invisible wide `railway_routes_click` layer (Regular only) gives touch hit areas.
+`src/lib/shared/map/style.ts` is the **single source of truth** for colours, widths and opacities (`COLORS`, `WIDTHS`, `CIRCLES`, `LABELS`, `OPACITIES`). Route colour = visit status × line_class; width is one z4→z7 interpolate. An invisible wide `railway_routes_click` layer (every shown usage type, `clickBufferFilter`) gives touch hit areas.
 
 - **No `["all", ...]` in data-driven paint expressions.** MapLibre Native's React binding crashes (`std::bad_alloc`) converting a `case` with an `all` condition beside another branch. Write nested single-condition `case`s and use `match` for a value fan-out (`userRouteStyling.ts`, `lineClassColorExpression`).
 - **Popups are raw HTML** (`setHTML`): every interpolated value goes through `escapeHtml()` and every URL through `safeHref()` (`utils/tooltipFormatting.ts`). Station names come from OSM, i.e. from third parties. Popup inline styles read `var(--color-…)`, since no stylesheet can reach them.

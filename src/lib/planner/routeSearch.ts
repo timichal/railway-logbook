@@ -208,7 +208,7 @@ class SearchQueue {
   }
 }
 
-export interface SearchOptions {
+interface SearchOptions {
   /** Reject transitions that double back on themselves (>140° turn). */
   avoidBacktracking?: boolean;
   /** Give up on paths whose weighted cost exceeds this. */

@@ -17,7 +17,7 @@ import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
 type FeatureProperties = maplibreglType.MapGeoJSONFeature["properties"];
 
 /** What a tap on a route would do, as the touch sheet's button has to word it. */
-export interface RouteTapAction {
+interface RouteTapAction {
   /** "Add to selection", "Remove from journey" — whatever the tap is about to do. */
   label: string;
 }

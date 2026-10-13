@@ -45,6 +45,7 @@ import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapIntera
 import { useRegionId } from "@/lib/regionContext";
 import { type UsageType, usageOptions } from "@/lib/shared/constants";
 import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
+import { REGULAR_ONLY_FILTER } from "@/lib/shared/map/userMapLayers";
 import {
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
@@ -52,11 +53,6 @@ import {
 import type { RegionId } from "@/lib/shared/regions";
 import type { GeoJSONFeatureCollection, MapSearchResults } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
-
-// The base layer draws Regular routes solid; Heritage (dotted) and Special
-// (dashed) get their own layers so the dash/dot gaps aren't filled by a solid
-// line underneath. All three are always shown on the admin map.
-const REGULAR_ONLY_FILTER = ["==", ["get", "usage_type"], 0] as maplibregl.FilterSpecification;
 
 // The admin map draws every station, so its search offers every station too — not
 // only the near-route ones the user map's does — and lines as the user map's does.
@@ -89,7 +85,7 @@ function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | n
       COLORS.railwayRoutes.underRepair,
       COLORS.railwayRoutes.invalid,
     ],
-    lineClassColorExpression(COLORS.railwayRoutes.default),
+    lineClassColorExpression(COLORS.railwayRoutes.unvisited),
   ];
   const colorExpression: maplibregl.ExpressionSpecification =
     trackIdNum !== null
@@ -211,6 +207,8 @@ export default function AdminMap({
         // Over the parts, so a scenic stretch shows while points are picked on them;
         // it takes no clicks of its own, which fall through to the parts.
         createScenicLinesLayer({ visible: true }),
+        // Regular solid; Heritage (dotted) and Special (dashed) get their own layers
+        // so the gaps aren't filled by a solid line underneath. All three always show.
         createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }),
         createRailwayRoutesHeritageLayer(),
         createRailwayRoutesSpecialLayer(),

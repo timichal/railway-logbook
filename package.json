@@ -60,12 +60,10 @@
     "@biomejs/biome": "^2.5.15",
     "@maplibre/maplibre-gl-style-spec": "^26.4.1",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^26.6.4",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/transliteration": "^1.6.1",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3"
   },

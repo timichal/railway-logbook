@@ -6,6 +6,7 @@ import { login } from "@/lib/authActions";
 import * as localStore from "@/lib/localStorage";
 import { migrateLocalJourneys } from "@/lib/migrationActions";
 import { describeJourneyMigration } from "@/lib/migrationMessage";
+import { plural } from "@/lib/plural";
 import { useToast } from "@/lib/toast";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import { FIELD, FIELD_LABEL, FORM_ERROR } from "@/lib/ui/inputStyles";
@@ -30,12 +31,11 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormPr
    * (Escape is "Keep Local", its cancel), so it always does.
    */
   async function settleLocalJourneys(journeyCount: number) {
-    const plural = journeyCount !== 1 ? "s" : "";
     const choice = await new Promise<"merge" | "keep" | "delete">((resolve) =>
       showConfirm({
         title: "Merge Local Journeys?",
-        message: `You have ${journeyCount} journey${plural} stored locally. Would you like to merge them with your account?\n\nDuplicates will be skipped automatically.\n\nIf you choose "Keep Local", these journeys will remain in your browser but won't be visible until you log out.`,
-        confirmLabel: `Merge ${journeyCount} Journey${plural}`,
+        message: `You have ${plural(journeyCount, "journey")} stored locally. Would you like to merge them with your account?\n\nDuplicates will be skipped automatically.\n\nIf you choose "Keep Local", these journeys will remain in your browser but won't be visible until you log out.`,
+        confirmLabel: `Merge ${plural(journeyCount, "Journey")}`,
         cancelLabel: "Keep Local",
         thirdLabel: "Delete Local",
         variant: "info",

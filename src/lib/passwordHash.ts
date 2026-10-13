@@ -9,7 +9,7 @@
 import bcrypt from "bcryptjs";
 
 /** Bcrypt cost. Unchanged from the original inline value. */
-export const SALT_ROUNDS = 12;
+const SALT_ROUNDS = 12;
 
 /**
  * A real hash at `SALT_ROUNDS`, of a password no account has.

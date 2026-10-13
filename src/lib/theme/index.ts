@@ -19,12 +19,11 @@ import { useSyncExternalStore } from "react";
 import type { ResolvedTheme, ThemePreference } from "../shared/theme/types";
 import { THEME_COLORS } from "./colors";
 
-export type { ResolvedTheme, ThemePreference } from "../shared/theme/types";
-export { THEME_COLORS } from "./colors";
+export type { ThemePreference } from "../shared/theme/types";
 
-export const THEME_STORAGE_KEY = "railway-logbook-theme";
+const THEME_STORAGE_KEY = "railway-logbook-theme";
 
-export const THEME_COLOR_META_NAME = "theme-color";
+const THEME_COLOR_META_NAME = "theme-color";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
@@ -57,7 +56,7 @@ function isPreference(value: string | null): value is ThemePreference {
   return value === "system" || value === "light" || value === "dark";
 }
 
-export function readThemePreference(): ThemePreference {
+function readThemePreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     if (isPreference(stored)) return stored;

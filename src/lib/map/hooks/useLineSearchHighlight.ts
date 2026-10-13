@@ -19,7 +19,7 @@ import { getLineGeometry } from "@/lib/userActions";
  * What the band is doing, for the chip: its geometry still on the way, drawn, every
  * route of the line on a layer switched off, or the geometry failed to load.
  */
-export type LineHighlightStatus = "loading" | "drawn" | "hidden" | "failed";
+type LineHighlightStatus = "loading" | "drawn" | "hidden" | "failed";
 
 /** A map's searched-line highlight, as `MapStationSearch` shows and sets it. */
 export interface LineHighlight {

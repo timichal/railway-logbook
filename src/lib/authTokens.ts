@@ -77,7 +77,7 @@ export interface User {
  * refresh token must never be accepted as an access token, which is the whole
  * reason the claim exists.
  */
-export type TokenKind = "session" | "access" | "refresh";
+type TokenKind = "session" | "access" | "refresh";
 
 /** Web cookie session. Unchanged from before the mobile API existed. */
 const SESSION_TTL = "7d";

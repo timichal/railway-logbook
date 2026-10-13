@@ -93,7 +93,7 @@ export function createRailwayRoutesLayer(
       visibility: "visible",
     },
     paint: {
-      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
+      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.unvisited),
       "line-width": widthExpression || defaultWidth,
       "line-opacity": opacityExpression || defaultOpacity,
     },
@@ -171,7 +171,7 @@ export function createRailwayRoutesSpecialLayer(
       visibility: "none", // controlled by "Show special services" checkbox
     },
     paint: {
-      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
+      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.unvisited),
       "line-width": widthExpression || defaultWidth,
       "line-opacity": opacityExpression || defaultOpacity,
       "line-dasharray": [...DASHES.special],
@@ -211,7 +211,7 @@ export function createRailwayRoutesHeritageLayer(
       "line-cap": "round", // makes the zero-length dashes render as dots
     },
     paint: {
-      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.default),
+      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.unvisited),
       "line-width": widthExpression || defaultWidth,
       "line-opacity": opacityExpression || defaultOpacity,
       "line-dasharray": [...DASHES.heritage],

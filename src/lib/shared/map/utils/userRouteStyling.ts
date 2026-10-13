@@ -123,15 +123,7 @@ export function getUserRouteHeritageWidthExpression(): ExpressionSpecification {
  */
 export function getUserRouteClickBufferWidthExpression(): ExpressionSpecification {
   const s = WIDTHS.clickBuffer;
-  return [
-    "interpolate",
-    ["linear"],
-    ["zoom"],
-    4,
-    widthByClass(s.z4),
-    12,
-    widthByClass(s.z12),
-  ] as ExpressionSpecification;
+  return ["interpolate", ["linear"], ["zoom"], 4, s.z4, 12, s.z12];
 }
 
 /**

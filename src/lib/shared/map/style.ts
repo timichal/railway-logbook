@@ -17,14 +17,13 @@ export const COLORS = {
   railwayParts: {
     default: "#2563eb",
     hover: "#dc2626",
-    selected: "#16a34a",
   },
   railwayRoutes: {
-    // Default fallback before visit-status colors are applied (admin map uses this).
-    default: { branch: "#b8554f", main: "#b8554f", highspeed: "#7a3633" },
     // Admin selected route (orange).
     selected: "#ff6b35",
     visited: { branch: "#1f8a4c", main: "#1f8a4c", highspeed: "#155e34" },
+    // Also the colour wherever no visit status applies (the admin map, and the
+    // layer factories' fallback).
     unvisited: { branch: "#b8554f", main: "#b8554f", highspeed: "#7a3633" },
     partial: { branch: "#d97706", main: "#d97706", highspeed: "#92400e" },
     invalid: "#9ca3af", // Grey for invalid routes
@@ -216,10 +215,8 @@ export const WIDTHS = {
   fallback: { route: 3, clickBuffer: 16 },
   // Raw OSM parts on the admin map; a hovered part thickens from z7.
   railwayParts: { z4: 0.8, z7: 3, z7Hover: 5 },
-  clickBuffer: {
-    z4: { branch: 14, main: 14, highspeed: 14 },
-    z12: { branch: 16, main: 16, highspeed: 16 },
-  },
+  // The invisible hit area of the user map's routes, one width for every line.
+  clickBuffer: { z4: 14, z12: 16 },
   // Scenic line band: a few times a route's width, growing with zoom so it stays
   // a band around the line rather than shrinking into a second line beside it.
   // `blur` softens its edges by that many pixels.

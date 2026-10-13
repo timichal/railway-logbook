@@ -31,7 +31,7 @@ import { SUPPORTED_COUNTRIES } from "./shared/constants";
 import type { RegionId } from "./shared/regions";
 import type { CoveredStretch } from "./shared/types";
 
-export interface PublicMapSettings {
+interface PublicMapSettings {
   enabled: boolean;
   /** URL slug for /shared/<token>. Stable once minted. */
   token: string;

@@ -57,19 +57,6 @@ export type GeoJSONFeatureCollection = {
   features: GeoJSONFeature[];
 };
 
-// Railway part from database (specific GeoJSON feature)
-export type RailwayPart = {
-  type: "Feature";
-  geometry: {
-    type: "LineString";
-    coordinates: [number, number][];
-  };
-  properties: {
-    "@id": number | string;
-    [key: string]: unknown;
-  };
-};
-
 // Station from database
 export type Station = {
   id: string | number;

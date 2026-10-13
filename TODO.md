@@ -42,8 +42,7 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 - [ ] **`verifyRouteData.ts`** (~50 lines).
   - Inline `recalculateRoute` into `recalculateGeometry`. Its
-    `{ success, coordinates, error }` shape exists only to be unpacked one call later,
-    and the function is exported but used only in this file.
+    `{ success, coordinates, error }` shape exists only to be unpacked one call later.
   - `RouteRow` and `ScenicLineRow`, and their two coordinate `SELECT`s, share a base
     type and a column fragment.
   - The "refresh station proximity and log the count" block is copied between
@@ -171,40 +170,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 - [ ] **`tripQueries.ts` types.** `StandaloneJourneyWithStats` and `JourneyInTrip`
   are the same type.
-
----
-
-## Dead code (small, safe)
-
-- [ ] `constants.ts`: `isPublicNoteType` and the `public` field on `noteTypeOptions`.
-  Nothing reads them; public visibility is the hard-coded `note_type = 'Usage'` in SQL.
-- [ ] `basemap.ts`: `BASEMAP_FONT`. Only `BASEMAP_FONT_BOLD` is used.
-- [ ] `highlightLayers.ts`: the `HighlightBaseId` type.
-- [ ] `style.ts`:
-  - `COLORS.railwayParts.selected` is unused.
-  - `COLORS.railwayRoutes.default` and `.unvisited` are identical.
-  - `WIDTHS.clickBuffer` repeats the same value for each line class. The click buffer
-    is Regular-only, so the special multiplier never applies and it could be a scalar
-    interpolate.
-- [ ] `package.json`: the `deployValidMapData` script is the same as
-  `deployMapData -- --valid-only`, and CLAUDE.md doesn't document it.
-- [ ] **~50 exports used only in their own file** (drop the `export` keyword):
-  - `verifyRouteData.ts`: `recalculateRoute`, `recalculateAllRoutes`, the result and
-    options types, `DEFAULT_RECALC_CONCURRENCY`
-  - `basemap.ts`: `latinizeLabels`, `flattenBuildings`, `filterPointsFromParkOutlines`,
-    `BASEMAP_STYLE_URLS`
-  - `countryUtils.ts`: `getStartCoordinate` / `getEndCoordinate` /
-    `getCountryFromCoordinates` (removed anyway by the rewrite above)
-  - `theme/index.ts`: `THEME_STORAGE_KEY` / `THEME_COLOR_META_NAME` /
-    `readThemePreference`
-  - `routeQueries.ts`: `searchLinesByName`
-  - `api/response.ts`: `errorResponse`
-  - …and about 30 types
-
-  Re-run the scan to get the full list. (The scan: list every
-  `export function|const|type` under `src/` and count word-boundary hits in every
-  other file under `src`, `tests`, `mobile/src` and `mobile/app`.)
-- [ ] Manual plural (`x !== 1 ? "s" : ""`) where `plural()` exists: `LoginForm`.
 
 ---
 

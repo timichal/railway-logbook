@@ -39,7 +39,7 @@ export const REGULAR_ONLY_FILTER: ["==", ["get", string], number] = [
   0,
 ];
 
-export interface UserRouteLayerConfigs {
+interface UserRouteLayerConfigs {
   /** The solid Regular line. */
   route: RailwayRoutesPaintConfig;
   /**

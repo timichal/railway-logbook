@@ -122,7 +122,7 @@ interface MobileBottomSheetProps {
 type Phase = "idle" | "dragging" | "animating";
 
 /** The snap points by name, for content asking the sheet to move. */
-export type SheetSnap = "collapsed" | "peek" | "half" | "full";
+type SheetSnap = "collapsed" | "peek" | "half" | "full";
 
 interface BottomSheetControls {
   snapTo: (snap: SheetSnap) => void;

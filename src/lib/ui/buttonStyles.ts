@@ -120,7 +120,7 @@ const VARIANTS = {
 } as const;
 
 export type ButtonVariant = keyof typeof VARIANTS;
-export type ButtonSize = keyof typeof SIZES;
+type ButtonSize = keyof typeof SIZES;
 
 /** Classes for a padded button, or a link styled as one. Add layout at the call site. */
 export function btn(variant: ButtonVariant, size: ButtonSize = "sm"): string {
@@ -144,8 +144,8 @@ const ICON_TONES = {
   onColor: "text-white/80 not-disabled:hover:text-white not-disabled:active:text-white/70",
 } as const;
 
-export type IconButtonSize = keyof typeof ICON_SIZES;
-export type IconButtonTone = keyof typeof ICON_TONES;
+type IconButtonSize = keyof typeof ICON_SIZES;
+type IconButtonTone = keyof typeof ICON_TONES;
 
 /** A square, label-less glyph button: close x, back chevron, remove-from-list. */
 export function iconBtn(size: IconButtonSize = "md", tone: IconButtonTone = "muted"): string {

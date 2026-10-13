@@ -31,16 +31,3 @@ export interface ToastContextValue {
   removeToast: (id: string) => void;
   showConfirm: (options: ConfirmDialogOptions) => void;
 }
-
-// Server action result types
-export interface ActionSuccess<T = void> {
-  success: true;
-  data: T;
-}
-
-export interface ActionError {
-  success: false;
-  error: string;
-}
-
-export type ActionResult<T = void> = ActionSuccess<T> | ActionError;

@@ -13,7 +13,7 @@ types.setTypeParser(types.builtins.DATE, (value) => value);
  * Used by both the application (Pool) and scripts (Client)
  */
 
-export interface DbConfig {
+interface DbConfig {
   host: string;
   port: number;
   database: string;

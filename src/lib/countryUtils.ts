@@ -18,7 +18,7 @@ type RouteGeometry =
  * @param lat - Latitude in decimal degrees
  * @returns Two-letter country code (e.g., 'CZ', 'AT', 'SK') or null if not found
  */
-export function getCountryFromCoordinates(lng: number, lat: number): string | null {
+function getCountryFromCoordinates(lng: number, lat: number): string | null {
   try {
     // country-coder uses [longitude, latitude] format
     const feature = countryCoder.feature([lng, lat]);
@@ -48,7 +48,7 @@ export function getCountryFromCoordinates(lng: number, lat: number): string | nu
  * @param geometry - PostGIS geometry object or GeoJSON geometry
  * @returns [lng, lat] or null if extraction fails
  */
-export function getStartCoordinate(geometry: RouteGeometry): [number, number] | null {
+function getStartCoordinate(geometry: RouteGeometry): [number, number] | null {
   try {
     if (!geometry) return null;
 
@@ -80,7 +80,7 @@ export function getStartCoordinate(geometry: RouteGeometry): [number, number] | 
  * @param geometry - PostGIS geometry object or GeoJSON geometry
  * @returns [lng, lat] or null if extraction fails
  */
-export function getEndCoordinate(geometry: RouteGeometry): [number, number] | null {
+function getEndCoordinate(geometry: RouteGeometry): [number, number] | null {
   try {
     if (!geometry) return null;
 

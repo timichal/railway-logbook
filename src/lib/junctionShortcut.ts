@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
 
 /** Suffix admins tag a station name with when the route ends at a junction, not a station. */
-export const JUNCTION_SUFFIX = " [junction]";
+const JUNCTION_SUFFIX = " [junction]";
 
 /**
  * Alt+J inserts `JUNCTION_SUFFIX` at the caret of a station-name input.

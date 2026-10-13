@@ -47,7 +47,7 @@ function updateNearRouteSql(stationFilter: string): string {
       AND s.near_route IS DISTINCT FROM ${NEAR_ROUTE_EXISTS}`;
 }
 
-export interface ProximityCounts {
+interface ProximityCounts {
   near: number;
   total: number;
 }

@@ -88,7 +88,7 @@ export async function searchStationsByName(
  * in Japan. A line with no geometry to box is dropped rather than returned with
  * bounds nobody can fly to.
  */
-export async function searchLinesByName(
+async function searchLinesByName(
   searchQuery: string,
   region: RegionId,
 ): Promise<LineSearchResult[]> {

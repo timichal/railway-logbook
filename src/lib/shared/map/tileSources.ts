@@ -40,7 +40,7 @@ export interface RailwayRoutesSourceOptions {
  * (`src/app/api/tiles`), so it lives on the app's origin rather than under
  * Martin's `/tiles`.
  */
-export interface RouteTileHosts {
+interface RouteTileHosts {
   /** Martin: `/tiles` in production, port 3001 in development. */
   tileBaseUrl: string;
   /** The Next app, absolute (`https://host`). */

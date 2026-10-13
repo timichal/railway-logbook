@@ -47,7 +47,7 @@ export async function authenticateUser(email: string, password: string): Promise
   return { id: user.id, email: user.email, name: user.name };
 }
 
-export interface RegistrationInput {
+interface RegistrationInput {
   name?: string | null;
   email: string;
   password: string;

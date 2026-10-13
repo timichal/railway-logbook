@@ -67,7 +67,7 @@ export function requireIdParam(value: string, name: string): number {
   return id;
 }
 
-export type JsonBody = Record<string, unknown>;
+type JsonBody = Record<string, unknown>;
 
 /** The request's JSON body, which must be an object. */
 export async function readJsonBody(request: Request): Promise<JsonBody> {

@@ -11,12 +11,10 @@ import {
 } from "./partGeometry";
 import { PartNetwork, type RailwayPart } from "./partNetwork";
 
-export type { BacktrackingPoint, PathResult };
-
 /** A path as parts only; its coordinates are built by the caller, truncated to the clicks. */
 type PartPath = Omit<PathResult, "coordinates">;
 
-export interface PathFinderOptions {
+interface PathFinderOptions {
   /**
    * Silence the search's progress logging.
    *

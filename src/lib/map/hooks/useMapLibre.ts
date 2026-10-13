@@ -112,7 +112,7 @@ function addAttribution(map: maplibregl.Map): void {
   map.addControl(control, "bottom-right");
 }
 
-export interface UseMapLibreOptions {
+interface UseMapLibreOptions {
   /**
    * Region the map is locked to: supplies the initial view, the panning bounds
    * and the key the saved position is stored under. Pass it in `deps` too, so
@@ -135,7 +135,7 @@ export interface UseMapLibreOptions {
   onLoad?: (map: maplibregl.Map) => void;
 }
 
-export interface UseMapLibreReturn {
+interface UseMapLibreReturn {
   map: React.MutableRefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
 }

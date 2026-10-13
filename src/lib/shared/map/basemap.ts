@@ -23,7 +23,7 @@ import { COLORS, OPACITIES, WIDTHS } from "./style";
  * Attribution (OpenFreeMap / OpenMapTiles / OSM) is declared by the TileJSON at
  * the source `url`, so MapLibre picks it up on its own - do not restate it here.
  */
-export const BASEMAP_STYLE_URLS: Record<ResolvedTheme, string> = {
+const BASEMAP_STYLE_URLS: Record<ResolvedTheme, string> = {
   light: "https://tiles.openfreemap.org/styles/liberty",
   // OpenFreeMap serves a dark style beside liberty, so dark mode costs a URL rather
   // than a hand-recoloured style. It is also a much smaller one - 47 layers against
@@ -49,7 +49,6 @@ export const OSM_TILES_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
  * Extended-A, so the Czech and Polish names render.
  */
 export const GLYPHS_URL = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
-export const BASEMAP_FONT = "Noto Sans Regular";
 export const BASEMAP_FONT_BOLD = "Noto Sans Bold";
 
 /** How long to wait for the style before falling back to the raster basemap. */
@@ -60,7 +59,7 @@ const STYLE_FETCH_TIMEOUT_MS = 6000;
  * along because the basemap's own label and POI layers need them; our layers
  * carry no text or icons.
  */
-export type BasemapStyle = Pick<StyleSpecification, "sources" | "layers" | "glyphs" | "sprite">;
+type BasemapStyle = Pick<StyleSpecification, "sources" | "layers" | "glyphs" | "sprite">;
 
 // try english name first, then latin, then whatever the local name is
 const LATIN_LABEL_EXPRESSION = [
@@ -86,7 +85,7 @@ const POI_LAYER_IDS = new Set(["poi_r1", "poi_r7", "poi_r20", "poi_transit"]);
 const BUILDING_FILL_COLOR = "hsl(35,8%,85%)";
 const BUILDING_OUTLINE_COLOR = "hsl(35,6%,79%)";
 
-export function dropPoiLayers(layers: LayerSpecification[]): LayerSpecification[] {
+function dropPoiLayers(layers: LayerSpecification[]): LayerSpecification[] {
   return layers.filter((layer) => !POI_LAYER_IDS.has(layer.id));
 }
 
@@ -108,7 +107,7 @@ export function dropPoiLayers(layers: LayerSpecification[]): LayerSpecification[
  * Keyed on the layer *type*, not on `building-3d` by name - any extrusion in the
  * style is the same effect and gets the same treatment.
  */
-export function flattenBuildings(layers: LayerSpecification[]): LayerSpecification[] {
+function flattenBuildings(layers: LayerSpecification[]): LayerSpecification[] {
   return layers.map((layer) => {
     if (layer.type !== "fill-extrusion") return layer;
     const flattened: FillLayerSpecification = {
@@ -151,7 +150,7 @@ export function flattenBuildings(layers: LayerSpecification[]): LayerSpecificati
  * `["all", ...]`-combined with an expression one. If upstream ever gives this
  * layer a filter, it has taken its own view of which features it draws.
  */
-export function filterPointsFromParkOutlines(layers: LayerSpecification[]): LayerSpecification[] {
+function filterPointsFromParkOutlines(layers: LayerSpecification[]): LayerSpecification[] {
   return layers.map((layer) => {
     if (layer.type !== "line" || layer["source-layer"] !== "park") return layer;
     if (layer.filter !== undefined) return layer;
@@ -168,7 +167,7 @@ export function filterPointsFromParkOutlines(layers: LayerSpecification[]): Laye
  * left alone - the test is what the layer reads, not what it is called, since
  * `highway-name-major` draws a name and `highway-shield-non-us` does not.
  */
-export function latinizeLabels(layers: LayerSpecification[]): LayerSpecification[] {
+function latinizeLabels(layers: LayerSpecification[]): LayerSpecification[] {
   return layers.map((layer) => {
     if (layer.type !== "symbol") return layer;
     const textField = layer.layout?.["text-field"];

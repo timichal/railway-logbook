@@ -39,7 +39,7 @@ export function oppositeSide(side: EndpointSide): EndpointSide {
 /**
  * In-memory route graph for fast pathfinding
  */
-export class RouteGraph {
+class RouteGraph {
   private adjacencyList: Map<number, Set<number>> = new Map();
 
   addConnection(from: number, to: number) {

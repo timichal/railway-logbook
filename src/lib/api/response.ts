@@ -26,7 +26,7 @@ export function jsonResponse(data: unknown, status = 200): Response {
   return Response.json(data, { status });
 }
 
-export function errorResponse(status: number, message: string, headers?: HeadersInit): Response {
+function errorResponse(status: number, message: string, headers?: HeadersInit): Response {
   return Response.json({ error: message }, { status, headers });
 }
 

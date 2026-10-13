@@ -4,7 +4,7 @@
 
 import type { RegionId } from "@/lib/shared/regions";
 
-export interface MapState {
+interface MapState {
   center: [number, number];
   zoom: number;
 }

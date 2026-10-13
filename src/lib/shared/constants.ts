@@ -115,15 +115,16 @@ export const getLineClassLabel = (lineClass: LineClass): string => {
 /**
  * Admin note types. Every note has one — the column is NOT NULL.
  *
- * Only `public: true` types are shown on the public user map. "Usage" is the
- * published, public-facing type; "UsageInternal" ("Usage (internal)") is an
- * admin-only draft that the admin manually promotes to "Usage" once reviewed.
+ * "Usage" is the published, public-facing type — the only one on the public user
+ * map (`public_notes_tile` filters on it in SQL); "UsageInternal" ("Usage
+ * (internal)") is an admin-only draft that the admin manually promotes to "Usage"
+ * once reviewed.
  */
 export const noteTypeOptions = [
-  { id: "Usage", label: "Usage", color: "#2563eb", public: true }, // blue
-  { id: "UsageInternal", label: "Usage (internal)", color: "#60a5fa", public: false }, // light blue (draft)
-  { id: "Works", label: "Works", color: "#ea580c", public: false }, // orange
-  { id: "Todo", label: "Todo", color: "#9333ea", public: false }, // purple
+  { id: "Usage", label: "Usage", color: "#2563eb" }, // blue
+  { id: "UsageInternal", label: "Usage (internal)", color: "#60a5fa" }, // light blue (draft)
+  { id: "Works", label: "Works", color: "#ea580c" }, // orange
+  { id: "Todo", label: "Todo", color: "#9333ea" }, // purple
 ] as const;
 
 export type NoteType = (typeof noteTypeOptions)[number]["id"];
@@ -137,9 +138,6 @@ export const getNoteTypeColor = (noteType: NoteType): string => noteTypeById[not
 
 /** Display label for a note type. */
 export const getNoteTypeLabel = (noteType: NoteType): string => noteTypeById[noteType].label;
-
-/** Whether a note type is shown on the public user map (only published "Usage"). */
-export const isPublicNoteType = (noteType: NoteType): boolean => noteTypeById[noteType].public;
 
 /**
  * Supported countries for filtering

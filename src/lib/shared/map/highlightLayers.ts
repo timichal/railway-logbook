@@ -30,11 +30,9 @@ import {
  */
 
 /** The two highlight sets: the planner/view overlay and the Route Logger selection. */
-export const HIGHLIGHT_BASE_IDS = ["highlighted_routes", "selected_routes_highlight"] as const;
+const HIGHLIGHT_BASE_IDS = ["highlighted_routes", "selected_routes_highlight"] as const;
 
-export type HighlightBaseId = (typeof HIGHLIGHT_BASE_IDS)[number];
-
-export interface HighlightVariant {
+interface HighlightVariant {
   suffix: "regular" | "heritage" | "special";
   usageType: number;
   width: ExpressionSpecification | number;

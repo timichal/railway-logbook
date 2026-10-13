@@ -24,7 +24,7 @@ const dbConfig = getDbConfig();
  * is why `importMapData` runs with a raised heap limit. Raise it by measuring,
  * not by guessing.
  */
-export const DEFAULT_RECALC_CONCURRENCY = 4;
+const DEFAULT_RECALC_CONCURRENCY = 4;
 
 /** Read `--concurrency=N` off the command line, falling back to the default. */
 export function parseConcurrencyArg(args: string[]): number {
@@ -44,7 +44,7 @@ export function createRecalcPool(concurrency: number): Pool {
   return new Pool({ ...dbConfig, max: concurrency + 2 });
 }
 
-export interface RecalculationResult {
+interface RecalculationResult {
   totalRoutes: number;
   successfulRoutes: number;
   invalidRoutes: number;
@@ -55,7 +55,7 @@ export interface RecalculationResult {
 /**
  * Recalculate a single railway route based on starting and ending coordinates
  */
-export async function recalculateRoute(
+async function recalculateRoute(
   db: Client | Pool,
   startingCoordinate: [number, number],
   endingCoordinate: [number, number],
@@ -86,7 +86,7 @@ export async function recalculateRoute(
   };
 }
 
-export interface RecalculationOptions {
+interface RecalculationOptions {
   /** Skip routes already marked invalid (is_valid = FALSE); only recalculate valid ones. */
   validOnly?: boolean;
   /** Routes to recalculate at once. Defaults to DEFAULT_RECALC_CONCURRENCY. */
@@ -234,7 +234,7 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
  * a Client: node-pg serialises concurrent queries on a single connection, so
  * workers sharing one would queue behind each other and gain nothing.
  */
-export async function recalculateAllRoutes(
+async function recalculateAllRoutes(
   db: Pool,
   options: RecalculationOptions = {},
 ): Promise<RecalculationResult> {

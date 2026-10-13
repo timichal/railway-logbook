@@ -24,7 +24,7 @@ interface GeoJSONFeature {
   properties: GeoJSONProperties;
 }
 
-export interface LoadResult {
+interface LoadResult {
   stationsCount: number;
   partsCount: number;
 }
@@ -60,7 +60,7 @@ interface PartRow {
  * `]}` closing its FeatureCollection, so reading the last bytes catches a
  * truncated download without reading gigabytes.
  */
-export function validateGeoJSONFiles(paths: string[]): void {
+function validateGeoJSONFiles(paths: string[]): void {
   for (const path of paths) {
     let stat: fs.Stats;
     try {

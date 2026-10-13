@@ -37,7 +37,7 @@ import {
 export type RegionId = "europe" | "japan";
 
 /** [[west, south], [east, north]] */
-export type RegionBounds = [[number, number], [number, number]];
+type RegionBounds = [[number, number], [number, number]];
 
 export interface Region {
   id: RegionId;

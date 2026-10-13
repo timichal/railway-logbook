@@ -31,7 +31,7 @@ function bearerToken(request: Request): string | null {
 }
 
 /** The request's user, or null if it carries no usable access token. */
-export async function userFromRequest(request: Request): Promise<User | null> {
+async function userFromRequest(request: Request): Promise<User | null> {
   const token = bearerToken(request);
   if (!token) return null;
 
