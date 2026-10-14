@@ -14,10 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **Login/Register migration block** (~20 lines). "Migrate local journeys →
-  `clearAll()` → toast, or a fallback toast on failure" is written twice. Make it one
-  helper next to `describeJourneyMigration`.
-
 - [ ] **`RouteMetadataFields` + `AdminScenicTab` text fields** (~50 lines). The
   label + input + junction-shortcut block appears 4 times in RouteMetadataFields
   (name/from/to/link) and 4 more in the scenic tab (two From/To pairs). Use a small

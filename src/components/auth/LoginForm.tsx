@@ -3,9 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { login } from "@/lib/authActions";
+import { migrateLocalJourneysToAccount } from "@/lib/localJourneyMigration";
 import * as localStore from "@/lib/localStorage";
-import { migrateLocalJourneys } from "@/lib/migrationActions";
-import { describeJourneyMigration } from "@/lib/migrationMessage";
 import { plural } from "@/lib/plural";
 import { useToast } from "@/lib/toast";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
@@ -23,7 +22,7 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormPr
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { showSuccess, showConfirm } = useToast();
+  const { showToast, showSuccess, showConfirm } = useToast();
 
   /**
    * Ask what to do with the journeys stored locally, and do it. Resolves once the
@@ -52,20 +51,8 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormPr
       localStore.clearAll();
       showSuccess("Signed in. Local journeys have been deleted.");
     } else {
-      try {
-        const { journeys, parts } = localStore.exportJourneysData();
-        const result = await migrateLocalJourneys(journeys, parts);
-
-        // Clear localStorage after successful migration
-        localStore.clearAll();
-
-        showSuccess(describeJourneyMigration(result));
-      } catch (err) {
-        console.error("Error migrating journeys:", err);
-        showSuccess(
-          "Signed in, but journey migration failed. Your local journeys are still saved.",
-        );
-      }
+      const { message, type } = await migrateLocalJourneysToAccount("Signed in");
+      showToast(message, type);
     }
   }
 

@@ -3,9 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { register } from "@/lib/authActions";
+import { migrateLocalJourneysToAccount } from "@/lib/localJourneyMigration";
 import * as localStore from "@/lib/localStorage";
-import { migrateLocalJourneys } from "@/lib/migrationActions";
-import { describeJourneyMigration } from "@/lib/migrationMessage";
 import { useToast } from "@/lib/toast";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import { FIELD, FIELD_HINT, FIELD_LABEL, FORM_ERROR } from "@/lib/ui/inputStyles";
@@ -22,39 +21,23 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { showSuccess } = useToast();
+  const { showToast, showSuccess } = useToast();
 
   async function handleSubmit(formData: FormData) {
     setError("");
     setLoading(true);
 
     try {
-      // Export localStorage data before registration
-      const { journeys, parts } = localStore.exportJourneysData();
-      const localPreferences = localStore.getPreferences();
-
-      // Register with auto-migration
-      const result = await register(formData, localPreferences);
+      // The new account starts from the preferences picked while signed out.
+      const result = await register(formData, localStore.getPreferences());
       if (result.error) {
         setError(result.error);
         return;
       }
 
-      // Migrate journeys if there are any
-      if (journeys.length > 0) {
-        try {
-          const migrationResult = await migrateLocalJourneys(journeys, parts);
-
-          // Clear localStorage after successful migration
-          localStore.clearAll();
-
-          showSuccess(`Account created! ${describeJourneyMigration(migrationResult)}`);
-        } catch (migrationErr) {
-          console.error("Error migrating journeys:", migrationErr);
-          showSuccess(
-            "Account created, but journey migration failed. Your local journeys are still saved.",
-          );
-        }
+      if (localStore.getJourneyCount() > 0) {
+        const { message, type } = await migrateLocalJourneysToAccount("Account created");
+        showToast(message, type);
       } else {
         showSuccess("Account created successfully!");
       }
