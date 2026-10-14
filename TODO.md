@@ -14,13 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **SQL tile functions** (~100 lines in `02-vector-tiles.sql`). Each point/line
-  tile is a plpgsql block (`DECLARE result; tile_envelope := …; SELECT INTO; RETURN`)
-  that could be a one-statement `LANGUAGE sql` function. `stations_tile` and
-  `public_stations_tile` are the same function apart from `near_route`, so they can
-  share a body. Some comments are stale: "matching Leaflet behavior", and "Only show
-  stations at zoom 8+" above `z >= 9`.
-
 - [ ] **Shared `<Icon>`** (~120 lines). There are 16 inline `<svg>` elements in
   Navbar (5), MenuSheet, ThemeSwitch, MapStationSearch (2), ShareMapDialog,
   MobileBottomSheet, CardHeader, UserSidebar and RouteEditForm. Most use the same

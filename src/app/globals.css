@@ -319,7 +319,7 @@ body,
   display: none;
 }
 
-/* Leaflet popup styling */
+/* Popup content styling */
 .railway-popup h3,
 .railway-click-menu h3 {
   margin-bottom: 8px;

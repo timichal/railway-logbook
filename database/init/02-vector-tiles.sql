@@ -59,53 +59,28 @@ CREATE INDEX IF NOT EXISTS idx_stations_name_trgm_near_route
 ON stations USING GIN (immutable_unaccent(name) gin_trgm_ops) WHERE near_route;
 
 -- Function: railway_parts_tile
--- Serves railway parts (raw OSM segments) as vector tiles
--- Optimized with zoom-level filtering and geometry simplification
+-- Serves railway parts (raw OSM segments) as vector tiles, fewer of them at low zoom.
+--
+-- Like every function below that builds a tile, one SQL statement with the tile
+-- envelope in its FROM list, which evaluates it once per tile rather than per row.
 CREATE OR REPLACE FUNCTION railway_parts_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
-DECLARE
-    result bytea;
-    tile_envelope geometry;
-BEGIN
-    -- Get the tile envelope in Web Mercator
-    tile_envelope := ST_TileEnvelope(z, x, y);
-
-    -- Generate MVT tile with zoom-level optimization
-    -- Use 'id' as feature ID for MapLibre feature-state support
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'railway_parts', 4096, 'geom', 'id')
+    -- 'id' is the feature id, for MapLibre feature state
+    SELECT ST_AsMVT(mvtgeom.*, 'railway_parts', 4096, 'geom', 'id')
     FROM (
         SELECT
             id,
-            -- Simplify geometry for tile display
             -- 4096 = tile extent, 64 = buffer, true = clip to tile
-            ST_AsMVTGeom(
-                geometry_3857,
-                tile_envelope,
-                4096,
-                64,
-                true
-            ) AS geom
-        FROM railway_parts
-        WHERE
-            -- Spatial filter using index
-            geometry_3857 && tile_envelope
-            -- Zoom-level filtering to reduce data at low zooms
-            AND (
-                -- At zoom < 8, only show longer segments (main lines)
-                (z < 8 AND ST_Length(geometry_3857) > 1000) OR
-                -- At zoom 8-9, show medium+ segments
-                (z >= 8 AND z < 9 AND ST_Length(geometry_3857) > 500) OR
-                -- At zoom 9+, show all segments
-                (z >= 9)
-            )
+            ST_AsMVTGeom(geometry_3857, envelope, 4096, 64, true) AS geom
+        FROM railway_parts, ST_TileEnvelope(z, x, y) AS envelope
+        WHERE geometry_3857 && envelope
+            -- Below z9 only the longer segments: over 1km below z8, over 500m at z8
+            AND (z >= 9 OR ST_Length(geometry_3857) > CASE WHEN z < 8 THEN 1000 ELSE 500 END)
         -- Order doesn't matter for parts, but consistent ordering helps caching
         ORDER BY id
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql
+$$ LANGUAGE sql
 -- STABLE, not IMMUTABLE, here and in every tile function below: they read tables,
 -- and IMMUTABLE lets the planner fold a call with constant arguments into its
 -- result once and reuse it after the data has changed.
@@ -203,16 +178,8 @@ CREATE OR REPLACE FUNCTION railway_routes_mvt(
     selected_countries_param text[]
 )
 RETURNS bytea AS $$
-DECLARE
-    result bytea;
-    tile_envelope geometry;
-BEGIN
-    -- Get the tile envelope in Web Mercator
-    tile_envelope := ST_TileEnvelope(z, x, y);
-
-    -- Generate MVT tile
-    -- Use 'track_id' as feature ID for MapLibre feature-state support
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'railway_routes', 4096, 'geom', 'track_id')
+    -- 'track_id' is the feature id, for MapLibre feature state
+    SELECT ST_AsMVT(mvtgeom.*, 'railway_routes', 4096, 'geom', 'track_id')
     FROM (
         SELECT
             rr.track_id,
@@ -239,15 +206,9 @@ BEGIN
             -- Whether the route reads as ridden: a complete journey, or partial
             -- stretches that add up to the whole line (user_fully_ridden_routes)
             (ridden.track_id IS NOT NULL) AS has_complete_trip,
-            -- Simplify geometry for tile display
-            ST_AsMVTGeom(
-                rr.geometry_3857,
-                tile_envelope,
-                4096,
-                64,
-                true
-            ) AS geom
+            ST_AsMVTGeom(rr.geometry_3857, envelope, 4096, 64, true) AS geom
         FROM railway_routes rr
+        CROSS JOIN ST_TileEnvelope(z, x, y) AS envelope
         -- Most recent journey for this route (drives the hover popup and the
         -- partial styling of a route that isn't fully ridden yet)
         LEFT JOIN LATERAL (
@@ -266,11 +227,9 @@ BEGIN
         -- With no user_id it yields nothing, so every route reads as unvisited.
         LEFT JOIN user_fully_ridden_routes(user_id_param) ridden
             ON ridden.track_id = rr.track_id
-        WHERE
-            -- Spatial filter using index
-            rr.geometry_3857 && tile_envelope
-            -- Show routes at all zoom levels (no zoom restriction)
-            -- Country filtering: if countries are specified, filter by start AND end country
+        WHERE rr.geometry_3857 && envelope
+            -- Every zoom level. Country filter: if countries are specified, both
+            -- the start AND end country must be among them
             AND (
                 selected_countries_param IS NULL OR
                 (rr.start_country = ANY(selected_countries_param) AND rr.end_country = ANY(selected_countries_param))
@@ -285,10 +244,7 @@ BEGIN
             rr.track_id
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql
+$$ LANGUAGE sql
 -- STABLE, not IMMUTABLE: it reads tables. And not STRICT, which would turn the
 -- NULL user of an anonymous tile into a NULL tile.
 STABLE
@@ -314,94 +270,55 @@ STABLE
 STRICT
 PARALLEL SAFE;
 
--- Function: stations_tile
--- Serves railway stations as vector tiles
--- Only displayed at zoom 9+ (matching Leaflet behavior)
-CREATE OR REPLACE FUNCTION stations_tile(z integer, x integer, y integer)
+-- Function: stations_mvt
+-- The station tile behind stations_tile and public_stations_tile, from zoom 9.
+-- Both emit the layer name 'stations', so the map's layer definition is shared.
+--
+-- Always planned for the flag it is called with: a cached generic plan can't fold
+-- near_route_only away, so it can't use the user map's partial near_route index
+-- and filters every station in the tile instead.
+CREATE OR REPLACE FUNCTION stations_mvt(z integer, x integer, y integer, near_route_only boolean)
 RETURNS bytea AS $$
-DECLARE
-    result bytea;
-    tile_envelope geometry;
-BEGIN
-    -- Get the tile envelope in Web Mercator
-    tile_envelope := ST_TileEnvelope(z, x, y);
-
-    -- Generate MVT tile
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'stations')
+    SELECT ST_AsMVT(mvtgeom.*, 'stations')
     FROM (
         SELECT
             id,
             name,
-            -- Point geometry doesn't need much simplification
-            ST_AsMVTGeom(
-                coordinates_3857,
-                tile_envelope,
-                4096,
-                0,  -- No buffer needed for points
-                true
-            ) AS geom
-        FROM stations
-        WHERE
-            -- Spatial filter using index
-            coordinates_3857 && tile_envelope
-            -- Only show stations at zoom 8+
+            -- No buffer needed for points
+            ST_AsMVTGeom(coordinates_3857, envelope, 4096, 0, true) AS geom
+        FROM stations, ST_TileEnvelope(z, x, y) AS envelope
+        WHERE coordinates_3857 && envelope
+            AND (near_route OR NOT near_route_only)
             AND z >= 9
-        ORDER BY name
+        -- id breaks ties between same-name stations, or their order follows the plan
+        ORDER BY name, id
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
+$$ LANGUAGE sql
+STABLE
+STRICT
+PARALLEL SAFE
+SET plan_cache_mode = force_custom_plan;
 
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql
+-- Function: stations_tile
+-- Every station, for the admin map: route creation needs all of them.
+CREATE OR REPLACE FUNCTION stations_tile(z integer, x integer, y integer)
+RETURNS bytea AS $$
+    SELECT stations_mvt(z, x, y, false);
+$$ LANGUAGE sql
 STABLE
 STRICT
 PARALLEL SAFE;
 
 -- Function: public_stations_tile
--- Same as stations_tile, but only stations with an admin-defined route running
--- within 250m (near_route — see src/lib/stationProximity.ts). OSM carries far
--- more station points than the network we map, and one with no route beside it
--- is noise on the user map: nothing to click, nothing for the planner to reach.
--- The admin map uses stations_tile and keeps seeing all of them, which is what
--- route creation needs.
+-- Only stations with an admin-defined route running within 250m (near_route — see
+-- src/lib/stationProximity.ts), for the user map. OSM carries far more station
+-- points than the network we map, and one with no route beside it is noise on
+-- the user map: nothing to click, nothing for the planner to reach.
 CREATE OR REPLACE FUNCTION public_stations_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
-DECLARE
-    result bytea;
-    tile_envelope geometry;
-BEGIN
-    -- Get the tile envelope in Web Mercator
-    tile_envelope := ST_TileEnvelope(z, x, y);
-
-    -- Generate MVT tile (layer name matches stations_tile, so the map layer
-    -- definition is shared between the two)
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'stations')
-    FROM (
-        SELECT
-            id,
-            name,
-            -- Point geometry doesn't need much simplification
-            ST_AsMVTGeom(
-                coordinates_3857,
-                tile_envelope,
-                4096,
-                0,  -- No buffer needed for points
-                true
-            ) AS geom
-        FROM stations
-        WHERE
-            near_route
-            -- Spatial filter using index
-            AND coordinates_3857 && tile_envelope
-            -- Only show stations at zoom 9+
-            AND z >= 9
-        ORDER BY name
-    ) AS mvtgeom
-    WHERE geom IS NOT NULL;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql
+    SELECT stations_mvt(z, x, y, true);
+$$ LANGUAGE sql
 STABLE
 STRICT
 PARALLEL SAFE;
@@ -461,15 +378,7 @@ ON admin_notes USING GIST (coordinate_3857);
 -- src/app/api/tiles/admin_notes checks for the admin first and calls this itself.
 CREATE OR REPLACE FUNCTION admin_notes_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
-DECLARE
-    result bytea;
-    tile_envelope geometry;
-BEGIN
-    -- Get the tile envelope in Web Mercator
-    tile_envelope := ST_TileEnvelope(z, x, y);
-
-    -- Generate MVT tile
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'admin_notes')
+    SELECT ST_AsMVT(mvtgeom.*, 'admin_notes')
     FROM (
         SELECT
             id,
@@ -477,26 +386,14 @@ BEGIN
             note_type,
             source,
             updated_at,
-            -- Point geometry doesn't need much simplification
-            ST_AsMVTGeom(
-                coordinate_3857,
-                tile_envelope,
-                4096,
-                0,  -- No buffer needed for points
-                true
-            ) AS geom
-        FROM admin_notes
-        WHERE
-            -- Spatial filter using index
-            coordinate_3857 && tile_envelope
-            -- Show all notes at all zoom levels
+            -- No buffer needed for points
+            ST_AsMVTGeom(coordinate_3857, envelope, 4096, 0, true) AS geom
+        FROM admin_notes, ST_TileEnvelope(z, x, y) AS envelope
+        WHERE coordinate_3857 && envelope
         ORDER BY updated_at DESC
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql
+$$ LANGUAGE sql
 STABLE
 STRICT
 PARALLEL SAFE;
@@ -508,36 +405,21 @@ PARALLEL SAFE;
 -- their text are never shipped to the public.
 CREATE OR REPLACE FUNCTION public_notes_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
-DECLARE
-    result bytea;
-    tile_envelope geometry;
-BEGIN
-    tile_envelope := ST_TileEnvelope(z, x, y);
-
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'public_notes')
+    SELECT ST_AsMVT(mvtgeom.*, 'public_notes')
     FROM (
         SELECT
             id,
             text,
             source,
-            ST_AsMVTGeom(
-                coordinate_3857,
-                tile_envelope,
-                4096,
-                0,  -- No buffer needed for points
-                true
-            ) AS geom
-        FROM admin_notes
-        WHERE
-            coordinate_3857 && tile_envelope
+            -- No buffer needed for points
+            ST_AsMVTGeom(coordinate_3857, envelope, 4096, 0, true) AS geom
+        FROM admin_notes, ST_TileEnvelope(z, x, y) AS envelope
+        WHERE coordinate_3857 && envelope
             AND note_type = 'Usage'
         ORDER BY updated_at DESC
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql
+$$ LANGUAGE sql
 STABLE
 STRICT
 PARALLEL SAFE;
@@ -573,21 +455,7 @@ CREATE TRIGGER scenic_lines_sync_geometry
 -- names and validity are for the admin map.
 CREATE OR REPLACE FUNCTION scenic_lines_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
-DECLARE
-    result bytea;
-    tile_envelope geometry;
-    query_envelope geometry;
-BEGIN
-    tile_envelope := ST_TileEnvelope(z, x, y);
-    -- Widened by the 64-unit MVT buffer: the band is up to 18px wide with round
-    -- caps, so a line ending just inside the next tile still spills into this
-    -- one, and selecting on the bare envelope cut its cap flat at the tile edge.
-    query_envelope := ST_Expand(
-        tile_envelope,
-        (ST_XMax(tile_envelope) - ST_XMin(tile_envelope)) * 64 / 4096
-    );
-
-    SELECT INTO result ST_AsMVT(mvtgeom.*, 'scenic_lines', 4096, 'geom', 'id')
+    SELECT ST_AsMVT(mvtgeom.*, 'scenic_lines', 4096, 'geom', 'id')
     FROM (
         SELECT
             id,
@@ -603,20 +471,23 @@ BEGIN
             -- string of bright blotches. The routes are opaque and never show it.
             ST_AsMVTGeom(
                 ST_Simplify(geometry_3857, 40075016.68 / (512 * 2 ^ z)),
-                tile_envelope,
+                envelope,
                 4096,
                 64,
                 true
             ) AS geom
-        FROM scenic_lines
+        FROM scenic_lines,
+            ST_TileEnvelope(z, x, y) AS envelope,
+            -- Widened by the 64-unit MVT buffer: the band is up to 18px wide with
+            -- round caps, so a line ending just inside the next tile still spills
+            -- into this one, and selecting on the bare envelope cut its cap flat
+            -- at the tile edge.
+            ST_TileEnvelope(z, x, y, margin => 64.0 / 4096) AS query_envelope
         WHERE geometry_3857 && query_envelope
         ORDER BY id
     ) AS mvtgeom
     WHERE geom IS NOT NULL;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql
+$$ LANGUAGE sql
 STABLE
 STRICT
 PARALLEL SAFE;
