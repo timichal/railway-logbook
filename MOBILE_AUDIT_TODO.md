@@ -16,15 +16,11 @@ becomes an item of its own.
 ## High — bugs and the foundation
 
 - [ ] **Finish checking the 2026-10-14 High fixes on the device.** *(device)* The
-  airplane-mode cold start, the map's top row, dark mode and a plain return after a
-  minute have been confirmed on the iPhone. Left:
-  - Sign out, then sign in as a **different** account (only the same one has been
-    tried): no selection, planner form or highlight left over, and the route colours
-    are the new account's.
-  - Log a journey on the web while the app is in the background, then come back after
-    more than a minute: the map colours, progress and logbook catch up.
-  - The same return **offline** changes nothing: routes, numbers and the logbook stay
-    as drawn. Pulling down the notification centre doesn't count as leaving.
+  airplane-mode cold start, the map's top row, dark mode, a plain return after a
+  minute, switching to a different account, and a return after logging on the web
+  have been confirmed on the iPhone. Left:
+  - A return after more than a minute **offline** changes nothing: routes, numbers and
+    the logbook stay as drawn. Pulling down the notification centre doesn't count as leaving.
   - The error screen. It needs a throw during render, so add one temporarily: for the
     tab boundary, `if (Math.random() < 2) throw new Error("test")` at the top of
     `SettingsScreen` (Retry should keep the session); for the root one, the same line
@@ -195,9 +191,6 @@ becomes an item of its own.
 
 ## Store readiness (before Phase 6, but cheap to decide now)
 
-- [ ] **Try account deletion on the device.** *(device)* Settings → Delete account:
-  a wrong password shows the error and stays signed in; the right one lands on the
-  login screen with nothing of the old account left (selection, planner, countries).
 - [ ] **Google Play also wants a deletion link outside the app** (a web page or URL
   in the listing for people who uninstalled it). The web menu's "Delete account" is
   that path once signed in; point the listing at the site and say so there.
