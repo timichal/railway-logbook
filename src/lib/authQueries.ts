@@ -25,6 +25,19 @@ import { ABSENT_USER_HASH, hashPassword } from "./passwordHash";
 import { updateSelectedCountriesForUser } from "./preferencesQueries";
 import { normalizeCountryCodes } from "./shared/constants";
 
+/**
+ * Whether `password` matches the stored hash. Always compared, and against a
+ * well-formed hash either way, so that neither a missing row nor a row with no
+ * password answers faster than a real one.
+ */
+async function passwordMatches(
+  password: string,
+  stored: string | null | undefined,
+): Promise<boolean> {
+  const isValid = await bcrypt.compare(password, stored || ABSENT_USER_HASH);
+  return Boolean(stored) && isValid;
+}
+
 export async function authenticateUser(email: string, password: string): Promise<User> {
   if (!email?.trim() || !password) {
     throw new ValidationError("Email and password are required");
@@ -36,11 +49,7 @@ export async function authenticateUser(email: string, password: string): Promise
   );
 
   const user = result.rows[0];
-
-  // Always compared, and against a well-formed hash either way, so that neither
-  // a missing row nor a row with no password answers faster than a real one.
-  const isValid = await bcrypt.compare(password, user?.password || ABSENT_USER_HASH);
-  if (!user || !isValid) {
+  if (!(await passwordMatches(password, user?.password)) || !user) {
     throw new ValidationError("Invalid email or password");
   }
 
@@ -110,4 +119,52 @@ export async function registerUser(
   }
 
   return { id: user.id, email: user.email, name: user.name };
+}
+
+/**
+ * Delete an account and everything it holds, once the password has been given
+ * again — the deletion both app stores require (MOBILE_APP_PLAN.md, Phase 6),
+ * offered on the web as well so it is not an app-only right.
+ *
+ * Everything the user owns references `users` with `ON DELETE CASCADE` (trips,
+ * journeys, logged parts, preferences and with them the share token), so the one
+ * `DELETE` takes it all in a single statement. Every token issued for the account
+ * stops working at once, since a token naming an account that is gone is refused
+ * (`sessionQueries.ts`).
+ *
+ * The admin (user 1) cannot be deleted this way: the id is reserved, and losing
+ * it would leave the routes with no one to maintain them. `createAdmin --reset`
+ * is how that account changes hands.
+ *
+ * A wrong password is a `ValidationError` like any other rejected value — not a
+ * 401, which the native client reads as an expired token and answers by
+ * refreshing and then signing out.
+ */
+export async function deleteAccount(userId: number, password: string): Promise<void> {
+  if (!password) {
+    throw new ValidationError("Password is required");
+  }
+
+  if (userId === 1) {
+    throw new ValidationError("The admin account cannot be deleted");
+  }
+
+  const result = await pool.query<{ password: string | null }>(
+    "SELECT password FROM users WHERE id = $1",
+    [userId],
+  );
+  const stored = result.rows[0]?.password;
+  if (!(await passwordMatches(password, stored))) {
+    throw new ValidationError("Incorrect password");
+  }
+
+  // Only while the hash is still the one just checked: a password changed during
+  // the bcrypt must not be overruled by the old one.
+  const deleted = await pool.query("DELETE FROM users WHERE id = $1 AND password = $2", [
+    userId,
+    stored,
+  ]);
+  if (deleted.rowCount === 0) {
+    throw new ValidationError("Incorrect password");
+  }
 }

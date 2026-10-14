@@ -62,6 +62,9 @@ function RootNavigator(): ReactNode {
           {/* Pushed, not modal: a settings page is left by going back, not by being
               spent. */}
           <Stack.Screen name="countries" />
+          {/* Modal: it is spent, not left — and once spent, the guard above takes it
+              away with the rest of the signed-in tree. */}
+          <Stack.Screen name="delete-account" options={{ presentation: "modal" }} />
         </Stack.Protected>
         <Stack.Protected guard={status === "signedOut"}>
           <Stack.Screen name="(auth)" />

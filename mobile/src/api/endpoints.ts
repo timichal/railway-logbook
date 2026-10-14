@@ -45,6 +45,11 @@ export async function me(): Promise<ApiUser> {
   return user;
 }
 
+/** The account and everything in it, gone. A wrong password is a 400, never a sign-out. */
+export async function deleteAccount(password: string): Promise<void> {
+  await request("/auth/me", { method: "DELETE", body: { password } });
+}
+
 // ============================================================================
 // Public reads — no token; this is the same data the tiles serve to anyone
 // ============================================================================

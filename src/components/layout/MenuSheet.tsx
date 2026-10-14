@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import HowToUseArticle from "@/components/articles/HowToUseArticle";
 import RailwayNotesArticle from "@/components/articles/RailwayNotesArticle";
+import DeleteAccountForm from "@/components/auth/DeleteAccountForm";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
 import Icon, { type IconName } from "@/components/ui/Icon";
@@ -45,7 +46,8 @@ import { useModalDialog } from "@/lib/ui/useModalDialog";
  * chip strip's blue/green/indigo/red) reads as decoration and says nothing: in a
  * list where everything is coloured, colour cannot mark out the one row that is
  * destructive. So the rows are neutral, the icon carries the identity, and red is
- * spent only on Log out.
+ * spent only on Log out — and on the button inside Delete account, whose row
+ * stays neutral like the rest.
  *
  * Mounted only while open (the caller conditions on it), so closing resets the view
  * and the open animation runs on every open. It is a native modal `<dialog>`
@@ -58,13 +60,15 @@ interface MenuSheetProps {
   onClose: () => void;
   onLogout: () => void;
   onAuthSuccess: () => void;
+  /** The account is gone and its cookie with it; the layout resets as for a logout. */
+  onAccountDeleted: () => void;
   /** Opened straight into a sub-view — the navbar's auth buttons land on the form
       they name, so the bar costs one click rather than two and neither form is
       duplicated in a dropdown of its own. */
   initialView?: MenuView;
 }
 
-export type MenuView = "menu" | "login" | "register" | "howto" | "notes";
+export type MenuView = "menu" | "login" | "register" | "howto" | "notes" | "deleteAccount";
 
 function Chevron() {
   return <Icon name="chevronRight" className="w-4 h-4 text-gray-300 flex-shrink-0" />;
@@ -100,6 +104,7 @@ export default function MenuSheet({
   onClose,
   onLogout,
   onAuthSuccess,
+  onAccountDeleted,
   initialView = "menu",
 }: MenuSheetProps) {
   const [view, setView] = useState<MenuView>(initialView);
@@ -168,6 +173,7 @@ export default function MenuSheet({
     register: "Create account",
     howto: "How To Use",
     notes: "Railway Notes",
+    deleteAccount: "Delete account",
   };
 
   let body: ReactNode;
@@ -181,6 +187,12 @@ export default function MenuSheet({
     body = (
       <div className="p-4">
         <RegisterForm onSuccess={handleAuthSuccess} onSwitchToLogin={() => openView("login")} />
+      </div>
+    );
+  } else if (view === "deleteAccount") {
+    body = (
+      <div className="p-4">
+        <DeleteAccountForm onDeleted={onAccountDeleted} />
       </div>
     );
   } else if (view === "howto") {
@@ -235,6 +247,11 @@ export default function MenuSheet({
               <span className="flex-1">Admin</span>
               <Chevron />
             </Link>
+          )}
+          {/* Last, and as neutral as the rows above it: the red is in the form it
+              opens. Not for the admin, whose account the server refuses to delete. */}
+          {user && user.id !== 1 && (
+            <Row icon="trash" label="Delete account" opens="deleteAccount" onOpen={openView} />
           )}
         </nav>
       </>

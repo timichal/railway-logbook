@@ -66,6 +66,13 @@ function MainPage({
       onLogout();
     });
 
+  // The cookie is already gone (the form refreshes the page), and with the account
+  // went everything a draft was for, so nothing is asked
+  const handleAccountDeleted = () => {
+    setActiveTab("routes");
+    setMenuView(null);
+  };
+
   // Handle successful login/register - switch to Route Logger tab
   const handleAuthSuccess = () => {
     setActiveTab("routes");
@@ -107,6 +114,7 @@ function MainPage({
           onClose={() => setMenuView(null)}
           onLogout={handleLogout}
           onAuthSuccess={handleAuthSuccess}
+          onAccountDeleted={handleAccountDeleted}
         />
       )}
     </>

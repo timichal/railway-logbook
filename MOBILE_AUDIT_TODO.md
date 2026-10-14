@@ -195,10 +195,12 @@ becomes an item of its own.
 
 ## Store readiness (before Phase 6, but cheap to decide now)
 
-- [ ] **Account deletion in the app.** Required by App Store guideline 5.1.1(v) and by
-  Google Play for any app with accounts. The plan mentions it, but there is no
-  endpoint and no UI. It needs `DELETE /api/v1/auth/me` (or similar), confirmed with
-  the password.
+- [ ] **Try account deletion on the device.** *(device)* Settings → Delete account:
+  a wrong password shows the error and stays signed in; the right one lands on the
+  login screen with nothing of the old account left (selection, planner, countries).
+- [ ] **Google Play also wants a deletion link outside the app** (a web page or URL
+  in the listing for people who uninstalled it). The web menu's "Delete account" is
+  that path once signed in; point the listing at the site and say so there.
 - [ ] **Privacy policy URL** for both store listings, and a link to it in Settings.
 - [ ] **The `NSLocalNetworkUsageDescription` / `NSBonjourServices` entries are for
   development** and will ship in a release build. Move them to an `app.config.ts` that

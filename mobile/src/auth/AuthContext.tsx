@@ -1,5 +1,5 @@
 /**
- * Who is signed in, and the three ways that changes.
+ * Who is signed in, and the ways that changes.
  *
  * The cold start is the interesting part. Tokens live in the keychain and outlive
  * the process, so the app opens not knowing whether they still work — hence a
@@ -35,7 +35,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { type ApiUser, type AuthResponse, onSignedOut, refreshIfExpiring } from "@/api/client";
+import {
+  ApiError,
+  type ApiUser,
+  type AuthResponse,
+  onSignedOut,
+  refreshIfExpiring,
+} from "@/api/client";
 import * as api from "@/api/endpoints";
 import { useOnForeground } from "@/lifecycle/useOnForeground";
 import { bumpLogVersion } from "@/logbook/logVersion";
@@ -51,6 +57,8 @@ type Status = "loading" | "signedOut" | "signedIn";
 interface AuthValue {
   status: Status;
   user: ApiUser | null;
+  /** Said on the login screen about how the last session ended (an account deletion). */
+  notice: string | null;
   signIn(email: string, password: string): Promise<void>;
   signUp(input: {
     email: string;
@@ -59,6 +67,11 @@ interface AuthValue {
     name?: string;
   }): Promise<void>;
   signOut(): Promise<void>;
+  /**
+   * Delete the account on the server, then end the session as `signOut` does and
+   * leave a `notice` for the login screen.
+   */
+  deleteAccount(password: string): Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -66,6 +79,7 @@ const AuthContext = createContext<AuthValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   const [status, setStatus] = useState<Status>("loading");
   const [user, setUser] = useState<ApiUser | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const forgetSession = useCallback(() => {
     setUser(null);
@@ -117,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
     // A new session draws its own colours: the route tile's URL does not say whose
     // they are (the bearer header does), so the cache buster has to move instead.
     bumpLogVersion();
+    setNotice(null);
     setUser(response);
     setStatus("signedIn");
   }, []);
@@ -169,8 +184,40 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
     forgetSession();
   }, [forgetSession]);
 
+  const deleteAccount = useCallback(
+    async (password: string) => {
+      try {
+        await api.deleteAccount(password);
+      } catch (error) {
+        // The session was refused, and the client has already ended it. Most likely
+        // an earlier attempt went through and only its reply was lost: the request
+        // carried tokens for an account that no longer exists. Not certain, though,
+        // so the notice says so.
+        if (error instanceof ApiError && error.status === 401) {
+          setNotice(
+            "You were signed out. If an earlier attempt went through, your account has been deleted.",
+          );
+          return;
+        }
+        throw error;
+      }
+      setNotice("Your account has been deleted.");
+      // The tokens name an account that is gone and would be refused anyway; ending
+      // the session is what clears everything held for it on the device
+      // (`useOnSessionEnd`, the country list's copy). Ended even if the keychain
+      // fails to clear: the account is gone either way, and the screen must not
+      // report a deletion that happened as an error.
+      try {
+        await clearTokens();
+      } finally {
+        forgetSession();
+      }
+    },
+    [forgetSession],
+  );
+
   return (
-    <AuthContext.Provider value={{ status, user, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ status, user, notice, signIn, signUp, signOut, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,5 @@
 /**
- * Rate limiting for the unauthenticated auth endpoints.
+ * Rate limiting for the auth endpoints — everything that checks a password.
  *
  * Checking a password costs a bcrypt at cost 12 — ~250ms of CPU that anyone can
  * spend without an account, on the one process that also serves the map. So
@@ -167,12 +167,12 @@ function clientBucket(address: string): string {
     .join(":")}::/64`;
 }
 
-function enforce(headers: Headers, prefix: string, policy: Policy): void {
+function enforce(headers: Headers, prefix: string, policy: Policy, what = policy.what): void {
   const waitSeconds = consume(`${prefix}:${clientAddress(headers)}`, policy);
   if (waitSeconds > 0) {
     throw new RateLimitError(
       waitSeconds,
-      `Too many ${policy.what}. Please try again in ${describeWait(waitSeconds)}.`,
+      `Too many ${what}. Please try again in ${describeWait(waitSeconds)}.`,
     );
   }
 }
@@ -185,4 +185,14 @@ export function enforceLoginRateLimit(headers: Headers): void {
 /** Charge a registration attempt to its client, or throw a `RateLimitError`. */
 export function enforceRegisterRateLimit(headers: Headers): void {
   enforce(headers, "register", REGISTER_POLICY);
+}
+
+/**
+ * Charge a password re-entry (account deletion) to the sign-in budget, or throw.
+ * It is a bcrypt compare like a sign-in, so it is the same counter under the same
+ * policy and only the message differs — which also keeps a stolen token from
+ * being a way to guess the password behind it.
+ */
+export function enforcePasswordCheckRateLimit(headers: Headers): void {
+  enforce(headers, "login", LOGIN_POLICY, "password attempts");
 }

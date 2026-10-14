@@ -18,9 +18,18 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { type ActionResult, asActionResult } from "./actionResult";
-import { authenticateUser, registerUser } from "./authQueries";
+import {
+  authenticateUser,
+  deleteAccount as deleteAccountForUser,
+  registerUser,
+} from "./authQueries";
 import { COOKIE_NAME, createToken, type User } from "./authTokens";
-import { enforceLoginRateLimit, enforceRegisterRateLimit } from "./rateLimit";
+import { ValidationError } from "./errors";
+import {
+  enforceLoginRateLimit,
+  enforcePasswordCheckRateLimit,
+  enforceRegisterRateLimit,
+} from "./rateLimit";
 import { verifyToken } from "./sessionQueries";
 
 export type { User };
@@ -92,6 +101,26 @@ export async function register(
 
     await setSessionCookie(user);
     return user;
+  });
+}
+
+/**
+ * Delete the signed-in account, confirmed by its password (see `deleteAccount`
+ * in `authQueries.ts`), and drop the cookie. The caller refreshes the page, which
+ * then renders signed out; the cookie would be refused anyway, its account gone.
+ */
+export async function deleteAccount(formData: FormData): Promise<ActionResult<null>> {
+  return asActionResult(async () => {
+    const user = await getUser();
+    if (!user) {
+      throw new ValidationError("Not authenticated");
+    }
+
+    enforcePasswordCheckRateLimit(await headers());
+
+    await deleteAccountForUser(user.id, formData.get("password") as string);
+    (await cookies()).delete(COOKIE_NAME);
+    return null;
   });
 }
 

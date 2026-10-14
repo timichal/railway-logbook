@@ -1016,7 +1016,9 @@ and costs nothing.
 | Store paperwork   | screenshots at several sizes, privacy manifest, privacy policy URL | data safety form, target-API-level requirements        |
 
 Both stores need a privacy policy URL and an account-deletion path if the app has
-accounts — which this one does.
+accounts — which this one does. Deletion is done (2026-10-15): Settings → Delete
+account, confirmed with the password, over `DELETE /api/v1/auth/me`; the web menu
+offers the same. The admin account cannot be deleted.
 
 ### Also needed
 

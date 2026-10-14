@@ -46,6 +46,7 @@ of these opt in.
 | `POST /auth/register` | `{ email, password, confirmPassword, name? }` → 201 and the token pair. 400 with the message the web form would show |
 | `POST /auth/refresh` | `{ refreshToken }` → a fresh pair. 401 if it is expired, invalid, or an access token |
 | `GET /auth/me` | `{ user }` — who the token belongs to |
+| `DELETE /auth/me` | `{ password }` → `{ success: true }`. Deletes the account and everything in it; every token for it is refused from then on. A wrong password is a **400**, not a 401 (a 401 would send the client into refresh-and-sign-out). The admin (user 1) is refused with a 400. Rate-limited with sign-ins |
 
 The pair is `{ user, accessToken, refreshToken, expiresIn }`, `expiresIn` in
 seconds. The access token lasts **7 days**, the refresh token **180** — a
@@ -65,7 +66,8 @@ refused the same way.
 5 registrations per hour, counted in memory against the address the proxy
 reports (`src/lib/rateLimit.ts`; an IPv6 client by its /64). **Every** sign-in
 counts, a successful one too, so a client should log in once and then live on
-refreshes rather than re-sending the password. Over the limit is a **429** with `Retry-After` in
+refreshes rather than re-sending the password. Deleting the account checks a
+password too and draws on the same budget. Over the limit is a **429** with `Retry-After` in
 seconds and a message fit to show; a client should wait that long rather than
 retry, and must not treat it as bad credentials. Nothing else in the API is
 limited — everything else costs a query, while a password costs a bcrypt.

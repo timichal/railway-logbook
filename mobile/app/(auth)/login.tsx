@@ -8,7 +8,7 @@ import { Screen } from "@/ui/Screen";
 import { TextField } from "@/ui/TextField";
 
 export default function LoginScreen(): ReactNode {
-  const { signIn } = useAuth();
+  const { signIn, notice } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +47,12 @@ export default function LoginScreen(): ReactNode {
               Sign in to see your map and log a ride.
             </Text>
           </View>
+
+          {notice ? (
+            <Text className="rounded-xl bg-gray-100 p-3 text-sm text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+              {notice}
+            </Text>
+          ) : null}
 
           <View className="gap-4">
             <TextField
