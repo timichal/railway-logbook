@@ -14,13 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **Shared `<Icon>`** (~120 lines). There are 16 inline `<svg>` elements in
-  Navbar (5), MenuSheet, ThemeSwitch, MapStationSearch (2), ShareMapDialog,
-  MobileBottomSheet, CardHeader, UserSidebar and RouteEditForm. Most use the same
-  24×24 stroke template, each at ~13 lines. `MenuSheet` already has a local
-  `Icon({ path })`; move it to `components/ui/Icon.tsx` and use it everywhere. The two
-  Navbar hamburgers are also identical copies.
-
 - [ ] **`LocalJourneyLogTab` vs `JourneyCard`** (~80 lines).
   `buildRouteMetaFromSelected` and `buildRouteFromSelected` are the same function;
   move it to `selectedRoutes.ts`. More broadly, the local tab still uses the old

@@ -1,7 +1,8 @@
 "use client";
 
+import Icon, { type IconName } from "@/components/ui/Icon";
+import IconButton from "@/components/ui/IconButton";
 import { setThemePreference, type ThemePreference, useThemePreference } from "@/lib/theme";
-import { iconBtn } from "@/lib/ui/buttonStyles";
 
 /**
  * Light / System / Dark, as a segmented control shaped like `RegionSwitch`.
@@ -15,21 +16,10 @@ import { iconBtn } from "@/lib/ui/buttonStyles";
  * browser and needs no account — which is also what makes the shared map follow the
  * visitor rather than the owner.
  */
-const OPTIONS: { value: ThemePreference; label: string; icon: string }[] = [
-  // Sun.
-  {
-    value: "light",
-    label: "Light",
-    icon: "M12 3v2m0 14v2m9-9h-2M5 12H3m14.66-6.66l-1.42 1.42M7.76 16.24l-1.42 1.42m12.32 0l-1.42-1.42M7.76 7.76L6.34 6.34M16 12a4 4 0 11-8 0 4 4 0 018 0z",
-  },
-  // A display, for "whatever this device says".
-  {
-    value: "system",
-    label: "System",
-    icon: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
-  },
-  // Moon.
-  { value: "dark", label: "Dark", icon: "M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" },
+const OPTIONS: { value: ThemePreference; label: string; icon: IconName }[] = [
+  { value: "light", label: "Light", icon: "sun" },
+  { value: "system", label: "System", icon: "display" },
+  { value: "dark", label: "Dark", icon: "moon" },
 ];
 
 interface ThemeSwitchProps {
@@ -69,20 +59,7 @@ export default function ThemeSwitch({ compact = false }: ThemeSwitchProps) {
                 : "bg-surface text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200"
             }`}
           >
-            <svg
-              className="w-4 h-4 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.8}
-                d={option.icon}
-              />
-            </svg>
+            <Icon name={option.icon} className="w-4 h-4 flex-shrink-0" />
             {!compact && option.label}
           </button>
         );
@@ -103,22 +80,11 @@ export function ThemeCycleButton() {
   const next = OPTIONS[(index + 1) % OPTIONS.length];
 
   return (
-    <button
-      type="button"
-      onClick={() => setThemePreference(next.value)}
-      className={iconBtn("md")}
-      aria-label={`Colour scheme: ${current.label}. Switch to ${next.label}`}
+    <IconButton
+      icon={current.icon}
+      label={`Colour scheme: ${current.label}. Switch to ${next.label}`}
       title={`Colour scheme: ${current.label}`}
-    >
-      <svg
-        className="w-6 h-6"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={current.icon} />
-      </svg>
-    </button>
+      onClick={() => setThemePreference(next.value)}
+    />
   );
 }

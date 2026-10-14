@@ -144,8 +144,8 @@ const ICON_TONES = {
   onColor: "text-white/80 not-disabled:hover:text-white not-disabled:active:text-white/70",
 } as const;
 
-type IconButtonSize = keyof typeof ICON_SIZES;
-type IconButtonTone = keyof typeof ICON_TONES;
+export type IconButtonSize = keyof typeof ICON_SIZES;
+export type IconButtonTone = keyof typeof ICON_TONES;
 
 /** A square, label-less glyph button: close x, back chevron, remove-from-list. */
 export function iconBtn(size: IconButtonSize = "md", tone: IconButtonTone = "muted"): string {

@@ -1,7 +1,7 @@
 "use client";
 
 import { LABEL } from "@/components/admin/RouteMetadataFields";
-import { iconBtn } from "@/lib/ui/buttonStyles";
+import IconButton from "@/components/ui/IconButton";
 
 const formatCoordinate = (coord: [number, number] | null) =>
   coord ? `${coord[1].toFixed(6)}, ${coord[0].toFixed(6)}` : "";
@@ -41,15 +41,15 @@ export default function PickedPointField({
             locked ? "bg-gray-100 cursor-not-allowed" : "bg-gray-50"
           }`}
         />
-        <button
-          type="button"
-          onClick={onClear}
-          className={`${iconBtn("sm", "danger")} self-center`}
+        <IconButton
+          icon="close"
+          label={`Clear ${label.replace(/ \*$/, "").toLowerCase()}`}
           title={`Clear ${label.replace(/ \*$/, "").toLowerCase()}`}
-          aria-label={`Clear ${label.replace(/ \*$/, "").toLowerCase()}`}
-        >
-          ×
-        </button>
+          onClick={onClear}
+          size="sm"
+          tone="danger"
+          className="self-center"
+        />
       </div>
     </div>
   );

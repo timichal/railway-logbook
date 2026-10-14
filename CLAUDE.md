@@ -226,7 +226,7 @@ One directory per part of the app; always import a component by its full path (`
 - **`layout/`** — `MainLayout`, `Navbar`, `ServiceWorkerRegistrar`, `MenuSheet`.
 - **`auth/`** — `LoginForm`, `RegisterForm` (rendered only by `MenuSheet`).
 - **`articles/`** — `HowToUseArticle`, `RailwayNotesArticle` (the menu supplies title and back arrow).
-- **`ui/`** — `MobileBottomSheet`, `ToggleSwitch`, `RegionSwitch`, `ThemeSwitch`, `TagInput`, `StationSearchInput`, `TrashIcon`.
+- **`ui/`** — `MobileBottomSheet`, `ToggleSwitch`, `RegionSwitch`, `ThemeSwitch`, `TagInput`, `StationSearchInput`, `Icon` (**every icon in the app**, by name — add a new glyph there, never an inline `<svg>`; its stroke weight is set by its group, not the call site), `IconButton` (a label-less `iconBtn` around one, whose glyph size follows the button size; other button attributes pass through).
 
 ### Library (`src/lib/`)
 - **Queries** (server-only): `db.ts` (pool, `asMissingRow`, `withTransaction`), `dbConfig.ts`, `progressQueries.ts`, `journeyQueries.ts`, `tripQueries.ts`, `preferencesQueries.ts`, `routeQueries.ts`, `authQueries.ts`, `passwordHash.ts`, `authTokens.ts`, `sessionQueries.ts`, `publicMapQueries.ts`, `routeTileQueries.ts`, `adminNotesTileQueries.ts`, `errors.ts`.

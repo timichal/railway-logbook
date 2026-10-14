@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Icon from "@/components/ui/Icon";
 import { optionRow } from "@/lib/ui/buttonStyles";
 
 interface TagInputProps {
@@ -104,7 +105,7 @@ export default function TagInput({
               className="text-green-700 leading-none transition-colors hover:text-green-900 active:text-green-950"
               aria-label={`Remove ${tag}`}
             >
-              ×
+              <Icon name="close" className="w-3 h-3" />
             </button>
           </span>
         ))}

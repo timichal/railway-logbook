@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+import Icon from "@/components/ui/Icon";
 
 /**
  * The mobile sheet that carries the sidebar, anchored to the **bottom** of the map —
@@ -502,20 +503,7 @@ export default function MobileBottomSheet({
         {collapsed && collapsedLabel && (
           <span className="flex items-center gap-1 text-xs font-medium text-gray-600">
             {collapsedLabel}
-            <svg
-              className="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 15l7-7 7 7"
-              />
-            </svg>
+            <Icon name="chevronUp" className="w-3.5 h-3.5" />
           </span>
         )}
       </button>

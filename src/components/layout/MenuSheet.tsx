@@ -6,10 +6,12 @@ import HowToUseArticle from "@/components/articles/HowToUseArticle";
 import RailwayNotesArticle from "@/components/articles/RailwayNotesArticle";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
+import Icon, { type IconName } from "@/components/ui/Icon";
+import IconButton from "@/components/ui/IconButton";
 import RegionSwitch from "@/components/ui/RegionSwitch";
 import ThemeSwitch from "@/components/ui/ThemeSwitch";
 import type { User } from "@/lib/authActions";
-import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import { btn } from "@/lib/ui/buttonStyles";
 import { useModalDialog } from "@/lib/ui/useModalDialog";
 
 /**
@@ -63,41 +65,8 @@ interface MenuSheetProps {
 
 export type MenuView = "menu" | "login" | "register" | "howto" | "notes";
 
-const ICON_PATHS = {
-  howTo:
-    "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253",
-  notes:
-    "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
-  admin:
-    "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z",
-} as const;
-
-function Icon({ path, className = "w-5 h-5" }: { path: string; className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={path} />
-    </svg>
-  );
-}
-
 function Chevron() {
-  return (
-    <svg
-      className="w-4 h-4 text-gray-300 flex-shrink-0"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-    </svg>
-  );
+  return <Icon name="chevronRight" className="w-4 h-4 text-gray-300 flex-shrink-0" />;
 }
 
 /** Full-width list row; 56px clears the 44pt touch floor without feeling stretched. */
@@ -111,35 +80,16 @@ function Row({
   opens,
   onOpen,
 }: {
-  icon: string;
+  icon: IconName;
   label: string;
   opens: MenuView;
   onOpen: (view: MenuView) => void;
 }) {
   return (
     <button type="button" onClick={() => onOpen(opens)} data-opens={opens} className={ROW}>
-      <Icon path={icon} className="w-5 h-5 text-gray-400 flex-shrink-0" />
+      <Icon name={icon} className="w-5 h-5 text-gray-400 flex-shrink-0" />
       <span className="flex-1">{label}</span>
       <Chevron />
-    </button>
-  );
-}
-
-const CHEVRON_LEFT = "M15 19l-7-7 7-7";
-const CROSS = "M6 18L18 6M6 6l12 12";
-
-function IconButton({
-  onClick,
-  label,
-  path,
-}: {
-  onClick: () => void;
-  label: string;
-  path: string;
-}) {
-  return (
-    <button type="button" onClick={onClick} aria-label={label} className={iconBtn("md")}>
-      <Icon path={path} />
     </button>
   );
 }
@@ -271,11 +221,11 @@ export default function MenuSheet({
         </div>
 
         <nav className="divide-y divide-gray-100">
-          <Row icon={ICON_PATHS.howTo} label="How To Use" opens="howto" onOpen={openView} />
-          <Row icon={ICON_PATHS.notes} label="Railway Notes" opens="notes" onOpen={openView} />
+          <Row icon="book" label="How To Use" opens="howto" onOpen={openView} />
+          <Row icon="document" label="Railway Notes" opens="notes" onOpen={openView} />
           {user?.id === 1 && (
             <Link href="/admin" className={ROW}>
-              <Icon path={ICON_PATHS.admin} className="w-5 h-5 text-gray-400 flex-shrink-0" />
+              <Icon name="cog" className="w-5 h-5 text-gray-400 flex-shrink-0" />
               <span className="flex-1">Admin</span>
               <Chevron />
             </Link>
@@ -304,7 +254,7 @@ export default function MenuSheet({
           className="flex items-center gap-1 border-b border-gray-200 px-3 py-2 flex-shrink-0"
         >
           {view !== "menu" && (
-            <IconButton onClick={backToMenu} label="Back to menu" path={CHEVRON_LEFT} />
+            <IconButton icon="chevronLeft" label="Back to menu" onClick={backToMenu} />
           )}
           <h2
             id={titleId}
@@ -314,7 +264,7 @@ export default function MenuSheet({
           >
             {TITLES[view]}
           </h2>
-          <IconButton onClick={onClose} label="Close menu" path={CROSS} />
+          <IconButton icon="close" label="Close menu" onClick={onClose} />
         </header>
 
         <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto">

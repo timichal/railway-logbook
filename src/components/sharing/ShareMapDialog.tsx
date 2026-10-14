@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useId, useState } from "react";
+import IconButton from "@/components/ui/IconButton";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { getPublicMapSettings, setPublicMapEnabled } from "@/lib/publicMapActions";
 import { useRegionId } from "@/lib/regionContext";
-import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import { btn } from "@/lib/ui/buttonStyles";
 import { useModalDialog } from "@/lib/ui/useModalDialog";
 
 interface ShareMapDialogProps {
@@ -99,27 +100,7 @@ function ShareMapPanel({ onClose }: { onClose: () => void }) {
             Publish a read-only version of your map for anyone to view.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className={`${iconBtn("sm")} ml-4`}
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+        <IconButton icon="close" label="Close" onClick={onClose} size="sm" className="ml-4" />
       </div>
 
       {settings.loading ? (

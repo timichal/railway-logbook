@@ -1,5 +1,4 @@
-import TrashIcon from "@/components/ui/TrashIcon";
-import { iconBtn } from "@/lib/ui/buttonStyles";
+import IconButton from "@/components/ui/IconButton";
 
 interface LoggedRouteRowProps {
   title: string;
@@ -57,15 +56,14 @@ export default function LoggedRouteRow({
               />
               <span className="text-gray-500">partial</span>
             </label>
-            <button
-              type="button"
-              onClick={onRemove}
+            <IconButton
+              icon="trash"
+              label="Remove route from journey"
               title="Remove route from journey"
-              aria-label="Remove route from journey"
-              className={iconBtn("responsive", "danger")}
-            >
-              <TrashIcon />
-            </button>
+              onClick={onRemove}
+              size="responsive"
+              tone="danger"
+            />
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import IconButton from "@/components/ui/IconButton";
 import StationSearchInput from "@/components/ui/StationSearchInput";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import { findRoutePathBetweenStations } from "@/lib/plannerActions";
@@ -11,7 +12,7 @@ import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
 import { hasOrdinaryNonRegular, regionUsagePluralLabel } from "@/lib/shared/regions";
 import type { HighlightRoutesFn, PlannerRoute, Station } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 
 /**
  * One station field of the planner: the station picked in it, and the text typed.
@@ -275,24 +276,20 @@ export default function JourneyPlanner({
           {/* Only worth the width once there is something to reorder. */}
           {vias.length > 1 && (
             <>
-              <button
-                type="button"
+              <IconButton
+                icon="chevronUp"
+                label={`Move via station ${viaIndex + 1} up`}
                 onClick={() => moveViaStation(viaIndex, -1)}
                 disabled={viaIndex === 0}
-                aria-label={`Move via station ${viaIndex + 1} up`}
-                className={`${iconBtn("responsive")} text-xs`}
-              >
-                ▲
-              </button>
-              <button
-                type="button"
+                size="responsive"
+              />
+              <IconButton
+                icon="chevronDown"
+                label={`Move via station ${viaIndex + 1} down`}
                 onClick={() => moveViaStation(viaIndex, 1)}
                 disabled={viaIndex === vias.length - 1}
-                aria-label={`Move via station ${viaIndex + 1} down`}
-                className={`${iconBtn("responsive")} text-xs`}
-              >
-                ▼
-              </button>
+                size="responsive"
+              />
             </>
           )}
           <StationSearchInput

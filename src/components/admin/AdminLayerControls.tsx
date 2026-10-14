@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import IconButton from "@/components/ui/IconButton";
 import {
   ADMIN_LAYERS,
   type AdminLayerKey,
   type AdminLayerVisibility,
 } from "@/lib/map/hooks/useAdminLayerVisibility";
 import { useRegion } from "@/lib/regionContext";
-import { iconBtn } from "@/lib/ui/buttonStyles";
 
 interface AdminLayerControlsProps {
   visible: AdminLayerVisibility;
@@ -45,14 +45,13 @@ export default function AdminLayerControls({
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-bold">Layers</h3>
         {isMobile && (
-          <button
-            type="button"
+          <IconButton
+            icon="close"
+            label="Collapse layers"
             onClick={() => setCollapsed(true)}
-            className={`${iconBtn("sm")} ml-3 text-lg`}
-            aria-label="Collapse layers"
-          >
-            &times;
-          </button>
+            size="sm"
+            className="ml-3"
+          />
         )}
       </div>
       <div className="space-y-2">

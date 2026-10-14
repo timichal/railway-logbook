@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { useState } from "react";
+import Icon from "@/components/ui/Icon";
 import { getCountryFlag } from "@/lib/shared/countryFlag";
 
 interface CollapsibleSectionProps {
@@ -42,7 +43,10 @@ function CollapsibleSection({
           onClick={handleToggle}
           className="w-full text-xl font-bold text-gray-900 flex items-center gap-2 select-none text-left transition-colors hover:text-gray-700 active:text-gray-500"
         >
-          <span className="text-sm">{isOpen ? "▼" : "▶"}</span>
+          <Icon
+            name="chevronRight"
+            className={`w-4 h-4 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+          />
           <span className="text-2xl">{getCountryFlag(countryCode)}</span>
           {countryName}
         </button>

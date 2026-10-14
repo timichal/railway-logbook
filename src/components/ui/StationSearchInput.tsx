@@ -1,8 +1,9 @@
 "use client";
 
+import IconButton from "@/components/ui/IconButton";
 import { useRegionId } from "@/lib/regionContext";
 import type { Station } from "@/lib/shared/types";
-import { iconBtn, optionRow } from "@/lib/ui/buttonStyles";
+import { optionRow } from "@/lib/ui/buttonStyles";
 import { useSearchCombobox } from "@/lib/ui/useSearchCombobox";
 import { searchStations } from "@/lib/userActions";
 
@@ -77,14 +78,13 @@ export default function StationSearchInput({
         }`}
       />
       {onClear && (
-        <button
-          type="button"
+        <IconButton
+          icon="close"
+          label={clearLabel}
           onClick={onClear}
-          aria-label={clearLabel}
-          className={`${iconBtn("sm")} absolute right-2 top-1/2 -translate-y-1/2`}
-        >
-          ×
-        </button>
+          size="sm"
+          className="absolute right-2 top-1/2 -translate-y-1/2"
+        />
       )}
       {combobox.expanded && (
         <div

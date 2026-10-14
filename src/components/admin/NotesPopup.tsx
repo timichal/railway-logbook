@@ -2,10 +2,11 @@
 
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import IconButton from "@/components/ui/IconButton";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { createAdminNote, deleteAdminNote, updateAdminNote } from "@/lib/adminNotesActions";
 import { type NoteType, noteTypeOptions } from "@/lib/shared/constants";
-import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import { btn } from "@/lib/ui/buttonStyles";
 
 interface NotesPopupProps {
   noteId?: number | null; // If set, editing existing note; if null, creating new note
@@ -127,14 +128,7 @@ export default function NotesPopup({
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className={`${iconBtn("sm")} text-lg`}
-          aria-label="Close"
-        >
-          ×
-        </button>
+        <IconButton icon="close" label="Close" onClick={onClose} size="sm" />
       </div>
 
       <label htmlFor="note-type" className="block text-xs font-medium text-gray-700 mb-1">

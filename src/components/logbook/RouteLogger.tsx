@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from "react";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import JourneyPlanner from "@/components/logbook/JourneyPlanner";
+import IconButton from "@/components/ui/IconButton";
 import { useRegionId } from "@/lib/regionContext";
 import {
   loggedLengthKm,
@@ -15,7 +16,7 @@ import {
 import { routeTitle } from "@/lib/shared/map/routeFeature";
 import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import { btn, iconBtn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import { useTodayDefault } from "@/lib/useTodayDefault";
 
 /** What the Route Logger tab is handed by the sidebar, signed in or not. */
@@ -274,15 +275,14 @@ function SelectedRoutesList({
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onRemoveRoute(route.track_id)}
-                      className={`${iconBtn("responsive")} -my-2 -mr-1 md:my-0 md:mr-0 text-lg`}
+                    <IconButton
+                      icon="close"
+                      label="Remove route"
                       title="Remove route"
-                      aria-label="Remove route"
-                    >
-                      ×
-                    </button>
+                      onClick={() => onRemoveRoute(route.track_id)}
+                      size="responsive"
+                      className="-my-2 -mr-1 md:my-0 md:mr-0"
+                    />
                   </div>
                 </div>
               );

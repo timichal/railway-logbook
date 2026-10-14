@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import ShareMapDialog from "@/components/sharing/ShareMapDialog";
+import IconButton from "@/components/ui/IconButton";
 import RegionSwitch from "@/components/ui/RegionSwitch";
 import ThemeSwitch, { ThemeCycleButton } from "@/components/ui/ThemeSwitch";
 import type { User } from "@/lib/authActions";
 import { useRegion } from "@/lib/regionContext";
-import { btn, iconBtn } from "@/lib/ui/buttonStyles";
+import { btn } from "@/lib/ui/buttonStyles";
 
 interface NavbarProps {
   user: User | null;
@@ -20,9 +21,6 @@ interface NavbarProps {
    */
   onOpenMenu?: (view?: "login" | "register") => void;
 }
-
-/** Bar icon button: 44pt target, no label. Both bars use it. */
-const BAR_BUTTON = iconBtn("md");
 
 /**
  * The navbar picks its bar with `md:` classes rather than with `useIsMobile`,
@@ -60,51 +58,9 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
           {/* Auth first: signing in or out is the most consequential thing in the
               menu, so it gets a bar button of its own rather than two taps. */}
           {user
-            ? onLogout && (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className={BAR_BUTTON}
-                  aria-label="Log out"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.8}
-                      d="M17 16l4-4m0 0l-4-4m4 4H9m5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h5a3 3 0 013 3v1"
-                    />
-                  </svg>
-                </button>
-              )
+            ? onLogout && <IconButton icon="logOut" label="Log out" onClick={onLogout} />
             : onOpenMenu && (
-                <button
-                  type="button"
-                  onClick={() => onOpenMenu("login")}
-                  className={BAR_BUTTON}
-                  aria-label="Sign in"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.8}
-                      d="M11 16l-4-4m0 0l4-4m-4 4h12m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h5a3 3 0 013 3v1"
-                    />
-                  </svg>
-                </button>
+                <IconButton icon="logIn" label="Sign in" onClick={() => onOpenMenu("login")} />
               )}
 
           {/* The admin page has no menu, so its region and colour-scheme switches have
@@ -116,52 +72,10 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
 
           {/* Share as the platform share glyph. */}
           {user && !isAdminPage && (
-            <button
-              type="button"
-              onClick={() => setShowShareDialog(true)}
-              className={BAR_BUTTON}
-              aria-label="Share map"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.8}
-                  d="M12 16V4m0 0L8.5 7.5M12 4l3.5 3.5M7 11H5.5A1.5 1.5 0 004 12.5v6A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5v-6A1.5 1.5 0 0018.5 11H17"
-                />
-              </svg>
-            </button>
+            <IconButton icon="share" label="Share map" onClick={() => setShowShareDialog(true)} />
           )}
 
-          {onOpenMenu && (
-            <button
-              type="button"
-              onClick={() => onOpenMenu()}
-              className={BAR_BUTTON}
-              aria-label="Open menu"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
-          )}
+          {onOpenMenu && <IconButton icon="menu" label="Open menu" onClick={() => onOpenMenu()} />}
         </div>
       </div>
 
@@ -245,27 +159,7 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
                 own — its hamburger opens the sidebar drawer, which on desktop is
                 already on screen. */}
             {!isAdminPage && onOpenMenu && (
-              <button
-                type="button"
-                onClick={() => onOpenMenu()}
-                className={BAR_BUTTON}
-                aria-label="Open menu"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                </svg>
-              </button>
+              <IconButton icon="menu" label="Open menu" onClick={() => onOpenMenu()} />
             )}
           </div>
         </div>

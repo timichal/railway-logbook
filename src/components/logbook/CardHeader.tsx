@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Icon from "@/components/ui/Icon";
 
 interface CardHeaderProps {
   title: string;
@@ -63,15 +64,10 @@ export default function CardHeader({
         <span className="block text-xs text-gray-600 mt-0.5">{meta}</span>
       </span>
       {!locked && (
-        <svg
+        <Icon
+          name="chevronRight"
           className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
+        />
       )}
     </button>
   );

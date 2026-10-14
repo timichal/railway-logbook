@@ -1,6 +1,7 @@
 "use client";
-import { iconBtn } from "@/lib/ui/buttonStyles";
 
+import Icon, { type IconName } from "@/components/ui/Icon";
+import IconButton from "@/components/ui/IconButton";
 import { useToast } from "./ToastContext";
 import type { Toast, ToastType } from "./types";
 
@@ -17,11 +18,11 @@ const toastStyles: Record<ToastType, string> = {
   info: "bg-blue-600 border-blue-700 dark:border-black/30",
 };
 
-const toastIcons: Record<ToastType, string> = {
-  success: "\u2713",
-  error: "\u2715",
-  warning: "\u26A0",
-  info: "\u2139",
+const toastIcons: Record<ToastType, IconName> = {
+  success: "check",
+  error: "close",
+  warning: "warning",
+  info: "info",
 };
 
 function ToastItem({ toast }: { toast: Toast }) {
@@ -34,16 +35,15 @@ function ToastItem({ toast }: { toast: Toast }) {
       className={`${styles} text-white px-4 py-3 rounded-md shadow-lg border flex items-center gap-3 min-w-0 md:min-w-[300px] max-w-full md:max-w-[500px] animate-slide-in`}
       role="alert"
     >
-      <span className="text-lg font-bold flex-shrink-0">{icon}</span>
+      <Icon name={icon} className="w-5 h-5 flex-shrink-0" />
       <p className="flex-1 text-sm leading-relaxed">{toast.message}</p>
-      <button
-        type="button"
+      <IconButton
+        icon="close"
+        label="Close notification"
         onClick={() => removeToast(toast.id)}
-        className={`${iconBtn("sm", "onColor")} text-lg font-bold`}
-        aria-label="Close notification"
-      >
-        &times;
-      </button>
+        size="sm"
+        tone="onColor"
+      />
     </div>
   );
 }
