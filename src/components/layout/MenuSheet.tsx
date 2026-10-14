@@ -284,10 +284,8 @@ export default function MenuSheet({
             {user ? (
               <button
                 type="button"
-                onClick={() => {
-                  onLogout();
-                  onClose();
-                }}
+                // The layout closes the menu once the edit guard has its answer
+                onClick={onLogout}
                 className={`${btn("outlineDanger", "lg")} w-full`}
               >
                 Log out

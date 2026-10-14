@@ -31,9 +31,13 @@ const defaultCountries = (): string[] => SUPPORTED_COUNTRIES.map((country) => co
  * quota, an unreadable list), as opposed to whatever the browser threw.
  */
 export class StorageError extends Error {
-  constructor(message: string) {
+  /** The journey asked for is no longer stored (deleted in another tab). */
+  readonly gone: boolean;
+
+  constructor(message: string, gone = false) {
     super(message);
     this.name = "StorageError";
+    this.gone = gone;
   }
 }
 
@@ -191,7 +195,7 @@ export function addJourneyWithParts(
 export function saveJourneyEdits(id: string, edits: JourneyEdits): void {
   const journeys = journeysToWrite();
   const parts = partsToWrite();
-  if (!journeys.some((journey) => journey.id === id)) throw new StorageError(GONE_MESSAGE);
+  if (!journeys.some((journey) => journey.id === id)) throw new StorageError(GONE_MESSAGE, true);
 
   const now = new Date().toISOString();
   const flags = new Map(edits.upsert.map(({ trackId, partial }) => [trackId, partial]));
@@ -259,7 +263,7 @@ export function getJourneyWithParts(id: string): {
   parts: LocalLoggedPart[];
 } {
   const journey = journeysToWrite().find((j) => j.id === id);
-  if (!journey) throw new StorageError(GONE_MESSAGE);
+  if (!journey) throw new StorageError(GONE_MESSAGE, true);
   return { journey, parts: partsToWrite().filter((part) => part.journey_id === id) };
 }
 

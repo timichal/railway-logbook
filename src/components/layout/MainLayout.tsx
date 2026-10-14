@@ -1,11 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import MapLoading from "@/components/layout/MapLoading";
 import MenuSheet, { type MenuView } from "@/components/layout/MenuSheet";
 import Navbar from "@/components/layout/Navbar";
-import type { ActiveTab, SetActiveTab } from "@/components/logbook/UserSidebar";
+import type { ActiveTab } from "@/components/logbook/UserSidebar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import type { User } from "@/lib/authActions";
@@ -31,7 +31,7 @@ export default function MainLayout({ initialRegion, ...props }: MainLayoutProps)
   return (
     <RegionProvider initialRegion={initialRegion}>
       <LayerPrefsProvider>
-        <EditGuardProvider>
+        <EditGuardProvider owner={props.user?.id ?? null}>
           <MainPage {...props} />
         </EditGuardProvider>
       </LayerPrefsProvider>
@@ -44,7 +44,7 @@ function MainPage({
   onLogout,
   initialSelectedCountries,
 }: Omit<MainLayoutProps, "initialRegion">) {
-  const [activeTab, setActiveTabNow] = useState<ActiveTab>("routes");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("routes");
   // null = closed. A view name opens the menu straight onto it (the navbar's Sign
   // in button lands on the login form rather than making the user find it).
   const [menuView, setMenuView] = useState<MenuView | null>(null);
@@ -54,38 +54,27 @@ function MainPage({
     isMobile,
   });
 
-  // Leaving My Trips unmounts it, and with it a journey or trip being edited
+  // Signing out swaps the account under My Trips, and the edit guard drops the
+  // drafts made against the old one, so it asks first. Also switches to the Route
+  // Logger tab, and closes the menu if that is where it came from — only once the
+  // answer is in, so Keep editing leaves the menu as it was.
   const confirmDiscard = useConfirmDiscard();
-  const setActiveTab = useCallback<SetActiveTab>(
-    (tab, then) => {
-      if (tab === activeTab) {
-        then?.();
-        return;
-      }
-      confirmDiscard(() => {
-        setActiveTabNow(tab);
-        then?.();
-      });
-    },
-    [activeTab, confirmDiscard],
-  );
-
-  // Wrap logout to also switch to Route Logger tab. Signing out swaps the store
-  // under My Journeys, so an edit there would go with it.
   const handleLogout = () =>
     confirmDiscard(() => {
-      setActiveTabNow("routes");
+      setActiveTab("routes");
+      setMenuView(null);
       onLogout();
     });
 
   // Handle successful login/register - switch to Route Logger tab
   const handleAuthSuccess = () => {
-    setActiveTabNow("routes");
+    setActiveTab("routes");
   };
 
-  // Signing in or registering swaps the store under My Journeys too. Asked as the
-  // form opens rather than on submit, which would reset the form on Cancel; the
-  // open menu keeps the page inert until then, so no edit can start meanwhile.
+  // Signing in or registering swaps the account too. Asked as the form opens
+  // rather than on submit, which would reset the form on Cancel; the open menu
+  // keeps the page inert until then, so no edit can start meanwhile. Nothing is
+  // dropped until the sign-in goes through.
   const openMenu = (view?: MenuView) => {
     if (view === "login" || view === "register") confirmDiscard(() => setMenuView(view));
     else setMenuView(view ?? "menu");

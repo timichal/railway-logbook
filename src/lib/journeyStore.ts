@@ -39,7 +39,9 @@ async function forUser<T>(access: () => T): Promise<T> {
   try {
     return access();
   } catch (error) {
-    throw error instanceof localStore.StorageError ? new ActionError(error.message) : error;
+    throw error instanceof localStore.StorageError
+      ? new ActionError(error.message, error.gone)
+      : error;
   }
 }
 

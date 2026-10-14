@@ -15,17 +15,14 @@ import { NotFoundError, RateLimitError, ValidationError } from "./errors";
 
 export type ActionResult<T> =
   | { value: T; error?: undefined }
-  | { value?: undefined; error: string };
+  | { value?: undefined; error: string; notFound?: true };
 
 export async function asActionResult<T>(attempt: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { value: await attempt() };
   } catch (error) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof NotFoundError ||
-      error instanceof RateLimitError
-    ) {
+    if (error instanceof NotFoundError) return { error: error.message, notFound: true };
+    if (error instanceof ValidationError || error instanceof RateLimitError) {
       return { error: error.message };
     }
     throw error;
@@ -34,9 +31,17 @@ export async function asActionResult<T>(attempt: () => Promise<T>): Promise<Acti
 
 /** A rejection an action returned for the user to read, re-thrown on the client by `unwrap`. */
 export class ActionError extends Error {
-  constructor(message: string) {
+  /**
+   * What was asked for doesn't exist (any more) — a `NotFoundError` on the
+   * server, or a journey gone from localStorage — so whatever was kept for it on
+   * the client can go too.
+   */
+  readonly notFound: boolean;
+
+  constructor(message: string, notFound = false) {
     super(message);
     this.name = "ActionError";
+    this.notFound = notFound;
   }
 }
 
@@ -47,7 +52,7 @@ export class ActionError extends Error {
  */
 export function unwrap<T>(result: ActionResult<T>): T {
   if (result.error !== undefined) {
-    throw new ActionError(result.error);
+    throw new ActionError(result.error, result.notFound === true);
   }
   return result.value as T;
 }

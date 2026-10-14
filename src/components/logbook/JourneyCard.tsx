@@ -6,7 +6,7 @@ import CardHeader from "@/components/logbook/CardHeader";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
 import { useBottomSheet } from "@/components/ui/MobileBottomSheet";
-import { actionErrorMessage } from "@/lib/actionResult";
+import { ActionError, actionErrorMessage } from "@/lib/actionResult";
 import type { JourneyStore } from "@/lib/journeyStore";
 import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
@@ -21,7 +21,7 @@ import type {
 import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
-import { journeyEditKey, useReportEditing } from "@/lib/ui/editGuard";
+import { journeyEditKey, useDraft } from "@/lib/ui/editGuard";
 import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
@@ -55,8 +55,11 @@ interface JourneySummary<Id> {
 interface JourneyCardProps<Id> {
   journey: JourneySummary<Id>;
   store: JourneyStore<Id>;
-  /** The trips it can be filed under; left out, it has no trip field. */
-  availableTrips?: TripWithStats[];
+  /**
+   * The trips it can be filed under; left out, it has no trip field. Null while
+   * they load, so a trip missing from the list can be told from one not yet in it.
+   */
+  availableTrips?: TripWithStats[] | null;
   // Tells parent whether this card is the currently-open one. Parent enforces single-open.
   isOpen: boolean;
   onRequestOpen: () => void;
@@ -79,6 +82,16 @@ interface JourneySnapshot {
   tripId: number | null;
 }
 
+/**
+ * An edit in progress: the journey as it was when Edit was pressed, which Save
+ * diffs against, and the form as it stands. Kept by the edit guard rather than
+ * the card, so it outlives the card closing or unmounting.
+ */
+interface JourneyDraft {
+  base: JourneySnapshot;
+  edit: JourneySnapshot;
+}
+
 /** The routes Save sends: added or re-ticked, and removed. */
 function routeChanges(original: RailwayRoute[], edited: RailwayRoute[]) {
   const origMap = new Map(original.map((r) => [r.track_id, r]));
@@ -96,18 +109,59 @@ function routeChanges(original: RailwayRoute[], edited: RailwayRoute[]) {
   return { upsert, remove };
 }
 
-/** Whether Save would change anything — what the edit guard asks about. */
-function differsFrom(original: JourneySnapshot, current: JourneySnapshot): boolean {
+/**
+ * Whether Save would change anything — what the edit guard asks about. The name
+ * and description as Save sends them, trimmed.
+ */
+function differsFrom({ base, edit }: JourneyDraft): boolean {
   if (
-    current.name !== original.name ||
-    current.date !== original.date ||
-    current.description !== original.description ||
-    current.tripId !== original.tripId
+    edit.name.trim() !== base.name.trim() ||
+    edit.date !== base.date ||
+    edit.description.trim() !== base.description.trim() ||
+    edit.tripId !== base.tripId
   ) {
     return true;
   }
-  const { upsert, remove } = routeChanges(original.routes, current.routes);
+  const { upsert, remove } = routeChanges(base.routes, edit.routes);
   return upsert.length > 0 || remove.length > 0;
+}
+
+/**
+ * A resumed draft moved onto the journey as just loaded, which may have changed
+ * since Edit was pressed (on another device, or through another card here). A
+ * field the draft left alone takes the loaded value; of the routes, the draft's
+ * additions, removals and re-ticks are replayed onto the loaded list, so Save
+ * sends exactly what the form shows.
+ */
+function rebase({ base, edit }: JourneyDraft, loaded: JourneySnapshot): JourneyDraft {
+  const field = <K extends "name" | "date" | "description" | "tripId">(key: K) =>
+    edit[key] === base[key] ? loaded[key] : edit[key];
+  const before = new Map(base.routes.map((r) => [r.track_id, r]));
+  const after = new Map(edit.routes.map((r) => [r.track_id, r]));
+  const loadedIds = new Set(loaded.routes.map((r) => r.track_id));
+  const routes = [
+    ...loaded.routes.flatMap((route) => {
+      const was = before.get(route.track_id);
+      const is = after.get(route.track_id);
+      // Removed in the draft; or untouched by it, added elsewhere or not
+      if (!is) return was ? [] : [route];
+      const reticked = !was || (was.partial ?? false) !== (is.partial ?? false);
+      return [reticked ? { ...route, partial: is.partial } : route];
+    }),
+    // Added in the draft. One the draft kept but that is gone from the loaded
+    // journey was removed elsewhere, and stays removed.
+    ...edit.routes.filter((r) => !before.has(r.track_id) && !loadedIds.has(r.track_id)),
+  ];
+  return {
+    base: loaded,
+    edit: {
+      routes,
+      name: field("name"),
+      date: field("date"),
+      description: field("description"),
+      tripId: field("tripId"),
+    },
+  };
 }
 
 export default function JourneyCard<Id extends number | string>({
@@ -127,16 +181,15 @@ export default function JourneyCard<Id extends number | string>({
   const regionId = useRegionId();
   const sheet = useBottomSheet();
 
-  const [viewedRoutes, setViewedRoutes] = useState<RailwayRoute[]>([]);
-  const [editName, setEditName] = useState(journey.name);
-  const [editDate, setEditDate] = useState(journey.date);
-  const [editDescription, setEditDescription] = useState(journey.description || "");
-  const [editTripId, setEditTripId] = useState<number | null>(journey.trip_id ?? null);
-  // The journey as last loaded or saved: what Cancel goes back to and what Save
-  // diffs against.
+  // The journey as last loaded or saved: what the view shows and Edit starts from
   const [originalSnapshot, setOriginalSnapshot] = useState<JourneySnapshot | null>(null);
-  // An open card shows the journey; only Edit lets map taps change it.
-  const [isEditing, setIsEditing] = useState(false);
+  // An open card shows the journey; only Edit lets map taps change it. A draft
+  // left by a card that closed mid-edit is taken up again when it reopens.
+  const { draft, changed, setDraft } = useDraft<JourneyDraft>(
+    journeyEditKey(journey.id),
+    `"${journey.name}"`,
+    differsFrom,
+  );
   const [isSaving, setIsSaving] = useState(false);
   // Until the journey has loaded there is nothing to view or edit, and the snapshot
   // is what says it has — so the card reads as loading from its first render, not
@@ -145,32 +198,34 @@ export default function JourneyCard<Id extends number | string>({
   const [loadAttempt, setLoadAttempt] = useState(0);
   const isLoading = originalSnapshot === null && !loadFailed;
 
-  const editing = isOpen && isEditing;
-  useReportEditing(
-    journeyEditKey(journey.id),
-    `"${journey.name}"`,
-    editing &&
-      originalSnapshot !== null &&
-      differsFrom(originalSnapshot, {
-        routes: viewedRoutes,
-        name: editName,
-        date: editDate,
-        description: editDescription,
-        tripId: editTripId,
-      }),
-  );
+  // Not before the journey has loaded: a resumed draft is rebased on it first, and
+  // until then the card shows no form to go with map taps that change it
+  const editing = isOpen && draft !== null && originalSnapshot !== null;
+  const viewedRoutes = (editing ? draft.edit.routes : originalSnapshot?.routes) ?? [];
+  const updateEdit = (patch: Partial<JourneySnapshot>) => {
+    if (draft) setDraft({ ...draft, edit: { ...draft.edit, ...patch } });
+  };
 
   const focusAfterRender = useFocusAfterRender();
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const editHeadingRef = useRef<HTMLHeadingElement>(null);
 
-  // Mutable handler ref so the stable map click callback always sees fresh state
-  const editStateRef = useRef({ editing, viewedRoutes });
-  editStateRef.current = { editing, viewedRoutes };
+  // Mutable handler ref so the stable map click callback, and whatever finishes
+  // after an await or runs as the card closes, always sees fresh state
+  const editStateRef = useRef({
+    editing,
+    viewedRoutes,
+    updateEdit,
+    isOpen,
+    draft,
+    changed,
+    setDraft,
+  });
+  editStateRef.current = { editing, viewedRoutes, updateEdit, isOpen, draft, changed, setDraft };
 
   const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | undefined>(undefined);
   handleMapRouteClickRef.current = (route: SelectedRoute) => {
-    const { editing, viewedRoutes } = editStateRef.current;
+    const { editing, viewedRoutes, updateEdit } = editStateRef.current;
     if (!editing) return;
 
     const routeId = route.track_id;
@@ -179,7 +234,7 @@ export default function JourneyCard<Id extends number | string>({
       ? viewedRoutes.filter((r) => r.track_id !== routeId)
       : [...viewedRoutes, buildRouteFromSelected(route)];
 
-    setViewedRoutes(newRoutes);
+    updateEdit({ routes: newRoutes });
     onHighlightRoutes?.(newRoutes.map((r) => r.track_id));
   };
 
@@ -194,16 +249,9 @@ export default function JourneyCard<Id extends number | string>({
     [],
   );
 
-  const applySnapshot = useCallback((snapshot: JourneySnapshot) => {
-    setViewedRoutes(snapshot.routes);
-    setEditName(snapshot.name);
-    setEditDate(snapshot.date);
-    setEditDescription(snapshot.description);
-    setEditTripId(snapshot.tripId);
-    setOriginalSnapshot(snapshot);
-  }, []);
-
-  // Load journey details when this card opens
+  // Load journey details when this card opens. A draft being resumed is rebased on
+  // what loaded and is what the map shows; read through the ref so that editing it
+  // doesn't reload. A journey that turns out to be gone takes its draft with it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes and regionId are intentionally omitted; the effect should fire only when the card opens, the journey changes or a retry is asked for, not when the callback identity changes, and the region only scopes the fit that opening does.
   useEffect(() => {
     if (!isOpen) return;
@@ -214,16 +262,19 @@ export default function JourneyCard<Id extends number | string>({
       try {
         const result = await store.load(journey.id, regionId);
         if (cancelled) return;
-        const routes = result.routes;
-        applySnapshot({
-          routes,
+        const loaded: JourneySnapshot = {
+          routes: result.routes,
           name: result.journey.name,
           date: result.journey.date,
           description: result.journey.description || "",
           tripId: result.journey.trip_id ?? null,
-        });
+        };
+        const { draft, setDraft } = editStateRef.current;
+        const resumed = draft && rebase(draft, loaded);
+        if (resumed) setDraft(resumed);
+        setOriginalSnapshot(loaded);
         onHighlightRoutes?.(
-          routes.map((r) => r.track_id),
+          (resumed?.edit ?? loaded).routes.map((r) => r.track_id),
           "view",
           undefined,
           {
@@ -235,6 +286,7 @@ export default function JourneyCard<Id extends number | string>({
         if (cancelled) return;
         console.error("Error loading journey:", error);
         showError(actionErrorMessage(error, "Failed to load journey"));
+        if (error instanceof ActionError && error.notFound) editStateRef.current.setDraft(null);
         setLoadFailed(true);
       }
     })();
@@ -244,9 +296,9 @@ export default function JourneyCard<Id extends number | string>({
     };
   }, [isOpen, journey.id, store, loadAttempt]);
 
-  // The map edit session lasts exactly as long as edit mode. The cleanup also
-  // covers an unmount mid-edit: a card that leaves the list while being edited
-  // (a search with no hits, a region switch) would otherwise leave map taps
+  // The map edit session lasts exactly as long as an open card has a draft. The
+  // cleanup also covers an unmount mid-edit: a card that leaves the list while
+  // being edited (a search, a region switch) would otherwise leave map taps
   // toggling routes on an invisible journey.
   // biome-ignore lint/correctness/useExhaustiveDependencies: onJourneyEditStart and onJourneyEditEnd are intentionally omitted; a new callback identity must not end and restart the session.
   useEffect(() => {
@@ -255,19 +307,38 @@ export default function JourneyCard<Id extends number | string>({
     return () => onJourneyEditEnd?.();
   }, [editing, stableHandleMapRouteClick, stableIsRouteInJourney]);
 
-  // When this card closes, reset its state. The map edit session itself is ended
-  // by the effect above.
+  // When this card closes, reset its state — all but a draft with changes, which
+  // waits for it to reopen. The map edit session itself is ended by the effect above.
   useEffect(() => {
     if (isOpen) return;
-    setIsEditing(false);
-    setViewedRoutes([]);
     setOriginalSnapshot(null);
     setLoadFailed(false);
     // Don't clear highlights here — parent owns coordination across cards
   }, [isOpen]);
 
+  // A draft nobody typed into goes as the card closes or unmounts, or the card
+  // would reopen in edit mode with no Unsaved to say why
+  useEffect(() => {
+    if (!isOpen) return;
+    return () => {
+      const { draft, changed, setDraft } = editStateRef.current;
+      if (draft && !changed) setDraft(null);
+    };
+  }, [isOpen]);
+
+  // A trip the draft files the journey under, deleted since (here or elsewhere),
+  // can't be saved to: the draft falls back to the journey's own trip, or none.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateEdit is a fresh closure over the same draft each render.
+  useEffect(() => {
+    if (!draft || !availableTrips) return;
+    const exists = (id: number | null) => id === null || availableTrips.some((t) => t.id === id);
+    if (exists(draft.edit.tripId)) return;
+    updateEdit({ tripId: exists(draft.base.tripId) ? draft.base.tripId : null });
+  }, [draft, availableTrips]);
+
   const handleStartEdit = () => {
-    setIsEditing(true);
+    if (!originalSnapshot) return;
+    setDraft({ base: originalSnapshot, edit: originalSnapshot });
     // Editing is picking routes on the map, which the sheet's top snap leaves as
     // a sliver. Null on desktop.
     sheet?.snapTo("half");
@@ -277,67 +348,66 @@ export default function JourneyCard<Id extends number | string>({
   };
 
   const handleCancelEdit = () => {
-    setIsEditing(false);
+    setDraft(null);
     focusAfterRender(() => editButtonRef.current);
-    if (!originalSnapshot) return;
-    applySnapshot(originalSnapshot);
-    onHighlightRoutes?.(originalSnapshot.routes.map((r) => r.track_id));
+    if (originalSnapshot) onHighlightRoutes?.(originalSnapshot.routes.map((r) => r.track_id));
   };
 
   const handleTogglePartial = (trackId: number, nextPartial: boolean) => {
-    setViewedRoutes((prev) =>
-      prev.map((r) => (r.track_id === trackId ? { ...r, partial: nextPartial } : r)),
-    );
+    updateEdit({
+      routes: viewedRoutes.map((r) =>
+        r.track_id === trackId ? { ...r, partial: nextPartial } : r,
+      ),
+    });
   };
 
   const handleRemoveRoute = (trackId: number) => {
     const newRoutes = viewedRoutes.filter((r) => r.track_id !== trackId);
-    setViewedRoutes(newRoutes);
+    updateEdit({ routes: newRoutes });
     onHighlightRoutes?.(newRoutes.map((r) => r.track_id));
   };
 
   const handleSave = async () => {
-    if (!originalSnapshot) return;
-    const trimmedName = editName.trim();
-    const trimmedDescription = editDescription.trim();
+    if (!draft) return;
+    const { base, edit } = draft;
+    const trimmedName = edit.name.trim();
+    const trimmedDescription = edit.description.trim();
 
-    if (!trimmedName || !editDate) {
+    if (!trimmedName || !edit.date) {
       showError("Journey name and date are required");
       return;
     }
 
     // Only the difference goes to the store, which applies all of it or none: a
-    // failed save changes nothing, so the snapshot still matches the journey and
+    // failed save changes nothing, so the base still matches the journey and
     // pressing Save again retries the whole edit
-    const { upsert, remove } = routeChanges(originalSnapshot.routes, viewedRoutes);
-    const tripChanged = editTripId !== originalSnapshot.tripId;
+    const { upsert, remove } = routeChanges(base.routes, edit.routes);
+    const tripChanged = edit.tripId !== base.tripId;
 
     setIsSaving(true);
     try {
       await store.save(journey.id, {
         name: trimmedName,
         description: trimmedDescription || null,
-        date: editDate,
-        tripId: tripChanged ? editTripId : undefined,
+        date: edit.date,
+        tripId: tripChanged ? edit.tripId : undefined,
         upsert,
         remove,
       });
 
       showSuccess("Journey updated");
-      if (tripChanged) {
-        // It is listed somewhere else now, so this card is on its way out
-        onRequestClose();
-      } else {
-        // Back to the view, which now shows what was just saved
-        applySnapshot({
-          routes: viewedRoutes,
-          name: trimmedName,
-          date: editDate,
-          description: trimmedDescription,
-          tripId: editTripId,
-        });
-        setIsEditing(false);
-        focusAfterRender(() => editButtonRef.current);
+      setDraft(null);
+      // Only if it is still the open card: the header can close it, and another
+      // card open, while the save is on its way
+      if (editStateRef.current.isOpen) {
+        if (tripChanged) {
+          // It is listed somewhere else now, so this card is on its way out
+          onRequestClose();
+        } else {
+          // Back to the view, which now shows what was just saved
+          setOriginalSnapshot({ ...edit, name: trimmedName, description: trimmedDescription });
+          focusAfterRender(() => editButtonRef.current);
+        }
       }
       onChanged();
     } catch (error) {
@@ -403,7 +473,7 @@ export default function JourneyCard<Id extends number | string>({
           .join(" · ")}
         isOpen={isOpen}
         onToggle={isOpen ? onRequestClose : onRequestOpen}
-        locked={editing}
+        unsaved={changed}
       />
 
       {isOpen && (
@@ -438,18 +508,20 @@ export default function JourneyCard<Id extends number | string>({
                 <JourneyMetaFields
                   idPrefix={`journey-${journey.id}`}
                   compact
-                  name={editName}
-                  onNameChange={setEditName}
-                  date={editDate}
-                  onDateChange={setEditDate}
-                  description={editDescription}
-                  onDescriptionChange={setEditDescription}
+                  name={draft.edit.name}
+                  onNameChange={(name) => updateEdit({ name })}
+                  date={draft.edit.date}
+                  onDateChange={(date) => updateEdit({ date })}
+                  description={draft.edit.description}
+                  onDescriptionChange={(description) => updateEdit({ description })}
                   trip={
-                    availableTrips && {
-                      value: editTripId,
-                      options: availableTrips,
-                      onChange: setEditTripId,
-                    }
+                    availableTrips === undefined
+                      ? undefined
+                      : {
+                          value: draft.edit.tripId,
+                          options: availableTrips ?? [],
+                          onChange: (tripId) => updateEdit({ tripId }),
+                        }
                   }
                 />
               </div>

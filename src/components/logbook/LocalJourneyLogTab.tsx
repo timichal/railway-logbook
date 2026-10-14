@@ -13,7 +13,7 @@ import type {
   LocalJourney,
   LocalLoggedPart,
 } from "@/lib/shared/types";
-import { journeyEditKey, useConfirmDiscard, useHasChanges } from "@/lib/ui/editGuard";
+import { usePruneJourneyDrafts } from "@/lib/ui/editGuard";
 import { getRegionTrackIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
@@ -48,11 +48,6 @@ export default function LocalJourneyLogTab({
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [openJourneyId, setOpenJourneyId] = useState<string | null>(null);
-  // As in JourneysAndTripsTab: while the open journey has unsaved changes the
-  // search (which can filter it out) is disabled, and opening another asks first.
-  const openEditKeys = openJourneyId === null ? [] : [journeyEditKey(openJourneyId)];
-  const hasChanges = useHasChanges(openEditKeys);
-  const confirmDiscard = useConfirmDiscard();
 
   // Any journey open when the region changes is collapsed: it may not be in this
   // region at all, and its highlight is dropped by the map anyway. Done during
@@ -63,18 +58,22 @@ export default function LocalJourneyLogTab({
     setOpenJourneyId(null);
   }
 
+  // Every journey there is, so a draft whose journey isn't among them was deleted
+  // (in another tab) and goes too, rather than be asked about for good
+  const pruneDrafts = usePruneJourneyDrafts();
   const loadJourneys = useCallback(() => {
     const parts = localStore.getLoggedParts();
+    const stored = localStore.getJourneys();
+    pruneDrafts(stored.map((journey) => journey.id));
     setJourneys(
-      localStore
-        .getJourneys()
+      stored
         .map((journey) => ({
           journey,
           parts: parts.filter((part) => part.journey_id === journey.id),
         }))
         .sort((a, b) => b.journey.date.localeCompare(a.journey.date)),
     );
-  }, []);
+  }, [pruneDrafts]);
 
   // On mount, and whenever another tab changes the stored journeys
   useEffect(() => {
@@ -117,8 +116,8 @@ export default function LocalJourneyLogTab({
   }, [regionJourneys, searchQuery]);
 
   // A search (or another tab's delete) can take the open card out of the list. The
-  // card ends its own map edit session as it unmounts; its open state and
-  // highlights are left here, as in JourneysAndTripsTab.
+  // card ends its own map edit session as it unmounts and its edit is kept; its
+  // open state and highlights are left here, as in JourneysAndTripsTab.
   useEffect(() => {
     if (openJourneyId && !filteredJourneys.some(({ journey }) => journey.id === openJourneyId)) {
       setOpenJourneyId(null);
@@ -144,9 +143,7 @@ export default function LocalJourneyLogTab({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by name, date, or description..."
-          disabled={hasChanges}
-          title={hasChanges ? "Save or cancel the edit to search" : undefined}
-          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -165,7 +162,7 @@ export default function LocalJourneyLogTab({
               journey={{ ...journey, route_count: parts.length }}
               store={localJourneyStore}
               isOpen={openJourneyId === journey.id}
-              onRequestOpen={() => confirmDiscard(() => setOpenJourneyId(journey.id), openEditKeys)}
+              onRequestOpen={() => setOpenJourneyId(journey.id)}
               onRequestClose={handleClose}
               onChanged={handleChanged}
               onHighlightRoutes={onHighlightRoutes}

@@ -20,18 +20,14 @@ import {
   updateTrip,
 } from "@/lib/tripActions";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
-import {
-  journeyEditKey,
-  tripEditKey,
-  useConfirmDiscard,
-  useReportEditing,
-} from "@/lib/ui/editGuard";
+import { journeyEditKey, tripEditKey, useDraft, useHasChanges } from "@/lib/ui/editGuard";
 import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 
 interface TripCardProps {
   trip: TripWithStats;
   initialJourneys: JourneyWithStats[];
-  availableTrips: TripWithStats[];
+  /** Null while they load (see JourneyCard). */
+  availableTrips: TripWithStats[] | null;
   // Parent enforces single-open across all top-level cards
   isOpen: boolean;
   onRequestOpen: () => void;
@@ -63,10 +59,14 @@ export default function TripCard({
   const { showSuccess, showError } = useToast();
 
   const [journeys, setJourneys] = useState<JourneyWithStats[]>(initialJourneys);
-  const [editName, setEditName] = useState(trip.name);
-  const [editDescription, setEditDescription] = useState(trip.description || "");
   // An open trip shows its journeys; the name and description form is behind Edit.
-  const [isEditing, setIsEditing] = useState(false);
+  // Kept by the edit guard, so it waits out the card closing (see JourneyCard).
+  const { draft, changed, setDraft } = useDraft<{ name: string; description: string }>(
+    tripEditKey(trip.id),
+    `"${trip.name}"`,
+    (d) => d.name.trim() !== trip.name || d.description.trim() !== (trip.description ?? ""),
+  );
+  const isEditing = draft !== null;
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [showPicker, setShowPicker] = useState(false);
@@ -76,15 +76,9 @@ export default function TripCard({
   const focusAfterRender = useFocusAfterRender();
   const editButtonRef = useRef<HTMLButtonElement>(null);
 
-  useReportEditing(
-    tripEditKey(trip.id),
-    `"${trip.name}"`,
-    isOpen && isEditing && (editName !== trip.name || editDescription !== (trip.description || "")),
-  );
-  // Collapsing the trip, or opening another of its journeys, closes the open
-  // nested journey — which may be mid-edit. The trip's own form survives both.
-  const confirmDiscard = useConfirmDiscard();
-  const nestedEditKeys = openNestedJourneyId === null ? [] : [journeyEditKey(openNestedJourneyId)];
+  // Collapsed, the header is all there is to say an edit is waiting, its
+  // journeys' included
+  const journeysChanged = useHasChanges(journeys.map((j) => journeyEditKey(j.id)));
 
   // Sync from props when they change (after parent refreshes the list)
   useEffect(() => {
@@ -94,8 +88,18 @@ export default function TripCard({
   // Read again once the trip has loaded: the card may have closed, or a nested
   // journey opened, while it was on its way, and the highlight then belongs to
   // someone else. The region too, so a switch does not re-run the effects below.
-  const latest = useRef({ isOpen, openNestedJourneyId, regionId });
-  latest.current = { isOpen, openNestedJourneyId, regionId };
+  // The draft too, for the cleanup below.
+  const latest = useRef({ isOpen, openNestedJourneyId, regionId, draft, changed, setDraft });
+  latest.current = { isOpen, openNestedJourneyId, regionId, draft, changed, setDraft };
+
+  // An edit nobody typed into goes as the card closes or unmounts, as JourneyCard's
+  useEffect(() => {
+    if (!isOpen) return;
+    return () => {
+      const { draft, changed, setDraft } = latest.current;
+      if (draft && !changed) setDraft(null);
+    };
+  }, [isOpen]);
 
   // When a nested journey is being edited, the journey card owns highlights.
   // Otherwise, when the trip is open, highlight all routes in the trip. `fit` brings
@@ -132,20 +136,20 @@ export default function TripCard({
 
   useEffect(() => {
     if (isOpen) return;
-    setIsEditing(false);
     setShowPicker(false);
   }, [isOpen]);
 
   const handleSaveEdit = async () => {
-    if (!editName.trim()) {
+    if (!draft) return;
+    if (!draft.name.trim()) {
       showError("Trip name is required");
       return;
     }
     setIsSavingEdit(true);
     try {
-      unwrap(await updateTrip(trip.id, editName.trim(), editDescription.trim() || null));
+      unwrap(await updateTrip(trip.id, draft.name.trim(), draft.description.trim() || null));
       showSuccess("Trip updated");
-      setIsEditing(false);
+      setDraft(null);
       focusAfterRender(() => editButtonRef.current);
       onChanged();
     } catch (error) {
@@ -156,16 +160,13 @@ export default function TripCard({
     }
   };
 
-  // The form starts from the trip as it is now, whatever an abandoned edit left in it
   const handleStartEdit = () => {
-    setEditName(trip.name);
-    setEditDescription(trip.description || "");
-    setIsEditing(true);
+    setDraft({ name: trip.name, description: trip.description || "" });
     focusAfterRender(() => document.getElementById(`trip-${trip.id}-name`));
   };
 
   const handleCancelEdit = () => {
-    setIsEditing(false);
+    setDraft(null);
     focusAfterRender(() => editButtonRef.current);
   };
 
@@ -231,13 +232,13 @@ export default function TripCard({
           `${trip.total_distance.toFixed(1)} km`,
         ].join(" · ")}
         isOpen={isOpen}
-        onToggle={isOpen ? () => confirmDiscard(onRequestClose, nestedEditKeys) : onRequestOpen}
-        locked={isEditing}
+        onToggle={isOpen ? onRequestClose : onRequestOpen}
+        unsaved={changed || journeysChanged}
       />
 
       {isOpen && (
         <div className="px-3 pb-3 pt-2 border-t border-gray-200 space-y-3">
-          {isEditing && (
+          {draft && (
             <div className="space-y-2">
               <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Trip</h5>
               <div>
@@ -247,8 +248,8 @@ export default function TripCard({
                 <input
                   id={`trip-${trip.id}-name`}
                   type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                   className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled={isSavingEdit}
                 />
@@ -262,8 +263,8 @@ export default function TripCard({
                 </label>
                 <textarea
                   id={`trip-${trip.id}-description`}
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
+                  value={draft.description}
+                  onChange={(e) => setDraft({ ...draft, description: e.target.value })}
                   rows={2}
                   className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   disabled={isSavingEdit}
@@ -273,7 +274,7 @@ export default function TripCard({
                 <button
                   type="button"
                   onClick={handleSaveEdit}
-                  disabled={isSavingEdit || !editName.trim()}
+                  disabled={isSavingEdit || !draft.name.trim()}
                   className={`${btn("success", "xs")} flex-1`}
                 >
                   {isSavingEdit ? "Saving..." : "Save"}
@@ -311,9 +312,7 @@ export default function TripCard({
                       store={databaseJourneyStore}
                       availableTrips={availableTrips}
                       isOpen={openNestedJourneyId === journey.id}
-                      onRequestOpen={() =>
-                        confirmDiscard(() => onNestedJourneyOpenChange(journey.id), nestedEditKeys)
-                      }
+                      onRequestOpen={() => onNestedJourneyOpenChange(journey.id)}
                       onRequestClose={() => onNestedJourneyOpenChange(null)}
                       onChanged={onChanged}
                       onHighlightRoutes={onHighlightRoutes}

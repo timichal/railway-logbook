@@ -11,10 +11,10 @@ interface CardHeaderProps {
   isOpen: boolean;
   onToggle: () => void;
   /**
-   * While the card is being edited: collapsing it would drop the edit, so the
-   * header stops toggling and Save / Cancel are the way out.
+   * The card has an edit that isn't saved. Shown open or closed: a card closed
+   * mid-edit keeps the edit (see `editGuard`) and picks it up when reopened.
    */
-  locked?: boolean;
+  unsaved?: boolean;
 }
 
 /**
@@ -32,16 +32,15 @@ export default function CardHeader({
   meta,
   isOpen,
   onToggle,
-  locked = false,
+  unsaved = false,
 }: CardHeaderProps) {
   const clamp = isOpen ? "whitespace-pre-wrap break-words" : "truncate";
   return (
     <button
       type="button"
       onClick={onToggle}
-      disabled={locked}
       aria-expanded={isOpen}
-      className={`w-full px-3 py-2 flex items-center gap-3 text-left transition-colors focus-visible:-outline-offset-2 not-disabled:hover:bg-gray-500/5 not-disabled:active:bg-gray-500/10 disabled:cursor-default ${isOpen ? "rounded-t" : "rounded"}`}
+      className={`w-full px-3 py-2 flex items-center gap-3 text-left transition-colors focus-visible:-outline-offset-2 hover:bg-gray-500/5 active:bg-gray-500/10 ${isOpen ? "rounded-t" : "rounded"}`}
     >
       <span className="flex-1 min-w-0 block">
         <span className="flex items-baseline gap-2 min-w-0">
@@ -52,6 +51,11 @@ export default function CardHeader({
           >
             {title}
           </span>
+          {unsaved && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 flex-shrink-0 tracking-wide">
+              Unsaved
+            </span>
+          )}
         </span>
         {description && (
           <span
@@ -63,12 +67,10 @@ export default function CardHeader({
         )}
         <span className="block text-xs text-gray-600 mt-0.5">{meta}</span>
       </span>
-      {!locked && (
-        <Icon
-          name="chevronRight"
-          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
-        />
-      )}
+      <Icon
+        name="chevronRight"
+        className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+      />
     </button>
   );
 }

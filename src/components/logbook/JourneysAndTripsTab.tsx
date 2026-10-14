@@ -11,14 +11,7 @@ import { useToast } from "@/lib/toast";
 import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
 import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
-import {
-  journeyEditKey,
-  NEW_TRIP_EDIT_KEY,
-  tripEditKey,
-  useConfirmDiscard,
-  useHasChanges,
-  useReportEditing,
-} from "@/lib/ui/editGuard";
+import { NEW_TRIP_EDIT_KEY, useDraft } from "@/lib/ui/editGuard";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -38,22 +31,6 @@ function isItem(item: TripsAndJourneysItem, open: NonNullable<OpenItem>): boolea
     : open.type === "journey" && item.journey.id === open.id;
 }
 
-/**
- * A reloaded page, with the card that has unsaved changes kept where it was if
- * the reload left it out — a nested journey's new date can move its trip to
- * another page, and dropping the card would drop the trip's half-edited form.
- */
-function keepListed(
-  next: TripsAndJourneysItem[],
-  prev: TripsAndJourneysItem[],
-  keep: OpenItem,
-): TripsAndJourneysItem[] {
-  if (!keep || next.some((item) => isItem(item, keep))) return next;
-  const index = prev.findIndex((item) => isItem(item, keep));
-  if (index === -1) return next;
-  return [...next.slice(0, index), prev[index], ...next.slice(index)];
-}
-
 export default function JourneysAndTripsTab({
   onHighlightRoutes,
   onJourneyChanged,
@@ -70,55 +47,33 @@ export default function JourneysAndTripsTab({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  const [availableTrips, setAvailableTrips] = useState<TripWithStats[]>([]);
+  // Null until loaded: a journey draft takes a trip missing from it for deleted
+  const [availableTrips, setAvailableTrips] = useState<TripWithStats[] | null>(null);
 
   // Single-open coordination across all top-level cards
   const [openItem, setOpenItem] = useState<OpenItem>(null);
   // For nested journey edit inside an open trip
   const [openNestedJourneyId, setOpenNestedJourneyId] = useState<number | null>(null);
 
-  const [isCreatingTrip, setIsCreatingTrip] = useState(false);
-  const [newTripName, setNewTripName] = useState("");
-  const [newTripDescription, setNewTripDescription] = useState("");
+  // A draft like the cards' edits, so the form outlives leaving the tab
+  const { draft: newTrip, setDraft: setNewTrip } = useDraft<{ name: string; description: string }>(
+    NEW_TRIP_EDIT_KEY,
+    "the new trip",
+    (d) => d.name.trim() !== "" || d.description.trim() !== "",
+  );
   const [isSavingNewTrip, setIsSavingNewTrip] = useState(false);
 
-  // A region switch collapses the open card, as in LocalJourneyLogTab, and the
-  // new trip form: a card listed in both regions (a journey with no routes yet)
-  // would otherwise stay open, and both would keep the changes the user agreed to
-  // discard when switching. The highlight is dropped by the map anyway.
+  // A region switch collapses the open card, as in LocalJourneyLogTab: a card
+  // listed in both regions (a journey with no routes yet) would otherwise stay
+  // open with its highlight dropped by the map. An edit in it is kept (editGuard).
+  // The trips are the region's, so they are unknown again until reloaded.
   const [listedRegionId, setListedRegionId] = useState(regionId);
   if (listedRegionId !== regionId) {
     setListedRegionId(regionId);
     setOpenItem(null);
     setOpenNestedJourneyId(null);
-    setIsCreatingTrip(false);
-    setNewTripName("");
-    setNewTripDescription("");
+    setAvailableTrips(null);
   }
-
-  useReportEditing(
-    NEW_TRIP_EDIT_KEY,
-    "the new trip",
-    isCreatingTrip && (newTripName.trim() !== "" || newTripDescription.trim() !== ""),
-  );
-
-  // The forms that closing the open card would drop: its own, and its open nested
-  // journey's. While either has changes, search and paging (which can take the
-  // card out of the list) are disabled, opening another card asks first, and a
-  // reload keeps the card listed.
-  const openEditKeys =
-    openItem === null
-      ? []
-      : openItem.type === "journey"
-        ? [journeyEditKey(openItem.id)]
-        : openNestedJourneyId === null
-          ? [tripEditKey(openItem.id)]
-          : [tripEditKey(openItem.id), journeyEditKey(openNestedJourneyId)];
-  const hasChanges = useHasChanges(openEditKeys);
-  const confirmDiscard = useConfirmDiscard();
-  // Read by loadItems, which would otherwise be rebuilt (and reload) on every change
-  const keepListedRef = useRef<OpenItem>(null);
-  keepListedRef.current = hasChanges ? openItem : null;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -149,15 +104,13 @@ export default function JourneysAndTripsTab({
           setPage(lastPage);
           return;
         }
-        const keep = keepListedRef.current;
-        setItems((prev) => keepListed(result.items, prev, keep));
+        setItems(result.items);
         setTotal(result.total);
       } catch (error) {
         if (requestId !== loadRequestRef.current) return;
         console.error("Error loading items:", error);
         showError(actionErrorMessage(error, "Failed to load journeys and trips"));
-        const keep = keepListedRef.current;
-        setItems((prev) => keepListed([], prev, keep));
+        setItems([]);
         setTotal(0);
       } finally {
         if (requestId === loadRequestRef.current && !steppedBack) setIsLoading(false);
@@ -187,10 +140,10 @@ export default function JourneysAndTripsTab({
   }, [loadAvailableTrips]);
 
   // A page or search change, or a reload after a delete, can take the open card
-  // out of the list — never one with unsaved changes (see `keepListed`). The card
-  // ends its own map edit session as it unmounts; what is left here is the open
-  // state and its highlights, which would otherwise linger for an item no longer
-  // shown. Only then: a card still in the new results stays open.
+  // out of the list. The card ends its own map edit session as it unmounts, and
+  // its edit is kept (editGuard); what is left here is the open state and its
+  // highlights, which would otherwise linger for an item no longer shown. Only
+  // then: a card still in the new results stays open.
   useEffect(() => {
     if (!openItem) return;
     if (items.some((item) => isItem(item, openItem))) return;
@@ -199,17 +152,16 @@ export default function JourneysAndTripsTab({
     onHighlightRoutes?.([]);
   }, [items, openItem, onHighlightRoutes]);
 
-  // Debounce search input → reset to page 1. Held while the open card has changes:
-  // the field is disabled then, but a search typed just before is still on its way.
+  // Debounce search input → reset to page 1
   useEffect(() => {
     const next = searchInput.trim();
-    if (next === debouncedSearch || hasChanges) return;
+    if (next === debouncedSearch) return;
     const t = setTimeout(() => {
       setDebouncedSearch(next);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [searchInput, debouncedSearch, hasChanges]);
+  }, [searchInput, debouncedSearch]);
 
   // Cleanup on unmount: clear highlights and any in-flight edit session
   useEffect(() => {
@@ -225,10 +177,8 @@ export default function JourneysAndTripsTab({
     onJourneyChanged?.();
   }, [loadItems, loadAvailableTrips, onJourneyChanged]);
 
-  // When the open item closes (or changes), clear highlights. Not guarded: a card
-  // closes itself only once it is done (deleted, or moved to another trip), and a
-  // header tap that closes one is locked while it is edited (a trip's guards the
-  // nested journey it would close itself).
+  // Opening another card closes the open one, nested journey and all; an edit in
+  // either is kept for when it reopens. When the open item closes, clear highlights.
   const handleRequestOpen = (next: OpenItem) => {
     setOpenItem(next);
     setOpenNestedJourneyId(null);
@@ -238,17 +188,18 @@ export default function JourneysAndTripsTab({
   };
 
   const handleCreateTrip = async () => {
-    if (!newTripName.trim()) {
+    if (!newTrip) return;
+    if (!newTrip.name.trim()) {
       showError("Trip name is required");
       return;
     }
     setIsSavingNewTrip(true);
     try {
-      const trip = unwrap(await createTrip(newTripName.trim(), newTripDescription.trim() || null));
+      const trip = unwrap(
+        await createTrip(newTrip.name.trim(), newTrip.description.trim() || null),
+      );
       showSuccess(`Trip "${trip.name}" created`);
-      setNewTripName("");
-      setNewTripDescription("");
-      setIsCreatingTrip(false);
+      setNewTrip(null);
       handleChanged();
     } catch (error) {
       console.error("Error creating trip:", error);
@@ -258,10 +209,6 @@ export default function JourneysAndTripsTab({
     }
   };
 
-  // Opening another card closes the open one, nested journey and all
-  const handleRequestOpenGuarded = (next: OpenItem) =>
-    confirmDiscard(() => handleRequestOpen(next), openEditKeys);
-
   return (
     <div className="p-4 text-fg space-y-4">
       <div className="flex items-center justify-between">
@@ -269,14 +216,18 @@ export default function JourneysAndTripsTab({
           <h3 className="text-lg font-bold">My Trips</h3>
           <p className="text-sm text-gray-600">Trips and journeys, sorted by date</p>
         </div>
-        {!isCreatingTrip && (
-          <button type="button" onClick={() => setIsCreatingTrip(true)} className={btn("primary")}>
+        {!newTrip && (
+          <button
+            type="button"
+            onClick={() => setNewTrip({ name: "", description: "" })}
+            className={btn("primary")}
+          >
             New Trip
           </button>
         )}
       </div>
 
-      {isCreatingTrip && (
+      {newTrip && (
         <div className="p-3 bg-blue-50 border border-blue-200 rounded space-y-2">
           <h4 className="text-sm font-semibold">Create New Trip</h4>
           <div>
@@ -286,8 +237,8 @@ export default function JourneysAndTripsTab({
             <input
               id="new-trip-name"
               type="text"
-              value={newTripName}
-              onChange={(e) => setNewTripName(e.target.value)}
+              value={newTrip.name}
+              onChange={(e) => setNewTrip({ ...newTrip, name: e.target.value })}
               placeholder="e.g., Summer Holiday in Austria"
               className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isSavingNewTrip}
@@ -299,8 +250,8 @@ export default function JourneysAndTripsTab({
             </label>
             <textarea
               id="new-trip-description"
-              value={newTripDescription}
-              onChange={(e) => setNewTripDescription(e.target.value)}
+              value={newTrip.description}
+              onChange={(e) => setNewTrip({ ...newTrip, description: e.target.value })}
               rows={2}
               placeholder="Optional description..."
               className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
@@ -311,18 +262,14 @@ export default function JourneysAndTripsTab({
             <button
               type="button"
               onClick={handleCreateTrip}
-              disabled={isSavingNewTrip || !newTripName.trim()}
+              disabled={isSavingNewTrip || !newTrip.name.trim()}
               className={`${btn("success")} flex-1`}
             >
               {isSavingNewTrip ? "Creating..." : "Create Trip"}
             </button>
             <button
               type="button"
-              onClick={() => {
-                setIsCreatingTrip(false);
-                setNewTripName("");
-                setNewTripDescription("");
-              }}
+              onClick={() => setNewTrip(null)}
               disabled={isSavingNewTrip}
               className={`${btn("subtle")} flex-1`}
             >
@@ -339,9 +286,7 @@ export default function JourneysAndTripsTab({
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search by name, date, or description..."
-          disabled={hasChanges}
-          title={hasChanges ? "Save or cancel the edit to search" : undefined}
-          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -365,7 +310,7 @@ export default function JourneysAndTripsTab({
                   initialJourneys={item.journeys}
                   availableTrips={availableTrips}
                   isOpen={isOpen}
-                  onRequestOpen={() => handleRequestOpenGuarded({ type: "trip", id: item.trip.id })}
+                  onRequestOpen={() => handleRequestOpen({ type: "trip", id: item.trip.id })}
                   onRequestClose={() => handleRequestOpen(null)}
                   onChanged={handleChanged}
                   onHighlightRoutes={onHighlightRoutes}
@@ -385,9 +330,7 @@ export default function JourneysAndTripsTab({
                 store={databaseJourneyStore}
                 availableTrips={availableTrips}
                 isOpen={isOpen}
-                onRequestOpen={() =>
-                  handleRequestOpenGuarded({ type: "journey", id: item.journey.id })
-                }
+                onRequestOpen={() => handleRequestOpen({ type: "journey", id: item.journey.id })}
                 onRequestClose={() => handleRequestOpen(null)}
                 onChanged={handleChanged}
                 onHighlightRoutes={onHighlightRoutes}
@@ -404,7 +347,7 @@ export default function JourneysAndTripsTab({
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1 || hasChanges}
+            disabled={page <= 1}
             className={btn("subtle", "xs")}
           >
             ← Prev
@@ -415,7 +358,7 @@ export default function JourneysAndTripsTab({
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages || hasChanges}
+            disabled={page >= totalPages}
             className={btn("subtle", "xs")}
           >
             Next →
