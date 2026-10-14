@@ -21,13 +21,12 @@ import { getUser } from "./authActions";
 import pool from "./db";
 import {
   coveredStretchesForUser,
-  type ProgressByCountry,
   progressByCountryForUser,
   progressForUser,
-  type UserProgress,
 } from "./progressQueries";
 import { publicMapOwner } from "./publicMapQueries";
 import { SUPPORTED_COUNTRIES } from "./shared/constants";
+import { EMPTY_PROGRESS, type ProgressByCountry, type UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type { CoveredStretch } from "./shared/types";
 
@@ -98,16 +97,7 @@ export async function getPublicProgress(
   shownUsageTypes?: number[],
 ): Promise<UserProgress> {
   const owner = await publicMapOwner(token);
-  if (!owner) {
-    return {
-      totalKm: 0,
-      completedKm: 0,
-      percentage: 0,
-      routePercentage: 0,
-      totalRoutes: 0,
-      completedRoutes: 0,
-    };
-  }
+  if (!owner) return EMPTY_PROGRESS;
 
   return progressForUser(owner.userId, region, selectedCountries, shownUsageTypes);
 }

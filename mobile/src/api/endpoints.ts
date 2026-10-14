@@ -4,12 +4,12 @@
  * Thin by design: the client owns auth and refresh, so these say only what the
  * path and the shape are. `API.md` is the reference for both.
  *
- * The response types are declared here rather than imported from `@shared/*`,
- * because the shapes they mirror (`UserProgress` and friends) live in the query
- * modules alongside `pg` — server-only code. Only dependency-free modules cross
- * over; see `@shared` in `tsconfig.json`.
+ * Most response types are declared here rather than imported from `@shared/*`,
+ * because the shapes they mirror live in the query modules alongside `pg` —
+ * server-only code. Only dependency-free modules cross over (the progress
+ * figures, `@shared/progress`); see `@shared` in `tsconfig.json`.
  */
-import type { UsageType } from "@shared/constants";
+import type { ProgressByCountry, UserProgress } from "@shared/progress";
 import type { RegionId } from "@shared/regions";
 import type {
   CoveredStretch,
@@ -21,14 +21,7 @@ import type {
 } from "@shared/types";
 import { type ApiUser, type AuthResponse, request } from "./client";
 
-export interface Progress {
-  totalKm: number;
-  completedKm: number;
-  percentage: number;
-  routePercentage: number;
-  totalRoutes: number;
-  completedRoutes: number;
-}
+export type Progress = UserProgress;
 
 export function login(email: string, password: string): Promise<AuthResponse> {
   return request<AuthResponse>("/auth/login", {
@@ -125,27 +118,7 @@ export function progress(region: RegionId, countries?: string[]): Promise<Progre
   });
 }
 
-/** One country's share of the region, ridden against total. */
-export interface CountryProgress {
-  countryCode: string;
-  countryName: string;
-  totalKm: number;
-  completedKm: number;
-}
-
-/** One usage type's share of the region — Japan's JR lines against its non-JR ones. */
-export interface UsageProgress {
-  usageType: UsageType;
-  totalKm: number;
-  completedKm: number;
-}
-
-export interface ProgressByCountry {
-  byCountry: CountryProgress[];
-  /** One row per usage type the region counts (`ordinaryUsageTypes`), ridden or not. */
-  byUsage: UsageProgress[];
-  total: { totalKm: number; completedKm: number };
-}
+export type { CountryProgress, ProgressByCountry, UsageProgress } from "@shared/progress";
 
 /**
  * Per-country and per-line-type km plus the grand total — one row per country the

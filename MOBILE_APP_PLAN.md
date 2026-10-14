@@ -468,10 +468,10 @@ assumes. Two pieces make it work, and both are load-bearing:
   runs rather than one.
 
 **What may be imported is decided by dependencies, not by intent.** A module that
-reaches `pg` is server-only however plain it looks — which is why the API response
-types are declared in `src/api/endpoints.ts` rather than imported from
-`progressQueries.ts`, where `UserProgress` actually lives. `regions.ts`,
-`constants.ts` and `types.ts` are dependency-free and cross over untouched;
+reaches `pg` is server-only however plain it looks — which is why most API response
+types are declared in `src/api/endpoints.ts` rather than imported from the query
+modules. `regions.ts`, `constants.ts`, `types.ts` and `progress.ts` (the progress
+figures) are dependency-free and cross over untouched;
 `regionCountryCodes` is already shared, so the app filters its progress by the
 same rule `RailwayMap` uses (stored preference where the region allows a country
 filter, the region's own list where it does not).

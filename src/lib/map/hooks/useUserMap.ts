@@ -13,11 +13,11 @@ import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
-import type { UserProgress } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
 import type { UsageType } from "@/lib/shared/constants";
 import type { RouteTileRides } from "@/lib/shared/map/tileSources";
 import { createUserMapLayers, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
+import type { UserProgress } from "@/lib/shared/progress";
 import { countedUsageTypes, regionCountryCodes } from "@/lib/shared/regions";
 import { useResolvedTheme } from "@/lib/theme";
 

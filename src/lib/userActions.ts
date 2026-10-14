@@ -15,10 +15,8 @@ import {
   buildCoveredStretches,
   coveredStretchesForUser,
   normalizeCoveredRanges,
-  type ProgressByCountry,
   progressByCountryForUser,
   progressForUser,
-  type UserProgress,
 } from "./progressQueries";
 import {
   lineGeometryByName,
@@ -29,6 +27,7 @@ import {
   searchStationsByName,
   trackIdsInRegion,
 } from "./routeQueries";
+import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type {
   CoveredRange,

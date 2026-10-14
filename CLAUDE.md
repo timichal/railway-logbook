@@ -16,7 +16,7 @@ The React Native / Expo client (`MOBILE_APP_PLAN.md`), with its own `package.jso
 
 ### `src/lib/shared/` is the shared set
 
-`regions.ts`, `constants.ts`, `types.ts`, `routeCoverage.ts`, `getUntimezonedDateStr.ts`, `countryFlag.ts`, `theme/types.ts`, and `map/` (see "Map library"). The web app imports it as `@/lib/shared/...`; inside the folder, imports are relative. Everything outside it is the web app's alone — notably `src/lib/map/index.ts`, which reads `window.location` at module load and would crash React Native.
+`regions.ts`, `constants.ts`, `types.ts`, `progress.ts`, `routeCoverage.ts`, `getUntimezonedDateStr.ts`, `countryFlag.ts`, `theme/types.ts`, and `map/` (see "Map library"). The web app imports it as `@/lib/shared/...`; inside the folder, imports are relative. Everything outside it is the web app's alone — notably `src/lib/map/index.ts`, which reads `window.location` at module load and would crash React Native.
 
 **Biome enforces the boundary** (`overrides` in `biome.json`): a shared file may not import `pg`, `maplibre-gl` (take spec types from `@maplibre/maplibre-gl-style-spec`), `next`, `react-dom` or country-coder (subpaths included), nor any Node built-in; may not use `@/*` (it means a different `src` in each app); and may not climb out of the folder. The climb-out rule is written once per folder depth (`shared/*`, `shared/*/*`, `shared/*/*/*`) because a later override replaces rather than merges options — a file deeper than three levels needs a depth added. `mobile/biome.json` forbids relative imports into `src/lib` and `@shared/..`.
 
@@ -159,7 +159,7 @@ Martin (port 3001) serves `railway_routes_tile` (`selected_countries` filter, no
 - Zoom ranges: `ZOOM_RANGES` in `lib/shared/map/zoomRanges.ts` (its header lists what else must match).
 - **An MVT property is a scalar**: `frequency` arrives as a Postgres array literal. Decode with `parsePgTextArray` / `parseFrequencyTags` (`map/routeFeature.ts`), never `split(",")`.
 
-**Public map sharing** — `/shared/<token>?view=<region>` (`ShareMapDialog`, `publicMapActions.ts`). The token is minted on the first read of the sharing settings (`getPublicMapSettings`) and never changes, so a pasted link keeps working; `public_map_enabled` alone grants access. Every public read — every route tile included — re-resolves the token through `sharedMapOwnerIdSql` (`publicMapQueries.ts`), so switching sharing off stops an open map drawing routes at once. `?view=` wins over the visitor's region cookie. On the client the shared view is a third `DataAccess` (`createPublicDataAccess`), whose preference methods throw.
+**Public map sharing** — `/shared/<token>?view=<region>` (`ShareMapDialog`, `publicMapActions.ts`). The token is minted on the first read of the sharing settings (`getPublicMapSettings`) and never changes, so a pasted link keeps working; `public_map_enabled` alone grants access. Every public read — every route tile included — re-resolves the token through `sharedMapOwnerIdSql` (`publicMapQueries.ts`), so switching sharing off stops an open map drawing routes at once. `?view=` wins over the visitor's region cookie. On the client the shared view is a third `DataAccess` (`createPublicDataAccess`), whose preference write throws.
 
 ### Journey planner (`routePathFinder.ts`, `src/lib/planner/`)
 
@@ -231,7 +231,7 @@ One directory per part of the app; always import a component by its full path (`
 - **Queries** (server-only): `db.ts` (pool, `asMissingRow`, `withTransaction`), `dbConfig.ts`, `progressQueries.ts`, `journeyQueries.ts`, `tripQueries.ts`, `preferencesQueries.ts`, `routeQueries.ts`, `authQueries.ts`, `passwordHash.ts`, `authTokens.ts`, `sessionQueries.ts`, `publicMapQueries.ts`, `routeTileQueries.ts`, `adminNotesTileQueries.ts`, `errors.ts`.
 - **Actions** (`"use server"`): `userActions.ts`, `journeyActions.ts`, `tripActions.ts`, `userPreferencesActions.ts`, `authActions.ts`, `plannerActions.ts`, `publicMapActions.ts`, `migrationActions.ts`, `adminRouteActions.ts`, `adminScenicLineActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts`.
 - **API plumbing** (`api/`): `auth.ts`, `params.ts`, `response.ts` (`apiHandler`), `tiles.ts`.
-- **Data access**: `dataAccess.ts` (database / localStorage / public), `localStorage.ts`.
+- **Data access**: `dataAccess.ts` (database / localStorage / public), `localStorage.ts`, `shared/progress.ts` (the progress types and rounding — the server, the localStorage count and the native app use the same ones).
 - **Planner**: `routePathFinder.ts`, `planner/`.
 - **Regions**: `shared/regions.ts`, `regionContext.tsx`.
 - **Theme**: `theme/index.ts` (the preference, `useResolvedTheme`, `THEME_INIT_SCRIPT`), `theme/colors.ts` (`THEME_COLORS`, a plain module so `app/manifest.ts` can read it), `shared/theme/types.ts`.

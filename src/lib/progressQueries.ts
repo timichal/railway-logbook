@@ -12,6 +12,15 @@
 import pool from "./db";
 import type { UsageType } from "./shared/constants";
 import {
+  type CountryProgress,
+  EMPTY_PROGRESS,
+  type ProgressByCountry,
+  round1,
+  toUserProgress,
+  type UsageProgress,
+  type UserProgress,
+} from "./shared/progress";
+import {
   countedUsageTypes,
   ordinaryUsageSql,
   REGIONS,
@@ -29,15 +38,6 @@ import type { CoveredRange, CoveredStretch } from "./shared/types";
  * one whose partial stretches union to the whole line.
  */
 const FULLY_RIDDEN_TRACK_IDS = "SELECT track_id FROM user_fully_ridden_routes($1)";
-
-export interface UserProgress {
-  totalKm: number;
-  completedKm: number;
-  percentage: number;
-  routePercentage: number;
-  totalRoutes: number;
-  completedRoutes: number;
-}
 
 export async function progressForUser(
   userId: number,
@@ -60,14 +60,7 @@ export async function progressForUser(
     (applyCountryFilter && !hasCountries) ||
     countedUsageTypes(region, shownUsageTypes).length === 0
   ) {
-    return {
-      totalKm: 0,
-      completedKm: 0,
-      percentage: 0,
-      routePercentage: 0,
-      totalRoutes: 0,
-      completedRoutes: 0,
-    };
+    return EMPTY_PROGRESS;
   }
 
   // Get total distance and count of all routes the region counts as ordinary
@@ -105,45 +98,7 @@ export async function progressForUser(
 
   const { total_km: totalKm, total_routes: totalRoutes } = totalResult.rows[0];
   const { completed_km: completedKm, completed_routes: completedRoutes } = completedResult.rows[0];
-
-  const percentage = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
-  const routePercentage = totalRoutes > 0 ? (completedRoutes / totalRoutes) * 100 : 0;
-
-  return {
-    totalKm: Math.round(totalKm * 10) / 10,
-    completedKm: Math.round(completedKm * 10) / 10,
-    percentage: Math.round(percentage),
-    routePercentage: Math.round(routePercentage),
-    totalRoutes,
-    completedRoutes,
-  };
-}
-
-export interface CountryProgress {
-  countryCode: string;
-  countryName: string;
-  totalKm: number;
-  completedKm: number;
-}
-
-/** One usage type's share of the region — Japan's JR lines against its non-JR ones. */
-export interface UsageProgress {
-  usageType: UsageType;
-  totalKm: number;
-  completedKm: number;
-}
-
-export interface ProgressByCountry {
-  byCountry: CountryProgress[];
-  /**
-   * One row per usage type the region counts (`ordinaryUsageTypes`), ridden or not.
-   * A single row equal to the total where only Regular counts, as in Europe.
-   */
-  byUsage: UsageProgress[];
-  total: {
-    totalKm: number;
-    completedKm: number;
-  };
+  return toUserProgress({ totalKm, completedKm, totalRoutes, completedRoutes });
 }
 
 /**
@@ -191,8 +146,6 @@ export async function progressByCountryForUser(
      GROUP BY GROUPING SETS ((country), (usage_type), ())`,
     [userId],
   );
-
-  const round1 = (value: number) => Math.round(value * 10) / 10;
 
   const byCode = new Map<string, { totalKm: number; completedKm: number }>();
   const byType = new Map<number, { totalKm: number; completedKm: number }>();

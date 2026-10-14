@@ -1,19 +1,23 @@
 "use client";
 
 /**
- * Data Access Abstraction Layer
- * Provides unified interface that switches between localStorage and database
- * based on authentication state
+ * One interface over the three places a map's progress and preferences come
+ * from: the database (signed in), localStorage (anonymous) and a share token.
  */
 
 import * as localStore from "./localStorage";
-import type { ProgressByCountry, UserProgress } from "./progressQueries";
 import {
   getPublicCoveredStretches,
   getPublicProgress,
   getPublicProgressByCountry,
 } from "./publicMapActions";
 import type { UsageType } from "./shared/constants";
+import {
+  type ProgressByCountry,
+  round1,
+  toUserProgress,
+  type UserProgress,
+} from "./shared/progress";
 import { countedUsageTypes, isOrdinaryUsage, REGIONS, type RegionId } from "./shared/regions";
 import { isRouteFullyRidden } from "./shared/routeCoverage";
 import type { CoveredRange, CoveredStretch, LocalLoggedPart, RouteSummary } from "./shared/types";
@@ -24,10 +28,7 @@ import {
   getCoveredStretchesFor,
   getRouteSummaries,
 } from "./userActions";
-import {
-  getUserPreferences as dbGetUserPreferences,
-  updateUserPreferences as dbUpdateUserPreferences,
-} from "./userPreferencesActions";
+import { updateUserPreferences as dbUpdateUserPreferences } from "./userPreferencesActions";
 
 /** How one route reads on the map for a localStorage user (see getLocalRouteStatuses). */
 export interface LocalRouteStatus {
@@ -37,7 +38,7 @@ export interface LocalRouteStatus {
 }
 
 export interface DataAccess {
-  // Progress operations. `shownUsageTypes` narrows the count to the usage types the
+  // `shownUsageTypes` narrows the count to the usage types the
   // map shows (`countedUsageTypes`); undefined counts all the region counts.
   getUserProgress(
     selectedCountries?: string[],
@@ -56,83 +57,31 @@ export interface DataAccess {
    */
   getLocalRouteStatuses(): Promise<LocalRouteStatus[]>;
 
-  // Preferences operations
-  getUserPreferences(): Promise<string[]>;
   updateUserPreferences(selectedCountries: string[]): Promise<void>;
-
-  // Utility (for localStorage users only)
-  getJourneyCount(): Promise<number>;
-  canAddMoreJourneys(): Promise<boolean>;
 }
 
 /**
- * Create data access layer based on authentication state
- *
  * Every progress figure is scoped to one region: the map shows one at a time,
  * so the numbers beside it must count that region alone. The region is bound
  * here rather than threaded through each call, which also means switching
  * regions produces a fresh instance and drops the cached route list below.
- *
- * @param user - Current user object (null if not logged in)
- * @param region - The region currently being viewed
- * @returns DataAccess implementation
  */
 export function createDataAccess(userId: number | null, region: RegionId): DataAccess {
-  if (userId !== null) {
-    // User is logged in - use database operations
-    return createDatabaseDataAccess(region);
-  } else {
-    // User is not logged in - use localStorage operations
-    return createLocalStorageDataAccess(region);
-  }
+  return userId !== null ? createDatabaseDataAccess(region) : createLocalStorageDataAccess(region);
 }
 
-/**
- * Database-backed data access (for logged-in users)
- */
 function createDatabaseDataAccess(region: RegionId): DataAccess {
   return {
-    async getUserProgress(selectedCountries, shownUsageTypes): Promise<UserProgress> {
-      return await dbGetUserProgress(region, selectedCountries, shownUsageTypes);
-    },
-
-    async getProgressByCountry(): Promise<ProgressByCountry> {
-      return await dbGetProgressByCountry(region);
-    },
-
-    async getCoveredStretches(): Promise<CoveredStretch[]> {
-      return await dbGetCoveredStretches();
-    },
-
-    async getLocalRouteStatuses(): Promise<LocalRouteStatus[]> {
-      // The route tile already carries this user's visit status
-      return [];
-    },
-
-    async getUserPreferences(): Promise<string[]> {
-      return await dbGetUserPreferences();
-    },
-
-    async updateUserPreferences(selectedCountries: string[]): Promise<void> {
-      await dbUpdateUserPreferences(selectedCountries);
-    },
-
-    async getJourneyCount(): Promise<number> {
-      // Logged-in users use database journeys (unlimited)
-      return 0;
-    },
-
-    async canAddMoreJourneys(): Promise<boolean> {
-      // Logged-in users have unlimited journeys
-      return true;
-    },
+    getUserProgress: (selectedCountries, shownUsageTypes) =>
+      dbGetUserProgress(region, selectedCountries, shownUsageTypes),
+    getProgressByCountry: () => dbGetProgressByCountry(region),
+    getCoveredStretches: dbGetCoveredStretches,
+    // The route tile already carries this user's visit status
+    getLocalRouteStatuses: async () => [],
+    updateUserPreferences: dbUpdateUserPreferences,
   };
 }
 
-/**
- * LocalStorage-backed data access (for unlogged users)
- * Note: Unlogged users still use the old localStorage trip system
- */
 function createLocalStorageDataAccess(region: RegionId): DataAccess {
   // This region's routes (used for progress calculation). The promise is what is
   // cached, not its result: progress, the map colouring and the ridden stretches
@@ -174,129 +123,70 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
     return ridden;
   };
 
+  const sumKm = (routes: RouteSummary[]) =>
+    routes.reduce((sum, route) => sum + (route.length_km ?? 0), 0);
+
   return {
     async getUserProgress(selectedCountries, shownUsageTypes): Promise<UserProgress> {
-      try {
-        const allRoutes = await ensureRoutes();
+      const allRoutes = await ensureRoutes();
 
-        // The same three-state contract progressForUser implements on the SQL
-        // side: undefined = no filter, [] = nothing matches, [...] = those
-        // countries. Treating [] as "no filter" left the progress box showing
-        // full network totals over a map the None button had just emptied.
-        let filteredRoutes = allRoutes;
-        if (selectedCountries !== undefined) {
-          filteredRoutes = allRoutes.filter(
-            (route) =>
-              route.start_country &&
+      // Only the usage types the region counts as ordinary service (Regular, plus
+      // Japan's non-JR lines) and the map shows, as progressForUser does. And the
+      // same three-state country contract: undefined = no filter, [] = nothing
+      // matches, [...] = those countries. Treating [] as "no filter" left the
+      // progress box showing full network totals over a map the None button had
+      // just emptied.
+      const counted = countedUsageTypes(region, shownUsageTypes);
+      const routes = allRoutes.filter(
+        (route) =>
+          counted.includes(route.usage_type) &&
+          (selectedCountries === undefined ||
+            (route.start_country &&
               route.end_country &&
               selectedCountries.includes(route.start_country) &&
-              selectedCountries.includes(route.end_country),
-          );
-        }
+              selectedCountries.includes(route.end_country))),
+      );
 
-        // Only the usage types the region counts as ordinary service (Regular, plus
-        // Japan's non-JR lines) and the map shows, as progressForUser does
-        const counted = countedUsageTypes(region, shownUsageTypes);
-        filteredRoutes = filteredRoutes.filter((route) => counted.includes(route.usage_type));
+      const completedIds = fullyRiddenTrackIds(allRoutes);
+      const completed = routes.filter((route) => completedIds.has(route.track_id));
 
-        // Calculate totals
-        const totalRoutes = filteredRoutes.length;
-        const totalKm = filteredRoutes.reduce((sum, route) => sum + (route.length_km ?? 0), 0);
-
-        const completedRouteIds = fullyRiddenTrackIds(allRoutes);
-
-        const completedRoutes = filteredRoutes.filter((route) =>
-          completedRouteIds.has(route.track_id),
-        );
-
-        const completedRoutesCount = completedRoutes.length;
-        const completedKm = completedRoutes.reduce((sum, route) => sum + (route.length_km ?? 0), 0);
-
-        const percentage = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
-        const routePercentage = totalRoutes > 0 ? (completedRoutesCount / totalRoutes) * 100 : 0;
-
-        return {
-          totalKm: Math.round(totalKm * 10) / 10,
-          completedKm: Math.round(completedKm * 10) / 10,
-          percentage: Math.round(percentage),
-          routePercentage: Math.round(routePercentage),
-          totalRoutes,
-          completedRoutes: completedRoutesCount,
-        };
-      } catch (error) {
-        console.error("Error calculating progress for localStorage user:", error);
-        // Return default values on error
-        return {
-          totalKm: 0,
-          completedKm: 0,
-          percentage: 0,
-          routePercentage: 0,
-          totalRoutes: 0,
-          completedRoutes: 0,
-        };
-      }
+      return toUserProgress({
+        totalKm: sumKm(routes),
+        completedKm: sumKm(completed),
+        totalRoutes: routes.length,
+        completedRoutes: completed.length,
+      });
     },
 
     async getProgressByCountry(): Promise<ProgressByCountry> {
-      try {
-        const allRoutes = await ensureRoutes();
-        const completedRouteIds = fullyRiddenTrackIds(allRoutes);
-        // The routes the region counts as ordinary service, as progressByCountryForUser
-        const counted = allRoutes.filter((route) => isOrdinaryUsage(region, route.usage_type));
+      const allRoutes = await ensureRoutes();
+      const completedIds = fullyRiddenTrackIds(allRoutes);
+      // The routes the region counts as ordinary service, as progressByCountryForUser
+      const counted = allRoutes.filter((route) => isOrdinaryUsage(region, route.usage_type));
 
-        // Ridden against total km over some of them, rounded as the server rounds
-        const kmOf = (routes: RouteSummary[]) => {
-          let totalKm = 0;
-          let completedKm = 0;
-          for (const route of routes) {
-            const km = route.length_km ?? 0;
-            totalKm += km;
-            if (completedRouteIds.has(route.track_id)) completedKm += km;
-          }
-          return {
-            totalKm: Math.round(totalKm * 10) / 10,
-            completedKm: Math.round(completedKm * 10) / 10,
-          };
-        };
+      // Ridden against total km over some of them, rounded as the server rounds
+      const kmOf = (routes: RouteSummary[]) => ({
+        totalKm: round1(sumKm(routes)),
+        completedKm: round1(sumKm(routes.filter((route) => completedIds.has(route.track_id)))),
+      });
 
-        // Each country: routes that both start AND end in it
-        const byCountry = REGIONS[region].countries.map((country) => ({
-          countryCode: country.code,
-          countryName: country.name,
-          ...kmOf(
-            counted.filter(
-              (route) => route.start_country === country.code && route.end_country === country.code,
-            ),
+      // Each country: routes that both start AND end in it
+      const byCountry = REGIONS[region].countries.map((country) => ({
+        countryCode: country.code,
+        countryName: country.name,
+        ...kmOf(
+          counted.filter(
+            (route) => route.start_country === country.code && route.end_country === country.code,
           ),
-        }));
+        ),
+      }));
 
-        const byUsage = REGIONS[region].ordinaryUsageTypes.map((usageType) => ({
-          usageType,
-          ...kmOf(counted.filter((route) => route.usage_type === usageType)),
-        }));
+      const byUsage = REGIONS[region].ordinaryUsageTypes.map((usageType) => ({
+        usageType,
+        ...kmOf(counted.filter((route) => route.usage_type === usageType)),
+      }));
 
-        return { byCountry, byUsage, total: kmOf(counted) };
-      } catch (error) {
-        console.error("Error calculating progress by country for localStorage user:", error);
-        // Return default values on error
-        return {
-          byCountry: REGIONS[region].countries.map((country) => ({
-            countryCode: country.code,
-            countryName: country.name,
-            totalKm: 0,
-            completedKm: 0,
-          })),
-          byUsage: REGIONS[region].ordinaryUsageTypes.map((usageType) => ({
-            usageType,
-            totalKm: 0,
-            completedKm: 0,
-          })),
-          total: {
-            totalKm: 0,
-            completedKm: 0,
-          },
-        };
-      }
+      return { byCountry, byUsage, total: kmOf(counted) };
     },
 
     async getCoveredStretches(): Promise<CoveredStretch[]> {
@@ -331,20 +221,8 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
       }));
     },
 
-    async getUserPreferences(): Promise<string[]> {
-      return localStore.getPreferences();
-    },
-
     async updateUserPreferences(selectedCountries: string[]): Promise<void> {
       localStore.setPreferences(selectedCountries);
-    },
-
-    async getJourneyCount(): Promise<number> {
-      return localStore.getJourneyCount();
-    },
-
-    async canAddMoreJourneys(): Promise<boolean> {
-      return localStore.canAddMoreJourneys();
     },
   };
 }
@@ -360,40 +238,18 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
  */
 export function createPublicDataAccess(token: string, region: RegionId): DataAccess {
   return {
-    async getUserProgress(selectedCountries, shownUsageTypes): Promise<UserProgress> {
-      return await getPublicProgress(token, region, selectedCountries, shownUsageTypes);
-    },
+    getUserProgress: (selectedCountries, shownUsageTypes) =>
+      getPublicProgress(token, region, selectedCountries, shownUsageTypes),
+    getProgressByCountry: () => getPublicProgressByCountry(token, region),
+    getCoveredStretches: () => getPublicCoveredStretches(token),
+    // The route tile is asked for the owner's status, and a visitor has no
+    // local log of their own to overlay on it
+    getLocalRouteStatuses: async () => [],
 
-    async getProgressByCountry(): Promise<ProgressByCountry> {
-      return await getPublicProgressByCountry(token, region);
-    },
-
-    async getCoveredStretches(): Promise<CoveredStretch[]> {
-      return await getPublicCoveredStretches(token);
-    },
-
-    async getLocalRouteStatuses(): Promise<LocalRouteStatus[]> {
-      // The route tile is asked for the owner's status, and a visitor has no
-      // local log of their own to overlay on it
-      return [];
-    },
-
-    async getUserPreferences(): Promise<string[]> {
-      // The shared view is handed the owner's list by the server component; it
-      // never asks for it again, and it has nowhere to change it.
-      throw new Error("A shared map has no editable preferences");
-    },
-
+    // The shared view is handed the owner's list by the server component, and
+    // has nowhere to change it
     async updateUserPreferences(): Promise<void> {
       throw new Error("A shared map is read-only");
-    },
-
-    async getJourneyCount(): Promise<number> {
-      return 0;
-    },
-
-    async canAddMoreJourneys(): Promise<boolean> {
-      return false;
     },
   };
 }

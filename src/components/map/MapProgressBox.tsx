@@ -3,8 +3,8 @@
 import { useState } from "react";
 import LayerToggles from "@/components/map/LayerToggles";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
-import type { UserProgress } from "@/lib/progressQueries";
 import { useRegion } from "@/lib/regionContext";
+import type { UserProgress } from "@/lib/shared/progress";
 import { btn } from "@/lib/ui/buttonStyles";
 
 /**
