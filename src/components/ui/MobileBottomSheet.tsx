@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -24,6 +25,16 @@ import Icon from "@/components/ui/Icon";
  * it. A flick carries: the release point is projected along its velocity before the
  * nearest snap is picked, so a short fast swipe goes where it was thrown instead of
  * springing back.
+ *
+ * **The content drags it too, downward from its top**, as a native sheet does: a
+ * finger pulling down on content with nothing above it to scroll back to moves the
+ * sheet instead. This one runs on touch events, not pointer events: the content keeps
+ * its `touch-action` for scrolling, so the browser claims any vertical pan there and
+ * cancels the pointer — only a non-passive `touchmove` can take the gesture back, by
+ * cancelling it before scrolling begins. While the gesture is undecided its downward
+ * moves are cancelled: at the top there is nothing for them to scroll, only the
+ * overscroll bounce or pull-to-refresh they would start. A finger that moves up or
+ * sideways first is left to scroll for the whole touch.
  *
  * **It lies over the map and moves by `transform`, never by layout.** It used to be a
  * flex sibling that changed its height, and every frame of a drag then resized the
@@ -101,6 +112,15 @@ const CLICK_SWALLOW_MS = 400;
 const MAX_SCRIM_OPACITY = 0.4;
 /** Marks the elements a drag can start from: the handle, and the tab bar inside. */
 const DRAG_REGION_SELECTOR = "[data-sheet-drag]";
+/** Content whose own touch drags (caret, selection, a slider) a pull must not take. */
+const EDITABLE_SELECTOR =
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+
+/** A drag of the sheet under way, fed by pointer or touch events alike. */
+interface DragGesture {
+  move: (y: number, t: number) => void;
+  end: (t: number) => void;
+}
 
 interface MobileBottomSheetProps {
   /**
@@ -178,6 +198,38 @@ function onScreenHeight(sheet: HTMLElement, contentHeight: number): number {
   return contentHeight - new DOMMatrix(getComputedStyle(sheet).transform).m42;
 }
 
+/**
+ * Whether anything from `target` up to (not including) `root` is scrolled off its top.
+ * A pixel's grace: a fling can come to rest at a fractional offset that looks like 0.
+ */
+function scrolledFromTop(target: Element, root: Element): boolean {
+  for (let el: Element | null = target; el && el !== root; el = el.parentElement) {
+    if (el.scrollTop >= 1) return true;
+  }
+  return false;
+}
+
+/**
+ * Swallows the click a drag ends in — on a tab, or on the handle, whose click is the
+ * tap toggle; neither should run. That click may come a task or two later, so the
+ * swallow stands until it arrives, the next press, or a timeout — whichever is first.
+ */
+function swallowTrailingClick() {
+  const release = () => {
+    clearTimeout(timer);
+    window.removeEventListener("click", swallow, { capture: true });
+    window.removeEventListener("pointerdown", release, { capture: true });
+  };
+  const swallow = (click: MouseEvent) => {
+    click.stopPropagation();
+    click.preventDefault();
+    release();
+  };
+  const timer = setTimeout(release, CLICK_SWALLOW_MS);
+  window.addEventListener("click", swallow, { capture: true });
+  window.addEventListener("pointerdown", release, { capture: true });
+}
+
 export default function MobileBottomSheet({
   onSettled,
   onCoverChange,
@@ -187,6 +239,8 @@ export default function MobileBottomSheet({
 }: MobileBottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLButtonElement>(null);
+  /** The content box: where a pull down can start. */
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const [available, setAvailable] = useState(0);
   /** Where the sheet is (or is headed, while animating). Null until measured. */
@@ -367,37 +421,63 @@ export default function MobileBottomSheet({
     [snapTo],
   );
 
+  /**
+   * Starts a drag once a press has moved far enough to be one, with the finger now at
+   * `y`. The sheet moves on from wherever it is at this moment — mid-snap too, where
+   * `heightRef` already holds the target and the press may be frames old — so it never
+   * jumps; the press only seeds the velocity.
+   */
+  const beginDrag = useCallback(
+    (press: { y: number; t: number }, y: number): DragGesture => {
+      const sheet = sheetRef.current;
+      const startHeight =
+        animationTimer.current !== null && sheet
+          ? onScreenHeight(sheet, contentRef.current)
+          : heightRef.current;
+      stopAnimation();
+      setTransition(false);
+      setPhase("dragging");
+      const startY = y;
+      const samples: { t: number; y: number }[] = [press];
+      return {
+        move: (y, t) => {
+          samples.push({ t, y });
+          while (samples.length > 2 && t - samples[0].t > VELOCITY_WINDOW_MS) samples.shift();
+          const { snaps } = live.current;
+          paint(Math.min(Math.max(startHeight + startY - y, snaps[0]), snaps[snaps.length - 1]));
+        },
+        end: (t) => {
+          swallowTrailingClick();
+          const first = samples[0];
+          const last = samples[samples.length - 1];
+          const dt = last.t - first.t;
+          // Positive = upward, in px per ms. A finger that stopped before letting go
+          // says nothing with its last moves about the release.
+          const stale = t - last.t > VELOCITY_WINDOW_MS;
+          const velocity = dt > 0 && !stale ? (first.y - last.y) / dt : 0;
+          const projected = heightRef.current + velocity * FLICK_PROJECTION_MS;
+          snapTo(nearestSnap(projected, live.current.snaps));
+        },
+      };
+    },
+    [paint, setTransition, stopAnimation, snapTo],
+  );
+
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (settled === null || !e.isPrimary || e.button !== 0) return;
     if (!(e.target as Element).closest(DRAG_REGION_SELECTOR)) return;
 
-    const startY = e.clientY;
-    // Mid-snap, `heightRef` already holds the target; start from where the sheet
-    // actually is on screen, or catching it would make it jump.
-    const sheet = sheetRef.current;
-    const startHeight =
-      phase === "animating" && sheet
-        ? onScreenHeight(sheet, contentRef.current)
-        : heightRef.current;
+    const press = { y: e.clientY, t: e.timeStamp };
     const pointerId = e.pointerId;
-    const samples: { t: number; y: number }[] = [{ t: e.timeStamp, y: e.clientY }];
-    let moved = false;
+    let drag: DragGesture | null = null;
 
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return;
-      const delta = startY - ev.clientY;
-      if (!moved) {
-        if (Math.abs(delta) <= DRAG_THRESHOLD_PX) return;
-        moved = true;
-        stopAnimation();
-        setTransition(false);
-        setPhase("dragging");
+      if (!drag) {
+        if (Math.abs(press.y - ev.clientY) <= DRAG_THRESHOLD_PX) return;
+        drag = beginDrag(press, ev.clientY);
       }
-      samples.push({ t: ev.timeStamp, y: ev.clientY });
-      while (samples.length > 2 && ev.timeStamp - samples[0].t > VELOCITY_WINDOW_MS)
-        samples.shift();
-      const { snaps } = live.current;
-      paint(Math.min(Math.max(startHeight + delta, snaps[0]), snaps[snaps.length - 1]));
+      drag.move(ev.clientY, ev.timeStamp);
     };
 
     const onEnd = (ev: PointerEvent) => {
@@ -405,41 +485,99 @@ export default function MobileBottomSheet({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onEnd);
       window.removeEventListener("pointercancel", onEnd);
-      if (!moved) return;
-
-      // The drag ends in a click on whatever it started on — a tab, or the handle,
-      // whose click is the tap toggle. Neither should run. That click may come a task
-      // or two later, so the swallow stands until it arrives, the next press, or a
-      // timeout — whichever is first.
-      const release = () => {
-        clearTimeout(timer);
-        window.removeEventListener("click", swallow, { capture: true });
-        window.removeEventListener("pointerdown", release, { capture: true });
-      };
-      const swallow = (click: MouseEvent) => {
-        click.stopPropagation();
-        click.preventDefault();
-        release();
-      };
-      const timer = setTimeout(release, CLICK_SWALLOW_MS);
-      window.addEventListener("click", swallow, { capture: true });
-      window.addEventListener("pointerdown", release, { capture: true });
-
-      const first = samples[0];
-      const last = samples[samples.length - 1];
-      const dt = last.t - first.t;
-      // Positive = upward, in px per ms. A pointer that stopped before letting go says
-      // nothing with its last moves about the release.
-      const stale = ev.timeStamp - last.t > VELOCITY_WINDOW_MS;
-      const velocity = dt > 0 && !stale ? (first.y - last.y) / dt : 0;
-      const projected = heightRef.current + velocity * FLICK_PROJECTION_MS;
-      snapTo(nearestSnap(projected, live.current.snaps));
+      drag?.end(ev.timeStamp);
     };
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onEnd);
     window.addEventListener("pointercancel", onEnd);
   };
+
+  /** The content touch being followed as a possible pull down, if any. */
+  const pull = useRef<{ dragging: boolean; stop: () => void } | null>(null);
+
+  /**
+   * A touch on the content, which may become a pull down (see the header comment):
+   * undecided until it has moved past the drag threshold, then the sheet's drag — or
+   * dropped, leaving the rest of the touch to the content.
+   *
+   * Its moves are heard on the element touched, not the content box: a touch's events
+   * go to where it started even once that element has left the DOM (a list reloaded
+   * under the finger), and from there they no longer bubble.
+   */
+  const onContentTouchStart = useEffectEvent((e: TouchEvent) => {
+    // Another finger landing leaves a drag to the first, and ends an undecided one.
+    if (pull.current?.dragging) return;
+    pull.current?.stop();
+    const body = bodyRef.current;
+    // Typed for its touch listeners; an SVG target has the same ones.
+    const target = e.target as HTMLElement;
+    if (settled === null || e.touches.length !== 1 || !body) return;
+    // A text field's own drags (caret, selection) are left to it.
+    if (target.closest(`${DRAG_REGION_SELECTOR}, ${EDITABLE_SELECTOR}`)) return;
+    if (scrolledFromTop(target, body)) return;
+
+    const { identifier, clientX: startX, clientY: startY } = e.touches[0];
+    const press = { y: startY, t: e.timeStamp };
+    let drag: DragGesture | null = null;
+    const own = (ev: TouchEvent) => [...ev.changedTouches].find((t) => t.identifier === identifier);
+
+    const onMove = (ev: TouchEvent) => {
+      const touch = own(ev);
+      if (!touch) return;
+      if (!drag) {
+        const dy = touch.clientY - startY;
+        const dx = Math.abs(touch.clientX - startX);
+        // Up is the content's, and so is a move the browser has already begun
+        // scrolling with: it can no longer be cancelled.
+        if (dy < 0 || !ev.cancelable) return state.stop();
+        // Flat or sideways so far is not cancelled — a touch whose first move is
+        // cancelled may never scroll — and past the threshold it is the content's.
+        if (dy <= dx) {
+          if (dx > DRAG_THRESHOLD_PX) state.stop();
+          return;
+        }
+        ev.preventDefault();
+        if (dy <= DRAG_THRESHOLD_PX) return;
+        drag = beginDrag(press, touch.clientY);
+        state.dragging = true;
+      }
+      if (ev.cancelable) ev.preventDefault();
+      drag.move(touch.clientY, ev.timeStamp);
+    };
+
+    const onEnd = (ev: TouchEvent) => {
+      if (!own(ev)) return;
+      state.stop();
+      drag?.end(ev.timeStamp);
+    };
+
+    const state = {
+      dragging: false,
+      stop: () => {
+        target.removeEventListener("touchmove", onMove);
+        target.removeEventListener("touchend", onEnd);
+        target.removeEventListener("touchcancel", onEnd);
+        if (pull.current === state) pull.current = null;
+      },
+    };
+    pull.current = state;
+    target.addEventListener("touchmove", onMove, { passive: false });
+    target.addEventListener("touchend", onEnd);
+    target.addEventListener("touchcancel", onEnd);
+  });
+
+  // A native listener, so the moves it adds can be non-passive (React's are passive).
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const start = (e: TouchEvent) => onContentTouchStart(e);
+    body.addEventListener("touchstart", start, { passive: true });
+    return () => {
+      body.removeEventListener("touchstart", start);
+      pull.current?.stop();
+    };
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
@@ -508,6 +646,7 @@ export default function MobileBottomSheet({
         )}
       </button>
       <div
+        ref={bodyRef}
         className="relative min-h-0 overflow-hidden flex flex-col"
         style={{ height: settled === null ? `${HALF_FRACTION * 100}%` : `${contentHeight}px` }}
       >
