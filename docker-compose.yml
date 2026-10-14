@@ -9,6 +9,8 @@ services:
     # use the libc provider, and moving from musl to glibc would change collation
     # order under every text index.
     image: postgis/postgis:18-3.6-alpine@sha256:ffcf0c4b904e41b9779f8098007fb5a9484025319c18c70cf8e1bcebb742b9b7
+    # Named so an arm64 machine pulls the amd64 image instead of finding no match.
+    platform: linux/amd64
     container_name: db
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
