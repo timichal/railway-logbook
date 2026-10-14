@@ -67,7 +67,7 @@ function RouteBody({
   feature: RouteFeature;
   regionId: RegionId;
 }): ReactNode {
-  const { name, endpoints } = routeTitle(feature, regionId);
+  const { name, alsoOn, endpoints } = routeTitle(feature, regionId);
   const badges = routeBadges(feature, regionId);
   const { resolved: theme } = useTheme();
   const { isSelected, toggle } = useSelection();
@@ -81,6 +81,7 @@ function RouteBody({
       {name ? (
         <View className="gap-0.5 pr-8">
           <Text className="text-lg font-bold text-gray-900 dark:text-gray-100">{name}</Text>
+          {alsoOn && <Text className="text-sm text-gray-600 dark:text-gray-400">{alsoOn}</Text>}
           <Text className="text-base text-gray-900 dark:text-gray-100">{endpoints}</Text>
         </View>
       ) : (

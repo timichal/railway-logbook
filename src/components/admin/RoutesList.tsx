@@ -97,11 +97,20 @@ export default function RoutesList({
                 onClick={() => onRouteClick(route.track_id)}
                 className={`${optionRow(selectedRouteId === route.track_id)} p-3`}
               >
-                {/* A naming region leads with the line name, endpoints beneath;
-                    a route still missing its name falls back to the endpoints. */}
+                {/* A naming region leads with the line name (and the other lines
+                    sharing the route), endpoints beneath; a route still missing its
+                    name falls back to the endpoints. */}
                 {hasRouteNames && route.name ? (
                   <>
-                    <div className="font-medium text-sm text-gray-900 truncate">{route.name}</div>
+                    <div className="font-medium text-sm text-gray-900 truncate">
+                      {route.name}
+                      {route.other_names.length > 0 && (
+                        <span className="font-normal text-gray-500">
+                          {" "}
+                          + {route.other_names.join(", ")}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-gray-500 truncate">
                       {route.from_station} ⟷ {route.to_station}
                     </div>

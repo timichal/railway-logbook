@@ -622,7 +622,7 @@ Two pieces of logic were *lifted into* the shared set on the way, rather than
 reimplemented on the native side: `scenicLinesFilter` / `clickBufferFilter` in
 `userMapLayers.ts` (what the layer toggles do to the filters — one decision, two
 mechanisms) and `map/routeFeature.ts` (`routeTitle`, `routeBadges`,
-`parseFrequencyTags` — what a route feature *says*, so the popup and the sheet
+`parseTextArray` — what a route feature *says*, so the popup and the sheet
 render the same decisions rather than agreeing by coincidence). Both mean the web
 app changed too; `npm run lint` and `npx tsc --noEmit` at the root are what stands
 behind that.

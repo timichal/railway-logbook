@@ -5,7 +5,7 @@ import RouteMetadataFields, {
   routeMetadataIncomplete,
 } from "@/components/admin/RouteMetadataFields";
 import Icon from "@/components/ui/Icon";
-import type { AdminRouteDetail } from "@/lib/adminRouteActions";
+import type { AdminRouteDetail, RouteSuggestions } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
 import { btn } from "@/lib/ui/buttonStyles";
 
@@ -13,7 +13,7 @@ interface RouteEditFormProps {
   selectedRoute: AdminRouteDetail | null;
   editForm: EditRouteData | null;
   isLoading: boolean;
-  availableTags: string[];
+  suggestions: RouteSuggestions;
   onEditFormChange: (form: EditRouteData) => void;
   onSave: () => void;
   onDelete: () => void;
@@ -27,7 +27,7 @@ export default function RouteEditForm({
   selectedRoute,
   editForm,
   isLoading,
-  availableTags,
+  suggestions,
   onEditFormChange,
   onSave,
   onDelete,
@@ -115,7 +115,7 @@ export default function RouteEditForm({
             idPrefix="edit"
             layout="narrow"
             withLineClass
-            availableTags={availableTags}
+            suggestions={suggestions}
           />
 
           {/* Action Buttons */}

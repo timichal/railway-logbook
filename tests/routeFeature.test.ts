@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { parseFrequencyTags, parsePgTextArray } from "@/lib/shared/map/routeFeature";
+import { parsePgTextArray, parseTextArray, routeTitle } from "@/lib/shared/map/routeFeature";
 
 describe("parsePgTextArray", () => {
   test("an empty array", () => {
@@ -39,18 +39,46 @@ describe("parsePgTextArray", () => {
   });
 });
 
-describe("parseFrequencyTags", () => {
+describe("parseTextArray", () => {
   test("reads the tile's array literal", () => {
-    assert.deepEqual(parseFrequencyTags('{Daily,"Winter break"}'), ["Daily", "Winter break"]);
+    assert.deepEqual(parseTextArray('{Daily,"Winter break"}'), ["Daily", "Winter break"]);
   });
 
   test("takes the API's JSON array as it is, empty tags dropped", () => {
-    assert.deepEqual(parseFrequencyTags(["Daily", "", "Mon, Wed"]), ["Daily", "Mon, Wed"]);
+    assert.deepEqual(parseTextArray(["Daily", "", "Mon, Wed"]), ["Daily", "Mon, Wed"]);
   });
 
   test("nothing at all", () => {
-    assert.deepEqual(parseFrequencyTags(undefined), []);
-    assert.deepEqual(parseFrequencyTags(""), []);
-    assert.deepEqual(parseFrequencyTags('{""}'), []);
+    assert.deepEqual(parseTextArray(undefined), []);
+    assert.deepEqual(parseTextArray(""), []);
+    assert.deepEqual(parseTextArray('{""}'), []);
+  });
+});
+
+describe("routeTitle", () => {
+  const shared = {
+    from_station: "Nagoya",
+    to_station: "Kanayama",
+    name: "Tokaido Main Line",
+    other_names: '{"Chuo Main Line"}',
+  };
+
+  test("names the other lines sharing the route", () => {
+    assert.deepEqual(routeTitle(shared, "japan"), {
+      name: "Tokaido Main Line",
+      alsoOn: "Also Chuo Main Line",
+      endpoints: "Nagoya ⟷ Kanayama",
+    });
+    assert.equal(
+      routeTitle({ ...shared, other_names: ["Chuo Main Line", "Kansai Main Line"] }, "japan")
+        .alsoOn,
+      "Also Chuo Main Line, Kansai Main Line",
+    );
+  });
+
+  test("no other lines without a name to lead", () => {
+    assert.equal(routeTitle({ ...shared, name: " " }, "japan").alsoOn, null);
+    assert.equal(routeTitle(shared, "europe").alsoOn, null);
+    assert.equal(routeTitle({ ...shared, other_names: "{}" }, "japan").alsoOn, null);
   });
 });

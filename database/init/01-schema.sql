@@ -56,6 +56,12 @@ CREATE TABLE railway_parts (
 CREATE TABLE railway_routes (
     track_id SERIAL PRIMARY KEY, -- Auto-generated unique track identifier
     name TEXT, -- Line name, where the region names its lines (Japan). NULL in regions whose routes are identified by their endpoints alone (Europe)
+    -- The other lines this stretch belongs to, where two named lines share one
+    -- route (the Tokaido and Chuo Main Lines between Nagoya and Kanayama). `name`
+    -- stays the line the route is called by; these only make it part of the other
+    -- lines too, for the line search and its highlight. Empty unless `name` is set
+    other_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    CONSTRAINT railway_routes_other_names_need_name CHECK (cardinality(other_names) = 0 OR name IS NOT NULL),
     from_station TEXT NOT NULL, -- Starting station/location
     to_station TEXT NOT NULL, -- Ending station/location
     description TEXT, -- Route description

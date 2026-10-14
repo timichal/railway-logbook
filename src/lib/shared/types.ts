@@ -72,6 +72,11 @@ export type RailwayRoute = {
    * identified by its endpoints alone — see Region.hasRouteNames.
    */
   name?: string | null;
+  /**
+   * The other lines this route is part of, where two named lines share it (the
+   * Tokaido and Chuo Main Lines into Nagoya). Empty unless `name` is set.
+   */
+  other_names?: string[];
   from_station: string;
   to_station: string;
   description: string | null;

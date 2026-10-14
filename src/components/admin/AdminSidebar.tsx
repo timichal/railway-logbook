@@ -5,10 +5,11 @@ import AdminCreateRouteTab, { type EditingGeometry } from "@/components/admin/Ad
 import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
 import AdminScenicTab, { type EditingScenicLine } from "@/components/admin/AdminScenicTab";
+import { NO_ROUTE_SUGGESTIONS } from "@/components/admin/RouteMetadataFields";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import {
   type AdminRouteDetail,
-  getFrequencyTags,
+  getRouteSuggestions,
   type SaveRouteData,
 } from "@/lib/adminRouteActions";
 import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
@@ -98,20 +99,21 @@ export default function AdminSidebar({
 }: AdminSidebarProps) {
   const { showError } = useToast();
   const region = useRegion();
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState(NO_ROUTE_SUGGESTIONS);
 
-  // Load the in-use frequency tags for autocomplete, and keep them fresh after edits.
-  const loadTags = useCallback(async () => {
+  // Load the in-use frequency tags and line names for autocomplete, and keep them
+  // fresh after edits.
+  const loadSuggestions = useCallback(async () => {
     try {
-      setAvailableTags(unwrap(await getFrequencyTags()));
+      setSuggestions(unwrap(await getRouteSuggestions()));
     } catch (error) {
-      console.error("Error loading frequency tags:", error);
+      console.error("Error loading route suggestions:", error);
     }
   }, []);
 
   useEffect(() => {
-    loadTags();
-  }, [loadTags]);
+    loadSuggestions();
+  }, [loadSuggestions]);
 
   // Switching tabs abandons whatever was being picked on the one left behind — the
   // points, a route's geometry edit (it would otherwise keep the routes hidden behind
@@ -182,8 +184,8 @@ export default function AdminSidebar({
             onRoutesChanged={onRoutesChanged}
             onEditGeometry={handleEditGeometry}
             onRouteFocus={onRouteFocus}
-            availableTags={availableTags}
-            onTagsChanged={loadTags}
+            suggestions={suggestions}
+            onSuggestionsChanged={loadSuggestions}
           />
         )}
 
@@ -218,8 +220,8 @@ export default function AdminSidebar({
               });
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
-            availableTags={availableTags}
-            onTagsChanged={loadTags}
+            suggestions={suggestions}
+            onSuggestionsChanged={loadSuggestions}
           />
         )}
 

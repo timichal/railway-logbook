@@ -37,6 +37,11 @@ export interface RouteTitleProperties {
   from_station?: unknown;
   to_station?: unknown;
   name?: unknown;
+  /**
+   * The other lines the route is part of: a Postgres array literal off a tile, a
+   * JSON array from the HTTP API (see `parseTextArray`).
+   */
+  other_names?: unknown;
 }
 
 export interface RouteFeatureProperties extends RouteTitleProperties {
@@ -61,15 +66,21 @@ export interface RouteFeatureProperties extends RouteTitleProperties {
  * say which stretch of it this is. Everywhere else the endpoints are the title. An
  * unnamed route in a naming region falls back to the endpoints rather than showing
  * a blank line, which is why `name` comes back null rather than empty.
+ *
+ * `alsoOn` names the other lines sharing the route ("Also Chuo Main Line"), for the
+ * places that describe one route at length (the popup, the sheet); a row in a list
+ * leaves it out. Null when there are none, and always with a null `name`.
  */
 export function routeTitle(
   properties: RouteTitleProperties,
   regionId: RegionId,
-): { name: string | null; endpoints: string } {
+): { name: string | null; alsoOn: string | null; endpoints: string } {
   const endpoints = `${properties.from_station} ⟷ ${properties.to_station}`;
   const named = REGIONS[regionId].hasRouteNames ? properties.name : null;
   const name = typeof named === "string" && named.trim() ? named : null;
-  return { name, endpoints };
+  const otherNames = name ? parseTextArray(properties.other_names) : [];
+  const alsoOn = otherNames.length > 0 ? `Also ${otherNames.join(", ")}` : null;
+  return { name, alsoOn, endpoints };
 }
 
 /**
@@ -127,13 +138,16 @@ export function parsePgTextArray(literal: string): string[] {
 }
 
 /**
- * A route's frequency tags, from either shape the column arrives in: the tile's
- * Postgres array literal (`parsePgTextArray`), or the JSON array the HTTP API sends
- * (see `RouteFeatureProperties.frequency`), which is already the answer.
+ * A route's `TEXT[]` property (frequency tags, other line names), from either shape
+ * it arrives in: the tile's Postgres array literal (`parsePgTextArray`), or the JSON
+ * array the HTTP API sends (see `RouteFeatureProperties.frequency`), which is
+ * already the answer. Empty and non-string elements are dropped.
  */
-export function parseFrequencyTags(value: string | string[] | undefined): string[] {
-  if (Array.isArray(value)) return value.filter(Boolean);
-  if (!value) return [];
+export function parseTextArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item !== "");
+  }
+  if (typeof value !== "string" || !value) return [];
   return parsePgTextArray(value).filter(Boolean);
 }
 
@@ -166,7 +180,7 @@ export function routeBadges(properties: RouteFeatureProperties, regionId: Region
     ...getUsageBadgeColors(properties.usage_type),
   });
 
-  for (const tag of parseFrequencyTags(properties.frequency)) {
+  for (const tag of parseTextArray(properties.frequency)) {
     badges.push({ label: tag, ...FREQUENCY_BADGE });
   }
 

@@ -73,10 +73,11 @@ const POPUP_DIVIDER =
  * follow underneath — the name is what identifies the route there, and the
  * endpoints only say which stretch of it this is. Everywhere else the endpoints
  * are the title, as they always were. An unnamed route in a naming region falls
- * back to the endpoints rather than showing a blank line.
+ * back to the endpoints rather than showing a blank line. The other lines sharing
+ * the route sit between the two, quieter.
  */
 function formatRouteTitle(properties: FeatureProperties, regionId: RegionId): string {
-  const { name, endpoints } = routeTitle(properties as RouteTitleProperties, regionId);
+  const { name, alsoOn, endpoints } = routeTitle(properties as RouteTitleProperties, regionId);
   const escapedEndpoints = escapeHtml(endpoints);
 
   // Margins are set inline on both branches: `.railway-popup h3` in globals.css
@@ -87,6 +88,9 @@ function formatRouteTitle(properties: FeatureProperties, regionId: RegionId): st
 
   return (
     `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0; color: var(--color-fg);">${escapeHtml(name)}</h3>` +
+    (alsoOn
+      ? `<div style="margin: 0; font-size: 0.85em; color: var(--color-gray-500);">${escapeHtml(alsoOn)}</div>`
+      : "") +
     `<div style="margin: 0 0 6px; color: var(--color-fg);">${escapedEndpoints}</div>`
   );
 }

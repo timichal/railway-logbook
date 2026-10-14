@@ -10,6 +10,7 @@
 
 import { boundsSql } from "./coordinateUtils";
 import pool, { escapeLikePattern } from "./db";
+import { onLineSql, routeLinesSql } from "./lineMembership";
 import { MIN_SEARCH_QUERY_LENGTH, type UsageType } from "./shared/constants";
 import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
 import type {
@@ -81,7 +82,8 @@ export async function searchStationsByName(
  * Line name search for the map search box, in a region that names its lines
  * (`hasRouteNames`); nothing elsewhere, where `name` is never set. The routes
  * sharing a name come back as one line, boxed round all of them, so picking it
- * shows the whole line. Every usage type: a line is a place to look at, whichever
+ * shows the whole line. A route is on a line whether the line is its `name` or
+ * one of its `other_names` (a stretch two lines share). Every usage type: a line is a place to look at, whichever
  * layers happen to be on. Matched as station names are — diacritic-insensitive,
  * start matches first. Unindexed, which a region's few thousand routes do not need.
  *
@@ -108,14 +110,15 @@ async function searchLinesByName(
   }>(
     `
     WITH matched AS (
-      SELECT name,
-             CASE WHEN immutable_unaccent(name) ILIKE immutable_unaccent($2) THEN 0 ELSE 1 END AS rank
-      FROM railway_routes
-      WHERE name IS NOT NULL
-        AND ${regionContainsSql(region, "starting_coordinate")}
-        AND immutable_unaccent(name) ILIKE immutable_unaccent($1)
-      GROUP BY name
-      ORDER BY rank, name
+      SELECT line.name,
+             CASE WHEN immutable_unaccent(line.name) ILIKE immutable_unaccent($2) THEN 0 ELSE 1 END AS rank
+      FROM railway_routes rr
+      CROSS JOIN LATERAL ${routeLinesSql("rr")} AS line(name)
+      WHERE line.name IS NOT NULL
+        AND ${regionContainsSql(region, "rr.starting_coordinate")}
+        AND immutable_unaccent(line.name) ILIKE immutable_unaccent($1)
+      GROUP BY line.name
+      ORDER BY rank, line.name
       LIMIT 5
     )
     SELECT name, route_count, usage_types, ${boundsSql("box")} AS bounds
@@ -124,7 +127,7 @@ async function searchLinesByName(
              array_agg(DISTINCT rr.usage_type ORDER BY rr.usage_type) AS usage_types,
              ST_Extent(rr.geometry) AS box
       FROM matched m
-      JOIN railway_routes rr ON rr.name = m.name
+      JOIN railway_routes rr ON ${onLineSql("rr", "m.name")}
       WHERE ${regionContainsSql(region, "rr.starting_coordinate")}
       GROUP BY m.name, m.rank
     ) lines
@@ -143,8 +146,8 @@ async function searchLinesByName(
 }
 
 /**
- * A searched line's geometry, for its highlight band on the map: the routes carrying
- * the name merged into as few lines as they make, one entry per usage type among
+ * A searched line's geometry, for its highlight band on the map: the routes on the
+ * line (by `name` or `other_names`) merged into as few lines as they make, one entry per usage type among
  * them (so the map can leave out what its layer switches hide).
  *
  * Merged because the band is translucent, and MapLibre blends wherever a layer's
@@ -173,8 +176,8 @@ export async function lineGeometryByName(name: string, region: RegionId): Promis
     `
     WITH routes AS (
       SELECT track_id, usage_type, geometry_3857 AS geom
-      FROM railway_routes
-      WHERE name = $1
+      FROM railway_routes rr
+      WHERE ${onLineSql("rr", "$1")}
         AND geometry_3857 IS NOT NULL
         AND ${regionContainsSql(region, "starting_coordinate")}
     ),
@@ -320,6 +323,7 @@ export async function routeMetadataByIds(trackIds: number[]): Promise<RailwayRou
     SELECT
       track_id,
       name,
+      other_names,
       from_station,
       to_station,
       description,

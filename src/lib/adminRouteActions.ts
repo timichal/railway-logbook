@@ -2,13 +2,14 @@
 
 import type { PoolClient } from "pg";
 import type { ActionResult } from "./actionResult";
-import { requiredStations } from "./adminValidation";
+import { requiredStations, routeLineNames } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { countryAt } from "./countryUtils";
 import pool, { withTransaction } from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
+import { routeLinesSql } from "./lineMembership";
 import type { LineClass, UsageType } from "./shared/constants";
 import { type RegionId, regionContainsSql } from "./shared/regions";
 import { MAX_TOLERANCE_FRACTION, UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
@@ -26,6 +27,8 @@ import { getStationsNearRoute, refreshStationProximityFor } from "./stationProxi
 export interface SaveRouteData {
   /** Line name, required in regions that name their lines; "" elsewhere. */
   name: string;
+  /** The other lines sharing the route (see railway_routes.other_names). */
+  other_names: string[];
   from_station: string;
   to_station: string;
   description: string;
@@ -40,6 +43,8 @@ export type AdminRouteSummary = {
   track_id: number;
   /** Line name where the region names its lines, NULL elsewhere. */
   name: string | null;
+  /** The other lines sharing the route; empty unless `name` is set. */
+  other_names: string[];
   from_station: string;
   to_station: string;
   description: string | null;
@@ -83,7 +88,7 @@ export async function getAllRailwayRoutes(
 ): Promise<ActionResult<AdminRouteSummary[]>> {
   return asAdmin(async () => {
     const result = await pool.query<AdminRouteSummary>(`
-    SELECT track_id, name, from_station, to_station, description, usage_type, line_class,
+    SELECT track_id, name, other_names, from_station, to_station, description, usage_type, line_class,
            is_valid, error_message, under_repair, intended_backtracking, has_backtracking
     FROM railway_routes
     WHERE ${regionContainsSql(region, "starting_coordinate")}
@@ -110,22 +115,39 @@ export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionRes
   });
 }
 
+/** What the route editor's tag inputs suggest: values already in use on some route. */
+export type RouteSuggestions = {
+  /** The frequency tags. */
+  tags: string[];
+  /** Every line name, a route's own or one it shares, for the Other lines field. */
+  lineNames: string[];
+};
+
 /**
- * Get the distinct set of frequency tags currently in use across all routes.
- * Tags have no separate table: a tag exists exactly as long as some route
- * references it, so dropping the last usage of a tag removes it implicitly.
- * Used to power the tag-label autocomplete in the route editor.
+ * The frequency tags and line names currently in use across all routes. Neither
+ * has a table of its own: one exists exactly as long as some route carries it, so
+ * dropping the last use removes it implicitly. Not per region — names are only
+ * ever set where the region names its lines.
  */
-export async function getFrequencyTags(): Promise<ActionResult<string[]>> {
+export async function getRouteSuggestions(): Promise<ActionResult<RouteSuggestions>> {
   return asAdmin(async () => {
-    const result = await pool.query<{ tag: string }>(`
-    SELECT DISTINCT tag
-    FROM railway_routes, unnest(frequency) AS tag
-    WHERE tag IS NOT NULL AND tag <> ''
-    ORDER BY tag
+    const result = await pool.query<RouteSuggestions>(`
+    SELECT
+      ARRAY(
+        SELECT DISTINCT tag
+        FROM railway_routes, unnest(frequency) AS tag
+        WHERE tag IS NOT NULL AND tag <> ''
+        ORDER BY tag
+      ) AS tags,
+      ARRAY(
+        SELECT DISTINCT line_name
+        FROM railway_routes rr, ${routeLinesSql("rr")} AS line_name
+        WHERE line_name IS NOT NULL AND line_name <> ''
+        ORDER BY line_name
+      ) AS "lineNames"
   `);
 
-    return result.rows.map((row) => row.tag);
+    return result.rows[0];
   });
 }
 
@@ -134,7 +156,7 @@ export async function getRailwayRoute(trackId: number): Promise<ActionResult<Adm
   return asAdmin(async () => {
     const result = await pool.query<AdminRouteDetail>(
       `
-    SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, line_class,
+    SELECT track_id, name, other_names, from_station, to_station, description, usage_type, frequency, link, line_class,
            ${boundsSql("geometry")} as bounds, length_km,
            ${lngLatSql("starting_coordinate")} as starting_coordinate,
            ${lngLatSql("ending_coordinate")} as ending_coordinate,
@@ -395,14 +417,16 @@ export async function saveRailwayRoute(
           routeData.to_station,
           "A route",
         );
+        // The name is required where the region names its lines, but only the form checks it
+        const { name, otherNames } = routeLineNames(routeData.name, routeData.other_names);
         queryStr = `
         INSERT INTO railway_routes (
-          name, from_station, to_station, description, usage_type, frequency, link,
+          name, other_names, from_station, to_station, description, usage_type, frequency, link,
           geometry, length_km, start_country, end_country,
           starting_coordinate, ending_coordinate,
           is_valid, intended_backtracking, has_backtracking
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7,
+          $1, $15, $2, $3, $4, $5, $6, $7,
           ST_GeomFromText($8, 4326), ${lineLengthKmSql("$8")}, $9, $10,
           ST_GeomFromText($11, 4326), ST_GeomFromText($12, 4326),
           TRUE, $13, $14
@@ -411,8 +435,7 @@ export async function saveRailwayRoute(
       `;
 
         values = [
-          // Required where the region names its lines, but only the form checks it
-          routeData.name.trim() || null,
+          name,
           from,
           to,
           routeData.description || null,
@@ -426,6 +449,7 @@ export async function saveRailwayRoute(
           endPointWKT,
           routeData.intended_backtracking,
           hasBacktracking,
+          otherNames,
         ];
       }
 
@@ -499,6 +523,7 @@ export async function saveRailwayRoute(
 export async function updateRailwayRoute(
   trackId: number,
   name: string | null,
+  otherNames: string[],
   fromStation: string,
   toStation: string,
   description: string | null,
@@ -510,16 +535,17 @@ export async function updateRailwayRoute(
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
     const { from, to } = requiredStations(fromStation, toStation, "A route");
+    const lineNames = routeLineNames(name, otherNames);
     const result = await pool.query(
       `
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
-        link = $8, line_class = $9, intended_backtracking = $10
+        link = $8, line_class = $9, intended_backtracking = $10, other_names = $11
     WHERE track_id = $1
   `,
       [
         trackId,
-        name,
+        lineNames.name,
         from,
         to,
         description,
@@ -528,6 +554,7 @@ export async function updateRailwayRoute(
         link,
         lineClass,
         intendedBacktracking,
+        lineNames.otherNames,
       ],
     );
 
@@ -600,13 +627,13 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
       const insertRoute = await client.query(
         `
       INSERT INTO railway_routes (
-        name, from_station, to_station, description, usage_type, frequency, link,
+        name, other_names, from_station, to_station, description, usage_type, frequency, link,
         line_class, geometry, length_km, start_country, end_country,
         starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       )
       SELECT
-        name, from_station || ' [duplicate]', to_station || ' [duplicate]', description,
+        name, other_names, from_station || ' [duplicate]', to_station || ' [duplicate]', description,
         usage_type, frequency, link, line_class, geometry, length_km,
         start_country, end_country, starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Icon from "@/components/ui/Icon";
+import { foldForSearch } from "@/lib/searchText";
 import { optionRow } from "@/lib/ui/buttonStyles";
 
 interface TagInputProps {
@@ -10,6 +11,11 @@ interface TagInputProps {
   onChange: (tags: string[]) => void;
   /** All tags already in use elsewhere, used for autocomplete suggestions. */
   availableTags?: string[];
+  /**
+   * Values that may not be added, compared as the chips are: neither suggested nor
+   * created (a route's own line name, in the field for its other lines).
+   */
+  exclude?: string[];
   placeholder?: string;
 }
 
@@ -23,6 +29,7 @@ export default function TagInput({
   value,
   onChange,
   availableTags = [],
+  exclude = [],
   placeholder = "Search or create a tag…",
 }: TagInputProps) {
   const [input, setInput] = useState("");
@@ -30,36 +37,43 @@ export default function TagInput({
   const [highlight, setHighlight] = useState(0);
 
   const query = input.trim();
+  const foldedQuery = foldForSearch(query);
 
-  const suggestions = useMemo(() => {
-    const lower = query.toLowerCase();
-    return availableTags
-      .filter((tag) => !value.some((v) => v.toLowerCase() === tag.toLowerCase()))
-      .filter((tag) => tag.toLowerCase().includes(lower))
-      .sort((a, b) => a.localeCompare(b));
-  }, [availableTags, value, query]);
+  // Matched case- and diacritic-insensitively, as the map's search box is: "chuo"
+  // finds "Chūō". The same folding decides what counts as a tag already there, so
+  // "Chuo Main Line" is never created beside "Chūō Main Line". Each suggestion is
+  // folded (and sorted) once per list, not on every keystroke.
+  const foldedTags = useMemo(
+    () =>
+      availableTags
+        .map((tag) => ({ tag, folded: foldForSearch(tag) }))
+        .sort((a, b) => a.tag.localeCompare(b.tag)),
+    [availableTags],
+  );
+  const taken = new Set([...value, ...exclude].map(foldForSearch));
+
+  const suggestions = foldedTags
+    .filter(({ folded }) => !taken.has(folded) && folded.includes(foldedQuery))
+    .map(({ tag }) => tag);
 
   const exactExists =
     query.length > 0 &&
-    [...value, ...availableTags].some((tag) => tag.toLowerCase() === query.toLowerCase());
+    (taken.has(foldedQuery) || foldedTags.some(({ folded }) => folded === foldedQuery));
   const canCreate = query.length > 0 && !exactExists;
 
   // Flat option list: existing matches first, then an optional "create" row.
-  const options = useMemo(() => {
-    const opts: Array<{ type: "existing" | "create"; value: string }> = suggestions.map((tag) => ({
-      type: "existing",
-      value: tag,
-    }));
-    if (canCreate) opts.push({ type: "create", value: query });
-    return opts;
-  }, [suggestions, canCreate, query]);
+  const options: Array<{ type: "existing" | "create"; value: string }> = suggestions.map((tag) => ({
+    type: "existing",
+    value: tag,
+  }));
+  if (canCreate) options.push({ type: "create", value: query });
 
   const safeHighlight = options.length === 0 ? 0 : Math.min(highlight, options.length - 1);
 
   const addTag = (tag: string) => {
     const trimmed = tag.trim();
     if (!trimmed) return;
-    if (!value.some((v) => v.toLowerCase() === trimmed.toLowerCase())) {
+    if (!taken.has(foldForSearch(trimmed))) {
       onChange([...value, trimmed]);
     }
     setInput("");

@@ -209,6 +209,9 @@ RETURNS bytea AS $$
         SELECT
             rr.track_id,
             rr.name,
+            -- The other lines the route is part of; a TEXT[], so it reaches the
+            -- client as an array literal (parsePgTextArray)
+            rr.other_names,
             rr.from_station,
             rr.to_station,
             rr.description,

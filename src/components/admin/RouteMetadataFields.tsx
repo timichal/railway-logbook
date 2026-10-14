@@ -2,7 +2,7 @@
 
 import TextField, { INPUT, LABEL } from "@/components/admin/TextField";
 import TagInput from "@/components/ui/TagInput";
-import type { SaveRouteData } from "@/lib/adminRouteActions";
+import type { RouteSuggestions, SaveRouteData } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
 import { type LineClass, lineClassOptions, type UsageType } from "@/lib/shared/constants";
 import { regionUsageOptions } from "@/lib/shared/regions";
@@ -12,6 +12,9 @@ import { regionUsageOptions } from "@/lib/shared/regions";
  * new route is given by auto-classification on save rather than by the admin.
  */
 export type EditRouteData = SaveRouteData & { line_class: LineClass };
+
+/** The suggestions before they have loaded (see `getRouteSuggestions`). */
+export const NO_ROUTE_SUGGESTIONS: RouteSuggestions = { tags: [], lineNames: [] };
 
 /**
  * Whether a form's required fields are filled — the endpoints, and the name where
@@ -35,7 +38,7 @@ interface CommonProps {
    * stacks them for the edit form's 250px column.
    */
   layout: "wide" | "narrow";
-  availableTags: string[];
+  suggestions: RouteSuggestions;
 }
 
 /**
@@ -51,7 +54,7 @@ type RouteMetadataFieldsProps = CommonProps &
 
 /** The route metadata fields shared by the create and edit forms. */
 export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
-  const { value, idPrefix, layout, availableTags } = props;
+  const { value, idPrefix, layout, suggestions } = props;
   const region = useRegion();
   // Japan calls its usage types JR / non-JR lines; Europe keeps the defaults.
   const usageOptions = regionUsageOptions(region.id);
@@ -97,15 +100,28 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
 
   return (
     <>
-      {/* Line Name — only where the region names its lines (Japan) */}
+      {/* Line Name — only where the region names its lines (Japan). Also part of:
+          the other lines sharing this stretch, whose line search then includes it. */}
       {region.hasRouteNames && (
-        <TextField
-          id={`${idPrefix}-name`}
-          label="Name *"
-          value={value.name}
-          onChange={(name) => set({ name })}
-          placeholder="Line name"
-        />
+        <>
+          <TextField
+            id={`${idPrefix}-name`}
+            label="Name *"
+            value={value.name}
+            onChange={(name) => set({ name })}
+            placeholder="Line name"
+          />
+          <div>
+            <span className={GROUP_LABEL}>Also part of</span>
+            <TagInput
+              value={value.other_names}
+              availableTags={suggestions.lineNames}
+              exclude={[value.name]}
+              onChange={(other_names) => set({ other_names })}
+              placeholder="Add a line…"
+            />
+          </div>
+        </>
       )}
       <TextField
         id={`${idPrefix}-from`}
@@ -170,12 +186,11 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
         <span className={GROUP_LABEL}>Frequency Tags</span>
         <TagInput
           value={value.frequency}
-          availableTags={availableTags}
+          availableTags={suggestions.tags}
           onChange={(frequency) => set({ frequency })}
         />
       </div>
 
-      <span className={GROUP_LABEL}>Other</span>
       {narrow ? (
         <>
           {lineClassSelect}

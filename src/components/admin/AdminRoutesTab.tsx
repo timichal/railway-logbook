@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import RouteEditForm from "@/components/admin/RouteEditForm";
-import type { EditRouteData } from "@/components/admin/RouteMetadataFields";
+import { type EditRouteData, NO_ROUTE_SUGGESTIONS } from "@/components/admin/RouteMetadataFields";
 import RoutesList from "@/components/admin/RoutesList";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import {
@@ -11,10 +11,12 @@ import {
   deleteRailwayRoute,
   duplicateRailwayRoute,
   getAllRailwayRoutes,
+  type RouteSuggestions,
   setRouteUnderRepair,
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
+import { foldForSearch } from "@/lib/searchText";
 import type { Region } from "@/lib/shared/regions";
 import type { RouteBounds } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
@@ -66,6 +68,7 @@ const ROUTE_FILTERS: RouteFilter[] = [
 function editFormFromRoute(route: AdminRouteDetail): EditRouteData {
   return {
     name: route.name || "",
+    other_names: route.other_names,
     from_station: route.from_station,
     to_station: route.to_station,
     description: route.description || "",
@@ -91,8 +94,8 @@ interface AdminRoutesTabProps {
   onRoutesChanged: () => void;
   onEditGeometry: (route: AdminRouteDetail) => void;
   onRouteFocus: (bounds: RouteBounds) => void;
-  availableTags?: string[];
-  onTagsChanged?: () => void;
+  suggestions?: RouteSuggestions;
+  onSuggestionsChanged?: () => void;
 }
 
 export default function AdminRoutesTab({
@@ -105,8 +108,8 @@ export default function AdminRoutesTab({
   onRoutesChanged,
   onEditGeometry,
   onRouteFocus,
-  availableTags = [],
-  onTagsChanged,
+  suggestions = NO_ROUTE_SUGGESTIONS,
+  onSuggestionsChanged,
 }: AdminRoutesTabProps) {
   const region = useRegion();
   const regionId = region.id;
@@ -182,6 +185,22 @@ export default function AdminRoutesTab({
     });
   }, [routes, hasRouteNames]);
 
+  // What the search box matches a route by — its endpoints, and its line names where
+  // the region names lines — folded once per load rather than on every keystroke.
+  // Diacritic-insensitive, as the map's search box is ("chuo" finds "Chūō").
+  const searchKeys = useMemo(() => {
+    const keys = new Map<number, string[]>();
+    for (const route of routes) {
+      const texts = [route.from_station, route.to_station];
+      if (hasRouteNames) {
+        if (route.name) texts.push(route.name);
+        texts.push(...route.other_names);
+      }
+      keys.set(route.track_id, texts.map(foldForSearch));
+    }
+    return keys;
+  }, [routes, hasRouteNames]);
+
   const filteredRoutes = useMemo(() => {
     const groups = new Map<string, RouteFilter["predicate"][]>();
     for (const filter of ROUTE_FILTERS) {
@@ -195,17 +214,14 @@ export default function AdminRoutesTab({
     );
 
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((route) => {
-        const fromMatch = route.from_station.toLowerCase().includes(query);
-        const toMatch = route.to_station.toLowerCase().includes(query);
-        const nameMatch = hasRouteNames && !!route.name?.toLowerCase().includes(query);
-        return fromMatch || toMatch || nameMatch;
-      });
+      const query = foldForSearch(searchQuery.trim());
+      filtered = filtered.filter((route) =>
+        searchKeys.get(route.track_id)?.some((key) => key.includes(query)),
+      );
     }
 
     return filtered;
-  }, [orderedRoutes, hasRouteNames, searchQuery, checkedFilters]);
+  }, [orderedRoutes, searchKeys, searchQuery, checkedFilters]);
 
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   const paginatedRoutes = useMemo(() => {
@@ -256,6 +272,7 @@ export default function AdminRoutesTab({
         await updateRailwayRoute(
           trackId,
           editForm.name.trim() || null,
+          editForm.other_names,
           editForm.from_station.trim(),
           editForm.to_station.trim(),
           editForm.description || null,
@@ -275,8 +292,8 @@ export default function AdminRoutesTab({
 
     // The save stands from here on, whatever happens to the reads below.
     onRoutesChanged();
-    // Editing a route may add new tags or drop the last use of an existing one.
-    onTagsChanged?.();
+    // Editing a route may add new tags or names, or drop the last use of one.
+    onSuggestionsChanged?.();
     showSuccess("Route updated successfully!");
 
     // Re-read the route rather than merging the form into it, so the detail shows
@@ -339,8 +356,8 @@ export default function AdminRoutesTab({
       onRouteSelect?.(null);
       onRoutesChanged();
 
-      // Deleting a route may have removed the last use of a tag.
-      onTagsChanged?.();
+      // Deleting a route may have removed the last use of a tag or name.
+      onSuggestionsChanged?.();
 
       showSuccess(
         `Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" has been deleted successfully.`,
@@ -422,7 +439,7 @@ export default function AdminRoutesTab({
           editForm={editForm}
           // With no route loaded the form has no buttons, and only that load matters
           isLoading={selectedRoute ? isLoading : selectedRouteLoading}
-          availableTags={availableTags}
+          suggestions={suggestions}
           onEditFormChange={setEditForm}
           onSave={handleSaveRoute}
           onDelete={handleDeleteRoute}

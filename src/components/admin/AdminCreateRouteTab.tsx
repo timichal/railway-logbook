@@ -3,11 +3,13 @@
 import { useState } from "react";
 import PickedPointField from "@/components/admin/PickedPointField";
 import RouteMetadataFields, {
+  NO_ROUTE_SUGGESTIONS,
   routeMetadataIncomplete,
 } from "@/components/admin/RouteMetadataFields";
 import { unwrap } from "@/lib/actionResult";
 import {
   type AdminRouteDetail,
+  type RouteSuggestions,
   type SaveRouteData,
   saveRailwayRoute,
 } from "@/lib/adminRouteActions";
@@ -22,6 +24,7 @@ export type EditingGeometry = Pick<AdminRouteDetail, "track_id" | "from_station"
 
 const EMPTY_FORM: SaveRouteData = {
   name: "",
+  other_names: [],
   from_station: "",
   to_station: "",
   description: "",
@@ -53,8 +56,8 @@ interface AdminCreateRouteTabProps {
   /** Called with the saved path once a new geometry is saved; the sidebar ends the edit and clears the form. */
   onGeometryEditComplete?: (saved: PathPreview) => void;
   onCancelGeometryEdit?: () => void;
-  availableTags?: string[];
-  onTagsChanged?: () => void;
+  suggestions?: RouteSuggestions;
+  onSuggestionsChanged?: () => void;
 }
 
 export default function AdminCreateRouteTab({
@@ -65,8 +68,8 @@ export default function AdminCreateRouteTab({
   editingGeometry,
   onGeometryEditComplete,
   onCancelGeometryEdit,
-  availableTags = [],
-  onTagsChanged,
+  suggestions = NO_ROUTE_SUGGESTIONS,
+  onSuggestionsChanged,
 }: AdminCreateRouteTabProps) {
   const { showSuccess } = useToast();
   const region = useRegion();
@@ -86,8 +89,8 @@ export default function AdminCreateRouteTab({
       });
       setCreateForm(EMPTY_FORM);
 
-      // A newly created route may introduce new tags; refresh the suggestion set.
-      onTagsChanged?.();
+      // A newly created route may introduce new tags or names; refresh the suggestions.
+      onSuggestionsChanged?.();
     });
   };
 
@@ -151,7 +154,7 @@ export default function AdminCreateRouteTab({
             onChange={setCreateForm}
             idPrefix="route"
             layout="wide"
-            availableTags={availableTags}
+            suggestions={suggestions}
           />
         )}
 
