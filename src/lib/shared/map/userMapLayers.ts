@@ -5,13 +5,12 @@ import type { LayerPrefs } from "./layerPrefs";
 import {
   createPublicNotesLayer,
   createRailwayRoutesClickLayer,
-  createRailwayRoutesHeritageLayer,
-  createRailwayRoutesLayer,
-  createRailwayRoutesSpecialLayer,
+  createRouteLineLayer,
   createScenicLinesLayer,
   createStationLabelsLayer,
   createStationsLayer,
   type RailwayRoutesPaintConfig,
+  type RouteClickLayerConfig,
   usageTypeFilter,
 } from "./layers";
 import {
@@ -31,37 +30,31 @@ import {
  * nothing but the scheme.
  */
 
-// Default to Regular-only (usage_type=0); the "Show heritage lines" and "Show
-// special services" toggles (useLayerFilters) reveal Heritage / Special.
-export const REGULAR_ONLY_FILTER: ["==", ["get", string], number] = [
-  "==",
-  ["get", "usage_type"],
-  0,
-];
-
 interface UserRouteLayerConfigs {
   /** The solid Regular line. */
   route: RailwayRoutesPaintConfig;
   /**
    * Dashed Special / dotted Heritage: same visit-status colours as the solid line,
    * rendered dashed / dotted. Their usage_type filter and hidden-by-default
-   * visibility are baked into the factories; useLayerFilters toggles visibility.
+   * visibility are baked into the factory; useLayerFilters toggles visibility.
    */
   special: RailwayRoutesPaintConfig;
   heritage: RailwayRoutesPaintConfig;
-  clickBuffer: RailwayRoutesPaintConfig;
+  clickBuffer: RouteClickLayerConfig;
 }
 
 export function userRouteLayerConfigs(theme: ResolvedTheme): UserRouteLayerConfigs {
   const colorExpression = getUserRouteColorExpression(theme);
   const widthExpression = getUserRouteWidthExpression();
   return {
-    route: { colorExpression, widthExpression, filter: REGULAR_ONLY_FILTER },
+    route: { colorExpression, widthExpression },
     special: { colorExpression, widthExpression },
     heritage: { colorExpression, widthExpression: getUserRouteHeritageWidthExpression() },
+    // Regular only, as the lines start out; useLayerFilters widens it as the
+    // switches reveal Heritage and Special
     clickBuffer: {
       widthExpression: getUserRouteClickBufferWidthExpression(),
-      filter: REGULAR_ONLY_FILTER,
+      filter: clickBufferFilter([0]),
     },
   };
 }
@@ -131,9 +124,9 @@ export function createUserMapLayers(theme: ResolvedTheme = "light"): LayerSpecif
     // Under everything: a band the route lines are drawn over. Hidden until the
     // "Scenic lines" toggle shows it (useLayerFilters).
     createScenicLinesLayer(),
-    createRailwayRoutesLayer(configs.route),
-    createRailwayRoutesHeritageLayer(configs.heritage),
-    createRailwayRoutesSpecialLayer(configs.special),
+    createRouteLineLayer(0, configs.route),
+    createRouteLineLayer(1, configs.heritage),
+    createRouteLineLayer(2, configs.special),
     createRailwayRoutesClickLayer(configs.clickBuffer),
     createStationsLayer(theme),
     createStationLabelsLayer(theme),

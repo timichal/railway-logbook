@@ -15,7 +15,7 @@
  * - **A toggle is a mounted child, not a `visibility` property.** The specs come out
  *   of the factories with `visibility: "none"` for the three optional layers, since
  *   that is what the web app's imperative toggles expect; here the layer is simply
- *   not rendered when it is off, and rendered `visible` when it is on.
+ *   not rendered when it is off, and built with `visible: true` when it is on.
  * - **`initialViewState` is initial and nothing else** — it cannot move the camera
  *   later, and remounting the `<Camera>` does not reset it. So the saved position is
  *   read *before* the map mounts, and a region switch moves the camera through
@@ -36,7 +36,6 @@ import {
   Camera,
   type CameraRef,
   Layer,
-  type LineLayerSpecification,
   Map as MapLibreMap,
   type PressEventWithFeatures,
   VectorSource,
@@ -45,9 +44,7 @@ import {
 import { HIGHLIGHT_COLORS } from "@shared/map/highlightLayers";
 import {
   createPublicNotesLayer,
-  createRailwayRoutesHeritageLayer,
-  createRailwayRoutesLayer,
-  createRailwayRoutesSpecialLayer,
+  createRouteLineLayer,
   createScenicLinesLayer,
   createStationLabelsLayer,
   createStationsLayer,
@@ -118,9 +115,9 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   const routeLayers = useMemo(() => {
     const configs = userRouteLayerConfigs(theme);
     return {
-      route: createRailwayRoutesLayer(configs.route),
-      heritage: shown(createRailwayRoutesHeritageLayer(configs.heritage)),
-      special: shown(createRailwayRoutesSpecialLayer(configs.special)),
+      route: createRouteLineLayer(0, configs.route),
+      heritage: createRouteLineLayer(1, { ...configs.heritage, visible: true }),
+      special: createRouteLineLayer(2, { ...configs.special, visible: true }),
     };
   }, [theme]);
   const { regionId } = useRegion();
@@ -369,15 +366,6 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
       ) : null}
     </View>
   );
-}
-
-/**
- * The three optional layers come out of the shared factories hidden, because that is
- * the state the web app's imperative toggles start them in. Here they are mounted
- * only when they are wanted, so the one thing to undo is that default.
- */
-function shown(layer: LineLayerSpecification): LineLayerSpecification {
-  return { ...layer, layout: { ...layer.layout, visibility: "visible" } };
 }
 
 /**

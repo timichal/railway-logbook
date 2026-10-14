@@ -40,6 +40,18 @@ export interface RailwayRoutesPaintConfig {
   opacityExpression?: ExpressionSpecification;
   defaultWidth?: number;
   defaultOpacity?: number;
+}
+
+export interface RouteLineConfig extends RailwayRoutesPaintConfig {
+  /**
+   * Shown from the start. Defaults to Regular only: the user map's switches reveal
+   * Heritage and Special later (useLayerFilters); the maps that show them from the
+   * start say so.
+   */
+  visible?: boolean;
+}
+
+export interface RouteClickLayerConfig extends RailwayRoutesPaintConfig {
   filter?: FilterSpecification | null;
 }
 
@@ -71,40 +83,57 @@ export function lineClassColorExpression(colors: {
 // LAYER CONFIGURATION FACTORIES
 // ============================================================================
 
-export function createRailwayRoutesLayer(
-  config: RailwayRoutesPaintConfig = {},
+/**
+ * How each usage type's route line is drawn. Each type is its own layer, drawing
+ * that type alone, because line-dasharray can't be data-driven — and a solid line
+ * under the dashed or dotted ones would fill their gaps. Heritage's zero-length
+ * dashes need a round cap, or they render as nothing.
+ */
+const ROUTE_LINES: Record<
+  UsageType,
+  { id: string; dash?: readonly [number, number]; roundCap?: boolean }
+> = {
+  0: { id: "railway_routes" },
+  1: { id: "railway_routes_heritage", dash: DASHES.heritage, roundCap: true },
+  2: { id: "railway_routes_special", dash: DASHES.special },
+};
+
+/**
+ * The route line of one usage type: Regular solid, Heritage dotted, Special dashed.
+ * All three share the route source, so feature-state visit colours apply alike.
+ */
+export function createRouteLineLayer(
+  usageType: UsageType,
+  config: RouteLineConfig = {},
 ): LineLayerSpecification {
+  const { id, dash, roundCap } = ROUTE_LINES[usageType];
   const {
     colorExpression,
     widthExpression,
     opacityExpression,
     defaultWidth = WIDTHS.fallback.route,
     defaultOpacity = OPACITIES.defaultRoute,
-    filter,
+    visible = usageType === 0,
   } = config;
 
-  const layer: LineLayerSpecification = {
-    id: "railway_routes",
+  return {
+    id,
     type: "line",
     source: "railway_routes",
     "source-layer": "railway_routes",
     minzoom: ZOOM_RANGES.railwayRoutes.min,
     layout: {
-      visibility: "visible",
+      visibility: visible ? "visible" : "none",
+      ...(roundCap ? { "line-cap": "round" as const } : {}),
     },
     paint: {
       "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.unvisited),
       "line-width": widthExpression || defaultWidth,
       "line-opacity": opacityExpression || defaultOpacity,
+      ...(dash ? { "line-dasharray": [...dash] } : {}),
     },
+    filter: usageTypeFilter([usageType]),
   };
-
-  // Add filter if provided
-  if (filter !== undefined) {
-    layer.filter = filter as FilterSpecification;
-  }
-
-  return layer;
 }
 
 /**
@@ -117,7 +146,7 @@ export function createRailwayRoutesLayer(
  * without a layer to pay for.
  */
 export function createRailwayRoutesClickLayer(
-  config: RailwayRoutesPaintConfig = {},
+  config: RouteClickLayerConfig = {},
 ): LineLayerSpecification {
   const { widthExpression, defaultWidth = WIDTHS.fallback.clickBuffer, filter } = config;
 
@@ -140,84 +169,6 @@ export function createRailwayRoutesClickLayer(
   }
 
   return layer;
-}
-
-/**
- * Dashed line layer for Special routes (usage_type=2). Drawn as its own layer
- * because line-dasharray can't be data-driven, and because the solid base
- * railway_routes layer must NOT also draw these (a solid line under the dashes
- * would fill the gaps). Hidden by default; revealed by the "Show special services"
- * toggle (useLayerFilters). Shares the route source so feature-state visit
- * colors apply identically.
- */
-export function createRailwayRoutesSpecialLayer(
-  config: RailwayRoutesPaintConfig = {},
-): LineLayerSpecification {
-  const {
-    colorExpression,
-    widthExpression,
-    opacityExpression,
-    defaultWidth = WIDTHS.fallback.route,
-    defaultOpacity = OPACITIES.defaultRoute,
-  } = config;
-
-  return {
-    id: "railway_routes_special",
-    type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: {
-      visibility: "none", // controlled by "Show special services" checkbox
-    },
-    paint: {
-      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.unvisited),
-      "line-width": widthExpression || defaultWidth,
-      "line-opacity": opacityExpression || defaultOpacity,
-      "line-dasharray": [...DASHES.special],
-    },
-    filter: ["==", ["get", "usage_type"], 2] as FilterSpecification,
-  };
-}
-
-/**
- * Dotted line layer for Heritage routes (usage_type=1). Like the Special layer,
- * it must be its own layer because line-dasharray can't be data-driven, and a
- * solid base railway_routes line underneath would fill the dot gaps. Drawn with
- * round line-caps so the zero-length dashes render as dots. Hidden by default on
- * the user map (revealed by the "Show heritage & tourist lines" toggle, useLayerFilters);
- * the admin map makes it visible. Shares the route source so feature-state visit
- * colors apply identically.
- */
-export function createRailwayRoutesHeritageLayer(
-  config: RailwayRoutesPaintConfig = {},
-): LineLayerSpecification {
-  const {
-    colorExpression,
-    widthExpression,
-    opacityExpression,
-    defaultWidth = WIDTHS.fallback.route,
-    defaultOpacity = OPACITIES.defaultRoute,
-  } = config;
-
-  return {
-    id: "railway_routes_heritage",
-    type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: {
-      visibility: "none", // controlled by "Show heritage & tourist lines" checkbox (user map)
-      "line-cap": "round", // makes the zero-length dashes render as dots
-    },
-    paint: {
-      "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.unvisited),
-      "line-width": widthExpression || defaultWidth,
-      "line-opacity": opacityExpression || defaultOpacity,
-      "line-dasharray": [...DASHES.heritage],
-    },
-    filter: ["==", ["get", "usage_type"], 1] as FilterSpecification,
-  };
 }
 
 /**

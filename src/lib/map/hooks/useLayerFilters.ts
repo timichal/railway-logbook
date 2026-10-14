@@ -42,9 +42,6 @@ export function useLayerFilters(
     if (!m?.getLayer("railway_routes")) return;
     const visibility = (type: UsageType) => (shownTypes.includes(type) ? "visible" : "none");
 
-    // Visible solid line: Regular only. Heritage (dotted) and Special (dashed)
-    // are drawn by their own layers.
-    m.setFilter("railway_routes", ["==", ["get", "usage_type"], 0]);
     m.setLayoutProperty("railway_routes", "visibility", visibility(0));
 
     // Dotted Heritage layer: visible only when heritage lines are shown.

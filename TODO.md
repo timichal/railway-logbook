@@ -14,12 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **`layers.ts`: three route line factories → one** (~60 lines).
-  `createRailwayRoutesLayer`, `createRailwayRoutesSpecialLayer` and
-  `createRailwayRoutesHeritageLayer` differ only in id, visibility, dash, cap and
-  filter. A single `routeLineLayer(id, config, { dash?, roundCap?, usageType?, hidden? })`
-  would cover all three.
-
 - [ ] **SQL tile functions** (~100 lines in `02-vector-tiles.sql`). Each point/line
   tile is a plpgsql block (`DECLARE result; tile_envelope := …; SELECT INTO; RETURN`)
   that could be a one-statement `LANGUAGE sql` function. `stations_tile` and

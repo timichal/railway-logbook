@@ -16,11 +16,9 @@ import {
   createRailwayPartsLayer,
   createRailwayPartsSource,
   createRailwayRoutesClickLayer,
-  createRailwayRoutesHeritageLayer,
-  createRailwayRoutesLayer,
   createRailwayRoutesSource,
-  createRailwayRoutesSpecialLayer,
   createRouteEndpointsLayer,
+  createRouteLineLayer,
   createScenicLinesLayer,
   createScenicLinesSource,
   createStationLabelsLayer,
@@ -45,7 +43,6 @@ import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapIntera
 import { useRegionId } from "@/lib/regionContext";
 import { type UsageType, usageOptions } from "@/lib/shared/constants";
 import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
-import { REGULAR_ONLY_FILTER } from "@/lib/shared/map/userMapLayers";
 import {
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
@@ -202,9 +199,9 @@ export default function AdminMap({
         createScenicLinesLayer({ visible: true }),
         // Regular solid; Heritage (dotted) and Special (dashed) get their own layers
         // so the gaps aren't filled by a solid line underneath. All three always show.
-        createRailwayRoutesLayer({ filter: REGULAR_ONLY_FILTER }),
-        createRailwayRoutesHeritageLayer(),
-        createRailwayRoutesSpecialLayer(),
+        createRouteLineLayer(0),
+        createRouteLineLayer(1, { visible: true }),
+        createRouteLineLayer(2, { visible: true }),
         createRailwayRoutesClickLayer(),
         createStationsLayer(theme),
         createStationLabelsLayer(theme),
