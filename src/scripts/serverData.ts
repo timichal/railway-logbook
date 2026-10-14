@@ -31,10 +31,7 @@ import { type StdioOptions, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import pool from "../lib/db";
-import {
-  refreshAllStationProximity,
-  STATION_ROUTE_PROXIMITY_METERS,
-} from "../lib/stationProximity";
+import { formatStationProximity, refreshAllStationProximity } from "../lib/stationProximity";
 import { readDumpContents } from "./lib/pgDumpArchive";
 
 const REMOTE_HOST = "railmap@railmap.zlatkovsky.cz";
@@ -227,15 +224,7 @@ function restore(containerFile: string, tables: string[]): void {
 
 /** The routes changed under the stations, and `near_route` is derived from them. */
 async function refreshProximity(): Promise<void> {
-  const client = await pool.connect();
-  try {
-    const { near, total } = await refreshAllStationProximity(client);
-    console.log(
-      `✓ Stations within ${STATION_ROUTE_PROXIMITY_METERS}m of a route: ${near} of ${total}`,
-    );
-  } finally {
-    client.release();
-  }
+  console.log(`✓ ${formatStationProximity(await refreshAllStationProximity(pool))}`);
 }
 
 /**

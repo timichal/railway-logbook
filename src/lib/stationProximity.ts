@@ -11,7 +11,7 @@
  * fully after a bulk recalculation (import, verifyRouteData), and per-route on
  * admin writes.
  */
-import type { ClientBase } from "pg";
+import type { ClientBase, Pool } from "pg";
 import { withinMetersSql } from "./mercatorDistance";
 
 /** How close a route has to run for a station to show on the user map. */
@@ -57,14 +57,19 @@ interface ProximityCounts {
  * (~5k routes in the index), unlike the per-route refresh, which exists to keep
  * an admin's edit from waiting on it.
  */
-export async function refreshAllStationProximity(db: ClientBase): Promise<ProximityCounts> {
+export async function refreshAllStationProximity(db: ClientBase | Pool): Promise<ProximityCounts> {
   await db.query(updateNearRouteSql("TRUE"));
 
-  const { rows } = await db.query<{ near: string; total: string }>(
-    `SELECT count(*) FILTER (WHERE near_route) AS near, count(*) AS total FROM stations`,
+  const { rows } = await db.query<ProximityCounts>(
+    `SELECT count(*) FILTER (WHERE near_route)::int AS near, count(*)::int AS total FROM stations`,
   );
 
-  return { near: Number(rows[0].near), total: Number(rows[0].total) };
+  return rows[0];
+}
+
+/** The line a script logs after refreshAllStationProximity. */
+export function formatStationProximity({ near, total }: ProximityCounts): string {
+  return `Stations within ${STATION_ROUTE_PROXIMITY_METERS}m of a route: ${near} of ${total}`;
 }
 
 /**

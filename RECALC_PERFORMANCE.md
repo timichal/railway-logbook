@@ -36,7 +36,7 @@ index and writing its own `UPDATE`:
 - **A thrown error stops the run.** Pathfinding failure is already an outcome:
   `findPathFromCoordinates` returns null for it (the one failure that throws,
   "Chain is broken", is caught per part combination inside the finder), and
-  `recalculateRoute` turns that into `{success: false}`. `recalculateRoute` does
+  `recalculateGeometry` turns that into an `invalid` outcome. It does
   **not** catch — it once did, and wrote a dropped connection into the route as
   `is_valid = FALSE`, which `--valid-only` then never rechecked. So an exception
   escaping `recalculateAndStoreRoute` means the database is unhappy — `runPool`

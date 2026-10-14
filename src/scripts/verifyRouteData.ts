@@ -1,11 +1,8 @@
-import type { Client, Pool } from "pg";
-import { type Coord, coordinatesToWKT } from "../lib/coordinateUtils";
+import type { Pool } from "pg";
+import { coordinatesToWKT } from "../lib/coordinateUtils";
 import { createPool } from "../lib/db";
 import { lineLengthKmSql } from "../lib/lineLength";
-import {
-  refreshAllStationProximity,
-  STATION_ROUTE_PROXIMITY_METERS,
-} from "../lib/stationProximity";
+import { formatStationProximity, refreshAllStationProximity } from "../lib/stationProximity";
 import { RailwayPathFinder } from "./lib/railwayPathFinder";
 import { runPool } from "./lib/runPool";
 
@@ -46,40 +43,6 @@ interface RecalculationResult {
   errors: Array<{ track_id: number; from_station: string; to_station: string; error: string }>;
 }
 
-/**
- * Recalculate a single railway route based on starting and ending coordinates
- */
-async function recalculateRoute(
-  db: Client | Pool,
-  startingCoordinate: [number, number],
-  endingCoordinate: [number, number],
-): Promise<{ success: boolean; coordinates?: Coord[]; error?: string; hasBacktracking?: boolean }> {
-  // Quiet rather than silenced from outside: a bulk run makes thousands of these
-  // searches, several at a time, and their progress logging would bury the
-  // summary. See PathFinderOptions for why patching the global console.log —
-  // which is what this used to do — cannot survive two overlapping searches.
-  const pathFinder = new RailwayPathFinder({ quiet: true });
-
-  // Deliberately no try/catch. Every way pathfinding can fail comes back as
-  // null — the one failure that throws, a part combination whose chain doesn't
-  // connect ("Chain is broken"), is caught per combination inside the finder —
-  // so what does throw is the part-loading query or a bug. Catching it here
-  // used to write e.g. "Connection terminated unexpectedly" as the route's
-  // error_message with is_valid = FALSE, and a `--valid-only` run (every
-  // deploy) then never looked at the route again. Let it stop the run instead.
-  const result = await pathFinder.findPathFromCoordinates(db, startingCoordinate, endingCoordinate);
-
-  if (!result) {
-    return { success: false, error: "No path found between starting and ending coordinates" };
-  }
-
-  return {
-    success: true,
-    coordinates: result.coordinates,
-    hasBacktracking: result.hasBacktracking || false,
-  };
-}
-
 interface RecalculationOptions {
   /** Skip routes already marked invalid (is_valid = FALSE); only recalculate valid ones. */
   validOnly?: boolean;
@@ -87,16 +50,31 @@ interface RecalculationOptions {
   concurrency?: number;
 }
 
-/** One route as read from the database, ready to recalculate. */
-interface RouteRow {
-  track_id: number;
+/** What a route and a scenic line share, as read for recalculation. */
+interface StoredGeometryRow {
   from_station: string;
   to_station: string;
-  start_lng: string;
-  start_lat: string;
-  end_lng: string;
-  end_lat: string;
+  start_point: [number, number];
+  end_point: [number, number];
   length_km: number;
+}
+
+/**
+ * The columns behind StoredGeometryRow. Only what recalculation actually reads.
+ * Notably not the existing geometry: it is replaced wholesale, and
+ * ST_AsGeoJSON'ing every route's full linestring just to discard it was costing
+ * a serialise-and-ship per route.
+ */
+const STORED_GEOMETRY_COLUMNS = `
+  from_station,
+  to_station,
+  ARRAY[ST_X(starting_coordinate), ST_Y(starting_coordinate)] AS start_point,
+  ARRAY[ST_X(ending_coordinate), ST_Y(ending_coordinate)] AS end_point,
+  length_km`;
+
+/** One route as read from the database, ready to recalculate. */
+interface RouteRow extends StoredGeometryRow {
+  track_id: number;
   intended_backtracking: boolean;
 }
 
@@ -111,44 +89,38 @@ type RouteOutcome =
  */
 async function recalculateGeometry(
   db: Pool,
-  row: {
-    start_lng: string;
-    start_lat: string;
-    end_lng: string;
-    end_lat: string;
-    length_km: number;
-  },
+  row: StoredGeometryRow,
 ): Promise<
   | { status: "invalid"; error: string }
   | { status: "ok"; lineString: string; newLength: number; hasBacktracking: boolean }
 > {
   const originalLength = row.length_km;
 
-  const startingCoordinate: [number, number] = [
-    parseFloat(row.start_lng),
-    parseFloat(row.start_lat),
-  ];
-  const endingCoordinate: [number, number] = [parseFloat(row.end_lng), parseFloat(row.end_lat)];
+  // Quiet rather than silenced from outside: a bulk run makes thousands of these
+  // searches, several at a time, and their progress logging would bury the
+  // summary. See PathFinderOptions for why patching the global console.log —
+  // which is what this used to do — cannot survive two overlapping searches.
+  const pathFinder = new RailwayPathFinder({ quiet: true });
 
-  // Recalculate from coordinates
-  const recalcResult = await recalculateRoute(db, startingCoordinate, endingCoordinate);
-
-  if (!recalcResult.success || !recalcResult.coordinates) {
-    return { status: "invalid", error: recalcResult.error || "Unknown error" };
+  // Deliberately no try/catch. Every way pathfinding can fail comes back as
+  // null — the one failure that throws, a part combination whose chain doesn't
+  // connect ("Chain is broken"), is caught per combination inside the finder —
+  // so what does throw is the part-loading query or a bug. Catching it here
+  // used to write e.g. "Connection terminated unexpectedly" as the route's
+  // error_message with is_valid = FALSE, and a `--valid-only` run (every
+  // deploy) then never looked at the route again. Let it stop the run instead.
+  const path = await pathFinder.findPathFromCoordinates(db, row.start_point, row.end_point);
+  if (!path) {
+    return { status: "invalid", error: "No path found between starting and ending coordinates" };
   }
 
-  // Convert coordinates to LineString WKT format
-  const lineString = coordinatesToWKT(recalcResult.coordinates);
-
-  // Calculate the new length
-  const lengthQuery = await db.query(
-    `
-    SELECT ${lineLengthKmSql("$1")} as new_length_km
-  `,
+  const lineString = coordinatesToWKT(path.coordinates);
+  const lengthQuery = await db.query<{ new_length_km: number }>(
+    `SELECT ${lineLengthKmSql("$1")} AS new_length_km`,
     [lineString],
   );
 
-  const newLength = parseFloat(lengthQuery.rows[0].new_length_km);
+  const newLength = lengthQuery.rows[0].new_length_km;
   const lengthDiff = Math.abs(newLength - originalLength);
   const lengthDiffPercent = (lengthDiff / originalLength) * 100;
 
@@ -166,12 +138,7 @@ async function recalculateGeometry(
     };
   }
 
-  return {
-    status: "ok",
-    lineString,
-    newLength,
-    hasBacktracking: recalcResult.hasBacktracking || false,
-  };
+  return { status: "ok", lineString, newLength, hasBacktracking: path.hasBacktracking ?? false };
 }
 
 /**
@@ -248,20 +215,8 @@ async function recalculateAllRoutes(
     errors: [],
   };
 
-  // Only what recalculation actually reads. Notably not the existing geometry:
-  // it is replaced wholesale, and ST_AsGeoJSON'ing every route's full linestring
-  // just to discard it was costing a serialise-and-ship per route.
   const routes = await db.query<RouteRow>(`
-    SELECT
-      track_id,
-      from_station,
-      to_station,
-      ST_X(starting_coordinate) as start_lng,
-      ST_Y(starting_coordinate) as start_lat,
-      ST_X(ending_coordinate) as end_lng,
-      ST_Y(ending_coordinate) as end_lat,
-      length_km,
-      intended_backtracking
+    SELECT track_id, intended_backtracking, ${STORED_GEOMETRY_COLUMNS}
     FROM railway_routes
     ${options.validOnly ? "WHERE is_valid" : ""}
     ORDER BY track_id
@@ -270,10 +225,10 @@ async function recalculateAllRoutes(
   result.totalRoutes = routes.rows.length;
   console.log(`Found ${result.totalRoutes} routes to recalculate (${concurrency} at a time)`);
 
-  // A pathfinding failure is already an outcome (see recalculateRoute), so a throw
-  // means the database itself is unhappy (or a bug): runPool stops the run rather
-  // than marking a route invalid over what is probably a transient fault. Outcomes
-  // come back in track_id order, so the summary reads that way too.
+  // A pathfinding failure is already an outcome (see recalculateGeometry), so a
+  // throw means the database itself is unhappy (or a bug): runPool stops the run
+  // rather than marking a route invalid over what is probably a transient fault.
+  // Outcomes come back in track_id order, so the summary reads that way too.
   const outcomes = await runPool(
     routes.rows,
     concurrency,
@@ -306,15 +261,8 @@ async function recalculateAllRoutes(
 }
 
 /** One scenic line as read from the database, ready to recalculate. */
-interface ScenicLineRow {
+interface ScenicLineRow extends StoredGeometryRow {
   id: number;
-  from_station: string;
-  to_station: string;
-  start_lng: string;
-  start_lat: string;
-  end_lng: string;
-  end_lat: string;
-  length_km: number;
 }
 
 /**
@@ -325,15 +273,7 @@ interface ScenicLineRow {
  */
 async function recalculateScenicLines(db: Pool, options: RecalculationOptions): Promise<void> {
   const lines = await db.query<ScenicLineRow>(`
-    SELECT
-      id,
-      from_station,
-      to_station,
-      ST_X(starting_coordinate) as start_lng,
-      ST_Y(starting_coordinate) as start_lat,
-      ST_X(ending_coordinate) as end_lng,
-      ST_Y(ending_coordinate) as end_lat,
-      length_km
+    SELECT id, ${STORED_GEOMETRY_COLUMNS}
     FROM scenic_lines
     ${options.validOnly ? "WHERE is_valid" : ""}
     ORDER BY id
@@ -390,35 +330,23 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
   }
 }
 
-/**
- * Verify and recalculate routes if they exist in the database, then the scenic lines
- * Prints summary information to console
- */
+/** Recalculate the routes, then the scenic lines, printing a summary of each. */
 export async function verifyAndRecalculateRoutes(
   db: Pool,
   options: RecalculationOptions = {},
 ): Promise<void> {
-  // Check if there are routes to recalculate
-  const routeCount = await db.query(`
-    SELECT COUNT(*) as count
-    FROM railway_routes
-    ${options.validOnly ? "WHERE is_valid" : ""}
-  `);
+  console.log("");
+  const started = performance.now();
+  const recalcResult = await recalculateAllRoutes(db, options);
+  const elapsedMinutes = (performance.now() - started) / 60000;
 
-  const hasRoutes = parseInt(routeCount.rows[0].count, 10) > 0;
-
-  if (!hasRoutes) {
-    console.log("");
+  // An empty table is the initial import. No summary: deploy.sh replays it at the
+  // end, where a block of zeros would read as a recalculation that ran.
+  if (recalcResult.totalRoutes === 0) {
     console.log("No routes found - skipping recalculation");
     await recalculateScenicLines(db, options);
     return;
   }
-
-  console.log("");
-  const started = performance.now();
-  // Recalculate all railway routes
-  const recalcResult = await recalculateAllRoutes(db, options);
-  const elapsedMinutes = (performance.now() - started) / 60000;
 
   console.log("\n");
   console.log("=== Route Recalculation Summary ===");
@@ -464,15 +392,7 @@ async function verifyRoutes(): Promise<void> {
 
     // Which stations the user map shows follows the route geometries this just moved
     console.log("");
-    const client = await pool.connect();
-    try {
-      const proximity = await refreshAllStationProximity(client);
-      console.log(
-        `Stations within ${STATION_ROUTE_PROXIMITY_METERS}m of a route: ${proximity.near} of ${proximity.total}`,
-      );
-    } finally {
-      client.release();
-    }
+    console.log(formatStationProximity(await refreshAllStationProximity(pool)));
 
     console.log("");
     console.log("Route verification completed!");

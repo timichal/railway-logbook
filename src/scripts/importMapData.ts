@@ -1,7 +1,4 @@
-import {
-  refreshAllStationProximity,
-  STATION_ROUTE_PROXIMITY_METERS,
-} from "../lib/stationProximity";
+import { formatStationProximity, refreshAllStationProximity } from "../lib/stationProximity";
 import { loadStationsAndParts } from "./lib/loadRailwayData";
 import {
   createRecalcPool,
@@ -74,15 +71,7 @@ async function loadGeoJSONData(): Promise<void> {
     // from them are refreshed last
     console.log("");
     console.log("=== Step 3: Flagging stations near routes ===");
-    const client = await pool.connect();
-    try {
-      const proximity = await refreshAllStationProximity(client);
-      console.log(
-        `Stations within ${STATION_ROUTE_PROXIMITY_METERS}m of a route: ${proximity.near} of ${proximity.total}`,
-      );
-    } finally {
-      client.release();
-    }
+    console.log(formatStationProximity(await refreshAllStationProximity(pool)));
 
     console.log("");
     console.log("Database update completed!");

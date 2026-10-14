@@ -14,17 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **`verifyRouteData.ts`** (~50 lines).
-  - Inline `recalculateRoute` into `recalculateGeometry`. Its
-    `{ success, coordinates, error }` shape exists only to be unpacked one call later.
-  - `RouteRow` and `ScenicLineRow`, and their two coordinate `SELECT`s, share a base
-    type and a column fragment.
-  - The "refresh station proximity and log the count" block is copied between
-    `verifyRoutes()` and `importMapData.ts` step 3. Give it a helper in
-    `stationProximity.ts`.
-  - The `COUNT(*)` pre-check in `verifyAndRecalculateRoutes` adds nothing:
-    `recalculateAllRoutes` over zero rows already does nothing.
-
 - [ ] **Admin sidebar plumbing** (~60 lines).
   - `AdminSidebar.handleEditGeometry` re-fetches the route with `getRailwayRoute`,
     plus a request counter and a stale-check, and has `EditingGeometry.routeInfo: null`
