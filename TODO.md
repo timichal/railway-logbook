@@ -14,21 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **Admin sidebar plumbing** (~60 lines).
-  - `AdminSidebar.handleEditGeometry` re-fetches the route with `getRailwayRoute`,
-    plus a request counter and a stale-check, and has `EditingGeometry.routeInfo: null`
-    as a loading state. But Edit Geometry is only reachable from the edit form of the
-    selected route, whose detail the page has already loaded. Use that detail and drop
-    the fetch and the race guards.
-  - The `showError` prop (AdminSidebar, with a fallback to `useToast`) and the
-    `showSuccess`/`showError` props on AdminMap are all the same toast. Call
-    `useToast()` directly.
-  - `handleRouteDeleted` and `handleRouteUpdated` in `AdminPageClient` are identical.
-  - The four tab buttons in `AdminSidebar` can be mapped from a list.
-  - `AdminCreateRouteTab` takes the picked points as two values and two setters, while
-    `AdminScenicTab` takes the `CreateFormCoordinates` object and its setter. Use the
-    object form for both.
-
 - [ ] **Single-flight save guard** (~30 lines). `AdminCreateRouteTab` repeats the
   `savingRef` + `isSaving` set/reset dance in both handlers. `AdminScenicTab` already
   has the same thing as its `run()`. Extract a small `useSingleFlight()` hook and use
@@ -51,6 +36,10 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
     build the FeatureCollection in SQL.
   - `adminNotesActions.ts` repeats the 7-column note select/RETURNING list 4 times.
     Make it a `NOTE_COLUMNS` constant.
+  - `CreateFormCoordinates` (the admin's two picked points) is declared in
+    `AdminCreateRouteTab.tsx`, and the page, the map and the scenic tab import it
+    from that one tab's component. Move it beside `PathPreview` in
+    `useRoutePreview.ts`, which takes the same two points.
 
 - [ ] **`countryUtils.ts`** (134 → ~20 lines). Both callers pass
   `{ type: "LineString", coordinates }`. Make it

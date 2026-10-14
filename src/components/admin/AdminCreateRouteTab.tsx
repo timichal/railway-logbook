@@ -6,7 +6,11 @@ import RouteMetadataFields, {
   routeMetadataIncomplete,
 } from "@/components/admin/RouteMetadataFields";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
-import { type SaveRouteData, saveRailwayRoute } from "@/lib/adminRouteActions";
+import {
+  type AdminRouteDetail,
+  type SaveRouteData,
+  saveRailwayRoute,
+} from "@/lib/adminRouteActions";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
@@ -18,11 +22,8 @@ export interface CreateFormCoordinates {
   endingCoordinate: [number, number] | null;
 }
 
-/** A geometry edit in progress; `routeInfo` arrives once the route has loaded. */
-export interface EditingGeometry {
-  trackId: number;
-  routeInfo: { from_station: string; to_station: string } | null;
-}
+/** A geometry edit in progress: the route whose points are being re-picked. */
+export type EditingGeometry = Pick<AdminRouteDetail, "track_id" | "from_station" | "to_station">;
 
 const EMPTY_FORM: SaveRouteData = {
   name: "",
@@ -37,10 +38,9 @@ const EMPTY_FORM: SaveRouteData = {
 };
 
 interface AdminCreateRouteTabProps {
-  startingCoordinate: [number, number] | null;
-  endingCoordinate: [number, number] | null;
-  onStartingCoordinateChange: (coord: [number, number] | null) => void;
-  onEndingCoordinateChange: (coord: [number, number] | null) => void;
+  /** The picked points, owned by the page (see `AdminPageClient`). */
+  coordinates: CreateFormCoordinates;
+  onCoordinatesChange: React.Dispatch<React.SetStateAction<CreateFormCoordinates>>;
   /**
    * The page's preview (`useRoutePreview`), which is also what gets saved. Read from
    * the page rather than kept here as well: this tab unmounts with the mobile
@@ -53,24 +53,21 @@ interface AdminCreateRouteTabProps {
    * preview) on success; this tab then clears only its own fields.
    */
   onSaveRoute?: (routeData: SaveRouteData) => Promise<boolean>;
-  editingGeometryForTrackId?: number | null;
-  editingRouteInfo?: { from_station: string; to_station: string } | null;
-  /** Called once a new geometry is saved; the sidebar ends the edit and clears the form. */
-  onGeometryEditComplete?: () => void;
+  /** Set while an existing route's geometry is re-picked instead of a route created. */
+  editingGeometry: EditingGeometry | null;
+  /** Called with the saved path once a new geometry is saved; the sidebar ends the edit and clears the form. */
+  onGeometryEditComplete?: (saved: PathPreview) => void;
   onCancelGeometryEdit?: () => void;
   availableTags?: string[];
   onTagsChanged?: () => void;
 }
 
 export default function AdminCreateRouteTab({
-  startingCoordinate,
-  endingCoordinate,
-  onStartingCoordinateChange,
-  onEndingCoordinateChange,
+  coordinates,
+  onCoordinatesChange,
   previewRoute,
   onSaveRoute,
-  editingGeometryForTrackId,
-  editingRouteInfo,
+  editingGeometry,
   onGeometryEditComplete,
   onCancelGeometryEdit,
   availableTags = [],
@@ -88,11 +85,6 @@ export default function AdminCreateRouteTab({
   // Create route form state (without the coordinates that are managed by parent)
   const [createForm, setCreateForm] = useState(EMPTY_FORM);
 
-  // Clearing a point drops the preview with it (`useRoutePreview`).
-  const clearStartingCoordinate = () => onStartingCoordinateChange(null);
-  const clearEndingCoordinate = () => onEndingCoordinateChange(null);
-
-  // Handle save route functionality
   const handleSaveRoute = async () => {
     if (savingRef.current || !onSaveRoute || !previewRoute) return;
 
@@ -118,13 +110,8 @@ export default function AdminCreateRouteTab({
     }
   };
 
-  // Handle save geometry for existing route
   const handleSaveGeometry = async () => {
-    if (savingRef.current) return;
-    if (!editingGeometryForTrackId || !previewRoute) {
-      console.error("Cannot save geometry: missing track ID or path result");
-      return;
-    }
+    if (savingRef.current || !editingGeometry || !previewRoute) return;
 
     savingRef.current = true;
     setIsSaving(true);
@@ -141,12 +128,12 @@ export default function AdminCreateRouteTab({
           },
           previewRoute.startCoordinate,
           previewRoute.endCoordinate,
-          editingGeometryForTrackId, // Pass track ID to trigger UPDATE query
+          editingGeometry.track_id, // Pass track ID to trigger UPDATE query
         ),
       );
 
       showSuccess("Route geometry updated successfully!");
-      onGeometryEditComplete?.();
+      onGeometryEditComplete?.(previewRoute);
     } catch (error) {
       console.error("Error updating route geometry:", error);
       showError(`Error updating route geometry: ${actionErrorMessage(error)}`);
@@ -156,20 +143,15 @@ export default function AdminCreateRouteTab({
     }
   };
 
-  const isEditMode = !!editingGeometryForTrackId;
-
-  // Format header for edit mode
-  const getEditModeHeader = () => {
-    if (!isEditMode || !editingRouteInfo) {
-      return "Create New Route";
-    }
-
-    return `Edit Route Geometry (${editingRouteInfo.from_station} ⟷ ${editingRouteInfo.to_station})`;
-  };
+  const isEditMode = editingGeometry !== null;
 
   return (
     <div className="p-4 overflow-y-auto">
-      <h3 className="font-semibold text-gray-900 mb-4">{getEditModeHeader()}</h3>
+      <h3 className="font-semibold text-gray-900 mb-4">
+        {editingGeometry
+          ? `Edit Route Geometry (${editingGeometry.from_station} ⟷ ${editingGeometry.to_station})`
+          : "Create New Route"}
+      </h3>
       <p className="text-sm text-gray-600 mb-4">
         Click on railway parts in the map to set starting and ending points. The route will be
         automatically previewed on the map.
@@ -180,16 +162,17 @@ export default function AdminCreateRouteTab({
         <PickedPointField
           id="route-starting-point"
           label="Starting Point *"
-          coordinate={startingCoordinate}
+          coordinate={coordinates.startingCoordinate}
           locked={isPreviewMode}
-          onClear={clearStartingCoordinate}
+          // Clearing a point drops the preview with it (`useRoutePreview`).
+          onClear={() => onCoordinatesChange((prev) => ({ ...prev, startingCoordinate: null }))}
         />
         <PickedPointField
           id="route-ending-point"
           label="Ending Point *"
-          coordinate={endingCoordinate}
+          coordinate={coordinates.endingCoordinate}
           locked={isPreviewMode}
-          onClear={clearEndingCoordinate}
+          onClear={() => onCoordinatesChange((prev) => ({ ...prev, endingCoordinate: null }))}
         />
 
         {/* Only show metadata fields in create mode */}

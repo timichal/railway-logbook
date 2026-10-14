@@ -195,9 +195,8 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     }
 
     setSelectedRouteId((prevId) => {
-      // Only clear the points (and so the preview) if the route ID actually changed
-      // This prevents clearing coordinates when re-selecting the same route
-      // (which happens during "Edit Route Geometry")
+      // A new route drops the picked points (and so the preview); clicking the
+      // selected route again keeps them.
       if (prevId !== routeId) {
         setCreateFormCoordinates(NO_COORDINATES);
       }
@@ -215,8 +214,9 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     });
     // A click picks for whichever form is open: the scenic one, or else the route one
     setSelectedTab((tab) => (tab === "scenic" ? tab : "create"));
-    // Unselect any selected route when clicking a coordinate
-    setSelectedRouteId(null);
+    // A new route's pick drops the selection; a geometry re-pick keeps its route
+    // selected, for the reload after the save.
+    if (!editingGeometry) setSelectedRouteId(null);
   };
 
   // Resolves whether the route was saved, so the form clears only then: a failed
@@ -245,8 +245,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       // Clear the picked points and the preview; the form clears its own fields
       handleFormReset();
 
-      // Trigger routes layer refresh
-      setRefreshTrigger((prev) => prev + 1);
+      refreshRoutes();
 
       showSuccess(
         `Route "${routeData.name || `${routeData.from_station} ⟷ ${routeData.to_station}`}" saved successfully! Track ID: ${trackId}`,
@@ -264,15 +263,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setCreateFormCoordinates(NO_COORDINATES);
   }, []);
 
-  const handleRouteDeleted = () => {
-    // Trigger routes layer refresh after deletion
-    setRefreshTrigger((prev) => prev + 1);
-  };
-
-  const handleRouteUpdated = () => {
-    // Trigger routes layer refresh after update
-    setRefreshTrigger((prev) => prev + 1);
-  };
+  const refreshRoutes = () => setRefreshTrigger((prev) => prev + 1);
 
   const handleEditingGeometryChange = useCallback((editing: EditingGeometry | null) => {
     setEditingGeometry(editing);
@@ -315,14 +306,12 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       previewRoute={previewRoute}
       onSaveRoute={handleSaveRoute}
       onFormReset={handleFormReset}
-      onRouteDeleted={handleRouteDeleted}
-      onRouteUpdated={handleRouteUpdated}
+      onRoutesChanged={refreshRoutes}
       onRouteFocus={handleRouteFocus}
       sidebarWidth={isMobile ? null : sidebarWidth}
       onFocusNote={handleFocusNote}
       onNoteChanged={handleNoteChanged}
       notesRefreshSignal={notesRefreshTrigger}
-      showError={showError}
       editingScenicLine={editingScenicLine}
       onEditingScenicLineChange={setEditingScenicLine}
       selectedScenicLineId={selectedScenicLineId}
@@ -395,8 +384,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
             focusCoordinate={focusCoordinate}
             notesRefreshTrigger={notesRefreshTrigger}
             onNotesChanged={handleNoteChanged}
-            showSuccess={showSuccess}
-            showError={showError}
           />
         </div>
       </main>

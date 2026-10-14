@@ -17,7 +17,7 @@ interface RouteEditFormProps {
   onSave: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
-  onEditGeometry: (trackId: number) => void;
+  onEditGeometry: (route: AdminRouteDetail) => void;
   onToggleUnderRepair: (underRepair: boolean) => void;
   onUnselect: () => void;
 }
@@ -138,7 +138,7 @@ export default function RouteEditForm({
 
             <button
               type="button"
-              onClick={() => onEditGeometry(selectedRoute.track_id)}
+              onClick={() => onEditGeometry(selectedRoute)}
               disabled={isLoading}
               className={`${btn("success", "md")} w-full`}
             >

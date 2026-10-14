@@ -2,6 +2,7 @@
 
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
+import type { CreateFormCoordinates } from "@/components/admin/AdminCreateRouteTab";
 import AdminLayerControls from "@/components/admin/AdminLayerControls";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -121,10 +122,7 @@ interface AdminMapProps {
   /** The selected route's length, from the detail the page loads for the sidebar. */
   selectedRouteLength: number | null;
   previewRoute?: PathPreview | null;
-  selectedCoordinates?: {
-    startingCoordinate: [number, number] | null;
-    endingCoordinate: [number, number] | null;
-  };
+  selectedCoordinates?: CreateFormCoordinates;
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   /**
@@ -139,8 +137,6 @@ interface AdminMapProps {
   focusCoordinate?: { coordinate: [number, number]; nonce: number } | null;
   notesRefreshTrigger: number;
   onNotesChanged: () => void;
-  showSuccess: (message: string) => void;
-  showError: (message: string) => void;
 }
 
 export default function AdminMap({
@@ -160,8 +156,6 @@ export default function AdminMap({
   focusCoordinate,
   notesRefreshTrigger,
   onNotesChanged,
-  showSuccess,
-  showError,
 }: AdminMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   // The route and note tiles' `v`. Refs, read when the map is built: a refresh
@@ -249,7 +243,7 @@ export default function AdminMap({
   });
 
   // Notes popup system
-  useAdminNotesPopup({ map, mapLoaded, showSuccess, showError, onNotesChanged });
+  useAdminNotesPopup({ map, mapLoaded, onNotesChanged });
 
   // Fetch route endpoints
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch endpoints on demand.

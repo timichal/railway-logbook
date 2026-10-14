@@ -86,9 +86,9 @@ interface AdminRoutesTabProps {
   onReloadSelectedRoute: () => Promise<AdminRouteDetail | null>;
   /** `focus` flies the map to the route once it has loaded. */
   onRouteSelect?: (routeId: number | null, options?: { focus?: boolean }) => void;
-  onRouteDeleted?: () => void;
-  onRouteUpdated?: () => void;
-  onEditGeometry: (trackId: number) => void;
+  /** A route was changed or deleted: the map's route tiles are stale. */
+  onRoutesChanged: () => void;
+  onEditGeometry: (route: AdminRouteDetail) => void;
   onRouteFocus?: (geometry: string) => void;
   availableTags?: string[];
   onTagsChanged?: () => void;
@@ -101,8 +101,7 @@ export default function AdminRoutesTab({
   onSelectedRouteChange,
   onReloadSelectedRoute,
   onRouteSelect,
-  onRouteDeleted,
-  onRouteUpdated,
+  onRoutesChanged,
   onEditGeometry,
   onRouteFocus,
   availableTags = [],
@@ -276,7 +275,7 @@ export default function AdminRoutesTab({
     }
 
     // The save stands from here on, whatever happens to the reads below.
-    onRouteUpdated?.();
+    onRoutesChanged();
     // Editing a route may add new tags or drop the last use of an existing one.
     onTagsChanged?.();
     showSuccess("Route updated successfully!");
@@ -310,7 +309,7 @@ export default function AdminRoutesTab({
       await loadRoutes();
 
       // Repaints the admin map: the flag decides violet vs grey.
-      onRouteUpdated?.();
+      onRoutesChanged();
 
       showSuccess(
         underRepair ? "Route marked as under repair." : "Route no longer marked as under repair.",
@@ -339,7 +338,7 @@ export default function AdminRoutesTab({
       await loadRoutes();
 
       onRouteSelect?.(null);
-      onRouteDeleted?.();
+      onRoutesChanged();
 
       // Deleting a route may have removed the last use of a tag.
       onTagsChanged?.();
@@ -367,7 +366,7 @@ export default function AdminRoutesTab({
       // Select the new copy so the admin can immediately edit it.
       onRouteSelect?.(newTrackId);
 
-      onRouteUpdated?.();
+      onRoutesChanged();
 
       showSuccess(
         `Route "${selectedRoute.from_station} ⟷ ${selectedRoute.to_station}" duplicated successfully.`,

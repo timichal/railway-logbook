@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminCreateRouteTab, {
   type CreateFormCoordinates,
   type EditingGeometry,
@@ -12,7 +12,6 @@ import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import {
   type AdminRouteDetail,
   getFrequencyTags,
-  getRailwayRoute,
   type SaveRouteData,
 } from "@/lib/adminRouteActions";
 import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
@@ -21,6 +20,13 @@ import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
 export type AdminTab = "routes" | "create" | "scenic" | "notes";
+
+const TABS: { id: AdminTab; label: string }[] = [
+  { id: "routes", label: "Railway Routes" },
+  { id: "create", label: "Create New" },
+  { id: "scenic", label: "Scenic" },
+  { id: "notes", label: "Notes" },
+];
 
 interface AdminSidebarProps {
   /**
@@ -49,14 +55,13 @@ interface AdminSidebarProps {
   onSaveRoute?: (routeData: SaveRouteData) => Promise<boolean>;
   /** Clears the create form's points and the preview drawn from them. */
   onFormReset: () => void;
-  onRouteDeleted?: () => void;
-  onRouteUpdated?: () => void;
+  /** A route was created, changed or deleted: the map's route tiles are stale. */
+  onRoutesChanged: () => void;
   onRouteFocus?: (geometry: string) => void;
   sidebarWidth?: string | null;
   onFocusNote?: (coordinate: [number, number]) => void;
   onNoteChanged?: () => void;
   notesRefreshSignal?: number;
-  showError?: (message: string) => void;
   editingScenicLine: EditingScenicLine | null;
   onEditingScenicLineChange: (editing: EditingScenicLine | null) => void;
   selectedScenicLineId: number | null;
@@ -81,30 +86,21 @@ export default function AdminSidebar({
   previewRoute,
   onSaveRoute,
   onFormReset,
-  onRouteDeleted,
-  onRouteUpdated,
+  onRoutesChanged,
   onRouteFocus,
   sidebarWidth,
   onFocusNote,
   onNoteChanged,
   notesRefreshSignal,
-  showError: showErrorProp,
   editingScenicLine,
   onEditingScenicLineChange,
   selectedScenicLineId,
   onScenicLineSelect,
   onScenicLinesChanged,
 }: AdminSidebarProps) {
-  const { showError: showErrorToast } = useToast();
+  const { showError } = useToast();
   const region = useRegion();
-  const showError = showErrorProp || showErrorToast;
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  // Read after an await, to tell whether the edit that asked is still the current one.
-  const editingGeometryRef = useRef(editingGeometry);
-  editingGeometryRef.current = editingGeometry;
-  // Bumped per edit started, so a cancelled edit's load cannot land in a new edit of
-  // the same route.
-  const editRequestRef = useRef(0);
 
   // Load the in-use frequency tags for autocomplete, and keep them fresh after edits.
   const loadTags = useCallback(async () => {
@@ -125,57 +121,21 @@ export default function AdminSidebar({
   const switchTab = (tab: AdminTab) => {
     if (tab === activeTab) return;
     onFormReset();
-    if (editingGeometryRef.current) onEditingGeometryChange(null);
+    if (editingGeometry) onEditingGeometryChange(null);
     if (tab !== "routes") onRouteSelect?.(null);
     onSelectedTabChange(tab);
   };
 
-  // Handle edit geometry button click
-  const handleEditGeometry = useCallback(
-    async (trackId: number) => {
-      const request = ++editRequestRef.current;
-      onEditingGeometryChange({ trackId, routeInfo: null });
-      onSelectedTabChange("create");
-
-      // Fetch the route details to get starting_coordinate and ending_coordinate
-      try {
-        const routeDetail = unwrap(await getRailwayRoute(trackId));
-        // Cancelled (and perhaps restarted), or the region switched, while the
-        // route was loading.
-        if (request !== editRequestRef.current || editingGeometryRef.current?.trackId !== trackId)
-          return;
-
-        onEditingGeometryChange({
-          trackId,
-          routeInfo: {
-            from_station: routeDetail.from_station,
-            to_station: routeDetail.to_station,
-          },
-        });
-
-        // Prefill the stored points — unless a point was picked on the map while the
-        // route loaded, which is the admin's choice and not to be overwritten.
-        const { starting_coordinate, ending_coordinate } = routeDetail;
-        onCreateFormCoordinatesChange((prev) =>
-          prev.startingCoordinate || prev.endingCoordinate
-            ? prev
-            : { startingCoordinate: starting_coordinate, endingCoordinate: ending_coordinate },
-        );
-      } catch (error) {
-        // Superseded: a newer edit (or none) owns the tab now, and nobody is
-        // waiting on this one.
-        if (request !== editRequestRef.current || editingGeometryRef.current?.trackId !== trackId)
-          return;
-        console.error("Error fetching route details for geometry edit:", error);
-        // With no route to re-pick (deleted in another tab, session gone), staying
-        // in edit mode would only keep the map's routes hidden behind a save that
-        // is bound to fail again.
-        onEditingGeometryChange(null);
-        showError(`Failed to load route details: ${actionErrorMessage(error)}`);
-      }
-    },
-    [onEditingGeometryChange, onCreateFormCoordinatesChange, onSelectedTabChange, showError],
-  );
+  // Only the selected route offers Edit Geometry, so its loaded detail has the
+  // stored points to start the re-pick from.
+  const handleEditGeometry = (route: AdminRouteDetail) => {
+    onEditingGeometryChange(route);
+    onCreateFormCoordinatesChange({
+      startingCoordinate: route.starting_coordinate,
+      endingCoordinate: route.ending_coordinate,
+    });
+    onSelectedTabChange("create");
+  };
 
   // Ends a geometry edit, whether saved or cancelled: the form is cleared once, here.
   const endGeometryEdit = useCallback(() => {
@@ -184,10 +144,8 @@ export default function AdminSidebar({
     onSelectedTabChange("routes");
   }, [onEditingGeometryChange, onFormReset, onSelectedTabChange]);
 
-  // Handle cancel geometry edit
   const handleCancelGeometryEdit = useCallback(() => {
     endGeometryEdit();
-    // Unselect the route
     onRouteSelect?.(null);
   }, [endGeometryEdit, onRouteSelect]);
 
@@ -198,37 +156,19 @@ export default function AdminSidebar({
     >
       {/* Tab Headers */}
       <div className="flex border-b border-gray-200">
-        <button
-          type="button"
-          onClick={() => switchTab("routes")}
-          className={tabBtn(activeTab === "routes")}
-        >
-          Railway Routes
-        </button>
-        <button
-          type="button"
-          onClick={() => switchTab("create")}
-          className={tabBtn(activeTab === "create")}
-        >
-          Create New
-        </button>
-        {/* Only where the user map can show what is drawn here */}
-        {region.hasScenicHighlight && (
-          <button
-            type="button"
-            onClick={() => switchTab("scenic")}
-            className={tabBtn(activeTab === "scenic")}
-          >
-            Scenic
-          </button>
+        {/* Scenic only where the user map can show what is drawn there */}
+        {TABS.filter(({ id }) => id !== "scenic" || region.hasScenicHighlight).map(
+          ({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => switchTab(id)}
+              className={tabBtn(activeTab === id)}
+            >
+              {label}
+            </button>
+          ),
         )}
-        <button
-          type="button"
-          onClick={() => switchTab("notes")}
-          className={tabBtn(activeTab === "notes")}
-        >
-          Notes
-        </button>
       </div>
 
       {/* Tab Content */}
@@ -241,8 +181,7 @@ export default function AdminSidebar({
             onSelectedRouteChange={onSelectedRouteChange}
             onReloadSelectedRoute={onReloadSelectedRoute}
             onRouteSelect={onRouteSelect}
-            onRouteDeleted={onRouteDeleted}
-            onRouteUpdated={onRouteUpdated}
+            onRoutesChanged={onRoutesChanged}
             onEditGeometry={handleEditGeometry}
             onRouteFocus={onRouteFocus}
             availableTags={availableTags}
@@ -252,21 +191,27 @@ export default function AdminSidebar({
 
         {activeTab === "create" && (
           <AdminCreateRouteTab
-            startingCoordinate={createFormCoordinates.startingCoordinate}
-            endingCoordinate={createFormCoordinates.endingCoordinate}
-            onStartingCoordinateChange={(coord) =>
-              onCreateFormCoordinatesChange((prev) => ({ ...prev, startingCoordinate: coord }))
-            }
-            onEndingCoordinateChange={(coord) =>
-              onCreateFormCoordinatesChange((prev) => ({ ...prev, endingCoordinate: coord }))
-            }
+            coordinates={createFormCoordinates}
+            onCoordinatesChange={onCreateFormCoordinatesChange}
             previewRoute={previewRoute}
             onSaveRoute={onSaveRoute}
-            editingGeometryForTrackId={editingGeometry?.trackId ?? null}
-            editingRouteInfo={editingGeometry?.routeInfo ?? null}
-            onGeometryEditComplete={() => {
+            editingGeometry={editingGeometry}
+            onGeometryEditComplete={(saved) => {
+              const trackId = editingGeometry?.track_id;
               endGeometryEdit();
-              onRouteUpdated?.();
+              onRoutesChanged();
+              // The new points go into the loaded detail at once: a second Edit
+              // Geometry starts from them, and must not wait for (or, if it fails,
+              // miss) the reload below.
+              onSelectedRouteChange((prev) =>
+                prev && prev.track_id === trackId
+                  ? {
+                      ...prev,
+                      starting_coordinate: saved.startCoordinate,
+                      ending_coordinate: saved.endCoordinate,
+                    }
+                  : prev,
+              );
               // The route stays selected, and the re-pick changed its length and
               // validity: the banner and the map's length box must follow.
               onReloadSelectedRoute().catch((error) => {

@@ -6,12 +6,11 @@ import { unwrap } from "@/lib/actionResult";
 import { getAdminNote } from "@/lib/adminNotesActions";
 import type { NoteType } from "@/lib/shared/constants";
 import type { AdminNote } from "@/lib/shared/types";
+import { useToast } from "@/lib/toast";
 
 interface UseAdminNotesPopupOptions {
   map: React.MutableRefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
-  showSuccess: (message: string) => void;
-  showError: (message: string) => void;
   /** Called after a popup save/delete; the parent refreshes the notes tiles. */
   onNotesChanged: () => void;
 }
@@ -21,13 +20,9 @@ interface UseAdminNotesPopupOptions {
  * - Right-click to create/edit notes
  * - Click outside to close popup
  */
-export function useAdminNotesPopup({
-  map,
-  mapLoaded,
-  showSuccess,
-  showError,
-  onNotesChanged,
-}: UseAdminNotesPopupOptions) {
+export function useAdminNotesPopup({ map, mapLoaded, onNotesChanged }: UseAdminNotesPopupOptions) {
+  // Passed down: the popup is its own React root, outside the toast provider.
+  const { showError, showSuccess } = useToast();
   const notesPopupRef = useRef<maplibregl.Popup | null>(null);
 
   // Right-click handler for notes
