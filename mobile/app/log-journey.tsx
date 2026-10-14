@@ -20,14 +20,7 @@ import { getUntimezonedDateStr } from "@shared/getUntimezonedDateStr";
 import { routeTitle } from "@shared/map/routeFeature";
 import { useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { bumpLogVersion } from "@/logbook/logVersion";
 import { type SelectedRoute, useSelection } from "@/logbook/SelectionContext";
@@ -101,30 +94,36 @@ export default function LogJourneyScreen(): ReactNode {
               : undefined,
         })),
       });
-      // Cleared before leaving, so the map behind is already showing the result —
-      // and the version bump is what repaints the route in its new colour and
-      // reloads the numbers over it.
+      // The version bump is what repaints the route in its new colour and reloads the
+      // numbers over it. Emptying the selection is what closes this screen (the
+      // effect above), so there is no `router.back()` here: a second one would find
+      // nothing under the tabs to go back to.
       bumpLogVersion();
       clear();
-      router.back();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not log the journey.");
       setSaving(false);
     }
-  }, [name, date, description, tripId, selected, clear, router]);
+  }, [name, date, description, tripId, selected, clear]);
 
   return (
     <Screen>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1"
-      >
+      {/* Not a KeyboardAvoidingView: it measures itself against its parent, not the
+          screen, and a modal sheet starts below the top of the screen — so it came up
+          short by that much, and the keyboard's suggestion bar covered the bottom of
+          the form. The scroll view's own iOS inset is measured by UIKit in window
+          coordinates; Android resizes the window for the keyboard itself. */}
+      <View className="flex-1">
         <View className="flex-row items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <Text className="text-lg font-bold text-gray-900 dark:text-gray-100">Log journey</Text>
           <Button label="Cancel" variant="ghost" onPress={() => router.back()} />
         </View>
 
-        <ScrollView contentContainerClassName="gap-6 p-4" keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerClassName="gap-6 p-4"
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
           <View className="gap-3">
             <TextField
               label="Name"
@@ -188,7 +187,7 @@ export default function LogJourneyScreen(): ReactNode {
 
           <Button label="Log journey" onPress={() => void submit()} busy={saving} />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

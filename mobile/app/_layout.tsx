@@ -19,6 +19,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
 import { HighlightProvider } from "@/logbook/HighlightContext";
+import { PlannerProvider } from "@/logbook/PlannerContext";
 import { SelectionProvider } from "@/logbook/SelectionContext";
 import { LayerPrefsProvider } from "@/map/LayerPrefsContext";
 import { CountryPrefsProvider } from "@/region/CountryPrefsContext";
@@ -48,7 +49,8 @@ function RootNavigator(): ReactNode {
               ends by emptying it. */}
           <Stack.Screen name="log-journey" options={{ presentation: "modal" }} />
           {/* Likewise: opened, spent, closed — what it produces is a gold path on the
-              map behind it and routes in the selection. */}
+              map behind it and routes in the selection. Its form and answer outlive
+              it (`PlannerContext`). */}
           <Stack.Screen name="plan-journey" options={{ presentation: "modal" }} />
           {/* Pushed, not modal: a settings page is left by going back, not by being
               spent. */}
@@ -73,7 +75,9 @@ export default function RootLayout(): ReactNode {
                 <LayerPrefsProvider>
                   <SelectionProvider>
                     <HighlightProvider>
-                      <RootNavigator />
+                      <PlannerProvider>
+                        <RootNavigator />
+                      </PlannerProvider>
                     </HighlightProvider>
                   </SelectionProvider>
                 </LayerPrefsProvider>

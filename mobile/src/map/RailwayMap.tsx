@@ -41,6 +41,7 @@ import {
   VectorSource,
   type ViewStateChangeEvent,
 } from "@maplibre/maplibre-react-native";
+import { COVERAGE_LAYER_IDS } from "@shared/map/coverageLayer";
 import { HIGHLIGHT_COLORS } from "@shared/map/highlightLayers";
 import {
   createPublicNotesLayer,
@@ -285,16 +286,26 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
           ) : null}
         </VectorSource>
 
+        {/* Keyed on its URL: the binding reads `tiles` once, when it builds the
+            source, and a new URL handed to a built one is stored and never used — so
+            neither the country filter nor the log version would reach the map. A new
+            key is a new source. Which is also why every route layer carries a
+            `beforeId`: a remounted source re-adds its layers, and one without an
+            anchor would be appended to the top, over the stations. Under the
+            coverage overlay is where they belong, and it is mounted with the map. */}
         <VectorSource
+          key={routesUrl}
           id="railway_routes"
           tiles={[routesUrl]}
           minzoom={ZOOM_RANGES.railwayRoutes.min}
           maxzoom={ZOOM_RANGES.railwayRoutes.max}
           onPress={(event) => takePress(event, toRouteFeature)}
         >
-          <Layer {...routeLayers.route} />
-          {showHeritage ? <Layer {...routeLayers.heritage} /> : null}
-          {showSpecial ? <Layer {...routeLayers.special} /> : null}
+          <Layer {...routeLayers.route} beforeId={COVERAGE_LAYER_IDS[0]} />
+          {showHeritage ? (
+            <Layer {...routeLayers.heritage} beforeId={COVERAGE_LAYER_IDS[0]} />
+          ) : null}
+          {showSpecial ? <Layer {...routeLayers.special} beforeId={COVERAGE_LAYER_IDS[0]} /> : null}
           {/* What the logbook or the planner pointed the map at — gold or orange. */}
           <HighlightLayers
             baseId="highlighted_routes"

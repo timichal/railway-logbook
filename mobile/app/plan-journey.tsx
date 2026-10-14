@@ -22,16 +22,20 @@
  * what it is showing. Adding the routes to the selection hands them to the orange
  * selection highlight and drops the gold one, which is the web's behaviour too — two
  * colours claiming to be the answer is one too many.
+ *
+ * **The form and the answer are not this screen's** (`PlannerContext`): closing the
+ * modal to look at the path must not throw either away, or adding it would mean
+ * planning it twice. Only the add in flight is local.
  */
 
 import { Ionicons } from "@expo/vector-icons";
 import { hasOrdinaryNonRegular, regionUsagePluralLabel } from "@shared/regions";
 import type { PlannerRoute, Station } from "@shared/types";
 import { useRouter } from "expo-router";
-import { type ReactNode, useCallback, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
-import { useHighlight } from "@/logbook/HighlightContext";
+import { usePlanner } from "@/logbook/PlannerContext";
 import { useSelection } from "@/logbook/SelectionContext";
 import { routeFeatureFromMetadata } from "@/map/mapFeatures";
 import { useRegion } from "@/region/RegionContext";
@@ -40,118 +44,49 @@ import { Button } from "@/ui/Button";
 import { Screen } from "@/ui/Screen";
 import { ToggleSwitch } from "@/ui/ToggleSwitch";
 
-/** A station id is `string | number` off the API, and may be negative (see `API.md`). */
-function stationId(station: Station): number {
-  return typeof station.id === "string" ? Number.parseInt(station.id, 10) : station.id;
-}
-
 export default function PlanJourneyScreen(): ReactNode {
   const router = useRouter();
   const { add } = useSelection();
-  const { highlight, clear: clearHighlight } = useHighlight();
   const { regionId } = useRegion();
-
-  // Offered only where the region counts lines beyond Regular; on by default
+  const { form, result, error, searching, editForm, find, showOnMap, reset } = usePlanner();
+  const { from, to, vias, includeSpecial } = form;
   const offersSpecial = hasOrdinaryNonRegular(regionId);
-  const [includeSpecial, setIncludeSpecial] = useState(true);
 
-  const [from, setFrom] = useState<Station | null>(null);
-  const [to, setTo] = useState<Station | null>(null);
-  // A slot is created empty and filled afterwards, so the list carries nulls — the
-  // same positional shape the web app's via rows have.
-  const [vias, setVias] = useState<(Station | null)[]>([]);
-
-  const [routes, setRoutes] = useState<PlannerRoute[]>([]);
-  const [totalDistance, setTotalDistance] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [searching, setSearching] = useState(false);
-  // Only the latest search may write: flipping the non-JR switch drops one still
-  // running, whose answer would be a plan over lines just excluded
-  const searchRef = useRef(0);
   const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  // An answer kept from an earlier visit is drawn again, in case the map has been
+  // pointed at something else (or its chip dismissed) since
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening only — showOnMap changes with every answer, and a fresh answer highlights itself.
+  useEffect(() => {
+    showOnMap();
+  }, []);
 
   const setVia = (index: number, station: Station | null): void => {
-    setVias((current) => current.map((s, i) => (i === index ? station : s)));
+    editForm((f) => ({ ...f, vias: f.vias.map((s, i) => (i === index ? station : s)) }));
   };
 
   const moveVia = (index: number, direction: -1 | 1): void => {
     const target = index + direction;
-    setVias((current) => {
-      if (target < 0 || target >= current.length) return current;
-      const next = [...current];
+    if (target < 0 || target >= vias.length) return;
+    editForm((f) => {
+      const next = [...f.vias];
       [next[index], next[target]] = [next[target], next[index]];
-      return next;
+      return { ...f, vias: next };
     });
   };
 
-  /**
-   * A new search supersedes whatever the last one put on the map. Stable, because
-   * `find` closes over it — a version recreated every render would make that callback
-   * useless as one.
-   */
-  const resetResult = useCallback((): void => {
-    setRoutes([]);
-    setTotalDistance(0);
-    setError(null);
-  }, []);
-
-  const find = useCallback(async (): Promise<void> => {
-    if (!from || !to) {
-      setError("Pick both a from and a to station.");
-      return;
-    }
-    if (vias.some((s) => s === null)) {
-      setError("Fill in every via station, or remove the empty ones.");
-      return;
-    }
-
-    const request = ++searchRef.current;
-    setSearching(true);
-    resetResult();
-    try {
-      const result = await api.plan({
-        fromStationId: stationId(from),
-        toStationId: stationId(to),
-        viaStationIds: vias.flatMap((s) => (s ? [stationId(s)] : [])),
-        includeSpecial: offersSpecial && includeSpecial,
-      });
-      if (request !== searchRef.current) return;
-
-      if (result.error) {
-        setError(result.error);
-        clearHighlight();
-        return;
-      }
-
-      setRoutes(result.routes);
-      setTotalDistance(result.totalDistance);
-      highlight({
-        trackIds: result.routes.map((r) => r.track_id),
-        kind: "planner",
-        // A terminal route joined between its endpoints is highlighted along the
-        // stretch travelled only, so the gold line stops at the station.
-        partials: result.routes.flatMap((r) => (r.partial ? [r.partial] : [])),
-        ownerKey: "planner",
-      });
-    } catch (caught) {
-      if (request !== searchRef.current) return;
-      setError(caught instanceof Error ? caught.message : "Could not plan that journey.");
-    } finally {
-      if (request === searchRef.current) setSearching(false);
-    }
-  }, [from, to, vias, offersSpecial, includeSpecial, highlight, clearHighlight, resetResult]);
-
   const addToSelection = useCallback(async (): Promise<void> => {
-    if (routes.length === 0) return;
+    if (!result) return;
     setAdding(true);
-    setError(null);
+    setAddError(null);
     try {
       // The plan names its routes by endpoint; the selection holds whole features, so
       // the ids are exchanged for the route rows the tile would have carried.
-      const metadata = await api.routeMetadata(routes.map((r) => r.track_id));
+      const metadata = await api.routeMetadata(result.routes.map((r) => r.track_id));
       const byId = new Map(metadata.map((route) => [route.track_id, route]));
 
-      for (const planned of routes) {
+      for (const planned of result.routes) {
         const row = byId.get(planned.track_id);
         if (!row) continue;
         add(routeFeatureFromMetadata(row), {
@@ -160,37 +95,47 @@ export default function PlanJourneyScreen(): ReactNode {
         });
       }
 
-      // The selection's own orange highlight takes over from here.
-      clearHighlight();
+      // The plan is spent, as on the web: the selection's own orange highlight takes
+      // over from the gold one, which goes with the answer
+      reset();
       router.back();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not add those routes.");
+      setAddError(caught instanceof Error ? caught.message : "Could not add those routes.");
       setAdding(false);
     }
-  }, [routes, add, clearHighlight, router]);
+  }, [result, add, reset, router]);
+
+  const shownError = addError ?? error;
+  const hasForm = from !== null || to !== null || vias.length > 0;
 
   return (
     <Screen>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1"
-      >
+      {/* Not a KeyboardAvoidingView: it measures itself against its parent, not the
+          screen, and a modal sheet starts below the top of the screen — so it came up
+          short by that much, and the keyboard's suggestion bar covered the bottom of
+          the form. The scroll view's own iOS inset is measured by UIKit in window
+          coordinates; Android resizes the window for the keyboard itself. */}
+      <View className="flex-1">
         <View className="flex-row items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <Text className="text-lg font-bold text-gray-900 dark:text-gray-100">
             Journey planner
           </Text>
-          <Button label="Close" variant="ghost" onPress={() => router.back()} />
+          <View className="flex-row">
+            {hasForm ? <Button label="Clear" variant="ghost" onPress={reset} /> : null}
+            <Button label="Close" variant="ghost" onPress={() => router.back()} />
+          </View>
         </View>
 
-        <ScrollView contentContainerClassName="gap-4 p-4" keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerClassName="gap-4 p-4"
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
           <StationField
             label="From"
             placeholder="Search for a station"
             value={from}
-            onChange={(station) => {
-              setFrom(station);
-              resetResult();
-            }}
+            onChange={(station) => editForm((f) => ({ ...f, from: station }))}
           />
 
           {vias.map((station, index) => (
@@ -204,10 +149,7 @@ export default function PlanJourneyScreen(): ReactNode {
                   label={`Via ${index + 1}`}
                   placeholder="Search for a station"
                   value={station}
-                  onChange={(picked) => {
-                    setVia(index, picked);
-                    resetResult();
-                  }}
+                  onChange={(picked) => setVia(index, picked)}
                 />
               </View>
               {/* Only worth the width once there are two rows to put in an order. */}
@@ -230,10 +172,9 @@ export default function PlanJourneyScreen(): ReactNode {
               <IconButton
                 icon="trash-outline"
                 label={`Remove via ${index + 1}`}
-                onPress={() => {
-                  setVias((current) => current.filter((_, i) => i !== index));
-                  resetResult();
-                }}
+                onPress={() =>
+                  editForm((f) => ({ ...f, vias: f.vias.filter((_, i) => i !== index) }))
+                }
               />
             </View>
           ))}
@@ -241,32 +182,21 @@ export default function PlanJourneyScreen(): ReactNode {
           <Button
             label="+ Add via station"
             variant="outline"
-            onPress={() => setVias((current) => [...current, null])}
+            onPress={() => editForm((f) => ({ ...f, vias: [...f.vias, null] }))}
           />
 
           <StationField
             label="To"
             placeholder="Search for a station"
             value={to}
-            onChange={(station) => {
-              setTo(station);
-              resetResult();
-            }}
+            onChange={(station) => editForm((f) => ({ ...f, to: station }))}
           />
 
           {offersSpecial ? (
             <ToggleSwitch
               label={`Include ${regionUsagePluralLabel(regionId, 2)}`}
               value={includeSpecial}
-              onChange={(value) => {
-                // The result, its gold line and any search still running were all
-                // for the other setting
-                searchRef.current++;
-                setSearching(false);
-                setIncludeSpecial(value);
-                resetResult();
-                clearHighlight();
-              }}
+              onChange={(value) => editForm((f) => ({ ...f, includeSpecial: value }))}
             />
           ) : null}
 
@@ -277,20 +207,20 @@ export default function PlanJourneyScreen(): ReactNode {
             disabled={!from || !to}
           />
 
-          {error ? (
+          {shownError ? (
             <View className="rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
-              <Text className="text-sm text-red-700 dark:text-red-300">{error}</Text>
+              <Text className="text-sm text-red-700 dark:text-red-300">{shownError}</Text>
             </View>
           ) : null}
 
-          {routes.length > 0 ? (
+          {result && result.routes.length > 0 ? (
             <View className="gap-3">
               <Text className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {routes.length} {routes.length === 1 ? "route" : "routes"} ·{" "}
-                {totalDistance.toFixed(1)} km
+                {result.routes.length} {result.routes.length === 1 ? "route" : "routes"} ·{" "}
+                {result.totalDistance.toFixed(1)} km
               </Text>
               <View className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-                {routes.map((route, index) => (
+                {result.routes.map((route, index) => (
                   <PlannedRouteRow key={route.track_id} route={route} index={index} />
                 ))}
               </View>
@@ -300,12 +230,13 @@ export default function PlanJourneyScreen(): ReactNode {
                 busy={adding}
               />
               <Text className="text-xs text-gray-500 dark:text-gray-400">
-                The path is already drawn in gold on the map — close this to look at it.
+                The path is drawn in gold on the map — close this to look at it. It stays here until
+                you add it, clear it or change the stations.
               </Text>
             </View>
           ) : null}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }
