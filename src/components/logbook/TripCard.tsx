@@ -20,6 +20,12 @@ import {
   updateTrip,
 } from "@/lib/tripActions";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
+import {
+  journeyEditKey,
+  tripEditKey,
+  useConfirmDiscard,
+  useReportEditing,
+} from "@/lib/ui/editGuard";
 import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 
 interface TripCardProps {
@@ -69,6 +75,16 @@ export default function TripCard({
 
   const focusAfterRender = useFocusAfterRender();
   const editButtonRef = useRef<HTMLButtonElement>(null);
+
+  useReportEditing(
+    tripEditKey(trip.id),
+    `"${trip.name}"`,
+    isOpen && isEditing && (editName !== trip.name || editDescription !== (trip.description || "")),
+  );
+  // Collapsing the trip, or opening another of its journeys, closes the open
+  // nested journey — which may be mid-edit. The trip's own form survives both.
+  const confirmDiscard = useConfirmDiscard();
+  const nestedEditKeys = openNestedJourneyId === null ? [] : [journeyEditKey(openNestedJourneyId)];
 
   // Sync from props when they change (after parent refreshes the list)
   useEffect(() => {
@@ -215,7 +231,7 @@ export default function TripCard({
           `${trip.total_distance.toFixed(1)} km`,
         ].join(" · ")}
         isOpen={isOpen}
-        onToggle={isOpen ? onRequestClose : onRequestOpen}
+        onToggle={isOpen ? () => confirmDiscard(onRequestClose, nestedEditKeys) : onRequestOpen}
         locked={isEditing}
       />
 
@@ -295,7 +311,9 @@ export default function TripCard({
                       store={databaseJourneyStore}
                       availableTrips={availableTrips}
                       isOpen={openNestedJourneyId === journey.id}
-                      onRequestOpen={() => onNestedJourneyOpenChange(journey.id)}
+                      onRequestOpen={() =>
+                        confirmDiscard(() => onNestedJourneyOpenChange(journey.id), nestedEditKeys)
+                      }
                       onRequestClose={() => onNestedJourneyOpenChange(null)}
                       onChanged={onChanged}
                       onHighlightRoutes={onHighlightRoutes}

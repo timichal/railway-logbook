@@ -4,7 +4,7 @@ import type { MapLibreEvent } from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SidebarResizer from "@/components/layout/SidebarResizer";
 import SelectionSummaryBar from "@/components/logbook/SelectionSummaryBar";
-import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
+import UserSidebar, { type ActiveTab, type SetActiveTab } from "@/components/logbook/UserSidebar";
 import MapProgressBox from "@/components/map/MapProgressBox";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import MobileBottomSheet from "@/components/ui/MobileBottomSheet";
@@ -64,7 +64,7 @@ interface RailwayMapProps {
   user: User | null;
   initialSelectedCountries: string[];
   activeTab: ActiveTab;
-  setActiveTab: (tab: ActiveTab) => void;
+  setActiveTab: SetActiveTab;
   sidebarWidth: string;
   onSidebarResize: () => void;
   isResizing: boolean;
@@ -566,17 +566,18 @@ export default function RailwayMap({
   // transform comes off. Both rects sit under the same transform, so their
   // difference is the form's offset in the container whatever the sheet is doing.
   const handleLogFromSummary = useCallback(() => {
-    setActiveTab("routes");
-    requestAnimationFrame(() => {
-      const form = document.getElementById(NEW_JOURNEY_FORM_ID);
-      let scroller = form?.parentElement ?? null;
-      while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
-        scroller = scroller.parentElement;
-      }
-      if (!form || !scroller) return;
-      const offset = form.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-      scroller.scrollTo({ top: scroller.scrollTop + offset - 8, behavior: "smooth" });
-    });
+    setActiveTab("routes", () =>
+      requestAnimationFrame(() => {
+        const form = document.getElementById(NEW_JOURNEY_FORM_ID);
+        let scroller = form?.parentElement ?? null;
+        while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+          scroller = scroller.parentElement;
+        }
+        if (!form || !scroller) return;
+        const offset = form.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        scroller.scrollTo({ top: scroller.scrollTop + offset - 8, behavior: "smooth" });
+      }),
+    );
   }, [setActiveTab]);
 
   // The same limit LocalTripLogger disables its form on, read per render as it is

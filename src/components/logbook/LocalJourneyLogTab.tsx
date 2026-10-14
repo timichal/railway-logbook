@@ -13,6 +13,7 @@ import type {
   LocalJourney,
   LocalLoggedPart,
 } from "@/lib/shared/types";
+import { journeyEditKey, useConfirmDiscard, useHasChanges } from "@/lib/ui/editGuard";
 import { getRegionTrackIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
@@ -47,6 +48,11 @@ export default function LocalJourneyLogTab({
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [openJourneyId, setOpenJourneyId] = useState<string | null>(null);
+  // As in JourneysAndTripsTab: while the open journey has unsaved changes the
+  // search (which can filter it out) is disabled, and opening another asks first.
+  const openEditKeys = openJourneyId === null ? [] : [journeyEditKey(openJourneyId)];
+  const hasChanges = useHasChanges(openEditKeys);
+  const confirmDiscard = useConfirmDiscard();
 
   // Any journey open when the region changes is collapsed: it may not be in this
   // region at all, and its highlight is dropped by the map anyway. Done during
@@ -138,7 +144,9 @@ export default function LocalJourneyLogTab({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by name, date, or description..."
-          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={hasChanges}
+          title={hasChanges ? "Save or cancel the edit to search" : undefined}
+          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
         />
       </div>
 
@@ -157,7 +165,7 @@ export default function LocalJourneyLogTab({
               journey={{ ...journey, route_count: parts.length }}
               store={localJourneyStore}
               isOpen={openJourneyId === journey.id}
-              onRequestOpen={() => setOpenJourneyId(journey.id)}
+              onRequestOpen={() => confirmDiscard(() => setOpenJourneyId(journey.id), openEditKeys)}
               onRequestClose={handleClose}
               onChanged={handleChanged}
               onHighlightRoutes={onHighlightRoutes}

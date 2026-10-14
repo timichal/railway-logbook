@@ -27,6 +27,12 @@ import { tabBtn } from "@/lib/ui/buttonStyles";
  */
 export type ActiveTab = "routes" | "journeylog" | "map";
 
+/**
+ * Leaving My Trips asks first while a card there is being edited (`editGuard`),
+ * so the switch may come later or not at all; `then` runs once it has.
+ */
+export type SetActiveTab = (tab: ActiveTab, then?: () => void) => void;
+
 interface UserSidebarProps {
   user: User | null;
   dataAccess: DataAccess;
@@ -40,7 +46,7 @@ interface UserSidebarProps {
   selectedCountries: string[];
   onCountryChange: (countries: string[]) => void;
   activeTab: ActiveTab;
-  setActiveTab: (tab: ActiveTab) => void;
+  setActiveTab: SetActiveTab;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
   sidebarWidth?: string | null;
   onJourneyEditStart?: JourneyEditStartFn;

@@ -12,6 +12,7 @@ import RegionSwitch from "@/components/ui/RegionSwitch";
 import ThemeSwitch from "@/components/ui/ThemeSwitch";
 import type { User } from "@/lib/authActions";
 import { btn } from "@/lib/ui/buttonStyles";
+import { useConfirmDiscard, useGuardedLinkClick } from "@/lib/ui/editGuard";
 import { useModalDialog } from "@/lib/ui/useModalDialog";
 
 /**
@@ -144,6 +145,11 @@ export default function MenuSheet({
     else if (!isFirstRender) headerButton()?.focus({ preventScroll: true });
   }, [view, dialogRef]);
 
+  // Signing in swaps the store under My Journeys (see MainLayout's openMenu), and
+  // the Admin link leaves the page
+  const confirmDiscard = useConfirmDiscard();
+  const handleAdminClick = useGuardedLinkClick("/admin");
+
   const openView = (next: MenuView) => {
     if (view === "menu") openedFromRef.current = next;
     setView(next);
@@ -224,7 +230,7 @@ export default function MenuSheet({
           <Row icon="book" label="How To Use" opens="howto" onOpen={openView} />
           <Row icon="document" label="Railway Notes" opens="notes" onOpen={openView} />
           {user?.id === 1 && (
-            <Link href="/admin" className={ROW}>
+            <Link href="/admin" onClick={handleAdminClick} className={ROW}>
               <Icon name="cog" className="w-5 h-5 text-gray-400 flex-shrink-0" />
               <span className="flex-1">Admin</span>
               <Chevron />
@@ -290,7 +296,7 @@ export default function MenuSheet({
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => openView("login")}
+                  onClick={() => confirmDiscard(() => openView("login"))}
                   data-opens="login"
                   className={`${btn("primary", "lg")} w-full`}
                 >
@@ -298,7 +304,7 @@ export default function MenuSheet({
                 </button>
                 <button
                   type="button"
-                  onClick={() => openView("register")}
+                  onClick={() => confirmDiscard(() => openView("register"))}
                   data-opens="register"
                   className={`${btn("outline", "lg")} w-full`}
                 >

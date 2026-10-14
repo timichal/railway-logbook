@@ -2,6 +2,7 @@
 
 import { useRegionContext } from "@/lib/regionContext";
 import { REGION_IDS, REGIONS } from "@/lib/shared/regions";
+import { useConfirmDiscard } from "@/lib/ui/editGuard";
 
 interface RegionSwitchProps {
   /** Flag-only buttons, for a cramped navbar. */
@@ -16,6 +17,8 @@ interface RegionSwitchProps {
  */
 export default function RegionSwitch({ compact = false, stretch = false }: RegionSwitchProps) {
   const { regionId, setRegion } = useRegionContext();
+  // A switch reloads My Trips for the other region, closing a card being edited
+  const confirmDiscard = useConfirmDiscard();
 
   return (
     <fieldset
@@ -34,7 +37,9 @@ export default function RegionSwitch({ compact = false, stretch = false }: Regio
           <button
             key={id}
             type="button"
-            onClick={() => setRegion(id)}
+            onClick={() => {
+              if (id !== regionId) confirmDiscard(() => setRegion(id));
+            }}
             aria-pressed={isActive}
             title={region.label}
             // The fieldset clips (`overflow-hidden`, to round the strip's ends), so the

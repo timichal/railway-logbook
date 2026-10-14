@@ -21,6 +21,7 @@ import type {
 import { useToast } from "@/lib/toast";
 import type { TripWithStats } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
+import { journeyEditKey, useReportEditing } from "@/lib/ui/editGuard";
 import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 
 function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
@@ -78,6 +79,37 @@ interface JourneySnapshot {
   tripId: number | null;
 }
 
+/** The routes Save sends: added or re-ticked, and removed. */
+function routeChanges(original: RailwayRoute[], edited: RailwayRoute[]) {
+  const origMap = new Map(original.map((r) => [r.track_id, r]));
+  const editedIds = new Set(edited.map((r) => r.track_id));
+  const upsert = edited.flatMap((route) => {
+    const orig = origMap.get(route.track_id);
+    const partial = route.partial ?? false;
+    return !orig || (orig.partial ?? false) !== partial
+      ? [{ trackId: route.track_id, partial }]
+      : [];
+  });
+  const remove = original
+    .filter((orig) => !editedIds.has(orig.track_id))
+    .map((orig) => orig.track_id);
+  return { upsert, remove };
+}
+
+/** Whether Save would change anything — what the edit guard asks about. */
+function differsFrom(original: JourneySnapshot, current: JourneySnapshot): boolean {
+  if (
+    current.name !== original.name ||
+    current.date !== original.date ||
+    current.description !== original.description ||
+    current.tripId !== original.tripId
+  ) {
+    return true;
+  }
+  const { upsert, remove } = routeChanges(original.routes, current.routes);
+  return upsert.length > 0 || remove.length > 0;
+}
+
 export default function JourneyCard<Id extends number | string>({
   journey,
   store,
@@ -114,6 +146,19 @@ export default function JourneyCard<Id extends number | string>({
   const isLoading = originalSnapshot === null && !loadFailed;
 
   const editing = isOpen && isEditing;
+  useReportEditing(
+    journeyEditKey(journey.id),
+    `"${journey.name}"`,
+    editing &&
+      originalSnapshot !== null &&
+      differsFrom(originalSnapshot, {
+        routes: viewedRoutes,
+        name: editName,
+        date: editDate,
+        description: editDescription,
+        tripId: editTripId,
+      }),
+  );
 
   const focusAfterRender = useFocusAfterRender();
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -264,18 +309,7 @@ export default function JourneyCard<Id extends number | string>({
     // Only the difference goes to the store, which applies all of it or none: a
     // failed save changes nothing, so the snapshot still matches the journey and
     // pressing Save again retries the whole edit
-    const origMap = new Map(originalSnapshot.routes.map((r) => [r.track_id, r]));
-    const editedIds = new Set(viewedRoutes.map((r) => r.track_id));
-    const upsert = viewedRoutes.flatMap((edited) => {
-      const orig = origMap.get(edited.track_id);
-      const partial = edited.partial ?? false;
-      return !orig || (orig.partial ?? false) !== partial
-        ? [{ trackId: edited.track_id, partial }]
-        : [];
-    });
-    const remove = originalSnapshot.routes
-      .filter((orig) => !editedIds.has(orig.track_id))
-      .map((orig) => orig.track_id);
+    const { upsert, remove } = routeChanges(originalSnapshot.routes, viewedRoutes);
     const tripChanged = editTripId !== originalSnapshot.tripId;
 
     setIsSaving(true);

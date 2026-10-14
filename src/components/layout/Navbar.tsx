@@ -9,6 +9,7 @@ import ThemeSwitch, { ThemeCycleButton } from "@/components/ui/ThemeSwitch";
 import type { User } from "@/lib/authActions";
 import { useRegion } from "@/lib/regionContext";
 import { btn } from "@/lib/ui/buttonStyles";
+import { useGuardedLinkClick } from "@/lib/ui/editGuard";
 
 interface NavbarProps {
   user: User | null;
@@ -43,6 +44,8 @@ interface NavbarProps {
 export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu }: NavbarProps) {
   const region = useRegion();
   const [showShareDialog, setShowShareDialog] = useState(false);
+  // Leaving the map for the admin page drops a My Trips edit
+  const handleAdminClick = useGuardedLinkClick("/admin");
 
   return (
     <header className="bg-surface border-b border-gray-200 px-3 py-2 md:p-4 flex-shrink-0">
@@ -116,7 +119,7 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
                 switching between the map and the admin view is a constant back and
                 forth, and two clicks each way is two too many. */}
             {user?.id === 1 && !isAdminPage && (
-              <Link href="/admin" className={btn("primary", "bar")}>
+              <Link href="/admin" onClick={handleAdminClick} className={btn("primary", "bar")}>
                 Admin
               </Link>
             )}
