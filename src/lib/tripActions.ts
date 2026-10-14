@@ -19,7 +19,7 @@ import {
   assignJourneyToTripForUser,
   createTripForUser,
   deleteTripForUser,
-  type JourneyInTrip,
+  type JourneyWithStats,
   journeysAndTripsForUser,
   type TripsAndJourneysItem,
   type TripWithStats,
@@ -29,7 +29,7 @@ import {
   updateTripForUser,
 } from "./tripQueries";
 
-export type { JourneyInTrip, TripsAndJourneysItem, TripWithStats };
+export type { JourneyWithStats, TripsAndJourneysItem, TripWithStats };
 
 /** All of the current user's trips with computed stats, scoped to `region`. */
 export async function getAllTrips(region: RegionId): Promise<ActionResult<TripWithStats[]>> {
@@ -46,7 +46,7 @@ export async function getTrip(
 ): Promise<
   ActionResult<{
     trip: Trip;
-    journeys: JourneyInTrip[];
+    journeys: JourneyWithStats[];
     routeIds: number[];
     bounds: RouteBounds | null;
   }>
@@ -101,6 +101,6 @@ export async function getJourneysAndTrips(
 /** Journeys not assigned to any trip (for the assignment picker), scoped to `region`. */
 export async function getUnassignedJourneys(
   region: RegionId,
-): Promise<ActionResult<JourneyInTrip[]>> {
+): Promise<ActionResult<JourneyWithStats[]>> {
   return asUser((userId) => unassignedJourneysForUser(userId, region));
 }

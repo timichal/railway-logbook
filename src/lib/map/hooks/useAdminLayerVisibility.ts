@@ -1,14 +1,11 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useState } from "react";
-import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
+import {
+  ROUTE_CLICK_LAYER_ID,
+  ROUTE_LINE_LAYERS,
+  SCENIC_LINES_LAYER_ID,
+} from "@/lib/shared/map/layers";
 import type { Region } from "@/lib/shared/regions";
-
-/** The three coloured route line layers, one per usage type. */
-export const ROUTE_LINE_LAYERS = [
-  "railway_routes",
-  "railway_routes_heritage",
-  "railway_routes_special",
-] as const;
 
 /**
  * The admin map's layer switches, in the order the controls list them. `offeredIn`
@@ -87,8 +84,10 @@ export function useAdminLayerVisibility({
       for (const id of layerIds) setVisibility(id, visible[key]);
     }
     // Routes re-shown mid-mode are for reference: the wide hit area stays off, so it
-    // neither swallows the clicks on the parts being picked nor selects a route.
-    setVisibility("railway_routes_click", routesInteractive);
+    // neither swallows the clicks on the parts beside a route nor selects one. A click
+    // on a line itself is still blocked; hovering it shows its popup (see
+    // adminMapInteractions).
+    setVisibility(ROUTE_CLICK_LAYER_ID, routesInteractive);
   }, [map, mapLoaded, visible, routesInteractive]);
 
   const toggle = (key: AdminLayerKey) => setVisible((v) => ({ ...v, [key]: !v[key] }));

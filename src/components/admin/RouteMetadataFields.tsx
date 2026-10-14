@@ -1,8 +1,8 @@
 "use client";
 
+import TextField, { INPUT, LABEL } from "@/components/admin/TextField";
 import TagInput from "@/components/ui/TagInput";
 import type { SaveRouteData } from "@/lib/adminRouteActions";
-import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 import { useRegion } from "@/lib/regionContext";
 import { type LineClass, lineClassOptions, type UsageType } from "@/lib/shared/constants";
 import { regionUsageOptions } from "@/lib/shared/regions";
@@ -24,10 +24,6 @@ export function routeMetadataIncomplete(value: SaveRouteData, hasRouteNames: boo
   );
 }
 
-/** The admin forms' text input and label classes, shared with the scenic form. */
-export const INPUT =
-  "w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-fg";
-export const LABEL = "block text-sm font-medium text-gray-700 mb-1";
 const GROUP_LABEL = "block text-sm font-medium text-gray-700 mb-2";
 const CHECKBOX = "w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500";
 
@@ -103,50 +99,30 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
     <>
       {/* Line Name — only where the region names its lines (Japan) */}
       {region.hasRouteNames && (
-        <div>
-          <label htmlFor={`${idPrefix}-name`} className={LABEL}>
-            Name *
-          </label>
-          <input
-            id={`${idPrefix}-name`}
-            type="text"
-            value={value.name}
-            onChange={(e) => set({ name: e.target.value })}
-            className={INPUT}
-            placeholder="Line name"
-          />
-        </div>
+        <TextField
+          id={`${idPrefix}-name`}
+          label="Name *"
+          value={value.name}
+          onChange={(name) => set({ name })}
+          placeholder="Line name"
+        />
       )}
-
-      <div>
-        <label htmlFor={`${idPrefix}-from`} className={LABEL}>
-          From *
-        </label>
-        <input
-          id={`${idPrefix}-from`}
-          type="text"
-          value={value.from_station}
-          onChange={(e) => set({ from_station: e.target.value })}
-          onKeyDown={(e) => handleJunctionShortcut(e, (from_station) => set({ from_station }))}
-          className={INPUT}
-          placeholder="Starting station"
-        />
-      </div>
-
-      <div>
-        <label htmlFor={`${idPrefix}-to`} className={LABEL}>
-          To *
-        </label>
-        <input
-          id={`${idPrefix}-to`}
-          type="text"
-          value={value.to_station}
-          onChange={(e) => set({ to_station: e.target.value })}
-          onKeyDown={(e) => handleJunctionShortcut(e, (to_station) => set({ to_station }))}
-          className={INPUT}
-          placeholder="Ending station"
-        />
-      </div>
+      <TextField
+        id={`${idPrefix}-from`}
+        label="From *"
+        value={value.from_station}
+        onChange={(from_station) => set({ from_station })}
+        station
+        placeholder="Starting station"
+      />
+      <TextField
+        id={`${idPrefix}-to`}
+        label="To *"
+        value={value.to_station}
+        onChange={(to_station) => set({ to_station })}
+        station
+        placeholder="Ending station"
+      />
 
       <div>
         <label htmlFor={`${idPrefix}-description`} className={LABEL}>
@@ -162,19 +138,14 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
         />
       </div>
 
-      <div>
-        <label htmlFor={`${idPrefix}-link`} className={LABEL}>
-          Link (URL)
-        </label>
-        <input
-          id={`${idPrefix}-link`}
-          type="url"
-          value={value.link}
-          onChange={(e) => set({ link: e.target.value })}
-          className={INPUT}
-          placeholder="https://example.com"
-        />
-      </div>
+      <TextField
+        id={`${idPrefix}-link`}
+        label="Link (URL)"
+        type="url"
+        value={value.link}
+        onChange={(link) => set({ link })}
+        placeholder="https://example.com"
+      />
 
       <div>
         <span className={GROUP_LABEL}>Usage Type *</span>

@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import MapLoading from "@/components/layout/MapLoading";
 import RegionSwitch from "@/components/ui/RegionSwitch";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
@@ -12,11 +13,7 @@ import { btn } from "@/lib/ui/buttonStyles";
 // Same reason as the interactive map: MapLibre can't be server-rendered.
 const PublicRailwayMap = dynamic(() => import("@/components/sharing/PublicRailwayMap"), {
   ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <div className="text-gray-600">Loading map...</div>
-    </div>
-  ),
+  loading: MapLoading,
 });
 
 interface PublicMapLayoutProps {

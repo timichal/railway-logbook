@@ -4,6 +4,7 @@ import {
   setupUserMapInteractions,
   type UserMapInteractionCallbacks,
 } from "@/lib/map/interactions/userMapInteractions";
+import { REGULAR_ROUTE_LAYER_ID } from "@/lib/shared/map/layers";
 
 /**
  * Attaches the user map's popups, touch sheets and click handlers once the route
@@ -35,7 +36,7 @@ export function useUserMapInteractions(
     let cancelled = false;
 
     const setupWhenReady = () => {
-      if (cancelled || !map.current?.getLayer("railway_routes")) return;
+      if (cancelled || !map.current?.getLayer(REGULAR_ROUTE_LAYER_ID)) return;
       cleanup = setupUserMapInteractions(map.current, getCallbacks);
     };
 

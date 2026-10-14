@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import NotesPopup from "@/components/admin/NotesPopup";
 import { unwrap } from "@/lib/actionResult";
 import { getAdminNote } from "@/lib/adminNotesActions";
+import { featuresAt } from "@/lib/map/featuresAt";
 import type { NoteType } from "@/lib/shared/constants";
 import type { AdminNote } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
@@ -45,9 +46,7 @@ export function useAdminNotesPopup({ map, mapLoaded, onNotesChanged }: UseAdminN
       const coordinate: [number, number] = [e.lngLat.lng, e.lngLat.lat];
 
       // Check if clicking on an existing note
-      const noteFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ["admin_notes"],
-      });
+      const noteFeatures = featuresAt(mapInstance, e.point, ["admin_notes"]);
 
       let noteId: number | null = null;
       let noteText = "";
@@ -55,7 +54,7 @@ export function useAdminNotesPopup({ map, mapLoaded, onNotesChanged }: UseAdminN
       let noteTypeValue: NoteType | null = null;
       let noteSource: string | null = null;
 
-      if (noteFeatures && noteFeatures.length > 0) {
+      if (noteFeatures.length > 0) {
         noteId = noteFeatures[0].properties?.id;
         if (noteId) {
           let note: AdminNote | null;
@@ -134,10 +133,7 @@ export function useAdminNotesPopup({ map, mapLoaded, onNotesChanged }: UseAdminN
       latestClick++;
       if (!notesPopupRef.current) return;
 
-      const noteFeatures = mapInstance.queryRenderedFeatures(e.point, {
-        layers: ["admin_notes"],
-      });
-      if (noteFeatures && noteFeatures.length > 0) return;
+      if (featuresAt(mapInstance, e.point, ["admin_notes"]).length > 0) return;
 
       const popupElement = notesPopupRef.current.getElement();
       if (popupElement && e.originalEvent.target instanceof Node) {

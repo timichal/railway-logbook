@@ -2,6 +2,7 @@
 
 import type { MapLibreEvent } from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SidebarResizer from "@/components/layout/SidebarResizer";
 import SelectionSummaryBar from "@/components/logbook/SelectionSummaryBar";
 import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
 import MapProgressBox from "@/components/map/MapProgressBox";
@@ -614,13 +615,7 @@ export default function RailwayMap({
       {!isMobile && (
         <>
           {sidebarContent}
-          {/* Resizer: mouse-only drag handle (keyboard resize intentionally unsupported) */}
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only resize affordance with no keyboard equivalent; the sidebar remains fully usable without resizing. */}
-          <div
-            onMouseDown={onSidebarResize}
-            className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? "bg-blue-400" : ""}`}
-            style={{ userSelect: "none" }}
-          />
+          <SidebarResizer onMouseDown={onSidebarResize} isResizing={isResizing} />
         </>
       )}
 

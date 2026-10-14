@@ -25,7 +25,7 @@ export interface RouteSelectionProps {
   onRemoveRoute: (trackId: number) => void;
   onClearSelection: () => void;
   onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
-  onRoutesLogged: () => void;
+  onRoutesLogged?: () => void;
   onHighlightRoutes?: HighlightRoutesFn;
   onAddRoutesFromPlanner?: (routes: PlannerRoute[]) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
@@ -137,7 +137,7 @@ export default function RouteLogger({
       setJourneyDescription("");
       setPickedTripId(null);
       onClearSelection();
-      onRoutesLogged();
+      onRoutesLogged?.();
 
       showSuccess(message);
     } catch (error) {

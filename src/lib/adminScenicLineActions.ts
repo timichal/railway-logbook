@@ -3,12 +3,13 @@
 import type { ActionResult } from "./actionResult";
 import { requiredStations } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
-import { coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
+import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { countryAt } from "./countryUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
 import { type RegionId, regionContainsSql } from "./shared/regions";
+import type { RouteBounds } from "./shared/types";
 
 /**
  * Scenic lines: stretches of track the user map highlights as scenic.
@@ -27,8 +28,8 @@ export type AdminScenicLine = {
   length_km: number;
   is_valid: boolean;
   error_message: string | null;
-  /** GeoJSON LineString, as a string — what the map flies to. */
-  geometry: string;
+  /** The line's box, which the map flies to. */
+  bounds: RouteBounds;
   /** The stored click points the line is recalculated from. */
   starting_coordinate: [number, number];
   ending_coordinate: [number, number];
@@ -43,15 +44,15 @@ function lineWKT(coordinates: [number, number][]): string {
 
 /**
  * The region's scenic lines, by bounding box as the admin routes list is — a
- * line may run through a country outside SUPPORTED_COUNTRIES. Geometry included:
- * there are few of them, and a line picked from the list is flown to at once.
+ * line may run through a country outside SUPPORTED_COUNTRIES. Each with its box:
+ * a line picked from the list is flown to at once.
  * Unordered: the tab sorts it, as the routes list is sorted (`adminListSort.ts`).
  */
 export async function getScenicLines(region: RegionId): Promise<ActionResult<AdminScenicLine[]>> {
   return asAdmin(async () => {
     const result = await pool.query<AdminScenicLine>(`
       SELECT id, from_station, to_station, length_km, is_valid, error_message,
-             ST_AsGeoJSON(geometry) AS geometry,
+             ${boundsSql("geometry")} AS bounds,
              ${lngLatSql("starting_coordinate")} AS starting_coordinate,
              ${lngLatSql("ending_coordinate")} AS ending_coordinate
       FROM scenic_lines

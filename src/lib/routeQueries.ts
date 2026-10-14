@@ -8,6 +8,7 @@
  * is here and `userActions.ts` is one of its callers.
  */
 
+import { boundsSql } from "./coordinateUtils";
 import pool, { escapeLikePattern } from "./db";
 import { MIN_SEARCH_QUERY_LENGTH, type UsageType } from "./shared/constants";
 import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
@@ -20,9 +21,6 @@ import type {
   RouteSummary,
   Station,
 } from "./shared/types";
-
-/** A box selected as `ST_XMin(box) AS west, ST_YMin(box) AS south, …`. */
-type BoxRow = { west: number; south: number; east: number; north: number };
 
 /**
  * Station name search for the map search boxes and the Journey Planner.
@@ -102,9 +100,12 @@ async function searchLinesByName(
 
   const pattern = escapeLikePattern(searchQuery);
 
-  const result = await pool.query<
-    BoxRow & { name: string; route_count: number; usage_types: UsageType[] }
-  >(
+  const result = await pool.query<{
+    name: string;
+    route_count: number;
+    usage_types: UsageType[];
+    bounds: RouteBounds;
+  }>(
     `
     WITH matched AS (
       SELECT name,
@@ -117,8 +118,7 @@ async function searchLinesByName(
       ORDER BY rank, name
       LIMIT 5
     )
-    SELECT name, route_count, usage_types,
-           ST_XMin(box) AS west, ST_YMin(box) AS south, ST_XMax(box) AS east, ST_YMax(box) AS north
+    SELECT name, route_count, usage_types, ${boundsSql("box")} AS bounds
     FROM (
       SELECT m.name, m.rank, count(*)::int AS route_count,
              array_agg(DISTINCT rr.usage_type ORDER BY rr.usage_type) AS usage_types,
@@ -138,7 +138,7 @@ async function searchLinesByName(
     name: row.name,
     routeCount: row.route_count,
     usageTypes: row.usage_types,
-    bounds: [row.west, row.south, row.east, row.north],
+    bounds: row.bounds,
   }));
 }
 
@@ -292,9 +292,9 @@ export async function routeBoundsByIds(
   if (trackIds.length === 0) return null;
 
   const inRegion = region ? `AND ${regionContainsSql(region, "starting_coordinate")}` : "";
-  const result = await pool.query<BoxRow>(
+  const result = await pool.query<{ bounds: RouteBounds }>(
     `
-    SELECT ST_XMin(box) AS west, ST_YMin(box) AS south, ST_XMax(box) AS east, ST_YMax(box) AS north
+    SELECT ${boundsSql("box")} AS bounds
     FROM (
       SELECT ST_Extent(geometry) AS box
       FROM railway_routes
@@ -305,8 +305,7 @@ export async function routeBoundsByIds(
     [trackIds],
   );
 
-  const row = result.rows[0];
-  return row ? [row.west, row.south, row.east, row.north] : null;
+  return result.rows[0]?.bounds ?? null;
 }
 
 /**

@@ -132,8 +132,8 @@ function tripStatsSql(tripIdsParam?: string): string {
 `;
 }
 
-// Journey with route stats (used in trip detail view)
-export type JourneyInTrip = Journey & {
+/** A journey with its route count and distance, in a trip or standing alone. */
+export type JourneyWithStats = Journey & {
   route_count: number;
   total_distance: number;
 };
@@ -182,12 +182,12 @@ export async function tripsForUser(userId: number, region: RegionId): Promise<Tr
 export async function tripForUser(
   userId: number,
   tripId: number,
-): Promise<{ trip: Trip; journeys: JourneyInTrip[]; routeIds: number[] }> {
+): Promise<{ trip: Trip; journeys: JourneyWithStats[]; routeIds: number[] }> {
   // All three at once: the journey and route reads are scoped to the user, so
   // for someone else's trip they come back empty and are discarded with the 404
   const [tripResult, journeysResult, routeIdsResult] = await Promise.all([
     pool.query<Trip>("SELECT * FROM user_trips WHERE id = $1 AND user_id = $2", [tripId, userId]),
-    pool.query<JourneyInTrip>(journeyStatsSql("$2", "uj.trip_id = $1", "uj.date ASC"), [
+    pool.query<JourneyWithStats>(journeyStatsSql("$2", "uj.trip_id = $1", "uj.date ASC"), [
       tripId,
       userId,
     ]),
@@ -294,16 +294,10 @@ export async function unassignJourneyFromTripForUser(
   if (result.rowCount === 0) throw new NotFoundError("Journey not found");
 }
 
-// Standalone journey (not assigned to a trip) with stats — for the merged list
-export type StandaloneJourneyWithStats = Journey & {
-  route_count: number;
-  total_distance: number;
-};
-
 // One row in the merged trips+journeys list. A trip carries its assigned journeys; a standalone journey stands on its own.
 export type TripsAndJourneysItem =
-  | { type: "trip"; trip: TripWithStats; journeys: JourneyInTrip[] }
-  | { type: "journey"; journey: StandaloneJourneyWithStats };
+  | { type: "trip"; trip: TripWithStats; journeys: JourneyWithStats[] }
+  | { type: "journey"; journey: JourneyWithStats };
 
 /**
  * Get a paginated, search-filtered list of top-level items (trips and standalone journeys),
@@ -394,7 +388,7 @@ export async function journeysAndTripsForUser(
       : [],
     tripIds.length > 0
       ? pool
-          .query<JourneyInTrip>(
+          .query<JourneyWithStats>(
             journeyStatsSql("$1", "uj.trip_id = ANY($2::int[])", "uj.date ASC"),
             [userId, tripIds],
           )
@@ -402,7 +396,7 @@ export async function journeysAndTripsForUser(
       : [],
     journeyIds.length > 0
       ? pool
-          .query<StandaloneJourneyWithStats>(journeyStatsSql("$1", "uj.id = ANY($2::int[])"), [
+          .query<JourneyWithStats>(journeyStatsSql("$1", "uj.id = ANY($2::int[])"), [
             userId,
             journeyIds,
           ])
@@ -444,8 +438,8 @@ export async function journeysAndTripsForUser(
 export async function unassignedJourneysForUser(
   userId: number,
   region: RegionId,
-): Promise<JourneyInTrip[]> {
-  const result = await pool.query<JourneyInTrip>(
+): Promise<JourneyWithStats[]> {
+  const result = await pool.query<JourneyWithStats>(
     journeyStatsSql(
       "$1",
       `uj.trip_id IS NULL AND ${journeyInRegionSql(region, "uj.id")}`,

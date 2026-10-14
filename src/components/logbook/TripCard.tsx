@@ -11,7 +11,7 @@ import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly, formatDateOnlyRange } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { JourneyInTrip, TripWithStats } from "@/lib/tripActions";
+import type { JourneyWithStats, TripWithStats } from "@/lib/tripActions";
 import {
   assignJourneyToTrip,
   deleteTrip,
@@ -24,7 +24,7 @@ import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 
 interface TripCardProps {
   trip: TripWithStats;
-  initialJourneys: JourneyInTrip[];
+  initialJourneys: JourneyWithStats[];
   availableTrips: TripWithStats[];
   // Parent enforces single-open across all top-level cards
   isOpen: boolean;
@@ -56,7 +56,7 @@ export default function TripCard({
   const regionId = useRegionId();
   const { showSuccess, showError } = useToast();
 
-  const [journeys, setJourneys] = useState<JourneyInTrip[]>(initialJourneys);
+  const [journeys, setJourneys] = useState<JourneyWithStats[]>(initialJourneys);
   const [editName, setEditName] = useState(trip.name);
   const [editDescription, setEditDescription] = useState(trip.description || "");
   // An open trip shows its journeys; the name and description form is behind Edit.
@@ -64,7 +64,7 @@ export default function TripCard({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [showPicker, setShowPicker] = useState(false);
-  const [unassignedJourneys, setUnassignedJourneys] = useState<JourneyInTrip[]>([]);
+  const [unassignedJourneys, setUnassignedJourneys] = useState<JourneyWithStats[]>([]);
   const [isLoadingUnassigned, setIsLoadingUnassigned] = useState(false);
 
   const focusAfterRender = useFocusAfterRender();

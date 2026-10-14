@@ -98,6 +98,21 @@ const ROUTE_LINES: Record<
   2: { id: "railway_routes_special", dash: DASHES.special },
 };
 
+/** The route line layer of one usage type. */
+export const routeLineLayerId = (usageType: UsageType): string => ROUTE_LINES[usageType].id;
+
+/**
+ * The Regular route line: the layer whose presence means the route layers are
+ * there, and the one overlays meant to lie under the routes are added before.
+ */
+export const REGULAR_ROUTE_LAYER_ID = routeLineLayerId(0);
+
+/** The three route line layers. */
+export const ROUTE_LINE_LAYERS = Object.values(ROUTE_LINES).map(({ id }) => id);
+
+/** The invisible route hit area (`createRailwayRoutesClickLayer`). */
+export const ROUTE_CLICK_LAYER_ID = "railway_routes_click";
+
 /**
  * The route line of one usage type: Regular solid, Heritage dotted, Special dashed.
  * All three share the route source, so feature-state visit colours apply alike.
@@ -151,7 +166,7 @@ export function createRailwayRoutesClickLayer(
   const { widthExpression, defaultWidth = WIDTHS.fallback.clickBuffer, filter } = config;
 
   const layer: LineLayerSpecification = {
-    id: "railway_routes_click",
+    id: ROUTE_CLICK_LAYER_ID,
     type: "line",
     source: "railway_routes",
     "source-layer": "railway_routes",

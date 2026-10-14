@@ -1,6 +1,7 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import type { MutableRefObject } from "react";
+import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
 import {
   DOUBLE_CLICK_HINT,
   escapeHtml,
@@ -10,6 +11,7 @@ import {
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
 import { getNoteTypeLabel } from "@/lib/shared/constants";
+import { ROUTE_CLICK_LAYER_ID, ROUTE_LINE_LAYERS } from "@/lib/shared/map/layers";
 import type { RegionId } from "@/lib/shared/regions";
 
 interface AdminMapCallbacks {
@@ -19,19 +21,12 @@ interface AdminMapCallbacks {
   region: RegionId;
 }
 
-/** A route's wide click buffer included, so a route always wins over the part under it. */
-const ROUTE_LAYERS = ["railway_routes_click", "railway_routes"];
-
 export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
   { onCoordinateClickRef, onRouteSelectRef, region }: AdminMapCallbacks,
 ) {
-  const hits = (point: maplibreglType.PointLike, layers: string[]) => {
-    const present = layers.filter((id) => mapInstance.getLayer(id));
-    return (
-      present.length > 0 && mapInstance.queryRenderedFeatures(point, { layers: present }).length > 0
-    );
-  };
+  const hits = (point: maplibreglType.PointLike, layers: string[]) =>
+    featuresAt(mapInstance, point, layers).length > 0;
 
   const setCursor = (cursor: string) => {
     mapInstance.getCanvas().style.cursor = cursor;
@@ -85,7 +80,7 @@ export function setupAdminMapInteractions(
   // A part click captures the exact coordinate clicked — unless an endpoint, a
   // route or a note is there too, each of which takes the click itself.
   mapInstance.on("click", "railway_parts", (e) => {
-    if (hits(e.point, ["route-endpoints", ...ROUTE_LAYERS, "admin_notes"])) return;
+    if (hits(e.point, ["route-endpoints", ...ROUTE_HIT_LAYERS, "admin_notes"])) return;
     onCoordinateClickRef.current?.([e.lngLat.lng, e.lngLat.lat]);
   });
 
@@ -99,7 +94,7 @@ export function setupAdminMapInteractions(
     }
   });
 
-  mapInstance.on("click", "railway_routes_click", (e) => {
+  mapInstance.on("click", ROUTE_CLICK_LAYER_ID, (e) => {
     // Routes pass through their own start/end markers, so a click on an endpoint
     // dot also lands on the route. The endpoint handler already set the coordinate
     // — don't also select the route.
@@ -113,13 +108,13 @@ export function setupAdminMapInteractions(
 
   // A click on nothing at all unselects the route.
   mapInstance.on("click", (e) => {
-    if (!hits(e.point, [...ROUTE_LAYERS, "railway_parts", "route-endpoints"])) {
+    if (!hits(e.point, [...ROUTE_HIT_LAYERS, "railway_parts", "route-endpoints"])) {
       onRouteSelectRef.current?.(null);
     }
   });
 
   mapInstance.on("mouseenter", "railway_parts", (e) => {
-    if (hits(e.point, ROUTE_LAYERS)) return;
+    if (hits(e.point, ROUTE_HIT_LAYERS)) return;
     setCursor("pointer");
     partHover.enter(e.features?.[0]?.id);
   });
@@ -128,8 +123,7 @@ export function setupAdminMapInteractions(
     partHover.leave();
   });
 
-  mapInstance.on("mouseenter", "railway_routes_click", (e) => {
-    setCursor("pointer");
+  const showRouteHover = (e: maplibreglType.MapLayerMouseEvent) => {
     const properties = e.features?.[0]?.properties;
     if (!properties) return;
     showHover(
@@ -137,11 +131,31 @@ export function setupAdminMapInteractions(
       "railway-route-hover-popup",
       formatRouteBody(properties, region, { linkRow: true }),
     );
+  };
+
+  mapInstance.on("mouseenter", ROUTE_CLICK_LAYER_ID, (e) => {
+    setCursor("pointer");
+    showRouteHover(e);
   });
-  mapInstance.on("mouseleave", "railway_routes_click", () => {
+  mapInstance.on("mouseleave", ROUTE_CLICK_LAYER_ID, () => {
     setCursor("");
     hideHover("railway-route-hover-popup");
   });
+
+  // Routes re-shown for reference during a re-pick have no hit area (see
+  // useAdminLayerVisibility), so they are read from their lines instead: the popup
+  // without the pointer, since a click there does nothing — it neither selects the
+  // route nor reaches the part under it.
+  const referenceOnly = () =>
+    mapInstance.getLayoutProperty(ROUTE_CLICK_LAYER_ID, "visibility") === "none";
+  for (const layerId of ROUTE_LINE_LAYERS) {
+    mapInstance.on("mouseenter", layerId, (e) => {
+      if (referenceOnly()) showRouteHover(e);
+    });
+    mapInstance.on("mouseleave", layerId, () => {
+      if (referenceOnly()) hideHover("railway-route-hover-popup");
+    });
+  }
 
   mapInstance.on("mouseenter", "stations", (e) => {
     setCursor("pointer");
@@ -202,8 +216,7 @@ export function setupAdminMapInteractions(
   // Double-click / double-tap a note opens its source link in a new tab
   // (works on touch where the hover popup link can't be tapped).
   mapInstance.on("dblclick", (e) => {
-    if (!mapInstance.getLayer("admin_notes")) return;
-    const note = mapInstance.queryRenderedFeatures(e.point, { layers: ["admin_notes"] })[0];
+    const note = featuresAt(mapInstance, e.point, ["admin_notes"])[0];
     if (!note) return;
     e.preventDefault();
     const source = note.properties?.source;

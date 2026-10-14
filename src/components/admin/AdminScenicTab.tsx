@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import PickedPointField from "@/components/admin/PickedPointField";
-import { INPUT, LABEL } from "@/components/admin/RouteMetadataFields";
+import TextField, { INPUT } from "@/components/admin/TextField";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import {
   type AdminScenicLine,
@@ -12,9 +12,9 @@ import {
   updateScenicLineGeometry,
   updateScenicLineNames,
 } from "@/lib/adminScenicLineActions";
-import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegionId } from "@/lib/regionContext";
+import type { RouteBounds } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints } from "@/lib/ui/adminListSort";
 import { btn, optionRow } from "@/lib/ui/buttonStyles";
@@ -40,7 +40,7 @@ interface AdminScenicTabProps {
   onEditingChange: (editing: EditingScenicLine | null) => void;
   selectedId: number | null;
   onSelect: (id: number | null) => void;
-  onFocusGeometry: (geometry: string) => void;
+  onFocusBounds: (bounds: RouteBounds) => void;
   /** A line was saved or deleted: the map refreshes its scenic tiles. */
   onChanged: () => void;
 }
@@ -62,7 +62,7 @@ export default function AdminScenicTab({
   onEditingChange,
   selectedId,
   onSelect,
-  onFocusGeometry,
+  onFocusBounds,
   onChanged,
 }: AdminScenicTabProps) {
   const regionId = useRegionId();
@@ -286,34 +286,22 @@ export default function AdminScenicTab({
           hidden while this tab is open, so any point on the track can be picked.
         </p>
         {picked}
-        <div>
-          <label htmlFor="scenic-from" className={LABEL}>
-            From *
-          </label>
-          <input
-            id="scenic-from"
-            type="text"
-            value={newFrom}
-            onChange={(e) => setNewFrom(e.target.value)}
-            onKeyDown={(e) => handleJunctionShortcut(e, setNewFrom)}
-            className={INPUT}
-            placeholder="Where the scenic stretch starts"
-          />
-        </div>
-        <div>
-          <label htmlFor="scenic-to" className={LABEL}>
-            To *
-          </label>
-          <input
-            id="scenic-to"
-            type="text"
-            value={newTo}
-            onChange={(e) => setNewTo(e.target.value)}
-            onKeyDown={(e) => handleJunctionShortcut(e, setNewTo)}
-            className={INPUT}
-            placeholder="Where it ends"
-          />
-        </div>
+        <TextField
+          id="scenic-from"
+          label="From *"
+          value={newFrom}
+          onChange={setNewFrom}
+          station
+          placeholder="Where the scenic stretch starts"
+        />
+        <TextField
+          id="scenic-to"
+          label="To *"
+          value={newTo}
+          onChange={setNewTo}
+          station
+          placeholder="Where it ends"
+        />
         <button
           type="button"
           onClick={handleCreate}
@@ -361,7 +349,7 @@ export default function AdminScenicTab({
                   type="button"
                   onClick={() => {
                     onSelect(line.id === selectedId ? null : line.id);
-                    if (line.id !== selectedId) onFocusGeometry(line.geometry);
+                    if (line.id !== selectedId) onFocusBounds(line.bounds);
                   }}
                   className={`${optionRow(line.id === selectedId)} p-3 flex items-baseline gap-2`}
                 >
@@ -391,36 +379,20 @@ export default function AdminScenicTab({
                         </p>
                       </div>
                     )}
-                    <div>
-                      <label htmlFor="scenic-edit-from" className={LABEL}>
-                        From *
-                      </label>
-                      <input
-                        id="scenic-edit-from"
-                        type="text"
-                        value={names.from}
-                        onChange={(e) => setNames({ ...names, from: e.target.value })}
-                        onKeyDown={(e) =>
-                          handleJunctionShortcut(e, (from) => setNames({ ...names, from }))
-                        }
-                        className={INPUT}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="scenic-edit-to" className={LABEL}>
-                        To *
-                      </label>
-                      <input
-                        id="scenic-edit-to"
-                        type="text"
-                        value={names.to}
-                        onChange={(e) => setNames({ ...names, to: e.target.value })}
-                        onKeyDown={(e) =>
-                          handleJunctionShortcut(e, (to) => setNames({ ...names, to }))
-                        }
-                        className={INPUT}
-                      />
-                    </div>
+                    <TextField
+                      id="scenic-edit-from"
+                      label="From *"
+                      value={names.from}
+                      onChange={(from) => setNames({ ...names, from })}
+                      station
+                    />
+                    <TextField
+                      id="scenic-edit-to"
+                      label="To *"
+                      value={names.to}
+                      onChange={(to) => setNames({ ...names, to })}
+                      station
+                    />
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"

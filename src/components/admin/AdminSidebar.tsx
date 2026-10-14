@@ -13,6 +13,7 @@ import {
 } from "@/lib/adminRouteActions";
 import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
+import type { RouteBounds } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
@@ -54,7 +55,7 @@ interface AdminSidebarProps {
   onFormReset: () => void;
   /** A route was created, changed or deleted: the map's route tiles are stale. */
   onRoutesChanged: () => void;
-  onRouteFocus?: (geometry: string) => void;
+  onRouteFocus: (bounds: RouteBounds) => void;
   sidebarWidth?: string | null;
   onFocusNote?: (coordinate: [number, number]) => void;
   onNoteChanged?: () => void;
@@ -232,7 +233,7 @@ export default function AdminSidebar({
             onEditingChange={onEditingScenicLineChange}
             selectedId={selectedScenicLineId}
             onSelect={onScenicLineSelect}
-            onFocusGeometry={(geometry) => onRouteFocus?.(geometry)}
+            onFocusBounds={onRouteFocus}
             onChanged={onScenicLinesChanged}
           />
         )}

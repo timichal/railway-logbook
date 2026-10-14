@@ -14,6 +14,7 @@ import {
   partialHighlightSourceId,
   wholeRouteIds,
 } from "@/lib/shared/map/highlightLayers";
+import { REGULAR_ROUTE_LAYER_ID } from "@/lib/shared/map/layers";
 import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/shared/types";
 
 /**
@@ -135,7 +136,7 @@ export function useRouteHighlighting(
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger — a rebuilt map starts without the overlays.
   useEffect(() => {
     const m = map.current;
-    if (!m?.getLayer("railway_routes")) return;
+    if (!m?.getLayer(REGULAR_ROUTE_LAYER_ID)) return;
     // Partially-travelled routes are drawn from their own geometry, so keep them
     // out of the whole-route overlay
     const wholeIds = wholeRouteIds(highlightedRoutes, partialHighlights);
@@ -152,7 +153,7 @@ export function useRouteHighlighting(
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger — a rebuilt map starts without the overlays.
   useEffect(() => {
     const m = map.current;
-    if (!m?.getLayer("railway_routes")) return;
+    if (!m?.getLayer(REGULAR_ROUTE_LAYER_ID)) return;
 
     const selectedTrackIds = selectedRoutes.map((r) => r.track_id);
     const selectedPartials = selectedRoutes.flatMap((r) =>

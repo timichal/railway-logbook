@@ -73,7 +73,6 @@ export default function AdminCreateRouteTab({
   const isPreviewMode = previewRoute !== null;
   const { busy: isSaving, run } = useSingleFlight();
 
-  // Create route form state (without the coordinates that are managed by parent)
   const [createForm, setCreateForm] = useState(EMPTY_FORM);
 
   const handleSaveRoute = async () => {
@@ -146,7 +145,6 @@ export default function AdminCreateRouteTab({
           onClear={() => onCoordinatesChange((prev) => ({ ...prev, endingCoordinate: null }))}
         />
 
-        {/* Only show metadata fields in create mode */}
         {!isEditMode && (
           <RouteMetadataFields
             value={createForm}
@@ -157,7 +155,6 @@ export default function AdminCreateRouteTab({
           />
         )}
 
-        {/* Save Button */}
         <div className="pt-4 border-t border-gray-200">
           {isEditMode ? (
             <>

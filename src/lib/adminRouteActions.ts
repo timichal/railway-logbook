@@ -4,7 +4,7 @@ import type { PoolClient } from "pg";
 import type { ActionResult } from "./actionResult";
 import { requiredStations } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
-import { coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
+import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { countryAt } from "./countryUtils";
 import pool, { withTransaction } from "./db";
 import { ValidationError } from "./errors";
@@ -12,7 +12,12 @@ import { lineLengthKmSql } from "./lineLength";
 import type { LineClass, UsageType } from "./shared/constants";
 import { type RegionId, regionContainsSql } from "./shared/regions";
 import { MAX_TOLERANCE_FRACTION, UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
-import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./shared/types";
+import type {
+  GeoJSONFeature,
+  GeoJSONFeatureCollection,
+  PathResult,
+  RouteBounds,
+} from "./shared/types";
 import { getStationsNearRoute, refreshStationProximityFor } from "./stationProximity";
 
 /**
@@ -54,8 +59,8 @@ export type AdminRouteSummary = {
 export type AdminRouteDetail = AdminRouteSummary & {
   frequency: string[];
   link: string | null;
-  /** GeoJSON LineString, as a string. */
-  geometry: string;
+  /** The route's box, which the map flies to. */
+  bounds: RouteBounds;
   length_km: number;
   /** The stored click points the route is recalculated from. */
   starting_coordinate: [number, number];
@@ -130,7 +135,7 @@ export async function getRailwayRoute(trackId: number): Promise<ActionResult<Adm
     const result = await pool.query<AdminRouteDetail>(
       `
     SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, line_class,
-           ST_AsGeoJSON(geometry) as geometry, length_km,
+           ${boundsSql("geometry")} as bounds, length_km,
            ${lngLatSql("starting_coordinate")} as starting_coordinate,
            ${lngLatSql("ending_coordinate")} as ending_coordinate,
            is_valid, error_message, under_repair, intended_backtracking, has_backtracking

@@ -103,3 +103,7 @@ export const pointToWKT = ([lng, lat]: Coord): string => `POINT(${lng} ${lat})`;
 
 /** SQL reading a point column as `[lng, lat]` — a float8 array, so it arrives as a `Coord`. */
 export const lngLatSql = (column: string): string => `ARRAY[ST_X(${column}), ST_Y(${column})]`;
+
+/** SQL reading a geometry column's box as `[west, south, east, north]` (a `RouteBounds`). */
+export const boundsSql = (column: string): string =>
+  `ARRAY[ST_XMin(${column}), ST_YMin(${column}), ST_XMax(${column}), ST_YMax(${column})]`;

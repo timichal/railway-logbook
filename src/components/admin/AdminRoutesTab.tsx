@@ -16,6 +16,7 @@ import {
 } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
 import type { Region } from "@/lib/shared/regions";
+import type { RouteBounds } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints, compareText } from "@/lib/ui/adminListSort";
 
@@ -89,7 +90,7 @@ interface AdminRoutesTabProps {
   /** A route was changed or deleted: the map's route tiles are stale. */
   onRoutesChanged: () => void;
   onEditGeometry: (route: AdminRouteDetail) => void;
-  onRouteFocus?: (geometry: string) => void;
+  onRouteFocus: (bounds: RouteBounds) => void;
   availableTags?: string[];
   onTagsChanged?: () => void;
 }
@@ -181,7 +182,6 @@ export default function AdminRoutesTab({
     });
   }, [routes, hasRouteNames]);
 
-  // Filtering and pagination
   const filteredRoutes = useMemo(() => {
     const groups = new Map<string, RouteFilter["predicate"][]>();
     for (const filter of ROUTE_FILTERS) {
@@ -240,13 +240,12 @@ export default function AdminRoutesTab({
   // loaded; one already loaded has nothing to wait for.
   const handleRouteClick = (trackId: number) => {
     if (selectedRoute?.track_id === trackId) {
-      if (selectedRoute.geometry) onRouteFocus?.(selectedRoute.geometry);
+      onRouteFocus(selectedRoute.bounds);
       return;
     }
     onRouteSelect?.(trackId, { focus: true });
   };
 
-  // Route actions
   const handleSaveRoute = async () => {
     if (!selectedRoute || !editForm) return;
     const trackId = selectedRoute.track_id;

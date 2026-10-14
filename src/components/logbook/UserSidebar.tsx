@@ -6,6 +6,7 @@ import JourneysAndTripsTab from "@/components/logbook/JourneysAndTripsTab";
 import LocalJourneyLogTab from "@/components/logbook/LocalJourneyLogTab";
 import LocalTripLogger from "@/components/logbook/LocalTripLogger";
 import MapStatsTab from "@/components/logbook/MapStatsTab";
+import type { RouteSelectionProps } from "@/components/logbook/RouteLogger";
 import Icon from "@/components/ui/Icon";
 import type { User } from "@/lib/authActions";
 import type { DataAccess } from "@/lib/dataAccess";
@@ -73,6 +74,17 @@ export default function UserSidebar({
     onRoutesLogged?.();
   }, [onRoutesLogged]);
 
+  const selection: RouteSelectionProps = {
+    selectedRoutes,
+    onRemoveRoute,
+    onClearSelection: onClearAll,
+    onUpdateRoutePartial,
+    onRoutesLogged,
+    onHighlightRoutes,
+    onAddRoutesFromPlanner,
+    onStationClickHandler,
+  };
+
   return (
     <div
       style={sidebarWidth != null ? { width: sidebarWidth } : undefined}
@@ -139,28 +151,9 @@ export default function UserSidebar({
             The other tabs mount fresh each time. */}
         <div hidden={activeTab !== "routes"}>
           {user ? (
-            <JourneyLogger
-              tripsVersion={tripsVersion}
-              selectedRoutes={selectedRoutes}
-              onRemoveRoute={onRemoveRoute}
-              onClearSelection={onClearAll}
-              onUpdateRoutePartial={onUpdateRoutePartial}
-              onRoutesLogged={onRoutesLogged || (() => {})}
-              onHighlightRoutes={onHighlightRoutes}
-              onAddRoutesFromPlanner={onAddRoutesFromPlanner}
-              onStationClickHandler={onStationClickHandler}
-            />
+            <JourneyLogger tripsVersion={tripsVersion} {...selection} />
           ) : (
-            <LocalTripLogger
-              selectedRoutes={selectedRoutes}
-              onRemoveRoute={onRemoveRoute}
-              onClearSelection={onClearAll}
-              onUpdateRoutePartial={onUpdateRoutePartial}
-              onRoutesLogged={onRoutesLogged || (() => {})}
-              onHighlightRoutes={onHighlightRoutes}
-              onAddRoutesFromPlanner={onAddRoutesFromPlanner}
-              onStationClickHandler={onStationClickHandler}
-            />
+            <LocalTripLogger {...selection} />
           )}
         </div>
 

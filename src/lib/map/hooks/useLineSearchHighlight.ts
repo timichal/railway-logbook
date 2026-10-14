@@ -9,7 +9,7 @@ import {
   lineSearchHighlightColor,
   lineSearchHighlightData,
 } from "@/lib/shared/map/highlightLayers";
-import { usageTypeFilter } from "@/lib/shared/map/layers";
+import { REGULAR_ROUTE_LAYER_ID, usageTypeFilter } from "@/lib/shared/map/layers";
 import type { RegionId } from "@/lib/shared/regions";
 import type { LineGeometry, LineSearchResult } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
@@ -117,7 +117,7 @@ export function useLineSearchHighlight(
       data,
       tolerance: LINE_SEARCH_HIGHLIGHT_TOLERANCE,
     });
-    const beforeId = m.getLayer("railway_routes") ? "railway_routes" : undefined;
+    const beforeId = m.getLayer(REGULAR_ROUTE_LAYER_ID) ? REGULAR_ROUTE_LAYER_ID : undefined;
     m.addLayer(
       createLineSearchHighlightLayer(usageTypes, theme) as maplibregl.LayerSpecification,
       beforeId,

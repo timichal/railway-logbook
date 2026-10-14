@@ -48,6 +48,7 @@ import {
   createScenicLinesLayer,
   createStationLabelsLayer,
   createStationsLayer,
+  REGULAR_ROUTE_LAYER_ID,
 } from "@shared/map/layers";
 import {
   scenicLinesFilter,
@@ -279,7 +280,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
             <Layer
               {...createScenicLinesLayer({ visible: true })}
               filter={scenicFilter}
-              beforeId="railway_routes"
+              beforeId={REGULAR_ROUTE_LAYER_ID}
             />
           ) : null}
         </VectorSource>

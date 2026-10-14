@@ -1,7 +1,11 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
-import type { UsageType } from "@/lib/shared/constants";
-import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
+import { type UsageType, usageOptions } from "@/lib/shared/constants";
+import {
+  ROUTE_CLICK_LAYER_ID,
+  routeLineLayerId,
+  SCENIC_LINES_LAYER_ID,
+} from "@/lib/shared/map/layers";
 import { clickBufferFilter, scenicLinesFilter } from "@/lib/shared/map/userMapLayers";
 
 /**
@@ -39,24 +43,15 @@ export function useLayerFilters(
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger (apply prefs once layers exist), not a value read inside the effect.
   useEffect(() => {
     const m = map.current;
-    if (!m?.getLayer("railway_routes")) return;
-    const visibility = (type: UsageType) => (shownTypes.includes(type) ? "visible" : "none");
-
-    m.setLayoutProperty("railway_routes", "visibility", visibility(0));
-
-    // Dotted Heritage layer: visible only when heritage lines are shown.
-    if (m.getLayer("railway_routes_heritage")) {
-      m.setLayoutProperty("railway_routes_heritage", "visibility", visibility(1));
+    if (!m) return;
+    for (const { id: type } of usageOptions) {
+      const id = routeLineLayerId(type);
+      if (m.getLayer(id)) {
+        m.setLayoutProperty(id, "visibility", shownTypes.includes(type) ? "visible" : "none");
+      }
     }
-
-    // Dashed Special layer: visible only when special services are shown.
-    if (m.getLayer("railway_routes_special")) {
-      m.setLayoutProperty("railway_routes_special", "visibility", visibility(2));
-    }
-
-    // Click/hit buffer: every currently-visible usage type should be clickable.
-    if (m.getLayer("railway_routes_click")) {
-      m.setFilter("railway_routes_click", clickBufferFilter(shownTypes));
+    if (m.getLayer(ROUTE_CLICK_LAYER_ID)) {
+      m.setFilter(ROUTE_CLICK_LAYER_ID, clickBufferFilter(shownTypes));
     }
   }, [map, shownTypes, mapLoaded]);
 

@@ -1,5 +1,6 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
+import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
 import { HIGHLIGHT_LAYER_IDS } from "@/lib/map/hooks/useRouteHighlighting";
 import {
   DOUBLE_CLICK_HINT,
@@ -9,6 +10,7 @@ import {
   popupLink,
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
+import { ROUTE_CLICK_LAYER_ID } from "@/lib/shared/map/layers";
 import type { RegionId } from "@/lib/shared/regions";
 import type { SelectedRoute, Station } from "@/lib/shared/types";
 import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
@@ -369,13 +371,8 @@ export function setupUserMapInteractions(
   };
 
   /** The route under a point, through the click buffer and the highlights on top. */
-  const routeFeatureAt = (point: maplibreglType.PointLike) => {
-    const layers = ["railway_routes_click", "railway_routes", ...HIGHLIGHT_LAYER_IDS].filter((id) =>
-      mapInstance.getLayer(id),
-    );
-    if (layers.length === 0) return undefined;
-    return mapInstance.queryRenderedFeatures(point, { layers })[0];
-  };
+  const routeFeatureAt = (point: maplibreglType.PointLike) =>
+    featuresAt(mapInstance, point, [...ROUTE_HIT_LAYERS, ...HIGHLIGHT_LAYER_IDS])[0];
 
   const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
     // Map-wide, so this fires for every tap and is where an open sheet is taken
@@ -391,18 +388,19 @@ export function setupUserMapInteractions(
 
     // Public notes render on top of everything and have no hover on a phone, so on
     // touch their own sheet takes the tap.
-    if (lastPointerWasTouch && mapInstance.getLayer("public_notes")) {
-      const noteHit = mapInstance.queryRenderedFeatures(e.point, { layers: ["public_notes"] });
-      if (noteHit.length > 0) return;
+    if (lastPointerWasTouch && featuresAt(mapInstance, e.point, ["public_notes"]).length > 0) {
+      return;
     }
 
     // A station circle sits on top of the very route it belongs to, and this is a
     // map-wide click while the station handler is layer-scoped, so both fire. The
     // station wins whenever it has something of its own to do — filling a from/to
     // field in the Journey Planner, or (on touch) opening its own sheet.
-    if ((onStationClick || lastPointerWasTouch) && mapInstance.getLayer("stations")) {
-      const stationHit = mapInstance.queryRenderedFeatures(e.point, { layers: ["stations"] });
-      if (stationHit.length > 0) return;
+    if (
+      (onStationClick || lastPointerWasTouch) &&
+      featuresAt(mapInstance, e.point, ["stations"]).length > 0
+    ) {
+      return;
     }
 
     const feature = routeFeatureAt(e.point);
@@ -591,13 +589,11 @@ export function setupUserMapInteractions(
     if (lastPointerWasTouch) return;
 
     // Public notes render on top — check them first
-    if (mapInstance.getLayer("public_notes")) {
-      const notes = mapInstance.queryRenderedFeatures(e.point, { layers: ["public_notes"] });
-      if (notes.length > 0) {
-        e.preventDefault();
-        openLink(notes[0].properties?.source);
-        return;
-      }
+    const note = featuresAt(mapInstance, e.point, ["public_notes"])[0];
+    if (note) {
+      e.preventDefault();
+      openLink(note.properties?.source);
+      return;
     }
 
     const route = routeFeatureAt(e.point);
@@ -615,9 +611,9 @@ export function setupUserMapInteractions(
   const subscriptions = [
     mapInstance.on("dblclick", handleDblClick),
     mapInstance.on("click", handleRouteClick),
-    mapInstance.on("mousemove", "railway_routes_click", handleRouteMouseMove),
-    mapInstance.on("mouseenter", "railway_routes_click", handleMouseEnter),
-    mapInstance.on("mouseleave", "railway_routes_click", handleMouseLeave),
+    mapInstance.on("mousemove", ROUTE_CLICK_LAYER_ID, handleRouteMouseMove),
+    mapInstance.on("mouseenter", ROUTE_CLICK_LAYER_ID, handleMouseEnter),
+    mapInstance.on("mouseleave", ROUTE_CLICK_LAYER_ID, handleMouseLeave),
     mapInstance.on("click", "stations", handleStationClick),
     mapInstance.on("mousemove", "stations", handleStationMouseMove),
     mapInstance.on("mouseenter", "stations", handleMouseEnter),

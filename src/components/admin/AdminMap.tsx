@@ -1,7 +1,7 @@
 "use client";
 
 import type * as maplibregl from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import AdminLayerControls from "@/components/admin/AdminLayerControls";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -29,10 +29,8 @@ import {
   railwayRoutesTileUrl,
   scenicLinesTileUrl,
 } from "@/lib/map";
-import {
-  ROUTE_LINE_LAYERS,
-  useAdminLayerVisibility,
-} from "@/lib/map/hooks/useAdminLayerVisibility";
+import { fitCamera } from "@/lib/map/fitCamera";
+import { useAdminLayerVisibility } from "@/lib/map/hooks/useAdminLayerVisibility";
 import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
@@ -42,13 +40,17 @@ import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
 import { useRegionId } from "@/lib/regionContext";
 import { type UsageType, usageOptions } from "@/lib/shared/constants";
-import { SCENIC_LINES_LAYER_ID } from "@/lib/shared/map/layers";
+import {
+  ROUTE_LINE_LAYERS,
+  routeLineLayerId,
+  SCENIC_LINES_LAYER_ID,
+} from "@/lib/shared/map/layers";
 import {
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
 } from "@/lib/shared/map/utils/userRouteStyling";
 import type { RegionId } from "@/lib/shared/regions";
-import type { GeoJSONFeatureCollection, MapSearchResults } from "@/lib/shared/types";
+import type { GeoJSONFeatureCollection, MapSearchResults, RouteBounds } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
 
 // The admin map draws every station, so its search offers every station too — not
@@ -104,7 +106,7 @@ function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | n
     m.setPaintProperty(
       layerId,
       "line-width",
-      layerId === "railway_routes_heritage" ? heritageWidthExpression : widthExpression,
+      layerId === routeLineLayerId(1) ? heritageWidthExpression : widthExpression,
     );
     m.setPaintProperty(layerId, "line-opacity", opacityExpression);
   }
@@ -129,7 +131,7 @@ interface AdminMapProps {
   scenicMode?: boolean;
   selectedScenicLineId?: number | null;
   scenicRefreshTrigger?: number;
-  focusGeometry?: string | null;
+  focusBounds?: { bounds: RouteBounds; nonce: number } | null;
   focusCoordinate?: { coordinate: [number, number]; nonce: number } | null;
   notesRefreshTrigger: number;
   onNotesChanged: () => void;
@@ -148,7 +150,7 @@ export default function AdminMap({
   scenicMode = false,
   selectedScenicLineId = null,
   scenicRefreshTrigger = 0,
-  focusGeometry,
+  focusBounds,
   focusCoordinate,
   notesRefreshTrigger,
   onNotesChanged,
@@ -334,26 +336,16 @@ export default function AdminMap({
     m.flyTo({ center: focusCoordinate.coordinate, zoom: targetZoom, duration: 800 });
   }, [focusCoordinate, mapLoaded, map]);
 
-  // Focus on route geometry
-  useEffect(() => {
-    if (!map.current || !mapLoaded || !focusGeometry || isEditingGeometry) return;
+  // Read through an effect event, so crossing the mobile breakpoint doesn't fly again
+  const flyToBounds = useEffectEvent((m: maplibregl.Map, bounds: RouteBounds) => {
+    m.flyTo({ ...fitCamera(m, bounds, isMobile), duration: 1000 });
+  });
 
-    try {
-      const geojson = JSON.parse(focusGeometry);
-      if (geojson?.type === "LineString" && geojson.coordinates) {
-        const coordinates = geojson.coordinates as [number, number][];
-        const lngs = coordinates.map((coord) => coord[0]);
-        const lats = coordinates.map((coord) => coord[1]);
-        const bounds: [[number, number], [number, number]] = [
-          [Math.min(...lngs), Math.min(...lats)],
-          [Math.max(...lngs), Math.max(...lats)],
-        ];
-        map.current.fitBounds(bounds, { padding: 80, duration: 1000, maxZoom: 13 });
-      }
-    } catch (error) {
-      console.error("Error parsing geometry for focus:", error);
-    }
-  }, [focusGeometry, mapLoaded, isEditingGeometry, map]);
+  // Fly to a route or scenic line picked from a list
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !focusBounds || isEditingGeometry) return;
+    flyToBounds(map.current, focusBounds.bounds);
+  }, [focusBounds, mapLoaded, isEditingGeometry, map]);
 
   return (
     <div className={`${className} relative`}>

@@ -6,7 +6,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { EditingGeometry } from "@/components/admin/AdminCreateRouteTab";
 import type { EditingScenicLine } from "@/components/admin/AdminScenicTab";
 import AdminSidebar, { type AdminTab } from "@/components/admin/AdminSidebar";
+import MapLoading from "@/components/layout/MapLoading";
 import Navbar from "@/components/layout/Navbar";
+import SidebarResizer from "@/components/layout/SidebarResizer";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
@@ -21,17 +23,14 @@ import { logout, type User } from "@/lib/authActions";
 import { type CreateFormCoordinates, useRoutePreview } from "@/lib/map/hooks/useRoutePreview";
 import { RegionProvider, useRegion } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
+import type { RouteBounds } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { btn } from "@/lib/ui/buttonStyles";
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
 const AdminMap = dynamic(() => import("@/components/admin/AdminMap"), {
   ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <div className="text-gray-600">Loading map...</div>
-    </div>
-  ),
+  loading: MapLoading,
 });
 
 const NO_COORDINATES: CreateFormCoordinates = { startingCoordinate: null, endingCoordinate: null };
@@ -71,7 +70,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   // Read after an await, to tell whether the selection has moved on meanwhile.
   const selectedRouteIdRef = useRef(selectedRouteId);
   selectedRouteIdRef.current = selectedRouteId;
-  // A route picked from the list is flown to once its geometry is in (one picked
+  // A route picked from the list is flown to once its detail is in (one picked
   // on the map is already on screen). Held here, beside the load, rather than in
   // the list: the mobile drawer holding the list may close before the load ends.
   const focusOnLoadRef = useRef<number | null>(null);
@@ -93,7 +92,10 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   // Likewise the geometry edit in progress, which the map needs (it hides the
   // routes) as much as the sidebar does.
   const [editingGeometry, setEditingGeometry] = useState<EditingGeometry | null>(null);
-  const [focusGeometry, setFocusGeometry] = useState<string | null>(null);
+  // A nonce, as for the note focus, so picking the same route again flies back to it
+  const [focusBounds, setFocusBounds] = useState<{ bounds: RouteBounds; nonce: number } | null>(
+    null,
+  );
   const [focusCoordinate, setFocusCoordinate] = useState<{
     coordinate: [number, number];
     nonce: number;
@@ -122,7 +124,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setSelectedRouteId(null);
     setCreateFormCoordinates(NO_COORDINATES);
     setEditingGeometry(null);
-    setFocusGeometry(null);
+    setFocusBounds(null);
     setSelectedScenicLineId(null);
     setEditingScenicLine(null);
     // Left on a Scenic tab the new region does not have, a map click would keep
@@ -146,6 +148,10 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setEditingScenicLine(null);
   }, [activeTab]);
 
+  const handleRouteFocus = useCallback((bounds: RouteBounds) => {
+    setFocusBounds({ bounds, nonce: Date.now() });
+  }, []);
+
   // However the selection moves on — a failed load, a region switch, a coordinate
   // click — a fly-to still waiting for the old route is dropped with it.
   useEffect(() => {
@@ -155,8 +161,8 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   useEffect(() => {
     if (!selectedRouteDetail || focusOnLoadRef.current !== selectedRouteDetail.track_id) return;
     focusOnLoadRef.current = null;
-    if (selectedRouteDetail.geometry) setFocusGeometry(selectedRouteDetail.geometry);
-  }, [selectedRouteDetail]);
+    handleRouteFocus(selectedRouteDetail.bounds);
+  }, [selectedRouteDetail, handleRouteFocus]);
 
   // A route whose detail cannot be loaded (deleted in another tab, session gone)
   // is not left selected: highlighted on the map with nothing to edit beside it.
@@ -252,15 +258,9 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
 
   const handleEditingGeometryChange = useCallback((editing: EditingGeometry | null) => {
     setEditingGeometry(editing);
-    // Clear focus geometry when entering/exiting edit mode to prevent unwanted panning
-    if (editing) {
-      setFocusGeometry(null);
-    }
+    // The fly-to effect re-runs when the edit ends, and would fly back to the route
+    if (editing) setFocusBounds(null);
   }, []);
-
-  const handleRouteFocus = (geometry: string) => {
-    setFocusGeometry(geometry);
-  };
 
   const handleFocusNote = useCallback((coordinate: [number, number]) => {
     setFocusCoordinate({ coordinate, nonce: Date.now() });
@@ -314,13 +314,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
         {!isMobile && (
           <>
             {sidebarContent}
-            {/* Resizer: mouse-only drag handle (keyboard resize intentionally unsupported) */}
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only resize affordance with no keyboard equivalent; the sidebar remains fully usable without resizing. */}
-            <div
-              onMouseDown={handleMouseDown}
-              className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 ${isResizing ? "bg-blue-400" : ""}`}
-              style={{ userSelect: "none" }}
-            />
+            <SidebarResizer onMouseDown={handleMouseDown} isResizing={isResizing} />
           </>
         )}
 
@@ -365,7 +359,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
             scenicMode={activeTab === "scenic"}
             selectedScenicLineId={selectedScenicLineId}
             scenicRefreshTrigger={scenicRefreshTrigger}
-            focusGeometry={focusGeometry}
+            focusBounds={focusBounds}
             focusCoordinate={focusCoordinate}
             notesRefreshTrigger={notesRefreshTrigger}
             onNotesChanged={handleNoteChanged}

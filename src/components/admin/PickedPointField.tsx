@@ -1,6 +1,6 @@
 "use client";
 
-import { LABEL } from "@/components/admin/RouteMetadataFields";
+import { LABEL } from "@/components/admin/TextField";
 import IconButton from "@/components/ui/IconButton";
 
 const formatCoordinate = (coord: [number, number] | null) =>

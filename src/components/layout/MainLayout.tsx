@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import MapLoading from "@/components/layout/MapLoading";
 import MenuSheet, { type MenuView } from "@/components/layout/MenuSheet";
 import Navbar from "@/components/layout/Navbar";
 import type { ActiveTab } from "@/components/logbook/UserSidebar";
@@ -15,11 +16,7 @@ import type { RegionId } from "@/lib/shared/regions";
 // Dynamically import the map component to avoid SSR issues with MapLibre
 const RailwayMap = dynamic(() => import("@/components/map/RailwayMap"), {
   ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <div className="text-gray-600">Loading map...</div>
-    </div>
-  ),
+  loading: MapLoading,
 });
 
 interface MainLayoutProps {
