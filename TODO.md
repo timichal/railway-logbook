@@ -14,12 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **`tileSources.ts` + `map/index.ts`** (~70 lines). There are seven
-  `xTileUrl` / `createXSource` pairs with the same shape. Use one
-  `vectorSource(url, ZOOM_RANGES.x)` and one `tileUrl(base, name, cacheBuster?)`, and
-  give each source a one-line factory. The web bindings in `map/index.ts` shrink the
-  same way.
-
 - [ ] **`layers.ts`: three route line factories → one** (~60 lines).
   `createRailwayRoutesLayer`, `createRailwayRoutesSpecialLayer` and
   `createRailwayRoutesHeritageLayer` differ only in id, visibility, dash, cap and

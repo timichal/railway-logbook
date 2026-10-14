@@ -55,8 +55,8 @@ const TILE_BASE_URL = getTileBaseUrl();
 
 /**
  * The app's own origin, for the tiles served by Next (the per-user route tile, the
- * admin notes). Absolute,
- * because MapLibre fetches tiles from a worker whose base URL is not the page's.
+ * admin notes). Absolute, because MapLibre fetches tiles from a worker whose base
+ * URL is not the page's.
  */
 const APP_ORIGIN = typeof window === "undefined" || !window.location ? "" : window.location.origin;
 

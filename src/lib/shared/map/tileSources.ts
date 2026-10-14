@@ -57,6 +57,20 @@ function queryString(params: [string, string][]): string {
   return `?${params.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
 }
 
+/** A tile URL template: `<base>/<name>/{z}/{x}/{y}` and its query string. */
+function tileUrl(base: string, name: string, params: [string, string][] = []): string {
+  return `${base}/${name}/{z}/{x}/{y}${queryString(params)}`;
+}
+
+/** `v=<cacheBuster>`, which makes MapLibre refetch tiles it already holds. */
+function cacheBusterParam(cacheBuster?: number): [string, string][] {
+  return cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];
+}
+
+function vectorSource(url: string, zooms: { min: number; max: number }): VectorSourceSpecification {
+  return { type: "vector", tiles: [url], minzoom: zooms.min, maxzoom: zooms.max };
+}
+
 /**
  * The route tile's URL template.
  *
@@ -70,98 +84,56 @@ export function railwayRoutesTileUrl(
   hosts: RouteTileHosts,
   { rides, cacheBuster, selectedCountries }: RailwayRoutesSourceOptions = {},
 ): string {
-  const baseUrl = rides
-    ? `${hosts.appOrigin}/api/tiles/railway_routes/{z}/{x}/{y}`
-    : `${hosts.tileBaseUrl}/railway_routes_tile/{z}/{x}/{y}`;
-
   const params: [string, string][] = [];
   if (rides && rides !== "session") params.push(["share", rides.shareToken]);
-  if (cacheBuster !== undefined) params.push(["v", cacheBuster.toString()]);
+  params.push(...cacheBusterParam(cacheBuster));
   if (selectedCountries !== undefined) {
     params.push(["selected_countries", JSON.stringify(selectedCountries)]);
   }
-  return `${baseUrl}${queryString(params)}`;
+  return rides
+    ? tileUrl(`${hosts.appOrigin}/api/tiles`, "railway_routes", params)
+    : tileUrl(hosts.tileBaseUrl, "railway_routes_tile", params);
 }
 
-export function createRailwayRoutesSource(
+export const createRailwayRoutesSource = (
   hosts: RouteTileHosts,
   options: RailwayRoutesSourceOptions = {},
-): VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [railwayRoutesTileUrl(hosts, options)],
-    minzoom: ZOOM_RANGES.railwayRoutes.min,
-    maxzoom: ZOOM_RANGES.railwayRoutes.max,
-  };
-}
+): VectorSourceSpecification =>
+  vectorSource(railwayRoutesTileUrl(hosts, options), ZOOM_RANGES.railwayRoutes);
 
-export function stationsTileUrl(tileBaseUrl: string): string {
-  return `${tileBaseUrl}/stations_tile/{z}/{x}/{y}`;
-}
-
-export function createStationsSource(tileBaseUrl: string): VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [stationsTileUrl(tileBaseUrl)],
-    minzoom: ZOOM_RANGES.stations.min,
-    maxzoom: ZOOM_RANGES.stations.max,
-  };
-}
+/** Every station — the admin map's. */
+export const createStationsSource = (tileBaseUrl: string): VectorSourceSpecification =>
+  vectorSource(tileUrl(tileBaseUrl, "stations_tile"), ZOOM_RANGES.stations);
 
 /**
- * Stations for the user map: only those within 250m of a railway part.
+ * Stations for the user map: only those within 250m of a route (`near_route`).
  * Serves the same "stations" MVT layer name as `createStationsSource`, so
  * `createStationsLayer` works with either source.
  */
-export function publicStationsTileUrl(tileBaseUrl: string): string {
-  return `${tileBaseUrl}/public_stations_tile/{z}/{x}/{y}`;
-}
+export const publicStationsTileUrl = (tileBaseUrl: string): string =>
+  tileUrl(tileBaseUrl, "public_stations_tile");
 
-export function createPublicStationsSource(tileBaseUrl: string): VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [publicStationsTileUrl(tileBaseUrl)],
-    minzoom: ZOOM_RANGES.stations.min,
-    maxzoom: ZOOM_RANGES.stations.max,
-  };
-}
+export const createPublicStationsSource = (tileBaseUrl: string): VectorSourceSpecification =>
+  vectorSource(publicStationsTileUrl(tileBaseUrl), ZOOM_RANGES.stations);
 
-export function createRailwayPartsSource(tileBaseUrl: string): VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [`${tileBaseUrl}/railway_parts_tile/{z}/{x}/{y}`],
-    minzoom: ZOOM_RANGES.railwayParts.min,
-    maxzoom: ZOOM_RANGES.railwayParts.max,
-  };
-}
+export const createRailwayPartsSource = (tileBaseUrl: string): VectorSourceSpecification =>
+  vectorSource(tileUrl(tileBaseUrl, "railway_parts_tile"), ZOOM_RANGES.railwayParts);
 
 /**
  * Scenic lines (`scenic_lines_tile`) — public, so Martin's. Both maps draw them;
  * the admin map refreshes them after a save through `cacheBuster`.
  */
-export function scenicLinesTileUrl(tileBaseUrl: string, cacheBuster?: number): string {
-  const params: [string, string][] =
-    cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];
-  return `${tileBaseUrl}/scenic_lines_tile/{z}/{x}/{y}${queryString(params)}`;
-}
+export const scenicLinesTileUrl = (tileBaseUrl: string, cacheBuster?: number): string =>
+  tileUrl(tileBaseUrl, "scenic_lines_tile", cacheBusterParam(cacheBuster));
 
-export function createScenicLinesSource(
+export const createScenicLinesSource = (
   tileBaseUrl: string,
   cacheBuster?: number,
-): VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [scenicLinesTileUrl(tileBaseUrl, cacheBuster)],
-    minzoom: ZOOM_RANGES.scenicLines.min,
-    maxzoom: ZOOM_RANGES.scenicLines.max,
-  };
-}
+): VectorSourceSpecification =>
+  vectorSource(scenicLinesTileUrl(tileBaseUrl, cacheBuster), ZOOM_RANGES.scenicLines);
 
-export function adminNotesTileUrl(appOrigin: string, cacheBuster?: number): string {
-  const params: [string, string][] =
-    cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];
-  return `${appOrigin}/api/tiles/admin_notes/{z}/{x}/{y}${queryString(params)}`;
-}
+export const adminNotesTileUrl = (appOrigin: string, cacheBuster?: number): string =>
+  tileUrl(`${appOrigin}/api/tiles`, "admin_notes", cacheBusterParam(cacheBuster));
 
 /**
  * Every admin note, drafts included — so, like a ride-coloured route tile, it is
@@ -169,37 +141,21 @@ export function adminNotesTileUrl(appOrigin: string, cacheBuster?: number): stri
  * the session for the admin, and never by Martin, which answers anyone. Takes the
  * app's origin rather than Martin's base URL for that reason.
  */
-export function createAdminNotesSource(
+export const createAdminNotesSource = (
   appOrigin: string,
   cacheBuster?: number,
-): VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [adminNotesTileUrl(appOrigin, cacheBuster)],
-    minzoom: ZOOM_RANGES.adminNotes.min,
-    maxzoom: ZOOM_RANGES.adminNotes.max,
-  };
-}
+): VectorSourceSpecification =>
+  vectorSource(adminNotesTileUrl(appOrigin, cacheBuster), ZOOM_RANGES.adminNotes);
 
 /**
- * Public notes source (note_type='Usage' only) for the user map.
- * Served by the `public_notes_tile` function, which exposes only published
- * Usage notes and only the popup fields (text + source).
+ * Published `Usage` notes for the user map. The `public_notes_tile` function
+ * exposes only those, and only the popup fields (text + source).
  */
-export function publicNotesTileUrl(tileBaseUrl: string, cacheBuster?: number): string {
-  const params: [string, string][] =
-    cacheBuster === undefined ? [] : [["v", cacheBuster.toString()]];
-  return `${tileBaseUrl}/public_notes_tile/{z}/{x}/{y}${queryString(params)}`;
-}
+export const publicNotesTileUrl = (tileBaseUrl: string, cacheBuster?: number): string =>
+  tileUrl(tileBaseUrl, "public_notes_tile", cacheBusterParam(cacheBuster));
 
-export function createPublicNotesSource(
+export const createPublicNotesSource = (
   tileBaseUrl: string,
   cacheBuster?: number,
-): VectorSourceSpecification {
-  return {
-    type: "vector",
-    tiles: [publicNotesTileUrl(tileBaseUrl, cacheBuster)],
-    minzoom: ZOOM_RANGES.publicNotes.min,
-    maxzoom: ZOOM_RANGES.publicNotes.max,
-  };
-}
+): VectorSourceSpecification =>
+  vectorSource(publicNotesTileUrl(tileBaseUrl, cacheBuster), ZOOM_RANGES.publicNotes);
