@@ -16,6 +16,7 @@ import type {
   Journey,
   PlannerRoute,
   RailwayRoute,
+  RouteBounds,
   Station,
   Trip,
 } from "@shared/types";
@@ -111,6 +112,8 @@ export function plan(input: {
 export interface PlannerResult {
   routes: PlannerRoute[];
   totalDistance: number;
+  /** What the map fits to — the travelled stretch on a partial route. Null with `error`. */
+  bounds: RouteBounds | null;
   error?: string;
 }
 
@@ -239,8 +242,15 @@ export interface LoggedRoute extends Omit<RailwayRoute, "geometry"> {
   covered_end?: number | null;
 }
 
-export function journey(id: number): Promise<{ journey: Journey; routes: LoggedRoute[] }> {
-  return request(`/journeys/${id}`);
+/**
+ * A journey and its routes, with `bounds` — the box of those routes in `region`, which
+ * the map fits to when the journey is opened, `null` when none is there.
+ */
+export function journey(
+  id: number,
+  region: RegionId,
+): Promise<{ journey: Journey; routes: LoggedRoute[]; bounds: RouteBounds | null }> {
+  return request(`/journeys/${id}`, { query: { region } });
 }
 
 export async function updateJourney(
@@ -270,10 +280,17 @@ export async function createTrip(input: { name: string; description?: string }):
   return trip;
 }
 
+/** A trip, its journeys and their track ids, with `bounds` as `journey` has them. */
 export function trip(
   id: number,
-): Promise<{ trip: TripWithStats; journeys: JourneyWithStats[]; routeIds: number[] }> {
-  return request(`/trips/${id}`);
+  region: RegionId,
+): Promise<{
+  trip: TripWithStats;
+  journeys: JourneyWithStats[];
+  routeIds: number[];
+  bounds: RouteBounds | null;
+}> {
+  return request(`/trips/${id}`, { query: { region } });
 }
 
 export async function updateTrip(

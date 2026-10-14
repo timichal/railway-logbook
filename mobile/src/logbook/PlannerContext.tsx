@@ -16,12 +16,17 @@
  * the planner's: a journey the logbook has pointed the map at since is not the
  * planner's to clear.
  *
+ * **A found path is flown to**, with the box the planner sends back with it — when
+ * the answer arrives, and again whenever the planner is reopened over it, as the
+ * logbook's "Showing on the map" flies back. The map makes the move once it is in
+ * view, so with this modal over it, on closing.
+ *
  * Cleared on a region switch, as the web app's planner is: its stations and its
  * answer are the other region's. And when the session ends: the provider sits above
  * the auth guard, and the next account must not open the last one's plan.
  */
 import { hasOrdinaryNonRegular } from "@shared/regions";
-import type { PlannerRoute, Station } from "@shared/types";
+import type { PlannerRoute, RouteBounds, Station } from "@shared/types";
 import {
   createContext,
   type ReactNode,
@@ -55,6 +60,7 @@ export interface PlannerForm {
 export interface PlannerResult {
   routes: PlannerRoute[];
   totalDistance: number;
+  bounds: RouteBounds | null;
 }
 
 interface PlannerValue {
@@ -65,7 +71,7 @@ interface PlannerValue {
   /** Changes the form. The answer was for the old one, so it goes. */
   editForm(update: (form: PlannerForm) => PlannerForm): void;
   find(): Promise<void>;
-  /** Puts the answer's gold line back on the map — the screen asks on opening. */
+  /** Puts the answer's gold line back on the map and flies to it — the screen asks on opening. */
   showOnMap(): void;
   /** An empty form and no answer: Clear, a spent plan, a region switch. */
   reset(): void;
@@ -82,7 +88,7 @@ function stationId(station: Station): number {
 
 export function PlannerProvider({ children }: { children: ReactNode }): ReactNode {
   const { regionId } = useRegion();
-  const { ownerKey, highlight, clear: clearHighlight } = useHighlight();
+  const { ownerKey, highlight, refit, clear: clearHighlight } = useHighlight();
 
   const [form, setForm] = useState<PlannerForm>(EMPTY_FORM);
   const [result, setResult] = useState<PlannerResult | null>(null);
@@ -129,7 +135,7 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
   useOnSessionEnd(reset);
 
   const highlightResult = useCallback(
-    (routes: PlannerRoute[]): void => {
+    ({ routes, bounds }: PlannerResult): void => {
       highlight({
         trackIds: routes.map((r) => r.track_id),
         kind: "planner",
@@ -137,6 +143,7 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
         // stretch travelled only, so the gold line stops at the station.
         partials: routes.flatMap((r) => (r.partial ? [r.partial] : [])),
         ownerKey: PLANNER_OWNER,
+        bounds,
       });
     },
     [highlight],
@@ -171,8 +178,13 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
         return;
       }
 
-      setResult({ routes: answer.routes, totalDistance: answer.totalDistance });
-      highlightResult(answer.routes);
+      const found = {
+        routes: answer.routes,
+        totalDistance: answer.totalDistance,
+        bounds: answer.bounds,
+      };
+      setResult(found);
+      highlightResult(found);
     } catch (caught) {
       if (request !== searchRef.current) return;
       setError(caught instanceof Error ? caught.message : "Could not plan that journey.");
@@ -182,8 +194,10 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
   }, [form, regionId, dropResult, highlightResult]);
 
   const showOnMap = useCallback((): void => {
-    if (result && !mapShowsPlan.current) highlightResult(result.routes);
-  }, [result, highlightResult]);
+    if (!result) return;
+    if (mapShowsPlan.current) refit();
+    else highlightResult(result);
+  }, [result, highlightResult, refit]);
 
   const value = useMemo(
     () => ({ form, result, error, searching, editForm, find, showOnMap, reset }),

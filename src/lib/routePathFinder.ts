@@ -26,9 +26,10 @@ import {
 } from "./planner/routeSearch";
 import { planTrims, planVisits, type TrimSpec } from "./planner/routeVisits";
 import { findRoutesNearStations } from "./planner/stations";
+import { routeBoundsByIds } from "./routeQueries";
 import { getUsagePluralLabel, MAX_VIA_STATIONS, type UsageType } from "./shared/constants";
 import { REGIONS, type RegionId, regionOfPoint, regionUsagePluralLabel } from "./shared/regions";
-import type { PartialRouteGeometry, PlannerRoute } from "./shared/types";
+import type { PartialRouteGeometry, PlannerRoute, RouteBounds } from "./shared/types";
 
 export interface PathResult {
   routes: PlannerRoute[];
@@ -261,4 +262,48 @@ export async function findRoutePathBetweenStations(
       error: error instanceof Error ? error.message : "Unknown error",
     };
   }
+}
+
+/**
+ * The bounds a plan is fitted to when it is shown: the whole routes' box, widened by
+ * the stretch actually travelled on each partly covered one, so a plan joining a
+ * 300km trunk mid-way fits to the part ridden. Not region-scoped — every route of a
+ * plan is reached from its stations, so it never leaves their region. A refused plan
+ * has no routes, and so no bounds.
+ */
+async function planBounds(routes: PlannerRoute[]): Promise<RouteBounds | null> {
+  const whole = routes.filter((r) => !r.partial).map((r) => r.track_id);
+  let bounds = await routeBoundsByIds(whole, null);
+  for (const route of routes) {
+    for (const [lng, lat] of route.partial?.coordinates ?? []) {
+      bounds = bounds
+        ? [
+            Math.min(bounds[0], lng),
+            Math.min(bounds[1], lat),
+            Math.max(bounds[2], lng),
+            Math.max(bounds[3], lat),
+          ]
+        : [lng, lat, lng, lat];
+    }
+  }
+  return bounds;
+}
+
+/**
+ * A plan as the planner shows it: the path, with the bounds the map fits to. What
+ * both transports call — the web's action and the app's `POST /planner`.
+ */
+export async function planJourney(
+  fromStationId: number,
+  toStationId: number,
+  viaStationIds: number[] = [],
+  options: PlannerOptions = {},
+): Promise<PathResult & { bounds: RouteBounds | null }> {
+  const result = await findRoutePathBetweenStations(
+    fromStationId,
+    toStationId,
+    viaStationIds,
+    options,
+  );
+  return { ...result, bounds: await planBounds(result.routes) };
 }

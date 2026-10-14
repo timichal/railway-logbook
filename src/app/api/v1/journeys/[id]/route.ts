@@ -1,7 +1,17 @@
 import { requireUser } from "@/lib/api/auth";
-import { optionalString, readJsonBody, requireIdParam, requireString } from "@/lib/api/params";
+import {
+  optionalString,
+  readJsonBody,
+  requireIdParam,
+  requireRegion,
+  requireString,
+} from "@/lib/api/params";
 import { apiHandler, jsonResponse } from "@/lib/api/response";
-import { deleteJourneyForUser, journeyForUser, updateJourneyForUser } from "@/lib/journeyQueries";
+import {
+  deleteJourneyForUser,
+  journeyWithBoundsForUser,
+  updateJourneyForUser,
+} from "@/lib/journeyQueries";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -10,13 +20,17 @@ async function journeyId(context: Context): Promise<number> {
   return requireIdParam(id, "journey id");
 }
 
-/** GET /api/v1/journeys/:id — the journey and the routes logged in it. */
+/**
+ * GET /api/v1/journeys/:id?region= — the journey, the routes logged in it, and the
+ * bounds of those in `region`: what the map fits to when the journey is opened
+ * (`null` when none of them is there).
+ */
 export async function GET(request: Request, context: Context): Promise<Response> {
   return apiHandler(async () => {
     const user = await requireUser(request);
-    const { journey, routes } = await journeyForUser(user.id, await journeyId(context));
+    const region = requireRegion(new URL(request.url));
 
-    return jsonResponse({ journey, routes });
+    return jsonResponse(await journeyWithBoundsForUser(user.id, await journeyId(context), region));
   });
 }
 

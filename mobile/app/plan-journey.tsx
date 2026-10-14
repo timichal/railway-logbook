@@ -57,7 +57,8 @@ export default function PlanJourneyScreen(): ReactNode {
   const [addError, setAddError] = useState<string | null>(null);
 
   // An answer kept from an earlier visit is drawn again, in case the map has been
-  // pointed at something else (or its chip dismissed) since
+  // pointed at something else (or its chip dismissed) since, and flown to again on
+  // closing, in case the map has been panned away from it
   // biome-ignore lint/correctness/useExhaustiveDependencies: on opening only — showOnMap changes with every answer, and a fresh answer highlights itself.
   useEffect(() => {
     showOnMap();

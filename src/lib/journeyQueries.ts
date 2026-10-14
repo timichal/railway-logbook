@@ -15,8 +15,10 @@
 import type { PoolClient } from "pg";
 import pool, { asMissingRow, withTransaction } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
+import { routeBoundsByIds } from "./routeQueries";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
-import type { Journey, JourneyEdits, LoggedPart, RailwayRoute } from "./shared/types";
+import type { RegionId } from "./shared/regions";
+import type { Journey, JourneyEdits, LoggedPart, RailwayRoute, RouteBounds } from "./shared/types";
 
 /** Fraction range along a route's geometry — see user_logged_parts.covered_start. */
 export interface LoggedRange {
@@ -143,6 +145,24 @@ export async function journeyForUser(
   );
 
   return { journey, routes: routesResult.rows };
+}
+
+/**
+ * A journey as it is opened: with the bounds of its routes in `region`, which the map
+ * fits to (see routeBoundsByIds) — returned with it, so the fit needs no request of
+ * its own. Both transports open a journey through this.
+ */
+export async function journeyWithBoundsForUser(
+  userId: number,
+  journeyId: number,
+  region: RegionId,
+): Promise<{ journey: Journey; routes: RailwayRoute[]; bounds: RouteBounds | null }> {
+  const result = await journeyForUser(userId, journeyId);
+  const bounds = await routeBoundsByIds(
+    result.routes.map((r) => r.track_id),
+    region,
+  );
+  return { ...result, bounds };
 }
 
 /** Create a new journey and log routes to it, in one transaction. */

@@ -1,7 +1,13 @@
 import { requireUser } from "@/lib/api/auth";
-import { optionalString, readJsonBody, requireIdParam, requireString } from "@/lib/api/params";
+import {
+  optionalString,
+  readJsonBody,
+  requireIdParam,
+  requireRegion,
+  requireString,
+} from "@/lib/api/params";
 import { apiHandler, jsonResponse } from "@/lib/api/response";
-import { deleteTripForUser, tripForUser, updateTripForUser } from "@/lib/tripQueries";
+import { deleteTripForUser, tripWithBoundsForUser, updateTripForUser } from "@/lib/tripQueries";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -11,15 +17,16 @@ async function tripId(context: Context): Promise<number> {
 }
 
 /**
- * GET /api/v1/trips/:id — the trip, its journeys, and the distinct track ids
- * across all of them (what the map highlights while the trip is open).
+ * GET /api/v1/trips/:id?region= — the trip, its journeys, the distinct track ids
+ * across all of them (what the map highlights while the trip is open), and the
+ * bounds of those in `region`, which the map fits to (`null` when none is there).
  */
 export async function GET(request: Request, context: Context): Promise<Response> {
   return apiHandler(async () => {
     const user = await requireUser(request);
-    const { trip, journeys, routeIds } = await tripForUser(user.id, await tripId(context));
+    const region = requireRegion(new URL(request.url));
 
-    return jsonResponse({ trip, journeys, routeIds });
+    return jsonResponse(await tripWithBoundsForUser(user.id, await tripId(context), region));
   });
 }
 

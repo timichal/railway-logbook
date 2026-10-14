@@ -4,16 +4,15 @@ import type {
   Map as MapLibreMap,
   PaddingOptions,
 } from "maplibre-gl";
+import { FIT_MAX_ZOOM } from "@/lib/shared/map/zoomRanges";
 import type { RouteBounds } from "@/lib/shared/types";
 
 /**
  * Fitting the camera to some routes — an opened journey, trip or plan, or a line
  * picked in the search box: the margin left around them, on top of the camera
- * padding the mobile sheet already holds, and how far in it may go — a single short
- * route would otherwise fill the screen at street level.
+ * padding the mobile sheet already holds. How far in it may go is `FIT_MAX_ZOOM`.
  */
 const FIT_PADDING_PX = { desktop: 64, mobile: 24 };
-const FIT_MAX_ZOOM = 12;
 /** How far a fitted route is kept from the edge of the progress box. */
 const FIT_BOX_GAP_PX = 16;
 

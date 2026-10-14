@@ -15,11 +15,10 @@ import { asUser } from "./authHelpers";
 import {
   createJourneyForUser,
   deleteJourneyForUser,
-  journeyForUser,
+  journeyWithBoundsForUser,
   type LoggedRange,
   saveJourneyEditsForUser,
 } from "./journeyQueries";
-import { routeBoundsByIds } from "./routeQueries";
 import type { RegionId } from "./shared/regions";
 import type { Journey, JourneyEdits, RailwayRoute, RouteBounds } from "./shared/types";
 
@@ -32,11 +31,7 @@ export async function getJourney(
   journeyId: number,
   region: RegionId,
 ): Promise<ActionResult<{ journey: Journey; routes: RailwayRoute[]; bounds: RouteBounds | null }>> {
-  return asUser(async (userId) => {
-    const result = await journeyForUser(userId, journeyId);
-    const trackIds = result.routes.map((r) => r.track_id);
-    return { ...result, bounds: await routeBoundsByIds(trackIds, region) };
-  });
+  return asUser((userId) => journeyWithBoundsForUser(userId, journeyId, region));
 }
 
 /** Create a new journey and log routes to it (atomic operation). */

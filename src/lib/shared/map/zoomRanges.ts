@@ -20,3 +20,10 @@ export const ZOOM_RANGES = {
   adminNotes: { min: 4, max: 18 }, // Admin notes visible at all zooms
   publicNotes: { min: 7, max: 18 }, // Public Usage notes on the user map (from moderate zoom)
 } as const;
+
+/**
+ * How far in a fit to some routes may go — an opened journey, trip or plan, or a
+ * searched line: a single short route would otherwise fill the screen at street
+ * level. Both maps' `fitCamera` read it.
+ */
+export const FIT_MAX_ZOOM = 12;

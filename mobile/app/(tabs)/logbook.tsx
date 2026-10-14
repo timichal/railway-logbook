@@ -286,7 +286,9 @@ function CardHeader({
 }
 
 /**
- * Point the map at this trip's or journey's routes, and take the reader there.
+ * Point the map at this trip's or journey's routes, and take the reader there — the
+ * map flies to them, with the box the same request brings back. Pressed again while
+ * the map still shows them, it flies there again, in case the reader has panned away.
  *
  * The routes are fetched on the press rather than carried in the list: the logbook
  * page would otherwise ship every track id of every row to draw a button nobody has
@@ -302,7 +304,12 @@ function ShowOnMap({
   label: string;
 }): ReactNode {
   const router = useRouter();
-  const { highlight, ownerKey } = useHighlight();
+  const { regionId } = useRegion();
+  const { highlight, refit, ownerKey } = useHighlight();
+  // Read after the request, which a region switch may have overtaken: its routes and
+  // box are the old region's, and the switch has just cleared the map of those
+  const currentRegion = useRef(regionId);
+  currentRegion.current = regionId;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The map may already be showing this one — from a previous press, or from before
@@ -313,18 +320,22 @@ function ShowOnMap({
     setBusy(true);
     setError(null);
     try {
-      const trackIds =
+      const { trackIds, bounds } =
         kind === "trip"
-          ? (await api.trip(id)).routeIds
-          : (await api.journey(id)).routes.map((route) => route.track_id);
-      highlight({ trackIds, kind: "view", ownerKey: `${kind}-${id}` });
+          ? await api.trip(id, regionId).then((t) => ({ trackIds: t.routeIds, bounds: t.bounds }))
+          : await api.journey(id, regionId).then((j) => ({
+              trackIds: j.routes.map((route) => route.track_id),
+              bounds: j.bounds,
+            }));
+      if (currentRegion.current !== regionId) return;
+      highlight({ trackIds, kind: "view", ownerKey: `${kind}-${id}`, bounds });
       router.push("/(tabs)/map");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load its routes.");
     } finally {
       setBusy(false);
     }
-  }, [kind, id, highlight, router]);
+  }, [kind, id, regionId, highlight, router]);
 
   return (
     <View className="gap-1">
@@ -332,7 +343,11 @@ function ShowOnMap({
         label={showing ? "Showing on the map" : label}
         variant={showing ? "secondary" : "outline"}
         busy={busy}
-        onPress={() => (showing ? router.push("/(tabs)/map") : void show())}
+        onPress={() => {
+          if (!showing) return void show();
+          refit();
+          router.push("/(tabs)/map");
+        }}
       />
       {error ? <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text> : null}
     </View>

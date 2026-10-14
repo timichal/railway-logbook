@@ -45,13 +45,14 @@ becomes an item of its own.
 
 ## Medium — UX gaps against the web and platform conventions
 
-- [ ] **Opening a journey, trip or plan doesn't move the map to it.** On the web,
-  opening something flies to it (`{ fit: true }`, a bounding box from
-  `routeBoundsByIds`). Here "Show on the map" switches tabs but leaves the camera where
-  it was, so the highlight may be off-screen. The same applies to a planner result.
-  Have `GET /journeys/:id`, `GET /trips/:id` and `POST /planner` return the bounding
-  box (the query already exists), and fit the camera with a `setStop({ bounds,
-  padding })` that keeps clear of the controls.
+- [ ] **Check the fly-to on the device.** *(device)* "Show on the map" and a
+  planner result now fit the camera (`mobile/src/map/fitCamera.ts`), once the map
+  tab is in view. Check that the routes land clear of the top row and the progress
+  box, that a plan is flown to when the planner modal closes (it relies on
+  `useIsFocused` being false under the modal), that pressing "Showing on the map"
+  again flies back after a pan, and that a short route stops at zoom 12. The fit
+  waits for `onDidFinishLoadingStyle`: check that it still happens on the first
+  "Show on the map" after a cold start, and after switching the colour scheme.
 
 - [ ] **A journey's highlight ignores partial rides.** `ShowOnMap` highlights whole
   routes. The web's view highlight draws only the stretch ridden for a route logged in

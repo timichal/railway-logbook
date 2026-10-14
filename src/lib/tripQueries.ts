@@ -10,8 +10,9 @@
 
 import pool, { asMissingRow, escapeLikePattern } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
+import { routeBoundsByIds } from "./routeQueries";
 import { type RegionId, regionContainsSql } from "./shared/regions";
-import type { Journey, Trip } from "./shared/types";
+import type { Journey, RouteBounds, Trip } from "./shared/types";
 
 /**
  * Region predicates for the browsing list.
@@ -207,6 +208,21 @@ export async function tripForUser(
     journeys: journeysResult.rows,
     routeIds: routeIdsResult.rows.map((r) => r.track_id),
   };
+}
+
+/** A trip as it is opened: with the bounds of its routes in `region` (see journeyWithBoundsForUser). */
+export async function tripWithBoundsForUser(
+  userId: number,
+  tripId: number,
+  region: RegionId,
+): Promise<{
+  trip: Trip;
+  journeys: JourneyWithStats[];
+  routeIds: number[];
+  bounds: RouteBounds | null;
+}> {
+  const result = await tripForUser(userId, tripId);
+  return { ...result, bounds: await routeBoundsByIds(result.routeIds, region) };
 }
 
 function assertTripName(name: unknown): void {

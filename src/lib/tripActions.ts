@@ -12,7 +12,6 @@
 
 import type { ActionResult } from "./actionResult";
 import { asUser } from "./authHelpers";
-import { routeBoundsByIds } from "./routeQueries";
 import type { RegionId } from "./shared/regions";
 import type { RouteBounds, Trip } from "./shared/types";
 import {
@@ -23,8 +22,8 @@ import {
   journeysAndTripsForUser,
   type TripsAndJourneysItem,
   type TripWithStats,
-  tripForUser,
   tripsForUser,
+  tripWithBoundsForUser,
   unassignedJourneysForUser,
   updateTripForUser,
 } from "./tripQueries";
@@ -51,10 +50,7 @@ export async function getTrip(
     bounds: RouteBounds | null;
   }>
 > {
-  return asUser(async (userId) => {
-    const result = await tripForUser(userId, tripId);
-    return { ...result, bounds: await routeBoundsByIds(result.routeIds, region) };
-  });
+  return asUser((userId) => tripWithBoundsForUser(userId, tripId, region));
 }
 
 export async function createTrip(

@@ -100,7 +100,7 @@ Bearer token required.
 | | |
 | --- | --- |
 | `POST /journeys` | `{ name, date, description?, tripId?, routes }` → 201 `{ journey }`. Journey and logged parts commit together. A `tripId` that is not one of the caller's own trips is a 404 `Trip not found`, and nothing is written |
-| `GET /journeys/:id` | `{ journey, routes }` — the routes carry the line `name` (where the region has one) plus `partial`, `covered_start`, `covered_end` |
+| `GET /journeys/:id?region=` | `{ journey, routes, bounds }` — the routes carry the line `name` (where the region has one) plus `partial`, `covered_start`, `covered_end`. `bounds` (below) is the box of those in `region` |
 | `PATCH /journeys/:id` | `{ name, date, description? }` → `{ journey }` |
 | `DELETE /journeys/:id` | `{ success: true }`, logged parts included |
 | `POST /journeys/:id/routes` | `{ routes }` — a route already logged has its flag and stretch overwritten, not duplicated |
@@ -109,6 +109,11 @@ Bearer token required.
 | `PUT /journeys/:id/trip` | `{ tripId }` — file the journey under a trip |
 | `DELETE /journeys/:id/trip` | file it under none |
 | `GET /journeys/unassigned?region=` | `{ journeys }` — the assignment picker's list |
+
+**`bounds` is `[west, south, east, north]`**, the box the map fits to when a
+journey or trip is opened. Only the routes in `region` count — a trip may hold a
+ride in Czechia and one in Japan, and a box around both would zoom the map out to
+half the planet — so it is `null` when none of them is there.
 
 **A journey's `date` is a calendar day, `YYYY-MM-DD`**, both ways — never a
 timestamp, and with no timezone to apply. Anything else sent, a day that does
@@ -148,7 +153,7 @@ is a column on it, and a journey belongs to at most one trip.
 | --- | --- |
 | `GET /trips?region=` | `{ trips }` with stats. A trip with no logged routes yet belongs to every region, so a new one never vanishes from the list that made it |
 | `POST /trips` | `{ name, description? }` → 201 `{ trip }` |
-| `GET /trips/:id` | `{ trip, journeys, routeIds }` — `routeIds` is what the map highlights while the trip is open |
+| `GET /trips/:id?region=` | `{ trip, journeys, routeIds, bounds }` — `routeIds` is what the map highlights while the trip is open; `bounds` is the box of those in `region` |
 | `PATCH /trips/:id` | `{ name, description? }` → `{ trip }` |
 | `DELETE /trips/:id` | its journeys survive, unassigned |
 | `GET /logbook?region=&page=&pageSize=&search=` | `{ items, total }` — the browsing list: one row per trip (journeys nested) or standalone journey, newest first. `page` defaults to 1, `pageSize` to 10 (capped at 100) |
@@ -160,7 +165,7 @@ a larger set.
 ## Journey planner
 
 `POST /planner` — `{ fromStationId, toStationId, viaStationIds?, includeSpecial? }` →
-`{ routes, totalDistance, error? }`. No token: route data is public and the
+`{ routes, totalDistance, bounds, error? }`. No token: route data is public and the
 planner writes nothing.
 
 The search rides Regular routes only, unless `includeSpecial` (boolean, default
@@ -191,7 +196,9 @@ from a station to itself covers nothing. A loop (A via B back to A) is fine.
 The search stays on the server for good: it needs Postgres and the in-memory
 route graph. First and last routes come back trimmed to the stretch actually
 travelled (`partial` geometry plus `travelled_length_km`), and `totalDistance`
-counts only that.
+counts only that. `bounds` covers the whole routes and the travelled stretch of
+the partial ones, so a plan joining a long trunk mid-way fits to the part ridden;
+it is `null` when no path was found.
 
 ## Route tiles
 

@@ -1,6 +1,6 @@
 import { readJsonBody, requireBoolean, requireInt, requireIntArray } from "@/lib/api/params";
 import { ApiError, apiHandler, jsonResponse } from "@/lib/api/response";
-import { findRoutePathBetweenStations } from "@/lib/routePathFinder";
+import { planJourney } from "@/lib/routePathFinder";
 import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
 
 /**
@@ -12,7 +12,8 @@ import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
  * client: Europe's Special routes are never in the network, whatever is asked.
  *
  * The search stays on the server for good: it needs Postgres and the in-memory
- * route graph, neither of which belongs on a phone.
+ * route graph, neither of which belongs on a phone. The answer carries the
+ * `bounds` the map fits to, `null` when no path was found.
  *
  * "No path found" comes back as a 200 with an `error` string rather than as an
  * HTTP failure — the request was fine, the network just doesn't connect those
@@ -50,9 +51,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     return jsonResponse(
-      await findRoutePathBetweenStations(fromStationId, toStationId, viaStationIds, {
-        includeSpecial,
-      }),
+      await planJourney(fromStationId, toStationId, viaStationIds, { includeSpecial }),
     );
   });
 }

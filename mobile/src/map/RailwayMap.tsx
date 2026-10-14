@@ -58,14 +58,17 @@ import {
 } from "@shared/map/userMapLayers";
 import { REGIONS, type RegionId } from "@shared/regions";
 import type { Station } from "@shared/types";
+import { useIsFocused } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { NativeSyntheticEvent } from "react-native";
+import type { LayoutChangeEvent, NativeSyntheticEvent } from "react-native";
 import { ActivityIndicator, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useLogVersion } from "@/logbook/logVersion";
 import { useSelection } from "@/logbook/SelectionContext";
 import { CoverageOverlay } from "@/map/CoverageOverlay";
 import { FeatureSheet } from "@/map/FeatureSheet";
+import { fitCamera } from "@/map/fitCamera";
 import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import { MapTopControls } from "@/map/MapTopControls";
@@ -97,6 +100,17 @@ const SAVE_DEBOUNCE_MS = 500;
 /** Where a station picked out of the search box lands, as on the web. */
 const STATION_ZOOM = 14;
 const STATION_FLY_MS = 1200;
+
+/**
+ * Fitting an opened journey, trip or plan: clear of the furniture over the map —
+ * the top row (`MapTopControls`) and the progress box and attribution along the
+ * bottom, each a 44pt control 8pt in from its edge — by a gap, and of the sides by
+ * the web's mobile margin.
+ */
+const CONTROL_EDGE = 8 + 44;
+const FIT_GAP = 16;
+const FIT_SIDE_MARGIN = 24;
+const FIT_FLY_MS = 1000;
 
 interface RailwayMapProps {
   /** The country filter, already resolved for this region (`useEffectiveCountries`). */
@@ -142,6 +156,9 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
 
   const cameraRef = useRef<CameraRef>(null);
   const [feature, setFeature] = useState<MapFeature | null>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
 
   const flyToStation = useCallback((station: Station) => {
     const [lon, lat] = station.coordinates;
@@ -187,6 +204,46 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
       cancelled = true;
     };
   }, [regionId]);
+
+  /**
+   * Flying to what the logbook or the planner just opened (`pendingFit`, see
+   * `HighlightContext`). Both ask from somewhere else — another tab, a modal over
+   * this one — so the move waits until the map is in view, where it can be seen
+   * landing, and until the map is measured and its style loaded: a stop sent to a
+   * map still being built can be lost under its `initialViewState`. The ask is
+   * settled only once the binding has taken the stop; one it refuses stays asked,
+   * and is tried again on the next change here.
+   */
+  const { bounds: fitBounds, pendingFit, fitDone } = highlighted;
+  const [loadedStyle, setLoadedStyle] = useState<typeof basemapStyle>(null);
+  useEffect(() => {
+    if (pendingFit === null || !fitBounds) return;
+    if (!isFocused || !size || !basemapStyle || loadedStyle !== basemapStyle) return;
+
+    const padding = {
+      top: insets.top + CONTROL_EDGE + FIT_GAP,
+      right: FIT_SIDE_MARGIN,
+      bottom: CONTROL_EDGE + FIT_GAP,
+      left: FIT_SIDE_MARGIN,
+    };
+    try {
+      cameraRef.current
+        ?.setStop({ ...fitCamera(fitBounds, size, padding, MIN_ZOOM), duration: FIT_FLY_MS })
+        .then(
+          () => fitDone(pendingFit),
+          () => {},
+        );
+    } catch {
+      // The native camera isn't there yet (`setStop` throws rather than rejects)
+    }
+  }, [pendingFit, fitBounds, fitDone, isFocused, size, basemapStyle, loadedStyle, insets.top]);
+
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setSize((prev) =>
+      prev && prev.width === width && prev.height === height ? prev : { width, height },
+    );
+  }, []);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRegionDidChange = useCallback((event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
@@ -247,7 +304,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   }
 
   return (
-    <View className="flex-1">
+    <View className="flex-1" onLayout={handleLayout}>
       <MapLibreMap
         mapStyle={basemapStyle}
         style={{ flex: 1 }}
@@ -261,6 +318,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
         attributionPosition={{ bottom: 8, right: 8 }}
         onPress={() => setFeature(null)}
         onRegionDidChange={handleRegionDidChange}
+        onDidFinishLoadingStyle={() => setLoadedStyle(basemapStyle)}
       >
         <Camera
           ref={cameraRef}
