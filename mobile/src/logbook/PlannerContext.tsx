@@ -17,7 +17,8 @@
  * planner's to clear.
  *
  * Cleared on a region switch, as the web app's planner is: its stations and its
- * answer are the other region's.
+ * answer are the other region's. And when the session ends: the provider sits above
+ * the auth guard, and the next account must not open the last one's plan.
  */
 import { hasOrdinaryNonRegular } from "@shared/regions";
 import type { PlannerRoute, Station } from "@shared/types";
@@ -32,6 +33,7 @@ import {
   useState,
 } from "react";
 import * as api from "@/api/endpoints";
+import { useOnSessionEnd } from "@/auth/useOnSessionEnd";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useRegion } from "@/region/RegionContext";
 
@@ -123,6 +125,8 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
     mountedRegion.current = regionId;
     reset();
   }, [regionId, reset]);
+
+  useOnSessionEnd(reset);
 
   const highlightResult = useCallback(
     (routes: PlannerRoute[]): void => {

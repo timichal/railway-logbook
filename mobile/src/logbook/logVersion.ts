@@ -15,15 +15,23 @@
  * mechanism the web app's route tile refresh (`useUserMap`) uses and the reason
  * `railwayRoutesTileUrl` takes one: a tile is cached by URL, so a *new* URL is the
  * only way to be sure the old colours are gone.
+ *
+ * The URL does not say whose colours a tile holds — the bearer header does — so a
+ * sign-in bumps it (`AuthContext`): the next account must not meet the last one's
+ * tiles in memory. It also starts at **the launch time rather than 0**, as a guard:
+ * the handler sends `private, no-store`, but whether MapLibre Native's disk cache
+ * honours that is unconfirmed (`MOBILE_AUDIT_TODO.md`), and a counter restarting at
+ * 0 would ask for URLs an earlier launch, or another account, already fetched. If the
+ * header turns out to be honoured, the clock is merely harmless.
  */
 import { useSyncExternalStore } from "react";
 
-let version = 0;
+let version = Date.now();
 const listeners = new Set<() => void>();
 
-/** Called by anything that writes a journey, a trip or a logged route. */
+/** Called by anything that writes a journey, a trip or a logged route, and by a new session. */
 export function bumpLogVersion(): void {
-  version += 1;
+  version = Math.max(version + 1, Date.now());
   for (const listener of listeners) listener();
 }
 

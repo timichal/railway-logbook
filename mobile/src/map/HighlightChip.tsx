@@ -8,34 +8,38 @@
  * nothing on screen explaining why.
  *
  * Over the top edge rather than the bottom: the bottom corners are the progress box
- * and the attribution, and the selection bar is below the map entirely.
+ * and the attribution, and the selection bar is below the map entirely. It sits in
+ * the middle of the top row (`MapTopControls`), between the search and the planner.
  */
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useHighlight } from "@/logbook/HighlightContext";
+import { useNativeColors } from "@/theme/colors";
 
 export function HighlightChip(): ReactNode {
   const { trackIds, color, clear } = useHighlight();
+  const colors = useNativeColors();
 
   if (trackIds.length === 0) return null;
 
   return (
-    <View className="absolute inset-x-0 top-2 items-center">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Clear the highlight"
-        onPress={clear}
-        className="min-h-11 flex-row items-center gap-2 rounded-full bg-white/95 px-4 active:opacity-80 dark:bg-gray-900/95"
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Clear the highlight"
+      onPress={clear}
+      className="min-h-11 shrink flex-row items-center gap-2 rounded-full bg-white/95 px-4 active:opacity-80 dark:bg-gray-900/95"
+    >
+      {/* The dot is the legend, in the set's own colour: gold means a plan,
+          orange means something already logged. */}
+      <View className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+      <Text
+        numberOfLines={1}
+        className="shrink text-sm font-semibold text-gray-900 dark:text-gray-100"
       >
-        {/* The dot is the legend, in the set's own colour: gold means a plan,
-            orange means something already logged. */}
-        <View className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-        <Text className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-          {trackIds.length} {trackIds.length === 1 ? "route" : "routes"} highlighted
-        </Text>
-        <Ionicons name="close" size={16} color="#6b7280" />
-      </Pressable>
-    </View>
+        {trackIds.length} {trackIds.length === 1 ? "route" : "routes"} highlighted
+      </Text>
+      <Ionicons name="close" size={16} color={colors.icon} />
+    </Pressable>
   );
 }

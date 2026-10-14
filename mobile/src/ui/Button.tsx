@@ -9,6 +9,7 @@
  */
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text } from "react-native";
+import { type NativeColors, useNativeColors } from "@/theme/colors";
 
 export type ButtonVariant = "primary" | "secondary" | "outline" | "danger" | "ghost";
 
@@ -29,12 +30,13 @@ const LABEL: Record<ButtonVariant, string> = {
   ghost: "text-blue-600 dark:text-blue-400",
 };
 
-const SPINNER: Record<ButtonVariant, string> = {
-  primary: "#ffffff",
-  secondary: "#111827",
-  outline: "#111827",
-  danger: "#ffffff",
-  ghost: "#2563eb",
+/** The spinner takes the label's colour, which for three roles depends on the scheme. */
+const SPINNER: Record<ButtonVariant, (colors: NativeColors) => string> = {
+  primary: () => "#ffffff",
+  secondary: (colors) => colors.text,
+  outline: (colors) => colors.text,
+  danger: () => "#ffffff",
+  ghost: (colors) => colors.accent,
 };
 
 interface ButtonProps {
@@ -56,6 +58,7 @@ export function Button({
   className = "",
 }: ButtonProps): ReactNode {
   const inert = disabled || busy;
+  const colors = useNativeColors();
 
   return (
     <Pressable
@@ -69,7 +72,7 @@ export function Button({
       } ${className}`}
     >
       {busy ? (
-        <ActivityIndicator color={SPINNER[variant]} />
+        <ActivityIndicator color={SPINNER[variant](colors)} />
       ) : (
         <Text className={`text-base font-semibold ${LABEL[variant]}`}>{label}</Text>
       )}

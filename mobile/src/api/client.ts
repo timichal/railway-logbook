@@ -17,7 +17,13 @@
  * discarded — leaving tokens in the keychain that no reply ever confirmed.
  */
 
-import { clearTokens, loadTokens, saveTokens, type TokenPair } from "@/auth/tokenStore";
+import {
+  accessTokenExpiresAt,
+  clearTokens,
+  loadTokens,
+  saveTokens,
+  type TokenPair,
+} from "@/auth/tokenStore";
 import { API_BASE_URL } from "@/config";
 
 export class ApiError extends Error {
@@ -150,7 +156,7 @@ function refresh(refreshToken: string): Promise<RefreshResult> {
 
       const pair = (await parse(response)) as AuthResponse;
       const tokens = { accessToken: pair.accessToken, refreshToken: pair.refreshToken };
-      await saveTokens(tokens);
+      await saveTokens(tokens, pair.expiresIn);
       return { kind: "refreshed", tokens };
     } catch (error) {
       return { kind: "unreachable", error };
@@ -160,6 +166,31 @@ function refresh(refreshToken: string): Promise<RefreshResult> {
   })();
 
   return refreshInFlight;
+}
+
+/** The server refused the session: drop it here, and tell whoever is listening. */
+async function endSession(): Promise<void> {
+  await clearTokens();
+  signedOutListener?.();
+}
+
+/**
+ * Replace the pair ahead of time when the access token is within `marginMs` of
+ * running out (or when it is not known when it does).
+ *
+ * `request` refreshes on a 401 by itself, but the map's route tiles are requested
+ * natively (`map/tileAuth.ts`) and a tile answered 401 is drawn as nothing — so a
+ * token must not be left to run out while the map is open. Called on a return to the
+ * foreground. A refusal ends the session as any other would; a refresh that cannot
+ * reach the server changes nothing, and the next request tries again.
+ */
+export async function refreshIfExpiring(marginMs: number): Promise<void> {
+  const tokens = await loadTokens();
+  if (!tokens) return;
+  const expiresAt = accessTokenExpiresAt();
+  if (expiresAt !== null && expiresAt - Date.now() > marginMs) return;
+  const result = await refresh(tokens.refreshToken);
+  if (result.kind === "rejected") await endSession();
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -185,8 +216,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     // both mean the session is over, and it ends here rather than at whichever
     // screen made the call.
     if (result.kind === "rejected" || response.status === 401) {
-      await clearTokens();
-      signedOutListener?.();
+      await endSession();
       throw new ApiError(401, "Your session has expired. Please sign in again.");
     }
   }

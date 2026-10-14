@@ -15,12 +15,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { formatDateOnly, formatDateOnlyRange } from "@shared/getUntimezonedDateStr";
 import { useRouter } from "expo-router";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useLogVersion } from "@/logbook/logVersion";
 import { useRegion } from "@/region/RegionContext";
+import { useNativeColors } from "@/theme/colors";
 import { Button } from "@/ui/Button";
 import { Screen } from "@/ui/Screen";
 
@@ -28,6 +29,7 @@ const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
 export default function LogbookScreen(): ReactNode {
+  const colors = useNativeColors();
   const { regionId } = useRegion();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -39,6 +41,10 @@ export default function LogbookScreen(): ReactNode {
   // list's inputs rather than something a focus event has to notice.
   const logVersion = useLogVersion();
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Which inputs the list on screen answers. A refresh of those same inputs that
+  // fails (offline, after a return to the foreground) keeps the list rather than
+  // replacing it with an error.
+  const shownKey = useRef<string | null>(null);
 
   // Typing is not a request. The debounce also resets the page, because a new
   // search's page 3 is a page of a different list.
@@ -53,12 +59,17 @@ export default function LogbookScreen(): ReactNode {
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey and logVersion are intentional triggers — a retry and a newly logged journey both mean this page is stale.
   useEffect(() => {
     const controller = new AbortController();
+    const key = `${regionId}|${page}|${query}`;
     setError(null);
     api
       .logbook(regionId, { page, pageSize: PAGE_SIZE, search: query }, controller.signal)
-      .then(setData)
+      .then((next) => {
+        shownKey.current = key;
+        setData(next);
+      })
       .catch((caught: unknown) => {
         if (caught instanceof Error && caught.name === "AbortError") return;
+        if (shownKey.current === key) return;
         setError(caught instanceof Error ? caught.message : "Could not load the logbook.");
       });
     return () => controller.abort();
@@ -75,7 +86,7 @@ export default function LogbookScreen(): ReactNode {
           value={search}
           onChangeText={setSearch}
           placeholder="Search trips and journeys"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -254,6 +265,7 @@ function CardHeader({
   open: boolean;
   onToggle(): void;
 }): ReactNode {
+  const colors = useNativeColors();
   return (
     <Pressable
       accessibilityRole="button"
@@ -262,13 +274,13 @@ function CardHeader({
       onPress={onToggle}
       className="min-h-14 flex-row items-center gap-3 bg-white p-3 active:opacity-70 dark:bg-gray-900"
     >
-      <Ionicons name={icon} size={20} color="#6b7280" />
+      <Ionicons name={icon} size={20} color={colors.icon} />
       <View className="flex-1">
         <Text className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</Text>
         <Text className="text-xs text-gray-600 dark:text-gray-400">{subtitle}</Text>
         <Text className="text-xs text-gray-500 dark:text-gray-500">{stats}</Text>
       </View>
-      <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color="#6b7280" />
+      <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={colors.icon} />
     </Pressable>
   );
 }
@@ -292,12 +304,14 @@ function ShowOnMap({
   const router = useRouter();
   const { highlight, ownerKey } = useHighlight();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // The map may already be showing this one — from a previous press, or from before
   // the reader came back to this tab. Saying so beats offering the same press twice.
   const showing = ownerKey === `${kind}-${id}`;
 
   const show = useCallback(async (): Promise<void> => {
     setBusy(true);
+    setError(null);
     try {
       const trackIds =
         kind === "trip"
@@ -305,18 +319,23 @@ function ShowOnMap({
           : (await api.journey(id)).routes.map((route) => route.track_id);
       highlight({ trackIds, kind: "view", ownerKey: `${kind}-${id}` });
       router.push("/(tabs)/map");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load its routes.");
     } finally {
       setBusy(false);
     }
   }, [kind, id, highlight, router]);
 
   return (
-    <Button
-      label={showing ? "Showing on the map" : label}
-      variant={showing ? "secondary" : "outline"}
-      busy={busy}
-      onPress={() => (showing ? router.push("/(tabs)/map") : void show())}
-    />
+    <View className="gap-1">
+      <Button
+        label={showing ? "Showing on the map" : label}
+        variant={showing ? "secondary" : "outline"}
+        busy={busy}
+        onPress={() => (showing ? router.push("/(tabs)/map") : void show())}
+      />
+      {error ? <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text> : null}
+    </View>
   );
 }
 

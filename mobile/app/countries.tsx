@@ -60,8 +60,14 @@ export default function CountriesScreen(): ReactNode {
       })
       .catch(() => {
         // A failed load reads as "couldn't load", never as zeros. The country list
-        // is still usable as a filter without its numbers.
-        if (!cancelled) setAnswer({ region: regionId, stats: null });
+        // is still usable as a filter without its numbers. A failed *refresh* keeps
+        // the numbers this region already has.
+        if (cancelled) return;
+        setAnswer((previous) =>
+          previous?.region === regionId && previous.stats
+            ? previous
+            : { region: regionId, stats: null },
+        );
       });
     // A request for the region just left is dropped, however late it lands
     return () => {
@@ -130,8 +136,12 @@ export default function CountriesScreen(): ReactNode {
 /** The countries to tick, each with its km — the half of the screen that writes. */
 function CountryFilter({ stats }: { stats: api.ProgressByCountry | null }): ReactNode {
   const { region } = useRegion();
-  const { selectedCountries, error, setSelectedCountries } = useCountryPrefs();
+  const { selectedCountries, loadError, saveError, setSelectedCountries, retry } =
+    useCountryPrefs();
 
+  // Until the list is known there is nothing to change: a tap would build a new list
+  // from an empty one and save it over the user's real one.
+  const ready = selectedCountries !== null;
   const selected = selectedCountries ?? [];
   const toggle = (code: string): void => {
     setSelectedCountries(
@@ -145,18 +155,27 @@ function CountryFilter({ stats }: { stats: api.ProgressByCountry | null }): Reac
         <Button
           label="Select all"
           className="flex-1"
+          disabled={!ready}
           onPress={() => setSelectedCountries(region.countries.map((c) => c.code))}
         />
         <Button
           label="Select none"
           variant="secondary"
           className="flex-1"
+          disabled={!ready}
           onPress={() => setSelectedCountries([])}
         />
       </View>
 
-      {error ? (
-        <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text>
+      {saveError ? (
+        <Text className="text-sm text-red-600 dark:text-red-400">{saveError}</Text>
+      ) : null}
+
+      {selectedCountries === null && loadError ? (
+        <View className="gap-2">
+          <Text className="text-sm text-red-600 dark:text-red-400">{loadError}</Text>
+          <Button label="Try again" variant="outline" onPress={retry} />
+        </View>
       ) : selectedCountries === null ? (
         <ActivityIndicator />
       ) : selected.length === 0 ? (
@@ -178,6 +197,7 @@ function CountryFilter({ stats }: { stats: api.ProgressByCountry | null }): Reac
             stat={stats?.byCountry.find((s) => s.countryCode === country.code)}
             selected={selected.includes(country.code)}
             first={index === 0}
+            disabled={!ready}
             onToggle={() => toggle(country.code)}
           />
         ))}
@@ -223,6 +243,7 @@ function CountryRow({
   stat,
   selected,
   first,
+  disabled,
   onToggle,
 }: {
   code: string;
@@ -230,15 +251,19 @@ function CountryRow({
   stat: api.CountryProgress | undefined;
   selected: boolean;
   first: boolean;
+  disabled: boolean;
   onToggle(): void;
 }): ReactNode {
   return (
     <Pressable
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: selected }}
+      accessibilityState={{ checked: selected, disabled }}
       accessibilityLabel={name}
+      disabled={disabled}
       onPress={onToggle}
       className={`min-h-14 flex-row items-center gap-3 px-3 py-2 active:opacity-70 ${
+        disabled ? "opacity-50" : ""
+      } ${
         selected ? "bg-blue-50 dark:bg-blue-950" : "bg-white dark:bg-gray-800"
       } ${first ? "" : "border-t border-gray-200 dark:border-gray-700"}`}
     >

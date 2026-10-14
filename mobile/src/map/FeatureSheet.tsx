@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useSelection } from "@/logbook/SelectionContext";
 import type { MapFeature, RouteFeature } from "@/map/mapFeatures";
+import { useNativeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { Button } from "@/ui/Button";
 
@@ -29,6 +30,7 @@ interface FeatureSheetProps {
 }
 
 export function FeatureSheet({ feature, regionId, onClose }: FeatureSheetProps): ReactNode {
+  const colors = useNativeColors();
   return (
     <View className="absolute inset-x-0 bottom-0 max-h-[60%] rounded-t-2xl border-t border-gray-200 bg-white pb-8 dark:border-gray-700 dark:bg-gray-900">
       <Pressable
@@ -37,7 +39,7 @@ export function FeatureSheet({ feature, regionId, onClose }: FeatureSheetProps):
         onPress={onClose}
         className="absolute right-2 top-2 z-10 h-11 w-11 items-center justify-center"
       >
-        <Ionicons name="close" size={22} color="#6b7280" />
+        <Ionicons name="close" size={22} color={colors.icon} />
       </Pressable>
       <ScrollView contentContainerClassName="gap-3 px-5 pb-2 pt-4">
         {feature.kind === "route" ? (

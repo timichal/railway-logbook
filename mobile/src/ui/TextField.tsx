@@ -4,6 +4,7 @@
  */
 import type { ReactNode } from "react";
 import { Text, TextInput, type TextInputProps, View } from "react-native";
+import { useNativeColors } from "@/theme/colors";
 
 interface TextFieldProps extends Omit<TextInputProps, "className"> {
   label: string;
@@ -12,13 +13,14 @@ interface TextFieldProps extends Omit<TextInputProps, "className"> {
 }
 
 export function TextField({ label, error, hint, ...props }: TextFieldProps): ReactNode {
+  const colors = useNativeColors();
   return (
     <View className="gap-1.5">
       <Text className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</Text>
       <TextInput
         // The platform keyboard picks its own colours from this, so it has to be set
         // rather than inherited: an unset one is dark-on-dark in dark mode.
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={colors.placeholder}
         className={`min-h-11 rounded-xl border px-3 text-base text-gray-900 dark:text-gray-100 ${
           error
             ? "border-red-500"

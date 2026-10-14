@@ -12,7 +12,8 @@
  * because they answer the same question — what is the map pointing at right now —
  * and two at once would be two colours claiming to be the answer.
  *
- * Cleared on a region switch, like every other thing picked out of a region's map.
+ * Cleared on a region switch, like every other thing picked out of a region's map,
+ * and when the session ends — a journey's highlight is that account's journey.
  */
 import { HIGHLIGHT_COLORS } from "@shared/map/highlightLayers";
 import type { PartialRouteGeometry } from "@shared/types";
@@ -26,6 +27,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useOnSessionEnd } from "@/auth/useOnSessionEnd";
 import { useRegion } from "@/region/RegionContext";
 
 export type HighlightKind = "planner" | "view";
@@ -64,6 +66,8 @@ export function HighlightProvider({ children }: { children: ReactNode }): ReactN
     mountedRegion.current = regionId;
     setCurrent(EMPTY);
   }, [regionId]);
+
+  useOnSessionEnd(() => setCurrent(EMPTY));
 
   const highlight = useCallback<HighlightValue["highlight"]>((input) => {
     setCurrent({

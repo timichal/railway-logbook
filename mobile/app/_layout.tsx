@@ -7,6 +7,10 @@
  * there is no screen that redirects on mount and no window in which a protected
  * screen is briefly mounted. While the session is still being settled from the
  * keychain neither guard is true, and the splash screen stays up.
+ *
+ * `ErrorBoundary` is expo-router's: it wraps this layout, so a render error anywhere
+ * ends on a screen with a way back rather than a white one (`ErrorScreen`). `(tabs)`
+ * has its own, which keeps a crash in a tab from taking the providers down with it.
  */
 import "../global.css";
 
@@ -25,6 +29,9 @@ import { LayerPrefsProvider } from "@/map/LayerPrefsContext";
 import { CountryPrefsProvider } from "@/region/CountryPrefsContext";
 import { RegionProvider } from "@/region/RegionContext";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
+import { ErrorScreen } from "@/ui/ErrorScreen";
+
+export { ErrorScreen as ErrorBoundary };
 
 // The splash screen comes down once the session is settled, not on first render:
 // otherwise a cold start shows the login screen for the moment the keychain read

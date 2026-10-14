@@ -16,8 +16,10 @@ import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSelection } from "@/logbook/SelectionContext";
+import { useNativeColors } from "@/theme/colors";
 
 export function SelectionBar(): ReactNode {
+  const colors = useNativeColors();
   const router = useRouter();
   const { selected, clear } = useSelection();
 
@@ -41,7 +43,7 @@ export function SelectionBar(): ReactNode {
             {km.toFixed(1)} km · tap to log a journey
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+        <Ionicons name="chevron-forward" size={20} color={colors.icon} />
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -49,7 +51,7 @@ export function SelectionBar(): ReactNode {
         onPress={clear}
         className="h-14 w-14 items-center justify-center active:opacity-70"
       >
-        <Ionicons name="close-circle-outline" size={22} color="#6b7280" />
+        <Ionicons name="close-circle-outline" size={22} color={colors.icon} />
       </Pressable>
     </View>
   );

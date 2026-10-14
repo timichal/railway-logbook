@@ -61,7 +61,6 @@ import type { Station } from "@shared/types";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { ActivityIndicator, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useLogVersion } from "@/logbook/logVersion";
 import { useSelection } from "@/logbook/SelectionContext";
@@ -69,7 +68,7 @@ import { CoverageOverlay } from "@/map/CoverageOverlay";
 import { FeatureSheet } from "@/map/FeatureSheet";
 import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
-import { MapStationSearch } from "@/map/MapStationSearch";
+import { MapTopControls } from "@/map/MapTopControls";
 import {
   type MapFeature,
   toNoteFeature,
@@ -143,10 +142,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
 
   const cameraRef = useRef<CameraRef>(null);
   const [feature, setFeature] = useState<MapFeature | null>(null);
-  const insets = useSafeAreaInsets();
 
-  // A map runs under the status bar, so the furniture over it has to stand clear of
-  // one — which is the whole of why the map pane takes no safe-area inset itself.
   const flyToStation = useCallback((station: Station) => {
     const [lon, lat] = station.coordinates;
     cameraRef.current?.setStop({
@@ -178,12 +174,18 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
 
     // Nothing picked out of the old region survives into the new one, and neither
     // does the camera: `initialViewState` cannot be revisited, so this is a stop.
+    // Cancelled by the next switch, so two quick ones cannot land out of order.
+    let cancelled = false;
     void loadMapPosition(regionId).then((saved) => {
+      if (cancelled) return;
       const region = REGIONS[regionId];
       const next = saved ?? { center: region.center, zoom: region.zoom };
       position.current = next;
       cameraRef.current?.setStop({ ...next, duration: 0 });
     });
+    return () => {
+      cancelled = true;
+    };
   }, [regionId]);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -367,11 +369,9 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
         </VectorSource>
       </MapLibreMap>
 
-      {/* `box-none` so the strip the search sits in does not swallow the taps meant
-          for the map underneath it — only the button and the open panel take one. */}
-      <View pointerEvents="box-none" className="absolute inset-x-2" style={{ top: insets.top + 8 }}>
-        <MapStationSearch onSelect={flyToStation} />
-      </View>
+      {/* A map runs under the status bar, so the furniture over it stands clear of
+          one — which is the whole of why the map pane takes no safe-area inset. */}
+      <MapTopControls onSelectStation={flyToStation} />
 
       {feature ? (
         <FeatureSheet feature={feature} regionId={regionId} onClose={() => setFeature(null)} />

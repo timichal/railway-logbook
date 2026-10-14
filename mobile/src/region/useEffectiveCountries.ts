@@ -10,7 +10,8 @@
  *
  * The preference itself is `CountryPrefsContext` and not a fetch of this hook's own —
  * the Countries screen writes it while the map is reading it, and two copies would
- * disagree.
+ * disagree. Only its *read* error comes through here: a failed save is undone and
+ * reported where it was made, and leaves a list the map can draw.
  */
 
 import { regionCountryCodes } from "@shared/regions";
@@ -18,9 +19,13 @@ import { useMemo } from "react";
 import { useCountryPrefs } from "@/region/CountryPrefsContext";
 import { useRegion } from "@/region/RegionContext";
 
-export function useEffectiveCountries(): { countries: string[] | null; error: string | null } {
+export function useEffectiveCountries(): {
+  countries: string[] | null;
+  loadError: string | null;
+  retry(): void;
+} {
   const { region, regionId } = useRegion();
-  const { selectedCountries, error } = useCountryPrefs();
+  const { selectedCountries, loadError, retry } = useCountryPrefs();
 
   const filterable = region.hasCountryFilter;
 
@@ -33,5 +38,5 @@ export function useEffectiveCountries(): { countries: string[] | null; error: st
   );
 
   // A region that ignores the preference is not blocked by having failed to read it.
-  return { countries, error: filterable ? error : null };
+  return { countries, loadError: filterable ? loadError : null, retry };
 }

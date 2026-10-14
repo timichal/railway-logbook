@@ -8,103 +8,36 @@ against platform conventions, and gaps against the web app.
 It was a static read. `npm run typecheck` and Biome are clean, and nothing was run on a
 device. Items marked *(device)* need confirming on the phone before or after the fix.
 Gaps the plan already lists are kept apart at the bottom, so this file is the one list
-to cross things off.
+of what is left. A finished item is deleted, not ticked; whatever it leaves to do
+becomes an item of its own.
 
 ---
 
 ## High — bugs and the foundation
 
-- [ ] **Opening the app offline signs the user out of the UI.** `AuthContext`'s cold
-  start sends any failure of `GET /auth/me`, a `NetworkError` included, to
-  `forgetSession()`. The tokens stay in the keychain, but the user lands on the login
-  screen, and signing in there fails too because there is no network. This works
-  against the whole reason for the app (on a train with no signal). Fix: keep the last
-  `ApiUser` on the device (SecureStore beside the tokens). When tokens exist and the
-  failure is a `NetworkError`, start `signedIn` with the cached user and check again
-  later (on foreground or the next request). Only a rejected refresh should sign out.
+- [ ] **Finish checking the 2026-10-14 High fixes on the device.** *(device)* The
+  airplane-mode cold start, the map's top row, dark mode and a plain return after a
+  minute have been confirmed on the iPhone. Left:
+  - Sign out, then sign in as a **different** account (only the same one has been
+    tried): no selection, planner form or highlight left over, and the route colours
+    are the new account's.
+  - Log a journey on the web while the app is in the background, then come back after
+    more than a minute: the map colours, progress and logbook catch up.
+  - The same return **offline** changes nothing: routes, numbers and the logbook stay
+    as drawn. Pulling down the notification centre doesn't count as leaving.
+  - The error screen. It needs a throw during render, so add one temporarily: for the
+    tab boundary, `if (Math.random() < 2) throw new Error("test")` at the top of
+    `SettingsScreen` (Retry should keep the session); for the root one, the same line
+    in `RootNavigator` (it renders without any provider). In a development build the
+    red LogBox overlay comes first; dismiss it to see the screen behind.
 
-- [ ] **A failed country-preference read or write replaces the whole map with red
-  text.** `map.tsx` renders an error screen whenever `useEffectiveCountries().error`
-  is set. That error also comes from a failed *save* (`CountryPrefsContext` sets it on
-  rollback), even though `countries` is still valid. A read that fails at startup is
-  never retried, and the screen has no Retry button, so the Map tab is a dead end
-  until the app restarts. Fix: keep read and write errors apart. A write error is a
-  message on the Countries screen and never blocks the map. A read error gets a Retry
-  and, once offline support exists, a last-known list from the device.
-
-- [ ] **Quick taps on country checkboxes can leave the app and server out of sync.**
-  Each tap sends its own `PUT /preferences` with nothing ordering them, and each
-  rollback restores the list as it was *when that tap happened*. A→B→C with B's request
-  failing after C's succeeded rolls the UI back to A while the server holds C. If B and
-  C arrive out of order, the server ends up with B while the UI shows C. Fix: send
-  only the latest list (one in flight plus one pending, or a short debounce), and on
-  failure roll back to the last list the server confirmed.
-
-- [ ] **Signing out leaves the previous session's state behind.**
-  `SelectionProvider`, `HighlightProvider` and `PlannerProvider` sit above the auth
-  guard and clear only on a region switch. After a sign-out and sign-in as someone
-  else, the old selection, the old planner form and the old user's journey highlight
-  (with its `ownerKey`) are all still there. Clear all three when `status` leaves
-  `signedIn`, as `CountryPrefsContext` already does. (The web drops drafts on a change
-  of user for the same reason.)
-
-- [ ] **Map controls overlap at the top.** *(device)*
-  - `HighlightChip` uses `top-2` with no safe-area inset. The map runs under the
-    status bar, so the chip sits under the notch or Dynamic Island. The search and
-    planner buttons use `insets.top + 8`.
-  - When the station search is open it spans the full width (`inset-x-2`), and
-    `PlannerButton` is rendered after it at `right-2`, the same top and the same
-    height. So it lands on the search field's × button.
-  - With the chip moved down to the inset, it would collide with the open search
-    field too.
-
-  Fix: put the top controls in one safe-area row (search, chip, planner) that the
-  open search replaces or pushes down, instead of three pieces placed separately. The
-  plan's "Rough edges" already flags this risk.
-
-- [ ] **Dark mode: icons and spinners that can't be seen.** `MapStationSearch`'s and
-  `PlannerButton`'s icons are a fixed `#374151` on `dark:bg-gray-900/95`. `Button`'s
-  `SPINNER` colour for `secondary` and `outline` is a fixed `#111827`, which is
-  invisible on a dark screen. That hits the busy "Show on the map" button (outline) in
-  the logbook. Fix: one module of colour values per scheme for the places where
-  NativeWind can't reach (icons, spinners, the tab bar's `TAB_COLORS`,
-  `placeholderTextColor`), read through `useTheme().resolved`.
-
-- [ ] **"Show on the map" in the logbook ignores failures.** `ShowOnMap.show()` has
-  `try/finally` and no `catch`, and is called as `void show()`. A failed
-  `GET /journeys/:id` or `/trips/:id` becomes an unhandled promise rejection: the
-  spinner stops and nothing is shown. Show the error next to the button.
-
-- [ ] **Stale responses can land after a region switch.**
-  - `map.tsx`'s `load()` has no cancellation. If the old region's `GET /progress`
-    resolves after the new one has started, the progress box shows the old region's
-    numbers. Use the `cancelled` flag or `AbortController` pattern the other screens
-    use.
-  - `RailwayMap`'s region-switch effect calls `loadMapPosition(...).then(setStop)`
-    without cancelling. Two quick switches can apply the positions in the wrong order.
-
-- [ ] **Route-tile cache and changing accounts.** *(device)* The route tile's URL
-  doesn't depend on who is signed in (the bearer header carries that), and
-  `logVersion` starts at 0 on every launch. So after a relaunch, or after one account
-  signs out and another signs in, the URL matches tiles fetched earlier. The handler
-  sends `private, no-store`. Check whether MapLibre Native's ambient (disk) cache
-  honours that. If it doesn't, the user sees colours that are out of date, or another
-  account's. Whatever the cache does, seed the cache buster with something unique to
-  the launch and the session (for example a timestamp taken at sign-in) instead of a
-  counter starting at 0.
-
-- [ ] **Nothing refreshes when the app returns to the foreground.** There is no
-  `AppState` handling anywhere. A journey logged on the web, or a day spent in the
-  background, leaves the map colours, progress, coverage and logbook stale until the
-  next log in the app. Separately, an access token that expires while the map is open
-  makes route tiles fail with 401 and draw nothing (`tileAuth.ts` admits this). Fix: on
-  `AppState` → `active`, refresh the token pair if it is near expiry (`expiresIn` is in
-  the auth response but unused), then call `bumpLogVersion()`.
-
-- [ ] **No error boundary.** If anything throws during render, the whole app shows a
-  white screen with no way back. expo-router supports
-  `export function ErrorBoundary` per layout: add one at the root (with Retry) and one
-  in `(tabs)`.
+- [ ] **Does MapLibre Native's disk cache honour `no-store`?** *(device)* The route
+  tile handler sends `private, no-store`. The cache buster no longer repeats across
+  launches or accounts (`logVersion.ts` starts at the launch time and moves on every
+  sign-in), so a cache that ignores the header can no longer show another account's
+  colours. It would still store every tile it is sent, so check its size after some
+  use, and whether a tile fetched offline is served from it (which would matter for
+  the offline colouring decision at the bottom).
 
 - [ ] **Run it on Android.** The app shell, the map with overlays, the modals and the
   keyboard handling have never run on Android (`MOBILE_APP_PLAN.md`, Phase 2). The

@@ -8,7 +8,9 @@
  *
  * A selection is made *on a region's map*, so **switching region clears it**, as the
  * web app clears its own. The alternative is a journey logged in Europe carrying a
- * route in Japan, which nothing downstream would reject.
+ * route in Japan, which nothing downstream would reject. **Signing out clears it**
+ * too: the provider sits above the auth guard, so it would otherwise be waiting for
+ * the next account (`useOnSessionEnd`).
  *
  * What is held per route is the tile feature itself plus the two logging decisions
  * (`partial` and, where it is known, the stretch). Keeping the whole feature means
@@ -26,6 +28,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useOnSessionEnd } from "@/auth/useOnSessionEnd";
 import type { RouteFeature } from "@/map/mapFeatures";
 import { useRegion } from "@/region/RegionContext";
 
@@ -68,6 +71,8 @@ export function SelectionProvider({ children }: { children: ReactNode }): ReactN
     mountedRegion.current = regionId;
     setSelected([]);
   }, [regionId]);
+
+  useOnSessionEnd(() => setSelected([]));
 
   const isSelected = useCallback(
     (trackId: number) => selected.some((s) => s.route.trackId === trackId),

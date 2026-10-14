@@ -758,7 +758,7 @@ same as having been seen.
 
 | | |
 | --- | --- |
-| `SelectionContext.tsx` | the Route Logger's selection, cleared on a region switch. Holds the tile feature itself plus `partial` and the stretch, so the logging screen renders a route with the same `routeTitle`/`routeBadges` the map sheet does |
+| `SelectionContext.tsx` | the Route Logger's selection, cleared on a region switch and on sign-out (`useOnSessionEnd`, as are the highlight and the planner). Holds the tile feature itself plus `partial` and the stretch, so the logging screen renders a route with the same `routeTitle`/`routeBadges` the map sheet does |
 | `SelectionBar.tsx` | "N routes selected" under the map, and the way into the logging screen |
 | `app/log-journey.tsx` | the form: name, date, description, an optional trip, and the per-route partial toggles. A modal over the tabs, since it exists only while there is a selection to spend |
 | `HighlightContext.tsx` | what the map is pointing at on someone else's behalf — the web's `highlightedRoutes`, gold or orange |
@@ -770,11 +770,12 @@ same as having been seen.
 | `useStationSearch.ts` | the debounced, region-scoped station autocomplete both the map and the planner ask |
 | `StationResults.tsx` | the list under a station field, shared by those two |
 | `MapStationSearch.tsx` | the map's own search: a button that becomes a field, and flies the camera to what is picked |
+| `MapTopControls.tsx` | the map's top row in one safe-area box — search · highlight chip · planner, the open search replacing the row (2026-10-14) |
 | `StationField.tsx` | one station slot of the planner form — a field until something is picked, the name and a clear button after |
 | `app/plan-journey.tsx` | the journey planner: from, any number of vias, to, the legs it found, and the way into the selection |
-| `PlannerButton.tsx` | the way in, over the map's other top corner |
+| `PlannerButton.tsx` | the way in, at the trailing end of the map's top row |
 | `PlannerContext.tsx` | the planner's form, answer and search, held above the navigator so closing the modal keeps them (added 2026-10-14) |
-| `CountryPrefsContext.tsx` | the country filter, held once: the map reads it, the Countries screen writes it |
+| `CountryPrefsContext.tsx` | the country filter, held once: the map reads it, the Countries screen writes it. A copy per account on the device; read and save errors kept apart; saves sent one at a time, latest wins (2026-10-14) |
 | `app/countries.tsx` | countries & statistics — which countries count, and how far each one is |
 
 #### What the highlight overlays cost the web app
@@ -808,7 +809,9 @@ Three smaller ones:
   colours are rendered into the route tile per user, so logging a journey has to
   produce a *new* URL — `railwayRoutesTileUrl` already takes one, for exactly the
   reason the web app's route tile refresh needs it. **A new URL alone does nothing
-  on native**, though: the source is keyed on it (see "Found on the device"). `logVersion.ts` is a
+  on native**, though: the source is keyed on it (see "Found on the device"). The
+  version starts at the launch time and is bumped on sign-in, so no launch or account
+  ever reuses an earlier one's URL. `logVersion.ts` is a
   `useSyncExternalStore` rather than a context because the write happens in a modal
   and the readers are a tab away: the map's tile URL, the map's numbers, and the
   logbook list.
@@ -937,11 +940,10 @@ fixed the same day and **not yet re-run**:
   them — sit behind layer toggles that are off by default, so a device run does not
   reach them unless the toggles are on. They validate, and the expression shapes are
   the base layers' own, but that is not the same as having been seen.
-- **The map's top furniture is three separate pieces in three corners** — the search
-  button at the left, the highlight chip in the middle, the planner button at the
-  right — each positioned against the safe-area inset on its own. They do not overlap
-  at any width this app will meet, but nothing enforces that, and a wider chip would
-  be the first thing to find out.
+- **The map's top furniture is one row now** (`MapTopControls`, 2026-10-14). It was
+  three pieces positioned each on its own, and they did overlap: the chip had no
+  safe-area inset, and the open search ran under the planner button. Not yet seen on
+  the device.
 - **Japan's JR / Non-JR checkboxes are web-only so far** (added 2026-10-12). On the
   web, the Map & Stats tab (formerly Statistics) ticks each line type like a country:
   unticked, it is hidden on the map and left out of the progress box; the tab's own

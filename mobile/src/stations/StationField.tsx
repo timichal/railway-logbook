@@ -20,6 +20,7 @@ import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { useRegion } from "@/region/RegionContext";
 import { StationResults } from "@/stations/StationResults";
 import { useStationSearch } from "@/stations/useStationSearch";
+import { useNativeColors } from "@/theme/colors";
 
 interface StationFieldProps {
   label: string;
@@ -34,6 +35,7 @@ export function StationField({
   value,
   onChange,
 }: StationFieldProps): ReactNode {
+  const colors = useNativeColors();
   const { regionId } = useRegion();
   const { query, setQuery, results, searching, reset } = useStationSearch(regionId);
 
@@ -49,7 +51,7 @@ export function StationField({
             onPress={() => onChange(null)}
             className="h-11 w-8 items-center justify-center active:opacity-70"
           >
-            <Ionicons name="close" size={18} color="#6b7280" />
+            <Ionicons name="close" size={18} color={colors.icon} />
           </Pressable>
         </View>
       </View>
@@ -63,7 +65,7 @@ export function StationField({
         value={query}
         onChangeText={setQuery}
         placeholder={placeholder}
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={colors.placeholder}
         autoCorrect={false}
         returnKeyType="search"
         className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"

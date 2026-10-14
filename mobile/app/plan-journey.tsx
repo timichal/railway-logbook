@@ -40,6 +40,7 @@ import { useSelection } from "@/logbook/SelectionContext";
 import { routeFeatureFromMetadata } from "@/map/mapFeatures";
 import { useRegion } from "@/region/RegionContext";
 import { StationField } from "@/stations/StationField";
+import { useNativeColors } from "@/theme/colors";
 import { Button } from "@/ui/Button";
 import { Screen } from "@/ui/Screen";
 import { ToggleSwitch } from "@/ui/ToggleSwitch";
@@ -273,6 +274,7 @@ function IconButton({
   onPress(): void;
   disabled?: boolean;
 }): ReactNode {
+  const colors = useNativeColors();
   return (
     <Pressable
       accessibilityRole="button"
@@ -284,7 +286,7 @@ function IconButton({
         disabled ? "opacity-40" : ""
       }`}
     >
-      <Ionicons name={icon} size={18} color="#6b7280" />
+      <Ionicons name={icon} size={18} color={colors.icon} />
     </Pressable>
   );
 }
