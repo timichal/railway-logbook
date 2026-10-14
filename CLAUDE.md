@@ -219,7 +219,7 @@ Invariants (the modules carry the reasoning):
 ### Components (`src/components/`)
 One directory per part of the app; always import a component by its full path (`@/components/<dir>/<Name>`), from a sibling too.
 
-- **`logbook/`** — the sidebar and its tabs: `UserSidebar`, `RouteLogger` (the Route Logger tab, either store), `JourneyLogger` (auth) / `LocalTripLogger` (anon) wrappers, `JourneyMetaFields`, `LoggedRouteRow`, `JourneyPlanner`, `JourneysAndTripsTab`, `TripCard`, `JourneyCard`, `CardHeader`, `SelectionSummaryBar`, `LocalJourneyLogTab`, `MapStatsTab`.
+- **`logbook/`** — the sidebar and its tabs: `UserSidebar`, `RouteLogger` (the Route Logger tab, either store), `JourneyLogger` (auth) / `LocalTripLogger` (anon) wrappers, `JourneyMetaFields`, `LoggedRouteRow`, `JourneyPlanner`, `JourneysAndTripsTab`, `TripCard`, `JourneyCard`, `CardHeader`, `CardActions`, `SelectionSummaryBar`, `LocalJourneyLogTab`, `MapStatsTab`.
 - **`map/`** — `RailwayMap` (the user map), `MapStationSearch` (station and line search, used by all three maps), `MapProgressBox` (user and public maps; layer switches only on the shared map, `withLayerToggles`), `LayerToggles` (the region rules for which switches exist).
 - **`sharing/`** — `PublicMapLayout`, `PublicRailwayMap` (read-only by calling `useUserMapInteractions` without `onRouteClick`), `ShareMapDialog`.
 - **`admin/`** — `AdminPageClient` (holds the open tab, `useRoutePreview` and the selected route's detail), `AdminMap`, `AdminLayerControls`, `AdminSidebar`, `AdminCreateRouteTab`, `AdminRoutesTab`, `AdminScenicTab`, `AdminNotesTab`, `PickedPointField`, `RoutesList`, `RouteEditForm`, `RouteMetadataFields`, `NotesPopup`. The route preview is derived from the picked points, and dropped when they change.

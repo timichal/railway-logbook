@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import CardActions from "@/components/logbook/CardActions";
 import CardHeader from "@/components/logbook/CardHeader";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
@@ -105,7 +106,6 @@ export default function JourneyCard<Id extends number | string>({
   // An open card shows the journey; only Edit lets map taps change it.
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
   // Until the journey has loaded there is nothing to view or edit, and the snapshot
   // is what says it has — so the card reads as loading from its first render, not
   // only once the load effect has run.
@@ -117,8 +117,6 @@ export default function JourneyCard<Id extends number | string>({
 
   const focusAfterRender = useFocusAfterRender();
   const editButtonRef = useRef<HTMLButtonElement>(null);
-  const deleteButtonRef = useRef<HTMLButtonElement>(null);
-  const confirmCancelRef = useRef<HTMLButtonElement>(null);
   const editHeadingRef = useRef<HTMLHeadingElement>(null);
 
   // Mutable handler ref so the stable map click callback always sees fresh state
@@ -220,12 +218,10 @@ export default function JourneyCard<Id extends number | string>({
     setViewedRoutes([]);
     setOriginalSnapshot(null);
     setLoadFailed(false);
-    setDeleteConfirm(false);
     // Don't clear highlights here — parent owns coordination across cards
   }, [isOpen]);
 
   const handleStartEdit = () => {
-    setDeleteConfirm(false);
     setIsEditing(true);
     // Editing is picking routes on the map, which the sheet's top snap leaves as
     // a sliver. Null on desktop.
@@ -241,16 +237,6 @@ export default function JourneyCard<Id extends number | string>({
     if (!originalSnapshot) return;
     applySnapshot(originalSnapshot);
     onHighlightRoutes?.(originalSnapshot.routes.map((r) => r.track_id));
-  };
-
-  const handleAskDelete = () => {
-    setDeleteConfirm(true);
-    focusAfterRender(() => confirmCancelRef.current);
-  };
-
-  const handleCancelDelete = () => {
-    setDeleteConfirm(false);
-    focusAfterRender(() => deleteButtonRef.current);
   };
 
   const handleTogglePartial = (trackId: number, nextPartial: boolean) => {
@@ -334,10 +320,11 @@ export default function JourneyCard<Id extends number | string>({
       showSuccess("Journey deleted");
       onRequestClose();
       onChanged();
+      return true;
     } catch (error) {
       console.error("Error deleting journey:", error);
       showError(actionErrorMessage(error, "Failed to delete journey"));
-      handleCancelDelete();
+      return false;
     }
   };
 
@@ -473,45 +460,15 @@ export default function JourneyCard<Id extends number | string>({
                 routeList
               )}
 
-              {deleteConfirm ? (
-                <div className="flex items-center gap-2">
-                  <span className="flex-1 text-sm text-gray-700">Delete this journey?</span>
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    className={`${btn("danger")} flex-shrink-0`}
-                  >
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    ref={confirmCancelRef}
-                    onClick={handleCancelDelete}
-                    className={`${btn("subtle")} flex-shrink-0`}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    ref={editButtonRef}
-                    onClick={handleStartEdit}
-                    className={btn("primary")}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    ref={deleteButtonRef}
-                    onClick={handleAskDelete}
-                    className={btn("softDanger")}
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
+              <CardActions
+                editLabel="Edit"
+                editVariant="primary"
+                editButtonRef={editButtonRef}
+                onEdit={handleStartEdit}
+                deleteLabel="Delete"
+                question="Delete this journey?"
+                onDelete={handleDelete}
+              />
             </>
           )}
         </div>

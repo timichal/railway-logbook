@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import CardActions from "@/components/logbook/CardActions";
 import CardHeader from "@/components/logbook/CardHeader";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
@@ -61,7 +62,6 @@ export default function TripCard({
   // An open trip shows its journeys; the name and description form is behind Edit.
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const [showPicker, setShowPicker] = useState(false);
   const [unassignedJourneys, setUnassignedJourneys] = useState<JourneyInTrip[]>([]);
@@ -69,8 +69,6 @@ export default function TripCard({
 
   const focusAfterRender = useFocusAfterRender();
   const editButtonRef = useRef<HTMLButtonElement>(null);
-  const deleteButtonRef = useRef<HTMLButtonElement>(null);
-  const confirmCancelRef = useRef<HTMLButtonElement>(null);
 
   // Sync from props when they change (after parent refreshes the list)
   useEffect(() => {
@@ -120,7 +118,6 @@ export default function TripCard({
     if (isOpen) return;
     setIsEditing(false);
     setShowPicker(false);
-    setDeleteConfirm(false);
   }, [isOpen]);
 
   const handleSaveEdit = async () => {
@@ -147,7 +144,6 @@ export default function TripCard({
   const handleStartEdit = () => {
     setEditName(trip.name);
     setEditDescription(trip.description || "");
-    setDeleteConfirm(false);
     setIsEditing(true);
     focusAfterRender(() => document.getElementById(`trip-${trip.id}-name`));
   };
@@ -157,26 +153,17 @@ export default function TripCard({
     focusAfterRender(() => editButtonRef.current);
   };
 
-  const handleAskDelete = () => {
-    setDeleteConfirm(true);
-    focusAfterRender(() => confirmCancelRef.current);
-  };
-
-  const handleCancelDelete = () => {
-    setDeleteConfirm(false);
-    focusAfterRender(() => deleteButtonRef.current);
-  };
-
   const handleDelete = async () => {
     try {
       unwrap(await deleteTrip(trip.id));
       showSuccess("Trip deleted (journeys unassigned)");
       onRequestClose();
       onChanged();
+      return true;
     } catch (error) {
       console.error("Error deleting trip:", error);
       showError(actionErrorMessage(error, "Failed to delete trip"));
-      handleCancelDelete();
+      return false;
     }
   };
 
@@ -364,48 +351,18 @@ export default function TripCard({
             </div>
           )}
 
-          {!isEditing &&
-            (deleteConfirm ? (
-              <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
-                <span className="flex-1 text-sm text-gray-700">
-                  Delete this trip? Its journeys are kept.
-                </span>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className={`${btn("danger")} flex-shrink-0`}
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  ref={confirmCancelRef}
-                  onClick={handleCancelDelete}
-                  className={`${btn("subtle")} flex-shrink-0`}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-200">
-                <button
-                  type="button"
-                  ref={editButtonRef}
-                  onClick={handleStartEdit}
-                  className={btn("outline")}
-                >
-                  Edit trip
-                </button>
-                <button
-                  type="button"
-                  ref={deleteButtonRef}
-                  onClick={handleAskDelete}
-                  className={btn("softDanger")}
-                >
-                  Delete trip
-                </button>
-              </div>
-            ))}
+          {!isEditing && (
+            <CardActions
+              editLabel="Edit trip"
+              editVariant="outline"
+              editButtonRef={editButtonRef}
+              onEdit={handleStartEdit}
+              deleteLabel="Delete trip"
+              question="Delete this trip? Its journeys are kept."
+              onDelete={handleDelete}
+              divided
+            />
+          )}
         </div>
       )}
     </div>

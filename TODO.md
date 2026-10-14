@@ -14,11 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **`JourneyCard` / `TripCard` action rows** (~40 lines). The delete-confirm row
-  (`Delete this …?` + Delete + Cancel with focus refs) and the Edit/Delete row are
-  copied between the two cards, along with `handleAskDelete` / `handleCancelDelete`.
-  Extract a `CardActions` component.
-
 - [ ] **Login/Register migration block** (~20 lines). "Migrate local journeys →
   `clearAll()` → toast, or a fallback toast on failure" is written twice. Make it one
   helper next to `describeJourneyMigration`.
