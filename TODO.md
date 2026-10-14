@@ -14,12 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **`countryUtils.ts`** (134 → ~20 lines). Both callers pass
-  `{ type: "LineString", coordinates }`. Make it
-  `getRouteCountries(coords: [number, number][])` that looks up the first and last
-  points. This removes the union geometry type, `getStartCoordinate` /
-  `getEndCoordinate` with their try/catch and warnings, and the JSDoc.
-
 - [ ] **`tileSources.ts` + `map/index.ts`** (~70 lines). There are seven
   `xTileUrl` / `createXSource` pairs with the same shape. Use one
   `vectorSource(url, ZOOM_RANGES.x)` and one `tileUrl(base, name, cacheBuster?)`, and

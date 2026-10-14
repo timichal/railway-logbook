@@ -5,7 +5,7 @@ import type { ActionResult } from "./actionResult";
 import { requiredStations } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
-import { getRouteCountries } from "./countryUtils";
+import { countryAt } from "./countryUtils";
 import pool, { withTransaction } from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
@@ -350,10 +350,8 @@ export async function saveRailwayRoute(
       const startPointWKT = pointToWKT(startCoordinate);
       const endPointWKT = pointToWKT(endCoordinate);
       const hasBacktracking = pathResult.hasBacktracking === true;
-      const { startCountry, endCountry } = getRouteCountries({
-        type: "LineString",
-        coordinates: pathResult.coordinates,
-      });
+      const startCountry = countryAt(startCoordinate);
+      const endCountry = countryAt(endCoordinate);
 
       let queryStr: string;
       let values: (string | number | string[] | boolean | null)[];

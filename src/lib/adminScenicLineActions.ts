@@ -4,7 +4,7 @@ import type { ActionResult } from "./actionResult";
 import { requiredStations } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
-import { getRouteCountries } from "./countryUtils";
+import { countryAt } from "./countryUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
@@ -71,7 +71,8 @@ export async function createScenicLine(
 ): Promise<ActionResult<number>> {
   return asAdmin(async () => {
     const { from, to } = requiredStations(fromStation, toStation, "A scenic line");
-    const { startCountry, endCountry } = getRouteCountries({ type: "LineString", coordinates });
+    const startCountry = countryAt(startCoordinate);
+    const endCountry = countryAt(endCoordinate);
     const result = await pool.query<{ id: number }>(
       `
       INSERT INTO scenic_lines (
@@ -105,7 +106,8 @@ export async function updateScenicLineGeometry(
   endCoordinate: [number, number],
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
-    const { startCountry, endCountry } = getRouteCountries({ type: "LineString", coordinates });
+    const startCountry = countryAt(startCoordinate);
+    const endCountry = countryAt(endCoordinate);
     const result = await pool.query(
       `
       UPDATE scenic_lines
