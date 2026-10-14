@@ -219,43 +219,31 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     if (!editingGeometry) setSelectedRouteId(null);
   };
 
-  // Resolves whether the route was saved, so the form clears only then: a failed
-  // save leaves everything typed into it in place, to be retried.
-  const handleSaveRoute = async (routeData: SaveRouteData): Promise<boolean> => {
-    if (!previewRoute) {
-      console.error("AdminPageClient: No preview route to save");
-      showError("Error: No route preview available to save");
-      return false;
-    }
+  // Throws on failure, which the form reports; it clears its fields only on success,
+  // so a failed save leaves everything typed into it in place, to be retried.
+  const handleSaveRoute = async (routeData: SaveRouteData) => {
+    if (!previewRoute) throw new Error("No route preview to save");
+    const trackId = unwrap(
+      await saveRailwayRoute(
+        routeData,
+        {
+          partIds: previewRoute.partIds,
+          coordinates: previewRoute.coordinates,
+          hasBacktracking: previewRoute.hasBacktracking,
+        },
+        previewRoute.startCoordinate,
+        previewRoute.endCoordinate,
+      ),
+    );
 
-    try {
-      const trackId = unwrap(
-        await saveRailwayRoute(
-          routeData,
-          {
-            partIds: previewRoute.partIds,
-            coordinates: previewRoute.coordinates,
-            hasBacktracking: previewRoute.hasBacktracking,
-          },
-          previewRoute.startCoordinate,
-          previewRoute.endCoordinate,
-        ),
-      );
+    // Clear the picked points and the preview; the form clears its own fields
+    handleFormReset();
 
-      // Clear the picked points and the preview; the form clears its own fields
-      handleFormReset();
+    refreshRoutes();
 
-      refreshRoutes();
-
-      showSuccess(
-        `Route "${routeData.name || `${routeData.from_station} ⟷ ${routeData.to_station}`}" saved successfully! Track ID: ${trackId}`,
-      );
-      return true;
-    } catch (error) {
-      console.error("AdminPageClient: Error saving route:", error);
-      showError(`Error saving route: ${actionErrorMessage(error)}`);
-      return false;
-    }
+    showSuccess(
+      `Route "${routeData.name || `${routeData.from_station} ⟷ ${routeData.to_station}`}" saved successfully! Track ID: ${trackId}`,
+    );
   };
 
   // Clears the picked points, and with them the preview drawn from them.

@@ -52,7 +52,7 @@ interface AdminSidebarProps {
   editingGeometry: EditingGeometry | null;
   onEditingGeometryChange: (editing: EditingGeometry | null) => void;
   previewRoute: PathPreview | null;
-  onSaveRoute?: (routeData: SaveRouteData) => Promise<boolean>;
+  onSaveRoute?: (routeData: SaveRouteData) => Promise<void>;
   /** Clears the create form's points and the preview drawn from them. */
   onFormReset: () => void;
   /** A route was created, changed or deleted: the map's route tiles are stale. */

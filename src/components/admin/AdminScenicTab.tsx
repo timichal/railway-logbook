@@ -19,6 +19,7 @@ import { useRegionId } from "@/lib/regionContext";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints } from "@/lib/ui/adminListSort";
 import { btn, optionRow } from "@/lib/ui/buttonStyles";
+import { useSingleFlight } from "@/lib/ui/useSingleFlight";
 
 /** A scenic line whose geometry is being re-picked. */
 export interface EditingScenicLine {
@@ -77,10 +78,7 @@ export default function AdminScenicTab({
   const [names, setNames] = useState<{ from: string; to: string } | null>(null);
   const [namesForId, setNamesForId] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  // A second click must not save twice: the ref is set synchronously, the state
-  // that disables the button only on the next render.
-  const busyRef = useRef(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useSingleFlight();
   // Bumped per load, so a slower reply to an earlier one (another region's, after
   // a switch) cannot land over the newest list.
   const loadRequestRef = useRef(0);
@@ -125,24 +123,6 @@ export default function AdminScenicTab({
       );
   }, [lines, search, invalidOnly]);
   const invalidCount = lines.filter((line) => !line.is_valid).length;
-
-  /** Runs one save/delete, guarded against a double click; resolves whether it succeeded. */
-  const run = async (what: string, action: () => Promise<void>): Promise<boolean> => {
-    if (busyRef.current) return false;
-    busyRef.current = true;
-    setBusy(true);
-    try {
-      await action();
-      return true;
-    } catch (error) {
-      console.error(`Error: ${what}:`, error);
-      showError(`Failed to ${what}: ${actionErrorMessage(error)}`);
-      return false;
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-    }
-  };
 
   const handleCreate = async () => {
     const preview = previewRoute;
@@ -265,6 +245,7 @@ export default function AdminScenicTab({
           <button
             type="button"
             onClick={cancelGeometryEdit}
+            disabled={busy}
             className={`${btn("neutral", "md")} w-full`}
           >
             Cancel

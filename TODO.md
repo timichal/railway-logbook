@@ -14,11 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **Single-flight save guard** (~30 lines). `AdminCreateRouteTab` repeats the
-  `savingRef` + `isSaving` set/reset dance in both handlers. `AdminScenicTab` already
-  has the same thing as its `run()`. Extract a small `useSingleFlight()` hook and use
-  it in both.
-
 - [ ] **Admin action helpers** (~40 lines).
   - `requiredStations()` exists in both `adminRouteActions.ts` and
     `adminScenicLineActions.ts`, differing only in a noun.

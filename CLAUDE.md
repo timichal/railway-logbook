@@ -236,7 +236,7 @@ One directory per part of the app; always import a component by its full path (`
 - **Regions**: `shared/regions.ts`, `regionContext.tsx`.
 - **Theme**: `theme/index.ts` (the preference, `useResolvedTheme`, `THEME_INIT_SCRIPT`), `theme/colors.ts` (`THEME_COLORS`, a plain module so `app/manifest.ts` can read it), `shared/theme/types.ts`.
 - **Layer prefs**: `shared/map/layerPrefs.ts` (stored form and per-region resolution, shared), `map/layerPrefs.ts` (localStorage), `map/layerPrefsContext.tsx`. Held above the map by the layouts, inside `RegionProvider`. The Special and Regular switches are stored per region; `showRegular` exists only where `hasOrdinaryNonRegular`; `switchableUsageTypes` decides which switches a region has. Highlights ignore the switches.
-- **UI**: `ui/buttonStyles.ts`, `ui/inputStyles.ts`, `ui/useSearchCombobox.ts`, `ui/useModalDialog.ts`, `ui/adminListSort.ts` (sorted in the browser with a fixed `en` collation).
+- **UI**: `ui/buttonStyles.ts`, `ui/inputStyles.ts`, `ui/useSearchCombobox.ts`, `ui/useModalDialog.ts`, `ui/useSingleFlight.ts` (one admin save at a time, failure toasted), `ui/adminListSort.ts` (sorted in the browser with a fixed `en` collation).
 - **Utils**: `shared/types.ts`, `shared/constants.ts`, `shared/routeCoverage.ts`, `selectedRoutes.ts`, `stationProximity.ts`, `mercatorDistance.ts`, `lineLength.ts` (`lineLengthKmSql`, the one expression behind every stored `length_km` and the admin preview), `coordinateUtils.ts`, `countryUtils.ts`, `shared/countryFlag.ts`, `shared/getUntimezonedDateStr.ts`, `plural.ts`, `rateLimit.ts`.
 - **Toast**: `toast/` (`useToast`, `ToastContainer`, `ConfirmDialog`).
 
