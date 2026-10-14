@@ -19,14 +19,14 @@ and add a line to the Session log at the bottom.
 
 |                   |                                                                                                                                                                                                                                                                             |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Branch**        | `mobile-app` — all of this work lives here, not on `main`                                                                                                                                                                                                                   |
+| **Branch**        | `main` — `mobile-app` was merged on 2026-09-25 and deleted on 2026-10-14                                                                                                                                                                                                    |
 | **Phase 0**       | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware                                                                                                                                                                     |
 | **Phase 1**       | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md`                                                                                                                                                        |
 | **Phase 2**       | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android                                                                                                                                   |
 | **Phase 3**       | **Done** (2026-08-27; **seen on a device 2026-09-17**). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. Its two overlays were folded into Phase 4 and both are now built |
-| **Current phase** | **Phase 4 — features.** Everything on its list is built (2026-09-17): route logger, highlight overlays, logbook, coverage overlay, station search, journey planner, countries & statistics. **None of the second half has been run on a device yet** |
+| **Current phase** | **Phase 4 — features.** Everything on its list is built (2026-09-17): route logger, highlight overlays, logbook, coverage overlay, station search, journey planner, countries & statistics. **Nothing since the first half has been run on a device** — neither the second half nor the 09-25 bearer-authenticated route tile. Kept compiling through `main`'s refactors since: `tsc` and Biome clean in `mobile/` (2026-10-14) |
 | **Blocked on**    | nothing                                                                                                                                                                                                                                                                     |
-| **Next**          | Run the second half on the iPhone — the coverage overlay's stacking, the planner loop and the country filter are the three things a build proves nothing about. Then a pass over the UI details of the whole app, editing and deleting journeys and trips, and Phase 5 |
+| **Next**          | 1. Run it on the iPhone: **routes coloured at all** (a missing bearer header is a 401 and no routes), the coverage overlay's stacking, the planner loop, the country filter reaching the tiles. 2. Catch up with the web: Japan's JR / Non-JR checkboxes (Phase 4, "Rough edges"), which also retires `LayerToggles.tsx`'s `region.id === "japan"`; line-name search where `hasRouteNames`. 3. Editing and deleting journeys and trips, then the UI pass. 4. Decide offline route colouring before Phase 5 |
 
 The spike that answered Phase 0 has been **deleted** — it was throwaway by design
 and everything it taught is written down below. What it proved, in one line: the
@@ -583,7 +583,7 @@ watch, and an edit then silently serves the old bundle — which cost a confusin
 round here), and on a physical iPhone the phone must be on the same Wi-Fi as the
 Mac, per "Getting the tooling to run".
 
-### Phase 3 — The map — **mostly done**
+### Phase 3 — The map — **DONE**
 
 The map is on screen: the basemap with all five of its transforms, the whole
 railway layer stack, visit-status colouring, the country and usage-type filters,
@@ -911,7 +911,13 @@ Three more pieces moved into the shared set, on the same terms as the highlights
   hard-coding `showRegular: true` in `mobile/src/map/RailwayMap.tsx` and hide the
   Regular layer when it is off; and give `GET /api/v1/progress` a usage-type
   parameter passed to `progressForUser`'s `shownUsageTypes`, since today it always
-  counts both types.
+  counts both types. Port the web's `LayerToggles` rule with it
+  (`switchableUsageTypes` + `regionUsagePluralLabel`): the native one still names
+  the Special switch with `region.id === "japan"`, which `CLAUDE.md` forbids.
+- **No line-name search.** Where `hasRouteNames` (Japan) the web's map search finds
+  lines as well as stations (`searchMap` → `searchMapByName`) and highlights a picked
+  line as a blue band (`getLineGeometry`). The app searches stations only, and
+  `/api/v1` has no endpoint for either half.
 - **The planner's result survives nothing.** Closing the modal keeps the gold
   highlight on the map but throws away the legs and the form, so looking at the path
   and then adding it to the selection means planning it twice. The highlight chip is
@@ -1144,3 +1150,11 @@ pick up. Keep it short — the phase sections carry the detail.
   `main`'s quote-aware `parsePgTextArray` in place of its comma split. **Not yet run
   on a device** — the first thing to look at is that routes are coloured at all,
   since a missing header is a 401 and a map with no routes.
+- **2026-10-14 — status check after three weeks on the web app.** No mobile feature
+  work since the merge, but `main`'s refactors (scenic lines as their own table,
+  Japan's route types and checkboxes, shared layer prefs, the search and error
+  refactors, `src/lib/shared/`) carried 23 files in `mobile/` along, and `tsc` and
+  Biome are clean there. Found two gaps against the web, now under Phase 4's "Rough
+  edges": `LayerToggles.tsx`'s `region.id === "japan"` and the missing line-name
+  search. Updated the status table (development is on `main`). **Next: the device
+  run**, then the Japan checkboxes.
