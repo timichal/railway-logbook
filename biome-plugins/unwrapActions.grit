@@ -11,7 +11,7 @@ language js
 `$f($args)` as $call where {
   $program <: JsModule(items=$items),
   $items <: some `import { $specs } from $src` where {
-    $src <: r"\"@/lib/(?:admin[A-Za-z]*|journey|trip)Actions\"",
+    $src <: r"\"(?:@/lib|\.)/(?:admin[A-Za-z]*|journey|trip)Actions\"",
     $specs <: contains $f
   },
   not $call <: within `unwrap(await $inner)` where { $inner <: $call },

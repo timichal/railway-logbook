@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import TripCard from "@/components/logbook/TripCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
+import { databaseJourneyStore } from "@/lib/journeyStore";
 import { useRegionId } from "@/lib/regionContext";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
@@ -306,6 +307,7 @@ export default function JourneysAndTripsTab({
               <JourneyCard
                 key={`journey-${item.journey.id}`}
                 journey={item.journey}
+                store={databaseJourneyStore}
                 availableTrips={availableTrips}
                 isOpen={isOpen}
                 onRequestOpen={() => handleRequestOpen({ type: "journey", id: item.journey.id })}

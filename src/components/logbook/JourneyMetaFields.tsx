@@ -24,7 +24,7 @@ interface JourneyMetaFieldsProps {
   trip?: TripPicker;
 }
 
-/** Name, date, description and trip of a journey — the new-journey form and both edit forms. */
+/** Name, date, description and trip of a journey — the new-journey form and the edit form. */
 export default function JourneyMetaFields({
   idPrefix,
   compact = false,

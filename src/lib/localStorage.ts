@@ -7,7 +7,7 @@
  */
 
 import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
-import type { LocalJourney, LocalLoggedPart } from "./shared/types";
+import type { JourneyEdits, LocalJourney, LocalLoggedPart } from "./shared/types";
 
 const JOURNEYS_KEY = "railway_journeys";
 const LOGGED_PARTS_KEY = "railway_logged_parts";
@@ -25,6 +25,17 @@ export const JOURNEY_LIMIT_MESSAGE = `Journey limit reached (${MAX_JOURNEYS}/${M
 // that put it in React state, and a shared mutable module-level array would let
 // one of them corrupt the defaults for everyone else.
 const defaultCountries = (): string[] => SUPPORTED_COUNTRIES.map((country) => country.code);
+
+/**
+ * A failure whose message is written for the user (the journey limit, a full
+ * quota, an unreadable list), as opposed to whatever the browser threw.
+ */
+export class StorageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StorageError";
+  }
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -45,6 +56,9 @@ const isLocalLoggedPart = (entry: unknown): entry is LocalLoggedPart =>
   typeof entry.id === "string" &&
   typeof entry.journey_id === "string" &&
   typeof entry.track_id === "number";
+
+/** What an edit says when the journey has been deleted in another tab. */
+const GONE_MESSAGE = "This journey is no longer saved in this browser.";
 
 /** What a write says when the list it would replace cannot be read. */
 const UNREADABLE_MESSAGE =
@@ -77,7 +91,7 @@ function readStoredArray<T>(
   } catch {
     // Unparseable: falls through to the shape check, which refuses it
   }
-  if (!Array.isArray(entries)) throw new Error(UNREADABLE_MESSAGE);
+  if (!Array.isArray(entries)) throw new StorageError(UNREADABLE_MESSAGE);
   return entries.filter(isEntry);
 }
 
@@ -105,7 +119,7 @@ function writeStoredArray(key: string, field: string, list: unknown[], what?: st
     localStorage.setItem(key, JSON.stringify({ version: 1, [field]: list }));
   } catch (error) {
     if (what && error instanceof Error && error.name === "QuotaExceededError") {
-      throw new Error(`Storage limit reached. Please register to save more ${what}.`);
+      throw new StorageError(`Storage limit reached. Please register to save more ${what}.`);
     }
     throw error;
   }
@@ -143,7 +157,7 @@ export function addJourneyWithParts(
   parts: Omit<LocalLoggedPart, "id" | "journey_id" | "created_at">[],
 ): LocalJourney {
   const journeys = journeysToWrite();
-  if (journeys.length >= MAX_JOURNEYS) throw new Error(JOURNEY_LIMIT_MESSAGE);
+  if (journeys.length >= MAX_JOURNEYS) throw new StorageError(JOURNEY_LIMIT_MESSAGE);
   const existingParts = partsToWrite();
 
   const now = new Date().toISOString();
@@ -167,16 +181,56 @@ export function addJourneyWithParts(
   return newJourney;
 }
 
-export function updateJourney(
-  id: string,
-  updates: Partial<Omit<LocalJourney, "id" | "created_at" | "updated_at">>,
-): void {
+/**
+ * Saves an edited journey — its name, description and date, and its routes — as
+ * `saveJourneyEditsForUser` does on the server. An upserted route keeps its stretch
+ * while it stays partial and loses it when it doesn't: a stretch kept would come
+ * back when the flag is ticked again, claiming a range nobody re-entered. Both
+ * lists or neither.
+ */
+export function saveJourneyEdits(id: string, edits: JourneyEdits): void {
   const journeys = journeysToWrite();
-  const index = journeys.findIndex((journey) => journey.id === id);
-  if (index === -1) throw new Error(`Journey with id ${id} not found`);
+  const parts = partsToWrite();
+  if (!journeys.some((journey) => journey.id === id)) throw new StorageError(GONE_MESSAGE);
 
-  journeys[index] = { ...journeys[index], ...updates, updated_at: new Date().toISOString() };
-  writeJourneys(journeys);
+  const now = new Date().toISOString();
+  const flags = new Map(edits.upsert.map(({ trackId, partial }) => [trackId, partial]));
+  const removed = new Set(edits.remove);
+  const kept = parts.filter((part) => part.journey_id !== id || !removed.has(part.track_id));
+  const logged = new Set(kept.filter((part) => part.journey_id === id).map((p) => p.track_id));
+  const updated = kept.map((part) => {
+    const partial = part.journey_id === id ? flags.get(part.track_id) : undefined;
+    if (partial === undefined) return part;
+    return partial
+      ? { ...part, partial }
+      : { ...part, partial, covered_start: null, covered_end: null };
+  });
+  const added = edits.upsert
+    .filter(({ trackId }) => !logged.has(trackId))
+    .map(({ trackId, partial }) =>
+      newLoggedPart({ journey_id: id, track_id: trackId, partial }, now),
+    );
+
+  writeParts([...updated, ...added]);
+  try {
+    writeJourneys(
+      journeys.map((journey) =>
+        journey.id === id
+          ? {
+              ...journey,
+              name: edits.name,
+              description: edits.description,
+              date: edits.date,
+              updated_at: now,
+            }
+          : journey,
+      ),
+    );
+  } catch (error) {
+    // What was stored before, so it fits.
+    writeParts(parts);
+    throw error;
+  }
 }
 
 /** Deletes the journey and every part logged in it. */
@@ -195,43 +249,24 @@ export function getLoggedParts(): LocalLoggedPart[] {
   return readForDisplay(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? [];
 }
 
-export function getLoggedPartsByJourneyId(journeyId: string): LocalLoggedPart[] {
-  return getLoggedParts().filter((part) => part.journey_id === journeyId);
-}
-
-/** @throws Error if the route is already in the journey, or the quota is reached */
-export function addLoggedPart(part: Omit<LocalLoggedPart, "id" | "created_at">): void {
-  const parts = partsToWrite();
-  if (parts.some((p) => p.journey_id === part.journey_id && p.track_id === part.track_id)) {
-    throw new Error("This route is already logged in this journey");
-  }
-  writeParts([...parts, newLoggedPart(part, new Date().toISOString())]);
+/**
+ * One journey and its routes, for a card about to edit them. Read as a write
+ * reads, so an unreadable list says so rather than passing for a journey deleted
+ * in another tab.
+ */
+export function getJourneyWithParts(id: string): {
+  journey: LocalJourney;
+  parts: LocalLoggedPart[];
+} {
+  const journey = journeysToWrite().find((j) => j.id === id);
+  if (!journey) throw new StorageError(GONE_MESSAGE);
+  return { journey, parts: partsToWrite().filter((part) => part.journey_id === id) };
 }
 
 const newLoggedPart = (
   part: Omit<LocalLoggedPart, "id" | "created_at">,
   created_at: string,
 ): LocalLoggedPart => ({ ...part, id: crypto.randomUUID(), created_at });
-
-/**
- * Sets a logged part's partial flag. Clearing it clears the stretch with it, as
- * the server does (`journeyQueries.ts`): a stretch kept here would come back when
- * the flag is ticked again, claiming a range nobody re-entered.
- */
-export function updateLoggedPart(id: string, partial: boolean): void {
-  const parts = partsToWrite();
-  const index = parts.findIndex((part) => part.id === id);
-  if (index === -1) throw new Error(`Logged part with id ${id} not found`);
-
-  parts[index] = partial
-    ? { ...parts[index], partial }
-    : { ...parts[index], partial, covered_start: null, covered_end: null };
-  writeParts(parts);
-}
-
-export function deleteLoggedPart(id: string): void {
-  writeParts(partsToWrite().filter((part) => part.id !== id));
-}
 
 // ===== Preferences =====
 

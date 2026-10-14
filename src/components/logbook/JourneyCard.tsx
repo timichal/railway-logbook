@@ -5,15 +5,14 @@ import CardHeader from "@/components/logbook/CardHeader";
 import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
 import { useBottomSheet } from "@/components/ui/MobileBottomSheet";
-import { actionErrorMessage, unwrap } from "@/lib/actionResult";
-import { deleteJourney, getJourney, saveJourneyEdits } from "@/lib/journeyActions";
+import { actionErrorMessage } from "@/lib/actionResult";
+import type { JourneyStore } from "@/lib/journeyStore";
 import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import { routeTitle } from "@/lib/shared/map/routeFeature";
 import type {
   HighlightRoutesFn,
-  Journey,
   JourneyEditStartFn,
   RailwayRoute,
   SelectedRoute,
@@ -39,14 +38,23 @@ function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
   };
 }
 
-interface JourneyDisplay extends Journey {
+/** What the list knows of a journey before it is opened. */
+interface JourneySummary<Id> {
+  id: Id;
+  name: string;
+  description: string | null;
+  date: string;
+  trip_id?: number | null;
   route_count: number;
-  total_distance: number;
+  /** Left out where the list doesn't know it (the local journeys). */
+  total_distance?: number;
 }
 
-interface JourneyCardProps {
-  journey: JourneyDisplay;
-  availableTrips: TripWithStats[];
+interface JourneyCardProps<Id> {
+  journey: JourneySummary<Id>;
+  store: JourneyStore<Id>;
+  /** The trips it can be filed under; left out, it has no trip field. */
+  availableTrips?: TripWithStats[];
   // Tells parent whether this card is the currently-open one. Parent enforces single-open.
   isOpen: boolean;
   onRequestOpen: () => void;
@@ -69,8 +77,9 @@ interface JourneySnapshot {
   tripId: number | null;
 }
 
-export default function JourneyCard({
+export default function JourneyCard<Id extends number | string>({
   journey,
+  store,
   availableTrips,
   isOpen,
   onRequestOpen,
@@ -80,7 +89,7 @@ export default function JourneyCard({
   onJourneyEditStart,
   onJourneyEditEnd,
   nested = false,
-}: JourneyCardProps) {
+}: JourneyCardProps<Id>) {
   const { showSuccess, showError } = useToast();
   const regionId = useRegionId();
   const sheet = useBottomSheet();
@@ -89,7 +98,7 @@ export default function JourneyCard({
   const [editName, setEditName] = useState(journey.name);
   const [editDate, setEditDate] = useState(journey.date);
   const [editDescription, setEditDescription] = useState(journey.description || "");
-  const [editTripId, setEditTripId] = useState<number | null>(journey.trip_id);
+  const [editTripId, setEditTripId] = useState<number | null>(journey.trip_id ?? null);
   // The journey as last loaded or saved: what Cancel goes back to and what Save
   // diffs against.
   const [originalSnapshot, setOriginalSnapshot] = useState<JourneySnapshot | null>(null);
@@ -160,7 +169,7 @@ export default function JourneyCard({
     setLoadFailed(false);
     (async () => {
       try {
-        const result = unwrap(await getJourney(journey.id, regionId));
+        const result = await store.load(journey.id, regionId);
         if (cancelled) return;
         const routes = result.routes;
         applySnapshot({
@@ -168,7 +177,7 @@ export default function JourneyCard({
           name: result.journey.name,
           date: result.journey.date,
           description: result.journey.description || "",
-          tripId: result.journey.trip_id,
+          tripId: result.journey.trip_id ?? null,
         });
         onHighlightRoutes?.(
           routes.map((r) => r.track_id),
@@ -190,7 +199,7 @@ export default function JourneyCard({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, journey.id, loadAttempt]);
+  }, [isOpen, journey.id, store, loadAttempt]);
 
   // The map edit session lasts exactly as long as edit mode. The cleanup also
   // covers an unmount mid-edit: a card that leaves the list while being edited
@@ -266,9 +275,9 @@ export default function JourneyCard({
       return;
     }
 
-    // Only the difference goes to the server, applied there in one transaction:
-    // a failed save changes nothing, so the snapshot still matches the journey
-    // and pressing Save again retries the whole edit
+    // Only the difference goes to the store, which applies all of it or none: a
+    // failed save changes nothing, so the snapshot still matches the journey and
+    // pressing Save again retries the whole edit
     const origMap = new Map(originalSnapshot.routes.map((r) => [r.track_id, r]));
     const editedIds = new Set(viewedRoutes.map((r) => r.track_id));
     const upsert = viewedRoutes.flatMap((edited) => {
@@ -285,16 +294,14 @@ export default function JourneyCard({
 
     setIsSaving(true);
     try {
-      unwrap(
-        await saveJourneyEdits(journey.id, {
-          name: trimmedName,
-          description: trimmedDescription || null,
-          date: editDate,
-          tripId: tripChanged ? editTripId : undefined,
-          upsert,
-          remove,
-        }),
-      );
+      await store.save(journey.id, {
+        name: trimmedName,
+        description: trimmedDescription || null,
+        date: editDate,
+        tripId: tripChanged ? editTripId : undefined,
+        upsert,
+        remove,
+      });
 
       showSuccess("Journey updated");
       if (tripChanged) {
@@ -323,7 +330,7 @@ export default function JourneyCard({
 
   const handleDelete = async () => {
     try {
-      unwrap(await deleteJourney(journey.id));
+      await store.remove(journey.id);
       showSuccess("Journey deleted");
       onRequestClose();
       onChanged();
@@ -369,8 +376,10 @@ export default function JourneyCard({
         meta={[
           formatDateOnly(journey.date),
           plural(journey.route_count, "route"),
-          `${journey.total_distance.toFixed(1)} km`,
-        ].join(" · ")}
+          journey.total_distance !== undefined && `${journey.total_distance.toFixed(1)} km`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         isOpen={isOpen}
         onToggle={isOpen ? onRequestClose : onRequestOpen}
         locked={editing}
@@ -414,7 +423,13 @@ export default function JourneyCard({
                   onDateChange={setEditDate}
                   description={editDescription}
                   onDescriptionChange={setEditDescription}
-                  trip={{ value: editTripId, options: availableTrips, onChange: setEditTripId }}
+                  trip={
+                    availableTrips && {
+                      value: editTripId,
+                      options: availableTrips,
+                      onChange: setEditTripId,
+                    }
+                  }
                 />
               </div>
 

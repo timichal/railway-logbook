@@ -16,7 +16,7 @@ import type { PoolClient } from "pg";
 import pool, { asMissingRow, withTransaction } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
-import type { Journey, LoggedPart, RailwayRoute } from "./shared/types";
+import type { Journey, JourneyEdits, LoggedPart, RailwayRoute } from "./shared/types";
 
 /** Fraction range along a route's geometry — see user_logged_parts.covered_start. */
 export interface LoggedRange {
@@ -291,19 +291,6 @@ export async function updateLoggedPartPartialForUser(
     [partial, journeyId, trackId, userId],
   );
   if (result.rowCount === 0) throw new NotFoundError("Route not found in journey");
-}
-
-/** An edit of a journey as a whole — see `saveJourneyEditsForUser`. */
-export interface JourneyEdits {
-  name: string;
-  description: string | null;
-  date: string;
-  /** The trip to file it under (null for none), or undefined to leave it where it is. */
-  tripId?: number | null;
-  /** Routes to log, or whose partial flag changed, with the flag they now carry. */
-  upsert: { trackId: number; partial: boolean }[];
-  /** Routes to unlog. */
-  remove: number[];
 }
 
 /**

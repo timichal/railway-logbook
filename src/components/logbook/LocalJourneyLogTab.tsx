@@ -1,24 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import JourneyMetaFields from "@/components/logbook/JourneyMetaFields";
-import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import JourneyCard from "@/components/logbook/JourneyCard";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
+import { localJourneyStore } from "@/lib/journeyStore";
 import * as localStore from "@/lib/localStorage";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
-import { routeTitle } from "@/lib/shared/map/routeFeature";
 import type {
   HighlightRoutesFn,
   JourneyEditStartFn,
   LocalJourney,
   LocalLoggedPart,
-  RailwayRoute,
-  SelectedRoute,
 } from "@/lib/shared/types";
-import { useToast } from "@/lib/toast";
-import { btn } from "@/lib/ui/buttonStyles";
-import { getRegionTrackIds, getRoutesByIds } from "@/lib/userActions";
+import { getRegionTrackIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
   journey: LocalJourney;
@@ -32,29 +27,13 @@ interface LocalJourneyLogTabProps {
   onJourneyEditEnd?: () => void;
 }
 
-// Build a minimal RailwayRoute for display from a route clicked on the map.
-function buildRouteMetaFromSelected(route: SelectedRoute): RailwayRoute {
-  return {
-    track_id: route.track_id,
-    name: route.name,
-    from_station: route.from_station,
-    to_station: route.to_station,
-    description: route.description,
-    usage_type: 0 as RailwayRoute["usage_type"],
-    frequency: [],
-    link: route.link,
-    geometry: "",
-    length_km: route.length_km,
-  };
-}
-
+/** My Journeys for an anonymous visitor: the journeys saved in this browser, as `JourneyCard`s. */
 export default function LocalJourneyLogTab({
   onHighlightRoutes,
   onJourneyChanged,
   onJourneyEditStart,
   onJourneyEditEnd,
 }: LocalJourneyLogTabProps) {
-  const { showSuccess, showError } = useToast();
   const regionId = useRegionId();
   const [journeys, setJourneys] = useState<JourneyWithRoutes[]>([]);
   // Track ids of the region on screen, refetched when the region changes. A
@@ -67,17 +46,7 @@ export default function LocalJourneyLogTab({
     "region route ids",
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [viewedJourneyId, setViewedJourneyId] = useState<string | null>(null);
-  // Route metadata (station names, length, …) keyed by track_id. The localStorage
-  // parts only store track_id, so we fetch the rest on demand for display.
-  const [routeMeta, setRouteMeta] = useState<Record<number, RailwayRoute>>({});
-
-  // Edit state
-  const [editingJourneyId, setEditingJourneyId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editDate, setEditDate] = useState("");
-  const [editDescription, setEditDescription] = useState("");
+  const [openJourneyId, setOpenJourneyId] = useState<string | null>(null);
 
   // Any journey open when the region changes is collapsed: it may not be in this
   // region at all, and its highlight is dropped by the map anyway. Done during
@@ -85,269 +54,39 @@ export default function LocalJourneyLogTab({
   const [listedRegionId, setListedRegionId] = useState(regionId);
   if (listedRegionId !== regionId) {
     setListedRegionId(regionId);
-    setViewedJourneyId(null);
+    setOpenJourneyId(null);
   }
 
-  // Load journeys on mount and when storage changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadJourneys only needs to run on mount; the storage listener handles subsequent reloads.
+  const loadJourneys = useCallback(() => {
+    const parts = localStore.getLoggedParts();
+    setJourneys(
+      localStore
+        .getJourneys()
+        .map((journey) => ({
+          journey,
+          parts: parts.filter((part) => part.journey_id === journey.id),
+        }))
+        .sort((a, b) => b.journey.date.localeCompare(a.journey.date)),
+    );
+  }, []);
+
+  // On mount, and whenever another tab changes the stored journeys
   useEffect(() => {
     loadJourneys();
+    return localStore.onStorageChange(loadJourneys);
+  }, [loadJourneys]);
 
-    // Listen for storage changes from other tabs
-    const cleanup = localStore.onStorageChange(() => {
-      loadJourneys();
-    });
+  // The tab switched away: its highlights go with it
+  useEffect(() => () => onHighlightRoutes?.([]), [onHighlightRoutes]);
 
-    return cleanup;
-  }, []);
-
-  // Clear highlights when component unmounts (tab switched)
-  useEffect(() => {
-    return () => {
-      if (onHighlightRoutes) {
-        onHighlightRoutes([]);
-      }
-    };
-  }, [onHighlightRoutes]);
-
-  const loadJourneys = () => {
-    const allJourneys = localStore.getJourneys();
-    const allParts = localStore.getLoggedParts();
-
-    const journeysWithRoutes: JourneyWithRoutes[] = allJourneys.map((journey) => ({
-      journey,
-      parts: allParts.filter((part) => part.journey_id === journey.id),
-    }));
-
-    // Sort by date descending
-    journeysWithRoutes.sort(
-      (a, b) => new Date(b.journey.date).getTime() - new Date(a.journey.date).getTime(),
-    );
-
-    setJourneys(journeysWithRoutes);
+  const handleClose = () => {
+    setOpenJourneyId(null);
+    onHighlightRoutes?.([]);
   };
 
-  // Fetch metadata for any track_ids we don't already have cached.
-  const loadRouteMeta = useCallback(
-    async (trackIds: number[]) => {
-      const missing = trackIds.filter((id) => !(id in routeMeta));
-      if (missing.length === 0) return;
-      try {
-        const routes = await getRoutesByIds(missing);
-        setRouteMeta((prev) => {
-          const next = { ...prev };
-          for (const route of routes) {
-            next[route.track_id] = route;
-          }
-          return next;
-        });
-      } catch (error) {
-        console.error("Error loading route metadata:", error);
-      }
-    },
-    [routeMeta],
-  );
-
-  // Map route clicks (while a journey is open) toggle that route in/out of the
-  // journey. Kept in a ref so the stable callback registered with the map always
-  // sees fresh state, mirroring JourneyCard's approach.
-  const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | null>(null);
-  handleMapRouteClickRef.current = (route: SelectedRoute) => {
-    if (!viewedJourneyId) return;
-    const trackId = route.track_id;
-
-    try {
-      const existing = localStore
-        .getLoggedPartsByJourneyId(viewedJourneyId)
-        .find((p) => p.track_id === trackId);
-      if (existing) {
-        localStore.deleteLoggedPart(existing.id);
-      } else {
-        localStore.addLoggedPart({
-          journey_id: viewedJourneyId,
-          track_id: trackId,
-          partial: false,
-        });
-        // Cache metadata from the clicked route for instant display.
-        setRouteMeta((prev) => ({ ...prev, [trackId]: buildRouteMetaFromSelected(route) }));
-      }
-
-      loadJourneys();
-      const remaining = localStore.getLoggedPartsByJourneyId(viewedJourneyId);
-      onHighlightRoutes?.(remaining.map((p) => p.track_id));
-      onJourneyChanged?.();
-    } catch (error) {
-      console.error("Error toggling route in journey:", error);
-      showError(error instanceof Error ? error.message : "Failed to update journey");
-    }
-  };
-
-  const stableHandleMapRouteClick = useCallback((route: SelectedRoute) => {
-    handleMapRouteClickRef.current?.(route);
-  }, []);
-
-  // Same ref dance, for the touch sheet's button label ("Add to journey" vs
-  // "Remove from journey") — the map holds this for the whole edit session.
-  const isRouteInJourneyRef = useRef<((trackId: number) => boolean) | null>(null);
-  isRouteInJourneyRef.current = (trackId: number) => {
-    if (!viewedJourneyId) return false;
-    return localStore
-      .getLoggedPartsByJourneyId(viewedJourneyId)
-      .some((p) => p.track_id === trackId);
-  };
-  const stableIsRouteInJourney = useCallback(
-    (trackId: number) => isRouteInJourneyRef.current?.(trackId) ?? false,
-    [],
-  );
-
-  // Register the map click handler while a journey is open; tear it down when it
-  // closes or the tab unmounts.
-  useEffect(() => {
-    if (!viewedJourneyId) return;
-    onJourneyEditStart?.(stableHandleMapRouteClick, stableIsRouteInJourney);
-    return () => {
-      onJourneyEditEnd?.();
-    };
-  }, [
-    viewedJourneyId,
-    stableHandleMapRouteClick,
-    stableIsRouteInJourney,
-    onJourneyEditStart,
-    onJourneyEditEnd,
-  ]);
-
-  const handleViewJourney = (journeyId: string) => {
-    // Toggle view - if already viewing this journey, collapse it
-    if (viewedJourneyId === journeyId) {
-      setViewedJourneyId(null);
-      setEditingJourneyId(null);
-      if (onHighlightRoutes) {
-        onHighlightRoutes([]);
-      }
-      return;
-    }
-
-    const journeyData = journeys.find((j) => j.journey.id === journeyId);
-    if (!journeyData) return;
-
-    setViewedJourneyId(journeyId);
-
-    // Set up edit mode with current journey data
-    setEditingJourneyId(journeyId);
-    setEditName(journeyData.journey.name);
-    setEditDate(journeyData.journey.date);
-    setEditDescription(journeyData.journey.description || "");
-
-    // Highlight routes on map, and bring them into view
-    const routeIds = journeyData.parts.map((p) => p.track_id);
-    if (onHighlightRoutes) {
-      onHighlightRoutes(routeIds, "view", undefined, { fit: true });
-    }
-
-    // Fetch route metadata for richer display
-    loadRouteMeta(routeIds);
-  };
-
-  const handleSaveEdit = () => {
-    if (!editingJourneyId) return;
-
-    if (!editName.trim() || !editDate) {
-      showError("Journey name and date are required");
-      return;
-    }
-
-    try {
-      localStore.updateJourney(editingJourneyId, {
-        name: editName.trim(),
-        description: editDescription.trim() || null,
-        date: editDate,
-      });
-
-      showSuccess("Journey updated successfully");
-      loadJourneys();
-
-      // Trigger map refresh
-      if (onJourneyChanged) {
-        onJourneyChanged();
-      }
-    } catch (error) {
-      console.error("Error updating journey:", error);
-      showError("Failed to update journey");
-    }
-  };
-
-  const handleCancelEdit = () => {
-    // Restore original values from the journey
-    const journeyData = journeys.find((j) => j.journey.id === editingJourneyId);
-    if (journeyData) {
-      setEditName(journeyData.journey.name);
-      setEditDate(journeyData.journey.date);
-      setEditDescription(journeyData.journey.description || "");
-    }
-  };
-
-  const handleDelete = (journeyId: string) => {
-    try {
-      localStore.deleteJourney(journeyId);
-      showSuccess("Journey deleted successfully");
-
-      // If we were viewing this journey, clear the view
-      if (viewedJourneyId === journeyId) {
-        setViewedJourneyId(null);
-        if (onHighlightRoutes) {
-          onHighlightRoutes([]);
-        }
-      }
-
-      loadJourneys();
-
-      // Trigger map refresh to update route colors
-      if (onJourneyChanged) {
-        onJourneyChanged();
-      }
-    } catch (error) {
-      console.error("Error deleting journey:", error);
-      showError("Failed to delete journey");
-    } finally {
-      setDeleteConfirmId(null);
-    }
-  };
-
-  const handleDeletePart = (partId: string) => {
-    try {
-      localStore.deleteLoggedPart(partId);
-      showSuccess("Route removed from journey");
-      loadJourneys();
-
-      // Re-highlight the remaining routes of the journey being viewed
-      if (viewedJourneyId && onHighlightRoutes) {
-        const remaining = localStore.getLoggedPartsByJourneyId(viewedJourneyId);
-        onHighlightRoutes(remaining.map((p) => p.track_id));
-      }
-
-      // Trigger map refresh
-      if (onJourneyChanged) {
-        onJourneyChanged();
-      }
-    } catch (error) {
-      console.error("Error deleting logged part:", error);
-      showError("Failed to remove route");
-    }
-  };
-
-  const handleSetPartial = (partId: string, partial: boolean) => {
-    try {
-      localStore.updateLoggedPart(partId, partial);
-      loadJourneys();
-
-      // Trigger map refresh
-      if (onJourneyChanged) {
-        onJourneyChanged();
-      }
-    } catch (error) {
-      console.error("Error updating partial flag:", error);
-      showError("Failed to update partial flag");
-    }
+  const handleChanged = () => {
+    loadJourneys();
+    onJourneyChanged?.();
   };
 
   // Journeys of the region on screen. One with no routes logged yet belongs to
@@ -359,16 +98,27 @@ export default function LocalJourneyLogTab({
     );
   }, [journeys, regionTrackIds]);
 
-  // Filter journeys by search query
-  const filteredJourneys = regionJourneys.filter(({ journey }) => {
+  const filteredJourneys = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    const matchesName = journey.name.toLowerCase().includes(query);
-    // The stored day, and the day as the card shows it in the viewer's locale.
-    const matchesDate =
-      journey.date.includes(query) || formatDateOnly(journey.date).includes(query);
-    const matchesDescription = journey.description?.toLowerCase().includes(query) || false;
-    return matchesName || matchesDate || matchesDescription;
-  });
+    return regionJourneys.filter(
+      ({ journey }) =>
+        journey.name.toLowerCase().includes(query) ||
+        // The stored day, and the day as the card shows it in the viewer's locale
+        journey.date.includes(query) ||
+        formatDateOnly(journey.date).includes(query) ||
+        journey.description?.toLowerCase().includes(query),
+    );
+  }, [regionJourneys, searchQuery]);
+
+  // A search (or another tab's delete) can take the open card out of the list. The
+  // card ends its own map edit session as it unmounts; its open state and
+  // highlights are left here, as in JourneysAndTripsTab.
+  useEffect(() => {
+    if (openJourneyId && !filteredJourneys.some(({ journey }) => journey.id === openJourneyId)) {
+      setOpenJourneyId(null);
+      onHighlightRoutes?.([]);
+    }
+  }, [filteredJourneys, openJourneyId, onHighlightRoutes]);
 
   return (
     <div className="p-4 text-fg space-y-4">
@@ -402,140 +152,18 @@ export default function LocalJourneyLogTab({
           </div>
         ) : (
           filteredJourneys.map(({ journey, parts }) => (
-            <div
+            <JourneyCard
               key={journey.id}
-              className="p-3 bg-surface border border-gray-300 rounded shadow-sm"
-            >
-              {/* Journey Header */}
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-base truncate">{journey.name}</h4>
-                  {journey.description && (
-                    <div className="text-xs text-gray-600 mt-1">{journey.description}</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Journey Stats */}
-              <div className="flex items-center gap-4 text-xs text-gray-700 mb-3">
-                <span className="font-medium">{formatDateOnly(journey.date)}</span>
-                <span className="flex items-center gap-1">
-                  <span className="font-medium">{parts.length}</span>
-                  <span>routes</span>
-                </span>
-              </div>
-
-              {/* Action Buttons */}
-              {deleteConfirmId === journey.id ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(journey.id)}
-                    className={`${btn("danger")} flex-1`}
-                  >
-                    Confirm Delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirmId(null)}
-                    className={`${btn("subtle")} flex-1`}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleViewJourney(journey.id)}
-                    className={`${btn(viewedJourneyId === journey.id ? "warning" : "primary")} flex-1`}
-                  >
-                    {viewedJourneyId === journey.id ? "Hide Details" : "View / Edit"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirmId(journey.id)}
-                    className={btn("danger")}
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
-
-              {/* Edit Form and Journey Details - shown when viewing */}
-              {viewedJourneyId === journey.id && (
-                <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
-                  <div className="px-2 py-1.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-                    Click routes on the map to add or remove them from this journey
-                  </div>
-
-                  {/* Edit Form */}
-                  {editingJourneyId === journey.id && (
-                    <div className="space-y-2">
-                      <h5 className="text-sm font-semibold text-gray-700 mb-2">Edit Journey</h5>
-                      <JourneyMetaFields
-                        idPrefix={`local-journey-${journey.id}`}
-                        compact
-                        name={editName}
-                        onNameChange={setEditName}
-                        date={editDate}
-                        onDateChange={setEditDate}
-                        description={editDescription}
-                        onDescriptionChange={setEditDescription}
-                      />
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={handleSaveEdit}
-                          disabled={!editName.trim() || !editDate}
-                          className={`${btn("success", "xs")} flex-1`}
-                        >
-                          Save Changes
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelEdit}
-                          className={`${btn("subtle", "xs")} flex-1`}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Routes List */}
-                  {parts.length > 0 && (
-                    <div>
-                      <h5 className="text-sm font-semibold text-gray-700 mb-2">
-                        Routes in this journey:
-                      </h5>
-                      <div className="space-y-1 max-h-64 overflow-y-auto">
-                        {parts.map((part) => {
-                          const meta = routeMeta[part.track_id];
-                          const heading = meta ? routeTitle(meta, regionId) : null;
-                          return (
-                            <LoggedRouteRow
-                              key={part.id}
-                              title={
-                                heading
-                                  ? (heading.name ?? heading.endpoints)
-                                  : `Route #${part.track_id}`
-                              }
-                              subtitle={heading?.name ? heading.endpoints : undefined}
-                              lengthKm={meta?.length_km}
-                              partial={part.partial}
-                              covered={{ start: part.covered_start, end: part.covered_end }}
-                              onPartialChange={(partial) => handleSetPartial(part.id, partial)}
-                              onRemove={() => handleDeletePart(part.id)}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              journey={{ ...journey, route_count: parts.length }}
+              store={localJourneyStore}
+              isOpen={openJourneyId === journey.id}
+              onRequestOpen={() => setOpenJourneyId(journey.id)}
+              onRequestClose={handleClose}
+              onChanged={handleChanged}
+              onHighlightRoutes={onHighlightRoutes}
+              onJourneyEditStart={onJourneyEditStart}
+              onJourneyEditEnd={onJourneyEditEnd}
+            />
           ))
         )}
       </div>

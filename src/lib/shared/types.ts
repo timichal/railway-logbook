@@ -142,6 +142,22 @@ export type LoggedPart = {
   created_at: string;
 };
 
+/**
+ * An edit of a journey as a whole — saved by `saveJourneyEditsForUser`, or by
+ * `saveJourneyEdits` in localStorage.ts for an anonymous visitor.
+ */
+export interface JourneyEdits {
+  name: string;
+  description: string | null;
+  date: string;
+  /** The trip to file it under (null for none), or undefined to leave it where it is. */
+  tripId?: number | null;
+  /** Routes to log, or whose partial flag changed, with the flag they now carry. */
+  upsert: { trackId: number; partial: boolean }[];
+  /** Routes to unlog. */
+  remove: number[];
+}
+
 // Local journey stored in localStorage (for unauthenticated users)
 export type LocalJourney = {
   id: string; // UUID

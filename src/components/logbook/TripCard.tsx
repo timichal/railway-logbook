@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CardHeader from "@/components/logbook/CardHeader";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
+import { databaseJourneyStore } from "@/lib/journeyStore";
 import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly, formatDateOnlyRange } from "@/lib/shared/getUntimezonedDateStr";
@@ -304,6 +305,7 @@ export default function TripCard({
                   <div key={journey.id} className="relative">
                     <JourneyCard
                       journey={journey}
+                      store={databaseJourneyStore}
                       availableTrips={availableTrips}
                       isOpen={openNestedJourneyId === journey.id}
                       onRequestOpen={() => onNestedJourneyOpenChange(journey.id)}

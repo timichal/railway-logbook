@@ -14,14 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **`LocalJourneyLogTab` vs `JourneyCard`** (~80 lines).
-  `buildRouteMetaFromSelected` and `buildRouteFromSelected` are the same function;
-  move it to `selectedRoutes.ts`. More broadly, the local tab still uses the old
-  card layout ("View / Edit" button, inline Delete) and its own copy of the edit
-  form, instead of `CardHeader` and the view/edit split. Converging them would remove
-  most of its markup and make the two lists look alike. It also has the most
-  `if (onX) { onX(); }` code and "// Trigger map refresh" comments in the codebase.
-
 - [ ] **`JourneyCard` / `TripCard` action rows** (~40 lines). The delete-confirm row
   (`Delete this …?` + Delete + Cancel with focus refs) and the Edit/Delete row are
   copied between the two cards, along with `handleAskDelete` / `handleCancelDelete`.
@@ -71,7 +63,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 - [ ] Delete comments that repeat the next line: "// Handle save route functionality",
   "// Trigger map refresh", "// Calculate totals", "// Remove hover from previous
   part", "// Cleanup function", and so on. They are concentrated in
-  `LocalJourneyLogTab`, `adminMapInteractions`, `AdminRoutesTab`,
-  `AdminCreateRouteTab` and `dataAccess`.
+  `adminMapInteractions`, `AdminRoutesTab`, `AdminCreateRouteTab` and `dataAccess`.
 - [ ] Replace `if (onX) { onX(); }` with `onX?.()`, and `onX || (() => {})` with an
   optional prop. Same files.
