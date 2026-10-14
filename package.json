@@ -29,7 +29,6 @@
     "listStations": "tsx src/scripts/listStations.ts",
     "inspectPath": "tsx src/scripts/inspectPath.ts",
     "showBacktracking": "tsx src/scripts/showBacktracking.ts",
-    "addOtherLineNames": "tsx src/scripts/addOtherLineNames.ts",
     "deployMapData": "sh ./osmium-scripts/deploy.sh",
     "deployValidMapData": "sh ./osmium-scripts/deploy.sh --valid-only"
   },
