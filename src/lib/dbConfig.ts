@@ -14,6 +14,13 @@ import { types } from "pg";
 // app's, the tile pool and the scripts' alike, is built from this module.
 types.setTypeParser(types.builtins.DATE, (value) => value);
 
+// NUMERIC is kilometres here (`length_km` and the sums over it), which pg would
+// otherwise hand back as strings, typed by every caller as the number it isn't.
+// A double holds any of them far beyond the precision a distance needs. BIGINT
+// keeps pg's string: the OSM ids are handled as strings throughout, and a count
+// is cast to int where it is read.
+types.setTypeParser(types.builtins.NUMERIC, parseFloat);
+
 interface DbConfig {
   host: string;
   port: number;

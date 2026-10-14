@@ -65,7 +65,7 @@ const pointWKT = ([lng, lat]: [number, number]) => `POINT(${lng} ${lat})`;
 export async function getScenicLines(region: RegionId): Promise<ActionResult<AdminScenicLine[]>> {
   return asAdmin(async () => {
     const result = await pool.query<AdminScenicLineRow>(`
-      SELECT id, from_station, to_station, length_km::float8 AS length_km, is_valid, error_message,
+      SELECT id, from_station, to_station, length_km, is_valid, error_message,
              ST_AsGeoJSON(geometry) AS geometry,
              ST_AsGeoJSON(starting_coordinate)::json AS starting_coordinate,
              ST_AsGeoJSON(ending_coordinate)::json AS ending_coordinate

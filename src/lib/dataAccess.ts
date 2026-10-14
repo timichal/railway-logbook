@@ -166,7 +166,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
       }
     }
 
-    const lengths = new Map(routes.map((route) => [route.track_id, Number(route.length_km)]));
+    const lengths = new Map(routes.map((route) => [route.track_id, route.length_km]));
     const ridden = new Set<number>();
     for (const [trackId, parts] of partsByTrack) {
       if (isRouteFullyRidden(parts, lengths.get(trackId))) ridden.add(trackId);
@@ -201,10 +201,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 
         // Calculate totals
         const totalRoutes = filteredRoutes.length;
-        const totalKm = filteredRoutes.reduce(
-          (sum, route) => sum + (Number(route.length_km) || 0),
-          0,
-        );
+        const totalKm = filteredRoutes.reduce((sum, route) => sum + (route.length_km ?? 0), 0);
 
         const completedRouteIds = fullyRiddenTrackIds(allRoutes);
 
@@ -213,10 +210,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
         );
 
         const completedRoutesCount = completedRoutes.length;
-        const completedKm = completedRoutes.reduce(
-          (sum, route) => sum + (Number(route.length_km) || 0),
-          0,
-        );
+        const completedKm = completedRoutes.reduce((sum, route) => sum + (route.length_km ?? 0), 0);
 
         const percentage = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
         const routePercentage = totalRoutes > 0 ? (completedRoutesCount / totalRoutes) * 100 : 0;
@@ -255,7 +249,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
           let totalKm = 0;
           let completedKm = 0;
           for (const route of routes) {
-            const km = Number(route.length_km) || 0;
+            const km = route.length_km ?? 0;
             totalKm += km;
             if (completedRouteIds.has(route.track_id)) completedKm += km;
           }

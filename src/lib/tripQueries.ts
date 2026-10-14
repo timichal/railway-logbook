@@ -46,7 +46,7 @@ function tripInRegionSql(region: RegionId, tripIdExpr: string): string {
 export type TripWithStats = Trip & {
   journey_count: number;
   route_count: number;
-  total_distance: string;
+  total_distance: number;
   start_date: string | null;
   end_date: string | null;
 };
@@ -135,7 +135,7 @@ function tripStatsSql(tripIdsParam?: string): string {
 // Journey with route stats (used in trip detail view)
 export type JourneyInTrip = Journey & {
   route_count: number;
-  total_distance: string;
+  total_distance: number;
 };
 
 /**
@@ -297,7 +297,7 @@ export async function unassignJourneyFromTripForUser(
 // Standalone journey (not assigned to a trip) with stats — for the merged list
 export type StandaloneJourneyWithStats = Journey & {
   route_count: number;
-  total_distance: string;
+  total_distance: number;
 };
 
 // One row in the merged trips+journeys list. A trip carries its assigned journeys; a standalone journey stands on its own.

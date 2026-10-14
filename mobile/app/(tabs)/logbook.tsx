@@ -325,8 +325,8 @@ function plural(count: number, one: string, many: string): string {
 }
 
 /** A Postgres numeric arrives as a string; an absent one as null. */
-function formatKm(value: string | null): string {
-  return (Number(value) || 0).toFixed(1);
+function formatKm(value: number): string {
+  return value.toFixed(1);
 }
 
 function dateRange(start: string | null, end: string | null): string {

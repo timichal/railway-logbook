@@ -87,6 +87,8 @@ Osmium Tool (`conda install conda-forge::osmium-tool`), Node, Docker, `tsx`, `.e
 
 GIST indexes on spatial data; EPSG:3857 geometry columns kept in sync by triggers.
 
+Type parsers (`dbConfig.ts`, global to `pg`): NUMERIC arrives as a JS number, DATE as its `YYYY-MM-DD` string, BIGINT as a string (OSM ids are handled as strings) — cast a `count(*)` to `::int` where it is read.
+
 - **users** — email (stored `lower(btrim(...))`, folded in SQL on every write and lookup and held there by a CHECK), bcrypt password, `password_changed_at` (see "Auth").
 - **stations** — OSM points; the name is resolved in `pruneData.ts`. Stations mapped as **areas** are reduced to their centroid and stored with a **negated id** (node and way ids overlap); one is dropped when a same-name station node sits within 150m. `near_route` — see "Station proximity".
 - **railway_routes** — `track_id`, `name` (only where `hasRouteNames`; NULL elsewhere), `from_station`, `to_station`, `description`, `usage_type`, `frequency` TEXT[] (free-form tags, no tag table; `getFrequencyTags` returns the in-use set for `TagInput`), `link`, `line_class` ('highspeed'|'main'|'branch'), `geom`, `length_km`, `start_country`/`end_country`, `starting_coordinate`/`ending_coordinate` (exact click points), `is_valid`, `error_message`, `under_repair`, `intended_backtracking`, `has_backtracking`.

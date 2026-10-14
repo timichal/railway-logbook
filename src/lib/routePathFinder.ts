@@ -50,7 +50,7 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
       from_station: string;
       to_station: string;
       description: string;
-      length_km: string | number;
+      length_km: number;
     }>(
       `
       SELECT track_id, name, from_station, to_station, description, length_km
@@ -60,20 +60,7 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
       `,
       [routeIds],
     );
-    // Convert length_km to number (PostgreSQL returns it as string)
-    return result.rows.map((row) => {
-      const lengthKm =
-        typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km;
-      return {
-        track_id: row.track_id,
-        name: row.name,
-        from_station: row.from_station,
-        to_station: row.to_station,
-        description: row.description,
-        length_km: lengthKm,
-        travelled_length_km: lengthKm,
-      };
-    });
+    return result.rows.map((row) => ({ ...row, travelled_length_km: row.length_km }));
   } finally {
     client.release();
   }

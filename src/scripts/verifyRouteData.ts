@@ -96,7 +96,7 @@ interface RouteRow {
   start_lat: string;
   end_lng: string;
   end_lat: string;
-  length_km: string;
+  length_km: number;
   intended_backtracking: boolean;
 }
 
@@ -116,13 +116,13 @@ async function recalculateGeometry(
     start_lat: string;
     end_lng: string;
     end_lat: string;
-    length_km: string;
+    length_km: number;
   },
 ): Promise<
   | { status: "invalid"; error: string }
   | { status: "ok"; lineString: string; newLength: number; hasBacktracking: boolean }
 > {
-  const originalLength = parseFloat(row.length_km);
+  const originalLength = row.length_km;
 
   const startingCoordinate: [number, number] = [
     parseFloat(row.start_lng),
@@ -314,7 +314,7 @@ interface ScenicLineRow {
   start_lat: string;
   end_lng: string;
   end_lat: string;
-  length_km: string;
+  length_km: number;
 }
 
 /**

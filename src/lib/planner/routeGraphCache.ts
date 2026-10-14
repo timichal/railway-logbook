@@ -61,7 +61,7 @@ async function loadRouteNetworks(signature: string): Promise<CachedRouteNetworks
     const result = await client.query<{
       track_id: number;
       usage_type: number;
-      length_km: string | number;
+      length_km: number;
       line_class: string | null;
       start_x: number;
       start_y: number;
@@ -93,11 +93,9 @@ async function loadRouteNetworks(signature: string): Promise<CachedRouteNetworks
     );
 
     for (const row of result.rows) {
-      const lengthKm =
-        typeof row.length_km === "string" ? parseFloat(row.length_km) : row.length_km;
       const route: NetworkRoute = {
         track_id: row.track_id,
-        length_km: lengthKm,
+        length_km: row.length_km,
         line_class: row.line_class,
         startCoord: [row.start_x, row.start_y],
         nearStartCoord: [row.near_start_x, row.near_start_y],
@@ -133,7 +131,7 @@ let networkInFlight: { signature: string; promise: Promise<CachedRouteNetworks> 
 async function getNetworkSignature(): Promise<string> {
   const result = await pool.query<{ total: string; xmins: string | null }>(
     `
-    SELECT count(*) AS total, sum(xmin::text::bigint) AS xmins
+    SELECT count(*) AS total, sum(xmin::text::bigint)::text AS xmins
     FROM railway_routes
     `,
   );

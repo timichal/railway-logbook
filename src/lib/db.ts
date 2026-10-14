@@ -20,16 +20,6 @@ export function createPool(overrides: PoolConfig = {}): Pool {
 
 const pool = createPool();
 
-export async function query(text: string, params?: unknown[]) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(text, params);
-    return result;
-  } finally {
-    client.release();
-  }
-}
-
 export default pool;
 
 const MISSING_ROW_NAMES: Record<string, string> = {

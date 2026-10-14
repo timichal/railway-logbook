@@ -62,8 +62,8 @@ export async function findRoutesNearStations(
     const rows = await client.query<{
       station_id: string | number;
       track_id: number;
-      distance_m: string | number;
-      frac: string | number;
+      distance_m: number;
+      frac: number;
       lon: number;
       lat: number;
     }>(
@@ -92,16 +92,12 @@ export async function findRoutesNearStations(
     const byStation = new Map<number, { track_id: number; distance: number }[]>();
     for (const row of rows.rows) {
       const stationId = Number(row.station_id);
-      const distance =
-        typeof row.distance_m === "string" ? parseFloat(row.distance_m) : row.distance_m;
+      const distance = row.distance_m;
       if (distance > maxTolerance) continue;
       if (!byStation.has(stationId)) byStation.set(stationId, []);
       byStation.get(stationId)!.push({ track_id: row.track_id, distance });
       const match = matches.get(stationId)!;
-      match.fractions.set(
-        row.track_id,
-        typeof row.frac === "string" ? parseFloat(row.frac) : row.frac,
-      );
+      match.fractions.set(row.track_id, row.frac);
       match.points.set(row.track_id, [Number(row.lon), Number(row.lat)]);
     }
 

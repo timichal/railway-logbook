@@ -12,7 +12,7 @@
  * problem.
  */
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
-import { onSignedOut } from "@/api/client";
+import { type ApiUser, onSignedOut } from "@/api/client";
 import * as api from "@/api/endpoints";
 import { clearTokens, loadTokens, saveTokens } from "./tokenStore";
 
@@ -20,7 +20,7 @@ type Status = "loading" | "signedOut" | "signedIn";
 
 interface AuthValue {
   status: Status;
-  user: api.ApiUser | null;
+  user: ApiUser | null;
   signIn(email: string, password: string): Promise<void>;
   signUp(input: {
     email: string;
@@ -35,7 +35,7 @@ const AuthContext = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   const [status, setStatus] = useState<Status>("loading");
-  const [user, setUser] = useState<api.ApiUser | null>(null);
+  const [user, setUser] = useState<ApiUser | null>(null);
 
   const forgetSession = useCallback(() => {
     setUser(null);
@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   }, [forgetSession]);
 
   const accept = useCallback(
-    async (response: api.ApiUser, tokens: Parameters<typeof saveTokens>[0]) => {
+    async (response: ApiUser, tokens: Parameters<typeof saveTokens>[0]) => {
       await saveTokens(tokens);
       setUser(response);
       setStatus("signedIn");

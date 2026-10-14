@@ -224,7 +224,7 @@ export default function TripCard({
           dateRange,
           plural(trip.journey_count, "journey"),
           plural(trip.route_count, "route"),
-          `${Number(trip.total_distance).toFixed(1)} km`,
+          `${trip.total_distance.toFixed(1)} km`,
         ].join(" · ")}
         isOpen={isOpen}
         onToggle={isOpen ? onRequestClose : onRequestOpen}
@@ -345,7 +345,7 @@ export default function TripCard({
                         <div className="font-medium truncate">{j.name}</div>
                         <div className="text-gray-600 flex items-center gap-3 mt-0.5">
                           <span>{formatDateOnly(j.date)}</span>
-                          <span>{Number(j.total_distance).toFixed(1)} km</span>
+                          <span>{j.total_distance.toFixed(1)} km</span>
                         </div>
                       </div>
                       <button

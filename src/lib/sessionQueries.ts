@@ -16,7 +16,7 @@
  */
 
 import { readToken, type TokenClaims, type User } from "./authTokens";
-import { query } from "./db";
+import pool from "./db";
 
 /**
  * The rule as SQL: the id of the user in `userIdParam`, or NULL unless that
@@ -54,7 +54,7 @@ export async function verifyToken(
   const claims = await readToken(token, expect);
   if (!claims) return null;
 
-  const result = await query(
+  const result = await pool.query<User>(
     `SELECT id, email, name FROM users WHERE id = ${currentAccountIdSql("$1", "$2")}`,
     [claims.userId, issuedAtParam(claims)],
   );

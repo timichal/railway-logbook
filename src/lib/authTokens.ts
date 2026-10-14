@@ -64,7 +64,8 @@ export const COOKIE_NAME = "railway-auth";
 export interface User {
   id: number;
   email: string;
-  name?: string;
+  /** Optional at registration, and NULL in the row when left out. */
+  name: string | null;
 }
 
 /**
@@ -95,7 +96,6 @@ function sign(user: User, kind: TokenKind, ttl: string): Promise<string> {
   const claims: Record<string, unknown> = {
     userId: user.id,
     email: user.email,
-    name: user.name,
     // `iat` is whole seconds, too coarse to say which side of a password change
     // a token issued in the same second fell on (see `sessionQueries.ts`).
     iatMs: Date.now(),
@@ -126,7 +126,6 @@ export function createRefreshToken(user: User): Promise<string> {
 export interface TokenClaims {
   userId: number;
   email: string;
-  name?: string;
   /**
    * When it was issued, in milliseconds. From `iatMs`, or `iat` for a token
    * minted before that claim existed — which puts it at the start of its
@@ -168,7 +167,6 @@ export async function readToken(
     return {
       userId: payload.userId,
       email: payload.email as string,
-      name: payload.name as string,
       issuedAtMs,
     };
   } catch {

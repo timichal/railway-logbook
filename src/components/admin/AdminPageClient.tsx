@@ -20,7 +20,7 @@ import {
   type SaveRouteData,
   saveRailwayRoute,
 } from "@/lib/adminRouteActions";
-import { logout } from "@/lib/authActions";
+import { logout, type User } from "@/lib/authActions";
 import { useRoutePreview } from "@/lib/map/hooks/useRoutePreview";
 import { RegionProvider, useRegion } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
@@ -40,11 +40,7 @@ const AdminMap = dynamic(() => import("@/components/admin/AdminMap"), {
 const NO_COORDINATES: CreateFormCoordinates = { startingCoordinate: null, endingCoordinate: null };
 
 interface AdminPageClientProps {
-  user: {
-    id: number;
-    name?: string;
-    email: string;
-  };
+  user: User;
   initialRegion: RegionId;
 }
 

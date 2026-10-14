@@ -8,7 +8,7 @@
  * calls the same functions.
  */
 
-import { query } from "./db";
+import pool from "./db";
 import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
 
 /**
@@ -26,7 +26,7 @@ import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
  */
 export async function selectedCountriesForUser(userId: number): Promise<string[]> {
   try {
-    const result = await query(
+    const result = await pool.query<{ selected_countries: string[] }>(
       `INSERT INTO user_preferences (user_id, selected_countries)
        VALUES ($1, $2)
        ON CONFLICT (user_id) DO UPDATE
@@ -64,7 +64,7 @@ export async function updateSelectedCountriesForUser(
   const codes = normalizeCountryCodes(selectedCountries);
 
   try {
-    await query(
+    await pool.query(
       `INSERT INTO user_preferences (user_id, selected_countries, updated_at)
        VALUES ($1, $2, NOW())
        ON CONFLICT (user_id)

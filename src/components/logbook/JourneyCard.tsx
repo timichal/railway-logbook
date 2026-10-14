@@ -41,7 +41,7 @@ function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
 
 interface JourneyDisplay extends Journey {
   route_count: number;
-  total_distance: string;
+  total_distance: number;
 }
 
 interface JourneyCardProps {
@@ -369,7 +369,7 @@ export default function JourneyCard({
         meta={[
           formatDateOnly(journey.date),
           plural(journey.route_count, "route"),
-          `${Number(journey.total_distance).toFixed(1)} km`,
+          `${journey.total_distance.toFixed(1)} km`,
         ].join(" · ")}
         isOpen={isOpen}
         onToggle={isOpen ? onRequestClose : onRequestOpen}

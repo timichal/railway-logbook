@@ -8,8 +8,8 @@
  * is here and `userActions.ts` is one of its callers.
  */
 
-import { escapeLikePattern, query } from "./db";
-import { MIN_SEARCH_QUERY_LENGTH } from "./shared/constants";
+import pool, { escapeLikePattern } from "./db";
+import { MIN_SEARCH_QUERY_LENGTH, type UsageType } from "./shared/constants";
 import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
 import type {
   LineGeometry,
@@ -20,6 +20,9 @@ import type {
   RouteSummary,
   Station,
 } from "./shared/types";
+
+/** A box selected as `ST_XMin(box) AS west, ST_YMin(box) AS south, …`. */
+type BoxRow = { west: number; south: number; east: number; north: number };
 
 /**
  * Station name search for the map search boxes and the Journey Planner.
@@ -48,7 +51,8 @@ export async function searchStationsByName(
 
   const pattern = escapeLikePattern(searchQuery);
 
-  const result = await query(
+  // A BIGINT id comes back from pg as a string
+  const result = await pool.query<{ id: string; name: string; lon: number; lat: number }>(
     `
     SELECT id, name,
            ST_X(coordinates) as lon,
@@ -98,7 +102,9 @@ async function searchLinesByName(
 
   const pattern = escapeLikePattern(searchQuery);
 
-  const result = await query(
+  const result = await pool.query<
+    BoxRow & { name: string; route_count: number; usage_types: UsageType[] }
+  >(
     `
     WITH matched AS (
       SELECT name,
@@ -163,7 +169,7 @@ const LINE_ENDPOINT_SNAP = 50; // EPSG:3857 units, ~40m in Europe and Japan
 const LINE_SIMPLIFY = 3; // EPSG:3857 units
 
 export async function lineGeometryByName(name: string, region: RegionId): Promise<LineGeometry[]> {
-  const result = await query(
+  const result = await pool.query<{ usage_type: UsageType; geometry: LineGeometry["geometry"] }>(
     `
     WITH routes AS (
       SELECT track_id, usage_type, geometry_3857 AS geom
@@ -242,13 +248,13 @@ export async function searchMapByName(
  * database journey list it cannot ask the question in SQL.
  */
 export async function trackIdsInRegion(region: RegionId): Promise<number[]> {
-  const result = await query(`
+  const result = await pool.query<{ track_id: number }>(`
     SELECT track_id
     FROM railway_routes
     WHERE ${regionContainsSql(region, "starting_coordinate")}
   `);
 
-  return result.rows.map((row) => row.track_id as number);
+  return result.rows.map((row) => row.track_id);
 }
 
 /**
@@ -258,14 +264,14 @@ export async function trackIdsInRegion(region: RegionId): Promise<number[]> {
  * the local rides off the map for seconds on every load.
  */
 export async function routeSummariesInRegion(region: RegionId): Promise<RouteSummary[]> {
-  const result = await query(`
+  const result = await pool.query<RouteSummary>(`
     SELECT track_id, usage_type, length_km, start_country, end_country
     FROM railway_routes
     WHERE ${regionContainsSql(region, "starting_coordinate")}
     ORDER BY track_id
   `);
 
-  return result.rows as RouteSummary[];
+  return result.rows;
 }
 
 /**
@@ -286,7 +292,7 @@ export async function routeBoundsByIds(
   if (trackIds.length === 0) return null;
 
   const inRegion = region ? `AND ${regionContainsSql(region, "starting_coordinate")}` : "";
-  const result = await query(
+  const result = await pool.query<BoxRow>(
     `
     SELECT ST_XMin(box) AS west, ST_YMin(box) AS south, ST_XMax(box) AS east, ST_YMax(box) AS north
     FROM (
@@ -310,7 +316,7 @@ export async function routeBoundsByIds(
 export async function routeMetadataByIds(trackIds: number[]): Promise<RailwayRoute[]> {
   if (trackIds.length === 0) return [];
 
-  const result = await query(
+  const result = await pool.query<Omit<RailwayRoute, "geometry">>(
     `
     SELECT
       track_id,

@@ -19,7 +19,7 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
     three implementations, and nobody calls them through it. Callers use
     `localStore.*` directly. Remove them.
   - The local `getUserProgress` / `getProgressByCountry` repeat the
-    `reduce((sum, r) => sum + (Number(r.length_km) || 0), 0)` five times. Use a
+    `reduce((sum, r) => sum + (r.length_km ?? 0), 0)` three times. Use a
     `sumKm(routes)` helper.
   - The all-zeros `UserProgress` literal is written 4 times (`progressQueries`,
     `publicMapActions`, `dataAccess` ×2). Make it one `EMPTY_PROGRESS` constant in a
@@ -27,10 +27,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
     in `progressQueries.ts`.
   - The database and public implementations are `async f() { return await g() }`
     wrappers. Write them as `f: (…) => g(…)`.
-
-- [ ] **`db.ts`'s `query()` wrapper** (~10 lines, plus typing). It does
-  connect/query/release, which is exactly what `pool.query` already does, and it loses
-  `pool.query<T>`'s row typing. It is used in 8 modules. Replace with `pool.query`.
 
 - [ ] **`verifyRouteData.ts`** (~50 lines).
   - Inline `recalculateRoute` into `recalculateGeometry`. Its

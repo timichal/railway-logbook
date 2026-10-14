@@ -19,13 +19,7 @@ import type {
   Station,
   Trip,
 } from "@shared/types";
-import { type AuthResponse, request } from "./client";
-
-export interface ApiUser {
-  id: number;
-  email: string;
-  name?: string;
-}
+import { type ApiUser, type AuthResponse, request } from "./client";
 
 export interface Progress {
   totalKm: number;
@@ -201,13 +195,13 @@ export interface LoggedRouteInput {
 export interface JourneyWithStats extends Journey {
   route_count: number;
   /** A Postgres numeric, so a string over the wire. */
-  total_distance: string;
+  total_distance: number;
 }
 
 export interface TripWithStats extends Trip {
   journey_count: number;
   route_count: number;
-  total_distance: string;
+  total_distance: number;
   start_date: string | null;
   end_date: string | null;
 }

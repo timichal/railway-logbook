@@ -39,8 +39,14 @@ export class NetworkError extends Error {
   }
 }
 
+export interface ApiUser {
+  id: number;
+  email: string;
+  name: string | null;
+}
+
 export interface AuthResponse extends TokenPair {
-  user: { id: number; email: string; name?: string };
+  user: ApiUser;
   expiresIn: number;
 }
 

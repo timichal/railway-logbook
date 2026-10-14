@@ -9,7 +9,7 @@
  * where the shared page only ever needed it server-side.
  */
 
-import { query } from "./db";
+import pool from "./db";
 
 /** The owner of a shared map, as resolved from a token. */
 interface PublicMapOwner {
@@ -47,7 +47,12 @@ export function sharedMapOwnerIdSql(param: string): string {
 export async function publicMapOwner(token: string): Promise<PublicMapOwner | null> {
   if (!isPlausibleShareToken(token)) return null;
 
-  const result = await query(
+  const result = await pool.query<{
+    user_id: number;
+    selected_countries: string[];
+    name: string | null;
+    email: string;
+  }>(
     `SELECT up.user_id, up.selected_countries, u.name, u.email
      FROM user_preferences up
      JOIN users u ON u.id = up.user_id
@@ -60,7 +65,7 @@ export async function publicMapOwner(token: string): Promise<PublicMapOwner | nu
   const row = result.rows[0];
   return {
     userId: row.user_id,
-    displayName: row.name || String(row.email).split("@")[0],
+    displayName: row.name || row.email.split("@")[0],
     selectedCountries: row.selected_countries,
   };
 }

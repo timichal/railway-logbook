@@ -18,7 +18,7 @@
 
 import { randomBytes } from "node:crypto";
 import { getUser } from "./authActions";
-import { query } from "./db";
+import pool from "./db";
 import {
   coveredStretchesForUser,
   type ProgressByCountry,
@@ -56,7 +56,7 @@ export async function getPublicMapSettings(): Promise<PublicMapSettings> {
 
   // One statement for the three cases: no preferences row yet, a row without a
   // token, and a row that already has one (left untouched by the DO UPDATE).
-  const result = await query(
+  const result = await pool.query<{ public_map_enabled: boolean; public_map_token: string }>(
     `INSERT INTO user_preferences (user_id, public_map_token, selected_countries)
      VALUES ($1, $2, $3)
      ON CONFLICT (user_id) DO UPDATE
@@ -82,7 +82,7 @@ export async function setPublicMapEnabled(enabled: boolean): Promise<PublicMapSe
   // Enabling needs a token, and a row may not exist yet, so this goes through
   // the same upsert — the token it mints is only used if there isn't one.
   const settings = await getPublicMapSettings();
-  await query(
+  await pool.query(
     `UPDATE user_preferences SET public_map_enabled = $2, updated_at = NOW() WHERE user_id = $1`,
     [user.id, enabled],
   );

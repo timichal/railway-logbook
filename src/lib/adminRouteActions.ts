@@ -5,7 +5,7 @@ import type { ActionResult } from "./actionResult";
 import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
-import pool, { query, withTransaction } from "./db";
+import pool, { withTransaction } from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
 import type { LineClass, UsageType } from "./shared/constants";
@@ -108,14 +108,14 @@ export async function getAllRailwayRoutes(
  */
 export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionResult<number>> {
   return asAdmin(async () => {
-    const result = await query(`
+    const result = await pool.query<{ total_km: number }>(`
     SELECT COALESCE(SUM(length_km), 0) AS total_km
     FROM railway_routes
     WHERE is_valid = true
       AND ${regionContainsSql(region, "starting_coordinate")}
   `);
 
-    return Math.round((parseFloat(result.rows[0].total_km) || 0) * 10) / 10;
+    return Math.round(result.rows[0].total_km * 10) / 10;
   });
 }
 
@@ -127,14 +127,14 @@ export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionRes
  */
 export async function getFrequencyTags(): Promise<ActionResult<string[]>> {
   return asAdmin(async () => {
-    const result = await query(`
+    const result = await pool.query<{ tag: string }>(`
     SELECT DISTINCT tag
     FROM railway_routes, unnest(frequency) AS tag
     WHERE tag IS NOT NULL AND tag <> ''
     ORDER BY tag
   `);
 
-    return result.rows.map((row) => row.tag as string);
+    return result.rows.map((row) => row.tag);
   });
 }
 
@@ -146,11 +146,10 @@ type AdminRouteDetailRow = Omit<AdminRouteDetail, "starting_coordinate" | "endin
 /** Get a single railway route by track_id. */
 export async function getRailwayRoute(trackId: number): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
-    // length_km is NUMERIC, which pg hands back as a string unless cast.
     const result = await pool.query<AdminRouteDetailRow>(
       `
     SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, line_class,
-           ST_AsGeoJSON(geometry) as geometry, length_km::float8 AS length_km,
+           ST_AsGeoJSON(geometry) as geometry, length_km,
            ST_AsGeoJSON(starting_coordinate)::json as starting_coordinate,
            ST_AsGeoJSON(ending_coordinate)::json as ending_coordinate,
            is_valid, error_message, under_repair, intended_backtracking, has_backtracking
@@ -181,7 +180,13 @@ export async function getAllRouteEndpoints(
   region: RegionId,
 ): Promise<ActionResult<GeoJSONFeatureCollection>> {
   return asAdmin(async () => {
-    const result = await query(`
+    const result = await pool.query<{
+      track_id: number;
+      from_station: string;
+      to_station: string;
+      starting_coordinate_json: string;
+      ending_coordinate_json: string;
+    }>(`
     SELECT
       track_id,
       from_station,
@@ -589,7 +594,7 @@ export async function updateRailwayRoute(
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
     const { from, to } = requiredStations(fromStation, toStation);
-    const result = await query(
+    const result = await pool.query(
       `
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
@@ -635,7 +640,7 @@ export async function setRouteUnderRepair(
   underRepair: boolean,
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
-    const result = await query(
+    const result = await pool.query(
       `
     UPDATE railway_routes
     SET under_repair = $2

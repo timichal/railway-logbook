@@ -19,7 +19,7 @@
 
 import bcrypt from "bcryptjs";
 import type { User } from "./authTokens";
-import { query } from "./db";
+import pool from "./db";
 import { ValidationError } from "./errors";
 import { ABSENT_USER_HASH, hashPassword } from "./passwordHash";
 import { updateSelectedCountriesForUser } from "./preferencesQueries";
@@ -30,7 +30,7 @@ export async function authenticateUser(email: string, password: string): Promise
     throw new ValidationError("Email and password are required");
   }
 
-  const result = await query(
+  const result = await pool.query<User & { password: string | null }>(
     "SELECT id, email, name, password FROM users WHERE email = lower(btrim($1))",
     [email],
   );
@@ -73,7 +73,9 @@ export async function registerUser(
     throw new ValidationError("Password must be at least 6 characters");
   }
 
-  const existingUser = await query("SELECT id FROM users WHERE email = lower(btrim($1))", [email]);
+  const existingUser = await pool.query("SELECT id FROM users WHERE email = lower(btrim($1))", [
+    email,
+  ]);
   if (existingUser.rows.length > 0) {
     throw new ValidationError("User with this email already exists");
   }
@@ -83,7 +85,7 @@ export async function registerUser(
   // The check above saves a bcrypt on the common case; this catches the race it
   // leaves open (a double submit, two tabs), which would otherwise surface as a
   // unique violation and reach the form as an opaque failure.
-  const result = await query(
+  const result = await pool.query<User>(
     `INSERT INTO users (email, name, password) VALUES (lower(btrim($1)), $2, $3)
      ON CONFLICT (email) DO NOTHING
      RETURNING id, email, name`,

@@ -9,7 +9,7 @@
  * resolve *which* user first and then come here.
  */
 
-import { query } from "./db";
+import pool from "./db";
 import type { UsageType } from "./shared/constants";
 import {
   countedUsageTypes,
@@ -73,10 +73,10 @@ export async function progressForUser(
   // Get total distance and count of all routes the region counts as ordinary
   // service (Regular, plus Japan's non-JR lines — see `ordinaryUsageTypes`) and
   // the map shows, optionally filtered by countries
-  const totalResult = await query(
+  const totalResult = await pool.query<{ total_km: number; total_routes: number }>(
     `SELECT
       COALESCE(SUM(length_km), 0) as total_km,
-      COUNT(*) as total_routes
+      COUNT(*)::int as total_routes
     FROM railway_routes
     WHERE length_km IS NOT NULL
       AND ${ordinaryUsageSql(region, "usage_type", shownUsageTypes)}
@@ -90,10 +90,10 @@ export async function progressForUser(
   // or if its partial stretches add up to all of it (FULLY_RIDDEN_TRACK_IDS).
   // The subquery yields distinct ids, so a route counts once however many
   // journeys rode it.
-  const completedResult = await query(
+  const completedResult = await pool.query<{ completed_km: number; completed_routes: number }>(
     `SELECT
       COALESCE(SUM(rr.length_km), 0) as completed_km,
-      COUNT(*) as completed_routes
+      COUNT(*)::int as completed_routes
     FROM railway_routes rr
     WHERE ${ordinaryUsageSql(region, "rr.usage_type", shownUsageTypes)}
       AND rr.length_km IS NOT NULL
@@ -103,10 +103,8 @@ export async function progressForUser(
     hasCountries ? [userId, selectedCountries] : [userId],
   );
 
-  const totalKm = parseFloat(totalResult.rows[0].total_km) || 0;
-  const completedKm = parseFloat(completedResult.rows[0].completed_km) || 0;
-  const totalRoutes = parseInt(totalResult.rows[0].total_routes, 10) || 0;
-  const completedRoutes = parseInt(completedResult.rows[0].completed_routes, 10) || 0;
+  const { total_km: totalKm, total_routes: totalRoutes } = totalResult.rows[0];
+  const { completed_km: completedKm, completed_routes: completedRoutes } = completedResult.rows[0];
 
   const percentage = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
   const routePercentage = totalRoutes > 0 ? (completedRoutes / totalRoutes) * 100 : 0;
@@ -164,7 +162,13 @@ export async function progressByCountryForUser(
   // - per `usage_type` (Japan's JR and non-JR lines), cross-border included
   // - the grand total over every counted route, cross-border included
   // GROUPING tells the sets apart: bit 1 is `country` rolled up, bit 0 `usage_type`.
-  const result = await query(
+  const result = await pool.query<{
+    grouping: number;
+    country: string | null;
+    usage_type: UsageType | null;
+    total_km: number;
+    completed_km: number;
+  }>(
     `WITH counted AS (
        SELECT
          rr.length_km,
@@ -196,17 +200,15 @@ export async function progressByCountryForUser(
   let overallCompletedKm = 0;
 
   for (const row of result.rows) {
-    const totalKm = parseFloat(row.total_km) || 0;
-    const completedKm = parseFloat(row.completed_km) || 0;
+    const { total_km: totalKm, completed_km: completedKm } = row;
 
     // GROUPING comes back as an int: 3 = grand total, 2 = per usage type
     // (country rolled up), 1 = per country (usage type rolled up)
-    const grouping = Number(row.grouping);
-    if (grouping === 3) {
+    if (row.grouping === 3) {
       overallTotalKm = totalKm;
       overallCompletedKm = completedKm;
-    } else if (grouping === 2) {
-      byType.set(Number(row.usage_type), { totalKm, completedKm });
+    } else if (row.grouping === 2 && row.usage_type !== null) {
+      byType.set(row.usage_type, { totalKm, completedKm });
     } else if (row.country) {
       byCode.set(row.country, { totalKm, completedKm });
     }
@@ -255,7 +257,7 @@ const MAX_PG_INT = 2147483647;
 export async function buildCoveredStretches(ranges: CoveredRange[]): Promise<CoveredStretch[]> {
   if (ranges.length === 0) return [];
 
-  const result = await query(
+  const result = await pool.query<Omit<CoveredStretch, "coordinates"> & { geojson: string }>(
     `
     SELECT
       t.track_id,
@@ -284,8 +286,8 @@ export async function buildCoveredStretches(ranges: CoveredRange[]): Promise<Cov
     if (!parsed.coordinates || parsed.coordinates.length < 2) continue;
     stretches.push({
       track_id: row.track_id,
-      covered_start: Number(row.covered_start),
-      covered_end: Number(row.covered_end),
+      covered_start: row.covered_start,
+      covered_end: row.covered_end,
       line_class: row.line_class,
       usage_type: row.usage_type,
       start_country: row.start_country,
@@ -331,7 +333,7 @@ export function normalizeCoveredRanges(ranges: CoveredRange[]): CoveredRange[] {
  * union comes out right without computing it.
  */
 export async function coveredStretchesForUser(userId: number): Promise<CoveredStretch[]> {
-  const result = await query(
+  const result = await pool.query<CoveredRange>(
     `
     SELECT DISTINCT ulp.track_id, ulp.covered_start, ulp.covered_end
     FROM user_logged_parts ulp
@@ -347,11 +349,5 @@ export async function coveredStretchesForUser(userId: number): Promise<CoveredSt
     [userId],
   );
 
-  return buildCoveredStretches(
-    result.rows.map((row) => ({
-      track_id: row.track_id,
-      covered_start: Number(row.covered_start),
-      covered_end: Number(row.covered_end),
-    })),
-  );
+  return buildCoveredStretches(result.rows);
 }
