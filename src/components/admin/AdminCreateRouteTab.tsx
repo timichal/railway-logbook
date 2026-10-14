@@ -15,12 +15,16 @@ import {
 } from "@/lib/adminRouteActions";
 import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
+import { routeTitle } from "@/lib/shared/map/routeFeature";
 import { useToast } from "@/lib/toast";
 import { btn } from "@/lib/ui/buttonStyles";
 import { useSingleFlight } from "@/lib/ui/useSingleFlight";
 
 /** A geometry edit in progress: the route whose points are being re-picked. */
-export type EditingGeometry = Pick<AdminRouteDetail, "track_id" | "from_station" | "to_station">;
+export type EditingGeometry = Pick<
+  AdminRouteDetail,
+  "track_id" | "name" | "from_station" | "to_station"
+>;
 
 const EMPTY_FORM: SaveRouteData = {
   name: "",
@@ -117,12 +121,13 @@ export default function AdminCreateRouteTab({
   };
 
   const isEditMode = editingGeometry !== null;
+  const editingTitle = editingGeometry && routeTitle(editingGeometry, region.id);
 
   return (
     <div className="p-4 overflow-y-auto">
       <h3 className="font-semibold text-gray-900 mb-4">
-        {editingGeometry
-          ? `Edit Route Geometry (${editingGeometry.from_station} ⟷ ${editingGeometry.to_station})`
+        {editingTitle
+          ? `Edit Route Geometry (${editingTitle.name ?? editingTitle.endpoints})`
           : "Create New Route"}
       </h3>
       <p className="text-sm text-gray-600 mb-4">
