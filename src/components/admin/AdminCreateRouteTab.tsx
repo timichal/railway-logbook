@@ -11,17 +11,11 @@ import {
   type SaveRouteData,
   saveRailwayRoute,
 } from "@/lib/adminRouteActions";
-import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
+import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import { btn } from "@/lib/ui/buttonStyles";
 import { useSingleFlight } from "@/lib/ui/useSingleFlight";
-
-/** The create form's two picked points (also what a geometry edit re-picks). */
-export interface CreateFormCoordinates {
-  startingCoordinate: [number, number] | null;
-  endingCoordinate: [number, number] | null;
-}
 
 /** A geometry edit in progress: the route whose points are being re-picked. */
 export type EditingGeometry = Pick<AdminRouteDetail, "track_id" | "from_station" | "to_station">;

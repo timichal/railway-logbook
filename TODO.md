@@ -14,28 +14,6 @@ bloat. Neither is the HTTP API layer (`src/app/api/v1`), which is already tight.
 
 ## Medium
 
-- [ ] **Admin action helpers** (~40 lines).
-  - `requiredStations()` exists in both `adminRouteActions.ts` and
-    `adminScenicLineActions.ts`, differing only in a noun.
-  - `pointWKT` exists in the scenic actions, while `saveRailwayRoute` builds `POINT(…)`
-    inline.
-  - Coordinates are read back as `ST_AsGeoJSON(...)::json` and then mapped from
-    `{ coordinates }` to a tuple in three places (route detail, scenic lines, notes'
-    `rowToNote`). Selecting `ARRAY[ST_X(p), ST_Y(p)]` (or one shared column helper)
-    would remove the row types and the mapping.
-  - `saveRailwayRoute`'s INSERT puts every column and every `$n` on its own line
-    (~40 lines). Its "Create LineString geometry from coordinates"-style comments
-    repeat the code, and `pathResult.hasBacktracking || false` appears 3 times.
-  - `getAllRouteEndpoints` runs `JSON.parse` on `ST_AsGeoJSON` and has two
-    near-identical start/end blocks. Use `::json` and loop over the two endpoints, or
-    build the FeatureCollection in SQL.
-  - `adminNotesActions.ts` repeats the 7-column note select/RETURNING list 4 times.
-    Make it a `NOTE_COLUMNS` constant.
-  - `CreateFormCoordinates` (the admin's two picked points) is declared in
-    `AdminCreateRouteTab.tsx`, and the page, the map and the scenic tab import it
-    from that one tab's component. Move it beside `PathPreview` in
-    `useRoutePreview.ts`, which takes the same two points.
-
 - [ ] **`countryUtils.ts`** (134 → ~20 lines). Both callers pass
   `{ type: "LineString", coordinates }`. Make it
   `getRouteCountries(coords: [number, number][])` that looks up the first and last

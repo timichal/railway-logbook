@@ -2,29 +2,23 @@
 
 import type { ActionResult } from "./actionResult";
 import { asAdmin } from "./authHelpers";
+import { lngLatSql } from "./coordinateUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { type NoteType, noteTypeOptions } from "./shared/constants";
 import { type RegionId, regionContainsSql } from "./shared/regions";
 import type { AdminNote } from "./shared/types";
 
-type AdminNoteRow = {
-  id: number;
-  coordinate: { coordinates: [number, number] };
-  text: string;
-  note_type: NoteType;
-  source: string | null;
+type AdminNoteRow = Omit<AdminNote, "created_at" | "updated_at"> & {
   created_at: Date;
   updated_at: Date;
 };
 
+const NOTE_COLUMNS = `id, ${lngLatSql("coordinate")} AS coordinate, text, note_type, source, created_at, updated_at`;
+
 function rowToNote(row: AdminNoteRow): AdminNote {
   return {
-    id: row.id,
-    coordinate: row.coordinate.coordinates,
-    text: row.text,
-    note_type: row.note_type,
-    source: row.source,
+    ...row,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
@@ -58,14 +52,7 @@ function validNoteFields(
 export async function getAllAdminNotes(region: RegionId): Promise<ActionResult<AdminNote[]>> {
   return asAdmin(async () => {
     const result = await pool.query<AdminNoteRow>(`
-    SELECT
-      id,
-      ST_AsGeoJSON(coordinate)::json as coordinate,
-      text,
-      note_type,
-      source,
-      created_at,
-      updated_at
+    SELECT ${NOTE_COLUMNS}
     FROM admin_notes
     WHERE ${regionContainsSql(region, "coordinate")}
     ORDER BY updated_at DESC
@@ -83,14 +70,7 @@ export async function getAdminNote(id: number): Promise<ActionResult<AdminNote |
   return asAdmin(async () => {
     const result = await pool.query<AdminNoteRow>(
       `
-    SELECT
-      id,
-      ST_AsGeoJSON(coordinate)::json as coordinate,
-      text,
-      note_type,
-      source,
-      created_at,
-      updated_at
+    SELECT ${NOTE_COLUMNS}
     FROM admin_notes
     WHERE id = $1
   `,
@@ -123,14 +103,7 @@ export async function createAdminNote(
       `
     INSERT INTO admin_notes (coordinate, text, note_type, source)
     VALUES (ST_SetSRID(ST_MakePoint($1, $2), 4326), $3, $4, $5)
-    RETURNING
-      id,
-      ST_AsGeoJSON(coordinate)::json as coordinate,
-      text,
-      note_type,
-      source,
-      created_at,
-      updated_at
+    RETURNING ${NOTE_COLUMNS}
   `,
       [lng, lat, fields.text, fields.noteType, fields.source],
     );
@@ -156,14 +129,7 @@ export async function updateAdminNote(
     UPDATE admin_notes
     SET text = $1, note_type = $2, source = $3
     WHERE id = $4
-    RETURNING
-      id,
-      ST_AsGeoJSON(coordinate)::json as coordinate,
-      text,
-      note_type,
-      source,
-      created_at,
-      updated_at
+    RETURNING ${NOTE_COLUMNS}
   `,
       [fields.text, fields.noteType, fields.source, id],
     );

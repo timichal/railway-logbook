@@ -2,6 +2,12 @@ import { useEffect, useEffectEvent, useState } from "react";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { findRailwayPathFromCoordinates } from "@/lib/adminMapActions";
 
+/** The admin's two picked points: a new route's or scenic line's, or a geometry edit's re-pick. */
+export interface CreateFormCoordinates {
+  startingCoordinate: [number, number] | null;
+  endingCoordinate: [number, number] | null;
+}
+
 /** The path found between the two picked points: what the admin map draws and a save stores. */
 export interface PathPreview {
   partIds: string[];

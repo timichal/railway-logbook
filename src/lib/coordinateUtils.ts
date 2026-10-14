@@ -98,3 +98,8 @@ export function mergeLinearChain(sublists: Coord[][]): Coord[] {
 export function coordinatesToWKT(coordinates: Coord[]): string {
   return `LINESTRING(${coordinates.map((coord) => `${coord[0]} ${coord[1]}`).join(",")})`;
 }
+
+export const pointToWKT = ([lng, lat]: Coord): string => `POINT(${lng} ${lat})`;
+
+/** SQL reading a point column as `[lng, lat]` — a float8 array, so it arrives as a `Coord`. */
+export const lngLatSql = (column: string): string => `ARRAY[ST_X(${column}), ST_Y(${column})]`;

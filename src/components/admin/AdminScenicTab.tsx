@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CreateFormCoordinates } from "@/components/admin/AdminCreateRouteTab";
 import PickedPointField from "@/components/admin/PickedPointField";
 import { INPUT, LABEL } from "@/components/admin/RouteMetadataFields";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
@@ -14,7 +13,7 @@ import {
   updateScenicLineNames,
 } from "@/lib/adminScenicLineActions";
 import { handleJunctionShortcut } from "@/lib/junctionShortcut";
-import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
+import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegionId } from "@/lib/regionContext";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints } from "@/lib/ui/adminListSort";

@@ -3,10 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  CreateFormCoordinates,
-  EditingGeometry,
-} from "@/components/admin/AdminCreateRouteTab";
+import type { EditingGeometry } from "@/components/admin/AdminCreateRouteTab";
 import type { EditingScenicLine } from "@/components/admin/AdminScenicTab";
 import AdminSidebar, { type AdminTab } from "@/components/admin/AdminSidebar";
 import Navbar from "@/components/layout/Navbar";
@@ -21,7 +18,7 @@ import {
   saveRailwayRoute,
 } from "@/lib/adminRouteActions";
 import { logout, type User } from "@/lib/authActions";
-import { useRoutePreview } from "@/lib/map/hooks/useRoutePreview";
+import { type CreateFormCoordinates, useRoutePreview } from "@/lib/map/hooks/useRoutePreview";
 import { RegionProvider, useRegion } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
 import { useToast } from "@/lib/toast";

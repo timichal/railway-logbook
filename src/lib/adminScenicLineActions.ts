@@ -1,8 +1,9 @@
 "use server";
 
 import type { ActionResult } from "./actionResult";
+import { requiredStations } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
-import { coordinatesToWKT } from "./coordinateUtils";
+import { coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
@@ -33,28 +34,12 @@ export type AdminScenicLine = {
   ending_coordinate: [number, number];
 };
 
-type AdminScenicLineRow = Omit<AdminScenicLine, "starting_coordinate" | "ending_coordinate"> & {
-  starting_coordinate: { coordinates: [number, number] };
-  ending_coordinate: { coordinates: [number, number] };
-};
-
-function requiredStations(from: string, to: string): { from: string; to: string } {
-  const trimmedFrom = typeof from === "string" ? from.trim() : "";
-  const trimmedTo = typeof to === "string" ? to.trim() : "";
-  if (!trimmedFrom || !trimmedTo) {
-    throw new ValidationError("A scenic line needs both a From and a To");
-  }
-  return { from: trimmedFrom, to: trimmedTo };
-}
-
 function lineWKT(coordinates: [number, number][]): string {
   if (!Array.isArray(coordinates) || coordinates.length < 2) {
     throw new ValidationError("A scenic line needs a path of at least two points");
   }
   return coordinatesToWKT(coordinates);
 }
-
-const pointWKT = ([lng, lat]: [number, number]) => `POINT(${lng} ${lat})`;
 
 /**
  * The region's scenic lines, by bounding box as the admin routes list is — a
@@ -64,19 +49,15 @@ const pointWKT = ([lng, lat]: [number, number]) => `POINT(${lng} ${lat})`;
  */
 export async function getScenicLines(region: RegionId): Promise<ActionResult<AdminScenicLine[]>> {
   return asAdmin(async () => {
-    const result = await pool.query<AdminScenicLineRow>(`
+    const result = await pool.query<AdminScenicLine>(`
       SELECT id, from_station, to_station, length_km, is_valid, error_message,
              ST_AsGeoJSON(geometry) AS geometry,
-             ST_AsGeoJSON(starting_coordinate)::json AS starting_coordinate,
-             ST_AsGeoJSON(ending_coordinate)::json AS ending_coordinate
+             ${lngLatSql("starting_coordinate")} AS starting_coordinate,
+             ${lngLatSql("ending_coordinate")} AS ending_coordinate
       FROM scenic_lines
       WHERE ${regionContainsSql(region, "starting_coordinate")}
     `);
-    return result.rows.map((row) => ({
-      ...row,
-      starting_coordinate: row.starting_coordinate.coordinates,
-      ending_coordinate: row.ending_coordinate.coordinates,
-    }));
+    return result.rows;
   });
 }
 
@@ -89,7 +70,7 @@ export async function createScenicLine(
   endCoordinate: [number, number],
 ): Promise<ActionResult<number>> {
   return asAdmin(async () => {
-    const { from, to } = requiredStations(fromStation, toStation);
+    const { from, to } = requiredStations(fromStation, toStation, "A scenic line");
     const { startCountry, endCountry } = getRouteCountries({ type: "LineString", coordinates });
     const result = await pool.query<{ id: number }>(
       `
@@ -108,8 +89,8 @@ export async function createScenicLine(
         lineWKT(coordinates),
         startCountry,
         endCountry,
-        pointWKT(startCoordinate),
-        pointWKT(endCoordinate),
+        pointToWKT(startCoordinate),
+        pointToWKT(endCoordinate),
       ],
     );
     return result.rows[0].id;
@@ -143,8 +124,8 @@ export async function updateScenicLineGeometry(
         lineWKT(coordinates),
         startCountry,
         endCountry,
-        pointWKT(startCoordinate),
-        pointWKT(endCoordinate),
+        pointToWKT(startCoordinate),
+        pointToWKT(endCoordinate),
       ],
     );
     if (result.rowCount === 0) throw new ValidationError("Scenic line not found");
@@ -158,7 +139,7 @@ export async function updateScenicLineNames(
   toStation: string,
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
-    const { from, to } = requiredStations(fromStation, toStation);
+    const { from, to } = requiredStations(fromStation, toStation, "A scenic line");
     const result = await pool.query(
       "UPDATE scenic_lines SET from_station = $2, to_station = $3 WHERE id = $1",
       [id, from, to],

@@ -2,7 +2,6 @@
 
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
-import type { CreateFormCoordinates } from "@/components/admin/AdminCreateRouteTab";
 import AdminLayerControls from "@/components/admin/AdminLayerControls";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -40,7 +39,7 @@ import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAd
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
-import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
+import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
 import { useRegionId } from "@/lib/regionContext";

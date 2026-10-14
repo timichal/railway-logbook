@@ -2,8 +2,9 @@
 
 import type { PoolClient } from "pg";
 import type { ActionResult } from "./actionResult";
+import { requiredStations } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
-import { coordinatesToWKT } from "./coordinateUtils";
+import { coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { getRouteCountries } from "./countryUtils";
 import pool, { withTransaction } from "./db";
 import { ValidationError } from "./errors";
@@ -13,21 +14,6 @@ import { type RegionId, regionContainsSql } from "./shared/regions";
 import { MAX_TOLERANCE_FRACTION, UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
 import type { GeoJSONFeature, GeoJSONFeatureCollection, PathResult } from "./shared/types";
 import { getStationsNearRoute, refreshStationProximityFor } from "./stationProximity";
-
-/**
- * The endpoints are required, and so is the name where the region names its
- * lines; the forms say so first, but every export here is an endpoint. Trimmed,
- * because a name of spaces reads as none. `name` is checked only by the caller
- * that knows the region.
- */
-function requiredStations(from: string, to: string): { from: string; to: string } {
-  const trimmedFrom = typeof from === "string" ? from.trim() : "";
-  const trimmedTo = typeof to === "string" ? to.trim() : "";
-  if (!trimmedFrom || !trimmedTo) {
-    throw new ValidationError("A route needs both a From and a To station");
-  }
-  return { from: trimmedFrom, to: trimmedTo };
-}
 
 /**
  * Interface for route metadata used during creation
@@ -138,20 +124,15 @@ export async function getFrequencyTags(): Promise<ActionResult<string[]>> {
   });
 }
 
-type AdminRouteDetailRow = Omit<AdminRouteDetail, "starting_coordinate" | "ending_coordinate"> & {
-  starting_coordinate: { coordinates: [number, number] };
-  ending_coordinate: { coordinates: [number, number] };
-};
-
 /** Get a single railway route by track_id. */
 export async function getRailwayRoute(trackId: number): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
-    const result = await pool.query<AdminRouteDetailRow>(
+    const result = await pool.query<AdminRouteDetail>(
       `
     SELECT track_id, name, from_station, to_station, description, usage_type, frequency, link, line_class,
            ST_AsGeoJSON(geometry) as geometry, length_km,
-           ST_AsGeoJSON(starting_coordinate)::json as starting_coordinate,
-           ST_AsGeoJSON(ending_coordinate)::json as ending_coordinate,
+           ${lngLatSql("starting_coordinate")} as starting_coordinate,
+           ${lngLatSql("ending_coordinate")} as ending_coordinate,
            is_valid, error_message, under_repair, intended_backtracking, has_backtracking
     FROM railway_routes
     WHERE track_id = $1
@@ -163,12 +144,7 @@ export async function getRailwayRoute(trackId: number): Promise<ActionResult<Adm
     if (!row) {
       throw new ValidationError("Route not found");
     }
-
-    return {
-      ...row,
-      starting_coordinate: row.starting_coordinate.coordinates,
-      ending_coordinate: row.ending_coordinate.coordinates,
-    };
+    return row;
   });
 }
 
@@ -184,60 +160,30 @@ export async function getAllRouteEndpoints(
       track_id: number;
       from_station: string;
       to_station: string;
-      starting_coordinate_json: string;
-      ending_coordinate_json: string;
+      start: [number, number];
+      end: [number, number];
     }>(`
-    SELECT
-      track_id,
-      from_station,
-      to_station,
-      ST_AsGeoJSON(starting_coordinate) as starting_coordinate_json,
-      ST_AsGeoJSON(ending_coordinate) as ending_coordinate_json
+    SELECT track_id, from_station, to_station,
+           ${lngLatSql("starting_coordinate")} AS start, ${lngLatSql("ending_coordinate")} AS end
     FROM railway_routes
     WHERE ${regionContainsSql(region, "starting_coordinate")}
   `);
 
-    const features: GeoJSONFeature[] = [];
-
-    for (const row of result.rows) {
-      // Parse starting coordinate
-      if (row.starting_coordinate_json) {
-        const geojson = JSON.parse(row.starting_coordinate_json);
-        if (geojson.type === "Point" && geojson.coordinates) {
-          features.push({
-            type: "Feature" as const,
-            geometry: geojson,
-            properties: {
-              track_id: row.track_id,
-              endpoint_type: "start",
-              station_name: row.from_station,
-              route_name: `${row.from_station} ⟷ ${row.to_station}`,
-            },
-          });
-        }
-      }
-
-      // Parse ending coordinate
-      if (row.ending_coordinate_json) {
-        const geojson = JSON.parse(row.ending_coordinate_json);
-        if (geojson.type === "Point" && geojson.coordinates) {
-          features.push({
-            type: "Feature" as const,
-            geometry: geojson,
-            properties: {
-              track_id: row.track_id,
-              endpoint_type: "end",
-              station_name: row.to_station,
-              route_name: `${row.from_station} ⟷ ${row.to_station}`,
-            },
-          });
-        }
-      }
-    }
-
     return {
       type: "FeatureCollection",
-      features,
+      features: result.rows.flatMap((row) =>
+        (["start", "end"] as const).map(
+          (endpoint): GeoJSONFeature => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: row[endpoint] },
+            properties: {
+              track_id: row.track_id,
+              endpoint_type: endpoint,
+              route_name: `${row.from_station} ⟷ ${row.to_station}`,
+            },
+          }),
+        ),
+      ),
     };
   });
 }
@@ -399,29 +345,21 @@ export async function saveRailwayRoute(
     // refresh are one change: a failure between them would leave the route at
     // the default 'branch', or the user map showing stations no route reaches.
     const savedTrackId = await withTransaction(async (client) => {
-      // Use the truncated/merged coordinates from pathResult
-      // The pathfinder already handles truncation and merging correctly
-      const sortedCoordinates = pathResult.coordinates;
-
-      // Create LineString geometry from coordinates
-      const geometryWKT = coordinatesToWKT(sortedCoordinates);
-
-      // Create POINT WKT for start and end coordinates
-      const startPointWKT = `POINT(${startCoordinate[0]} ${startCoordinate[1]})`;
-      const endPointWKT = `POINT(${endCoordinate[0]} ${endCoordinate[1]})`;
-
-      // Determine countries from route geometry
+      // The pathfinder's coordinates, already truncated to the click points and merged
+      const geometryWKT = coordinatesToWKT(pathResult.coordinates);
+      const startPointWKT = pointToWKT(startCoordinate);
+      const endPointWKT = pointToWKT(endCoordinate);
+      const hasBacktracking = pathResult.hasBacktracking === true;
       const { startCountry, endCountry } = getRouteCountries({
         type: "LineString",
-        coordinates: sortedCoordinates,
+        coordinates: pathResult.coordinates,
       });
 
       let queryStr: string;
       let values: (string | number | string[] | boolean | null)[];
 
       if (trackId) {
-        // Update existing route - only update geometry, length, coordinates, countries, validity, and backtracking flag
-        // Keep name, description, usage_type unchanged
+        // The geometry and what follows from it; the metadata is left as it is
         queryStr = `
         UPDATE railway_routes
         SET
@@ -445,52 +383,32 @@ export async function saveRailwayRoute(
           endCountry,
           startPointWKT,
           endPointWKT,
-          pathResult.hasBacktracking || false,
+          hasBacktracking,
           trackId,
         ];
       } else {
-        const { from, to } = requiredStations(routeData.from_station, routeData.to_station);
-        // Insert new route with auto-generated track_id
+        const { from, to } = requiredStations(
+          routeData.from_station,
+          routeData.to_station,
+          "A route",
+        );
         queryStr = `
         INSERT INTO railway_routes (
-          name,
-          from_station,
-          to_station,
-          description,
-          usage_type,
-          frequency,
-          link,
-          geometry,
-          length_km,
-          start_country,
-          end_country,
-          starting_coordinate,
-          ending_coordinate,
-          is_valid,
-          intended_backtracking,
-          has_backtracking
+          name, from_station, to_station, description, usage_type, frequency, link,
+          geometry, length_km, start_country, end_country,
+          starting_coordinate, ending_coordinate,
+          is_valid, intended_backtracking, has_backtracking
         ) VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          ST_GeomFromText($8, 4326),
-          ${lineLengthKmSql("$8")},
-          $9,
-          $10,
-          ST_GeomFromText($11, 4326),
-          ST_GeomFromText($12, 4326),
-          TRUE,
-          $13,
-          $14
+          $1, $2, $3, $4, $5, $6, $7,
+          ST_GeomFromText($8, 4326), ${lineLengthKmSql("$8")}, $9, $10,
+          ST_GeomFromText($11, 4326), ST_GeomFromText($12, 4326),
+          TRUE, $13, $14
         )
         RETURNING track_id
       `;
 
         values = [
+          // Required where the region names its lines, but only the form checks it
           routeData.name.trim() || null,
           from,
           to,
@@ -504,7 +422,7 @@ export async function saveRailwayRoute(
           startPointWKT,
           endPointWKT,
           routeData.intended_backtracking,
-          pathResult.hasBacktracking || false,
+          hasBacktracking,
         ];
       }
 
@@ -515,12 +433,7 @@ export async function saveRailwayRoute(
       // Likewise the partial rides: their fractions are positions along the
       // current geometry, so they are moved onto the new one before it is written
       if (trackId) {
-        await reprojectCoveredRanges(
-          client,
-          trackId,
-          geometryWKT,
-          pathResult.hasBacktracking || false,
-        );
+        await reprojectCoveredRanges(client, trackId, geometryWKT, hasBacktracking);
       }
 
       const result = await client.query(queryStr, values);
@@ -593,7 +506,7 @@ export async function updateRailwayRoute(
   intendedBacktracking: boolean,
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
-    const { from, to } = requiredStations(fromStation, toStation);
+    const { from, to } = requiredStations(fromStation, toStation, "A route");
     const result = await pool.query(
       `
     UPDATE railway_routes

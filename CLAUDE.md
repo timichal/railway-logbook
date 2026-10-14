@@ -229,7 +229,7 @@ One directory per part of the app; always import a component by its full path (`
 
 ### Library (`src/lib/`)
 - **Queries** (server-only): `db.ts` (pool, `asMissingRow`, `withTransaction`), `dbConfig.ts`, `progressQueries.ts`, `journeyQueries.ts`, `tripQueries.ts`, `preferencesQueries.ts`, `routeQueries.ts`, `authQueries.ts`, `passwordHash.ts`, `authTokens.ts`, `sessionQueries.ts`, `publicMapQueries.ts`, `routeTileQueries.ts`, `adminNotesTileQueries.ts`, `errors.ts`.
-- **Actions** (`"use server"`): `userActions.ts`, `journeyActions.ts`, `tripActions.ts`, `userPreferencesActions.ts`, `authActions.ts`, `plannerActions.ts`, `publicMapActions.ts`, `migrationActions.ts`, `adminRouteActions.ts`, `adminScenicLineActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts`.
+- **Actions** (`"use server"`): `userActions.ts`, `journeyActions.ts`, `tripActions.ts`, `userPreferencesActions.ts`, `authActions.ts`, `plannerActions.ts`, `publicMapActions.ts`, `migrationActions.ts`, `adminRouteActions.ts`, `adminScenicLineActions.ts`, `adminMapActions.ts`, `adminNotesActions.ts` (their shared input checks in `adminValidation.ts`, a plain module since a `"use server"` file exports only actions).
 - **API plumbing** (`api/`): `auth.ts`, `params.ts`, `response.ts` (`apiHandler`), `tiles.ts`.
 - **Data access**: `dataAccess.ts` (database / localStorage / public), `localStorage.ts`, `shared/progress.ts` (the progress types and rounding — the server, the localStorage count and the native app use the same ones).
 - **Planner**: `routePathFinder.ts`, `planner/`.
@@ -237,7 +237,7 @@ One directory per part of the app; always import a component by its full path (`
 - **Theme**: `theme/index.ts` (the preference, `useResolvedTheme`, `THEME_INIT_SCRIPT`), `theme/colors.ts` (`THEME_COLORS`, a plain module so `app/manifest.ts` can read it), `shared/theme/types.ts`.
 - **Layer prefs**: `shared/map/layerPrefs.ts` (stored form and per-region resolution, shared), `map/layerPrefs.ts` (localStorage), `map/layerPrefsContext.tsx`. Held above the map by the layouts, inside `RegionProvider`. The Special and Regular switches are stored per region; `showRegular` exists only where `hasOrdinaryNonRegular`; `switchableUsageTypes` decides which switches a region has. Highlights ignore the switches.
 - **UI**: `ui/buttonStyles.ts`, `ui/inputStyles.ts`, `ui/useSearchCombobox.ts`, `ui/useModalDialog.ts`, `ui/useSingleFlight.ts` (one admin save at a time, failure toasted), `ui/adminListSort.ts` (sorted in the browser with a fixed `en` collation).
-- **Utils**: `shared/types.ts`, `shared/constants.ts`, `shared/routeCoverage.ts`, `selectedRoutes.ts`, `stationProximity.ts`, `mercatorDistance.ts`, `lineLength.ts` (`lineLengthKmSql`, the one expression behind every stored `length_km` and the admin preview), `coordinateUtils.ts`, `countryUtils.ts`, `shared/countryFlag.ts`, `shared/getUntimezonedDateStr.ts`, `plural.ts`, `rateLimit.ts`.
+- **Utils**: `shared/types.ts`, `shared/constants.ts`, `shared/routeCoverage.ts`, `selectedRoutes.ts`, `stationProximity.ts`, `mercatorDistance.ts`, `lineLength.ts` (`lineLengthKmSql`, the one expression behind every stored `length_km` and the admin preview), `coordinateUtils.ts` (WKT out, `lngLatSql` to read a point column back as `[lng, lat]`), `countryUtils.ts`, `shared/countryFlag.ts`, `shared/getUntimezonedDateStr.ts`, `plural.ts`, `rateLimit.ts`.
 - **Toast**: `toast/` (`useToast`, `ToastContainer`, `ConfirmDialog`).
 
 ### Map library (`src/lib/shared/map/`, `src/lib/map/`)

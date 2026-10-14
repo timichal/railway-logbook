@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import AdminCreateRouteTab, {
-  type CreateFormCoordinates,
-  type EditingGeometry,
-} from "@/components/admin/AdminCreateRouteTab";
+import AdminCreateRouteTab, { type EditingGeometry } from "@/components/admin/AdminCreateRouteTab";
 import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
 import AdminScenicTab, { type EditingScenicLine } from "@/components/admin/AdminScenicTab";
@@ -14,7 +11,7 @@ import {
   getFrequencyTags,
   type SaveRouteData,
 } from "@/lib/adminRouteActions";
-import type { PathPreview } from "@/lib/map/hooks/useRoutePreview";
+import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
 import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
