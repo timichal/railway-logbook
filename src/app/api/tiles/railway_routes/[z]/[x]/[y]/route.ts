@@ -51,7 +51,7 @@ export async function GET(request: Request, context: Context): Promise<Response>
     // loaded), or a session from before a password change.
     if (body === null) return new Response(null, { status: "shareToken" in rides ? 404 : 401 });
 
-    return mvtResponse(body);
+    return await mvtResponse(request, body);
   } catch (error) {
     console.error("Route tile failed:", error);
     return new Response(null, { status: 500 });

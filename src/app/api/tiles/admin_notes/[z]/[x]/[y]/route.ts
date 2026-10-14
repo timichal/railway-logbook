@@ -17,7 +17,7 @@ type Context = { params: Promise<{ z: string; x: string; y: string }> };
  * that changes nothing, a `SameSite=Lax` cookie, and no CORS headers. `?v=` is the
  * admin map's cache buster, ignored here.
  */
-export async function GET(_request: Request, context: Context): Promise<Response> {
+export async function GET(request: Request, context: Context): Promise<Response> {
   const tile = parseTile(await context.params, ZOOM_RANGES.adminNotes);
   if (!tile) return new Response("Invalid tile coordinates", { status: 400 });
 
@@ -30,7 +30,7 @@ export async function GET(_request: Request, context: Context): Promise<Response
     // A session from before the admin's password was last changed.
     if (body === null) return new Response(null, { status: 401 });
 
-    return mvtResponse(body);
+    return await mvtResponse(request, body);
   } catch (error) {
     console.error("Admin notes tile failed:", error);
     return new Response(null, { status: 500 });

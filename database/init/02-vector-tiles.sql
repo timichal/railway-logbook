@@ -30,6 +30,12 @@ WHERE coordinates IS NOT NULL AND coordinates_3857 IS NULL;
 CREATE INDEX IF NOT EXISTS idx_railway_parts_geometry_3857
 ON railway_parts USING GIST (geometry_3857);
 
+-- Partial index for railway_parts_tile below z9, which draws only the parts over
+-- 500m (or 1km): measuring every part in a low-zoom tile took longer than drawing
+-- the ones kept, and the index skips the short two thirds of the network.
+CREATE INDEX IF NOT EXISTS idx_railway_parts_geometry_3857_long
+ON railway_parts USING GIST (geometry_3857) WHERE ST_Length(geometry_3857) > 500;
+
 CREATE INDEX IF NOT EXISTS idx_railway_routes_geometry_3857
 ON railway_routes USING GIST (geometry_3857);
 
@@ -58,11 +64,28 @@ RETURN public.unaccent('public.unaccent'::regdictionary, $1);
 CREATE INDEX IF NOT EXISTS idx_stations_name_trgm_near_route
 ON stations USING GIN (immutable_unaccent(name) gin_trgm_ops) WHERE near_route;
 
+-- Function: tile_unit
+-- One unit of a 4096-extent tile at zoom z, in metres of Web Mercator (the world
+-- is 40075016.68 wide): the grid ST_AsMVTGeom snaps every coordinate to.
+--
+-- Line tiles simplify their geometry by one unit before ST_AsMVTGeom. The snap
+-- alone keeps every point of a dense OSM line that lands on a different grid
+-- cell, so a z4-z8 route tile was two thirds redundant vertices; simplified, its
+-- geometry is a third to a fifth the size and no line moves by more than the snap
+-- already moves it (an eighth of a pixel), so overlays drawn from full-resolution
+-- GeoJSON still line up. preserveCollapsed keeps a line shorter than a unit, which
+-- ST_AsMVTGeom then treats as it always did.
+CREATE OR REPLACE FUNCTION tile_unit(z integer) RETURNS float8
+LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+RETURN 40075016.68 / (4096 * 2 ^ z);
+
 -- Function: railway_parts_tile
 -- Serves railway parts (raw OSM segments) as vector tiles, fewer of them at low zoom.
 --
 -- Like every function below that builds a tile, one SQL statement with the tile
 -- envelope in its FROM list, which evaluates it once per tile rather than per row.
+-- None filters out a NULL geom (clipped away): ST_AsMVT skips those rows itself,
+-- and the filter, pushed down into the scan, ran ST_AsMVTGeom twice per row.
 CREATE OR REPLACE FUNCTION railway_parts_tile(z integer, x integer, y integer)
 RETURNS bytea AS $$
     -- 'id' is the feature id, for MapLibre feature state
@@ -71,22 +94,24 @@ RETURNS bytea AS $$
         SELECT
             id,
             -- 4096 = tile extent, 64 = buffer, true = clip to tile
-            ST_AsMVTGeom(geometry_3857, envelope, 4096, 64, true) AS geom
+            ST_AsMVTGeom(ST_Simplify(geometry_3857, tile_unit(z), true), envelope, 4096, 64, true) AS geom
         FROM railway_parts, ST_TileEnvelope(z, x, y) AS envelope
         WHERE geometry_3857 && envelope
             -- Below z9 only the longer segments: over 1km below z8, over 500m at z8
             AND (z >= 9 OR ST_Length(geometry_3857) > CASE WHEN z < 8 THEN 1000 ELSE 500 END)
         -- Order doesn't matter for parts, but consistent ordering helps caching
         ORDER BY id
-    ) AS mvtgeom
-    WHERE geom IS NOT NULL;
+    ) AS mvtgeom;
 $$ LANGUAGE sql
 -- STABLE, not IMMUTABLE, here and in every tile function below: they read tables,
 -- and IMMUTABLE lets the planner fold a call with constant arguments into its
 -- result once and reuse it after the data has changed.
 STABLE
 STRICT
-PARALLEL SAFE;
+PARALLEL SAFE
+-- Planned for its own zoom every time: only with z folded to a constant does the
+-- length filter imply idx_railway_parts_geometry_3857_long's predicate.
+SET plan_cache_mode = force_custom_plan;
 
 -- Index: the stretch rows behind user_fully_ridden_routes' second branch.
 -- Partial because a stretch is rare (almost every logged part is a whole route),
@@ -206,7 +231,7 @@ RETURNS bytea AS $$
             -- Whether the route reads as ridden: a complete journey, or partial
             -- stretches that add up to the whole line (user_fully_ridden_routes)
             (ridden.track_id IS NOT NULL) AS has_complete_trip,
-            ST_AsMVTGeom(rr.geometry_3857, envelope, 4096, 64, true) AS geom
+            ST_AsMVTGeom(ST_Simplify(rr.geometry_3857, tile_unit(z), true), envelope, 4096, 64, true) AS geom
         FROM railway_routes rr
         CROSS JOIN ST_TileEnvelope(z, x, y) AS envelope
         -- Most recent journey for this route (drives the hover popup and the
@@ -237,13 +262,11 @@ RETURNS bytea AS $$
         ORDER BY
             -- Render order: unvisited routes first (so visited are on top)
             CASE WHEN recent_trip.date IS NULL THEN 0 ELSE 1 END,
-            rr.from_station,
-            rr.to_station,
-            -- Parallel lines share both endpoints; without a tiebreaker their order
-            -- follows the plan, which changes the tile bytes (and Martin's ETag).
+            -- Then by id, only so the order (and with it the tile bytes and Martin's
+            -- ETag) doesn't follow the plan. Not by station names, whose collation
+            -- cost a z4 tile about a third of its time.
             rr.track_id
-    ) AS mvtgeom
-    WHERE geom IS NOT NULL;
+    ) AS mvtgeom;
 $$ LANGUAGE sql
 -- STABLE, not IMMUTABLE: it reads tables. And not STRICT, which would turn the
 -- NULL user of an anonymous tile into a NULL tile.
@@ -292,8 +315,7 @@ RETURNS bytea AS $$
             AND z >= 9
         -- id breaks ties between same-name stations, or their order follows the plan
         ORDER BY name, id
-    ) AS mvtgeom
-    WHERE geom IS NOT NULL;
+    ) AS mvtgeom;
 $$ LANGUAGE sql
 STABLE
 STRICT
@@ -391,8 +413,7 @@ RETURNS bytea AS $$
         FROM admin_notes, ST_TileEnvelope(z, x, y) AS envelope
         WHERE coordinate_3857 && envelope
         ORDER BY updated_at DESC
-    ) AS mvtgeom
-    WHERE geom IS NOT NULL;
+    ) AS mvtgeom;
 $$ LANGUAGE sql
 STABLE
 STRICT
@@ -417,8 +438,7 @@ RETURNS bytea AS $$
         WHERE coordinate_3857 && envelope
             AND note_type = 'Usage'
         ORDER BY updated_at DESC
-    ) AS mvtgeom
-    WHERE geom IS NOT NULL;
+    ) AS mvtgeom;
 $$ LANGUAGE sql
 STABLE
 STRICT
@@ -485,8 +505,7 @@ RETURNS bytea AS $$
             ST_TileEnvelope(z, x, y, margin => 64.0 / 4096) AS query_envelope
         WHERE geometry_3857 && query_envelope
         ORDER BY id
-    ) AS mvtgeom
-    WHERE geom IS NOT NULL;
+    ) AS mvtgeom;
 $$ LANGUAGE sql
 STABLE
 STRICT
