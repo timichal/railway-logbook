@@ -320,15 +320,20 @@ function ShowOnMap({
     setBusy(true);
     setError(null);
     try {
-      const { trackIds, bounds } =
+      const { trackIds, partials, bounds } =
         kind === "trip"
-          ? await api.trip(id, regionId).then((t) => ({ trackIds: t.routeIds, bounds: t.bounds }))
+          ? await api.trip(id, regionId).then((t) => ({
+              trackIds: t.routeIds,
+              partials: t.partials,
+              bounds: t.bounds,
+            }))
           : await api.journey(id, regionId).then((j) => ({
               trackIds: j.routes.map((route) => route.track_id),
+              partials: j.partials,
               bounds: j.bounds,
             }));
       if (currentRegion.current !== regionId) return;
-      highlight({ trackIds, kind: "view", ownerKey: `${kind}-${id}`, bounds });
+      highlight({ trackIds, kind: "view", partials, ownerKey: `${kind}-${id}`, bounds });
       router.push("/(tabs)/map");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load its routes.");

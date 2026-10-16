@@ -15,6 +15,8 @@
  * Keep the two in step — the tolerances below are the numbers the SQL hard-codes.
  */
 
+import type { CoveredRange } from "./types";
+
 /**
  * How much untravelled track at the end of a route is noise rather than track
  * the journey missed.
@@ -53,6 +55,33 @@ export interface RiddenPart {
   partial: boolean;
   covered_start?: number | null;
   covered_end?: number | null;
+}
+
+/**
+ * The stretches of `parts` that can be drawn: those of rides logged in part whose
+ * extent is known. A ride logged whole has none (it covered the route), nor has a
+ * route ticked partial by hand. `HAS_STRETCH_SQL` (`tripQueries.ts`) is the same
+ * test in SQL.
+ */
+export function knownStretches(
+  parts: {
+    track_id: number;
+    partial?: boolean | null;
+    covered_start?: number | null;
+    covered_end?: number | null;
+  }[],
+): CoveredRange[] {
+  return parts.flatMap((part) =>
+    part.partial && part.covered_start != null && part.covered_end != null
+      ? [
+          {
+            track_id: part.track_id,
+            covered_start: part.covered_start,
+            covered_end: part.covered_end,
+          },
+        ]
+      : [],
+  );
 }
 
 /**

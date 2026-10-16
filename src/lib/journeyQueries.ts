@@ -15,10 +15,19 @@
 import type { PoolClient } from "pg";
 import pool, { asMissingRow, withTransaction } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
+import { buildCoveredStretches } from "./progressQueries";
 import { routeBoundsByIds } from "./routeQueries";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
 import type { RegionId } from "./shared/regions";
-import type { Journey, JourneyEdits, LoggedPart, RailwayRoute, RouteBounds } from "./shared/types";
+import { knownStretches } from "./shared/routeCoverage";
+import type {
+  Journey,
+  JourneyEdits,
+  LoggedPart,
+  PartialRouteGeometry,
+  RailwayRoute,
+  RouteBounds,
+} from "./shared/types";
 
 /** Fraction range along a route's geometry — see user_logged_parts.covered_start. */
 export interface LoggedRange {
@@ -150,19 +159,29 @@ export async function journeyForUser(
 /**
  * A journey as it is opened: with the bounds of its routes in `region`, which the map
  * fits to (see routeBoundsByIds) — returned with it, so the fit needs no request of
- * its own. Both transports open a journey through this.
+ * its own — and `partials`, the stretch ridden of each route logged in part where
+ * it is known, which the highlight draws in place of the whole route. Both
+ * transports open a journey through this.
  */
 export async function journeyWithBoundsForUser(
   userId: number,
   journeyId: number,
   region: RegionId,
-): Promise<{ journey: Journey; routes: RailwayRoute[]; bounds: RouteBounds | null }> {
+): Promise<{
+  journey: Journey;
+  routes: RailwayRoute[];
+  bounds: RouteBounds | null;
+  partials: PartialRouteGeometry[];
+}> {
   const result = await journeyForUser(userId, journeyId);
-  const bounds = await routeBoundsByIds(
-    result.routes.map((r) => r.track_id),
-    region,
-  );
-  return { ...result, bounds };
+  const [bounds, partials] = await Promise.all([
+    routeBoundsByIds(
+      result.routes.map((r) => r.track_id),
+      region,
+    ),
+    buildCoveredStretches(knownStretches(result.routes)),
+  ]);
+  return { ...result, bounds, partials };
 }
 
 /** Create a new journey and log routes to it, in one transaction. */

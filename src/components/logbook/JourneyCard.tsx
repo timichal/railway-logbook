@@ -12,9 +12,12 @@ import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import { routeTitle } from "@/lib/shared/map/routeFeature";
+import { knownStretches } from "@/lib/shared/routeCoverage";
 import type {
+  HighlightOptions,
   HighlightRoutesFn,
   JourneyEditStartFn,
+  PartialRouteGeometry,
   RailwayRoute,
   SelectedRoute,
 } from "@/lib/shared/types";
@@ -223,6 +226,33 @@ export default function JourneyCard<Id extends number | string>({
   });
   editStateRef.current = { editing, viewedRoutes, updateEdit, isOpen, draft, changed, setDraft };
 
+  // The stretches ridden of the routes the journey logged in part, as loaded
+  const loadedPartialsRef = useRef<PartialRouteGeometry[]>([]);
+
+  /**
+   * Light up `routes` on the map. A route logged in part lights up only along its
+   * stretch while it is still ticked partial — unticking it claims the whole route,
+   * as in the Route Logger. One ticked partial by hand has no stretch, and is drawn
+   * whole.
+   */
+  const highlightRoutes = (routes: RailwayRoute[], options?: HighlightOptions) => {
+    const stretches = knownStretches(routes);
+    const partials = loadedPartialsRef.current.filter((p) =>
+      stretches.some(
+        (s) =>
+          s.track_id === p.track_id &&
+          s.covered_start === p.covered_start &&
+          s.covered_end === p.covered_end,
+      ),
+    );
+    onHighlightRoutes?.(
+      routes.map((r) => r.track_id),
+      "view",
+      partials,
+      options,
+    );
+  };
+
   const handleMapRouteClickRef = useRef<((route: SelectedRoute) => void) | undefined>(undefined);
   handleMapRouteClickRef.current = (route: SelectedRoute) => {
     const { editing, viewedRoutes, updateEdit } = editStateRef.current;
@@ -235,7 +265,7 @@ export default function JourneyCard<Id extends number | string>({
       : [...viewedRoutes, buildRouteFromSelected(route)];
 
     updateEdit({ routes: newRoutes });
-    onHighlightRoutes?.(newRoutes.map((r) => r.track_id));
+    highlightRoutes(newRoutes);
   };
 
   const stableHandleMapRouteClick = useCallback((route: SelectedRoute) => {
@@ -252,7 +282,7 @@ export default function JourneyCard<Id extends number | string>({
   // Load journey details when this card opens. A draft being resumed is rebased on
   // what loaded and is what the map shows; read through the ref so that editing it
   // doesn't reload. A journey that turns out to be gone takes its draft with it.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onHighlightRoutes and regionId are intentionally omitted; the effect should fire only when the card opens, the journey changes or a retry is asked for, not when the callback identity changes, and the region only scopes the fit that opening does.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: highlightRoutes and regionId are intentionally omitted; the effect should fire only when the card opens, the journey changes or a retry is asked for, not when the callback identity changes, and the region only scopes the fit that opening does.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -273,15 +303,8 @@ export default function JourneyCard<Id extends number | string>({
         const resumed = draft && rebase(draft, loaded);
         if (resumed) setDraft(resumed);
         setOriginalSnapshot(loaded);
-        onHighlightRoutes?.(
-          (resumed?.edit ?? loaded).routes.map((r) => r.track_id),
-          "view",
-          undefined,
-          {
-            fit: true,
-            bounds: result.bounds,
-          },
-        );
+        loadedPartialsRef.current = result.partials;
+        highlightRoutes((resumed?.edit ?? loaded).routes, { fit: true, bounds: result.bounds });
       } catch (error) {
         if (cancelled) return;
         console.error("Error loading journey:", error);
@@ -350,21 +373,21 @@ export default function JourneyCard<Id extends number | string>({
   const handleCancelEdit = () => {
     setDraft(null);
     focusAfterRender(() => editButtonRef.current);
-    if (originalSnapshot) onHighlightRoutes?.(originalSnapshot.routes.map((r) => r.track_id));
+    if (originalSnapshot) highlightRoutes(originalSnapshot.routes);
   };
 
   const handleTogglePartial = (trackId: number, nextPartial: boolean) => {
-    updateEdit({
-      routes: viewedRoutes.map((r) =>
-        r.track_id === trackId ? { ...r, partial: nextPartial } : r,
-      ),
-    });
+    const newRoutes = viewedRoutes.map((r) =>
+      r.track_id === trackId ? { ...r, partial: nextPartial } : r,
+    );
+    updateEdit({ routes: newRoutes });
+    highlightRoutes(newRoutes);
   };
 
   const handleRemoveRoute = (trackId: number) => {
     const newRoutes = viewedRoutes.filter((r) => r.track_id !== trackId);
     updateEdit({ routes: newRoutes });
-    onHighlightRoutes?.(newRoutes.map((r) => r.track_id));
+    highlightRoutes(newRoutes);
   };
 
   const handleSave = async () => {

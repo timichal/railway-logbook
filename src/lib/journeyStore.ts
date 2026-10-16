@@ -8,14 +8,20 @@ import { ActionError, unwrap } from "./actionResult";
 import { deleteJourney, getJourney, saveJourneyEdits } from "./journeyActions";
 import * as localStore from "./localStorage";
 import type { RegionId } from "./shared/regions";
-import type { JourneyEdits, RailwayRoute, RouteBounds } from "./shared/types";
-import { getRoutesByIds } from "./userActions";
+import { knownStretches } from "./shared/routeCoverage";
+import type { JourneyEdits, PartialRouteGeometry, RailwayRoute, RouteBounds } from "./shared/types";
+import { getCoveredStretchesFor, getRoutesByIds } from "./userActions";
 
 export interface LoadedJourney {
   journey: { name: string; date: string; description: string | null; trip_id?: number | null };
   routes: RailwayRoute[];
   /** What opening it fits the map to; left out, the map fetches the routes' bounds itself. */
   bounds?: RouteBounds | null;
+  /**
+   * The stretch ridden of each route logged in part, where it is known, cut to
+   * geometry: the highlight draws these in place of the whole route.
+   */
+  partials: PartialRouteGeometry[];
 }
 
 export interface JourneyStore<Id> {
@@ -62,10 +68,14 @@ const deletedRoute = (trackId: number): RailwayRoute => ({
 export const localJourneyStore: JourneyStore<string> = {
   async load(id) {
     const { journey, parts } = await forUser(() => localStore.getJourneyWithParts(id));
-    // Only track ids are stored; the rest of each route comes from the server
-    const routes = new Map(
-      (await getRoutesByIds(parts.map((part) => part.track_id))).map((r) => [r.track_id, r]),
-    );
+    const ranges = knownStretches(parts);
+    // Only track ids and stretches are stored; the rest of each route, and the
+    // stretches' geometry, come from the server
+    const [found, partials] = await Promise.all([
+      getRoutesByIds(parts.map((part) => part.track_id)),
+      ranges.length > 0 ? getCoveredStretchesFor(ranges) : [],
+    ]);
+    const routes = new Map(found.map((r) => [r.track_id, r]));
     return {
       journey,
       routes: parts.map((part) => ({
@@ -74,6 +84,7 @@ export const localJourneyStore: JourneyStore<string> = {
         covered_start: part.covered_start,
         covered_end: part.covered_end,
       })),
+      partials,
     };
   },
   save: (id, edits) => forUser(() => localStore.saveJourneyEdits(id, edits)),

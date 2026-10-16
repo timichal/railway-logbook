@@ -201,17 +201,16 @@ const MAX_COVERED_RANGES = 2000;
 const MAX_PG_INT = 2147483647;
 
 /**
- * Resolve covered fraction ranges into drawable geometry.
+ * Covered fraction ranges cut into drawable geometry, as a SELECT over `ranges` — a
+ * FROM item with the columns `track_id`, `covered_start`, `covered_end` (float8),
+ * aliased `t`. Read the rows with `parseCoveredStretches`.
  *
  * The stored form is fractions along the route (see CoveredRange), so the
  * geometry is cut on read — which means it follows the route through an OSM
  * update instead of going stale.
  */
-export async function buildCoveredStretches(ranges: CoveredRange[]): Promise<CoveredStretch[]> {
-  if (ranges.length === 0) return [];
-
-  const result = await pool.query<Omit<CoveredStretch, "coordinates"> & { geojson: string }>(
-    `
+export function coveredStretchesSql(ranges: string): string {
+  return `
     SELECT
       t.track_id,
       t.covered_start,
@@ -223,32 +222,37 @@ export async function buildCoveredStretches(ranges: CoveredRange[]): Promise<Cov
       -- Not simplified: this is drawn directly over the route's own line, and any
       -- dropped vertex shows up as the overlay visibly cutting corners at zoom.
       ST_AsGeoJSON(ST_LineSubstring(rr.geometry, t.covered_start, t.covered_end)) AS geojson
-    FROM unnest($1::int[], $2::float8[], $3::float8[]) AS t(track_id, covered_start, covered_end)
-    JOIN railway_routes rr ON rr.track_id = t.track_id
-    `,
+    FROM ${ranges}
+    JOIN railway_routes rr ON rr.track_id = t.track_id`;
+}
+
+export type CoveredStretchRow = Omit<CoveredStretch, "coordinates"> & { geojson: string };
+
+export function parseCoveredStretches(rows: CoveredStretchRow[]): CoveredStretch[] {
+  const stretches: CoveredStretch[] = [];
+  for (const { geojson, ...row } of rows) {
+    const parsed = JSON.parse(geojson) as { coordinates: [number, number][] };
+    if (!parsed.coordinates || parsed.coordinates.length < 2) continue;
+    stretches.push({ ...row, coordinates: parsed.coordinates });
+  }
+  return stretches;
+}
+
+/** Resolve covered fraction ranges into drawable geometry (see coveredStretchesSql). */
+export async function buildCoveredStretches(ranges: CoveredRange[]): Promise<CoveredStretch[]> {
+  if (ranges.length === 0) return [];
+
+  const result = await pool.query<CoveredStretchRow>(
+    coveredStretchesSql(
+      "unnest($1::int[], $2::float8[], $3::float8[]) AS t(track_id, covered_start, covered_end)",
+    ),
     [
       ranges.map((r) => r.track_id),
       ranges.map((r) => r.covered_start),
       ranges.map((r) => r.covered_end),
     ],
   );
-
-  const stretches: CoveredStretch[] = [];
-  for (const row of result.rows) {
-    const parsed = JSON.parse(row.geojson) as { coordinates: [number, number][] };
-    if (!parsed.coordinates || parsed.coordinates.length < 2) continue;
-    stretches.push({
-      track_id: row.track_id,
-      covered_start: row.covered_start,
-      covered_end: row.covered_end,
-      line_class: row.line_class,
-      usage_type: row.usage_type,
-      start_country: row.start_country,
-      end_country: row.end_country,
-      coordinates: parsed.coordinates,
-    });
-  }
-  return stretches;
+  return parseCoveredStretches(result.rows);
 }
 
 /** Keep only well-formed, non-degenerate ranges, deduplicated. */

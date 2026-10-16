@@ -100,7 +100,7 @@ Bearer token required.
 | | |
 | --- | --- |
 | `POST /journeys` | `{ name, date, description?, tripId?, routes }` → 201 `{ journey }`. Journey and logged parts commit together. A `tripId` that is not one of the caller's own trips is a 404 `Trip not found`, and nothing is written |
-| `GET /journeys/:id?region=` | `{ journey, routes, bounds }` — the routes carry the line `name` (where the region has one) plus `partial`, `covered_start`, `covered_end`. `bounds` (below) is the box of those in `region` |
+| `GET /journeys/:id?region=` | `{ journey, routes, bounds, partials }` — the routes carry the line `name` (where the region has one) plus `partial`, `covered_start`, `covered_end`. `bounds` (below) is the box of those in `region`. `partials` is the stretch ridden of each route logged `partial` with a known stretch, as `{ track_id, covered_start, covered_end, coordinates, usage_type }` cut from the route's geometry (plus the route's `line_class` and countries): a highlight draws these in place of the whole route |
 | `PATCH /journeys/:id` | `{ name, date, description? }` → `{ journey }` |
 | `DELETE /journeys/:id` | `{ success: true }`, logged parts included |
 | `POST /journeys/:id/routes` | `{ routes }` — a route already logged has its flag and stretch overwritten, not duplicated |
@@ -153,7 +153,7 @@ is a column on it, and a journey belongs to at most one trip.
 | --- | --- |
 | `GET /trips?region=` | `{ trips }` with stats. A trip with no logged routes yet belongs to every region, so a new one never vanishes from the list that made it |
 | `POST /trips` | `{ name, description? }` → 201 `{ trip }` |
-| `GET /trips/:id?region=` | `{ trip, journeys, routeIds, bounds }` — `routeIds` is what the map highlights while the trip is open; `bounds` is the box of those in `region` |
+| `GET /trips/:id?region=` | `{ trip, journeys, routeIds, partials, bounds }` — `routeIds` is what the map highlights while the trip is open; `partials` (as for a journey) the routes the trip rode only part of, each disjoint stretch of its journeys' union, drawn in place of those routes — a route any journey rode whole, or partial with no known stretch, has none; `bounds` is the box of those in `region` |
 | `PATCH /trips/:id` | `{ name, description? }` → `{ trip }` |
 | `DELETE /trips/:id` | its journeys survive, unassigned |
 | `GET /logbook?region=&page=&pageSize=&search=` | `{ items, total }` — the browsing list: one row per trip (journeys nested) or standalone journey, newest first. `page` defaults to 1, `pageSize` to 10 (capped at 100) |

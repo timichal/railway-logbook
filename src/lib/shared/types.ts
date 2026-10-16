@@ -332,6 +332,8 @@ export interface CoveredRange {
  */
 export interface PartialRouteGeometry extends CoveredRange {
   coordinates: [number, number][];
+  /** The route's, so the stretch keeps its dots or dashes (see `highlightLayers.ts`). */
+  usage_type: UsageType;
 }
 
 /**
@@ -341,7 +343,6 @@ export interface PartialRouteGeometry extends CoveredRange {
  */
 export interface CoveredStretch extends PartialRouteGeometry {
   line_class: LineClass | null;
-  usage_type: UsageType;
   start_country: string | null;
   end_country: string | null;
 }

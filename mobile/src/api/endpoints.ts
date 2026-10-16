@@ -14,6 +14,7 @@ import type { RegionId } from "@shared/regions";
 import type {
   CoveredStretch,
   Journey,
+  PartialRouteGeometry,
   PlannerRoute,
   RailwayRoute,
   RouteBounds,
@@ -244,12 +245,19 @@ export interface LoggedRoute extends Omit<RailwayRoute, "geometry"> {
 
 /**
  * A journey and its routes, with `bounds` — the box of those routes in `region`, which
- * the map fits to when the journey is opened, `null` when none is there.
+ * the map fits to when the journey is opened, `null` when none is there — and
+ * `partials`, the stretch ridden of each route logged in part where it is known,
+ * which the highlight draws in place of the whole route.
  */
 export function journey(
   id: number,
   region: RegionId,
-): Promise<{ journey: Journey; routes: LoggedRoute[]; bounds: RouteBounds | null }> {
+): Promise<{
+  journey: Journey;
+  routes: LoggedRoute[];
+  bounds: RouteBounds | null;
+  partials: PartialRouteGeometry[];
+}> {
   return request(`/journeys/${id}`, { query: { region } });
 }
 
@@ -280,7 +288,7 @@ export async function createTrip(input: { name: string; description?: string }):
   return trip;
 }
 
-/** A trip, its journeys and their track ids, with `bounds` as `journey` has them. */
+/** A trip, its journeys and their track ids, with `bounds` and `partials` as `journey` has them. */
 export function trip(
   id: number,
   region: RegionId,
@@ -288,6 +296,7 @@ export function trip(
   trip: TripWithStats;
   journeys: JourneyWithStats[];
   routeIds: number[];
+  partials: PartialRouteGeometry[];
   bounds: RouteBounds | null;
 }> {
   return request(`/trips/${id}`, { query: { region } });

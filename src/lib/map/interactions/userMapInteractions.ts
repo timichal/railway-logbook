@@ -1,7 +1,10 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
-import { HIGHLIGHT_LAYER_IDS } from "@/lib/map/hooks/useRouteHighlighting";
+import {
+  HIGHLIGHT_LAYER_IDS,
+  PARTIAL_HIGHLIGHT_LAYER_IDS,
+} from "@/lib/map/hooks/useRouteHighlighting";
 import { createMapHover, type FeatureProperties } from "@/lib/map/interactions/mapHover";
 import {
   DOUBLE_CLICK_HINT,
@@ -304,9 +307,25 @@ export function setupUserMapInteractions(
     return body;
   };
 
-  /** The route under a point, through the click buffer and the highlights on top. */
-  const routeFeatureAt = (point: maplibreglType.PointLike) =>
-    featuresAt(mapInstance, point, [...ROUTE_HIT_LAYERS, ...HIGHLIGHT_LAYER_IDS])[0];
+  /**
+   * The route under a point, through the click buffer and the highlights on top.
+   * A highlighted stretch is its own GeoJSON carrying only the route's id, so the
+   * route is read from the tile — loaded, since the stretch is on screen, and found
+   * even while its usage type is switched off the map, which is when the stretch is
+   * the only thing there to tap.
+   */
+  const routeFeatureAt = (point: maplibreglType.PointLike) => {
+    const feature = featuresAt(mapInstance, point, [
+      ...PARTIAL_HIGHLIGHT_LAYER_IDS,
+      ...ROUTE_HIT_LAYERS,
+      ...HIGHLIGHT_LAYER_IDS,
+    ])[0];
+    if (!feature || feature.source === "railway_routes") return feature;
+    return mapInstance.querySourceFeatures("railway_routes", {
+      sourceLayer: "railway_routes",
+      filter: ["==", ["id"], Number(feature.id)],
+    })[0];
+  };
 
   const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
     // Map-wide, so this fires for every tap and is where an open sheet is taken

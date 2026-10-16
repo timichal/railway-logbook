@@ -110,19 +110,10 @@ export function createHighlightCasingLayer(
   color: string,
   ids: number[],
 ): LineLayerSpecification {
-  return {
-    id: highlightCasingLayerId(baseId, variant),
-    type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    layout: { "line-cap": "round", "line-join": "round" },
-    paint: {
-      "line-color": color,
-      "line-width": WIDTHS.highlightCasing,
-      "line-opacity": OPACITIES.highlightCasing,
-    },
+  return casingLayer(highlightCasingLayerId(baseId, variant), color, {
+    ...ROUTE_TILE,
     filter: highlightFilter(ids, variant.usageType),
-  };
+  });
 }
 
 export function createHighlightLayer(
@@ -131,52 +122,111 @@ export function createHighlightLayer(
   color: string,
   ids: number[],
 ): LineLayerSpecification {
+  return variantLayer(highlightLayerId(baseId, variant), variant, color, {
+    ...ROUTE_TILE,
+    filter: highlightFilter(ids, variant.usageType),
+  });
+}
+
+/** What an overlay layer draws: its source, and which of the source's features. */
+interface OverlayFeatures {
+  source: string;
+  "source-layer"?: string;
+  filter: FilterSpecification;
+}
+
+const ROUTE_TILE = { source: "railway_routes", "source-layer": "railway_routes" } as const;
+
+function casingLayer(id: string, color: string, from: OverlayFeatures): LineLayerSpecification {
   return {
-    id: highlightLayerId(baseId, variant),
+    id,
     type: "line",
-    source: "railway_routes",
-    "source-layer": "railway_routes",
-    layout: variant.roundCap ? { "line-cap": "round" } : {},
+    ...from,
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": color,
+      "line-width": WIDTHS.highlightCasing,
+      "line-opacity": OPACITIES.highlightCasing,
+    },
+  };
+}
+
+function variantLayer(
+  id: string,
+  variant: HighlightVariant,
+  color: string,
+  from: OverlayFeatures,
+  /** How an undotted line ends; a whole route leaves it to MapLibre's default. */
+  cap?: "butt",
+): LineLayerSpecification {
+  return {
+    id,
+    type: "line",
+    ...from,
+    layout: variant.roundCap ? { "line-cap": "round" } : cap ? { "line-cap": cap } : {},
     paint: {
       "line-color": color,
       "line-width": variant.width,
       "line-opacity": OPACITIES.highlight,
       ...(variant.dash ? { "line-dasharray": variant.dash } : {}),
     },
-    filter: highlightFilter(ids, variant.usageType),
   };
 }
 
 /**
- * The layer drawing a partially-covered route from its own geometry.
+ * The layers drawing partially-covered routes from their own geometry.
  *
  * The tile-filter overlays above can only light up whole routes, so a route covered
- * only in part — a journey plan joining it at a station between its endpoints, or
- * that same route sitting in the Route Logger selection — is excluded from them and
- * drawn here instead, in the same colour and width. Each highlight set gets its own
- * source so the gold planner stretch and the orange selection stretch don't
- * overwrite each other.
+ * only in part — a journey plan joining it at a station between its endpoints, that
+ * same route in the Route Logger selection, a ride logged in part in an opened
+ * journey or trip — is excluded from them and drawn here instead. Each highlight set
+ * gets its own source so the gold planner stretch and the orange selection stretch
+ * don't overwrite each other.
+ *
+ * Split by usage type exactly as the tile overlays are — the same widths, dashes and
+ * casings — so a stretch of a Heritage or Special route stays dotted or dashed. On
+ * the web the casings are also what a tap on a stretch finds (see
+ * `PARTIAL_HIGHLIGHT_LAYER_IDS`).
  */
 export function partialHighlightSourceId(baseId: string): string {
   return `${baseId}_partial`;
 }
 
-export function partialHighlightLayerId(baseId: string): string {
-  return `${partialHighlightSourceId(baseId)}_line`;
+/** The base id of one set's stretch layers: they sit under the set's source id. */
+function partialBaseId(baseId: string): string {
+  return partialHighlightSourceId(baseId);
 }
 
-export function createPartialHighlightLayer(baseId: string, color: string): LineLayerSpecification {
-  return {
-    id: partialHighlightLayerId(baseId),
-    type: "line",
-    source: partialHighlightSourceId(baseId),
-    layout: { "line-cap": "butt" },
-    paint: {
-      "line-color": color,
-      "line-width": WIDTHS.selectedRoute,
-      "line-opacity": OPACITIES.highlight,
-    },
-  };
+/**
+ * The stretch layers' ids, for hit-testing on the web. A stretch feature carries
+ * only its route's id; the route itself is read from the tile.
+ */
+export const PARTIAL_HIGHLIGHT_LAYER_IDS = HIGHLIGHT_BASE_IDS.flatMap((base) =>
+  highlightVariants().flatMap((v) =>
+    v.casing
+      ? [highlightCasingLayerId(partialBaseId(base), v), highlightLayerId(partialBaseId(base), v)]
+      : [highlightLayerId(partialBaseId(base), v)],
+  ),
+);
+
+/** Which stretches one variant's layer draws: those of that usage type. */
+function partialHighlightFilter(usageType: number): FilterSpecification {
+  return ["==", ["get", "usage_type"], usageType];
+}
+
+/** One set's stretch layers, bottom to top — each casing before its own layer. */
+export function createPartialHighlightLayers(
+  baseId: string,
+  color: string,
+): LineLayerSpecification[] {
+  const base = partialBaseId(baseId);
+  const source = partialHighlightSourceId(baseId);
+  return highlightVariants().flatMap((v) => {
+    const from = { source, filter: partialHighlightFilter(v.usageType) };
+    // A stretch ends where the ride did, so a solid one ends square there
+    const line = variantLayer(highlightLayerId(base, v), v, color, from, "butt");
+    return v.casing ? [casingLayer(highlightCasingLayerId(base, v), color, from), line] : [line];
+  });
 }
 
 /**
@@ -190,7 +240,7 @@ export function partialHighlightData(partials: PartialRouteGeometry[]): GeoJSON.
     features: partials.map((p) => ({
       type: "Feature",
       id: p.track_id,
-      properties: { track_id: p.track_id },
+      properties: { track_id: p.track_id, usage_type: p.usage_type },
       geometry: { type: "LineString", coordinates: p.coordinates },
     })),
   };

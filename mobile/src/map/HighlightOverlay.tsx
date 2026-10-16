@@ -22,7 +22,7 @@ import { GeoJSONSource, Layer } from "@maplibre/maplibre-react-native";
 import {
   createHighlightCasingLayer,
   createHighlightLayer,
-  createPartialHighlightLayer,
+  createPartialHighlightLayers,
   highlightVariants,
   partialHighlightData,
   partialHighlightSourceId,
@@ -97,7 +97,9 @@ export function PartialHighlightSource({
 
   return (
     <GeoJSONSource id={partialHighlightSourceId(baseId)} data={data}>
-      <Layer {...createPartialHighlightLayer(baseId, color)} beforeId={beforeId} />
+      {createPartialHighlightLayers(baseId, color).map((layer) => (
+        <Layer key={layer.id} {...layer} beforeId={beforeId} />
+      ))}
     </GeoJSONSource>
   );
 }

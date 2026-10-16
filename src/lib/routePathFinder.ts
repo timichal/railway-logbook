@@ -94,6 +94,7 @@ async function cutTravelledStretches(
     track_id: number;
     lo: number;
     hi: number;
+    usage_type: UsageType;
     geojson: string;
     length_km: number;
   }>(
@@ -102,6 +103,7 @@ async function cutTravelledStretches(
       t.track_id,
       t.lo,
       t.hi,
+      r.usage_type,
       ST_AsGeoJSON(ST_LineSubstring(r.geometry, t.lo, t.hi)) AS geojson,
       ST_Length(ST_LineSubstring(r.geometry, t.lo, t.hi)::geography) / 1000 AS length_km
     FROM unnest($1::int[], $2::float8[], $3::float8[]) AS t(track_id, lo, hi)
@@ -121,6 +123,7 @@ async function cutTravelledStretches(
         covered_start: Number(row.lo),
         covered_end: Number(row.hi),
         coordinates: parsed.coordinates,
+        usage_type: row.usage_type,
       },
       lengthKm: Number(row.length_km),
     });

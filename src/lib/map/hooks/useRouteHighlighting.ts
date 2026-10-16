@@ -4,13 +4,12 @@ import { COLORS } from "@/lib/map";
 import {
   createHighlightCasingLayer,
   createHighlightLayer,
-  createPartialHighlightLayer,
+  createPartialHighlightLayers,
   highlightCasingLayerId,
   highlightFilter,
   highlightLayerId,
   highlightVariants,
   partialHighlightData,
-  partialHighlightLayerId,
   partialHighlightSourceId,
   wholeRouteIds,
 } from "@/lib/shared/map/highlightLayers";
@@ -27,7 +26,10 @@ import type { HighlightKind, PartialRouteGeometry, SelectedRoute } from "@/lib/s
  * app mounts and unmounts the same specs as children.
  */
 
-export { HIGHLIGHT_LAYER_IDS } from "@/lib/shared/map/highlightLayers";
+export {
+  HIGHLIGHT_LAYER_IDS,
+  PARTIAL_HIGHLIGHT_LAYER_IDS,
+} from "@/lib/shared/map/highlightLayers";
 
 /**
  * Add/update the overlay sublayers for one highlight set.
@@ -77,7 +79,11 @@ function syncHighlightOverlay(
 
 /**
  * Draw the covered stretch of partially-travelled routes from its own geometry —
- * see `createPartialHighlightLayer` for why a stretch cannot come from the tile.
+ * see `createPartialHighlightLayers` for why a stretch cannot come from the tile.
+ *
+ * Emptied by `setData`, never removed, for the reason `syncHighlightOverlay` keeps
+ * its layers: unticking a journey's one partial route and ticking it again would
+ * otherwise drop the layers and add them back.
  */
 function syncPartialOverlay(
   m: maplibregl.Map,
@@ -86,31 +92,26 @@ function syncPartialOverlay(
   color: string,
 ): void {
   const sourceId = partialHighlightSourceId(baseId);
-  const layerId = partialHighlightLayerId(baseId);
-
-  if (partials.length === 0) {
-    if (m.getLayer(layerId)) m.removeLayer(layerId);
-    if (m.getSource(sourceId)) m.removeSource(sourceId);
-    return;
-  }
-
   const data = partialHighlightData(partials) as GeoJSON.FeatureCollection;
 
   const source = m.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
   if (source) {
     source.setData(data);
   } else {
+    // Nothing to draw and nothing drawn yet
+    if (partials.length === 0) return;
     m.addSource(sourceId, { type: "geojson", data });
   }
 
-  if (m.getLayer(layerId)) {
-    m.setPaintProperty(layerId, "line-color", color);
-    // Keep the overlay above anything added since it was
-    m.moveLayer(layerId);
-    return;
+  for (const layer of createPartialHighlightLayers(baseId, color)) {
+    if (m.getLayer(layer.id)) {
+      m.setPaintProperty(layer.id, "line-color", color);
+      // Keep the overlay above anything added since it was, in its own order
+      m.moveLayer(layer.id);
+    } else {
+      m.addLayer(layer as maplibregl.LayerSpecification);
+    }
   }
-
-  m.addLayer(createPartialHighlightLayer(baseId, color) as maplibregl.LayerSpecification);
 }
 
 /**

@@ -13,7 +13,7 @@
 import type { ActionResult } from "./actionResult";
 import { asUser } from "./authHelpers";
 import type { RegionId } from "./shared/regions";
-import type { RouteBounds, Trip } from "./shared/types";
+import type { PartialRouteGeometry, RouteBounds, Trip } from "./shared/types";
 import {
   assignJourneyToTripForUser,
   createTripForUser,
@@ -37,7 +37,8 @@ export async function getAllTrips(region: RegionId): Promise<ActionResult<TripWi
 
 /**
  * Get a single trip with its assigned journeys, and the bounds of its routes in
- * `region` — what the map fits to when the trip is opened (see getJourney).
+ * `region` — what the map fits to when the trip is opened — and the stretches of
+ * those it rode only part of (see getJourney, tripForUser).
  */
 export async function getTrip(
   tripId: number,
@@ -47,6 +48,7 @@ export async function getTrip(
     trip: Trip;
     journeys: JourneyWithStats[];
     routeIds: number[];
+    partials: PartialRouteGeometry[];
     bounds: RouteBounds | null;
   }>
 > {

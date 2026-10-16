@@ -20,17 +20,31 @@ import {
   saveJourneyEditsForUser,
 } from "./journeyQueries";
 import type { RegionId } from "./shared/regions";
-import type { Journey, JourneyEdits, RailwayRoute, RouteBounds } from "./shared/types";
+import type {
+  Journey,
+  JourneyEdits,
+  PartialRouteGeometry,
+  RailwayRoute,
+  RouteBounds,
+} from "./shared/types";
 
 /**
  * Get a single journey with all its logged routes, and the bounds of those in
  * `region` — what the map fits to when the journey is opened, returned here so it
- * needs no request of its own.
+ * needs no request of its own — and the stretches ridden of those logged in part,
+ * which the highlight draws in place of the whole route.
  */
 export async function getJourney(
   journeyId: number,
   region: RegionId,
-): Promise<ActionResult<{ journey: Journey; routes: RailwayRoute[]; bounds: RouteBounds | null }>> {
+): Promise<
+  ActionResult<{
+    journey: Journey;
+    routes: RailwayRoute[];
+    bounds: RouteBounds | null;
+    partials: PartialRouteGeometry[];
+  }>
+> {
   return asUser((userId) => journeyWithBoundsForUser(userId, journeyId, region));
 }
 

@@ -10,9 +10,14 @@
 
 import pool, { asMissingRow, escapeLikePattern } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
+import {
+  type CoveredStretchRow,
+  coveredStretchesSql,
+  parseCoveredStretches,
+} from "./progressQueries";
 import { routeBoundsByIds } from "./routeQueries";
 import { type RegionId, regionContainsSql } from "./shared/regions";
-import type { Journey, RouteBounds, Trip } from "./shared/types";
+import type { Journey, PartialRouteGeometry, RouteBounds, Trip } from "./shared/types";
 
 /**
  * Region predicates for the browsing list.
@@ -69,6 +74,29 @@ const LOGGED_KM_SQL = `CASE WHEN ${HAS_STRETCH_SQL}
   ELSE rr.length_km END`;
 
 /**
+ * What a trip rode of each of its routes, one row per (trip_id, track_id): `whole`
+ * when any journey rode it whole (or partial with no known stretch, see
+ * HAS_STRETCH_SQL), otherwise `stretches`, the union of the journeys' stretches as a
+ * nummultirange — so two rides over one stretch count it once, and A–B plus B–C add
+ * up to A–C. `where` is a condition on `uj` (the trip's journeys) and must hold the
+ * user condition.
+ *
+ * The trip's distance (tripStatsSql) and its highlighted stretches (tripForUser) both
+ * read this, so what the map lights up is what the distance counts.
+ */
+function tripRouteCoverageSql(where: string): string {
+  return `
+    SELECT uj.trip_id, ulp.track_id,
+           bool_or(NOT (${HAS_STRETCH_SQL})) AS whole,
+           range_agg(numrange(ulp.covered_start::numeric, ulp.covered_end::numeric))
+             FILTER (WHERE ${HAS_STRETCH_SQL}) AS stretches
+    FROM user_journeys uj
+    JOIN user_logged_parts ulp ON ulp.journey_id = uj.id
+    WHERE ${where}
+    GROUP BY uj.trip_id, ulp.track_id`;
+}
+
+/**
  * Trip stats SELECT, shared by getAllTrips and getJourneysAndTrips.
  *
  * Journey and route stats are aggregated in separate subqueries rather than by
@@ -78,10 +106,7 @@ const LOGGED_KM_SQL = `CASE WHEN ${HAS_STRETCH_SQL}
  * over DISTINCT (trip_id, track_id) — a route ridden on several days of the
  * same trip counts once.
  *
- * Its distance is how much of it the trip covered: the whole line if any journey
- * rode it whole (or partial with no known stretch, see HAS_STRETCH_SQL), otherwise
- * the union of the journeys' stretches — so two rides over the same stretch count
- * it once, and A–B plus B–C add up to A–C.
+ * Its distance is how much of it the trip covered (tripRouteCoverageSql).
  *
  * `$1` must be the user id; callers may append further predicates on `ut`.
  * `tripIdsParam` (e.g. `"$2"`, an int[]) limits the aggregates to those trips:
@@ -117,16 +142,7 @@ function tripStatsSql(tripIdsParam?: string): string {
            SUM(rr.length_km * CASE WHEN tr.whole THEN 1 ELSE (
              SELECT SUM(upper(s) - lower(s)) FROM unnest(tr.stretches) s
            ) END) AS total_distance
-    FROM (
-      SELECT uj.trip_id, ulp.track_id,
-             bool_or(NOT (${HAS_STRETCH_SQL})) AS whole,
-             range_agg(numrange(ulp.covered_start::numeric, ulp.covered_end::numeric))
-               FILTER (WHERE ${HAS_STRETCH_SQL}) AS stretches
-      FROM user_journeys uj
-      JOIN user_logged_parts ulp ON ulp.journey_id = uj.id
-      WHERE uj.user_id = $1 AND ${tripsWhere}
-      GROUP BY uj.trip_id, ulp.track_id
-    ) tr
+    FROM (${tripRouteCoverageSql(`uj.user_id = $1 AND ${tripsWhere}`)}) tr
     JOIN railway_routes rr ON rr.track_id = tr.track_id
     GROUP BY tr.trip_id
   ) r ON r.trip_id = ut.id
@@ -179,14 +195,26 @@ export async function tripsForUser(userId: number, region: RegionId): Promise<Tr
   return result.rows;
 }
 
-/** A single trip with its assigned journeys, and every route they logged. */
+/**
+ * A single trip with its assigned journeys, and every route they logged.
+ *
+ * `partials` are the routes the trip rode only part of, cut to what it rode — each
+ * disjoint stretch of the union its distance counts (tripRouteCoverageSql). A route
+ * any journey rode whole, or partial with no known stretch, has none and is
+ * highlighted whole, as the distance counts it whole.
+ */
 export async function tripForUser(
   userId: number,
   tripId: number,
-): Promise<{ trip: Trip; journeys: JourneyWithStats[]; routeIds: number[] }> {
-  // All three at once: the journey and route reads are scoped to the user, so
-  // for someone else's trip they come back empty and are discarded with the 404
-  const [tripResult, journeysResult, routeIdsResult] = await Promise.all([
+): Promise<{
+  trip: Trip;
+  journeys: JourneyWithStats[];
+  routeIds: number[];
+  partials: PartialRouteGeometry[];
+}> {
+  // All at once: the journey and route reads are scoped to the user, so for
+  // someone else's trip they come back empty and are discarded with the 404
+  const [tripResult, journeysResult, routeIdsResult, stretchesResult] = await Promise.all([
     pool.query<Trip>("SELECT * FROM user_trips WHERE id = $1 AND user_id = $2", [tripId, userId]),
     pool.query<JourneyWithStats>(journeyStatsSql("$2", "uj.trip_id = $1", "uj.date ASC"), [
       tripId,
@@ -199,6 +227,15 @@ export async function tripForUser(
       WHERE uj.trip_id = $1 AND uj.user_id = $2`,
       [tripId, userId],
     ),
+    pool.query<CoveredStretchRow>(
+      coveredStretchesSql(`(
+        SELECT tr.track_id, lower(s)::float8 AS covered_start, upper(s)::float8 AS covered_end
+        FROM (${tripRouteCoverageSql("uj.trip_id = $1 AND uj.user_id = $2")}) tr
+        CROSS JOIN LATERAL unnest(tr.stretches) s
+        WHERE NOT tr.whole
+      ) t`),
+      [tripId, userId],
+    ),
   ]);
   const trip = tripResult.rows[0];
   if (!trip) throw new NotFoundError("Trip not found");
@@ -207,6 +244,7 @@ export async function tripForUser(
     trip,
     journeys: journeysResult.rows,
     routeIds: routeIdsResult.rows.map((r) => r.track_id),
+    partials: parseCoveredStretches(stretchesResult.rows),
   };
 }
 
@@ -219,6 +257,7 @@ export async function tripWithBoundsForUser(
   trip: Trip;
   journeys: JourneyWithStats[];
   routeIds: number[];
+  partials: PartialRouteGeometry[];
   bounds: RouteBounds | null;
 }> {
   const result = await tripForUser(userId, tripId);

@@ -114,7 +114,10 @@ export default function TripCard({
         const result = unwrap(await getTrip(trip.id, latest.current.regionId));
         if (!ownsHighlight()) return;
         setJourneys(result.journeys);
-        onHighlightRoutes?.(result.routeIds, "view", undefined, { fit, bounds: result.bounds });
+        onHighlightRoutes?.(result.routeIds, "view", result.partials, {
+          fit,
+          bounds: result.bounds,
+        });
       } catch (error) {
         console.error("Error loading trip:", error);
       }
