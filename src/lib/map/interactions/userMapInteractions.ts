@@ -2,6 +2,7 @@ import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
 import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
 import { HIGHLIGHT_LAYER_IDS } from "@/lib/map/hooks/useRouteHighlighting";
+import { createMapHover, type FeatureProperties } from "@/lib/map/interactions/mapHover";
 import {
   DOUBLE_CLICK_HINT,
   escapeHtml,
@@ -14,9 +15,6 @@ import { ROUTE_CLICK_LAYER_ID } from "@/lib/shared/map/layers";
 import type { RegionId } from "@/lib/shared/regions";
 import type { SelectedRoute, Station } from "@/lib/shared/types";
 import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
-
-/** Straight off an MVT feature, so every field is loosely typed. */
-type FeatureProperties = maplibreglType.MapGeoJSONFeature["properties"];
 
 /** What a tap on a route would do, as the touch sheet's button has to word it. */
 interface RouteTapAction {
@@ -70,8 +68,8 @@ const SHEET_TAP_GRACE_MS = 400;
  * longer acts on the route by itself — the button does, which is also what makes
  * "what does tapping this route do" answerable before committing to it. The hover
  * popups and the double-click stay exactly as they were for a pointer; every
- * handler branches on `lastPointerWasTouch`, tracked from the pointer events that
- * precede whatever MapLibre goes on to synthesize.
+ * handler, and the hover, branches on `lastPointerWasTouch`, tracked from the
+ * pointer events that precede whatever MapLibre goes on to synthesize.
  *
  * The callbacks are asked for afresh on every event rather than taken once here,
  * so the handlers are attached once per map: re-attaching them whenever a callback
@@ -82,8 +80,6 @@ export function setupUserMapInteractions(
   mapInstance: maplibreglType.Map,
   getCallbacks: () => UserMapInteractionCallbacks,
 ) {
-  let currentPopup: maplibregl.Popup | null = null;
-
   // Seeded from the media query so that even a first tap is treated as one, then
   // kept honest by the pointer events themselves — a hybrid laptop goes back to
   // hover popups the moment its mouse moves.
@@ -95,13 +91,6 @@ export function setupUserMapInteractions(
   const canvasContainer = mapInstance.getCanvasContainer();
   canvasContainer.addEventListener("pointerdown", handlePointer, { passive: true });
   canvasContainer.addEventListener("pointermove", handlePointer, { passive: true });
-
-  const removePopup = () => {
-    if (currentPopup) {
-      currentPopup.remove();
-      currentPopup = null;
-    }
-  };
 
   /**
    * **A tap in the sheet is not a tap on the map, and the other way round.**
@@ -184,73 +173,20 @@ export function setupUserMapInteractions(
   };
 
   /**
-   * The hover popup: no close button, no buttons, gone when the pointer leaves.
-   *
-   * **One popup follows the pointer rather than one per `mousemove`.** Over the
-   * same feature only its position changes, so that is all that is touched; the
-   * body is rebuilt and swapped in only when the pointer reaches another feature.
-   * A feature is told apart by its layer and its whole property set rather than by
-   * an id: the notes tile carries no id at all, and a tile refresh landing under a
-   * resting pointer (a journey logged, a login, a country toggled) changes a
-   * route's properties without changing its id — keyed on the id, the popup would
-   * keep the old body until the pointer left. Serialising a handful of scalar
-   * properties is still far cheaper than rebuilding the popup's DOM.
-   *
-   * **Precedence is settled before anything is drawn.** A station sits on its
-   * route and a note may sit on either, so one `mousemove` reaches several of the
-   * layer handlers below, in registration order, and the last one is meant to
-   * win. Applied one by one, a pointer resting on a station would swap the route's
-   * body in and the station's back on every move; instead each handler only
-   * records its offer, and the last offer of the dispatch is applied once, in a
-   * microtask. A `mouseleave` in the same dispatch may remove the popup first —
-   * the offer still stands, since a layer's `mousemove` fires only while the
-   * pointer is on it.
+   * The hover popup and cursor (`mapHover.ts`, shared with the admin map). A
+   * finger has no hover: on touch they are left alone, so a tap's synthesized
+   * `mousemove` can neither open a popup nor take the sheet away. A popup opening
+   * for a mouse that moved after a tap takes the sheet's place.
    */
-  let hoverPopup: maplibregl.Popup | null = null;
-  let hoverKey: string | null = null;
-  type HoverOffer = {
-    lngLat: maplibreglType.LngLatLike;
-    key: string;
-    build: () => { className: string; body: string };
-  };
-  let hoverOffer: HoverOffer | null = null;
-  let tornDown = false;
+  const hover = createMapHover(mapInstance, {
+    enabled: () => !lastPointerWasTouch,
+    onShow: () => openSheet?.remove(),
+  });
 
-  const applyHoverOffer = () => {
-    const offer = hoverOffer;
-    hoverOffer = null;
-    if (!offer || tornDown || lastPointerWasTouch) return;
-    const { lngLat, key, build } = offer;
-
-    const live = hoverPopup !== null && currentPopup === hoverPopup;
-    if (live && key === hoverKey) {
-      hoverPopup?.setLngLat(lngLat);
-      return;
-    }
-
-    const { className, body } = build();
-    const html = `<div class="${className}" style="color: var(--color-fg);">${body}</div>`;
-    if (live && hoverPopup) {
-      hoverPopup.setHTML(html).setLngLat(lngLat);
-    } else {
-      if (currentPopup) currentPopup.remove();
-      hoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
-        .setLngLat(lngLat)
-        .setHTML(html)
-        .addTo(mapInstance);
-      currentPopup = hoverPopup;
-    }
-    hoverKey = key;
-  };
-
-  const openHoverPopup = (
-    lngLat: HoverOffer["lngLat"],
-    layer: string,
-    properties: Record<string, unknown>,
-    build: HoverOffer["build"],
-  ) => {
-    if (!hoverOffer) queueMicrotask(applyHoverOffer);
-    hoverOffer = { lngLat, key: `${layer}:${JSON.stringify(properties)}`, build };
+  /** Whatever popup is open, the hover popup or the sheet. */
+  const removePopup = () => {
+    hover.hide();
+    openSheet?.remove();
   };
 
   /**
@@ -260,8 +196,8 @@ export function setupUserMapInteractions(
    * it through the listener below, a button having run its action on the way past;
    * a tap outside closes it through `sheetTookThisClick`, which the map's click
    * handlers consult first. One rule, so no press can leave the sheet behind.
-   * Both paths close **this** popup, and its `close` event clears whichever of the
-   * variables above still point at it.
+   * Both paths close **this** popup, and its `close` event clears `openSheet` if
+   * it still points at it.
    *
    * The buttons sit at `sm` and shrink-to-fit rather than at the mobile paths'
    * usual full-width 44pt: this is a popup roughly the width of a phone, and two
@@ -283,7 +219,7 @@ export function setupUserMapInteractions(
     body: string,
     actions: SheetAction[],
   ) => {
-    if (currentPopup) currentPopup.remove();
+    removePopup();
 
     const content = document.createElement("div");
     content.className = className;
@@ -322,12 +258,10 @@ export function setupUserMapInteractions(
       .setLngLat(lngLat)
       .setDOMContent(content)
       .addTo(mapInstance);
-    currentPopup = popup;
     openSheet = popup;
     sheetOpenedAt = performance.now();
     suspendDoubleClickZoom();
     popup.on("close", () => {
-      if (currentPopup === popup) currentPopup = null;
       if (openSheet !== popup) return;
       openSheet = null;
       sheetClosedAt = performance.now();
@@ -468,62 +402,17 @@ export function setupUserMapInteractions(
     onRouteClick?.(route);
   };
 
-  const handleRouteMouseMove = (e: maplibreglType.MapLayerMouseEvent) => {
-    if (lastPointerWasTouch) return;
-
-    if (!e.features || e.features.length === 0) {
-      removePopup();
-      return;
-    }
-
-    const properties = e.features[0].properties;
-    if (!properties) return;
-
-    openHoverPopup(e.lngLat, "route", properties, () => ({
-      className: "railway-popup",
-      body: buildRouteBody(properties, { linkRow: true }),
-    }));
-  };
-
-  // Hover handler for station popups (takes precedence)
-  const handleStationMouseMove = (e: maplibreglType.MapLayerMouseEvent) => {
-    if (lastPointerWasTouch) return;
-    if (!e.features || e.features.length === 0) return;
-
-    const properties = e.features[0].properties;
-    if (!properties) return;
-
-    openHoverPopup(e.lngLat, "station", properties, () => ({
-      className: "station-popup",
-      body: formatStationBody(properties),
-    }));
-  };
-
-  // Every layer here has a popup: the cursor says it can be clicked, and the popup
-  // goes when the pointer does.
-  const handleMouseEnter = () => {
-    mapInstance.getCanvas().style.cursor = "pointer";
-  };
-  const handleMouseLeave = () => {
-    mapInstance.getCanvas().style.cursor = "";
-    // A tap synthesizes a mouseleave of its own; letting it through would take the
-    // sheet away in the very gesture that opened it.
-    if (!lastPointerWasTouch) removePopup();
-  };
-
-  // Hover handler for public note popups (read-only: text + optional source link)
-  const handleNoteMouseMove = (e: maplibreglType.MapLayerMouseEvent) => {
-    if (lastPointerWasTouch) return;
-    if (!e.features || e.features.length === 0) return;
-
-    const properties = e.features[0].properties;
-    if (!properties) return;
-
-    openHoverPopup(e.lngLat, "note", properties, () => ({
-      className: "railway-popup",
-      body: `<div style="max-width: 260px;">${buildNoteBody(properties, { sourceRow: true })}</div>`,
-    }));
-  };
+  // Hover and cursor go off the wide click buffer, so the thin visible lines don't
+  // make them finicky.
+  hover.layer(ROUTE_CLICK_LAYER_ID, {
+    buildBody: (properties) => buildRouteBody(properties, { linkRow: true }),
+  });
+  hover.layer("stations", { className: "station-popup", buildBody: formatStationBody });
+  // Read-only: text + optional source link.
+  hover.layer("public_notes", {
+    buildBody: (properties) =>
+      `<div style="max-width: 260px;">${buildNoteBody(properties, { sourceRow: true })}</div>`,
+  });
 
   // Tap handler for public notes — the touch half of the hover popup above.
   const handleNoteClick = (e: maplibreglType.MapLayerMouseEvent) => {
@@ -604,29 +493,17 @@ export function setupUserMapInteractions(
   };
 
   // The route click is map-wide, so it works through the highlight layers on top
-  // and sees every tap (see `sheetTookThisClick`). Hover and cursor go off the wide
-  // click buffer, so the thin visible lines don't make them finicky. Stations and
-  // then notes are registered after the routes: they draw on top, and of the hover
-  // offers one `mousemove` makes, the last one wins.
+  // and sees every tap (see `sheetTookThisClick`).
   const subscriptions = [
     mapInstance.on("dblclick", handleDblClick),
     mapInstance.on("click", handleRouteClick),
-    mapInstance.on("mousemove", ROUTE_CLICK_LAYER_ID, handleRouteMouseMove),
-    mapInstance.on("mouseenter", ROUTE_CLICK_LAYER_ID, handleMouseEnter),
-    mapInstance.on("mouseleave", ROUTE_CLICK_LAYER_ID, handleMouseLeave),
     mapInstance.on("click", "stations", handleStationClick),
-    mapInstance.on("mousemove", "stations", handleStationMouseMove),
-    mapInstance.on("mouseenter", "stations", handleMouseEnter),
-    mapInstance.on("mouseleave", "stations", handleMouseLeave),
     mapInstance.on("click", "public_notes", handleNoteClick),
-    mapInstance.on("mousemove", "public_notes", handleNoteMouseMove),
-    mapInstance.on("mouseenter", "public_notes", handleMouseEnter),
-    mapInstance.on("mouseleave", "public_notes", handleMouseLeave),
   ];
 
   return () => {
-    tornDown = true;
-    removePopup();
+    hover.dispose();
+    openSheet?.remove();
     // The sheet's own close handler schedules this; tearing down mid-sheet would
     // otherwise leave double-click zoom off for good.
     if (resumeZoomTimer) clearTimeout(resumeZoomTimer);

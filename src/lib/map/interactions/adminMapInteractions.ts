@@ -1,7 +1,7 @@
 import type * as maplibreglType from "maplibre-gl";
-import * as maplibregl from "maplibre-gl";
 import type { MutableRefObject } from "react";
 import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
+import { createMapHover, type FeatureProperties } from "@/lib/map/interactions/mapHover";
 import {
   DOUBLE_CLICK_HINT,
   escapeHtml,
@@ -28,33 +28,6 @@ export function setupAdminMapInteractions(
   const hits = (point: maplibreglType.PointLike, layers: string[]) =>
     featuresAt(mapInstance, point, layers).length > 0;
 
-  const setCursor = (cursor: string) => {
-    mapInstance.getCanvas().style.cursor = cursor;
-  };
-
-  /**
-   * The hover popups, one per layer (keyed by class name), so leaving a route does
-   * not take down the popup of a station on it that is still under the pointer.
-   */
-  const hoverPopups = new Map<string, maplibregl.Popup>();
-  const showHover = (lngLat: maplibreglType.LngLatLike, className: string, html: string) => {
-    hoverPopups.get(className)?.remove();
-    const popup = new maplibregl.Popup({
-      closeButton: false,
-      closeOnClick: false,
-      offset: 10,
-      className,
-    })
-      .setLngLat(lngLat)
-      .setHTML(`<div style="color: var(--color-fg);">${html}</div>`)
-      .addTo(mapInstance);
-    hoverPopups.set(className, popup);
-  };
-  const hideHover = (className: string) => {
-    hoverPopups.get(className)?.remove();
-    hoverPopups.delete(className);
-  };
-
   /** The `hover` feature state of one tiled layer, which its paint reads. */
   const featureHover = (source: string) => {
     let hoveredId: number | string | null = null;
@@ -76,6 +49,22 @@ export function setupAdminMapInteractions(
   };
   const partHover = featureHover("railway_parts");
   const noteHover = featureHover("admin_notes");
+
+  // The hover popup and cursor (`mapHover.ts`, shared with the user map). A part
+  // or a note is lit only while a click would reach it — not under a route, an
+  // endpoint or a note drawn over it, which would take the click instead.
+  const hover = createMapHover(mapInstance, {
+    onSettle: (target) => {
+      const lit = (layerId: string) =>
+        target?.layerId === layerId ? target.feature.id : undefined;
+      const part = lit("railway_parts");
+      if (part === undefined) partHover.leave();
+      else partHover.enter(part);
+      const note = lit("admin_notes");
+      if (note === undefined) noteHover.leave();
+      else noteHover.enter(note);
+    },
+  });
 
   // A part click captures the exact coordinate clicked — unless an endpoint, a
   // route or a note is there too, each of which takes the click itself.
@@ -113,104 +102,55 @@ export function setupAdminMapInteractions(
     }
   });
 
-  mapInstance.on("mouseenter", "railway_parts", (e) => {
-    if (hits(e.point, ROUTE_HIT_LAYERS)) return;
-    setCursor("pointer");
-    partHover.enter(e.features?.[0]?.id);
-  });
-  mapInstance.on("mouseleave", "railway_parts", () => {
-    setCursor("");
-    partHover.leave();
-  });
+  // Every `click` below is what the click handlers above do there.
+  hover.layer("railway_parts");
 
-  const showRouteHover = (e: maplibreglType.MapLayerMouseEvent) => {
-    const properties = e.features?.[0]?.properties;
-    if (!properties) return;
-    showHover(
-      e.lngLat,
-      "railway-route-hover-popup",
-      formatRouteBody(properties, region, { linkRow: true }),
-    );
-  };
-
-  mapInstance.on("mouseenter", ROUTE_CLICK_LAYER_ID, (e) => {
-    setCursor("pointer");
-    showRouteHover(e);
-  });
-  mapInstance.on("mouseleave", ROUTE_CLICK_LAYER_ID, () => {
-    setCursor("");
-    hideHover("railway-route-hover-popup");
-  });
+  const buildRouteBody = (properties: FeatureProperties) =>
+    formatRouteBody(properties, region, { linkRow: true });
+  hover.layer(ROUTE_CLICK_LAYER_ID, { buildBody: buildRouteBody });
 
   // Routes re-shown for reference during a re-pick have no hit area (see
-  // useAdminLayerVisibility), so they are read from their lines instead: the popup
-  // without the pointer, since a click there does nothing — it neither selects the
-  // route nor reaches the part under it.
+  // useAdminLayerVisibility), so they are read from their lines instead. A click on
+  // a Regular one does nothing — it neither selects the route nor reaches the part
+  // under it (`ROUTE_HIT_LAYERS`); one on another line reaches the part.
   const referenceOnly = () =>
     mapInstance.getLayoutProperty(ROUTE_CLICK_LAYER_ID, "visibility") === "none";
   for (const layerId of ROUTE_LINE_LAYERS) {
-    mapInstance.on("mouseenter", layerId, (e) => {
-      if (referenceOnly()) showRouteHover(e);
-    });
-    mapInstance.on("mouseleave", layerId, () => {
-      if (referenceOnly()) hideHover("railway-route-hover-popup");
+    hover.layer(layerId, {
+      buildBody: buildRouteBody,
+      click: ROUTE_HIT_LAYERS.includes(layerId) ? "blocks" : "passes",
+      when: referenceOnly,
     });
   }
 
-  mapInstance.on("mouseenter", "stations", (e) => {
-    setCursor("pointer");
-    const properties = e.features?.[0]?.properties;
-    if (!properties) return;
-    showHover(e.lngLat, "station-hover-popup", formatStationBody(properties));
-  });
-  mapInstance.on("mouseleave", "stations", () => {
-    setCursor("");
-    hideHover("station-hover-popup");
+  // A station takes no click of its own: it goes to the route or part under it.
+  hover.layer("stations", {
+    className: "station-popup",
+    buildBody: formatStationBody,
+    click: "passes",
   });
 
-  mapInstance.on("mouseenter", "route-endpoints", (e) => {
-    const properties = e.features?.[0]?.properties;
-    if (!properties) return;
-    setCursor("pointer");
-    const endpointTypeLabel = properties.endpoint_type === "start" ? "Start" : "End";
-    showHover(
-      e.lngLat,
-      "endpoint-hover-popup",
-      `<h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
-      <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.route_name)}</div>
-      <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">Click to use this coordinate</div>`,
-    );
-  });
-  mapInstance.on("mouseleave", "route-endpoints", () => {
-    setCursor("");
-    hideHover("endpoint-hover-popup");
-  });
-
-  mapInstance.on("mouseenter", "admin_notes", (e) => {
-    setCursor("pointer");
-    const feature = e.features?.[0];
-    if (!feature) return;
-    noteHover.enter(feature.id);
-
-    const properties = feature.properties;
-    const updatedAtStr = properties.updated_at
-      ? new Date(properties.updated_at).toISOString().replace("T", " ").slice(0, 19)
-      : "";
-    const source = popupLink(properties.source, "Source ↗", DOUBLE_CLICK_HINT);
-    showHover(
-      e.lngLat,
-      "admin-note-hover-popup",
-      `<h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note: ${escapeHtml(getNoteTypeLabel(properties.note_type))}</h3>
+  hover.layer("admin_notes", {
+    buildBody: (properties) => {
+      const updatedAtStr = properties.updated_at
+        ? new Date(properties.updated_at).toISOString().replace("T", " ").slice(0, 19)
+        : "";
+      const source = popupLink(properties.source, "Source ↗", DOUBLE_CLICK_HINT);
+      return `<h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note: ${escapeHtml(getNoteTypeLabel(properties.note_type))}</h3>
       <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.text)}</div>
       ${source ? `<div style="font-size: 0.8rem; margin-top: 4px;">${source}</div>` : ""}
       ${updatedAtStr ? `<div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Last updated ${updatedAtStr}</div>` : ""}
-      <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Right-click to edit</div>`,
-    );
+      <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 2px;">Right-click to edit</div>`;
+    },
   });
-  mapInstance.on("mouseleave", "admin_notes", () => {
-    setCursor("");
-    noteHover.leave();
-    hideHover("admin-note-hover-popup");
+
+  hover.layer("route-endpoints", {
+    buildBody: (properties) => {
+      const endpointTypeLabel = properties.endpoint_type === "start" ? "Start" : "End";
+      return `<h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
+      <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.route_name)}</div>
+      <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">Click to use this coordinate</div>`;
+    },
   });
 
   // Double-click / double-tap a note opens its source link in a new tab

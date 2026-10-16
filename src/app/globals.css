@@ -319,6 +319,13 @@ body,
   display: none;
 }
 
+/* A hover popup (`mapHover.ts`) sits right at the pointer and follows it, so the
+   pointer must pass through it to the map: one pixel into it would otherwise leave
+   the canvas, take the popup down, and the next pixel would bring it back. */
+.map-hover-popup .maplibregl-popup-content {
+  pointer-events: none;
+}
+
 /* Popup content styling */
 .railway-popup h3,
 .railway-click-menu h3 {
