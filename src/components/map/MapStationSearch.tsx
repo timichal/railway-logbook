@@ -19,7 +19,7 @@ type MapSearchResult =
   | { kind: "station"; station: Station };
 
 interface MapStationSearchProps {
-  map: React.MutableRefObject<maplibregl.Map | null>;
+  map: React.RefObject<maplibregl.Map | null>;
   /**
    * The map's searched-line highlight (`useLineSearchHighlight`): a picked line is
    * handed to it, and the box shows the chip that names and clears it. Without it a

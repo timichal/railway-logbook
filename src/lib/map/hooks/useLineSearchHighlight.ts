@@ -44,7 +44,7 @@ export interface LineHighlight {
  * the two meet.
  */
 export function useLineSearchHighlight(
-  map: React.MutableRefObject<maplibregl.Map | null>,
+  map: React.RefObject<maplibregl.Map | null>,
   /** Re-applies the band to a freshly built map (scheme change). */
   mapLoaded: boolean,
   region: RegionId,

@@ -29,7 +29,7 @@ export type AdminLayerKey = (typeof ADMIN_LAYERS)[number]["key"];
 export type AdminLayerVisibility = Record<AdminLayerKey, boolean>;
 
 interface UseAdminLayerVisibilityOptions {
-  map: React.MutableRefObject<maplibregl.Map | null>;
+  map: React.RefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
   /** Routes forced hidden: a geometry edit, or the Scenic lines tab (see AdminMap). */
   hideRoutes?: boolean;

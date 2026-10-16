@@ -2,7 +2,7 @@ import type * as maplibregl from "maplibre-gl";
 import { useCallback, useEffect, useRef } from "react";
 
 interface UseSourceTileRefreshOptions {
-  map: React.MutableRefObject<maplibregl.Map | null>;
+  map: React.RefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
   /** A vector source on the map. */
   sourceId: string;
@@ -17,7 +17,7 @@ interface UseSourceTileRefreshOptions {
    * before it; bumped here on every refresh. Undefined until the first one, for a
    * caller that builds its first source with no `v` at all.
    */
-  cacheBusterRef: React.MutableRefObject<number | undefined>;
+  cacheBusterRef: React.RefObject<number | undefined>;
   /** The source's tile URL for a given `v`. Read when a refresh runs, not before. */
   tileUrl: (cacheBuster: number) => string;
 }

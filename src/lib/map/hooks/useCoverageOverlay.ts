@@ -59,7 +59,7 @@ function syncCoverageOverlay(
  * Keeps the ridden-stretch overlay in sync with the user's logged partial rides.
  */
 export function useCoverageOverlay(
-  map: React.MutableRefObject<maplibregl.Map | null>,
+  map: React.RefObject<maplibregl.Map | null>,
   mapLoaded: boolean,
   dataAccess: DataAccess,
   selectedCountries: string[],

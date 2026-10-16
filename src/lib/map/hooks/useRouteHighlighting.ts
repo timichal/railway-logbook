@@ -119,7 +119,7 @@ function syncPartialOverlay(
  * - Orange highlights from Route Logger selection and My Trips views
  */
 export function useRouteHighlighting(
-  map: React.MutableRefObject<maplibregl.Map | null>,
+  map: React.RefObject<maplibregl.Map | null>,
   /** Re-applies the highlights to a freshly built map (region or scheme change). */
   mapLoaded: boolean,
   highlightedRoutes: number[],

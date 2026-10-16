@@ -31,7 +31,7 @@ const RETRY_DELAY_MS = 5000;
  * uncoloured until the next refresh (a logged journey, a region switch).
  */
 export function useLocalRouteFeatureStates(
-  map: React.MutableRefObject<maplibregl.Map | null>,
+  map: React.RefObject<maplibregl.Map | null>,
   mapLoaded: boolean,
   dataAccess: DataAccess,
   onError: (message: string) => void,

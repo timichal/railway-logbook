@@ -18,7 +18,7 @@ import { REGULAR_ROUTE_LAYER_ID } from "@/lib/shared/map/layers";
  * tab switch or a journey card opening did in mid-use.
  */
 export function useUserMapInteractions(
-  map: React.MutableRefObject<maplibregl.Map | null>,
+  map: React.RefObject<maplibregl.Map | null>,
   mapLoaded: boolean,
   callbacks: UserMapInteractionCallbacks,
 ) {

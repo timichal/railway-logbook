@@ -136,7 +136,7 @@ interface UseMapLibreOptions {
 }
 
 interface UseMapLibreReturn {
-  map: React.MutableRefObject<maplibregl.Map | null>;
+  map: React.RefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
 }
 

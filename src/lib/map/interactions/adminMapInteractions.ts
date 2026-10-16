@@ -1,5 +1,5 @@
 import type * as maplibreglType from "maplibre-gl";
-import type { MutableRefObject } from "react";
+import type { RefObject } from "react";
 import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
 import { createMapHover, type FeatureProperties } from "@/lib/map/interactions/mapHover";
 import {
@@ -15,8 +15,8 @@ import { ROUTE_CLICK_LAYER_ID, ROUTE_LINE_LAYERS } from "@/lib/shared/map/layers
 import type { RegionId } from "@/lib/shared/regions";
 
 interface AdminMapCallbacks {
-  onCoordinateClickRef: MutableRefObject<((coordinate: [number, number]) => void) | undefined>;
-  onRouteSelectRef: MutableRefObject<((routeId: number | null) => void) | undefined>;
+  onCoordinateClickRef: RefObject<((coordinate: [number, number]) => void) | undefined>;
+  onRouteSelectRef: RefObject<((routeId: number | null) => void) | undefined>;
   /** Region the map is showing — decides how a route's popup is labelled. */
   region: RegionId;
 }

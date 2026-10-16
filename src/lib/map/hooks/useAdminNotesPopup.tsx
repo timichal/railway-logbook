@@ -10,7 +10,7 @@ import type { AdminNote } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 
 interface UseAdminNotesPopupOptions {
-  map: React.MutableRefObject<maplibregl.Map | null>;
+  map: React.RefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
   /** Called after a popup save/delete; the parent refreshes the notes tiles. */
   onNotesChanged: () => void;

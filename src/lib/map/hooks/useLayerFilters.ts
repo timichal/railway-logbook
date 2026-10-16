@@ -30,7 +30,7 @@ import { clickBufferFilter, scenicLinesFilter } from "@/lib/shared/map/userMapLa
  *   so each shown route stays tappable.
  */
 export function useLayerFilters(
-  map: React.MutableRefObject<maplibregl.Map | null>,
+  map: React.RefObject<maplibregl.Map | null>,
   /** The usage types shown (`shownUsageTypes`). */
   shownTypes: UsageType[],
   showScenicLines: boolean,

@@ -42,7 +42,7 @@ function removeGeoJSONLayer(mapInstance: maplibregl.Map, id: string) {
  * - Route endpoints (circles)
  */
 export function useAdminMapOverlays(
-  map: React.MutableRefObject<maplibregl.Map | null>,
+  map: React.RefObject<maplibregl.Map | null>,
   mapLoaded: boolean,
   data: OverlayData,
 ) {
