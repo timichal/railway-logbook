@@ -360,7 +360,25 @@ export default function AdminMap({
         // On a phone the collapsed "Layers" pill holds the top-left corner, and the
         // expanded panel, later in the tree, covers the box while it is open.
         positionClassName={isMobile ? "top-3 left-20 right-14" : undefined}
-      />
+      >
+        {/* Under the search box and its line chip, clear of MapLibre's top-right
+            controls. */}
+        {(previewLength !== null || selectedRouteLength !== null) && (
+          <div className="bg-surface p-3 rounded shadow-lg text-fg">
+            <h3 className="font-bold mb-2">Route Length</h3>
+            {previewLength !== null && (
+              <div className="text-sm">
+                Preview: <span className="font-semibold">{previewLength.toFixed(1)} km</span>
+              </div>
+            )}
+            {selectedRouteLength !== null && previewLength === null && (
+              <div className="text-sm">
+                Selected: <span className="font-semibold">{selectedRouteLength.toFixed(1)} km</span>
+              </div>
+            )}
+          </div>
+        )}
+      </MapStationSearch>
 
       <AdminLayerControls
         visible={layerVisibility.visible}
@@ -378,27 +396,6 @@ export default function AdminMap({
           <div className={`font-semibold ${isMobile ? "text-sm" : "text-lg"}`}>
             {validRoutesTotalKm.toFixed(1)} km
           </div>
-        </div>
-      )}
-
-      {(previewLength !== null || selectedRouteLength !== null) && (
-        // Below the station search, clear of MapLibre's top-right controls.
-        <div
-          className={`absolute bg-surface p-3 rounded shadow-lg text-fg z-10 ${
-            isMobile ? "top-14 right-14" : "top-16 right-12"
-          }`}
-        >
-          <h3 className="font-bold mb-2">Route Length</h3>
-          {previewLength !== null && (
-            <div className="text-sm">
-              Preview: <span className="font-semibold">{previewLength.toFixed(1)} km</span>
-            </div>
-          )}
-          {selectedRouteLength !== null && previewLength === null && (
-            <div className="text-sm">
-              Selected: <span className="font-semibold">{selectedRouteLength.toFixed(1)} km</span>
-            </div>
-          )}
         </div>
       )}
     </div>

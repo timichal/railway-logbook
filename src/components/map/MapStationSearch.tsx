@@ -35,6 +35,11 @@ interface MapStationSearchProps {
   search?: (query: string, region: RegionId) => Promise<MapSearchResults>;
   /** Placement classes, replacing the default top-corner position. */
   positionClassName?: string;
+  /**
+   * Map furniture that sits under the box, right-aligned: stacked below the line
+   * chip, so the chip never lands on it.
+   */
+  children?: React.ReactNode;
 }
 
 /**
@@ -53,6 +58,7 @@ export default function MapStationSearch({
   hidden = false,
   search = searchMap,
   positionClassName,
+  children,
 }: MapStationSearchProps) {
   const [query, setQuery] = useState("");
   // A new region drops the old one's search: its results lie outside the map's new
@@ -93,13 +99,15 @@ export default function MapStationSearch({
     onSelect: handleSelect,
   });
 
+  // The column is click-through; only what it shows takes a click, so the gaps
+  // beside the chip and the furniture under it leave the map clickable.
   return (
     <div
-      className={`absolute z-10 ${
+      className={`absolute z-10 pointer-events-none ${
         positionClassName ?? (isMobile ? "top-3 left-3 right-14" : "top-4 right-12 w-80")
       } ${hidden ? "hidden" : ""}`}
     >
-      <div className="relative">
+      <div className="relative pointer-events-auto">
         <input
           {...combobox.inputProps}
           aria-label={withLines ? "Search lines and stations" : "Search stations"}
@@ -165,7 +173,7 @@ export default function MapStationSearch({
       {/* Outside the wrapper above, which the dropdown hangs from: inside it, the
           list would open below the chip rather than under the input. */}
       {lineHighlight?.line && (
-        <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-surface border border-gray-300 shadow-lg pl-3 pr-1 text-sm text-fg">
+        <div className="pointer-events-auto mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-surface border border-gray-300 shadow-lg pl-3 pr-1 text-sm text-fg">
           {/* The band in miniature */}
           <span
             aria-hidden="true"
@@ -189,6 +197,8 @@ export default function MapStationSearch({
           />
         </div>
       )}
+
+      {children && <div className="pointer-events-auto mt-2 ml-auto w-fit">{children}</div>}
     </div>
   );
 }
