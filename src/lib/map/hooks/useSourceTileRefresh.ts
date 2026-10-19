@@ -32,6 +32,19 @@ interface UseSourceTileRefreshOptions {
  * visibility. Removing and re-adding the source dropped all of that, and every
  * overlay had to watch for the refresh and put itself back.
  *
+ * **It is applied on the next render, not at once.** A `setFilter` or layout change
+ * on any layer of the source pauses the source's tiles until the style next
+ * updates, and a `setTiles` landing in that window is lost: MapLibre drops the
+ * "data changed" news while paused and on resuming only re-parses the tiles it
+ * holds, without fetching. Logging a ride clears the selection's highlight filters
+ * in the same commit as the refresh, so it hit that window every time — the
+ * ridden route stayed unridden until a zoom loaded other tiles. A `render` comes
+ * after the style update that resumes the tiles, and there `refreshTiles` refetches
+ * them from the new URL at once — `setTiles` alone acts only a frame later (it
+ * waits a frame before announcing the change), when the source may be paused
+ * again. That reload then fetches the tiles a second time; a refresh is rare
+ * enough for that not to matter.
+ *
  * A refresh asked for while the map is still loading cannot be applied yet, and
  * the map under construction took its sources from a render before it — so it is
  * applied on load instead of dropped. The initial signal is what the map's own
@@ -52,16 +65,26 @@ export function useSourceTileRefresh({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: signal is the trigger, and mapLoaded only catches up on one that arrived before the map could take it. tileUrl is read at refresh time and must not trigger a refresh of its own.
   useEffect(() => {
-    const source = mapLoaded
-      ? map.current?.getSource<maplibregl.VectorTileSource>(sourceId)
-      : undefined;
-    if (!source || appliedRef.current === signal) return;
+    const m = mapLoaded ? map.current : null;
+    const source = m?.getSource<maplibregl.VectorTileSource>(sourceId);
+    if (!m || !source || appliedRef.current === signal) return;
     appliedRef.current = signal;
 
     // The `v` must not repeat across page loads (a plain counter would) nor within
-    // one (two refreshes in one millisecond would collapse into one).
+    // one (two refreshes in one millisecond would collapse into one). Bumped now,
+    // so a map rebuilt before the render below still starts from the new one.
     cacheBusterRef.current = Math.max(Date.now(), (cacheBusterRef.current ?? 0) + 1);
-    source.setTiles([tileUrl(cacheBusterRef.current)]);
+    const url = tileUrl(cacheBusterRef.current);
+    const apply = () => {
+      source.setTiles([url]);
+      // setTiles' own reload comes a frame later, open to the pause again
+      m.refreshTiles(sourceId);
+    };
+    m.once("render", apply);
+    m.triggerRepaint();
+    return () => {
+      m.off("render", apply);
+    };
   }, [signal, mapLoaded]);
 
   return useCallback((built: number | string) => {
