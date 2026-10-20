@@ -1,6 +1,6 @@
 # The OSM data on the server: the date each Geofabrik extract was cut.
 # Written by deploy.sh after a successful map data deploy.
-# Deployed 2026-10-19 10:55 UTC
+# Deployed 2026-10-20 12:11 UTC
 
 europe/albania: 2026-10-18
 europe/andorra: 2026-10-18
@@ -18,7 +18,7 @@ europe/faroe-islands: 2026-10-18
 europe/finland: 2026-10-18
 europe/france: 2026-10-18
 europe/georgia: 2026-10-18
-europe/germany: 2026-10-17
+europe/germany: 2026-10-18
 europe/greece: 2026-10-18
 europe/guernsey-jersey: 2026-10-18
 europe/hungary: 2026-10-18
@@ -55,4 +55,4 @@ russia/central-fed-district: 2026-10-18
 russia/south-fed-district: 2026-10-18
 russia/north-caucasus-fed-district: 2026-10-18
 russia/volga-fed-district: 2026-10-18
-asia/japan: 2026-10-18
+asia/japan: 2026-10-19
