@@ -1,5 +1,4 @@
 poznámky
-
 - dělení: special nejsou v běžných JŘ, seasonal jo
 - geolokace parts nepřesná - nutno asi přes api nebo manuálně (chyba - Vrbovce, s jinou knihovnou Hel): to vede ke špatným určením i větších tras (Šahy)
 

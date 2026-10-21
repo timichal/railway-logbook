@@ -6,7 +6,7 @@ Found in an audit of `mobile/` on 2026-10-14: every file under `mobile/app` and
 against platform conventions, and gaps against the web app.
 
 It was a static read. `npm run typecheck` and Biome are clean, and nothing was run on a
-device. Items marked *(device)* need confirming on the phone before or after the fix.
+device. Items marked _(device)_ need confirming on the phone before or after the fix.
 Gaps the plan already lists are kept apart at the bottom, so this file is the one list
 of what is left. A finished item is deleted, not ticked; whatever it leaves to do
 becomes an item of its own.
@@ -15,7 +15,7 @@ becomes an item of its own.
 
 ## High — bugs and the foundation
 
-- [ ] **Finish checking the 2026-10-14 High fixes on the device.** *(device)* The
+- [ ] **Finish checking the 2026-10-14 High fixes on the device.** _(device)_ The
   airplane-mode cold start, the map's top row, dark mode, a plain return after a
   minute, switching to a different account, and a return after logging on the web
   have been confirmed on the iPhone. Left:
@@ -27,7 +27,7 @@ becomes an item of its own.
     in `RootNavigator` (it renders without any provider). In a development build the
     red LogBox overlay comes first; dismiss it to see the screen behind.
 
-- [ ] **Does MapLibre Native's disk cache honour `no-store`?** *(device)* The route
+- [ ] **Does MapLibre Native's disk cache honour `no-store`?** _(device)_ The route
   tile handler sends `private, no-store`. The cache buster no longer repeats across
   launches or accounts (`logVersion.ts` starts at the launch time and moves on every
   sign-in), so a cache that ignores the header can no longer show another account's
@@ -45,7 +45,7 @@ becomes an item of its own.
 
 ## Medium — UX gaps against the web and platform conventions
 
-- [ ] **Check the fly-to on the device.** *(device)* "Show on the map" and a
+- [ ] **Check the fly-to on the device.** _(device)_ "Show on the map" and a
   planner result now fit the camera (`mobile/src/map/fitCamera.ts`), once the map
   tab is in view. Check that the routes land clear of the top row and the progress
   box, that a plan is flown to when the planner modal closes (it relies on

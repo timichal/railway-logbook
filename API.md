@@ -5,7 +5,7 @@ not use it and does not need to — it keeps its server actions, and is therefor
 the regression test for anything changed down here.
 
 Everything is JSON in and JSON out. Read this together with `CLAUDE.md`, which
-explains what the data *means*; this file only says how to ask for it.
+explains what the data _means_; this file only says how to ask for it.
 
 ## The rules that apply everywhere
 
@@ -23,13 +23,13 @@ for the other continent, so it is a 400. Values: `europe`, `japan`.
 
 **Errors are `{ "error": "…" }`** with a real status code:
 
-| Status | Means |
-| --- | --- |
-| 400 | the request is malformed, or a value was rejected (`name is required`) |
-| 401 | no token, an expired one, or credentials that don't check out |
-| 404 | the row isn't there, or isn't the caller's |
-| 429 | too many auth attempts from this client. Carries `Retry-After`, in seconds |
-| 500 | a bug or a database failure. The message is opaque by design; the detail is in the server log |
+| Status | Means                                                                                         |
+| ------ | --------------------------------------------------------------------------------------------- |
+| 400    | the request is malformed, or a value was rejected (`name is required`)                        |
+| 401    | no token, an expired one, or credentials that don't check out                                 |
+| 404    | the row isn't there, or isn't the caller's                                                    |
+| 429    | too many auth attempts from this client. Carries `Retry-After`, in seconds                    |
+| 500    | a bug or a database failure. The message is opaque by design; the detail is in the server log |
 
 A 404 rather than a 403 for someone else's journey: every query is scoped by
 user id, so "not yours" and "not there" are the same answer, and saying which
@@ -40,13 +40,13 @@ of these opt in.
 
 ## Auth
 
-| | |
-| --- | --- |
-| `POST /auth/login` | `{ email, password }` → the token pair. 401 on bad credentials |
-| `POST /auth/register` | `{ email, password, confirmPassword, name? }` → 201 and the token pair. 400 with the message the web form would show |
-| `POST /auth/refresh` | `{ refreshToken }` → a fresh pair. 401 if it is expired, invalid, or an access token |
-| `GET /auth/me` | `{ user }` — who the token belongs to |
-| `DELETE /auth/me` | `{ password }` → `{ success: true }`. Deletes the account and everything in it; every token for it is refused from then on. A wrong password is a **400**, not a 401 (a 401 would send the client into refresh-and-sign-out). The admin (user 1) is refused with a 400. Rate-limited with sign-ins |
+|                       |                                                                                                                                                                                                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/login`    | `{ email, password }` → the token pair. 401 on bad credentials                                                                                                                                                                                                                                     |
+| `POST /auth/register` | `{ email, password, confirmPassword, name? }` → 201 and the token pair. 400 with the message the web form would show                                                                                                                                                                               |
+| `POST /auth/refresh`  | `{ refreshToken }` → a fresh pair. 401 if it is expired, invalid, or an access token                                                                                                                                                                                                               |
+| `GET /auth/me`        | `{ user }` — who the token belongs to                                                                                                                                                                                                                                                              |
+| `DELETE /auth/me`     | `{ password }` → `{ success: true }`. Deletes the account and everything in it; every token for it is refused from then on. A wrong password is a **400**, not a 401 (a 401 would send the client into refresh-and-sign-out). The admin (user 1) is refused with a 400. Rate-limited with sign-ins |
 
 The pair is `{ user, accessToken, refreshToken, expiresIn }`, `expiresIn` in
 seconds. The access token lasts **7 days**, the refresh token **180** — a
@@ -76,39 +76,39 @@ limited — everything else costs a query, while a password costs a bcrypt.
 
 No token. These are the same data the tiles already serve to anyone.
 
-| | |
-| --- | --- |
-| `GET /stations?region=&q=` | `{ stations }` — at most 10, `near_route` only, diacritic-insensitive. Under two characters returns none |
-| `GET /routes/track-ids?region=` | `{ trackIds }` — a few thousand integers, for telling which locally-held journeys belong to the region on screen |
-| `POST /routes/metadata` | `{ trackIds }` → `{ routes }` without geometry, `name` and `other_names` (the other lines sharing the route, a JSON array) included. A POST for a read because the id list is the argument |
-| `POST /coverage/stretches` | `{ ranges: [{ track_id, covered_start, covered_end }] }` → `{ stretches }` — fraction ranges cut into drawable geometry, for journeys held on the device. Validated and capped at 2000 |
+|                                 |                                                                                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /stations?region=&q=`      | `{ stations }` — at most 10, `near_route` only, diacritic-insensitive. Under two characters returns none                                                                                   |
+| `GET /routes/track-ids?region=` | `{ trackIds }` — a few thousand integers, for telling which locally-held journeys belong to the region on screen                                                                           |
+| `POST /routes/metadata`         | `{ trackIds }` → `{ routes }` without geometry, `name` and `other_names` (the other lines sharing the route, a JSON array) included. A POST for a read because the id list is the argument |
+| `POST /coverage/stretches`      | `{ ranges: [{ track_id, covered_start, covered_end }] }` → `{ stretches }` — fraction ranges cut into drawable geometry, for journeys held on the device. Validated and capped at 2000     |
 
 ## The user's own data
 
 Bearer token required.
 
-| | |
-| --- | --- |
-| `GET /progress?region=&countries=` | km and route counts. `countries` absent = no filter; `countries=` (empty) = filter everything out, which answers zeros. Over the usage types the region counts (`ordinaryUsageTypes`): Regular, plus Japan's non-JR lines |
-| `GET /progress/countries?region=` | `{ byCountry, byUsage, total }` — one `byCountry` row per country the region declares and one `byUsage` row (`{ usageType, totalKm, completedKm }`) per usage type it counts, ridden or not. Japan's two `byUsage` rows (JR, non-JR) are its statistics screen; Europe's one equals the total |
-| `GET /coverage` | `{ stretches }` — ridden stretches of routes not yet finished |
-| `GET /preferences` | `{ selectedCountries }`, defaulted to every supported country on first read |
-| `PUT /preferences` | `{ selectedCountries }` — a whole-list replacement, empty list allowed. Codes are upper-cased and deduplicated, anything that is not ISO 3166-1 alpha-2 is dropped, and the response echoes the list as stored |
+|                                    |                                                                                                                                                                                                                                                                                               |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /progress?region=&countries=` | km and route counts. `countries` absent = no filter; `countries=` (empty) = filter everything out, which answers zeros. Over the usage types the region counts (`ordinaryUsageTypes`): Regular, plus Japan's non-JR lines                                                                     |
+| `GET /progress/countries?region=`  | `{ byCountry, byUsage, total }` — one `byCountry` row per country the region declares and one `byUsage` row (`{ usageType, totalKm, completedKm }`) per usage type it counts, ridden or not. Japan's two `byUsage` rows (JR, non-JR) are its statistics screen; Europe's one equals the total |
+| `GET /coverage`                    | `{ stretches }` — ridden stretches of routes not yet finished                                                                                                                                                                                                                                 |
+| `GET /preferences`                 | `{ selectedCountries }`, defaulted to every supported country on first read                                                                                                                                                                                                                   |
+| `PUT /preferences`                 | `{ selectedCountries }` — a whole-list replacement, empty list allowed. Codes are upper-cased and deduplicated, anything that is not ISO 3166-1 alpha-2 is dropped, and the response echoes the list as stored                                                                                |
 
 ## Journeys
 
-| | |
-| --- | --- |
-| `POST /journeys` | `{ name, date, description?, tripId?, routes }` → 201 `{ journey }`. Journey and logged parts commit together. A `tripId` that is not one of the caller's own trips is a 404 `Trip not found`, and nothing is written |
-| `GET /journeys/:id?region=` | `{ journey, routes, bounds, partials }` — the routes carry the line `name` (where the region has one) plus `partial`, `covered_start`, `covered_end`. `bounds` (below) is the box of those in `region`. `partials` is the stretch ridden of each route logged `partial` with a known stretch, as `{ track_id, covered_start, covered_end, coordinates, usage_type }` cut from the route's geometry (plus the route's `line_class` and countries): a highlight draws these in place of the whole route |
-| `PATCH /journeys/:id` | `{ name, date, description? }` → `{ journey }` |
-| `DELETE /journeys/:id` | `{ success: true }`, logged parts included |
-| `POST /journeys/:id/routes` | `{ routes }` — a route already logged has its flag and stretch overwritten, not duplicated |
-| `PATCH /journeys/:id/routes/:trackId` | `{ partial }` → `{ success: true }` |
-| `DELETE /journeys/:id/routes/:trackId` | unlog one route |
-| `PUT /journeys/:id/trip` | `{ tripId }` — file the journey under a trip |
-| `DELETE /journeys/:id/trip` | file it under none |
-| `GET /journeys/unassigned?region=` | `{ journeys }` — the assignment picker's list |
+|                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /journeys`                       | `{ name, date, description?, tripId?, routes }` → 201 `{ journey }`. Journey and logged parts commit together. A `tripId` that is not one of the caller's own trips is a 404 `Trip not found`, and nothing is written                                                                                                                                                                                                                                                                                 |
+| `GET /journeys/:id?region=`            | `{ journey, routes, bounds, partials }` — the routes carry the line `name` (where the region has one) plus `partial`, `covered_start`, `covered_end`. `bounds` (below) is the box of those in `region`. `partials` is the stretch ridden of each route logged `partial` with a known stretch, as `{ track_id, covered_start, covered_end, coordinates, usage_type }` cut from the route's geometry (plus the route's `line_class` and countries): a highlight draws these in place of the whole route |
+| `PATCH /journeys/:id`                  | `{ name, date, description? }` → `{ journey }`                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `DELETE /journeys/:id`                 | `{ success: true }`, logged parts included                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `POST /journeys/:id/routes`            | `{ routes }` — a route already logged has its flag and stretch overwritten, not duplicated                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `PATCH /journeys/:id/routes/:trackId`  | `{ partial }` → `{ success: true }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `DELETE /journeys/:id/routes/:trackId` | unlog one route                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `PUT /journeys/:id/trip`               | `{ tripId }` — file the journey under a trip                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `DELETE /journeys/:id/trip`            | file it under none                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `GET /journeys/unassigned?region=`     | `{ journeys }` — the assignment picker's list                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 **`bounds` is `[west, south, east, north]`**, the box the map fits to when a
 journey or trip is opened. Only the routes in `region` count — a trip may hold a
@@ -128,10 +128,12 @@ it at the `T`, showed as the day before.) A trip's
 the query module takes:
 
 ```json
-{ "routes": [
-  { "trackId": 231 },
-  { "trackId": 229, "partial": true, "covered": { "covered_start": 0.1, "covered_end": 0.42 } }
-] }
+{
+  "routes": [
+    { "trackId": 231 },
+    { "trackId": 229, "partial": true, "covered": { "covered_start": 0.1, "covered_end": 0.42 } }
+  ]
+}
 ```
 
 `partial` defaults to `false`. `covered` is the stretch ridden as fractions
@@ -149,14 +151,14 @@ is a column on it, and a journey belongs to at most one trip.
 
 ## Trips
 
-| | |
-| --- | --- |
-| `GET /trips?region=` | `{ trips }` with stats. A trip with no logged routes yet belongs to every region, so a new one never vanishes from the list that made it |
-| `POST /trips` | `{ name, description? }` → 201 `{ trip }` |
-| `GET /trips/:id?region=` | `{ trip, journeys, routeIds, partials, bounds }` — `routeIds` is what the map highlights while the trip is open; `partials` (as for a journey) the routes the trip rode only part of, each disjoint stretch of its journeys' union, drawn in place of those routes — a route any journey rode whole, or partial with no known stretch, has none; `bounds` is the box of those in `region` |
-| `PATCH /trips/:id` | `{ name, description? }` → `{ trip }` |
-| `DELETE /trips/:id` | its journeys survive, unassigned |
-| `GET /logbook?region=&page=&pageSize=&search=` | `{ items, total }` — the browsing list: one row per trip (journeys nested) or standalone journey, newest first. `page` defaults to 1, `pageSize` to 10 (capped at 100) |
+|                                                |                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /trips?region=`                           | `{ trips }` with stats. A trip with no logged routes yet belongs to every region, so a new one never vanishes from the list that made it                                                                                                                                                                                                                                                  |
+| `POST /trips`                                  | `{ name, description? }` → 201 `{ trip }`                                                                                                                                                                                                                                                                                                                                                 |
+| `GET /trips/:id?region=`                       | `{ trip, journeys, routeIds, partials, bounds }` — `routeIds` is what the map highlights while the trip is open; `partials` (as for a journey) the routes the trip rode only part of, each disjoint stretch of its journeys' union, drawn in place of those routes — a route any journey rode whole, or partial with no known stretch, has none; `bounds` is the box of those in `region` |
+| `PATCH /trips/:id`                             | `{ name, description? }` → `{ trip }`                                                                                                                                                                                                                                                                                                                                                     |
+| `DELETE /trips/:id`                            | its journeys survive, unassigned                                                                                                                                                                                                                                                                                                                                                          |
+| `GET /logbook?region=&page=&pageSize=&search=` | `{ items, total }` — the browsing list: one row per trip (journeys nested) or standalone journey, newest first. `page` defaults to 1, `pageSize` to 10 (capped at 100)                                                                                                                                                                                                                    |
 
 The logbook page is ordered and hydrated by the query, so a client must not
 re-sort or re-filter a page it has been handed — it would be sorting one page of

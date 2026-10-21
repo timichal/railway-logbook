@@ -21,7 +21,6 @@ route is recalculated independently of every other one.
 `recalculateAllRoutes` runs a fixed set of workers over the route list
 (`runPool`, `scripts/lib/runPool.ts`), each pulling the next route off a shared
 index and writing its own `UPDATE`:
-
 - **`DEFAULT_RECALC_CONCURRENCY` = 4 routes at a time.** This needs a `Pool`, not
   a `Client`: node-pg serialises concurrent queries on a single connection, so
   workers sharing one would just queue behind each other. Both scripts build the
@@ -51,7 +50,7 @@ index and writing its own `UPDATE`:
   (`findPathWithoutBacktracking`); a wash on small ones.
 - **The cycle check stays `path.includes()`.** Carrying a `Set` of the path's ids
   alongside each queue entry — the obvious fix for an O(path) scan in an inner
-  loop — is *slower here*, because a railway graph's parts have degree 2-3: the
+  loop — is _slower here_, because a railway graph's parts have degree 2-3: the
   scan runs about as often as the per-push `Set` copy would, at a much lower
   constant. Measured on a 3000-part corridor, the `Set` cost 1.00s against 0.78s.
   It would pay off only where nodes have many neighbours, which this graph does
@@ -114,13 +113,13 @@ railway parts, over a sample of 200 valid routes spread across the whole set
 (the first N by `track_id` all sit in one country, and cost varies hugely with
 network density):
 
-| | ms/route |
-|---|---|
-| two buffered queries, serial (before) | 326 |
-| one indexed query, serial | 242 |
-| one indexed query, 2 workers | 170 |
-| one indexed query, 4 workers | 157 |
-| one indexed query, 8 workers | 155 |
+|                                       | ms/route |
+| ------------------------------------- | -------- |
+| two buffered queries, serial (before) | 326      |
+| one indexed query, serial             | 242      |
+| one indexed query, 2 workers          | 170      |
+| one indexed query, 4 workers          | 157      |
+| one indexed query, 8 workers          | 155      |
 
 **~2.1× overall at the default of 4.** Scaling flattens hard after 2 — the work
 is a mix of Postgres-side spatial filtering and Node-side JSON parsing, and this
@@ -137,7 +136,7 @@ same box varied by well over a minute.
 
 Tempting, and wrong. The `[50000, 100000, 222000]` ladder in
 `findPathFromCoordinates` only escalates when **no path is found**. A tighter
-first pass that happens to find a *longer* path — because the true shortest one
+first pass that happens to find a _longer_ path — because the true shortest one
 left the loaded area — returns that longer path instead, which then trips the
 "more than 0.1 km and more than 1%" length check in `verifyRouteData` and marks a
 perfectly good route invalid. Silent false invalidations are much worse than a
@@ -167,14 +166,14 @@ the network but unconnected escalates through all three buffers, including the
 222 km one, before giving up. (One with an end off the network gives up after
 the first.)
 
-`npm run inspectPath -- "<from>" "<to>"` prints a single *journey planner* search
+`npm run inspectPath -- "<from>" "<to>"` prints a single _journey planner_ search
 and the gaps between consecutive routes. Note that it exercises
 `lib/routePathFinder.ts`, not the recalculation pathfinder, so it does not cover
 changes made here.
 
 ## Regression check
 
-Any change here must leave the *same* routes valid and invalid as before. Before
+Any change here must leave the _same_ routes valid and invalid as before. Before
 starting, capture the baseline:
 
 ```sql

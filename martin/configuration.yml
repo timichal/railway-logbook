@@ -23,7 +23,6 @@ postgres:
       minzoom: 4
       maxzoom: 18
       # This function accepts z, x, y parameters
-
     # Railway routes (combined lines with metadata), with no user: every route
     # reads as unvisited. Accepts z, x, y, and query_params (selected_countries).
     #
@@ -44,7 +43,6 @@ postgres:
       minzoom: 9
       maxzoom: 18
       # This function accepts z, x, y parameters
-
     # Stations within 250m of an admin-defined route (near_route) — user map
     public_stations_tile:
       schema: public
@@ -52,7 +50,6 @@ postgres:
       minzoom: 9
       maxzoom: 18
       # This function accepts z, x, y parameters
-
     # Scenic lines (admin-drawn stretches of track, highlight only) — both maps.
     # The user map filters them by country client-side.
     scenic_lines_tile:
@@ -72,7 +69,6 @@ postgres:
       minzoom: 4
       maxzoom: 18
       # This function accepts z, x, y parameters
-
 # Cache configuration - disable caching for dynamic data
 cache_size_mb: 0
 
