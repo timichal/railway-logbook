@@ -187,7 +187,7 @@ export default function AdminRoutesTab({
 
   // What the search box matches a route by — its endpoints, and its line names where
   // the region names lines — folded once per load rather than on every keystroke.
-  // Diacritic-insensitive, as the map's search box is ("chuo" finds "Chūō").
+  // Folded as the map's search box folds ("chuo" finds "Chūō", "owariseto" "Owari Seto").
   const searchKeys = useMemo(() => {
     const keys = new Map<number, string[]>();
     for (const route of routes) {

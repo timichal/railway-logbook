@@ -14,6 +14,7 @@ import {
 } from "@/lib/adminScenicLineActions";
 import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegionId } from "@/lib/regionContext";
+import { foldForSearch } from "@/lib/searchText";
 import type { RouteBounds } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints } from "@/lib/ui/adminListSort";
@@ -110,15 +111,15 @@ export default function AdminScenicTab({
 
   // Sorted here, not by the query — the same order as the routes list.
   const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = foldForSearch(search);
     return lines
       .toSorted((a, b) => compareByEndpoints(a, b) || a.id - b.id)
       .filter(
         (line) =>
           (!invalidOnly || !line.is_valid) &&
           (!query ||
-            line.from_station.toLowerCase().includes(query) ||
-            line.to_station.toLowerCase().includes(query)),
+            foldForSearch(line.from_station).includes(query) ||
+            foldForSearch(line.to_station).includes(query)),
       );
   }, [lines, search, invalidOnly]);
   const invalidCount = lines.filter((line) => !line.is_valid).length;

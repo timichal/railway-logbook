@@ -4,6 +4,7 @@ import TextField, { INPUT, LABEL } from "@/components/admin/TextField";
 import TagInput from "@/components/ui/TagInput";
 import type { RouteSuggestions, SaveRouteData } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
+import { foldForSearch } from "@/lib/searchText";
 import { type LineClass, lineClassOptions, type UsageType } from "@/lib/shared/constants";
 import { regionUsageOptions } from "@/lib/shared/regions";
 
@@ -117,6 +118,7 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
               value={value.other_names}
               availableTags={suggestions.lineNames}
               exclude={[value.name]}
+              fold={foldForSearch}
               onChange={(other_names) => set({ other_names })}
               placeholder="Add a line…"
             />

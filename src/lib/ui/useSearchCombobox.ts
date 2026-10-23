@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { MIN_SEARCH_QUERY_LENGTH, SEARCH_DEBOUNCE_MS } from "@/lib/shared/constants";
+import { searchQueryLength } from "@/lib/shared/searchQuery";
 
 /** Long enough for a click on a suggestion to land before the list goes. */
 const BLUR_DELAY_MS = 200;
@@ -129,7 +130,7 @@ export function useSearchCombobox<T>({
   const handleChange = (next: string) => {
     typedRef.current = next;
     onChange(next);
-    if (next.trim().length >= MIN_SEARCH_QUERY_LENGTH) {
+    if (searchQueryLength(next) >= MIN_SEARCH_QUERY_LENGTH) {
       // The list still showing answers the old text: a request for that text still
       // in flight must not replace it, and Enter must not pick a row arrowed to then
       cancelDebounce();
@@ -149,7 +150,7 @@ export function useSearchCombobox<T>({
     setFocused(true);
     if (!returning) {
       setActiveIndex(-1);
-      if (value.trim().length >= MIN_SEARCH_QUERY_LENGTH) runSearch(value);
+      if (searchQueryLength(value) >= MIN_SEARCH_QUERY_LENGTH) runSearch(value);
     }
     onFocus?.();
   };

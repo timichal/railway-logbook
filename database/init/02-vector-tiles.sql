@@ -47,13 +47,13 @@ CREATE INDEX IF NOT EXISTS idx_stations_coordinates_3857_near_route
 ON stations USING GIST (coordinates_3857) WHERE near_route;
 
 -- Station name search (searchStationsByName in src/lib/routeQueries.ts) is a
--- diacritic-insensitive substring match, `%…%`, which no btree can serve: a
+-- substring match, `%…%`, on search_key(name), which no btree can serve: a
 -- sequential scan running unaccent over every station name, ~60ms a keystroke.
 -- A trigram index answers it in about 1ms from three characters up (two are
 -- below a trigram, and still scan). unaccent() itself is only STABLE — it reads
 -- its dictionary through search_path — so the index goes through a wrapper that
 -- names the dictionary outright and can therefore be declared IMMUTABLE. The
--- query must call the same wrapper, or the planner cannot match the index.
+-- query must call the same function, or the planner cannot match the index.
 -- Partial on near_route, the only stations the search offers.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -61,8 +61,29 @@ CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text
 LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
 RETURN public.unaccent('public.unaccent'::regdictionary, $1);
 
-CREATE INDEX IF NOT EXISTS idx_stations_name_trgm_near_route
-ON stations USING GIN (immutable_unaccent(name) gin_trgm_ops) WHERE near_route;
+-- A name as the searches compare it: lower-cased, without diacritics, and without
+-- the spaces, hyphens, dashes, apostrophes and dots between its parts, so
+-- "owariseto", "owari-seto" and "Owari Seto" are one query, and "sanyo" finds
+-- "San'yō" — operators romanize the same name with and without them. The SQL
+-- twin of foldForSearch (src/lib/searchText.ts, its separators in
+-- src/lib/shared/searchQuery.ts); tests/searchText.sql.test.ts holds the two
+-- together. The whitespace is JavaScript's `\s` spelled out, not [[:space:]],
+-- which follows the locale and leaves out the no-break spaces. The index below
+-- stores its results, so a new body needs a new index name (and a DROP of the
+-- old one) for the deploy to rebuild it.
+CREATE OR REPLACE FUNCTION search_key(text) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+RETURN regexp_replace(
+  lower(public.immutable_unaccent($1)),
+  '[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff''’‘ʼ.·・‐‑‒–—―-]+',
+  '',
+  'g'
+);
+
+DROP INDEX IF EXISTS idx_stations_name_trgm_near_route;
+
+CREATE INDEX IF NOT EXISTS idx_stations_search_key_trgm_near_route
+ON stations USING GIN (search_key(name) gin_trgm_ops) WHERE near_route;
 
 -- Function: tile_unit
 -- One unit of a 4096-extent tile at zoom z, in metres of Web Mercator (the world

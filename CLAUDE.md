@@ -15,7 +15,7 @@ The React Native / Expo client (`MOBILE_APP_PLAN.md`), with its own `package.jso
 
 ### `src/lib/shared/` is the shared set
 
-`regions.ts`, `constants.ts`, `types.ts`, `progress.ts`, `routeCoverage.ts`, `getUntimezonedDateStr.ts`, `countryFlag.ts`, `theme/types.ts`, and `map/` (see "Map library"). The web app imports it as `@/lib/shared/...`; inside the folder, imports are relative. Everything outside it is the web app's alone — notably `src/lib/map/index.ts`, which reads `window.location` at module load and would crash React Native.
+`regions.ts`, `constants.ts`, `types.ts`, `progress.ts`, `routeCoverage.ts`, `searchQuery.ts`, `getUntimezonedDateStr.ts`, `countryFlag.ts`, `theme/types.ts`, and `map/` (see "Map library"). The web app imports it as `@/lib/shared/...`; inside the folder, imports are relative. Everything outside it is the web app's alone — notably `src/lib/map/index.ts`, which reads `window.location` at module load and would crash React Native.
 
 **Biome enforces the boundary** (`overrides` in `biome.json`): a shared file may not import `pg`, `maplibre-gl` (take spec types from `@maplibre/maplibre-gl-style-spec`), `next`, `react-dom` or country-coder (subpaths included), nor any Node built-in; may not use `@/*` (it means a different `src` in each app); and may not climb out of the folder. The climb-out rule is written once per folder depth (`shared/*`, `shared/*/*`, `shared/*/*/*`) because a later override replaces rather than merges options — a file deeper than three levels needs a depth added. `mobile/biome.json` forbids relative imports into `src/lib` and `@shared/..`.
 
@@ -125,7 +125,7 @@ Europe and Japan are two views of one backend. A region is a **bounding box**: t
 
 Per-region flags keep the differences declarative — never write `region.id === "japan"`:
 - **`hasRouteNames`** (Japan) — every route carries a line name that identifies it: a required Name field above From in the admin forms; the routes list sorted and searched by name, with a "Without name" filter; popups, journey rows and the selection lead with it (`routeTitle`); and the map search becomes "Search lines and stations" (`searchLinesByName`). A picked line fits the map (`fitCamera`) and is highlighted as a blue band drawn from its own GeoJSON (`getLineGeometry` → `lineGeometryByName`), owned by each map's `useLineSearchHighlight`, cleared from a chip under the search box. Lines and stations are searched by **one** server action (`searchMap`, the admin's `searchAdminMap`, both over `searchMapByName`), because Next runs a client's server actions one at a time.
-  - **A route can be on several lines** (`other_names`, the form's "Also part of"): where named lines share a stretch (Tokaido and Chuo Main Lines between Nagoya and Kanayama) it is one route, ridden and counted once. `name` is the line it is called by — the admin's choice, never derived; the other names make it part of those lines in the line search, its highlight and the name suggestions — always through `lineMembership.ts` (`routeLinesSql`, `onLineSql`), never `name` alone — and show as "Also …" in the popup and sheet (`routeTitle().alsoOn`) and after the name in the admin routes list, not in journey or planner rows. Other names need a `name` (CHECK), and `routeLineNames` drops any that equals the name or another once case and diacritics are folded (`foldForSearch`), so one line never gets two spellings. Parallel _tracks_ of different kinds (JR beside non-JR, a Shinkansen beside a conventional line) stay separate routes.
+  - **A route can be on several lines** (`other_names`, the form's "Also part of"): where named lines share a stretch (Tokaido and Chuo Main Lines between Nagoya and Kanayama) it is one route, ridden and counted once. `name` is the line it is called by — the admin's choice, never derived; the other names make it part of those lines in the line search, its highlight and the name suggestions — always through `lineMembership.ts` (`routeLinesSql`, `onLineSql`), never `name` alone — and show as "Also …" in the popup and sheet (`routeTitle().alsoOn`) and after the name in the admin routes list, not in journey or planner rows. Other names need a `name` (CHECK), and `routeLineNames` drops any that equals the name or another once folded (`foldForSearch`), so one line never gets two spellings. Parallel _tracks_ of different kinds (JR beside non-JR, a Shinkansen beside a conventional line) stay separate routes.
 - **`hasScenicHighlight`** — whether the user map offers the scenic toggle and the admin page its Scenic tab.
 - **`usageLabels`** — usage types the region renames (Japan: Regular "JR line", Special "Non-JR line"). Everything user-facing goes through `regionUsageLabel` / `regionUsageOptions` / `regionUsagePluralLabel`; `getUsageLabel` / `getUsagePluralLabel` in `constants.ts` are the region-less fallbacks.
 - **`ordinaryUsageTypes`** — the types that are ordinary timetabled service: Europe `[0]`, Japan `[0, 2]` (Japan's Special is the non-JR operators). Heritage never. It drives progress (`ordinaryUsageSql`; `countedUsageTypes` for localStorage), the per-type rows in Map & Stats (`hasOrdinaryNonRegular`), the planner's "Include …" switch (the server only ever adds types the region counts — `ordinaryRouteSql`), and the Special layer's default (`shared/map/layerPrefs.ts`).
@@ -244,7 +244,7 @@ One directory per part of the app; always import a component by its full path (`
 - **Regions**: `shared/regions.ts`, `regionContext.tsx`.
 - **Theme**: `theme/index.ts` (the preference, `useResolvedTheme`, `THEME_INIT_SCRIPT`), `theme/colors.ts` (`THEME_COLORS`, a plain module so `app/manifest.ts` can read it), `shared/theme/types.ts`.
 - **Layer prefs**: `shared/map/layerPrefs.ts` (stored form and per-region resolution, shared), `map/layerPrefs.ts` (localStorage), `map/layerPrefsContext.tsx`. Held above the map by the layouts, inside `RegionProvider`. The Special and Regular switches are stored per region; `showRegular` exists only where `hasOrdinaryNonRegular`; `switchableUsageTypes` decides which switches a region has. Highlights ignore the switches.
-- **UI**: `ui/buttonStyles.ts`, `ui/inputStyles.ts`, `ui/useSearchCombobox.ts`, `ui/useModalDialog.ts`, `ui/useSingleFlight.ts` (one admin save at a time, failure toasted), `ui/editGuard.tsx` (My Trips edits as drafts held above the cards; asks only before the page or account goes), `ui/adminListSort.ts` (sorted in the browser with a fixed `en` collation), `searchText.ts` (`foldForSearch` — case and diacritics folded as `immutable_unaccent` + `ILIKE` fold them, for the lists filtered in the browser and line-name comparison on the server).
+- **UI**: `ui/buttonStyles.ts`, `ui/inputStyles.ts`, `ui/useSearchCombobox.ts`, `ui/useModalDialog.ts`, `ui/useSingleFlight.ts` (one admin save at a time, failure toasted), `ui/editGuard.tsx` (My Trips edits as drafts held above the cards; asks only before the page or account goes), `ui/adminListSort.ts` (sorted in the browser with a fixed `en` collation), `searchText.ts` (`foldForSearch` — case, diacritics and separators (spaces, hyphens, apostrophes, dots; `shared/searchQuery.ts`) dropped as SQL `search_key` drops them, so "owariseto" finds "Owari Seto"; for the lists filtered in the browser and line-name comparison on the server. `foldAccents` keeps the separators, for the frequency tags, where "1-2x" is not "12x").
 - **Utils**: `shared/types.ts`, `shared/constants.ts`, `shared/routeCoverage.ts`, `selectedRoutes.ts`, `stationProximity.ts`, `mercatorDistance.ts`, `lineLength.ts` (`lineLengthKmSql`, the one expression behind every stored `length_km` and the admin preview), `lineMembership.ts` (which named lines a route is on), `coordinateUtils.ts` (WKT out, `lngLatSql` to read a point column back as `[lng, lat]`), `countryUtils.ts`, `shared/countryFlag.ts`, `shared/getUntimezonedDateStr.ts`, `plural.ts`, `rateLimit.ts`.
 - **Toast**: `toast/` (`useToast`, `ToastContainer`, `ConfirmDialog`).
 
@@ -267,7 +267,7 @@ One directory per part of the app; always import a component by its full path (`
 ### Database files (`database/init/`)
 
 - `01-schema.sql` — tables and indexes. Never re-run on deploy.
-- `02-vector-tiles.sql` — tile functions, 3857 columns and triggers, `user_fully_ridden_routes`, `immutable_unaccent`. Re-applied on every deploy — keep it idempotent.
+- `02-vector-tiles.sql` — tile functions, 3857 columns and triggers, `user_fully_ridden_routes`, `immutable_unaccent`, `search_key`. Re-applied on every deploy — keep it idempotent.
 
 ### OSM scripts (`osmium-scripts/`)
 
@@ -303,7 +303,7 @@ A web app made installable, not the native app: manifest (`src/app/manifest.ts`,
 
 ### Suggestion dropdowns
 
-Both station searches use `useSearchCombobox` (300ms debounce, two-character floor, latest-request guard, keyboard, ARIA combobox with `aria-activedescendant`). The list `preventDefault`s on **pointerdown** so focus never leaves the input — which is why **selecting a result blurs the input explicitly**, or the on-screen keyboard stays up.
+Both station searches use `useSearchCombobox` (300ms debounce, two-character floor counted without separators — `searchQueryLength`, as the server and the native app count it — latest-request guard, keyboard, ARIA combobox with `aria-activedescendant`). The list `preventDefault`s on **pointerdown** so focus never leaves the input — which is why **selecting a result blurs the input explicitly**, or the on-screen keyboard stays up.
 
 ### Journey dates
 
@@ -323,7 +323,7 @@ The **navbar** keeps identity and auth (mobile: auth icon, share glyph, hamburge
 
 ### Route Logger
 
-Click routes to select; click stations to fill the planner (a station wins over the route under it; on touch it opens the station's sheet instead). Per-route partial toggle and remove; "Log Journey" (name req, description, date defaulting to today). The embedded Journey Planner: from / via* / to (vias reordered with ▲▼ — not HTML5 drag-and-drop, which iOS never fires), diacritic-insensitive autocomplete through `immutable_unaccent` (call the wrapper, not `unaccent`, or the trigram index goes unused), gold result highlight, "Add Routes to Selection". A route the plan only partly covers arrives with `partial` ticked and its stretch attached.
+Click routes to select; click stations to fill the planner (a station wins over the route under it; on touch it opens the station's sheet instead). Per-route partial toggle and remove; "Log Journey" (name req, description, date defaulting to today). The embedded Journey Planner: from / via* / to (vias reordered with ▲▼ — not HTML5 drag-and-drop, which iOS never fires), autocomplete insensitive to case, diacritics, spaces and hyphens through `search_key` (the SQL twin of `foldForSearch`; call it on both sides, or the trigram index goes unused), gold result highlight, "Add Routes to Selection". A route the plan only partly covers arrives with `partial` ticked and its stretch attached.
 
 ### My Trips / My Journeys (auth)
 
@@ -357,7 +357,7 @@ Read `RECALC_PERFORMANCE.md` before touching `verifyRouteData.ts`, `scripts/lib/
 
 `npm test` runs `tests/*.test.ts` with Node's `node:test` through tsx — no framework. They cover the pure logic where a mistake is silent: `routeCoverage.ts`, `parsePgTextArray`, `normalizeCountryCodes`, `mergeLinearChain`, the GeoJSON stream, the planner's search and trims (networks built with `buildRouteGraph`), `selectedRoutes.ts`, `shared/map/layerPrefs.ts`, `scripts/lib/partGeometry.ts`. Run them after touching any of those. They live in `tests/` because the shared folder can't import `node:test`, and import through `@/`.
 
-`routeCoverage.sql.test.ts` needs the database (it skips itself otherwise): it shadows the tables `user_fully_ridden_routes` reads with temp tables in a rolled-back transaction, so a new table the function reads needs a temp twin there.
+`searchText.sql.test.ts` (`foldForSearch` against `search_key`, over every route's names) and `routeCoverage.sql.test.ts` need the database (they skip themselves otherwise). The latter shadows the tables `user_fully_ridden_routes` reads with temp tables in a rolled-back transaction, so a new table the function reads needs a temp twin there.
 
 ### Type checking
 

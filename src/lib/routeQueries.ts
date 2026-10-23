@@ -13,6 +13,7 @@ import pool, { escapeLikePattern } from "./db";
 import { onLineSql, routeLinesSql } from "./lineMembership";
 import { MIN_SEARCH_QUERY_LENGTH, type UsageType } from "./shared/constants";
 import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
+import { searchQueryLength } from "./shared/searchQuery";
 import type {
   LineGeometry,
   LineSearchResult,
@@ -35,16 +36,18 @@ import type {
  * Also restricted to the current region: the map is locked to it, so a hit in
  * the other one could neither be flown to nor routed from.
  *
- * `immutable_unaccent` rather than `unaccent`, on both sides: it is what the
- * trigram index on station names is built over (02-vector-tiles.sql), and the
- * planner uses that index only for the exact expression it indexes.
+ * Compared as `search_key` (02-vector-tiles.sql) on both sides — case,
+ * diacritics, spaces and hyphens aside, so "owariseto" finds "Owari Seto": it is
+ * what the trigram index on station names is built over, and the planner uses
+ * that index only for the exact expression it indexes. The two-character floor is
+ * counted without separators (`searchQueryLength`), so "a-" is one character.
  */
 export async function searchStationsByName(
   searchQuery: string,
   region: RegionId,
   { nearRouteOnly = true }: { nearRouteOnly?: boolean } = {},
 ): Promise<Station[]> {
-  if (searchQuery.trim().length < MIN_SEARCH_QUERY_LENGTH) {
+  if (searchQueryLength(searchQuery) < MIN_SEARCH_QUERY_LENGTH) {
     return [];
   }
 
@@ -59,10 +62,10 @@ export async function searchStationsByName(
     FROM stations
     WHERE ($3 OR near_route)
       AND ${regionContainsSql(region, "coordinates")}
-      AND immutable_unaccent(name) ILIKE immutable_unaccent($1)
+      AND search_key(name) LIKE search_key($1)
     ORDER BY
       CASE
-        WHEN immutable_unaccent(name) ILIKE immutable_unaccent($2) THEN 0  -- Start match first
+        WHEN search_key(name) LIKE search_key($2) THEN 0  -- Start match first
         ELSE 1  -- Contains match second
       END,
       name
@@ -84,8 +87,8 @@ export async function searchStationsByName(
  * sharing a name come back as one line, boxed round all of them, so picking it
  * shows the whole line. A route is on a line whether the line is its `name` or
  * one of its `other_names` (a stretch two lines share). Every usage type: a line is a place to look at, whichever
- * layers happen to be on. Matched as station names are — diacritic-insensitive,
- * start matches first. Unindexed, which a region's few thousand routes do not need.
+ * layers happen to be on. Matched as station names are — by `search_key`, start
+ * matches first. Unindexed, which a region's few thousand routes do not need.
  *
  * The five names are picked before anything is boxed: `ST_Extent` reads each
  * route's whole (TOASTed) line, and a query like "Li" matches nearly every route
@@ -96,7 +99,7 @@ async function searchLinesByName(
   searchQuery: string,
   region: RegionId,
 ): Promise<LineSearchResult[]> {
-  if (!REGIONS[region].hasRouteNames || searchQuery.trim().length < MIN_SEARCH_QUERY_LENGTH) {
+  if (!REGIONS[region].hasRouteNames || searchQueryLength(searchQuery) < MIN_SEARCH_QUERY_LENGTH) {
     return [];
   }
 
@@ -111,12 +114,12 @@ async function searchLinesByName(
     `
     WITH matched AS (
       SELECT line.name,
-             CASE WHEN immutable_unaccent(line.name) ILIKE immutable_unaccent($2) THEN 0 ELSE 1 END AS rank
+             CASE WHEN search_key(line.name) LIKE search_key($2) THEN 0 ELSE 1 END AS rank
       FROM railway_routes rr
       CROSS JOIN LATERAL ${routeLinesSql("rr")} AS line(name)
       WHERE line.name IS NOT NULL
         AND ${regionContainsSql(region, "rr.starting_coordinate")}
-        AND immutable_unaccent(line.name) ILIKE immutable_unaccent($1)
+        AND search_key(line.name) LIKE search_key($1)
       GROUP BY line.name
       ORDER BY rank, line.name
       LIMIT 5

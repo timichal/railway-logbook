@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Icon from "@/components/ui/Icon";
-import { foldForSearch } from "@/lib/searchText";
+import { foldAccents } from "@/lib/searchText";
 import { optionRow } from "@/lib/ui/buttonStyles";
 
 interface TagInputProps {
@@ -16,6 +16,12 @@ interface TagInputProps {
    * created (a route's own line name, in the field for its other lines).
    */
   exclude?: string[];
+  /**
+   * How two tags are compared, and a tag against the query: `foldAccents` (case and
+   * diacritics aside) unless the tags are names, which pass `foldForSearch` to drop
+   * the separators too.
+   */
+  fold?: (text: string) => string;
   placeholder?: string;
 }
 
@@ -30,6 +36,7 @@ export default function TagInput({
   onChange,
   availableTags = [],
   exclude = [],
+  fold = foldAccents,
   placeholder = "Search or create a tag…",
 }: TagInputProps) {
   const [input, setInput] = useState("");
@@ -37,20 +44,20 @@ export default function TagInput({
   const [highlight, setHighlight] = useState(0);
 
   const query = input.trim();
-  const foldedQuery = foldForSearch(query);
+  const foldedQuery = fold(query);
 
-  // Matched case- and diacritic-insensitively, as the map's search box is: "chuo"
-  // finds "Chūō". The same folding decides what counts as a tag already there, so
-  // "Chuo Main Line" is never created beside "Chūō Main Line". Each suggestion is
-  // folded (and sorted) once per list, not on every keystroke.
+  // Matched through `fold`, as the map's search box matches: "chuo" finds "Chūō".
+  // The same folding decides what counts as a tag already there, so "Chuo Main
+  // Line" is never created beside "Chūō Main Line". Each suggestion is folded (and
+  // sorted) once per list, not on every keystroke.
   const foldedTags = useMemo(
     () =>
       availableTags
-        .map((tag) => ({ tag, folded: foldForSearch(tag) }))
+        .map((tag) => ({ tag, folded: fold(tag) }))
         .sort((a, b) => a.tag.localeCompare(b.tag)),
-    [availableTags],
+    [availableTags, fold],
   );
-  const taken = new Set([...value, ...exclude].map(foldForSearch));
+  const taken = new Set([...value, ...exclude].map(fold));
 
   const suggestions = foldedTags
     .filter(({ folded }) => !taken.has(folded) && folded.includes(foldedQuery))
@@ -73,7 +80,7 @@ export default function TagInput({
   const addTag = (tag: string) => {
     const trimmed = tag.trim();
     if (!trimmed) return;
-    if (!taken.has(foldForSearch(trimmed))) {
+    if (!taken.has(fold(trimmed))) {
       onChange([...value, trimmed]);
     }
     setInput("");

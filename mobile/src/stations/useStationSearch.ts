@@ -18,6 +18,7 @@
  */
 import { MIN_SEARCH_QUERY_LENGTH, SEARCH_DEBOUNCE_MS } from "@shared/constants";
 import type { RegionId } from "@shared/regions";
+import { searchQueryLength } from "@shared/searchQuery";
 import type { Station } from "@shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as api from "@/api/endpoints";
@@ -51,7 +52,7 @@ export function useStationSearch(regionId: RegionId): StationSearch {
   }, [regionId, reset]);
 
   useEffect(() => {
-    if (query.trim().length < MIN_SEARCH_QUERY_LENGTH) {
+    if (searchQueryLength(query) < MIN_SEARCH_QUERY_LENGTH) {
       setResults([]);
       setSearching(false);
       return;

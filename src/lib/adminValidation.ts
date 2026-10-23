@@ -24,8 +24,9 @@ export function requiredStations(
  * A route's line names: `name`, the line it is called by, and `otherNames`, the
  * other lines sharing it. Trimmed, blanks dropped, and the other names cleared of
  * duplicates and of the name itself, compared as the line search compares them
- * (case and diacritics aside, `foldForSearch`): "Chuo Main Line" beside "Chūō Main
- * Line" would make the search offer one line twice, each with half its routes.
+ * (case, diacritics, spaces and hyphens aside, `foldForSearch`): "Chuo Main Line"
+ * beside "Chūō Main Line" would make the search offer one line twice, each with
+ * half its routes.
  * Other names need a name to follow, as the table's CHECK says; refused here
  * first, with a message the form can show.
  */

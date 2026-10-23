@@ -14,6 +14,7 @@
  * coordinate.
  */
 import { Ionicons } from "@expo/vector-icons";
+import { searchQueryLength } from "@shared/searchQuery";
 import type { Station } from "@shared/types";
 import type { ReactNode } from "react";
 import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
@@ -73,7 +74,7 @@ export function StationField({
       <StationResults
         results={results}
         searching={searching}
-        queryLength={query.trim().length}
+        queryLength={searchQueryLength(query)}
         onSelect={(station) => {
           onChange(station);
           reset();
