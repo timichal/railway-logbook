@@ -74,7 +74,7 @@ function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | n
   // `under_repair` only qualifies an invalid route, so it is asked only inside the
   // invalid branch — which also keeps a stale flag on a valid route from showing.
   // Nested single-condition `case`s rather than an `["all", ...]`, per the house
-  // rule for data-driven paint (see "Map styling" in CLAUDE.md).
+  // rule for data-driven paint (see src/lib/shared/map/CLAUDE.md).
   const statusColor: maplibregl.ExpressionSpecification = [
     "case",
     ["==", ["get", "is_valid"], false],

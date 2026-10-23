@@ -1,6 +1,6 @@
 /**
- * Journey-planner pathfinding over whole routes. See "Journey planner"
- * in CLAUDE.md and the modules under `planner/` for the search itself.
+ * Journey-planner pathfinding over whole routes. See
+ * `planner/CLAUDE.md` and the modules under `planner/` for the search itself.
  *
  * This module is the flow — find the stations' routes, search each segment,
  * work out what was travelled — and the reads that turn the plan into

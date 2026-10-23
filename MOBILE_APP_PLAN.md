@@ -6,7 +6,7 @@ Android. Written for someone fluent in JS/TS and React but new to mobile.
 
 This is a separate project from the mobile-web work, which is finished: the _web_
 app is pleasant on a phone and installable to the home screen (see the bottom
-sheet, the touch sheets, the safe areas and the manifest in `CLAUDE.md`). This one
+sheet, the touch sheets, the safe areas and the manifest in `CLAUDE.md` and the area notes it lists). This one
 is a distinct app in the two stores.
 
 ---
@@ -142,7 +142,7 @@ case  all(has date, whole) → visited        case  has date → (case whole →
 platforms**, so the web app now uses it too (`userRouteStyling.ts` and
 `lineClassColorExpression`) rather than keeping a native-only variant — one
 implementation, and Phase 3 inherits it working. See "The colour expression" under
-Map styling in `CLAUDE.md`; **keep new data-driven paint expressions in that
+Styling in `src/lib/shared/map/CLAUDE.md`; **keep new data-driven paint expressions in that
 shape**.
 
 Worth filing upstream: spec-valid input, silent process death, no crash report,
@@ -155,8 +155,8 @@ decoding `railway_routes_tile` at z4–z8 for both regions, with and without
 `?user_id=1`, every feature is a LineString with ≥2 points. It is liberty's
 `park_outline`, an unfiltered `line` layer over OpenMapTiles' `park` source-layer,
 which carries a label **point** per park alongside the polygon. Fixed by a fourth
-basemap transform, `filterPointsFromParkOutlines`, in the web app — full account
-under Basemap in `CLAUDE.md`. Nothing rendered wrong either way. Worth filing
+basemap transform, `filterPointsFromParkOutlines`, in the web app — explained
+under Basemap in `src/lib/shared/map/CLAUDE.md`. Nothing rendered wrong either way. Worth filing
 against the liberty style, not against MapLibre Native.
 
 ### Getting the tooling to run
@@ -318,7 +318,7 @@ lives in `src/lib/shared/`, the only part of the web app `@shared/*` reaches:
 - **The whole component tree.** No DOM, no CSS. **NativeWind** gives you Tailwind
   class names in RN, which makes this mostly transcription rather than redesign —
   and the web app's mobile decisions (bottom sheet, tap-to-inspect, 44pt targets;
-  all documented under **UI structure** in `CLAUDE.md`) are the ones you build here
+  documented in `src/components/CLAUDE.md` and `src/lib/map/CLAUDE.md`) are the ones you build here
   from the start.
 
 ### The data layer — was the hard blocker, now solved
@@ -592,7 +592,7 @@ Phase 2 chose to import the web app's `src/lib` rather than copy it, so that
 `style.ts` would stay one source of truth. Phase 3 is where that promise was
 paid, and it needed a refactor **on the web side** before any of it could be
 imported. Three things blocked it, and the fixes are now invariants (they are
-written up under "`mobile/` is a second app" in `CLAUDE.md`):
+written up under "`src/lib/shared/` is shared" in `CLAUDE.md`):
 - **The tile host.** `map/index.ts` computed it from `window.location` at module
   load, which in React Native is a `window` with no `location` — so importing
   that module at all was fatal, not merely wrong. The source factories moved to
