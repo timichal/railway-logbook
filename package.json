@@ -45,19 +45,19 @@
   "dependencies": {
     "@rapideditor/country-coder": "^5.6.1",
     "bcryptjs": "^3.0.3",
-    "dotenv": "^18.0.8",
+    "dotenv": "^18.0.9",
     "jose": "^6.2.13",
     "maplibre-gl": "^6.15.0",
-    "next": "^16.4.2",
+    "next": "^16.4.3",
     "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "transliteration": "^2.6.2",
+    "transliteration": "^2.7.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.2",
+    "@biomejs/biome": "^2.6.3",
     "@maplibre/maplibre-gl-style-spec": "^26.4.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.4",
