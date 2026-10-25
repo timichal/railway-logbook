@@ -20,6 +20,12 @@ export class ValidationError extends Error {
 }
 
 /**
+ * A signed-in action's refusal when there is no session: the page offers those
+ * actions only while signed in, so the session ended under it.
+ */
+export const SIGNED_OUT_MESSAGE = "You've been signed out. Sign in again to continue.";
+
+/**
  * A row the caller asked for that isn't there — or isn't theirs, which answers
  * the same so that an id cannot be probed for. Its message is written for the
  * caller like a `ValidationError`'s; it is a class of its own only because the

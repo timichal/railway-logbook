@@ -24,27 +24,21 @@ import {
   registerUser,
 } from "./authQueries";
 import { COOKIE_NAME, createToken, type User } from "./authTokens";
-import { ValidationError } from "./errors";
+import { SIGNED_OUT_MESSAGE, ValidationError } from "./errors";
 import {
   enforceLoginRateLimit,
   enforcePasswordCheckRateLimit,
   enforceRegisterRateLimit,
 } from "./rateLimit";
+import { SESSION_COOKIE_OPTIONS } from "./sessionCookie";
 import { verifyToken } from "./sessionQueries";
 
 export type { User };
 
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days, matching the token's own TTL
-
 async function setSessionCookie(user: User): Promise<void> {
   const token = await createToken(user);
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: COOKIE_MAX_AGE,
-  });
+  cookieStore.set(COOKIE_NAME, token, SESSION_COOKIE_OPTIONS);
 }
 
 /**
@@ -113,7 +107,7 @@ export async function deleteAccount(formData: FormData): Promise<ActionResult<nu
   return asActionResult(async () => {
     const user = await getUser();
     if (!user) {
-      throw new ValidationError("Not authenticated");
+      throw new ValidationError(SIGNED_OUT_MESSAGE);
     }
 
     enforcePasswordCheckRateLimit(await headers());

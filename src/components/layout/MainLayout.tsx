@@ -8,10 +8,12 @@ import Navbar from "@/components/layout/Navbar";
 import type { ActiveTab } from "@/components/logbook/UserSidebar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
+import { useSessionKeepAlive } from "@/hooks/useSessionKeepAlive";
 import type { User } from "@/lib/authActions";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
+import { useToast } from "@/lib/toast";
 import { EditGuardProvider, useConfirmDiscard } from "@/lib/ui/editGuard";
 
 // Dynamically import the map component to avoid SSR issues with MapLibre
@@ -73,6 +75,22 @@ function MainPage({
     setMenuView(null);
   };
 
+  // A session that ended under the page (see `useSessionKeepAlive`). Sign in goes
+  // straight to the form, without `openMenu`'s question: signing back in to the
+  // same account keeps the drafts, and saving them is the point. Not now leaves
+  // the page as it is; its saves then say why they fail.
+  const { showConfirm } = useToast();
+  useSessionKeepAlive(user?.id ?? null, () =>
+    showConfirm({
+      title: "Signed out",
+      message: "Your session has ended. Sign in again to keep logging and to save your changes.",
+      confirmLabel: "Sign in",
+      cancelLabel: "Not now",
+      variant: "info",
+      onConfirm: () => setMenuView("login"),
+    }),
+  );
+
   // Handle successful login/register - switch to Route Logger tab
   const handleAuthSuccess = () => {
     setActiveTab("routes");
@@ -107,8 +125,11 @@ function MainPage({
 
       {/* The hamburger's menu, at every width: a sheet of its own, not a strip inside
           the sidebar and not a row of buttons in the bar. */}
+      {/* Keyed by the view it opens on: the sheet reads `initialView` once, and the
+          Signed out dialog's Sign in can land on a sheet already open. */}
       {menuView && (
         <MenuSheet
+          key={menuView}
           user={user}
           initialView={menuView}
           onClose={() => setMenuView(null)}

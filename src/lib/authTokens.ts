@@ -80,8 +80,14 @@ export interface User {
  */
 type TokenKind = "session" | "access" | "refresh";
 
-/** Web cookie session. Unchanged from before the mobile API existed. */
-const SESSION_TTL = "7d";
+/**
+ * Web cookie session. Sliding: `/api/session` swaps a cookie
+ * for a fresh one once a day while the app is in use, so this is how long a
+ * browser can go unused before it is signed out — long, for the same reason as
+ * `REFRESH_TTL`.
+ */
+export const SESSION_TTL_SECONDS = 90 * 24 * 60 * 60;
+const SESSION_TTL = `${SESSION_TTL_SECONDS}s`;
 /** Bearer token the app sends with every request. */
 const ACCESS_TTL = "7d";
 /**

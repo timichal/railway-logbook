@@ -51,6 +51,17 @@ export async function verifyToken(
   token: string,
   expect: "session" | "access" | "refresh" = "session",
 ): Promise<User | null> {
+  return (await verifySession(token, expect))?.user ?? null;
+}
+
+/**
+ * `verifyToken`, keeping the claims beside the user, for a caller that also
+ * needs to know when the token was issued (the cookie's renewal, `/api/session`).
+ */
+export async function verifySession(
+  token: string,
+  expect: "session" | "access" | "refresh" = "session",
+): Promise<{ user: User; claims: TokenClaims } | null> {
   const claims = await readToken(token, expect);
   if (!claims) return null;
 
@@ -60,5 +71,5 @@ export async function verifyToken(
   );
 
   const row = result.rows[0];
-  return row ? { id: row.id, email: row.email, name: row.name } : null;
+  return row ? { user: { id: row.id, email: row.email, name: row.name }, claims } : null;
 }

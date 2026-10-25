@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EditingGeometry } from "@/components/admin/AdminCreateRouteTab";
 import type { EditingScenicLine } from "@/components/admin/AdminScenicTab";
@@ -12,6 +13,7 @@ import SidebarResizer from "@/components/layout/SidebarResizer";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
+import { useSessionKeepAlive } from "@/hooks/useSessionKeepAlive";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import {
   type AdminRouteDetail,
@@ -49,7 +51,8 @@ export default function AdminPageClient({ user, initialRegion }: AdminPageClient
 }
 
 function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
-  const { showError, showSuccess } = useToast();
+  const { showError, showSuccess, showConfirm } = useToast();
+  const router = useRouter();
   const isMobile = useIsMobile();
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   // The selected route's detail, loaded here once for both of its readers: the
@@ -273,6 +276,20 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   async function handleLogout() {
     await logout();
   }
+
+  // A session that ended under the page (see `useSessionKeepAlive`). The sign-in
+  // form is on the main page; Not now leaves this one as it is, and its saves
+  // then fail with "Admin access required".
+  useSessionKeepAlive(user.id, () =>
+    showConfirm({
+      title: "Signed out",
+      message: "Your session has ended. Sign in again on the map to keep editing.",
+      confirmLabel: "Go to map",
+      cancelLabel: "Not now",
+      variant: "info",
+      onConfirm: () => router.push("/"),
+    }),
+  );
 
   const sidebarContent = (
     <AdminSidebar
