@@ -30,14 +30,18 @@ export interface PathPreview {
  * changed while it ran is discarded — its answer is for points no longer picked.
  * Points are compared by identity: each click makes a new array.
  *
+ * `avoidBacktracking` searches as a scenic line's save does (`findAdminPath`); a
+ * path found in the other mode is discarded the same way.
+ *
  * Lives with the page, not the create tab, which unmounts with the mobile drawer.
  */
 export function useRoutePreview(
   start: [number, number] | null,
   end: [number, number] | null,
   onError: (message: string) => void,
+  { avoidBacktracking = false }: { avoidBacktracking?: boolean } = {},
 ): PathPreview | null {
-  const [found, setFound] = useState<PathPreview | null>(null);
+  const [found, setFound] = useState<(PathPreview & { avoidBacktracking: boolean }) | null>(null);
   const reportError = useEffectEvent(onError);
 
   useEffect(() => {
@@ -49,7 +53,7 @@ export function useRoutePreview(
     }
     let cancelled = false;
 
-    findRailwayPathFromCoordinates(start, end)
+    findRailwayPathFromCoordinates(start, end, { avoidBacktracking })
       .then(unwrap)
       .then((result) => {
         if (cancelled) return;
@@ -66,6 +70,7 @@ export function useRoutePreview(
           endCoordinate: end,
           hasBacktracking: result.hasBacktracking,
           lengthKm: result.lengthKm,
+          avoidBacktracking,
         });
       })
       .catch((error) => {
@@ -77,7 +82,12 @@ export function useRoutePreview(
     return () => {
       cancelled = true;
     };
-  }, [start, end]);
+  }, [start, end, avoidBacktracking]);
 
-  return found && found.startCoordinate === start && found.endCoordinate === end ? found : null;
+  return found &&
+    found.startCoordinate === start &&
+    found.endCoordinate === end &&
+    found.avoidBacktracking === avoidBacktracking
+    ? found
+    : null;
 }

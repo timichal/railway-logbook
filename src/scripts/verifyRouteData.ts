@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { SCENIC_BACKTRACKING_ERROR } from "../lib/adminValidation";
 import { coordinatesToWKT } from "../lib/coordinateUtils";
 import { createPool } from "../lib/db";
 import { lineLengthKmSql } from "../lib/lineLength";
@@ -86,10 +87,12 @@ type RouteOutcome =
 /**
  * Recalculate a geometry from its stored click points and judge it against the
  * stored length: what a route and a scenic line have in common. Writes nothing.
+ * `avoidBacktracking` for a scenic line, searched as its save searched it.
  */
 async function recalculateGeometry(
   db: Pool,
   row: StoredGeometryRow,
+  { avoidBacktracking = false }: { avoidBacktracking?: boolean } = {},
 ): Promise<
   | { status: "invalid"; error: string }
   | { status: "ok"; lineString: string; newLength: number; hasBacktracking: boolean }
@@ -100,7 +103,7 @@ async function recalculateGeometry(
   // searches, several at a time, and their progress logging would bury the
   // summary. See PathFinderOptions for why patching the global console.log —
   // which is what this used to do — cannot survive two overlapping searches.
-  const pathFinder = new RailwayPathFinder({ quiet: true });
+  const pathFinder = new RailwayPathFinder({ quiet: true, avoidBacktracking });
 
   // Deliberately no try/catch. Every way pathfinding can fail comes back as
   // null — the one failure that throws, a part combination whose chain doesn't
@@ -268,8 +271,9 @@ interface ScenicLineRow extends StoredGeometryRow {
 /**
  * Recalculate every scenic line from its stored click points, exactly as routes
  * are (same pathfinder, same length check), and print a summary. A line that no
- * longer routes is marked invalid and keeps its last geometry, which the user
- * map goes on drawing — it is only a highlight.
+ * longer routes, or whose new path backtracks (which a save refuses outright), is
+ * marked invalid and keeps its last geometry, which the user map goes on drawing
+ * — it is only a highlight.
  */
 async function recalculateScenicLines(db: Pool, options: RecalculationOptions): Promise<void> {
   const lines = await db.query<ScenicLineRow>(`
@@ -286,7 +290,11 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
     lines.rows,
     options.concurrency ?? DEFAULT_RECALC_CONCURRENCY,
     async (line) => {
-      const outcome = await recalculateGeometry(db, line);
+      const recalculated = await recalculateGeometry(db, line, { avoidBacktracking: true });
+      const outcome =
+        recalculated.status === "ok" && recalculated.hasBacktracking
+          ? { status: "invalid" as const, error: SCENIC_BACKTRACKING_ERROR }
+          : recalculated;
       if (outcome.status === "invalid") {
         await db.query(
           "UPDATE scenic_lines SET is_valid = FALSE, error_message = $1 WHERE id = $2",
@@ -310,12 +318,6 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
     const outcome = outcomes[index];
     return outcome.status === "invalid" ? [{ line, error: outcome.error }] : [];
   });
-  // Nothing is stored for it (a scenic line has no backtracking flags), but a path
-  // that now runs into a spur and back would draw the spur as part of the band.
-  const backtracking = lines.rows.filter((_, index) => {
-    const outcome = outcomes[index];
-    return outcome.status === "ok" && outcome.hasBacktracking;
-  });
 
   console.log("");
   console.log("=== Scenic Line Recalculation Summary ===");
@@ -323,10 +325,6 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
   console.log(`Invalid scenic lines: ${invalid.length}`);
   for (const { line, error } of invalid) {
     console.log(`  [${line.id}] ${line.from_station} → ${line.to_station}: ${error}`);
-  }
-  console.log(`Scenic lines that backtrack (check by hand): ${backtracking.length}`);
-  for (const line of backtracking) {
-    console.log(`  [${line.id}] ${line.from_station} → ${line.to_station}`);
   }
 }
 

@@ -116,6 +116,8 @@ interface AdminMapProps {
   className?: string;
   onCoordinateClick?: (coordinate: [number, number]) => void;
   onRouteSelect?: (routeId: number | null) => void;
+  /** A click on nothing unselects the scenic line. */
+  onScenicLineDeselect?: () => void;
   selectedRouteId?: number | null;
   /** The selected route's length, from the detail the page loads for the sidebar. */
   selectedRouteLength: number | null;
@@ -141,6 +143,7 @@ export default function AdminMap({
   className = "",
   onCoordinateClick,
   onRouteSelect,
+  onScenicLineDeselect,
   selectedRouteId,
   selectedRouteLength,
   previewRoute,
@@ -174,8 +177,10 @@ export default function AdminMap({
   // Store callbacks in refs to avoid map recreation on changes
   const onCoordinateClickRef = useRef(onCoordinateClick);
   const onRouteSelectRef = useRef(onRouteSelect);
+  const onScenicLineDeselectRef = useRef(onScenicLineDeselect);
   onCoordinateClickRef.current = onCoordinateClick;
   onRouteSelectRef.current = onRouteSelect;
+  onScenicLineDeselectRef.current = onScenicLineDeselect;
 
   // Initialize map
   // The station dots and their labels are picked against the basemap under them, so
@@ -214,6 +219,7 @@ export default function AdminMap({
         setupAdminMapInteractions(mapInstance, {
           onCoordinateClickRef,
           onRouteSelectRef,
+          onScenicLineDeselectRef,
           region: regionId,
         });
       },

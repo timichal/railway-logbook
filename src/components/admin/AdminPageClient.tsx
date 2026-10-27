@@ -84,13 +84,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   // the old region's preview straight back.
   const [createFormCoordinates, setCreateFormCoordinates] =
     useState<CreateFormCoordinates>(NO_COORDINATES);
-  // The path found between the picked points: drawn by the map, saved by the form,
-  // and gone as soon as either point is.
-  const previewRoute = useRoutePreview(
-    createFormCoordinates.startingCoordinate,
-    createFormCoordinates.endingCoordinate,
-    showError,
-  );
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   // Likewise the geometry edit in progress, which the map needs (it hides the
   // routes) as much as the sidebar does.
@@ -118,6 +111,15 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     : selectedTab === "scenic" && !region.hasScenicHighlight
       ? "routes"
       : selectedTab;
+  // The path found between the picked points: drawn by the map, saved by the form,
+  // and gone as soon as either point is. Searched as a scenic line's save searches
+  // it while the Scenic tab is open.
+  const previewRoute = useRoutePreview(
+    createFormCoordinates.startingCoordinate,
+    createFormCoordinates.endingCoordinate,
+    showError,
+    { avoidBacktracking: activeTab === "scenic" },
+  );
 
   // Switching regions drops everything picked out of the old one: the selected
   // route, a half-finished coordinate pick and its preview all point at track
@@ -265,6 +267,8 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     if (editing) setFocusBounds(null);
   }, []);
 
+  const handleScenicLineDeselect = useCallback(() => setSelectedScenicLineId(null), []);
+
   const handleFocusNote = useCallback((coordinate: [number, number]) => {
     setFocusCoordinate({ coordinate, nonce: Date.now() });
   }, []);
@@ -368,6 +372,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
             selectedRouteId={selectedRouteId}
             selectedRouteLength={selectedRouteDetail?.length_km ?? null}
             onRouteSelect={handleRouteSelect}
+            onScenicLineDeselect={handleScenicLineDeselect}
             onCoordinateClick={handleCoordinateClick}
             previewRoute={previewRoute}
             selectedCoordinates={createFormCoordinates}

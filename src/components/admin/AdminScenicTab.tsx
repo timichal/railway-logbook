@@ -32,7 +32,7 @@ interface AdminScenicTabProps {
   /** The picked points, owned by the page (map clicks fill them) and shared with the route form. */
   createFormCoordinates: CreateFormCoordinates;
   onCreateFormCoordinatesChange: React.Dispatch<React.SetStateAction<CreateFormCoordinates>>;
-  /** The path between the picked points; what a save stores. */
+  /** The path between the picked points; a save stores it (found again by the server) unless it backtracks. */
   previewRoute: PathPreview | null;
   /** Clears the picked points, and with them the preview. */
   onFormReset: () => void;
@@ -123,21 +123,18 @@ export default function AdminScenicTab({
       );
   }, [lines, search, invalidOnly]);
   const invalidCount = lines.filter((line) => !line.is_valid).length;
+  // A backtracking path is shown but never saved; the server refuses it too.
+  const backtracks = previewRoute?.hasBacktracking === true;
+  const savablePreview = backtracks ? null : previewRoute;
 
   const handleCreate = async () => {
-    const preview = previewRoute;
+    const preview = savablePreview;
     if (!preview) return;
     const from = newFrom.trim();
     const to = newTo.trim();
     const saved = await run("save the scenic line", async () => {
       const id = unwrap(
-        await createScenicLine(
-          from,
-          to,
-          preview.coordinates,
-          preview.startCoordinate,
-          preview.endCoordinate,
-        ),
+        await createScenicLine(from, to, preview.startCoordinate, preview.endCoordinate),
       );
       onFormReset();
       setNewFrom("");
@@ -150,18 +147,11 @@ export default function AdminScenicTab({
   };
 
   const handleSaveGeometry = async () => {
-    const preview = previewRoute;
+    const preview = savablePreview;
     if (!editing || !preview) return;
     const id = editing.id;
     const saved = await run("save the new geometry", async () => {
-      unwrap(
-        await updateScenicLineGeometry(
-          id,
-          preview.coordinates,
-          preview.startCoordinate,
-          preview.endCoordinate,
-        ),
-      );
+      unwrap(await updateScenicLineGeometry(id, preview.startCoordinate, preview.endCoordinate));
       onEditingChange(null);
       onFormReset();
       onChanged();
@@ -228,6 +218,12 @@ export default function AdminScenicTab({
           onCreateFormCoordinatesChange((prev) => ({ ...prev, endingCoordinate: null }))
         }
       />
+      {backtracks && (
+        <div className="border rounded-md p-3 bg-red-50 border-red-200 text-sm text-red-800">
+          This path backtracks, so it can't be saved as a scenic line. Re-pick a point so the path
+          runs straight through.
+        </div>
+      )}
     </>
   );
 
@@ -253,7 +249,7 @@ export default function AdminScenicTab({
           <button
             type="button"
             onClick={handleSaveGeometry}
-            disabled={!previewRoute || busy}
+            disabled={!savablePreview || busy}
             className={`${btn("success", "md")} w-full`}
           >
             {busy ? "Saving…" : "Save New Geometry"}
@@ -306,7 +302,7 @@ export default function AdminScenicTab({
         <button
           type="button"
           onClick={handleCreate}
-          disabled={busy || !previewRoute || !newFrom.trim() || !newTo.trim()}
+          disabled={busy || !savablePreview || !newFrom.trim() || !newTo.trim()}
           className={`${btn("success", "md")} w-full`}
         >
           {busy ? "Saving…" : "Save Scenic Line"}

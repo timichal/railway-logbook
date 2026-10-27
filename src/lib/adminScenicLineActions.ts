@@ -1,7 +1,8 @@
 "use server";
 
 import type { ActionResult } from "./actionResult";
-import { requiredStations } from "./adminValidation";
+import { findAdminPath } from "./adminPathSearch";
+import { requiredStations, SCENIC_BACKTRACKING_ERROR } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { countryAt } from "./countryUtils";
@@ -18,6 +19,12 @@ import type { RouteBounds } from "./shared/types";
  * between them (`useRoutePreview`), recalculated from the same points on every
  * OSM import (`verifyRouteData`) — but highlight only: two names and a geometry,
  * nothing logged against them, nothing derived from them.
+ *
+ * A scenic line never backtracks (`SCENIC_BACKTRACKING_ERROR`). Its paths are
+ * searched with `avoidBacktracking`, by the preview, the save and the
+ * recalculation alike. A save finds the path again from the click points rather
+ * than taking the previewed one, and refuses it if it turns back on itself; a
+ * recalculation that comes out backtracking marks the line invalid.
  */
 
 /** One scenic line as the admin list shows and edits it. */
@@ -35,11 +42,19 @@ export type AdminScenicLine = {
   ending_coordinate: [number, number];
 };
 
-function lineWKT(coordinates: [number, number][]): string {
-  if (!Array.isArray(coordinates) || coordinates.length < 2) {
-    throw new ValidationError("A scenic line needs a path of at least two points");
+/** The path between the click points as WKT, refused if there is none or it backtracks. */
+async function scenicLineWKT(
+  startCoordinate: [number, number],
+  endCoordinate: [number, number],
+): Promise<string> {
+  const path = await findAdminPath(startCoordinate, endCoordinate, { avoidBacktracking: true });
+  if (!path || path.coordinates.length < 2) {
+    throw new ValidationError("No path found between the picked points");
   }
-  return coordinatesToWKT(coordinates);
+  if (path.hasBacktracking) {
+    throw new ValidationError(SCENIC_BACKTRACKING_ERROR);
+  }
+  return coordinatesToWKT(path.coordinates);
 }
 
 /**
@@ -62,16 +77,16 @@ export async function getScenicLines(region: RegionId): Promise<ActionResult<Adm
   });
 }
 
-/** Create a scenic line from a previewed path. Returns its id. */
+/** Create a scenic line along the path between two click points. Returns its id. */
 export async function createScenicLine(
   fromStation: string,
   toStation: string,
-  coordinates: [number, number][],
   startCoordinate: [number, number],
   endCoordinate: [number, number],
 ): Promise<ActionResult<number>> {
   return asAdmin(async () => {
     const { from, to } = requiredStations(fromStation, toStation, "A scenic line");
+    const geometryWKT = await scenicLineWKT(startCoordinate, endCoordinate);
     const startCountry = countryAt(startCoordinate);
     const endCountry = countryAt(endCoordinate);
     const result = await pool.query<{ id: number }>(
@@ -88,7 +103,7 @@ export async function createScenicLine(
       [
         from,
         to,
-        lineWKT(coordinates),
+        geometryWKT,
         startCountry,
         endCountry,
         pointToWKT(startCoordinate),
@@ -99,14 +114,18 @@ export async function createScenicLine(
   });
 }
 
-/** Replace a scenic line's geometry with a re-picked path, which also makes it valid again. */
+/** Replace a scenic line's geometry with the path between re-picked points, which also makes it valid again. */
 export async function updateScenicLineGeometry(
   id: number,
-  coordinates: [number, number][],
   startCoordinate: [number, number],
   endCoordinate: [number, number],
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
+    // Before the search, which loads parts for up to 222km around both points; the
+    // UPDATE's own check still covers a line deleted while it runs.
+    const exists = await pool.query("SELECT 1 FROM scenic_lines WHERE id = $1", [id]);
+    if (exists.rowCount === 0) throw new ValidationError("Scenic line not found");
+    const geometryWKT = await scenicLineWKT(startCoordinate, endCoordinate);
     const startCountry = countryAt(startCoordinate);
     const endCountry = countryAt(endCoordinate);
     const result = await pool.query(
@@ -124,7 +143,7 @@ export async function updateScenicLineGeometry(
       `,
       [
         id,
-        lineWKT(coordinates),
+        geometryWKT,
         startCountry,
         endCountry,
         pointToWKT(startCoordinate),

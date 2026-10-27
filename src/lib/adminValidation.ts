@@ -21,6 +21,12 @@ export function requiredStations(
 }
 
 /**
+ * Why a scenic line's path was refused, or its recalculation marked invalid: a
+ * path into a spur and back would draw the spur as part of the band.
+ */
+export const SCENIC_BACKTRACKING_ERROR = "The path backtracks, which a scenic line may not";
+
+/**
  * A route's line names: `name`, the line it is called by, and `otherNames`, the
  * other lines sharing it. Trimmed, blanks dropped, and the other names cleared of
  * duplicates and of the name itself, compared as the line search compares them

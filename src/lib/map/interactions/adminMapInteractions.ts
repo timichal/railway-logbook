@@ -11,19 +11,25 @@ import {
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
 import { getNoteTypeLabel } from "@/lib/shared/constants";
-import { ROUTE_CLICK_LAYER_ID, ROUTE_LINE_LAYERS } from "@/lib/shared/map/layers";
+import {
+  ROUTE_CLICK_LAYER_ID,
+  ROUTE_LINE_LAYERS,
+  SCENIC_LINES_LAYER_ID,
+} from "@/lib/shared/map/layers";
 import type { RegionId } from "@/lib/shared/regions";
 
 interface AdminMapCallbacks {
   onCoordinateClickRef: RefObject<((coordinate: [number, number]) => void) | undefined>;
   onRouteSelectRef: RefObject<((routeId: number | null) => void) | undefined>;
+  /** A scenic line is selected from its list, never on the map, which can only unselect it. */
+  onScenicLineDeselectRef: RefObject<(() => void) | undefined>;
   /** Region the map is showing — decides how a route's popup is labelled. */
   region: RegionId;
 }
 
 export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
-  { onCoordinateClickRef, onRouteSelectRef, region }: AdminMapCallbacks,
+  { onCoordinateClickRef, onRouteSelectRef, onScenicLineDeselectRef, region }: AdminMapCallbacks,
 ) {
   const hits = (point: maplibreglType.PointLike, layers: string[]) =>
     featuresAt(mapInstance, point, layers).length > 0;
@@ -95,10 +101,14 @@ export function setupAdminMapInteractions(
     e.preventDefault();
   });
 
-  // A click on nothing at all unselects the route.
+  // A click on nothing at all unselects the route, and the scenic line — unless it
+  // lands on a scenic band (wider than the track under it) or a note, which are
+  // something to look at even though they take no click.
   mapInstance.on("click", (e) => {
-    if (!hits(e.point, [...ROUTE_HIT_LAYERS, "railway_parts", "route-endpoints"])) {
-      onRouteSelectRef.current?.(null);
+    if (hits(e.point, [...ROUTE_HIT_LAYERS, "railway_parts", "route-endpoints"])) return;
+    onRouteSelectRef.current?.(null);
+    if (!hits(e.point, [SCENIC_LINES_LAYER_ID, "admin_notes"])) {
+      onScenicLineDeselectRef.current?.();
     }
   });
 

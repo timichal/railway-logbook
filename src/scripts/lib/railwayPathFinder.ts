@@ -26,6 +26,23 @@ interface PathFinderOptions {
    * no-op as its "original" and silences logging permanently.
    */
   quiet?: boolean;
+  /**
+   * Between click points matched to several parts, prefer a combination whose path
+   * doesn't backtrack over a shorter one that does, within the same slack as the
+   * non-backtracking alternative (`backtrackingSlack`). Without it a straight path
+   * wins only when it is within 10m. For scenic lines, which may not backtrack at
+   * all; routes keep the default, which their stored lengths were measured with.
+   */
+  avoidBacktracking?: boolean;
+}
+
+/**
+ * How much longer than a backtracking path a non-backtracking one may be and still
+ * be preferred: 10% or 5km, whichever is smaller (the percentage rules on long
+ * paths, the +5km on short ones). In metres, as `distance` is.
+ */
+function backtrackingSlack(distance: number): number {
+  return Math.min(distance * 1.1, distance + 5000);
 }
 
 /**
@@ -45,9 +62,11 @@ interface PathFinderOptions {
 export class RailwayPathFinder {
   private readonly network = new PartNetwork();
   private readonly quiet: boolean;
+  private readonly avoidBacktracking: boolean;
 
   constructor(options: PathFinderOptions = {}) {
     this.quiet = options.quiet ?? false;
+    this.avoidBacktracking = options.avoidBacktracking ?? false;
   }
 
   /** Progress logging, dropped entirely when the finder is quiet. */
@@ -112,11 +131,10 @@ export class RailwayPathFinder {
     };
 
     // Step 3: Search for non-backtracking alternative. Non-backtracking paths are often
-    // slightly longer, so allow some slack: 10% or 5km, whichever is smaller (the
-    // percentage rules on long paths, the +5km on short ones). The search returns
+    // slightly longer, so allow some slack (`backtrackingSlack`). The search returns
     // nothing longer than this, so whatever it finds is acceptable.
     const firstDistance = pathDistance(firstParts);
-    const maxDistance = Math.min(firstDistance * 1.1, firstDistance + 5000);
+    const maxDistance = backtrackingSlack(firstDistance);
     this.log(
       `  Searching for non-backtracking alternatives (max ${(maxDistance / 1000).toFixed(1)}km)...`,
     );
@@ -223,6 +241,9 @@ export class RailwayPathFinder {
   ): PathResult | null {
     let bestResult: PathResult | null = null;
     let bestDistance = Infinity;
+    // The shortest combination that doesn't backtrack, for `avoidBacktracking`
+    let straightResult: PathResult | null = null;
+    let straightDistance = Infinity;
 
     for (const startPartId of startPartIds) {
       for (const endPartId of endPartIds) {
@@ -280,16 +301,33 @@ export class RailwayPathFinder {
           (distance < bestDistance && !(isSameDistance && replacingGoodWithBad)) ||
           (isSameDistance && betterQuality);
 
+        const result: PathResult = {
+          partIds: pathResult.partIds,
+          coordinates,
+          hasBacktracking: pathResult.hasBacktracking,
+          backtrackingAt: pathResult.backtrackingAt,
+        };
         if (shouldUpdate) {
           bestDistance = distance;
-          bestResult = {
-            partIds: pathResult.partIds,
-            coordinates,
-            hasBacktracking: pathResult.hasBacktracking,
-            backtrackingAt: pathResult.backtrackingAt,
-          };
+          bestResult = result;
+        }
+        if (!pathResult.hasBacktracking && distance < straightDistance) {
+          straightDistance = distance;
+          straightResult = result;
         }
       }
+    }
+
+    if (
+      this.avoidBacktracking &&
+      bestResult?.hasBacktracking &&
+      straightResult &&
+      straightDistance <= backtrackingSlack(bestDistance)
+    ) {
+      this.log(
+        `Selected non-backtracking path: ${(straightDistance / 1000).toFixed(2)} km (shortest backtracks)`,
+      );
+      return straightResult;
     }
 
     if (bestResult) {

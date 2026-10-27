@@ -1,7 +1,7 @@
 "use server";
 
-import { RailwayPathFinder } from "../scripts/lib/railwayPathFinder";
 import type { ActionResult } from "./actionResult";
+import { findAdminPath } from "./adminPathSearch";
 import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import pool from "./db";
@@ -18,14 +18,19 @@ import type { MapSearchResults, PathResult } from "./shared/types";
  * (`lineLengthKmSql`), so the preview shows the length the route will have.
  * A path of fewer than two points is no line to measure — PostGIS would throw
  * and take the preview down with it — so it comes back with no length.
+ *
+ * `avoidBacktracking` for a scenic line, whose save searches the same way
+ * (`findAdminPath`).
  */
 export async function findRailwayPathFromCoordinates(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
+  options: { avoidBacktracking?: boolean } = {},
 ): Promise<ActionResult<(PathResult & { lengthKm: number | null }) | null>> {
   return asAdmin(async () => {
-    const pathFinder = new RailwayPathFinder();
-    const path = await pathFinder.findPathFromCoordinates(pool, startCoordinate, endCoordinate);
+    const path = await findAdminPath(startCoordinate, endCoordinate, {
+      avoidBacktracking: options?.avoidBacktracking === true,
+    });
     if (!path) return null;
     if (path.coordinates.length < 2) return { ...path, lengthKm: null };
     const result = await pool.query<{ length_km: number }>(
