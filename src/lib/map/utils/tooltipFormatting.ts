@@ -169,6 +169,16 @@ export function formatRouteBody(
   return body;
 }
 
+/** The body of a scenic line's popup on the admin map, headed as a route's is. */
+export function formatScenicLineBody(properties: FeatureProperties): string {
+  const status = properties.is_valid === false ? "Scenic line · invalid" : "Scenic line";
+  return (
+    `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0 0 6px; color: var(--color-fg);">${escapeHtml(properties.from_station)} ⟷ ${escapeHtml(properties.to_station)}</h3>` +
+    `<div style="font-size: 0.85rem; color: var(--color-gray-700);">${status}</div>` +
+    `<div style="${POPUP_ROW_STYLE} font-size: 0.75rem; color: var(--color-gray-500);">Click to select</div>`
+  );
+}
+
 /** The body of a station popup, on either map. */
 export function formatStationBody(properties: FeatureProperties): string {
   return (

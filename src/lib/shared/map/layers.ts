@@ -418,6 +418,28 @@ export function createRouteEndpointsLayer(): CircleLayerSpecification {
   };
 }
 
+export const SCENIC_ENDPOINTS_LAYER_ID = "scenic-endpoints";
+
+/**
+ * Every scenic line's start and end point, as `createRouteEndpointsLayer` is for
+ * routes: clickable to reuse as a new scenic line's point, since a click on the
+ * band itself selects the line. Filled only while the Scenic tab is open.
+ */
+export function createScenicEndpointsLayer(): CircleLayerSpecification {
+  return {
+    id: SCENIC_ENDPOINTS_LAYER_ID,
+    type: "circle",
+    source: SCENIC_ENDPOINTS_LAYER_ID,
+    paint: {
+      "circle-radius": CIRCLES.routeEndpoint.radius,
+      "circle-color": COLORS.adminMarkers.scenicEndpoint,
+      "circle-stroke-color": COLORS.adminMarkers.stroke,
+      "circle-stroke-width": CIRCLES.routeEndpoint.strokeWidth,
+      "circle-opacity": OPACITIES.routeEndpoint,
+    },
+  };
+}
+
 export function createPublicNotesLayer(): CircleLayerSpecification {
   return {
     id: "public_notes",

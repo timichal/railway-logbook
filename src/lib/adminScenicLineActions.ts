@@ -10,7 +10,7 @@ import pool from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
 import { type RegionId, regionContainsSql } from "./shared/regions";
-import type { RouteBounds } from "./shared/types";
+import type { GeoJSONFeature, GeoJSONFeatureCollection, RouteBounds } from "./shared/types";
 
 /**
  * Scenic lines: stretches of track the user map highlights as scenic.
@@ -74,6 +74,46 @@ export async function getScenicLines(region: RegionId): Promise<ActionResult<Adm
       WHERE ${regionContainsSql(region, "starting_coordinate")}
     `);
     return result.rows;
+  });
+}
+
+/**
+ * The region's scenic line endpoints, for the admin map's dots in the Scenic tab
+ * (a GeoJSON FeatureCollection of Points, as `getAllRouteEndpoints` is for routes).
+ */
+export async function getScenicLineEndpoints(
+  region: RegionId,
+): Promise<ActionResult<GeoJSONFeatureCollection>> {
+  return asAdmin(async () => {
+    const result = await pool.query<{
+      id: number;
+      from_station: string;
+      to_station: string;
+      start: [number, number];
+      end: [number, number];
+    }>(`
+      SELECT id, from_station, to_station,
+             ${lngLatSql("starting_coordinate")} AS start, ${lngLatSql("ending_coordinate")} AS end
+      FROM scenic_lines
+      WHERE ${regionContainsSql(region, "starting_coordinate")}
+    `);
+
+    return {
+      type: "FeatureCollection",
+      features: result.rows.flatMap((row) =>
+        (["start", "end"] as const).map(
+          (endpoint): GeoJSONFeature => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: row[endpoint] },
+            properties: {
+              scenic_line_id: row.id,
+              endpoint_type: endpoint,
+              line_name: `${row.from_station} ⟷ ${row.to_station}`,
+            },
+          }),
+        ),
+      ),
+    };
   });
 }
 

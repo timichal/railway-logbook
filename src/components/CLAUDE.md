@@ -40,6 +40,6 @@ One directory per part of the app (`logbook/` sidebar and tabs, `map/`, `sharing
 ## Admin
 
 - Where `hasRouteNames`, the route forms have a required Name field above From, and the routes list is sorted and searched by name, with a "Without name" filter. Other names show after the name in the list.
-- While the Scenic tab is open, the admin map hides the routes so clicks reach the parts under them.
+- While the Scenic tab is open, the admin map hides the routes so clicks reach the parts under them. A scenic line then shows a From/To popup and a click selects it, as a route does elsewhere (`onScenicLineSelect`, passed only then and not during its geometry re-pick). Its endpoints are drawn as violet dots that pick their coordinate (`getScenicLineEndpoints`), so a new line can still start where one ends.
 - The route preview is derived from the picked points and dropped when they change. Its length is measured by the server with `lineLengthKmSql`.
 - Admin notes are coloured by type (`Usage` blue, `UsageInternal` light blue, `Works` orange, `Todo` purple). Switching type in `AdminNotesTab` is publish / unpublish.

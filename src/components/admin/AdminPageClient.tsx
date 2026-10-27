@@ -267,8 +267,6 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     if (editing) setFocusBounds(null);
   }, []);
 
-  const handleScenicLineDeselect = useCallback(() => setSelectedScenicLineId(null), []);
-
   const handleFocusNote = useCallback((coordinate: [number, number]) => {
     setFocusCoordinate({ coordinate, nonce: Date.now() });
   }, []);
@@ -372,7 +370,12 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
             selectedRouteId={selectedRouteId}
             selectedRouteLength={selectedRouteDetail?.length_km ?? null}
             onRouteSelect={handleRouteSelect}
-            onScenicLineDeselect={handleScenicLineDeselect}
+            // In the Scenic tab a click on a scenic line selects it, as a pick from its
+            // list does: the points picked for a new line stay, the form beside the
+            // list being still open. During a geometry re-pick the click picks a point.
+            onScenicLineSelect={
+              activeTab === "scenic" && !editingScenicLine ? setSelectedScenicLineId : undefined
+            }
             onCoordinateClick={handleCoordinateClick}
             previewRoute={previewRoute}
             selectedCoordinates={createFormCoordinates}

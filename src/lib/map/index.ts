@@ -24,6 +24,7 @@ export {
   createRailwayRoutesClickLayer,
   createRouteEndpointsLayer,
   createRouteLineLayer,
+  createScenicEndpointsLayer,
   createScenicLinesLayer,
   createStationLabelsLayer,
   createStationsLayer,

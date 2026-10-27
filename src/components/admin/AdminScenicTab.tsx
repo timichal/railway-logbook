@@ -52,7 +52,9 @@ interface AdminScenicTabProps {
  * renamed, re-picked or deleted.
  *
  * While this tab is open the map hides the routes (`scenicMode` on AdminMap), so a
- * click anywhere on the track picks a point.
+ * click on the track picks a point — except on a scenic line, which the click
+ * selects, as it selects a route in the other tabs. Its end dots pick their point,
+ * as a route's do. During a geometry re-pick the lines take no click.
  */
 export default function AdminScenicTab({
   createFormCoordinates,
@@ -109,19 +111,30 @@ export default function AdminScenicTab({
     loadLines();
   }, [regionId]);
 
-  // Sorted here, not by the query — the same order as the routes list.
+  // Sorted here, not by the query — the same order as the routes list. The selected
+  // line is always listed: one picked on the map may not match the filter, and its
+  // row is where it is edited.
   const filtered = useMemo(() => {
     const query = foldForSearch(search);
     return lines
       .toSorted((a, b) => compareByEndpoints(a, b) || a.id - b.id)
       .filter(
         (line) =>
-          (!invalidOnly || !line.is_valid) &&
-          (!query ||
-            foldForSearch(line.from_station).includes(query) ||
-            foldForSearch(line.to_station).includes(query)),
+          line.id === selectedId ||
+          ((!invalidOnly || !line.is_valid) &&
+            (!query ||
+              foldForSearch(line.from_station).includes(query) ||
+              foldForSearch(line.to_station).includes(query))),
       );
-  }, [lines, search, invalidOnly]);
+  }, [lines, search, invalidOnly, selectedId]);
+
+  // Bring the selected row into view: a line picked on the map may sit far down the
+  // list, out of sight. Again once the list loads, for a line selected meanwhile.
+  const selectedRowRef = useRef<HTMLDivElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedId and lines are the triggers; the row is read through its ref.
+  useEffect(() => {
+    selectedRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selectedId, lines]);
   const invalidCount = lines.filter((line) => !line.is_valid).length;
   // A backtracking path is shown but never saved; the server refuses it too.
   const backtracks = previewRoute?.hasBacktracking === true;
@@ -280,7 +293,8 @@ export default function AdminScenicTab({
         <h3 className="font-semibold text-gray-900">New Scenic Line</h3>
         <p className="text-sm text-gray-600">
           Click the track on the map to set the start and end of the scenic stretch. Routes are
-          hidden while this tab is open, so any point on the track can be picked.
+          hidden while this tab is open, so any point on the track can be picked. A click on an
+          existing scenic line selects it; click one of its violet end dots to start or end at it.
         </p>
         {picked}
         <TextField
@@ -341,7 +355,7 @@ export default function AdminScenicTab({
         ) : (
           <div className="divide-y divide-gray-100 border-t border-gray-100">
             {filtered.map((line) => (
-              <div key={line.id}>
+              <div key={line.id} ref={line.id === selectedId ? selectedRowRef : undefined}>
                 <button
                   type="button"
                   onClick={() => {

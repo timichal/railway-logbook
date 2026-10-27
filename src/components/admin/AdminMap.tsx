@@ -8,6 +8,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { unwrap } from "@/lib/actionResult";
 import { searchAdminMap } from "@/lib/adminMapActions";
 import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
+import { getScenicLineEndpoints } from "@/lib/adminScenicLineActions";
 import {
   adminNotesTileUrl,
   COLORS,
@@ -19,6 +20,7 @@ import {
   createRailwayRoutesSource,
   createRouteEndpointsLayer,
   createRouteLineLayer,
+  createScenicEndpointsLayer,
   createScenicLinesLayer,
   createScenicLinesSource,
   createStationLabelsLayer,
@@ -31,7 +33,7 @@ import {
 } from "@/lib/map";
 import { fitCamera } from "@/lib/map/fitCamera";
 import { useAdminLayerVisibility } from "@/lib/map/hooks/useAdminLayerVisibility";
-import { routeEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
+import { emptyEndpointsSource, useAdminMapOverlays } from "@/lib/map/hooks/useAdminMapOverlays";
 import { useAdminNotesPopup } from "@/lib/map/hooks/useAdminNotesPopup";
 import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
@@ -43,6 +45,7 @@ import { type UsageType, usageOptions } from "@/lib/shared/constants";
 import {
   ROUTE_LINE_LAYERS,
   routeLineLayerId,
+  SCENIC_ENDPOINTS_LAYER_ID,
   SCENIC_LINES_LAYER_ID,
 } from "@/lib/shared/map/layers";
 import {
@@ -61,6 +64,7 @@ const searchAdminStations = (query: string, region: RegionId): Promise<MapSearch
 
 const ALL_USAGE_TYPES: UsageType[] = usageOptions.map((option) => option.id);
 const NO_USAGE_TYPES: UsageType[] = [];
+const NO_ENDPOINTS: GeoJSONFeatureCollection = { type: "FeatureCollection", features: [] };
 
 /**
  * Apply the admin route paint (selected-route highlight + invalid-route grey,
@@ -116,8 +120,11 @@ interface AdminMapProps {
   className?: string;
   onCoordinateClick?: (coordinate: [number, number]) => void;
   onRouteSelect?: (routeId: number | null) => void;
-  /** A click on nothing unselects the scenic line. */
-  onScenicLineDeselect?: () => void;
+  /**
+   * Passed only while scenic lines can be selected on the map: a click on one
+   * selects it (with a From/To popup on hover), a click on nothing unselects it.
+   */
+  onScenicLineSelect?: (id: number | null) => void;
   selectedRouteId?: number | null;
   /** The selected route's length, from the detail the page loads for the sidebar. */
   selectedRouteLength: number | null;
@@ -143,7 +150,7 @@ export default function AdminMap({
   className = "",
   onCoordinateClick,
   onRouteSelect,
-  onScenicLineDeselect,
+  onScenicLineSelect,
   selectedRouteId,
   selectedRouteLength,
   previewRoute,
@@ -168,6 +175,7 @@ export default function AdminMap({
   const scenicCacheBusterRef = useRef(Date.now());
   const hideRoutes = !!isEditingGeometry || scenicMode;
   const [routeEndpoints, setRouteEndpoints] = useState<GeoJSONFeatureCollection | null>(null);
+  const [scenicEndpoints, setScenicEndpoints] = useState(NO_ENDPOINTS);
   const [validRoutesTotalKm, setValidRoutesTotalKm] = useState<number | null>(null);
   const isMobile = useIsMobile();
   const regionId = useRegionId();
@@ -177,10 +185,10 @@ export default function AdminMap({
   // Store callbacks in refs to avoid map recreation on changes
   const onCoordinateClickRef = useRef(onCoordinateClick);
   const onRouteSelectRef = useRef(onRouteSelect);
-  const onScenicLineDeselectRef = useRef(onScenicLineDeselect);
+  const onScenicLineSelectRef = useRef(onScenicLineSelect);
   onCoordinateClickRef.current = onCoordinateClick;
   onRouteSelectRef.current = onRouteSelect;
-  onScenicLineDeselectRef.current = onScenicLineDeselect;
+  onScenicLineSelectRef.current = onScenicLineSelect;
 
   // Initialize map
   // The station dots and their labels are picked against the basemap under them, so
@@ -197,12 +205,14 @@ export default function AdminMap({
         stations: createStationsSource(),
         admin_notes: createAdminNotesSource(notesCacheBusterRef.current),
         scenic_lines: createScenicLinesSource(scenicCacheBusterRef.current),
-        "route-endpoints": routeEndpointsSource,
+        "route-endpoints": emptyEndpointsSource(),
+        [SCENIC_ENDPOINTS_LAYER_ID]: emptyEndpointsSource(),
       }),
       layers: () => [
         createRailwayPartsLayer(),
-        // Over the parts, so a scenic stretch shows while points are picked on them;
-        // it takes no clicks of its own, which fall through to the parts.
+        // Over the parts, so a scenic stretch shows while points are picked on them.
+        // It takes clicks only in the Scenic tab (`onScenicLineSelect`); otherwise
+        // they fall through to the parts.
         createScenicLinesLayer({ visible: true }),
         // Regular solid; Heritage (dotted) and Special (dashed) get their own layers
         // so the gaps aren't filled by a solid line underneath. All three always show.
@@ -214,12 +224,13 @@ export default function AdminMap({
         createStationLabelsLayer(theme),
         createAdminNotesLayer(),
         createRouteEndpointsLayer(),
+        createScenicEndpointsLayer(),
       ],
       onLoad: (mapInstance) => {
         setupAdminMapInteractions(mapInstance, {
           onCoordinateClickRef,
           onRouteSelectRef,
-          onScenicLineDeselectRef,
+          onScenicLineSelectRef,
           region: regionId,
         });
       },
@@ -243,6 +254,7 @@ export default function AdminMap({
     previewRoute,
     selectedCoordinates,
     routeEndpoints,
+    scenicEndpoints,
     isEditingGeometry: hideRoutes,
   });
 
@@ -258,6 +270,26 @@ export default function AdminMap({
       .then(setRouteEndpoints)
       .catch((error) => console.error("Error fetching route endpoints:", error));
   }, [mapLoaded, refreshTrigger, regionId]);
+
+  // Scenic line endpoints, only while the Scenic tab is open: there a click on a
+  // band selects its line, so its dots are how a point at its end is picked.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scenicRefreshTrigger is an intentional trigger to refetch the endpoints after a save.
+  useEffect(() => {
+    if (!mapLoaded || !scenicMode) {
+      setScenicEndpoints(NO_ENDPOINTS);
+      return;
+    }
+    let current = true;
+    getScenicLineEndpoints(regionId)
+      .then(unwrap)
+      .then((endpoints) => {
+        if (current) setScenicEndpoints(endpoints);
+      })
+      .catch((error) => console.error("Error fetching scenic line endpoints:", error));
+    return () => {
+      current = false;
+    };
+  }, [mapLoaded, scenicMode, scenicRefreshTrigger, regionId]);
 
   // Fetch total km of valid routes (refreshes when routes are saved/deleted)
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch the total on demand.

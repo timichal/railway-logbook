@@ -161,6 +161,7 @@ export const COLORS = {
     start: "#16a34a", // Green for start coordinate
     end: "#dc2626", // Red for end coordinate
     routeEndpoint: "#3b82f6", // Blue dot for every existing route endpoint
+    scenicEndpoint: "#9333ea", // Violet dot for every scenic line's endpoint (Scenic tab)
     stroke: "#ffffff",
   },
   /**

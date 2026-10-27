@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   ROUTE_CLICK_LAYER_ID,
   ROUTE_LINE_LAYERS,
+  SCENIC_ENDPOINTS_LAYER_ID,
   SCENIC_LINES_LAYER_ID,
 } from "@/lib/shared/map/layers";
 import type { Region } from "@/lib/shared/regions";
@@ -21,7 +22,12 @@ export const ADMIN_LAYERS = [
     offeredIn: (region: Region) => region.hasScenicHighlight,
   },
   { key: "stations", label: "Stations", layerIds: ["stations", "station_labels"] },
-  { key: "endpoints", label: "Route Endpoints", layerIds: ["route-endpoints"] },
+  // A scenic line's endpoints are drawn only while the Scenic tab is open (see AdminMap)
+  {
+    key: "endpoints",
+    label: "Endpoints",
+    layerIds: ["route-endpoints", SCENIC_ENDPOINTS_LAYER_ID],
+  },
   { key: "notes", label: "Admin Notes", layerIds: ["admin_notes"] },
 ] as const;
 

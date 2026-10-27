@@ -6,6 +6,7 @@ import {
   DOUBLE_CLICK_HINT,
   escapeHtml,
   formatRouteBody,
+  formatScenicLineBody,
   formatStationBody,
   popupLink,
   safeHref,
@@ -14,25 +15,40 @@ import { getNoteTypeLabel } from "@/lib/shared/constants";
 import {
   ROUTE_CLICK_LAYER_ID,
   ROUTE_LINE_LAYERS,
+  SCENIC_ENDPOINTS_LAYER_ID,
   SCENIC_LINES_LAYER_ID,
 } from "@/lib/shared/map/layers";
 import type { RegionId } from "@/lib/shared/regions";
 
+/** The dots whose click picks their exact coordinate. */
+const ENDPOINT_LAYERS = ["route-endpoints", SCENIC_ENDPOINTS_LAYER_ID];
+
+/**
+ * What is drawn over a scenic line and takes a click of its own, so a click there
+ * reaches neither the line nor the part under it.
+ */
+const OVER_SCENIC_LINES = [...ENDPOINT_LAYERS, ...ROUTE_HIT_LAYERS, "admin_notes"];
+
 interface AdminMapCallbacks {
   onCoordinateClickRef: RefObject<((coordinate: [number, number]) => void) | undefined>;
   onRouteSelectRef: RefObject<((routeId: number | null) => void) | undefined>;
-  /** A scenic line is selected from its list, never on the map, which can only unselect it. */
-  onScenicLineDeselectRef: RefObject<(() => void) | undefined>;
+  /**
+   * Set only while scenic lines can be selected (the Scenic tab, outside a geometry
+   * re-pick): a scenic line then takes the click and shows its popup. Otherwise it
+   * takes no click, which falls through to the parts under it.
+   */
+  onScenicLineSelectRef: RefObject<((id: number | null) => void) | undefined>;
   /** Region the map is showing — decides how a route's popup is labelled. */
   region: RegionId;
 }
 
 export function setupAdminMapInteractions(
   mapInstance: maplibreglType.Map,
-  { onCoordinateClickRef, onRouteSelectRef, onScenicLineDeselectRef, region }: AdminMapCallbacks,
+  { onCoordinateClickRef, onRouteSelectRef, onScenicLineSelectRef, region }: AdminMapCallbacks,
 ) {
   const hits = (point: maplibreglType.PointLike, layers: string[]) =>
     featuresAt(mapInstance, point, layers).length > 0;
+  const scenicSelectable = () => onScenicLineSelectRef.current !== undefined;
 
   /** The `hover` feature state of one tiled layer, which its paint reads. */
   const featureHover = (source: string) => {
@@ -72,28 +88,44 @@ export function setupAdminMapInteractions(
     },
   });
 
-  // A part click captures the exact coordinate clicked — unless an endpoint, a
-  // route or a note is there too, each of which takes the click itself.
+  // A part click captures the exact coordinate clicked — unless something drawn over
+  // it is there too (`OVER_SCENIC_LINES`, and a selectable scenic line), which takes
+  // the click itself.
   mapInstance.on("click", "railway_parts", (e) => {
-    if (hits(e.point, ["route-endpoints", ...ROUTE_HIT_LAYERS, "admin_notes"])) return;
+    const takenBy = scenicSelectable()
+      ? [...OVER_SCENIC_LINES, SCENIC_LINES_LAYER_ID]
+      : OVER_SCENIC_LINES;
+    if (hits(e.point, takenBy)) return;
     onCoordinateClickRef.current?.([e.lngLat.lng, e.lngLat.lat]);
   });
 
-  // An endpoint click reuses the endpoint's exact coordinate. The layer is built
-  // with the map (empty until the endpoints load), so it can take a layer-scoped
-  // handler like any other.
-  mapInstance.on("click", "route-endpoints", (e) => {
+  // A scenic line is under the routes and over the parts, so anything drawn over it
+  // takes the click first, as it does from a part.
+  mapInstance.on("click", SCENIC_LINES_LAYER_ID, (e) => {
+    const select = onScenicLineSelectRef.current;
     const feature = e.features?.[0];
-    if (feature?.geometry.type === "Point") {
-      onCoordinateClickRef.current?.(feature.geometry.coordinates as [number, number]);
-    }
+    if (!select || !feature) return;
+    if (hits(e.point, OVER_SCENIC_LINES)) return;
+    select(Number(feature.id));
   });
+
+  // An endpoint click reuses the endpoint's exact coordinate. The layers are built
+  // with the map (empty until the endpoints load), so they can take a layer-scoped
+  // handler like any other.
+  for (const layerId of ENDPOINT_LAYERS) {
+    mapInstance.on("click", layerId, (e) => {
+      const feature = e.features?.[0];
+      if (feature?.geometry.type === "Point") {
+        onCoordinateClickRef.current?.(feature.geometry.coordinates as [number, number]);
+      }
+    });
+  }
 
   mapInstance.on("click", ROUTE_CLICK_LAYER_ID, (e) => {
     // Routes pass through their own start/end markers, so a click on an endpoint
     // dot also lands on the route. The endpoint handler already set the coordinate
     // — don't also select the route.
-    if (hits(e.point, ["route-endpoints"])) return;
+    if (hits(e.point, ENDPOINT_LAYERS)) return;
     const feature = e.features?.[0];
     if (!feature || !onRouteSelectRef.current) return;
     // track_id is the feature id, not a property
@@ -102,13 +134,13 @@ export function setupAdminMapInteractions(
   });
 
   // A click on nothing at all unselects the route, and the scenic line — unless it
-  // lands on a scenic band (wider than the track under it) or a note, which are
-  // something to look at even though they take no click.
+  // lands on a scenic band (wider than the track under it, and selecting a line of
+  // its own) or a note, which is something to look at even though it takes no click.
   mapInstance.on("click", (e) => {
-    if (hits(e.point, [...ROUTE_HIT_LAYERS, "railway_parts", "route-endpoints"])) return;
+    if (hits(e.point, [...ROUTE_HIT_LAYERS, "railway_parts", ...ENDPOINT_LAYERS])) return;
     onRouteSelectRef.current?.(null);
     if (!hits(e.point, [SCENIC_LINES_LAYER_ID, "admin_notes"])) {
-      onScenicLineDeselectRef.current?.();
+      onScenicLineSelectRef.current?.(null);
     }
   });
 
@@ -133,6 +165,8 @@ export function setupAdminMapInteractions(
     });
   }
 
+  hover.layer(SCENIC_LINES_LAYER_ID, { buildBody: formatScenicLineBody, when: scenicSelectable });
+
   // A station takes no click of its own: it goes to the route or part under it.
   hover.layer("stations", {
     className: "station-popup",
@@ -154,13 +188,19 @@ export function setupAdminMapInteractions(
     },
   });
 
-  hover.layer("route-endpoints", {
-    buildBody: (properties) => {
-      const endpointTypeLabel = properties.endpoint_type === "start" ? "Start" : "End";
-      return `<h3 style="font-weight: bold; margin-bottom: 2px;">${endpointTypeLabel} Point</h3>
-      <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.route_name)}</div>
+  const buildEndpointBody = (kind: string, name: unknown, endpointType: unknown) => {
+    const endpointTypeLabel = endpointType === "start" ? "Start" : "End";
+    return `<h3 style="font-weight: bold; margin-bottom: 2px;">${kind}${endpointTypeLabel} Point</h3>
+      <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(name)}</div>
       <div style="font-size: 0.75rem; color: var(--color-gray-500); margin-top: 4px;">Click to use this coordinate</div>`;
-    },
+  };
+  hover.layer("route-endpoints", {
+    buildBody: (properties) =>
+      buildEndpointBody("", properties.route_name, properties.endpoint_type),
+  });
+  hover.layer(SCENIC_ENDPOINTS_LAYER_ID, {
+    buildBody: (properties) =>
+      buildEndpointBody("Scenic Line ", properties.line_name, properties.endpoint_type),
   });
 
   // Double-click / double-tap a note opens its source link in a new tab
