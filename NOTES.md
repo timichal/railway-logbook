@@ -1,13 +1,9 @@
 poznámky
-- dělení: special nejsou v běžných JŘ, seasonal jo
 - geolokace parts nepřesná - nutno asi přes api nebo manuálně (chyba - Vrbovce, s jinou knihovnou Hel): to vede ke špatným určením i větších tras (Šahy)
+- EGTRE na všechny složitější trasy
 
-STAV
-hotovo: Česko, Švýcarsko, Lucembursko, Dánsko, Norsko (chybí scénické značení); Litva, Lotyšsko, Estonsko, Finsko, Polsko; Slovensko a Rakousko (chybí přeshraniční do Maďarska + scénické značení)
-rozdělané: Německo, Itálie, Slovinsko, Francie, Španělsko, Belgie, Nizozemsko, Švédsko
-
-dodělat s aičkem:
-- v user části dva módy - nový klik na stanice vyplní from/to/via (asi default), současný klik na parts, nějak vymyslet ux a tak
+dodělat:
+- scénické značení: zatím je Dánsko Norsko Švédsko Finsko
 - atlas část: europe by rail trasy
 - about/faq
 - correct utf8 sorting in admin routes
