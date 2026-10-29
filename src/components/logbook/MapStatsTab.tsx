@@ -180,6 +180,9 @@ function CountedStats({ dataAccess, selectedCountries, onCountryChange }: MapSta
         <div className="space-y-2 mb-6">
           {countries.map((country) => {
             const countryStat = stats?.byCountry.find((s) => s.countryCode === country.code);
+            const completedKm = countryStat?.completedKm ?? 0;
+            const totalKm = countryStat?.totalKm ?? 0;
+            const share = percent(completedKm, totalKm);
             return (
               <FilterRow
                 key={country.code}
@@ -194,9 +197,12 @@ function CountedStats({ dataAccess, selectedCountries, onCountryChange }: MapSta
                   </>
                 }
                 numbers={
-                  !stats || loadFailed
-                    ? null
-                    : `${formatKm(countryStat?.completedKm ?? 0)} / ${formatKm(countryStat?.totalKm ?? 0)} km`
+                  !stats || loadFailed ? null : (
+                    <>
+                      {formatKm(completedKm)} / {formatKm(totalKm)} km
+                      {share && <span className="ml-2 text-gray-500">{share}</span>}
+                    </>
+                  )
                 }
               />
             );
