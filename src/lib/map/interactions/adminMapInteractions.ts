@@ -179,7 +179,7 @@ export function setupAdminMapInteractions(
       const updatedAtStr = properties.updated_at
         ? new Date(properties.updated_at).toISOString().replace("T", " ").slice(0, 19)
         : "";
-      const source = popupLink(properties.source, "Source ↗", DOUBLE_CLICK_HINT);
+      const source = popupLink(properties.source, "Source", DOUBLE_CLICK_HINT);
       return `<h3 style="font-weight: bold; margin-bottom: 2px;">Admin Note: ${escapeHtml(getNoteTypeLabel(properties.note_type))}</h3>
       <div style="font-size: 0.85rem; color: var(--color-gray-700);">${escapeHtml(properties.text)}</div>
       ${source ? `<div style="font-size: 0.8rem; margin-top: 4px;">${source}</div>` : ""}

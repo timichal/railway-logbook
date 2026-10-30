@@ -89,28 +89,16 @@ export default function Icon({
   );
 }
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-
 /**
- * The same glyph as a DOM element, for markup built outside React (the map's touch
- * sheet). Stroked glyphs only, which is all such markup has needed.
+ * The same glyph as SVG markup, for HTML built outside React (the map's popups and
+ * touch sheet). Stroked glyphs only, which is all such markup has needed. `style`
+ * is for popup HTML, which sizes inline rather than by class.
  */
-export function iconElement(
+export function iconMarkup(
   name: Exclude<IconName, keyof typeof SOLIDS>,
-  className = "w-4 h-4",
-): SVGSVGElement {
+  { className = "w-4 h-4", style }: { className?: string; style?: string } = {},
+): string {
   const [d, strokeWidth] = strokedGlyph(name);
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("class", className);
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS(SVG_NS, "path");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  path.setAttribute("stroke-width", String(strokeWidth));
-  path.setAttribute("d", d);
-  svg.appendChild(path);
-  return svg;
+  const styleAttr = style ? ` style="${style}"` : "";
+  return `<svg class="${className}"${styleAttr} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="${strokeWidth}" d="${d}"/></svg>`;
 }

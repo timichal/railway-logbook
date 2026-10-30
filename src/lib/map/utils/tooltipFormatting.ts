@@ -1,3 +1,4 @@
+import { iconMarkup } from "@/components/ui/Icon";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import {
   type RouteFeatureProperties,
@@ -123,14 +124,21 @@ function formatRouteMetadataBadges(
 /** What a mouse is told about a popup link it can't reach before the popup moves. */
 export const DOUBLE_CLICK_HINT = "double-click to open";
 
+/** The external-link glyph after a popup link's label, sized to the text. */
+const EXTERNAL_GLYPH = iconMarkup("externalLink", {
+  className: "",
+  style:
+    "display: inline-block; width: 0.9em; height: 0.9em; margin-left: 0.2em; vertical-align: -0.1em;",
+});
+
 /**
  * A link out of a popup, opened in a new tab, or "" when `url` isn't http(s) (see
- * `safeHref`). `hint` follows it in grey.
+ * `safeHref`). The glyph marks it as leaving the site; `hint` follows it in grey.
  */
 export function popupLink(url: unknown, label: string, hint?: string): string {
   const href = safeHref(url);
   if (!href) return "";
-  const link = `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">${escapeHtml(label)}</a>`;
+  const link = `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">${escapeHtml(label)}${EXTERNAL_GLYPH}</a>`;
   if (!hint) return link;
   return `${link} <span style="color: var(--color-gray-500); font-size: 0.85em;">(${escapeHtml(hint)})</span>`;
 }

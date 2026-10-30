@@ -1,6 +1,6 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
-import { iconElement } from "@/components/ui/Icon";
+import { iconMarkup } from "@/components/ui/Icon";
 import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
 import {
   HIGHLIGHT_LAYER_IDS,
@@ -244,7 +244,7 @@ export function setupUserMapInteractions(
         button.type = "button";
         button.className = btn(action.variant, "sm");
         button.textContent = action.label;
-        if (action.external) button.appendChild(iconElement("externalLink"));
+        if (action.external) button.insertAdjacentHTML("beforeend", iconMarkup("externalLink"));
         button.addEventListener("click", action.onClick);
         row.appendChild(button);
         primaryButton ??= button;
