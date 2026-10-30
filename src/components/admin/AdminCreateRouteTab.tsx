@@ -36,6 +36,7 @@ const EMPTY_FORM: SaveRouteData = {
   usage_type: 0,
   frequency: [],
   link: "",
+  link_name: "",
   intended_backtracking: false,
 };
 

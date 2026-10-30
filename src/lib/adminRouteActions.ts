@@ -2,7 +2,7 @@
 
 import type { PoolClient } from "pg";
 import type { ActionResult } from "./actionResult";
-import { requiredStations, routeLineNames } from "./adminValidation";
+import { requiredStations, routeLineNames, routeLink } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { countryAt } from "./countryUtils";
@@ -35,6 +35,8 @@ export interface SaveRouteData {
   usage_type: UsageType;
   frequency: string[];
   link: string;
+  /** What the link is shown as, in place of "Website"; "" for the default. */
+  link_name: string;
   intended_backtracking: boolean;
 }
 
@@ -64,6 +66,7 @@ export type AdminRouteSummary = {
 export type AdminRouteDetail = AdminRouteSummary & {
   frequency: string[];
   link: string | null;
+  link_name: string | null;
   /** The route's box, which the map flies to. */
   bounds: RouteBounds;
   length_km: number;
@@ -156,7 +159,7 @@ export async function getRailwayRoute(trackId: number): Promise<ActionResult<Adm
   return asAdmin(async () => {
     const result = await pool.query<AdminRouteDetail>(
       `
-    SELECT track_id, name, other_names, from_station, to_station, description, usage_type, frequency, link, line_class,
+    SELECT track_id, name, other_names, from_station, to_station, description, usage_type, frequency, link, link_name, line_class,
            ${boundsSql("geometry")} as bounds, length_km,
            ${lngLatSql("starting_coordinate")} as starting_coordinate,
            ${lngLatSql("ending_coordinate")} as ending_coordinate,
@@ -419,15 +422,16 @@ export async function saveRailwayRoute(
         );
         // The name is required where the region names its lines, but only the form checks it
         const { name, otherNames } = routeLineNames(routeData.name, routeData.other_names);
+        const { link, linkName } = routeLink(routeData.link, routeData.link_name);
         queryStr = `
         INSERT INTO railway_routes (
           name, other_names, from_station, to_station, description, usage_type, frequency, link,
-          geometry, length_km, start_country, end_country,
+          link_name, geometry, length_km, start_country, end_country,
           starting_coordinate, ending_coordinate,
           is_valid, intended_backtracking, has_backtracking
         ) VALUES (
           $1, $15, $2, $3, $4, $5, $6, $7,
-          ST_GeomFromText($8, 4326), ${lineLengthKmSql("$8")}, $9, $10,
+          $16, ST_GeomFromText($8, 4326), ${lineLengthKmSql("$8")}, $9, $10,
           ST_GeomFromText($11, 4326), ST_GeomFromText($12, 4326),
           TRUE, $13, $14
         )
@@ -441,7 +445,7 @@ export async function saveRailwayRoute(
           routeData.description || null,
           routeData.usage_type,
           routeData.frequency || [],
-          routeData.link || null,
+          link,
           geometryWKT,
           startCountry,
           endCountry,
@@ -450,6 +454,7 @@ export async function saveRailwayRoute(
           routeData.intended_backtracking,
           hasBacktracking,
           otherNames,
+          linkName,
         ];
       }
 
@@ -530,17 +535,19 @@ export async function updateRailwayRoute(
   usageType: UsageType,
   frequency: string[],
   link: string | null,
+  linkName: string | null,
   lineClass: LineClass,
   intendedBacktracking: boolean,
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
     const { from, to } = requiredStations(fromStation, toStation, "A route");
     const lineNames = routeLineNames(name, otherNames);
+    const routeLinkValues = routeLink(link, linkName);
     const result = await pool.query(
       `
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
-        link = $8, line_class = $9, intended_backtracking = $10, other_names = $11
+        link = $8, link_name = $12, line_class = $9, intended_backtracking = $10, other_names = $11
     WHERE track_id = $1
   `,
       [
@@ -551,10 +558,11 @@ export async function updateRailwayRoute(
         description,
         usageType,
         frequency || [],
-        link,
+        routeLinkValues.link,
         lineClass,
         intendedBacktracking,
         lineNames.otherNames,
+        routeLinkValues.linkName,
       ],
     );
 
@@ -628,13 +636,13 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
         `
       INSERT INTO railway_routes (
         name, other_names, from_station, to_station, description, usage_type, frequency, link,
-        line_class, geometry, length_km, start_country, end_country,
+        link_name, line_class, geometry, length_km, start_country, end_country,
         starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       )
       SELECT
         name, other_names, from_station || ' [duplicate]', to_station || ' [duplicate]', description,
-        usage_type, frequency, link, line_class, geometry, length_km,
+        usage_type, frequency, link, link_name, line_class, geometry, length_km,
         start_country, end_country, starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking
       FROM railway_routes

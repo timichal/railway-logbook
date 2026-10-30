@@ -1,5 +1,6 @@
 import type * as maplibreglType from "maplibre-gl";
 import * as maplibregl from "maplibre-gl";
+import { iconElement } from "@/components/ui/Icon";
 import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
 import {
   HIGHLIGHT_LAYER_IDS,
@@ -15,6 +16,7 @@ import {
   safeHref,
 } from "@/lib/map/utils/tooltipFormatting";
 import { ROUTE_CLICK_LAYER_ID } from "@/lib/shared/map/layers";
+import { routeLinkLabel } from "@/lib/shared/map/routeFeature";
 import type { RegionId } from "@/lib/shared/regions";
 import type { SelectedRoute, Station } from "@/lib/shared/types";
 import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
@@ -48,6 +50,8 @@ interface SheetAction {
   label: string;
   variant: ButtonVariant;
   onClick: () => void;
+  /** Marks a button that leaves for a website, whose label may be only a name. */
+  external?: boolean;
 }
 
 /**
@@ -240,6 +244,7 @@ export function setupUserMapInteractions(
         button.type = "button";
         button.className = btn(action.variant, "sm");
         button.textContent = action.label;
+        if (action.external) button.appendChild(iconElement("externalLink"));
         button.addEventListener("click", action.onClick);
         row.appendChild(button);
         primaryButton ??= button;
@@ -404,8 +409,9 @@ export function setupUserMapInteractions(
       }
       if (safeHref(properties.link)) {
         actions.push({
-          label: "Website",
+          label: routeLinkLabel(properties.link_name),
           variant: "outline",
+          external: true,
           onClick: () => openLink(properties.link),
         });
       }
@@ -447,6 +453,7 @@ export function setupUserMapInteractions(
       actions.push({
         label: "Source",
         variant: "outline",
+        external: true,
         onClick: () => openLink(properties.source),
       });
     }

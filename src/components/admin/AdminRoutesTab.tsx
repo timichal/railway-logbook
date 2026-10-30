@@ -75,6 +75,7 @@ function editFormFromRoute(route: AdminRouteDetail): EditRouteData {
     usage_type: route.usage_type,
     frequency: route.frequency,
     link: route.link || "",
+    link_name: route.link_name || "",
     line_class: route.line_class,
     intended_backtracking: route.intended_backtracking,
   };
@@ -279,6 +280,7 @@ export default function AdminRoutesTab({
           editForm.usage_type,
           editForm.frequency,
           editForm.link || null,
+          editForm.link_name || null,
           editForm.line_class,
           editForm.intended_backtracking,
         ),

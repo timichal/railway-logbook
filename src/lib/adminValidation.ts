@@ -21,6 +21,20 @@ export function requiredStations(
 }
 
 /**
+ * A route's link and the name it is shown under, trimmed, blanks as NULL. The name
+ * goes with the link: one typed beside an emptied link is dropped rather than kept
+ * for a link that isn't there, as the table's CHECK requires.
+ */
+export function routeLink(
+  link: string | null,
+  linkName: string | null,
+): { link: string | null; linkName: string | null } {
+  const url = typeof link === "string" && link.trim() ? link.trim() : null;
+  const name = url && typeof linkName === "string" && linkName.trim() ? linkName.trim() : null;
+  return { link: url, linkName: name };
+}
+
+/**
  * Why a scenic line's path was refused, or its recalculation marked invalid: a
  * path into a spur and back would draw the spur as part of the band.
  */

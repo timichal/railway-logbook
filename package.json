@@ -24,6 +24,7 @@
     "restoreRouteData": "tsx src/scripts/serverData.ts restore",
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
+    "addRouteLinkName": "tsx src/scripts/addRouteLinkName.ts",
     "fixSequences": "tsx src/scripts/fixSequences.ts",
     "createAdmin": "tsx src/scripts/createAdmin.ts",
     "listStations": "tsx src/scripts/listStations.ts",

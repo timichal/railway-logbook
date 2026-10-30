@@ -83,6 +83,7 @@ export type RailwayRoute = {
   usage_type: UsageType; // 0=Regular, 1=Heritage, 2=Special
   frequency: string[]; // Array of frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
   link?: string | null; // External URL/link for the route
+  link_name?: string | null; // What the link is shown as, in place of "Website"
   line_class?: LineClass | null; // Line classification: highspeed, main, branch
   geometry: string; // GeoJSON string
   length_km?: number;

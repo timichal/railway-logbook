@@ -239,6 +239,7 @@ RETURNS bytea AS $$
             rr.usage_type,
             rr.frequency,
             rr.link,
+            rr.link_name,
             rr.line_class,
             rr.length_km,
             rr.start_country,

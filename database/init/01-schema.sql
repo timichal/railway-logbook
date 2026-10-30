@@ -68,6 +68,10 @@ CREATE TABLE railway_routes (
     usage_type INTEGER NOT NULL CHECK (usage_type IN (0, 1, 2)), -- Usage type (0=Regular, 1=Heritage, 2=Special; 1 & 2 are non-regular)
     frequency TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
     link TEXT, -- External URL/link for the route
+    -- What the link is called where the route shows it (the heritage railway's
+    -- name), in place of the default "Website". Only beside a link
+    link_name TEXT,
+    CONSTRAINT railway_routes_link_name_needs_link CHECK (link_name IS NULL OR link IS NOT NULL),
     line_class VARCHAR(20) NOT NULL DEFAULT 'branch' CHECK (line_class IN ('highspeed', 'main', 'branch')), -- Line classification derived from OSM data
     geometry GEOMETRY(LINESTRING, 4326) NOT NULL, -- PostGIS LineString
     length_km NUMERIC NOT NULL, -- Route length in kilometers (calculated from geometry). NOT NULL: the planner costs a route by it, and a missing one would make the route free

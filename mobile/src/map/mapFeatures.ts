@@ -10,7 +10,7 @@
  */
 
 import type { UsageType } from "@shared/constants";
-import type { RouteFeatureProperties } from "@shared/map/routeFeature";
+import { type RouteFeatureProperties, routeLinkLabel } from "@shared/map/routeFeature";
 import type { RailwayRoute } from "@shared/types";
 
 export interface RouteFeature extends RouteFeatureProperties {
@@ -18,6 +18,8 @@ export interface RouteFeature extends RouteFeatureProperties {
   trackId: number;
   description: string | null;
   link: string | null;
+  /** What the link is called (`routeLinkLabel`): "Website" unless the admin named it. */
+  linkLabel: string;
   lengthKm: number;
   /** The most recent journey over this route, both fields or neither. */
   lastJourney: { date: string; name: string } | null;
@@ -77,6 +79,7 @@ export function toRouteFeature(properties: Properties, id: unknown): RouteFeatur
     frequency: typeof properties.frequency === "string" ? properties.frequency : undefined,
     description: text(properties.description),
     link: safeUrl(properties.link),
+    linkLabel: routeLinkLabel(properties.link_name),
     lengthKm: Number(properties.length_km) || 0,
     // Populated together from the most-recent logged journey (both NOT NULL in
     // user_journeys), so either both are present or neither is.
@@ -122,6 +125,7 @@ export function routeFeatureFromMetadata(route: RailwayRoute): RouteFeature {
     frequency: route.frequency,
     description: text(route.description),
     link: safeUrl(route.link),
+    linkLabel: routeLinkLabel(route.link_name),
     lengthKm: route.length_km ?? 0,
     lastJourney: null,
   };

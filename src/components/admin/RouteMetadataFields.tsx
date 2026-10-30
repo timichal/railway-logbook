@@ -150,7 +150,7 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
           id={`${idPrefix}-description`}
           value={value.description}
           onChange={(e) => set({ description: e.target.value })}
-          rows={narrow ? 5 : 3}
+          rows={3}
           className={INPUT}
           placeholder="Enter route description"
         />
@@ -163,6 +163,17 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
         value={value.link}
         onChange={(link) => set({ link })}
         placeholder="https://example.com"
+      />
+      {/* Shown in place of "Website" wherever the route offers its link — the
+          heritage railway's name, say, which then needn't be in the description.
+          Off while there is no link, since the save drops a name without one. */}
+      <TextField
+        id={`${idPrefix}-link-name`}
+        label="Link name"
+        value={value.link_name}
+        onChange={(link_name) => set({ link_name })}
+        placeholder="Website"
+        disabled={!value.link.trim()}
       />
 
       <div>

@@ -132,7 +132,7 @@ function RouteBody({
         onPress={() => toggle(feature)}
       />
 
-      {feature.link ? <LinkButton label="Website" url={feature.link} /> : null}
+      {feature.link ? <LinkButton label={feature.linkLabel} url={feature.link} /> : null}
     </>
   );
 }
@@ -142,6 +142,7 @@ function LinkButton({ label, url }: { label: string; url: string }): ReactNode {
     <Button
       label={label}
       variant="outline"
+      external
       onPress={() => {
         void Linking.openURL(url);
       }}

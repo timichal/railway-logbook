@@ -37,6 +37,7 @@ A unified Next.js app for OSM railway data. It fetches, processes and visualizes
 - `npm run verifyRouteData`: recalculate all routes, then scenic lines, marking invalid ones (`--valid-only`, `--concurrency=N`).
 - `npm run applyVectorTiles`: re-apply `database/init/02-vector-tiles.sql`.
 - `npm run markAllRoutesInvalid`: flag all routes for recheck. **The reference example for migration scripts.**
+- `npm run addRouteLinkName`: migration, adds `railway_routes.link_name` (idempotent). Run it before the app deploy that ships the column, then `applyVectorTiles`.
 - `npm run fixSequences`: resync SERIAL sequences ("duplicate key violates …_pkey" after rows were loaded with explicit ids).
 - `npm run createAdmin -- <email> [name] [--reset]`: create the admin (user 1), prompting for the password (12+ chars, never an argument). **A setup step for every new database.** `--reset` replaces the admin's credentials and signs out all their sessions. On the server, run it from its checkout.
 - `npm run inspectPath -- "<from>" "<to>" ["<via>"...] [--special]`: run the Journey Planner from the CLI and print the chain, the partial legs and the gaps.

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { parsePgTextArray, parseTextArray, routeTitle } from "@/lib/shared/map/routeFeature";
+import {
+  parsePgTextArray,
+  parseTextArray,
+  routeLinkLabel,
+  routeTitle,
+} from "@/lib/shared/map/routeFeature";
 
 describe("parsePgTextArray", () => {
   test("an empty array", () => {
@@ -80,5 +85,18 @@ describe("routeTitle", () => {
     assert.equal(routeTitle({ ...shared, name: " " }, "japan").alsoOn, null);
     assert.equal(routeTitle(shared, "europe").alsoOn, null);
     assert.equal(routeTitle({ ...shared, other_names: "{}" }, "japan").alsoOn, null);
+  });
+});
+
+describe("routeLinkLabel", () => {
+  test("the admin's name for the link", () => {
+    assert.equal(routeLinkLabel(" Ffestiniog Railway "), "Ffestiniog Railway");
+  });
+
+  test("Website without one", () => {
+    assert.equal(routeLinkLabel(null), "Website");
+    assert.equal(routeLinkLabel(undefined), "Website");
+    assert.equal(routeLinkLabel(""), "Website");
+    assert.equal(routeLinkLabel("  "), "Website");
   });
 });

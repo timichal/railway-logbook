@@ -16,6 +16,7 @@ interface TextFieldProps {
   station?: boolean;
   type?: "text" | "url";
   placeholder?: string;
+  disabled?: boolean;
 }
 
 /** A labelled one-line input of the admin forms. */
@@ -27,6 +28,7 @@ export default function TextField({
   station,
   type = "text",
   placeholder,
+  disabled,
 }: TextFieldProps) {
   return (
     <div>
@@ -39,8 +41,9 @@ export default function TextField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={station ? (e) => handleJunctionShortcut(e, onChange) : undefined}
-        className={INPUT}
+        className={`${INPUT} disabled:opacity-50`}
         placeholder={placeholder}
+        disabled={disabled}
       />
     </div>
   );

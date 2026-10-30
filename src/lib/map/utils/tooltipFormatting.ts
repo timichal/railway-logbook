@@ -3,6 +3,7 @@ import {
   type RouteFeatureProperties,
   type RouteTitleProperties,
   routeBadges,
+  routeLinkLabel,
   routeTitle,
 } from "@/lib/shared/map/routeFeature";
 import type { RegionId } from "@/lib/shared/regions";
@@ -155,7 +156,9 @@ export function formatRouteBody(
   if (properties.description) {
     body += `<div style="${POPUP_ROW_STYLE}"><b>Note:</b> ${escapeHtml(properties.description)}</div>`;
   }
-  const link = linkRow ? popupLink(properties.link, "Website", linkHint) : "";
+  const link = linkRow
+    ? popupLink(properties.link, routeLinkLabel(properties.link_name), linkHint)
+    : "";
   if (link) body += `<div style="${POPUP_ROW_STYLE}">${link}</div>`;
 
   // `date` and `journey_name` are populated together from the most-recent logged

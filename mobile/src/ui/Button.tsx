@@ -7,8 +7,9 @@
  * press feedback a touch device gets — and NativeWind wires it to `Pressable`'s
  * pressed state. The 44pt floor from the web app's touch work is the default height.
  */
+import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, Text } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { type NativeColors, useNativeColors } from "@/theme/colors";
 
 export type ButtonVariant = "primary" | "secondary" | "outline" | "danger" | "ghost";
@@ -30,8 +31,11 @@ const LABEL: Record<ButtonVariant, string> = {
   ghost: "text-blue-600 dark:text-blue-400",
 };
 
-/** The spinner takes the label's colour, which for three roles depends on the scheme. */
-const SPINNER: Record<ButtonVariant, (colors: NativeColors) => string> = {
+/**
+ * The label's colour, for what draws beside it (the spinner, the external-link
+ * glyph). For three roles it depends on the scheme.
+ */
+const LABEL_COLOR: Record<ButtonVariant, (colors: NativeColors) => string> = {
   primary: () => "#ffffff",
   secondary: (colors) => colors.text,
   outline: (colors) => colors.text,
@@ -46,6 +50,8 @@ interface ButtonProps {
   disabled?: boolean;
   /** Shows a spinner in place of the label and blocks presses. */
   busy?: boolean;
+  /** Marks a button that leaves for a website, whose label may be only a name. */
+  external?: boolean;
   className?: string;
 }
 
@@ -55,6 +61,7 @@ export function Button({
   variant = "primary",
   disabled = false,
   busy = false,
+  external = false,
   className = "",
 }: ButtonProps): ReactNode {
   const inert = disabled || busy;
@@ -72,7 +79,12 @@ export function Button({
       } ${className}`}
     >
       {busy ? (
-        <ActivityIndicator color={SPINNER[variant](colors)} />
+        <ActivityIndicator color={LABEL_COLOR[variant](colors)} />
+      ) : external ? (
+        <View className="flex-row items-center gap-1.5">
+          <Text className={`text-base font-semibold ${LABEL[variant]}`}>{label}</Text>
+          <Ionicons name="open-outline" size={16} color={LABEL_COLOR[variant](colors)} />
+        </View>
       ) : (
         <Text className={`text-base font-semibold ${LABEL[variant]}`}>{label}</Text>
       )}

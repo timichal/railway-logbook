@@ -13,6 +13,8 @@ const STROKES = {
   chevronDown: "M19 9l-7 7-7-7",
   menu: "M4 6h16M4 12h16M4 18h16",
   search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+  /** Opens outside the app: a button that leaves for a website. */
+  externalLink: "M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14",
   trash:
     "M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2",
 };
@@ -53,6 +55,11 @@ function inGroup<T extends object>(group: T, name: IconName): name is IconName &
   return Object.hasOwn(group, name);
 }
 
+/** A stroked glyph's path and the stroke weight of its group. */
+function strokedGlyph(name: Exclude<IconName, keyof typeof SOLIDS>): [string, number] {
+  return inGroup(STROKES, name) ? [STROKES[name], 2] : [PICTOGRAMS[name], 1.8];
+}
+
 /** Drawn in `currentColor` and sized by `className`. */
 export default function Icon({
   name,
@@ -68,7 +75,7 @@ export default function Icon({
       </svg>
     );
   }
-  const [d, strokeWidth] = inGroup(STROKES, name) ? [STROKES[name], 2] : [PICTOGRAMS[name], 1.8];
+  const [d, strokeWidth] = strokedGlyph(name);
   return (
     <svg
       className={className}
@@ -80,4 +87,30 @@ export default function Icon({
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={strokeWidth} d={d} />
     </svg>
   );
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * The same glyph as a DOM element, for markup built outside React (the map's touch
+ * sheet). Stroked glyphs only, which is all such markup has needed.
+ */
+export function iconElement(
+  name: Exclude<IconName, keyof typeof SOLIDS>,
+  className = "w-4 h-4",
+): SVGSVGElement {
+  const [d, strokeWidth] = strokedGlyph(name);
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", className);
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  path.setAttribute("stroke-width", String(strokeWidth));
+  path.setAttribute("d", d);
+  svg.appendChild(path);
+  return svg;
 }

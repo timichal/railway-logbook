@@ -84,6 +84,14 @@ export function routeTitle(
 }
 
 /**
+ * What a route's link is called: the name the admin gave it (the heritage
+ * railway's, say), else "Website". Takes the raw tile property or API field.
+ */
+export function routeLinkLabel(linkName: unknown): string {
+  return typeof linkName === "string" && linkName.trim() ? linkName.trim() : "Website";
+}
+
+/**
  * Decode a Postgres array literal (`{Daily,"Winter break"}`) into its elements.
  *
  * `frequency` is a `TEXT[]`, but MVT carries only scalar values, so `ST_AsMVT`
