@@ -9,7 +9,7 @@ import type {
   StyleSpecification,
 } from "@maplibre/maplibre-gl-style-spec";
 import type { ResolvedTheme } from "../theme/types";
-import { COLORS, OPACITIES, WIDTHS } from "./style";
+import { COLORS, LABELS, OPACITIES, WIDTHS } from "./style";
 
 /**
  * The basemap under the railway data.
@@ -50,6 +50,7 @@ export const OSM_TILES_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
  */
 export const GLYPHS_URL = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
 export const BASEMAP_FONT_BOLD = "Noto Sans Bold";
+const BASEMAP_FONT_REGULAR = "Noto Sans Regular";
 
 /** How long to wait for the style before falling back to the raster basemap. */
 const STYLE_FETCH_TIMEOUT_MS = 6000;
@@ -57,9 +58,12 @@ const STYLE_FETCH_TIMEOUT_MS = 6000;
 /**
  * The parts of a fetched style we hand to MapLibre. `glyphs` and `sprite` come
  * along because the basemap's own label and POI layers need them; our layers
- * carry no text or icons.
+ * carry no text or icons. `layers` goes under the fade and `labels` above it
+ * (`basemapLayers`); `labels` is empty except in dark mode.
  */
-type BasemapStyle = Pick<StyleSpecification, "sources" | "layers" | "glyphs" | "sprite">;
+export type BasemapStyle = Pick<StyleSpecification, "sources" | "layers" | "glyphs" | "sprite"> & {
+  labels: LayerSpecification[];
+};
 
 // try english name first, then latin, then whatever the local name is
 const LATIN_LABEL_EXPRESSION = [
@@ -261,6 +265,132 @@ export function createCountryBordersLayer(theme: ResolvedTheme = "light"): LineL
   };
 }
 
+/** OpenMapTiles place classes that name an area rather than a point. */
+const AREA_PLACE_CLASSES = ["continent", "country", "state", "province"];
+
+function isPlaceLabelLayer(layer: LayerSpecification): boolean {
+  return layer.type === "symbol" && layer["source-layer"] === "place";
+}
+
+/**
+ * Makes the dark style's place names readable enough to orient by.
+ *
+ * Two things hide them. The style prints every place in one dim grey at 10px,
+ * uppercase; and the fade then washes that grey another 40% toward black, which
+ * no text colour can make up for (it would have to be brighter than white). So
+ * these layers are moved above the fade (`transformBasemapLayers` splits them
+ * out, `basemapLayers` stacks them) and restyled here: a grey that steps with
+ * the place's weight, a size that does too, bold for cities, mixed case for settlements
+ * (uppercase at 10-12px is what made them hard to read), uppercase kept for the
+ * area names, which are a different kind of label.
+ *
+ * Every expression keys on the feature's `class` (and a city's `rank`), not on
+ * the layer id, so one rewrite serves all of the style's place layers whatever
+ * it calls them - and it replaces their font, case, size and colour outright,
+ * so no layer keeps half the old style whatever upstream changes in it.
+ *
+ * The town and city dots (`icon-image`, below z9) come up with their layers,
+ * so their opacity is set to what the fade used to leave of them.
+ */
+function restylePlaceLabelsDark(layer: LayerSpecification): LayerSpecification {
+  if (layer.type !== "symbol") return layer;
+  const sizes = LABELS.placeDark.size;
+  const colors = COLORS.placeLabelsDark;
+  return {
+    ...layer,
+    layout: {
+      ...layer.layout,
+      "text-font": [
+        "match",
+        ["get", "class"],
+        "city",
+        ["literal", [BASEMAP_FONT_BOLD]],
+        ["literal", [BASEMAP_FONT_REGULAR]],
+      ],
+      "text-transform": ["match", ["get", "class"], AREA_PLACE_CLASSES, "uppercase", "none"],
+      "text-size": [
+        "match",
+        ["get", "class"],
+        "city",
+        [
+          "case",
+          ["<=", ["to-number", ["get", "rank"], 99], LABELS.placeDark.largeCityMaxRank],
+          sizes.cityLarge,
+          sizes.city,
+        ],
+        "town",
+        sizes.town,
+        ["village", "suburb", "quarter"],
+        sizes.village,
+        ["continent", "country"],
+        sizes.country,
+        ["state", "province"],
+        sizes.region,
+        sizes.other,
+      ],
+    },
+    paint: {
+      ...layer.paint,
+      "icon-opacity": OPACITIES.placeIconDark,
+      "text-color": [
+        "match",
+        ["get", "class"],
+        "city",
+        colors.city,
+        "town",
+        colors.town,
+        AREA_PLACE_CLASSES,
+        colors.area,
+        colors.village,
+      ],
+      "text-halo-color": colors.halo,
+      "text-halo-width": LABELS.placeDark.haloWidth,
+      "text-halo-blur": LABELS.placeDark.haloBlur,
+    },
+  };
+}
+
+/**
+ * Every transform the fetched style goes through, as a pure function of its
+ * layers: the POI drop, the building flattening, the Latin rewrite and the
+ * park-outline filter on all of them, and in dark mode the place names split
+ * out into `labels`, restyled, for `basemapLayers` to put above the fade.
+ *
+ * Light mode keeps its place names under the fade: liberty draws them dark on
+ * white, and a 25% wash toward white leaves them readable.
+ */
+export function transformBasemapLayers(
+  styleLayers: LayerSpecification[],
+  theme: ResolvedTheme,
+): Pick<BasemapStyle, "layers" | "labels"> {
+  const layers = filterPointsFromParkOutlines(
+    latinizeLabels(flattenBuildings(dropPoiLayers(styleLayers))),
+  );
+  if (theme !== "dark") return { layers, labels: [] };
+  const ground: LayerSpecification[] = [];
+  const labels: LayerSpecification[] = [];
+  for (const layer of layers) {
+    if (isPlaceLabelLayer(layer)) labels.push(restylePlaceLabelsDark(layer));
+    else ground.push(layer);
+  }
+  return { layers: ground, labels };
+}
+
+/**
+ * The whole basemap stack, in the order both apps hand it to MapLibre: the
+ * basemap, the fade over it, the country borders above the fade, and the
+ * labels the fade must not reach (dark mode's place names, see
+ * `transformBasemapLayers`) above those. Everything of ours goes on top.
+ */
+export function basemapLayers(basemap: BasemapStyle, theme: ResolvedTheme): LayerSpecification[] {
+  return [
+    ...basemap.layers,
+    createBasemapFadeLayer(theme),
+    createCountryBordersLayer(theme),
+    ...basemap.labels,
+  ];
+}
+
 async function fetchBasemapStyle(theme: ResolvedTheme): Promise<BasemapStyle> {
   const url = BASEMAP_STYLE_URLS[theme];
   // `AbortSignal.timeout` would say this in one line, but React Native does not
@@ -283,9 +413,7 @@ async function fetchBasemapStyle(theme: ResolvedTheme): Promise<BasemapStyle> {
   }
   return {
     sources: style.sources,
-    layers: filterPointsFromParkOutlines(
-      latinizeLabels(flattenBuildings(dropPoiLayers(style.layers))),
-    ),
+    ...transformBasemapLayers(style.layers, theme),
     glyphs: style.glyphs,
     sprite: style.sprite,
   };

@@ -144,6 +144,31 @@ export const COLORS = {
   countryBorder: "#6b7280",
   countryBorderDark: "#9aa4b2",
   /**
+   * Place names over the dark basemap, lifted above the fade by
+   * `restylePlaceLabelsDark`.
+   *
+   * The dark style prints every place in one rgb(101,101,101), which the fade
+   * then takes down to about #3f4040 - town names you have to search for, on a
+   * map whose lines alone don't say where you are. Here the grey steps with
+   * the place's weight: cities brightest, towns a little under, villages and
+   * suburbs dimmer, and the big area names (regions, countries) dimmest of
+   * all, since they label a whole screen rather than a point on it.
+   *
+   * **Where they sit in lightness**: above the unvisited routes (`#a8456a`),
+   * because those are most of the map and a name darker than them is the
+   * unreadable one this replaced - but under the visited and partial routes
+   * and our own station labels, so that what the user rode and where they can
+   * stop still carry the screen. Neutral, for the reason the borders are:
+   * anything with a hue reads as data.
+   */
+  placeLabelsDark: {
+    city: "#a9afb8",
+    town: "#959ba5",
+    village: "#7c828c",
+    area: "#6b717b",
+    halo: "rgba(5, 7, 10, 0.8)",
+  },
+  /**
    * The ground the basemap is drawn on, which the fade washes toward (so it fades
    * rather than tints) and which the dark raster fallback paints under its tiles.
    * The two uses of the dark one must agree, or the fallback would fade toward
@@ -321,6 +346,29 @@ export const LABELS = {
     maxWidthEm: 8,
     lineHeight: 1.05,
   },
+  /**
+   * Basemap place names in dark mode (`restylePlaceLabelsDark`). The dark style
+   * draws every settlement at 10px but its largest cities at 14, which at the
+   * zooms this map lives at (6-10) is too small to orient by. The country size
+   * is a constant where upstream's is a zoom curve (10-14 over z0-4): the map
+   * starts at z4, and those labels are gone by z8.
+   */
+  placeDark: {
+    size: {
+      cityLarge: 16,
+      city: 14,
+      town: 12.5,
+      village: 11,
+      country: 13,
+      region: 11,
+      other: 10,
+    },
+    // Cities at or under this OpenMapTiles rank count as large (the dark
+    // style's own `place_city_large` split).
+    largeCityMaxRank: 3,
+    haloWidth: 1.5,
+    haloBlur: 0.5,
+  },
 } as const;
 
 // ============================================================================
@@ -334,6 +382,11 @@ export const OPACITIES = {
   // white, so the same 0.25 left the basemap still competing with the routes.
   basemapFade: 0.25,
   basemapFadeDark: 0.4,
+  // The dot beside a town or city name below z9, in dark mode. Its layer is lifted
+  // above the fade with the name (restylePlaceLabelsDark); this keeps the dot as
+  // dim as it was under the fade (the style's 0.7, washed 40% toward black), so it
+  // marks the place without joining the station dots.
+  placeIconDark: 0.4,
   defaultRoute: 0.8,
   selectedRoute: 1.0,
   highlight: 1.0,
