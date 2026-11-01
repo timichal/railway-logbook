@@ -215,16 +215,16 @@ if [ -f "${PRUNED}" ] && [ -f "${SOURCES}" ] &&
   [ "$(cut -d: -f1 "${SOURCES}")" = "$(sh osmium-scripts/prepare.sh --list-extracts)" ]; then
   echo "Reusing ${PRUNED}, prepared $(date -u -r "${PRUNED}" '+%Y-%m-%d %H:%M UTC') and not deployed yet (--fresh rebuilds it)"
 else
-  # The largest single extract (France) is ~5GB, the merged and converted
-  # intermediates a few more. prepare.sh downloads the next extract during the
-  # current one's filter only where the disk has room for both, so this is
-  # enough either way; more only lets it overlap more often. Failing here
-  # beats failing an hour in. Measured with the raw cache's share of this
-  # disk already on it: its cap (RAW_CACHE) is what keeps this much free, and
-  # updating a cached extract borrows the room before the merge needs it.
+  # What a run needs (DATA_DISK_RESERVE_GB, see prepare.sh). prepare.sh
+  # downloads the next extract during the current one's filter only where the
+  # disk has room for both, so this is enough either way; more only lets it
+  # overlap more often. Failing here beats failing an hour in. Measured with
+  # the raw cache's share of this disk already on it, which prepare.sh never
+  # lets grow into the reserve.
+  NEEDED_GB="$(sh osmium-scripts/prepare.sh --data-disk-reserve-gb)"
   AVAILABLE_GB=$(($(df -Pk "${DATA_DIR}" | awk 'NR == 2 { print $4 }') / 1024 / 1024))
-  if [ "${AVAILABLE_GB}" -lt 10 ]; then
-    echo "ERROR: only ${AVAILABLE_GB}GB free on the data disk, 10GB needed"
+  if [ "${AVAILABLE_GB}" -lt "${NEEDED_GB}" ]; then
+    echo "ERROR: only ${AVAILABLE_GB}GB free on the data disk, ${NEEDED_GB}GB needed"
     exit 1
   fi
 

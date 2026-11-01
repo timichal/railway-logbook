@@ -61,13 +61,15 @@ LISTED_EXTRACTS_FILE="osmium-scripts/extracts.txt"
 EXTRACTS_FILE="${EXTRACTS_FILE:-${LISTED_EXTRACTS_FILE}}"
 GEOFABRIK="https://download.geofabrik.de"
 
-# The raw cache's directories, space-separated, in the order they fill. Each
-# may carry a cap in GB after a colon, which is how a disk keeps room for the
-# rest of the pipeline: RAW_CACHE="data/raw:11 /mnt/volume/osm-raw". Each must
-# already exist - one that is missing is skipped, so an unmounted volume never
-# fills the disk its mount point sits on - and lie outside data/extracts,
-# which --fresh empties. Taken from the environment, else from .env. Unset,
-# nothing is cached.
+# The raw cache's directories, space-separated, in the order they fill:
+# RAW_CACHE="data/raw /mnt/volume/osm-raw". Each may carry a cap in GB after a
+# colon (data/raw:11); on the data disk none is needed, since the cache never
+# fills it below DATA_DISK_RESERVE_GB. Each must already exist - one that is
+# missing is skipped - and lie outside data/extracts, which --fresh empties.
+# On a volume, name a directory inside its mount point, never the mount point
+# itself: unmounted, the mount point is still there, an empty directory on the
+# disk below, and the cache would fill that disk instead. Taken from the
+# environment, else from .env. Unset, nothing is cached.
 if [ -z "${RAW_CACHE+set}" ] && [ -f .env ]; then
     RAW_CACHE="$(sed -n 's/^RAW_CACHE=//p' .env | tail -n 1 | tr -d "\r\"'")"
 fi
@@ -106,20 +108,35 @@ matching_extracts() {
     all_extracts | awk -v sel="${1%/}" '$0 == sel || index($0, sel "/") == 1'
 }
 
+# A header option of an OSM file, empty when it has none.
+header_option() {
+    osmium fileinfo -g "header.option.$2" "$1" 2> /dev/null || true
+}
+
 # The date (YYYY-MM-DD) of the OSM data in a .osm.pbf, from its header. osmium
 # carries the header through tags-filter, so this reads a filtered file too.
 extract_date() {
-    DATE="$(osmium fileinfo -g header.option.osmosis_replication_timestamp "$1" 2>/dev/null)"
+    DATE="$(header_option "$1" osmosis_replication_timestamp)"
     if [ -z "${DATE}" ]; then
-        DATE="$(osmium fileinfo -g header.option.timestamp "$1" 2>/dev/null)"
+        DATE="$(header_option "$1" timestamp)"
     fi
     echo "${DATE:-unknown}" | cut -c1-10
 }
 
-# Query mode, so remote-deploy.sh reads extracts.txt through this one parser
-# instead of carrying a copy of it.
+# What a run needs free on the data disk besides the raw cache: the largest
+# extract (France) is ~5GB, the merged and converted intermediates a few more,
+# and the import grows the database. remote-deploy.sh refuses to start with
+# less, and the raw cache never fills the data disk below it.
+DATA_DISK_RESERVE_GB=10
+
+# Query modes, so remote-deploy.sh reads extracts.txt through this one parser
+# instead of carrying a copy of it, and the reserve from here.
 if [ "$1" = "--list-extracts" ]; then
     all_extracts
+    exit 0
+fi
+if [ "$1" = "--data-disk-reserve-gb" ]; then
+    echo "${DATA_DISK_RESERVE_GB}"
     exit 0
 fi
 
@@ -159,7 +176,10 @@ mkdir -p "${WORK_DIR}"
 
 # Split a RAW_CACHE entry into C_DIR and C_CAP_MB (empty: no cap). The cap is
 # what follows the last colon when that is a number, so a Windows path
-# (D:/osm/raw) needs no special case.
+# (D:/osm/raw) needs no special case; its leading zeros are dropped, or the
+# shell would read it as octal. Trailing slashes are dropped too: the sweeps
+# take a cached file's extract from its path relative to C_DIR, and with
+# "data/raw/" every file would look unlisted and be deleted.
 cache_entry() {
     C_DIR="$1"
     C_CAP_MB=""
@@ -168,10 +188,18 @@ cache_entry() {
         *)
             if [ "${1%:*}" != "$1" ]; then
                 C_DIR="${1%:*}"
-                C_CAP_MB=$((${1##*:} * 1024))
+                C_CAP_MB=$(($(echo "${1##*:}" | sed 's/^0*//; s/^$/0/') * 1024))
             fi
             ;;
     esac
+    while [ "${C_DIR}" != "${C_DIR%/}" ] && [ -n "${C_DIR%/}" ]; do
+        C_DIR="${C_DIR%/}"
+    done
+}
+
+# The disk holding a directory (its mount point).
+disk_of() {
+    df -Pk "$1" | awk 'NR == 2 { print $6 }'
 }
 
 # The RAW_CACHE entries whose directory exists.
@@ -271,17 +299,25 @@ free_mb() {
 
 # The first cache directory with room for a new raw extract of $1 MB: within
 # its cap, and still leaving room beside it to rewrite its largest file, since
-# an update writes the new copy before removing the old. Prints nothing when
-# none has room.
+# an update writes the new copy before removing the old. On the data disk it
+# also leaves DATA_DISK_RESERVE_GB free, so no cap is needed there; the rewrite
+# borrows from that, happening before the merge needs it. Prints nothing when
+# none has room. find and du take -H so that a cache directory which is a
+# symlink is measured by what it points to.
 pick_cache_dir() {
     for C_ENTRY in ${CACHE_ENTRIES}; do
         cache_entry "${C_ENTRY}"
-        C_LARGEST_MB="$(find "${C_DIR}" -type f -name '*.osm.pbf' -exec wc -c {} + |
+        C_RESERVE_MB="$(find -H "${C_DIR}" -type f -name '*.osm.pbf' -exec wc -c {} + |
             awk '$2 != "total" && $1 > m { m = $1 } END { print int(m / 1048576) }')"
-        [ "${C_LARGEST_MB}" -ge "$1" ] || C_LARGEST_MB="$1"
-        [ $(($(free_mb "${C_DIR}") - $1)) -ge $((C_LARGEST_MB + DISK_MARGIN_MB)) ] || continue
+        [ "${C_RESERVE_MB}" -ge "$1" ] || C_RESERVE_MB="$1"
+        C_RESERVE_MB=$((C_RESERVE_MB + DISK_MARGIN_MB))
+        if [ "$(disk_of "${C_DIR}")" = "$(disk_of "${DATA_DIR}")" ] &&
+            [ "${C_RESERVE_MB}" -lt $((DATA_DISK_RESERVE_GB * 1024)) ]; then
+            C_RESERVE_MB=$((DATA_DISK_RESERVE_GB * 1024))
+        fi
+        [ $(($(free_mb "${C_DIR}") - $1)) -ge "${C_RESERVE_MB}" ] || continue
         if [ -n "${C_CAP_MB}" ]; then
-            [ $(($(du -sk "${C_DIR}" | awk '{ print int($1 / 1024) }') + $1)) -le "${C_CAP_MB}" ] || continue
+            [ $(($(du -skH "${C_DIR}" | awk '{ print int($1 / 1024) }') + $1)) -le "${C_CAP_MB}" ] || continue
         fi
         echo "${C_DIR}"
         return 0
@@ -400,11 +436,6 @@ source_record() {
     printf '%s\n%s\n' "$1" "${RAIL_FILTER}"
 }
 
-# A header option of an OSM file, empty when it has none.
-header_option() {
-    osmium fileinfo -g "header.option.$2" "$1" 2> /dev/null || true
-}
-
 # What a cached raw extract holds, for its filtered file's .source: the last
 # diff applied, which names the data exactly whether the file came from a
 # download or an update.
@@ -437,11 +468,11 @@ cached_raw() {
 MAX_UPDATE_AGE_DAYS=60
 
 # Bring the cached raw file of an extract up to date in place (N, extract,
-# file). Where it cannot be - too old, no room to rewrite it, not from
-# Geofabrik's replication - it is dropped from the cache and U_RAW is left
-# empty, so the extract is downloaded whole. A failed update stops the run
-# with the file kept as it was: it is far more likely a passing network or
-# server problem than a bad file, and dropping it would cost a full download.
+# file). Where it cannot be - too old, or not from Geofabrik's replication -
+# it is dropped from the cache and U_RAW is left empty, so the extract is
+# downloaded whole. A failed update stops the run with the file kept as it
+# was: it is far more likely a passing network or server problem than a bad
+# file, and dropping it would cost a full download.
 update_raw() {
     U_N="$1"
     U_EXTRACT="$2"
@@ -454,8 +485,15 @@ update_raw() {
         U_WHY="it has no replication state of ${GEOFABRIK}/${U_EXTRACT}-updates"
     elif [ -n "${U_SECS}" ] && [ $((($(date -u +%s) - U_SECS) / 86400)) -gt "${MAX_UPDATE_AGE_DAYS}" ]; then
         U_WHY="its data is more than ${MAX_UPDATE_AGE_DAYS} days old"
-    elif [ "$(free_mb "$(dirname "${U_RAW}")")" -lt $(($(wc -c < "${U_RAW}") / 1048576 + DISK_MARGIN_MB)) ]; then
-        U_WHY="there is no room beside it for the updated copy"
+    fi
+    # No room for the updated copy stops the run rather than dropping the
+    # file: a download would need the same room, and the shortage is most
+    # likely passing (what a failed run left).
+    U_NEED_MB=$(($(wc -c < "${U_RAW}") / 1048576 + DISK_MARGIN_MB))
+    U_FREE_MB="$(free_mb "$(dirname "${U_RAW}")")"
+    if [ -z "${U_WHY}" ] && [ "${U_FREE_MB}" -lt "${U_NEED_MB}" ]; then
+        echo "ERROR: no room to update ${U_RAW} (${U_NEED_MB} MB needed beside it, ${U_FREE_MB} MB free)"
+        exit 1
     fi
     if [ -n "${U_WHY}" ]; then
         echo "[1/4] (${U_N}/${COUNT}) ${U_EXTRACT}: dropping ${U_RAW} from the cache, to download it whole: ${U_WHY}"
@@ -559,7 +597,7 @@ if [ "${EXTRACTS_FILE}" = "${LISTED_EXTRACTS_FILE}" ]; then
     # The raw cache likewise, its partial downloads (europe/france-261031)
     # included.
     for C_DIR in $(cache_dirs); do
-        find "${C_DIR}" -type f -name '*.osm.pbf' ! -name 'tmp*' | while read -r KEPT; do
+        find -H "${C_DIR}" -type f -name '*.osm.pbf' ! -name 'tmp*' | while read -r KEPT; do
             KEPT_EXTRACT="${KEPT#"${C_DIR}/"}"
             KEPT_EXTRACT="${KEPT_EXTRACT%.osm.pbf}"
             case "${KEPT_EXTRACT##*-}" in
@@ -576,7 +614,24 @@ fi
 # What a stopped update left: pyosmium-up-to-date's temporary copies
 # (tmpXXXXXXXX-france.osm.pbf), each as big as its extract.
 for C_DIR in $(cache_dirs); do
-    find "${C_DIR}" -type f -name 'tmp*-*.osm.pbf' -exec rm -f {} +
+    find -H "${C_DIR}" -type f -name 'tmp*-*.osm.pbf' -exec rm -f {} +
+done
+
+# A second copy of a cached extract, in a later directory than the one
+# cached_raw finds first: left when a directory was missing for a run (an
+# unmounted volume) and the extract was downloaded into another meanwhile.
+# It is never updated or read again.
+EARLIER_DIRS=""
+for C_DIR in $(cache_dirs); do
+    for EARLIER in ${EARLIER_DIRS}; do
+        find -H "${C_DIR}" -type f -name '*.osm.pbf' ! -name 'tmp*' | while read -r KEPT; do
+            if [ -f "${EARLIER}/${KEPT#"${C_DIR}/"}" ]; then
+                echo "Removing ${KEPT}: ${EARLIER}/${KEPT#"${C_DIR}/"} is the copy in use"
+                rm -f "${KEPT}"
+            fi
+        done
+    done
+    EARLIER_DIRS="${EARLIER_DIRS} ${C_DIR}"
 done
 
 # The extracts still to filter, as "N:path", in the positional parameters
