@@ -11,7 +11,8 @@
 #                      (see RECALC_PERFORMANCE.md)
 #   --fresh            discard what earlier runs left on the server - a pruned
 #                      map not deployed yet, and every filtered extract kept
-#                      (~35GB to download again) - instead of reusing it
+#                      (~35GB to download again, less what the raw cache
+#                      holds, which it keeps) - instead of reusing it
 #   --follow           start nothing; reattach to the run in progress, or
 #                      report on the last one
 # Example: npm run deployMapData -- --valid-only

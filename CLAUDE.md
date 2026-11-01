@@ -60,7 +60,7 @@ A unified Next.js app for OSM railway data. It fetches, processes and visualizes
 - **Every published port is bound to `127.0.0.1`**. Caddy on the host proxies to 3000/3001, and a Docker-published port bypasses ufw (an exposed frontend lets a client set its own `X-Forwarded-For`).
 - **A production server won't start without a `JWT_SECRET` of at least 32 bytes** (`resolveJwtSecret`, called from `src/instrumentation.ts`). The secret is resolved on first use, because `next build` runs as production with no secret. Only development falls back to a built-in key.
 
-Prerequisites: Osmium Tool (`conda install conda-forge::osmium-tool`), Node, Docker, `tsx`, `.env` from `.env.example`.
+Prerequisites: Osmium Tool (`conda install conda-forge::osmium-tool`), Node, Docker, `tsx`, `.env` from `.env.example`. The raw extract cache (`RAW_CACHE`, set on the server) also needs `pyosmium-up-to-date`.
 
 ## Data model (Postgres 18 + PostGIS 3.6)
 

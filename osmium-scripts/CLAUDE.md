@@ -9,6 +9,7 @@
 - Merged with `osmium merge -H` + `time-filter`. Neighbouring extracts overlap and carry the same way in two versions, which a plain merge writes as two `railway_parts` rows with one id.
 - Europe's list mirrors Geofabrik's Europe page, one extract per country (the continent won't fit the server's disk). The exceptions are the combination regions, Iceland and the Azores, and Russia goes in as federal districts. That way there is track everywhere on the admin map. A route crossing a region missing from the list goes invalid on import. Japan is one extract.
 - Filtered extracts are **kept** under `data/extracts/<geofabrik path>` beside a `.source` (dated file + `RAIL_FILTER`). They are re-downloaded only when `-latest` points elsewhere or the filter changed. An extract removed from `extracts.txt` is deleted (unless `EXTRACTS_FILE` names a trial list); `--fresh` deletes them all.
+- **Raw cache** (`RAW_CACHE`, from the environment or `.env`; the server sets it): directories that keep the raw extracts, each optionally capped in GB (`"data/raw:11 /mnt/<volume>/osm-raw"`, filled in that order). A cached extract is brought up to date in place with Geofabrik's daily diffs (`pyosmium-up-to-date`, apt `pyosmium`) instead of downloaded, and its `.source` records the replication sequence number instead of a dated file. Diffs need the whole extract, never a filtered one. A file whose header is not on `<extract>-updates`, one over 60 days old, or one with no room beside it for the rewrite is dropped and downloaded whole. A failed update stops the run and keeps the file. A directory that doesn't exist is skipped, so an unmounted volume can't fill the root disk. The cap is what leaves `remote-deploy.sh` its 10GB. `--fresh` keeps the cache. Unset, nothing changes.
 
 ## Deploy (`deploy.sh` → `remote-deploy.sh`)
 
@@ -16,4 +17,5 @@
 - Pulls the server's checkout of `main`. It refuses while local commits are unpushed or `osmium-scripts/`, `src/scripts/` or `package*.json` have uncommitted changes (`src/lib` only warns). Runs `npm ci` when `node_modules` wasn't installed from the current lockfile.
 - Prepares the map there (no date: always the latest extracts) and imports it. The log (`data/deploy.log`) streams over `plink -t`, and **the deploy stops when that session ends**. Windows plink never forwards Ctrl+C, so the hangup is the only signal. Rerunning resumes: a pruned file prepared from the current extract list since the last successful deploy is reused. `--follow` shows a running deploy (Ctrl+C there stops it too) or the last log. `--fresh` discards prepared files.
 - `remote-deploy.sh --state` is how pulls detect a running deploy.
-- The server needs `osmium-tool` (apt) and swap (osmium needs ~2GB to filter a country).
+- The server needs `osmium-tool` and `pyosmium` (apt) and swap (osmium needs ~2GB to filter a country).
+- A successful deploy deletes `data/pruned.geojson`, which is kept only to resume a deploy that failed at the import.

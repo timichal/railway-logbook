@@ -25,12 +25,15 @@
 #
 # Flags: --valid-only and --concurrency=N go to importMapData. --fresh throws
 # away whatever earlier runs left behind - a failed run's pruned map, and the
-# filtered extracts every run keeps - and starts from scratch.
+# filtered extracts every run keeps - and starts from scratch. It leaves the
+# raw cache (RAW_CACHE, see prepare.sh): every file there is checked as it is
+# updated, and emptying it would cost ~35GB of downloads.
 #
 # A pruned file prepared after the last successful deploy is reused rather
 # than rebuilt: it was produced by a run that failed later, at the import, and
-# preparing it again is half an hour of downloads. A successful deploy leaves
-# the pruned file older than its record, so the next deploy prepares anew.
+# preparing it again is half an hour of downloads. A successful deploy deletes
+# the pruned file (and a file older than the record is never reused), so the
+# next deploy prepares anew.
 
 set -e
 
@@ -216,7 +219,9 @@ else
   # intermediates a few more. prepare.sh downloads the next extract during the
   # current one's filter only where the disk has room for both, so this is
   # enough either way; more only lets it overlap more often. Failing here
-  # beats failing an hour in.
+  # beats failing an hour in. Measured with the raw cache's share of this
+  # disk already on it: its cap (RAW_CACHE) is what keeps this much free, and
+  # updating a cached extract borrows the room before the merge needs it.
   AVAILABLE_GB=$(($(df -Pk "${DATA_DIR}" | awk 'NR == 2 { print $4 }') / 1024 / 1024))
   if [ "${AVAILABLE_GB}" -lt 10 ]; then
     echo "ERROR: only ${AVAILABLE_GB}GB free on the data disk, 10GB needed"
@@ -240,6 +245,9 @@ npm run importMapData -- "${PRUNED}" ${IMPORT_FLAGS}
   cat "${SOURCES}"
 } > "${RECORD_FILE}.part"
 mv "${RECORD_FILE}.part" "${RECORD_FILE}"
+# Kept only to resume a deploy that failed at the import; this one went in, so
+# the next deploy prepares anew and the file is only taking up disk.
+rm -f "${PRUNED}"
 
 echo ""
 echo "=== Map data deploy finished $(date -u '+%Y-%m-%d %H:%M UTC') ==="
