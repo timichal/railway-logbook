@@ -169,8 +169,44 @@ if [ -z "${EXTRACTS}" ]; then
 fi
 COUNT="$(echo "${EXTRACTS}" | wc -l | tr -d ' ')"
 
-echo "=== Starting OSM Railway Data Processing (${COUNT} extracts) ==="
+# "1 extract", "2 extracts".
+count_extracts() {
+    if [ "$1" -eq 1 ]; then echo "1 ${2:+$2 }extract"; else echo "$1 ${2:+$2 }extracts"; fi
+}
+
+echo "=== OSM railway data: $(count_extracts "${COUNT}") ==="
 echo ""
+
+# Output is plain ASCII, so it reads right in any console. (deploy.sh also
+# switches a Windows console to UTF-8, for the import's station names.)
+#
+# Every line about one extract starts with its name, padded to the longest, so
+# the lines of one extract downloading and another being filtered beside it
+# read as two columns rather than a jumble.
+NAME_W="$(echo "${EXTRACTS}" | awk 'length > w { w = length } END { print w }')"
+say() {
+    printf "  %-${NAME_W}s  %s\n" "$1" "$2"
+}
+
+# The date in a Geofabrik file name (france-261031.osm.pbf: 2026-10-31), or
+# the name itself where it has none.
+file_date() {
+    case "$1" in
+        *-[0-9][0-9][0-9][0-9][0-9][0-9].osm.pbf)
+            echo "$1" | sed 's/.*-\([0-9][0-9]\)\([0-9][0-9]\)\([0-9][0-9]\)\.osm\.pbf$/20\1-\2-\3/'
+            ;;
+        *) echo "$1" ;;
+    esac
+}
+
+# The last line of each extract a phase works on: "done 3/42", counted in the
+# order they finish, so the count only goes up however the work overlaps.
+DONE_N=0
+DONE_OF=0
+finish() {
+    DONE_N=$((DONE_N + 1))
+    say "$1" "done ${DONE_N}/${DONE_OF}: $2"
+}
 
 mkdir -p "${WORK_DIR}"
 
@@ -244,11 +280,10 @@ cache_dirs() {
 # Headroom left beside a download started early, for the filter's own output.
 DISK_MARGIN_MB=1024
 
-# The download in hand: where it is on the list, its extract, file and URL,
-# its size in MB (empty when the server did not say), and curl's pid while it
-# runs. Each function below keeps to its own prefix (DL_, W_, F_), since sh
-# has no locals and the caller still needs the previous extract's values.
-DL_N=""
+# The download in hand: its extract, file and URL, its size in MB (empty when
+# the server did not say), and curl's pid while it runs. Each function below
+# keeps to its own prefix (DL_, W_, F_, U_), since sh has no locals and the
+# caller still needs the previous extract's values.
 DL_EXTRACT=""
 DL_FILE=""
 DL_URL=""
@@ -324,14 +359,13 @@ pick_cache_dir() {
     done
 }
 
-# Find where an extract ("N:path", N its place on the list) downloads from,
-# how big it is, and where it goes: DL_FILE, and DL_KEEP_AS, where it is kept
-# in the raw cache once filtered (empty: deleted instead). Returns non-zero,
-# having said why, when Geofabrik does not answer. Run in this shell, not in
-# $(...), since it sets the DL_ globals.
+# Find where an extract downloads from, how big it is, and where it goes:
+# DL_FILE, and DL_KEEP_AS, where it is kept in the raw cache once filtered
+# (empty: deleted instead). Returns non-zero, having said why, when Geofabrik
+# does not answer. Run in this shell, not in $(...), since it sets the DL_
+# globals.
 resolve_download() {
-    DL_N="${1%%:*}"
-    DL_EXTRACT="${1#*:}"
+    DL_EXTRACT="$1"
     DL_SUBDIR="$(dirname "${DL_EXTRACT}")"
     DL_NAME="$(basename "${DL_EXTRACT}")"
 
@@ -389,7 +423,7 @@ room_for_download() {
 
 # Start the resolved download in the background.
 start_download() {
-    echo "[1/4] (${DL_N}/${COUNT}) ${DL_EXTRACT}: downloading $(basename "${DL_FILE}")${DL_TOTAL_MB:+ (${DL_TOTAL_MB} MB)}..."
+    say "${DL_EXTRACT}" "downloading the $(file_date "$(basename "${DL_FILE}")") extract${DL_TOTAL_MB:+, ${DL_TOTAL_MB} MB}"
     # --fail keeps an HTTP error page from being written out as a .osm.pbf
     # (osmium would then fail on an "invalid BlobHeader size" that says
     # nothing about the download) and out of the file a resume appends to.
@@ -409,7 +443,7 @@ wait_download() {
     W_WAITED=""
     while kill -0 "${DL_PID}" 2>/dev/null; do
         if [ -f "${DL_FILE}" ]; then
-            printf '\r  %s: %d%s MB downloaded ' "${DL_EXTRACT}" \
+            printf "\r  %-${NAME_W}s  %d%s MB downloaded " "${DL_EXTRACT}" \
                 "$(($(wc -c < "${DL_FILE}") / 1048576))" "${DL_TOTAL_MB:+ of ${DL_TOTAL_MB}}"
             W_WAITED=1
         fi
@@ -467,42 +501,39 @@ cached_raw() {
 # well inside pyosmium-up-to-date's own refusal at 90.
 MAX_UPDATE_AGE_DAYS=60
 
-# Bring the cached raw file of an extract up to date in place (N, extract,
-# file). Where it cannot be - too old, or not from Geofabrik's replication -
-# it is dropped from the cache and U_RAW is left empty, so the extract is
-# downloaded whole. A failed update stops the run with the file kept as it
-# was: it is far more likely a passing network or server problem than a bad
-# file, and dropping it would cost a full download.
-update_raw() {
-    U_N="$1"
-    U_EXTRACT="$2"
-    U_RAW="$3"
-    U_WHY=""
-    U_TIMESTAMP="$(header_option "${U_RAW}" osmosis_replication_timestamp)"
+# Why the cached raw file of an extract (extract, file) cannot be brought up
+# to date, and is to be downloaded whole instead - too old, or not from
+# Geofabrik's replication. Prints nothing when it can be.
+stale_raw_reason() {
+    S_TIMESTAMP="$(header_option "$2" osmosis_replication_timestamp)"
     # GNU date parses the timestamp; where it can't, pyosmium's own check stands.
-    U_SECS="$(date -u -d "${U_TIMESTAMP:-none}" +%s 2> /dev/null || true)"
-    if ! updatable_raw "${U_EXTRACT}" "${U_RAW}"; then
-        U_WHY="it has no replication state of ${GEOFABRIK}/${U_EXTRACT}-updates"
-    elif [ -n "${U_SECS}" ] && [ $((($(date -u +%s) - U_SECS) / 86400)) -gt "${MAX_UPDATE_AGE_DAYS}" ]; then
-        U_WHY="its data is more than ${MAX_UPDATE_AGE_DAYS} days old"
+    S_SECS="$(date -u -d "${S_TIMESTAMP:-none}" +%s 2> /dev/null || true)"
+    if ! updatable_raw "$1" "$2"; then
+        echo "it has no replication state of ${GEOFABRIK}/$1-updates"
+    elif [ -n "${S_SECS}" ] && [ $((($(date -u +%s) - S_SECS) / 86400)) -gt "${MAX_UPDATE_AGE_DAYS}" ]; then
+        echo "its data is more than ${MAX_UPDATE_AGE_DAYS} days old"
     fi
+}
+
+# Bring the cached raw file of an extract up to date in place (extract, file),
+# one stale_raw_reason passed. A failed update stops the run with the file
+# kept as it was: it is far more likely a passing network or server problem
+# than a bad file, and dropping it would cost a full download.
+update_raw() {
+    U_EXTRACT="$1"
+    U_RAW="$2"
     # No room for the updated copy stops the run rather than dropping the
     # file: a download would need the same room, and the shortage is most
     # likely passing (what a failed run left).
     U_NEED_MB=$(($(wc -c < "${U_RAW}") / 1048576 + DISK_MARGIN_MB))
     U_FREE_MB="$(free_mb "$(dirname "${U_RAW}")")"
-    if [ -z "${U_WHY}" ] && [ "${U_FREE_MB}" -lt "${U_NEED_MB}" ]; then
+    if [ "${U_FREE_MB}" -lt "${U_NEED_MB}" ]; then
         echo "ERROR: no room to update ${U_RAW} (${U_NEED_MB} MB needed beside it, ${U_FREE_MB} MB free)"
         exit 1
     fi
-    if [ -n "${U_WHY}" ]; then
-        echo "[1/4] (${U_N}/${COUNT}) ${U_EXTRACT}: dropping ${U_RAW} from the cache, to download it whole: ${U_WHY}"
-        rm -f "${U_RAW}"
-        U_RAW=""
-        return 0
-    fi
 
-    echo "[1/4] (${U_N}/${COUNT}) ${U_EXTRACT}: updating the cached extract (data from $(extract_date "${U_RAW}"))..."
+    U_SEQ="$(header_option "${U_RAW}" osmosis_replication_sequence_number)"
+    say "${U_EXTRACT}" "updating from Geofabrik's diffs (data from $(extract_date "${U_RAW}"))"
     # In place: pyosmium writes the update to a temporary file beside the
     # input and renames it over the input only once it is complete (a stopped
     # run's temporary file is swept on the next). Exit 1 means it stopped at
@@ -520,21 +551,24 @@ update_raw() {
         echo "  It is kept as it was. Rerun later, or delete it to download ${U_EXTRACT} whole."
         exit 1
     done
-    echo "✓ ${U_EXTRACT}: data from $(extract_date "${U_RAW}")"
+    if [ "$(header_option "${U_RAW}" osmosis_replication_sequence_number)" = "${U_SEQ}" ]; then
+        say "${U_EXTRACT}" "no new diffs"
+    else
+        say "${U_EXTRACT}" "updated to data from $(extract_date "${U_RAW}")"
+    fi
 }
 
-# Filter a raw extract down to railways (N, extract, raw file, and where to
-# keep the raw file in the cache - empty to delete it, or the file itself
-# where it is cached already).
+# Filter a raw extract down to railways (extract, raw file, and where to keep
+# the raw file in the cache - empty to delete it, or the file itself where it
+# is cached already).
 filter_extract() {
-    F_N="$1"
-    F_EXTRACT="$2"
-    F_DOWNLOAD="$3"
-    F_KEEP_AS="$4"
+    F_EXTRACT="$1"
+    F_DOWNLOAD="$2"
+    F_KEEP_AS="$3"
     F_RAIL_FILE="${WORK_DIR}/${F_EXTRACT}.rail.pbf"
     mkdir -p "$(dirname "${F_RAIL_FILE}")"
 
-    echo "[1/4] (${F_N}/${COUNT}) ${F_EXTRACT}: filtering rail features..."
+    say "${F_EXTRACT}" "filtering rail features"
     # Stations are matched on nodes AND ways (nw/): plenty of them - most of
     # France, from the SNCF/cadastre import - carry railway=station on the
     # station building instead of a node. osmium export turns those closed ways
@@ -567,7 +601,7 @@ filter_extract() {
         source_record "$(raw_record "${F_KEEP_AS}")" > "${F_RAIL_FILE}.source"
     else
         if [ -n "${F_KEEP_AS}" ]; then
-            echo "  ${F_EXTRACT}: not caching $(basename "${F_DOWNLOAD}"), which has no replication state of ${GEOFABRIK}/${F_EXTRACT}-updates"
+            say "${F_EXTRACT}" "not cached: it has no replication state of ${GEOFABRIK}/${F_EXTRACT}-updates"
         fi
         rm -f "${F_DOWNLOAD}"
         case "${F_DOWNLOAD}" in
@@ -576,7 +610,7 @@ filter_extract() {
         esac
     fi
     FILTERED_NOW=1
-    echo "✓ ${F_EXTRACT}: data from $(extract_date "${F_RAIL_FILE}")"
+    finish "${F_EXTRACT}" "data from $(extract_date "${F_RAIL_FILE}")"
 }
 
 # Filtered extracts are kept from run to run; one no longer listed in
@@ -584,13 +618,14 @@ filter_extract() {
 # selection, so a partial run leaves the other extracts alone - and not at all
 # when the list is a trial one of its own (EXTRACTS_FILE), which would
 # otherwise cost the next real run every extract it leaves out.
+echo "[1/4] Checking $(count_extracts "${COUNT}")"
 if [ "${EXTRACTS_FILE}" = "${LISTED_EXTRACTS_FILE}" ]; then
     ALL_EXTRACTS="$(all_extracts)"
     find "${WORK_DIR}" -type f -name '*.rail.pbf' | while read -r KEPT; do
         KEPT_EXTRACT="${KEPT#"${WORK_DIR}/"}"
         KEPT_EXTRACT="${KEPT_EXTRACT%.rail.pbf}"
         if ! echo "${ALL_EXTRACTS}" | grep -qxF "${KEPT_EXTRACT}"; then
-            echo "Removing ${KEPT}: ${KEPT_EXTRACT} is no longer listed"
+            echo "  Removing ${KEPT}: ${KEPT_EXTRACT} is no longer listed"
             rm -f "${KEPT}" "${KEPT}.source"
         fi
     done
@@ -604,7 +639,7 @@ if [ "${EXTRACTS_FILE}" = "${LISTED_EXTRACTS_FILE}" ]; then
                 latest | [0-9]*) KEPT_EXTRACT="${KEPT_EXTRACT%-*}" ;;
             esac
             if ! echo "${ALL_EXTRACTS}" | grep -qxF "${KEPT_EXTRACT}"; then
-                echo "Removing ${KEPT}: ${KEPT_EXTRACT} is no longer listed"
+                echo "  Removing ${KEPT}: ${KEPT_EXTRACT} is no longer listed"
                 rm -f "${KEPT}"
             fi
         done
@@ -626,7 +661,7 @@ for C_DIR in $(cache_dirs); do
     for EARLIER in ${EARLIER_DIRS}; do
         find -H "${C_DIR}" -type f -name '*.osm.pbf' ! -name 'tmp*' | while read -r KEPT; do
             if [ -f "${EARLIER}/${KEPT#"${C_DIR}/"}" ]; then
-                echo "Removing ${KEPT}: ${EARLIER}/${KEPT#"${C_DIR}/"} is the copy in use"
+                echo "  Removing ${KEPT}: ${EARLIER}/${KEPT#"${C_DIR}/"} is the copy in use"
                 rm -f "${KEPT}"
             fi
         done
@@ -634,32 +669,36 @@ for C_DIR in $(cache_dirs); do
     EARLIER_DIRS="${EARLIER_DIRS} ${C_DIR}"
 done
 
-# The extracts still to filter, as "N:path", in the positional parameters
-# (the selection arguments having been read above): those with no filtered
-# file kept, and those Geofabrik has a newer file of than the one kept, or
-# that were kept from another RAIL_FILTER. A cached extract is updated and,
-# where that brought new data, filtered here and now.
+# What each extract needs. Cached ones go on UPDATES as "extract|file" (no
+# path here holds a space or a "|": RAW_CACHE is space-separated), to be
+# updated from the diffs. One that cannot be is dropped from the cache here
+# and treated as never cached, so the plan printed is the plan run. The ones
+# to download go in the positional parameters (the selection arguments having
+# been read above): those with no filtered file kept, and those Geofabrik has
+# a newer file of than the one kept, or that were kept from another
+# RAIL_FILTER. The rest are reused as they are.
 FILTERED_NOW=""
+UPDATES=""
+UPDATE_COUNT=0
+REUSED_COUNT=0
 set --
-N=0
 for EXTRACT in ${EXTRACTS}; do
-    N=$((N + 1))
     RAIL_FILE="${WORK_DIR}/${EXTRACT}.rail.pbf"
-    U_RAW="$(cached_raw "${EXTRACT}")"
-    if [ -n "${U_RAW}" ]; then
-        update_raw "${N}" "${EXTRACT}" "${U_RAW}"
-    fi
-    if [ -n "${U_RAW}" ]; then
-        if [ -f "${RAIL_FILE}" ] &&
-            [ "$(cat "${RAIL_FILE}.source" 2> /dev/null || true)" = "$(source_record "$(raw_record "${U_RAW}")")" ]; then
-            echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: no new data since it was last filtered, reusing that"
-        else
-            filter_extract "${N}" "${EXTRACT}" "${U_RAW}" "${U_RAW}"
+    RAW="$(cached_raw "${EXTRACT}")"
+    if [ -n "${RAW}" ]; then
+        STALE="$(stale_raw_reason "${EXTRACT}" "${RAW}")"
+        if [ -z "${STALE}" ]; then
+            say "${EXTRACT}" "cached, to update"
+            UPDATES="${UPDATES} ${EXTRACT}|${RAW}"
+            UPDATE_COUNT=$((UPDATE_COUNT + 1))
+            continue
         fi
-        continue
+        say "${EXTRACT}" "dropped from the cache: ${STALE}"
+        rm -f "${RAW}"
     fi
     if [ ! -f "${RAIL_FILE}" ]; then
-        set -- "$@" "${N}:${EXTRACT}"
+        say "${EXTRACT}" "to download: none kept"
+        set -- "$@" "${EXTRACT}"
         continue
     fi
     probe_latest "${EXTRACT}" || exit 1
@@ -667,45 +706,70 @@ for EXTRACT in ${EXTRACTS}; do
     KEPT_RECORD="$(cat "${RAIL_FILE}.source" 2>/dev/null || true)"
     KEPT_NAME="$(echo "${KEPT_RECORD}" | head -n 1)"
     if [ -n "${KEPT_RECORD}" ] && [ "${KEPT_RECORD}" = "$(source_record "${LATEST_NAME}")" ]; then
-        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: no newer extract than ${KEPT_NAME}, reusing it (data from $(extract_date "${RAIL_FILE}"))"
+        say "${EXTRACT}" "up to date, data from $(extract_date "${RAIL_FILE}")"
+        REUSED_COUNT=$((REUSED_COUNT + 1))
     elif [ -n "${KEPT_NAME}" ] && [ "${KEPT_NAME}" = "${LATEST_NAME}" ]; then
-        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: kept ${KEPT_NAME} went through another filter - fetching it again"
-        set -- "$@" "${N}:${EXTRACT}"
+        say "${EXTRACT}" "to download: the kept one went through another filter"
+        set -- "$@" "${EXTRACT}"
     else
-        echo "[1/4] (${N}/${COUNT}) ${EXTRACT}: Geofabrik has ${LATEST_NAME}, kept ${KEPT_NAME:-an unknown file} - fetching it again"
-        set -- "$@" "${N}:${EXTRACT}"
+        say "${EXTRACT}" "to download: Geofabrik has $(file_date "${LATEST_NAME}"), kept $(file_date "${KEPT_NAME:-nothing known}")"
+        set -- "$@" "${EXTRACT}"
     fi
 done
+echo "  => ${UPDATE_COUNT} to update, $# to download, ${REUSED_COUNT} up to date"
+echo ""
+
+# Update the cached extracts and filter those that brought new data.
+if [ "${UPDATE_COUNT}" -gt 0 ]; then
+    echo "[1/4] Updating $(count_extracts "${UPDATE_COUNT}" cached)"
+    DONE_N=0
+    DONE_OF="${UPDATE_COUNT}"
+    for ITEM in ${UPDATES}; do
+        EXTRACT="${ITEM%%|*}"
+        RAW="${ITEM#*|}"
+        RAIL_FILE="${WORK_DIR}/${EXTRACT}.rail.pbf"
+        update_raw "${EXTRACT}" "${RAW}"
+        if [ -f "${RAIL_FILE}" ] &&
+            [ "$(cat "${RAIL_FILE}.source" 2> /dev/null || true)" = "$(source_record "$(raw_record "${RAW}")")" ]; then
+            finish "${EXTRACT}" "filtered copy still current, data from $(extract_date "${RAIL_FILE}")"
+        else
+            filter_extract "${EXTRACT}" "${RAW}" "${RAW}"
+        fi
+    done
+    echo ""
+fi
 
 # The head of the list is always the extract downloading: each pass waits for
 # it, starts the next one where there is room, and filters it.
 if [ $# -gt 0 ]; then
+    echo "[1/4] Downloading and filtering $(count_extracts $#)"
+    DONE_N=0
+    DONE_OF=$#
     resolve_download "$1" || exit 1
     start_download
 fi
 while [ $# -gt 0 ]; do
     wait_download
-    READY_N="${DL_N}"
     READY_EXTRACT="${DL_EXTRACT}"
     READY_FILE="${DL_FILE}"
     READY_KEEP_AS="${DL_KEEP_AS}"
     shift
     if [ $# -eq 0 ]; then
-        filter_extract "${READY_N}" "${READY_EXTRACT}" "${READY_FILE}" "${READY_KEEP_AS}"
+        filter_extract "${READY_EXTRACT}" "${READY_FILE}" "${READY_KEEP_AS}"
+        echo ""
     elif ! resolve_download "$1"; then
         # The next extract's failure must not cost this one its download.
-        filter_extract "${READY_N}" "${READY_EXTRACT}" "${READY_FILE}" "${READY_KEEP_AS}"
+        filter_extract "${READY_EXTRACT}" "${READY_FILE}" "${READY_KEEP_AS}"
         exit 1
     elif room_for_download; then
         start_download
-        filter_extract "${READY_N}" "${READY_EXTRACT}" "${READY_FILE}" "${READY_KEEP_AS}"
+        filter_extract "${READY_EXTRACT}" "${READY_FILE}" "${READY_KEEP_AS}"
     else
-        echo "[1/4] (${DL_N}/${COUNT}) ${DL_EXTRACT}: no room to download ahead (${DL_NEED_MB} MB needed, ${DL_FREE_MB} MB free), waiting for the filter"
-        filter_extract "${READY_N}" "${READY_EXTRACT}" "${READY_FILE}" "${READY_KEEP_AS}"
+        say "${DL_EXTRACT}" "waiting for the filter: no room to download alongside (${DL_NEED_MB} MB needed, ${DL_FREE_MB} MB free)"
+        filter_extract "${READY_EXTRACT}" "${READY_FILE}" "${READY_KEEP_AS}"
         start_download
     fi
 done
-echo ""
 
 # 2. Merge the extracts. Neighbouring extracts overlap at the border, and
 # when they were cut on different days the same way can arrive in two
@@ -724,9 +788,9 @@ if [ -n "${FILTERED_NOW}" ] ||
     rm -f "${FILTERED_FILE}" "${MERGED_LIST_FILE}" "${GEOJSON_FILE}"
 fi
 if [ -f "${FILTERED_FILE}" ]; then
-    echo "[2/4] Skipping merge - ${FILTERED_FILE} already exists"
+    echo "[2/4] Merging: reusing ${FILTERED_FILE}, merged by an earlier run"
 else
-    echo "[2/4] Merging ${COUNT} extracts..."
+    echo "[2/4] Merging $(count_extracts "${COUNT}")"
     RAIL_FILES=""
     for EXTRACT in ${EXTRACTS}; do
         RAIL_FILES="${RAIL_FILES} ${WORK_DIR}/${EXTRACT}.rail.pbf"
@@ -745,7 +809,7 @@ else
     echo "${EXTRACTS}" > "${MERGED_LIST_FILE}"
     mv "${FILTERED_FILE}.part" "${FILTERED_FILE}"
     rm -f "${MERGED_FILE}"
-    echo "✓ Merge complete"
+    echo "  done"
 fi
 
 # Written now, while the filtered extracts are still here to read, and
@@ -757,40 +821,38 @@ echo ""
 
 # 3. Convert to GeoJSON
 if [ -f "${GEOJSON_FILE}" ]; then
-    echo "[3/4] Skipping conversion - ${GEOJSON_FILE} already exists"
+    echo "[3/4] Converting to GeoJSON: reusing ${GEOJSON_FILE}, converted by an earlier run"
 else
-    echo "[3/4] Converting to GeoJSON..."
+    echo "[3/4] Converting to GeoJSON"
     osmium export "${FILTERED_FILE}" -a id -f geojson -o "${GEOJSON_FILE}.part" || {
         echo "ERROR: Failed to convert to GeoJSON"
         rm -f "${GEOJSON_FILE}.part"
         exit 1
     }
     mv "${GEOJSON_FILE}.part" "${GEOJSON_FILE}"
-    echo "✓ Conversion complete"
+    echo "  done"
 fi
 echo ""
 
 # 4. Prune data (pruneData.ts does its own .part/rename on the output, and
 # fails rather than writing a short file if the input ends mid-feature)
-echo "[4/4] Pruning data (resolving station names)..."
+echo "[4/4] Pruning (resolving station names)"
 tsx src/scripts/pruneData.ts "${OUTPUT_FILE}" < "${GEOJSON_FILE}" || {
     echo "ERROR: Failed to prune data"
     exit 1
 }
 mv "${SOURCES_FILE}.part" "${SOURCES_FILE}"
-echo "✓ Pruning complete"
+echo "  done"
 echo ""
 
 # 5. Cleanup: remove this run's intermediate files. Only reached once pruning
 # succeeded, so a failed run keeps its intermediates for the retry. The
 # filtered extracts stay, for the next run to reuse (see step 1).
-echo "Cleaning up intermediate files..."
 rm -f "${MERGED_FILE}"
 find "${WORK_DIR}" -depth -type d -empty -exec rmdir {} \;
 rm -f "${FILTERED_FILE}" "${MERGED_LIST_FILE}" "${GEOJSON_FILE}"
-echo "✓ Cleanup complete"
-echo ""
 
-echo "=== OSM Railway Data Processing Complete ==="
-echo "Output: ${OUTPUT_FILE}"
-sed 's/^/  /' "${SOURCES_FILE}"
+echo "=== Done: ${OUTPUT_FILE}, with the data of each extract from ==="
+while IFS= read -r LINE; do
+    say "${LINE%%: *}" "${LINE#*: }"
+done < "${SOURCES_FILE}"

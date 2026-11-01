@@ -54,6 +54,20 @@ for arg in "$@"; do
   esac
 done
 
+# The server's log is UTF-8 (station names, the import's arrows), and a Windows
+# console started from PowerShell or cmd shows it in its OEM code page, 437 on
+# an English Windows, where "✓" arrives as "Γ£ô". So the console is switched
+# to UTF-8 for the run, and back when it ends. chcp.com exists only on
+# Windows; it is harmless under mintty, which is UTF-8 already. Best effort:
+# a console that refuses the switch only keeps its mojibake.
+if command -v chcp.com > /dev/null 2>&1; then
+  CONSOLE_CP="$(chcp.com 2> /dev/null | tr -dc '0-9')" || CONSOLE_CP=""
+  if [ -n "${CONSOLE_CP}" ] && [ "${CONSOLE_CP}" != 65001 ] &&
+    chcp.com 65001 > /dev/null 2>&1; then
+    trap 'chcp.com "${CONSOLE_CP}" > /dev/null 2>&1' EXIT
+  fi
+fi
+
 remote() {
   plink -batch "${REMOTE_HOST}" "cd ${REMOTE_DIR} && $1"
 }
