@@ -6,9 +6,10 @@
 # The map is built from the Geofabrik extracts listed in
 # osmium-scripts/extracts.txt - Europe one per country, Japan as one - into a
 # single file, data/pruned.geojson, which importMapData loads. Every extract is
-# downloaded, filtered down to railways and deleted, the next one downloading
-# while the previous is filtered, so the disk never holds more than two raw
-# extracts; the filtered files are then merged and pruned. The regions
+# downloaded, filtered down to railways and deleted - or kept, in the raw cache
+# (below) - the next one downloading while the previous is filtered, so
+# without a cache the disk never holds more than two raw extracts; the
+# filtered files are then merged and pruned. The regions
 # (src/lib/shared/regions.ts) are bounding boxes applied when the data is
 # read, so nothing here needs to know about them.
 #
@@ -59,6 +60,17 @@
 # replication) is dropped from it and downloaded whole.
 
 set -e  # Exit on error
+
+# libosmium's worker pool, which compresses and decompresses the PBF blocks,
+# defaults to two threads fewer than the CPUs, at least one. On the server's 2
+# vCPUs that is a single worker doing all of it, which is what an update
+# (every block read and written again) waits on. At least two instead; on a
+# bigger machine the default stands.
+if [ -z "${OSMIUM_POOL_THREADS:-}" ]; then
+    OSMIUM_POOL_THREADS=$(($(nproc 2> /dev/null || echo 4) - 2))
+    [ "${OSMIUM_POOL_THREADS}" -ge 2 ] || OSMIUM_POOL_THREADS=2
+fi
+export OSMIUM_POOL_THREADS
 
 DATA_DIR="data"
 # Overridable so the pipeline can be tried on a list of its own.
@@ -280,8 +292,10 @@ cache_dirs() {
 # overlap would. Either way it never starts before the previous download has
 # finished, or a slow filter would let the downloads run ahead and pile up.
 #
-# Extracts already in the raw cache come first, updated and filtered one by
-# one, with nothing to overlap; only the rest go through the downloads.
+# Extracts already in the raw cache are updated and filtered one by one, and
+# the downloads of the rest run in the background meanwhile: an update is
+# CPU-bound, a download network-bound. A download that has finished is
+# filtered between two updates, and the next one starts then.
 
 # Headroom left beside a download started early, for the filter's own output.
 DISK_MARGIN_MB=1024
@@ -414,7 +428,8 @@ resolve_download() {
 }
 
 # Whether the disk has room for the rest of the resolved download, plus the
-# margin, beside what is on it now. An unknown size is taken as no room.
+# margin and $1 MB more (none if not given), beside what is on it now. An
+# unknown size is taken as no room.
 room_for_download() {
     DL_FREE_MB="$(free_mb "${DL_ROOT}")"
     DL_NEED_MB="?"
@@ -423,7 +438,7 @@ room_for_download() {
     if [ -f "${DL_FILE}" ]; then
         DL_HAVE_MB=$(($(wc -c < "${DL_FILE}") / 1048576))
     fi
-    DL_NEED_MB=$((DL_TOTAL_MB - DL_HAVE_MB + DISK_MARGIN_MB))
+    DL_NEED_MB=$((DL_TOTAL_MB - DL_HAVE_MB + DISK_MARGIN_MB + ${1:-0}))
     [ "${DL_NEED_MB}" -le "${DL_FREE_MB}" ]
 }
 
@@ -725,12 +740,59 @@ done
 echo "  => ${UPDATE_COUNT} to update, $# to download, ${REUSED_COUNT} up to date"
 echo ""
 
-# Update the cached extracts and filter those that brought new data.
+# What the updates still to run (REMAINING_UPDATES) need on the disk holding
+# directory $1, in MB beyond the margin: the largest of their raw files there,
+# since each is rewritten beside itself. A download started beside them leaves
+# this free, so that it never takes the room an update counted on.
+update_reserve_mb() {
+    R_DISK="$(disk_of "$1")"
+    R_MB=0
+    for R_ITEM in ${REMAINING_UPDATES}; do
+        R_RAW="${R_ITEM#*|}"
+        [ "$(disk_of "$(dirname "${R_RAW}")")" = "${R_DISK}" ] || continue
+        R_SIZE=$(($(wc -c < "${R_RAW}") / 1048576))
+        [ "${R_SIZE}" -le "${R_MB}" ] || R_MB="${R_SIZE}"
+    done
+    echo "${R_MB}"
+}
+
+# One counter over everything filtered, updates and downloads alike, since
+# they finish interleaved.
+DONE_N=0
+DONE_OF=$((UPDATE_COUNT + $#))
+
+# Update the cached extracts and filter those that brought new data. The
+# positional parameters are the downloads still to go, the head downloading
+# while DL_PID is set. Before each update, a download that has finished is
+# filtered (and shifted off), and the next one started where there is room.
 if [ "${UPDATE_COUNT}" -gt 0 ]; then
-    echo "[1/4] Updating $(count_extracts "${UPDATE_COUNT}" cached)"
-    DONE_N=0
-    DONE_OF="${UPDATE_COUNT}"
+    if [ $# -gt 0 ]; then
+        echo "[1/4] Updating $(count_extracts "${UPDATE_COUNT}" cached), downloading $(count_extracts $#) alongside"
+    else
+        echo "[1/4] Updating $(count_extracts "${UPDATE_COUNT}" cached)"
+    fi
+    REMAINING_UPDATES="${UPDATES}"
+    NO_ROOM_SAID=""
     for ITEM in ${UPDATES}; do
+        # kill -0 stops answering once the shell has reaped curl, which it
+        # does while waiting on the update or filter that ran last.
+        if [ -n "${DL_PID}" ] && ! kill -0 "${DL_PID}" 2> /dev/null; then
+            wait_download
+            filter_extract "${DL_EXTRACT}" "${DL_FILE}" "${DL_KEEP_AS}"
+            shift
+        fi
+        # Resolved again before each try, not once: an update takes long
+        # enough for Geofabrik to publish a newer file meanwhile.
+        if [ $# -gt 0 ] && [ -z "${DL_PID}" ]; then
+            resolve_download "$1" || exit 1
+            if room_for_download "$(update_reserve_mb "${DL_ROOT}")"; then
+                start_download
+            elif [ "${NO_ROOM_SAID}" != "${DL_EXTRACT}" ]; then
+                say "${DL_EXTRACT}" "waiting for the updates: no room to download alongside (${DL_NEED_MB} MB needed, ${DL_FREE_MB} MB free)"
+                NO_ROOM_SAID="${DL_EXTRACT}"
+            fi
+        fi
+
         EXTRACT="${ITEM%%|*}"
         RAW="${ITEM#*|}"
         RAIL_FILE="${WORK_DIR}/${EXTRACT}.rail.pbf"
@@ -741,18 +803,26 @@ if [ "${UPDATE_COUNT}" -gt 0 ]; then
         else
             filter_extract "${EXTRACT}" "${RAW}" "${RAW}"
         fi
+        # The head, since UPDATES is taken in order.
+        REMAINING_UPDATES="${REMAINING_UPDATES#* "${ITEM}"}"
     done
     echo ""
 fi
 
 # The head of the list is always the extract downloading: each pass waits for
-# it, starts the next one where there is room, and filters it.
+# it, starts the next one where there is room, and filters it. One not
+# started beside the updates is resolved again, since Geofabrik may have
+# published a newer file while they ran.
 if [ $# -gt 0 ]; then
-    echo "[1/4] Downloading and filtering $(count_extracts $#)"
-    DONE_N=0
-    DONE_OF=$#
-    resolve_download "$1" || exit 1
-    start_download
+    if [ "${UPDATE_COUNT}" -gt 0 ]; then
+        echo "[1/4] Downloading and filtering the remaining $(count_extracts $#)"
+    else
+        echo "[1/4] Downloading and filtering $(count_extracts $#)"
+    fi
+    if [ -z "${DL_PID}" ]; then
+        resolve_download "$1" || exit 1
+        start_download
+    fi
 fi
 while [ $# -gt 0 ]; do
     wait_download
