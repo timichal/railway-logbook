@@ -25,8 +25,13 @@
 # dated file it redirects to before downloading, so a download resumed after
 # Geofabrik published the next day's file does not splice two files together.
 # The date of the data each extract carried is written beside the output, in
-# data/pruned.sources; deploy.sh turns that into
-# osmium-scripts/deployed-extracts.txt.
+# data/pruned.sources, and exactly which file or diff it was, in
+# data/pruned.inputs; remote-deploy.sh keeps both of the map it deployed.
+#
+# DEPLOYED_INPUTS (environment): the .inputs of the map already deployed.
+# When every extract, and the code that prepares and imports it, turns out to
+# be exactly as it was then, the run stops after step 1 with no output, since
+# the map would come out the same.
 #
 # The filtered extracts are kept from one run to the next, each with the name
 # of the dated file it was filtered from and the filter it went through, and
@@ -86,6 +91,7 @@ else
 fi
 OUTPUT_FILE="${DATA_DIR}/${OUTPUT_NAME}.geojson"
 SOURCES_FILE="${DATA_DIR}/${OUTPUT_NAME}.sources"
+INPUTS_FILE="${DATA_DIR}/${OUTPUT_NAME}.inputs"
 # Which extracts ${FILTERED_FILE} was merged from (see step 2).
 MERGED_LIST_FILE="${FILTERED_FILE}.extracts"
 
@@ -771,6 +777,39 @@ while [ $# -gt 0 ]; do
     fi
 done
 
+# What the map is built from, exactly: each extract's .source, the dated file
+# or the last diff it was filtered from, plus the filter. A date alone would
+# not do, since a diff applied later the same day changes the data. Then the
+# code that turns it into the map: this script and src/scripts (pruning, the
+# import), as committed - the server's checkout always is, since deploy.sh
+# refuses uncommitted changes there. src/lib, which the route recalculation
+# uses, is left out: it is mostly the web app, and verifyRouteData rechecks
+# the routes without a new map. Anything unknown (an extract with no .source,
+# an undated -latest download; no git) never matches.
+CODE_TREES="$(git rev-parse HEAD:osmium-scripts/prepare.sh HEAD:src/scripts 2> /dev/null)" ||
+    CODE_TREES="unknown"
+{
+    # Unquoted, so the two hashes join on one line.
+    echo "code:" ${CODE_TREES}
+    for EXTRACT in ${EXTRACTS}; do
+        if [ -f "${WORK_DIR}/${EXTRACT}.rail.pbf.source" ]; then
+            echo "${EXTRACT}: $(paste -s -d ' ' "${WORK_DIR}/${EXTRACT}.rail.pbf.source")"
+        else
+            echo "${EXTRACT}: unknown"
+        fi
+    done
+} > "${INPUTS_FILE}.part"
+if [ -n "${DEPLOYED_INPUTS:-}" ] && ! grep -q ': unknown$' "${INPUTS_FILE}.part" &&
+    [ "$(cat "${INPUTS_FILE}.part")" = "$(cat "${DEPLOYED_INPUTS}" 2> /dev/null)" ]; then
+    # What a failed run left would only be reused for this same map, which is
+    # not wanted: several GB of the data disk's reserve, freed.
+    rm -f "${INPUTS_FILE}.part" "${SOURCES_FILE}.part" "${MERGED_FILE}" "${MERGED_FILE}.part" \
+        "${FILTERED_FILE}" "${FILTERED_FILE}.part" "${MERGED_LIST_FILE}" \
+        "${GEOJSON_FILE}" "${GEOJSON_FILE}.part"
+    echo "=== Nothing new: every extract, and the code, is as in ${DEPLOYED_INPUTS}; no map prepared ==="
+    exit 0
+fi
+
 # 2. Merge the extracts. Neighbouring extracts overlap at the border, and
 # when they were cut on different days the same way can arrive in two
 # versions - a plain merge writes both, which would give railway_parts two
@@ -842,6 +881,7 @@ tsx src/scripts/pruneData.ts "${OUTPUT_FILE}" < "${GEOJSON_FILE}" || {
     exit 1
 }
 mv "${SOURCES_FILE}.part" "${SOURCES_FILE}"
+mv "${INPUTS_FILE}.part" "${INPUTS_FILE}"
 echo "  done"
 echo ""
 

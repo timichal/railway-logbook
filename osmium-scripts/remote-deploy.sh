@@ -1,12 +1,14 @@
 #!/bin/bash
 
 # The server half of deploy.sh: prepare the map data here, import it, and
-# record which data went in. deploy.sh drives it through four modes:
+# record which data went in (data/deployed-extracts.txt, the date each extract
+# was cut). deploy.sh drives it through four modes:
 #
 #   --start [flags]  start a deploy, then follow it (as --follow)
 #   --follow         print the log of the deploy in progress as it grows, or
 #                    the last one's log if none is running
-#   --state          print none | running | killed | <exit status of the last>
+#   --state          print none | running | killed | unchanged (the last run
+#                    found nothing new to deploy) | <exit status of the last>
 #   --run [flags]    the deploy itself; --start runs this in the background
 #
 # Ending the follow stops the deploy, however it ends: a SIGINT (a Ctrl+C that
@@ -23,11 +25,23 @@
 # pid is its process group id - which is what lets one kill reach curl, osmium,
 # npm and node together.
 #
+# Nothing new, nothing done: the run stops once the extracts are checked if
+# every one is exactly what the deployed map was built from (prepare.sh,
+# DEPLOYED_INPUTS), and so is the code that prepares and imports it. The map
+# would come out the same, and the import would spend half an hour
+# recalculating every route for no change. --force deploys anyway; a route
+# check alone is npm run verifyRouteData. A forced run that does not finish
+# leaves FORCE_FILE behind, so its rerun is forced too: otherwise a plain
+# "rerun to continue" would find nothing new and leave the old map in place.
+# importMapData drops the record of what was deployed as it starts, since
+# any import, this one or one by hand, replaces the map it describes.
+#
 # Flags: --valid-only and --concurrency=N go to importMapData. --fresh throws
 # away whatever earlier runs left behind - a failed run's pruned map, and the
 # filtered extracts every run keeps - and starts from scratch. It leaves the
 # raw cache (RAW_CACHE, see prepare.sh): every file there is checked as it is
-# updated, and emptying it would cost ~35GB of downloads.
+# updated, and emptying it would cost ~35GB of downloads. It implies --force,
+# since starting over is for when the deployed map is in doubt.
 #
 # A pruned file prepared after the last successful deploy is reused rather
 # than rebuilt: it was produced by a run that failed later, at the import, and
@@ -42,6 +56,10 @@ cd "$(dirname "$SCRIPT")/.."
 
 DATA_DIR="data"
 RECORD_FILE="${DATA_DIR}/deployed-extracts.txt"
+# Exactly which file or diff of each extract the deployed map was built from
+# (prepare.sh's .inputs), to tell whether there is anything new.
+DEPLOYED_INPUTS_FILE="${DATA_DIR}/deployed-extracts.inputs"
+FORCE_FILE="${DATA_DIR}/deploy.force"
 STATUS_FILE="${DATA_DIR}/deploy.status"
 LOG_FILE="${DATA_DIR}/deploy.log"
 PID_FILE="${DATA_DIR}/deploy.pid"
@@ -161,15 +179,19 @@ esac
 
 # deploy.sh reads the exit status from here once the process is gone; a missing
 # file then means the run was killed outright (out of memory, most likely). The
-# TERM trap turns a stop into an ordinary exit, so it is recorded too.
-trap 'echo $? > "${STATUS_FILE}"' EXIT
+# TERM trap turns a stop into an ordinary exit, so it is recorded too. A run
+# that found nothing new sets RESULT instead, a word no exit status can be.
+RESULT=""
+trap 'STATUS=$?; echo "${RESULT:-${STATUS}}" > "${STATUS_FILE}"' EXIT
 trap 'exit ${STOPPED_STATUS}' TERM
 
 FRESH=""
+FORCE=""
 IMPORT_FLAGS=""
 for arg in "$@"; do
   case "$arg" in
-    --fresh) FRESH=1 ;;
+    --fresh) FRESH=1 FORCE=1 ;;
+    --force) FORCE=1 ;;
     --valid-only | --concurrency=*) IMPORT_FLAGS="${IMPORT_FLAGS} $arg" ;;
     *)
       echo "ERROR: Unknown argument '$arg'"
@@ -177,6 +199,12 @@ for arg in "$@"; do
       ;;
   esac
 done
+if [ -n "${FORCE}" ]; then
+  : > "${FORCE_FILE}"
+elif [ -f "${FORCE_FILE}" ]; then
+  echo "Forced: the last run was forced (--force or --fresh) and did not finish"
+  FORCE=1
+fi
 
 echo "=== Map data deploy started $(date -u '+%Y-%m-%d %H:%M UTC') ($(git rev-parse --short HEAD)) ==="
 
@@ -200,11 +228,12 @@ fi
 
 PRUNED="${DATA_DIR}/pruned.geojson"
 SOURCES="${DATA_DIR}/pruned.sources"
+INPUTS="${DATA_DIR}/pruned.inputs"
 
 if [ -n "${FRESH}" ]; then
   echo "--fresh: discarding the pruned file and intermediates left by earlier runs"
   rm -rf "${DATA_DIR}/extracts"
-  rm -f "${DATA_DIR}"/rail.tmp.* "${PRUNED}" "${SOURCES}"*
+  rm -f "${DATA_DIR}"/rail.tmp.* "${PRUNED}" "${SOURCES}"* "${INPUTS}"*
 fi
 
 # Reused only if it is also built from exactly the extracts listed now: a
@@ -228,23 +257,42 @@ else
     exit 1
   fi
 
+  # Not reusable, so cleared: prepare.sh writes no output when there is nothing
+  # new, and a file left here would be taken for some.
+  rm -f "${PRUNED}" "${SOURCES}" "${INPUTS}"
   echo ""
-  npm run prepareMapData
+  if [ -n "${FORCE}" ]; then
+    DEPLOYED_INPUTS="" npm run prepareMapData
+  else
+    DEPLOYED_INPUTS="${DEPLOYED_INPUTS_FILE}" npm run prepareMapData
+  fi
+  if [ ! -f "${PRUNED}" ]; then
+    echo ""
+    echo "=== Nothing to deploy: the server's map already has this data (--force deploys anyway) ==="
+    RESULT="unchanged"
+    exit 0
+  fi
 fi
 
 echo ""
 npm run importMapData -- "${PRUNED}" ${IMPORT_FLAGS}
 
-# Recorded only now that the data is in the database. deploy.sh copies this
-# into the repository as osmium-scripts/deployed-extracts.txt.
+# Recorded only now that the data is in the database. Kept on the server
+# alone; deploy.sh reads its date when a run finds nothing new.
 {
   echo "# The OSM data on the server: the date each Geofabrik extract was cut."
-  echo "# Written by deploy.sh after a successful map data deploy."
+  echo "# Written by remote-deploy.sh after a successful map data deploy."
   echo "# Deployed $(date -u '+%Y-%m-%d %H:%M UTC')"
   echo ""
   cat "${SOURCES}"
 } > "${RECORD_FILE}.part"
 mv "${RECORD_FILE}.part" "${RECORD_FILE}"
+# (A pruned file prepared before .inputs existed has none; with no record, the
+# next run prepares anew.)
+if [ -f "${INPUTS}" ]; then
+  mv "${INPUTS}" "${DEPLOYED_INPUTS_FILE}"
+fi
+rm -f "${FORCE_FILE}"
 # Kept only to resume a deploy that failed at the import; this one went in, so
 # the next deploy prepares anew and the file is only taking up disk.
 rm -f "${PRUNED}"

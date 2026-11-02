@@ -1,3 +1,4 @@
+import { rmSync } from "node:fs";
 import { formatStationProximity, refreshAllStationProximity } from "../lib/stationProximity";
 import { loadStationsAndParts } from "./lib/loadRailwayData";
 import {
@@ -5,6 +6,9 @@ import {
   parseConcurrencyArg,
   verifyAndRecalculateRoutes,
 } from "./verifyRouteData";
+
+// Relative to the repository root, where npm runs the script.
+const DEPLOYED_INPUTS_FILE = "data/deployed-extracts.inputs";
 
 async function loadGeoJSONData(): Promise<void> {
   // A pool rather than a single client: step 2 recalculates several routes at
@@ -43,6 +47,12 @@ async function loadGeoJSONData(): Promise<void> {
     }
 
     console.log(`Using data files: ${dataPaths.join(", ")}`);
+
+    // The record of what the last map deploy built the map from
+    // (remote-deploy.sh), which lets the next deploy skip when nothing is new.
+    // Whatever this loads replaces that map, so the record goes first. Without
+    // it the next deploy rebuilds and imports.
+    rmSync(DEPLOYED_INPUTS_FILE, { force: true });
 
     pool = createRecalcPool(concurrency);
     console.log("Connected to database");

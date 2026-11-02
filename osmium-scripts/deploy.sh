@@ -9,10 +9,16 @@
 #   --valid-only       recalculate only routes not already invalid
 #   --concurrency=N    how many routes the import recalculates at once
 #                      (see RECALC_PERFORMANCE.md)
+#   --force            deploy even when neither the extracts nor the code
+#                      that prepares and imports them (prepare.sh,
+#                      src/scripts) has changed since the last deploy;
+#                      otherwise the run stops there. A stopped or failed
+#                      forced run stays forced when rerun
 #   --fresh            discard what earlier runs left on the server - a pruned
 #                      map not deployed yet, and every filtered extract kept
 #                      (~35GB to download again, less what the raw cache
-#                      holds, which it keeps) - instead of reusing it
+#                      holds, which it keeps) - instead of reusing it; implies
+#                      --force
 #   --follow           start nothing; reattach to the run in progress, or
 #                      report on the last one
 # Example: npm run deployMapData -- --valid-only
@@ -22,10 +28,10 @@
 # since the server stops the deploy when the session following it ends (see
 # remote-deploy.sh for why that is the reliable way to get Ctrl+C there). A
 # rerun resumes from what the stopped one finished. `--follow` shows a deploy
-# in progress, or the last one's log. On success the
-# recalculation summary is printed again at the end and
-# osmium-scripts/deployed-extracts.txt is updated with the date of every
-# extract that went in; commit it.
+# in progress, or the last one's log. On success the recalculation summary is
+# printed again at the end. Which data the server's map holds is recorded
+# there alone (data/deployed-extracts.txt); a run's first step lists each
+# extract's date.
 #
 # The server runs its own checkout of the repository, which this pulls first.
 # So what it runs is what you have pushed: the deploy refuses to start while
@@ -35,7 +41,6 @@ set -e
 
 REMOTE_HOST="railmap@railmap.zlatkovsky.cz"
 REMOTE_DIR="/home/railmap/osm-trains"
-RECORD_FILE="osmium-scripts/deployed-extracts.txt"
 
 # Flags are matched explicitly, so a mistyped one (or a date, which older
 # versions of this script took) stops the deploy instead of being dropped.
@@ -43,11 +48,11 @@ REMOTE_ARGS=""
 FOLLOW_ONLY=""
 for arg in "$@"; do
   case "$arg" in
-    --valid-only | --fresh | --concurrency=*) REMOTE_ARGS="${REMOTE_ARGS} $arg" ;;
+    --valid-only | --force | --fresh | --concurrency=*) REMOTE_ARGS="${REMOTE_ARGS} $arg" ;;
     --follow) FOLLOW_ONLY=1 ;;
     *)
       echo "ERROR: Unknown argument '$arg'"
-      echo "Usage: npm run deployMapData -- [--valid-only] [--concurrency=N] [--fresh] [--follow]"
+      echo "Usage: npm run deployMapData -- [--valid-only] [--concurrency=N] [--force] [--fresh] [--follow]"
       echo "(Extracts are always the latest from Geofabrik; there is no date to pass.)"
       exit 1
       ;;
@@ -84,9 +89,9 @@ if [ -z "${FOLLOW_ONLY}" ]; then
   # since the import reaches a few modules there but most of it is the web app,
   # edited all the time.
   PIPELINE_PATHS="osmium-scripts src/scripts package.json package-lock.json"
-  if [ -n "$(git status --porcelain -- ${PIPELINE_PATHS} ":!${RECORD_FILE}")" ]; then
+  if [ -n "$(git status --porcelain -- ${PIPELINE_PATHS})" ]; then
     echo "ERROR: uncommitted changes to the pipeline - the server would not see them:"
-    git status --short -- ${PIPELINE_PATHS} ":!${RECORD_FILE}"
+    git status --short -- ${PIPELINE_PATHS}
     exit 1
   fi
   if [ -n "$(git status --porcelain -- src/lib)" ]; then
@@ -172,11 +177,12 @@ case "${STATE}" in
     echo "=== Route recheck ==="
     remote "sed -n '/=== Route Recalculation Summary ===/,/=== Step 3/p' data/deploy.log | sed '\$d'" || true
     echo ""
-    # Via a temporary file, so a failed read leaves the committed record alone.
-    remote 'cat data/deployed-extracts.txt' > "${RECORD_FILE}.part"
-    mv "${RECORD_FILE}.part" "${RECORD_FILE}"
     echo "=== Deploy complete ==="
-    echo "Updated ${RECORD_FILE} - commit it."
+    ;;
+  unchanged)
+    echo "=== Nothing new to deploy: the server's map already has the latest data ==="
+    echo "(--force deploys anyway)"
+    remote "sed -n 's/^# Deployed/Last deployed/p' data/deployed-extracts.txt" || true
     ;;
   143)
     echo "The deploy was stopped."
