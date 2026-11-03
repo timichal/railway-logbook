@@ -173,12 +173,13 @@ if [ "$1" = "--code-inputs" ]; then
     code_inputs
     exit 0
 fi
-# --latest-dates: see step 1, where it is answered.
+# --latest-dates and --make-room: see step 1, where they are answered.
 LATEST_DATES=""
-if [ "$1" = "--latest-dates" ]; then
-    LATEST_DATES=1
-    shift
-fi
+MAKE_ROOM=""
+case "$1" in
+    --latest-dates) LATEST_DATES=1 && shift ;;
+    --make-room) MAKE_ROOM=1 && shift ;;
+esac
 
 if [ $# -eq 0 ]; then
     EXTRACTS="$(all_extracts)"
@@ -214,7 +215,7 @@ count_extracts() {
     if [ "$1" -eq 1 ]; then echo "1 ${2:+$2 }extract"; else echo "$1 ${2:+$2 }extracts"; fi
 }
 
-if [ -z "${LATEST_DATES}" ]; then
+if [ -z "${LATEST_DATES}${MAKE_ROOM}" ]; then
     echo "=== OSM railway data: $(count_extracts "${COUNT}") ==="
     echo ""
 fi
@@ -658,6 +659,70 @@ filter_extract() {
     FILTERED_NOW=1
     finish "${F_EXTRACT}" "data from $(extract_date "${F_RAIL_FILE}")"
 }
+
+# --make-room: bring the data disk back to DATA_DISK_RESERVE_GB free by moving
+# raw extracts cached on it to a cache directory on another disk, or, where
+# none has room, deleting them (downloaded whole when next needed).
+# remote-deploy.sh asks for it just before its pre-check. The cache fills the
+# data disk down to the reserve and no further, but every cached extract grows
+# a little with each update, in place, as does everything else on that disk,
+# so left alone the disk sinks a few MB below the reserve and stays there, and
+# every deploy is refused. The smallest file that covers the shortfall goes
+# (the least to copy, over a volume that may be slow), else the largest and
+# again. Copied as a .part and renamed, then the original removed, so an
+# interrupted move never leaves a short file under an extract's name; the
+# copy in the first directory listed is the one used meanwhile (step 1 sweeps
+# the other). Partial downloads (-YYMMDD, -latest) are left where they are.
+make_room() {
+    for C_DIR in $(cache_dirs); do
+        find -H "${C_DIR}" -type f -name '*.osm.pbf.part' -exec rm -f {} +
+    done
+    M_DATA_DISK="$(disk_of "${DATA_DIR}")"
+    while :; do
+        M_SHORT_MB=$((DATA_DISK_RESERVE_GB * 1024 - $(free_mb "${DATA_DIR}")))
+        [ "${M_SHORT_MB}" -gt 0 ] || return 0
+        # "bytes directory extract" for each extract cached on the data disk,
+        # smallest first.
+        M_FILES="$(for C_DIR in $(cache_dirs); do
+            [ "$(disk_of "${C_DIR}")" = "${M_DATA_DISK}" ] || continue
+            find -H "${C_DIR}" -type f -name '*.osm.pbf' ! -name 'tmp*' | while read -r M_FILE; do
+                case "${M_FILE}" in
+                    *-[0-9][0-9][0-9][0-9][0-9][0-9].osm.pbf | *-latest.osm.pbf) continue ;;
+                esac
+                M_REL="${M_FILE#"${C_DIR}/"}"
+                echo "$(wc -c < "${M_FILE}") ${C_DIR} ${M_REL%.osm.pbf}"
+            done
+        done | sort -n)"
+        if [ -z "${M_FILES}" ]; then
+            echo "  The data disk is ${M_SHORT_MB} MB short of ${DATA_DISK_RESERVE_GB}GB free, and none of it is the raw cache"
+            return 0
+        fi
+        M_PICK="$(echo "${M_FILES}" | awk -v short=$((M_SHORT_MB * 1048576)) '$1 >= short { print; exit }')"
+        [ -n "${M_PICK}" ] || M_PICK="$(echo "${M_FILES}" | tail -n 1)"
+        M_BYTES="${M_PICK%% *}"
+        M_REST="${M_PICK#* }"
+        M_DIR="${M_REST%% *}"
+        M_EXTRACT="${M_REST#* }"
+        M_FILE="${M_DIR}/${M_EXTRACT}.osm.pbf"
+        M_MB=$((M_BYTES / 1048576 + 1))
+        # pick_cache_dir never names a directory on the data disk here, since
+        # it is short of the reserve that pick_cache_dir keeps there.
+        M_TARGET="$(pick_cache_dir "${M_MB}")"
+        if [ -n "${M_TARGET}" ]; then
+            echo "  Moving ${M_FILE} (${M_MB} MB) to ${M_TARGET}: the data disk is ${M_SHORT_MB} MB short of ${DATA_DISK_RESERVE_GB}GB free"
+            mkdir -p "$(dirname "${M_TARGET}/${M_EXTRACT}")"
+            cp "${M_FILE}" "${M_TARGET}/${M_EXTRACT}.osm.pbf.part"
+            mv "${M_TARGET}/${M_EXTRACT}.osm.pbf.part" "${M_TARGET}/${M_EXTRACT}.osm.pbf"
+        else
+            echo "  Deleting ${M_FILE} (${M_MB} MB) from the raw cache, which has no room for it elsewhere: the data disk is ${M_SHORT_MB} MB short of ${DATA_DISK_RESERVE_GB}GB free"
+        fi
+        rm -f "${M_FILE}"
+    done
+}
+if [ -n "${MAKE_ROOM}" ]; then
+    make_room
+    exit 0
+fi
 
 # --latest-dates: what a run now would build each extract from, one line each
 # in list order, "extract: YYYY-MM-DD record", for remote-deploy.sh to weigh

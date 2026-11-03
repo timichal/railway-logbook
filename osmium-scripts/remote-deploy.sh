@@ -384,11 +384,14 @@ else
   # disk has room for both, so this is enough either way; more only lets it
   # overlap more often. Failing here beats failing an hour in. Measured with
   # the raw cache's share of this disk already on it, which prepare.sh never
-  # lets grow into the reserve.
-  NEEDED_GB="$(sh osmium-scripts/prepare.sh --data-disk-reserve-gb)"
-  AVAILABLE_GB=$(($(df -Pk "${DATA_DIR}" | awk 'NR == 2 { print $4 }') / 1024 / 1024))
-  if [ "${AVAILABLE_GB}" -lt "${NEEDED_GB}" ]; then
-    echo "ERROR: only ${AVAILABLE_GB}GB free on the data disk, ${NEEDED_GB}GB needed"
+  # lets grow into the reserve - though the extracts it holds grow with every
+  # update, so it first moves some off the data disk where they have (see
+  # prepare.sh --make-room). In MB: whole GB would round 9.97 down to 9.
+  sh osmium-scripts/prepare.sh --make-room
+  NEEDED_MB=$(($(sh osmium-scripts/prepare.sh --data-disk-reserve-gb) * 1024))
+  AVAILABLE_MB=$(($(df -Pk "${DATA_DIR}" | awk 'NR == 2 { print $4 }') / 1024))
+  if [ "${AVAILABLE_MB}" -lt "${NEEDED_MB}" ]; then
+    echo "ERROR: only ${AVAILABLE_MB} MB free on the data disk, ${NEEDED_MB} MB needed"
     exit 1
   fi
 
