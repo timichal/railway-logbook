@@ -147,8 +147,20 @@ extract_date() {
 # less, and the raw cache never fills the data disk below it.
 DATA_DISK_RESERVE_GB=10
 
+# The code that turns the extracts into the map, as the first line of .inputs
+# records it (see the end of step 1): this script and src/scripts as
+# committed, or "unknown" without git.
+code_inputs() {
+    C_TREES="$(git rev-parse HEAD:osmium-scripts/prepare.sh HEAD:src/scripts 2> /dev/null)" ||
+        C_TREES="unknown"
+    # Unquoted, so the two hashes join on one line.
+    # shellcheck disable=SC2086
+    echo "code:" ${C_TREES}
+}
+
 # Query modes, so remote-deploy.sh reads extracts.txt through this one parser
-# instead of carrying a copy of it, and the reserve from here.
+# instead of carrying a copy of it, and the reserve and the code line from
+# here.
 if [ "$1" = "--list-extracts" ]; then
     all_extracts
     exit 0
@@ -156,6 +168,16 @@ fi
 if [ "$1" = "--data-disk-reserve-gb" ]; then
     echo "${DATA_DISK_RESERVE_GB}"
     exit 0
+fi
+if [ "$1" = "--code-inputs" ]; then
+    code_inputs
+    exit 0
+fi
+# --latest-dates: see step 1, where it is answered.
+LATEST_DATES=""
+if [ "$1" = "--latest-dates" ]; then
+    LATEST_DATES=1
+    shift
 fi
 
 if [ $# -eq 0 ]; then
@@ -192,8 +214,10 @@ count_extracts() {
     if [ "$1" -eq 1 ]; then echo "1 ${2:+$2 }extract"; else echo "$1 ${2:+$2 }extracts"; fi
 }
 
-echo "=== OSM railway data: $(count_extracts "${COUNT}") ==="
-echo ""
+if [ -z "${LATEST_DATES}" ]; then
+    echo "=== OSM railway data: $(count_extracts "${COUNT}") ==="
+    echo ""
+fi
 
 # Output is plain ASCII, so it reads right in any console. (deploy.sh also
 # switches a Windows console to UTF-8, for the import's station names.)
@@ -263,7 +287,8 @@ for ENTRY in ${RAW_CACHE}; do
     if [ -d "${C_DIR}" ]; then
         CACHE_ENTRIES="${CACHE_ENTRIES} ${ENTRY}"
     else
-        echo "WARNING: raw cache directory ${C_DIR} does not exist - not caching there (is its volume mounted?)"
+        # On stderr, so it stays out of what --latest-dates answers.
+        echo "WARNING: raw cache directory ${C_DIR} does not exist - not caching there (is its volume mounted?)" >&2
     fi
 done
 if [ -n "${CACHE_ENTRIES}" ] && ! command -v pyosmium-up-to-date > /dev/null; then
@@ -634,6 +659,96 @@ filter_extract() {
     finish "${F_EXTRACT}" "data from $(extract_date "${F_RAIL_FILE}")"
 }
 
+# --latest-dates: what a run now would build each extract from, one line each
+# in list order, "extract: YYYY-MM-DD record", for remote-deploy.sh to weigh
+# before a deploy starts. The record is the extract's line of .inputs as the
+# run would write it, which is what decides whether there is anything new; the
+# date is only for reading. Nothing is downloaded, swept or changed.
+#
+# A cached extract that can be updated would be brought to its latest diff:
+# "replication <sequence>" from state.txt (a few hundred bytes). Any other
+# would be downloaded, or reused where the filtered copy kept is from the very
+# file -latest points to now: either way recorded by that file's name. Where
+# -latest points to no dated name (Germany redirects to a mirror's -latest),
+# the run records nothing, so the record is "unknown", which never matches,
+# and the date is the latest diff's, cut from the same day's data. (A
+# download the cache has room for is recorded by its replication sequence
+# instead, which only the file says; its name then never matches the deployed
+# record, so it counts as new, and the run's own test decides.)
+#
+# Geofabrik is asked a few extracts at a time. Any one that fails to answer
+# fails the whole query, its reason printed instead.
+state_value() {
+    curl -sf --retry 3 "${GEOFABRIK}/$1-updates/state.txt" > "${L_DIR}/$1.state" || {
+        echo "ERROR: ${GEOFABRIK}/$1-updates/state.txt is not available"
+        return 1
+    }
+    sed -n "s/^$2=//p" "${L_DIR}/$1.state" | tr -d '\\'
+}
+inputs_record() {
+    source_record "$1" | paste -s -d ' ' -
+}
+latest_date() {
+    mkdir -p "${L_DIR}/$(dirname "$1")"
+    L_RAW="$(cached_raw "$1")"
+    if [ -n "${L_RAW}" ] && [ -z "$(stale_raw_reason "$1" "${L_RAW}")" ]; then
+        L_SEQ="$(state_value "$1" sequenceNumber)" || {
+            echo "${L_SEQ}"
+            return 1
+        }
+        L_RECORD="$(inputs_record "replication ${L_SEQ}")"
+        L_DATE="$(state_value "$1" timestamp | cut -c1-10)"
+    else
+        probe_latest "$1" || return 1
+        L_NAME="$(basename "${P_URL}")"
+        case "${L_NAME}" in
+            *-[0-9][0-9][0-9][0-9][0-9][0-9].osm.pbf)
+                L_RECORD="$(inputs_record "${L_NAME}")"
+                L_DATE="$(file_date "${L_NAME}")"
+                ;;
+            *)
+                L_RECORD="unknown"
+                L_DATE="$(state_value "$1" timestamp | cut -c1-10)" || {
+                    echo "${L_DATE}"
+                    return 1
+                }
+                ;;
+        esac
+    fi
+    echo "$1: ${L_DATE:-unknown} ${L_RECORD}"
+}
+if [ -n "${LATEST_DATES}" ]; then
+    L_DIR="$(mktemp -d)"
+    trap 'rm -rf "${L_DIR}"' EXIT
+    L_N=0
+    for EXTRACT in ${EXTRACTS}; do
+        L_N=$((L_N + 1))
+        # stdout alone is the answer; anything a tool says on stderr is kept
+        # apart, so it can never be read as an extract's line.
+        (latest_date "${EXTRACT}" > "${L_DIR}/${L_N}" 2> "${L_DIR}/${L_N}.err" ||
+            : > "${L_DIR}/${L_N}.failed") &
+        [ $((L_N % 8)) -ne 0 ] || wait
+    done
+    wait
+    L_FAILED=""
+    L_N=0
+    for EXTRACT in ${EXTRACTS}; do
+        L_N=$((L_N + 1))
+        if [ -f "${L_DIR}/${L_N}.failed" ]; then
+            cat "${L_DIR}/${L_N}" "${L_DIR}/${L_N}.err"
+            L_FAILED=1
+        fi
+    done
+    [ -z "${L_FAILED}" ] || exit 1
+    L_N=0
+    for EXTRACT in ${EXTRACTS}; do
+        L_N=$((L_N + 1))
+        cat "${L_DIR}/${L_N}"
+        cat "${L_DIR}/${L_N}.err" >&2
+    done
+    exit 0
+fi
+
 # Filtered extracts are kept from run to run; one no longer listed in
 # extracts.txt would only take up room. Against the whole list, not this run's
 # selection, so a partial run leaves the other extracts alone - and not at all
@@ -856,11 +971,8 @@ done
 # uses, is left out: it is mostly the web app, and verifyRouteData rechecks
 # the routes without a new map. Anything unknown (an extract with no .source,
 # an undated -latest download; no git) never matches.
-CODE_TREES="$(git rev-parse HEAD:osmium-scripts/prepare.sh HEAD:src/scripts 2> /dev/null)" ||
-    CODE_TREES="unknown"
 {
-    # Unquoted, so the two hashes join on one line.
-    echo "code:" ${CODE_TREES}
+    code_inputs
     for EXTRACT in ${EXTRACTS}; do
         if [ -f "${WORK_DIR}/${EXTRACT}.rail.pbf.source" ]; then
             echo "${EXTRACT}: $(paste -s -d ' ' "${WORK_DIR}/${EXTRACT}.rail.pbf.source")"

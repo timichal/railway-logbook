@@ -19,9 +19,17 @@
 #                      (~35GB to download again, less what the raw cache
 #                      holds, which it keeps) - instead of reusing it; implies
 #                      --force
+#   --yes              start without asking (see below)
 #   --follow           start nothing; reattach to the run in progress, or
 #                      report on the last one
 # Example: npm run deployMapData -- --valid-only
+#
+# Before anything starts, the server lists each extract's date in the deployed
+# map beside the latest Geofabrik has ("europe/austria  2026-11-02 ->
+# 2026-11-03", or "-> unchanged") and says whether the code that prepares the
+# map changed. When nothing did, the deploy stops there; otherwise it asks
+# whether to go ahead. --yes skips the question, and a deploy with no terminal
+# to ask on (stdin closed) needs it.
 #
 # The server's log streams here as it is written. Ctrl+C stops the deploy on
 # the server too - and so does closing the terminal or losing the connection,
@@ -46,13 +54,15 @@ REMOTE_DIR="/home/railmap/osm-trains"
 # versions of this script took) stops the deploy instead of being dropped.
 REMOTE_ARGS=""
 FOLLOW_ONLY=""
+ASSUME_YES=""
 for arg in "$@"; do
   case "$arg" in
     --valid-only | --force | --fresh | --concurrency=*) REMOTE_ARGS="${REMOTE_ARGS} $arg" ;;
+    --yes) ASSUME_YES=1 ;;
     --follow) FOLLOW_ONLY=1 ;;
     *)
       echo "ERROR: Unknown argument '$arg'"
-      echo "Usage: npm run deployMapData -- [--valid-only] [--concurrency=N] [--force] [--fresh] [--follow]"
+      echo "Usage: npm run deployMapData -- [--valid-only] [--concurrency=N] [--force] [--fresh] [--yes] [--follow]"
       echo "(Extracts are always the latest from Geofabrik; there is no date to pass.)"
       exit 1
       ;;
@@ -72,6 +82,11 @@ if command -v chcp.com > /dev/null 2>&1; then
     trap 'chcp.com "${CONSOLE_CP}" > /dev/null 2>&1' EXIT
   fi
 fi
+
+say_nothing_new() {
+  echo "=== Nothing new to deploy: the server's map already has the latest data ==="
+  echo "(--force deploys anyway)"
+}
 
 remote() {
   plink -batch "${REMOTE_HOST}" "cd ${REMOTE_DIR} && $1"
@@ -131,6 +146,46 @@ if [ -z "${FOLLOW_ONLY}" ]; then
         sha256sum package-lock.json > node_modules/.deploy-lockfile.sha256
     fi"
 
+  # After the pull, so the server checks with the code it will run - which is
+  # also the code the check compares with the deployed map's.
+  echo ""
+  echo "=== Checking for new data (deployed -> latest) ==="
+  CHECK="$(remote "bash osmium-scripts/remote-deploy.sh --check${REMOTE_ARGS}")" || {
+    echo "${CHECK}"
+    echo "ERROR: the check failed - nothing was started"
+    exit 1
+  }
+  # All but the last line is for reading; the last is the verdict.
+  echo "${CHECK}" | sed '$d'
+  case "$(echo "${CHECK}" | tail -n 1 | tr -d '\r')" in
+    new) ;;
+    unchanged)
+      echo ""
+      say_nothing_new
+      exit 0
+      ;;
+    *)
+      echo "ERROR: the check gave no verdict - nothing was started"
+      exit 1
+      ;;
+  esac
+  if [ -z "${ASSUME_YES}" ]; then
+    echo ""
+    printf "Deploy? [y/N] "
+    # read fails on a closed stdin (no terminal), which is not a yes.
+    if ! read -r ANSWER; then
+      echo ""
+      echo "No answer (no terminal?) - nothing was started. --yes deploys without asking."
+      exit 1
+    fi
+    case "${ANSWER}" in
+      [yY] | [yY][eE][sS]) ;;
+      *)
+        echo "Nothing was started."
+        exit 0
+        ;;
+    esac
+  fi
 fi
 
 # A Ctrl+C kills plink; this script outlives it to report how the deploy ended.
@@ -180,8 +235,7 @@ case "${STATE}" in
     echo "=== Deploy complete ==="
     ;;
   unchanged)
-    echo "=== Nothing new to deploy: the server's map already has the latest data ==="
-    echo "(--force deploys anyway)"
+    say_nothing_new
     remote "sed -n 's/^# Deployed/Last deployed/p' data/deployed-extracts.txt" || true
     ;;
   143)

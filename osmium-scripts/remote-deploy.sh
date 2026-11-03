@@ -2,8 +2,10 @@
 
 # The server half of deploy.sh: prepare the map data here, import it, and
 # record which data went in (data/deployed-extracts.txt, the date each extract
-# was cut). deploy.sh drives it through four modes:
+# was cut). deploy.sh drives it through five modes:
 #
+#   --check [flags]  what a deploy now would bring, for deploy.sh to show
+#                    before it asks to go ahead (see check below)
 #   --start [flags]  start a deploy, then follow it (as --follow)
 #   --follow         print the log of the deploy in progress as it grows, or
 #                    the last one's log if none is running
@@ -63,6 +65,9 @@ FORCE_FILE="${DATA_DIR}/deploy.force"
 STATUS_FILE="${DATA_DIR}/deploy.status"
 LOG_FILE="${DATA_DIR}/deploy.log"
 PID_FILE="${DATA_DIR}/deploy.pid"
+PRUNED="${DATA_DIR}/pruned.geojson"
+SOURCES="${DATA_DIR}/pruned.sources"
+INPUTS="${DATA_DIR}/pruned.inputs"
 
 # The exit status of a stopped deploy, as its TERM trap and stop_deploy record it.
 STOPPED_STATUS=143
@@ -127,6 +132,154 @@ follow() {
   wait "${TAIL_PID}" || true
 }
 
+# Whether a run imports the pruned file an earlier one left (see the top)
+# rather than preparing a new one: prepared since the last successful deploy,
+# and from exactly the extracts listed now - a country added to extracts.txt
+# after the failed run would otherwise be left out of the data without a word.
+reusable_pruned() {
+  [ -f "${PRUNED}" ] && [ -f "${SOURCES}" ] &&
+    { [ ! -f "${RECORD_FILE}" ] || [ "${PRUNED}" -nt "${RECORD_FILE}" ]; } &&
+    [ "$(cut -d: -f1 "${SOURCES}")" = "$(sh osmium-scripts/prepare.sh --list-extracts)" ]
+}
+
+# The flags --check and --run take (see the top): FRESH, FORCE, and the
+# import's own flags in IMPORT_FLAGS. One parser for both, so a flag added to
+# the run is never refused by the check that comes before it.
+FRESH=""
+FORCE=""
+IMPORT_FLAGS=""
+parse_flags() {
+  for arg in "$@"; do
+    case "$arg" in
+      --fresh) FRESH=1 FORCE=1 ;;
+      --force) FORCE=1 ;;
+      --valid-only | --concurrency=*) IMPORT_FLAGS="${IMPORT_FLAGS} $arg" ;;
+      *)
+        echo "ERROR: Unknown argument '$arg'"
+        exit 1
+        ;;
+    esac
+  done
+}
+
+# --check: what a deploy now would bring. Each extract's date in the deployed
+# map beside the date a run would build it from ("unchanged" when it is the
+# same data), whether the code that prepares and imports the map changed, and,
+# on the last line, the verdict deploy.sh acts on: "new", or "unchanged" when
+# a run would find nothing new. Nothing is downloaded or changed, so it takes
+# seconds.
+#
+# "Unchanged" is the run's own test (prepare.sh, DEPLOYED_INPUTS), made ahead
+# of it: an extract is unchanged when the record a run would write for it
+# (prepare.sh --latest-dates) is the deployed map's line of .inputs, and the
+# code when its line is. An "unchanged" verdict means no run starts, so the
+# check must never say it where the run would deploy: anything it cannot
+# predict (an "unknown" record, either side) is new. The dates are only for
+# reading - an extract can be rebuilt from data of the deployed day. A run
+# that is forced, reuses a prepared map, or has no record of what the
+# deployed map was built from deploys whatever the extracts, so those are new
+# too.
+check() {
+  parse_flags "$@"
+  C_NEW=""
+
+  if [ -f "${RECORD_FILE}" ]; then
+    sed -n 's/^# Deployed/  The map on the server was deployed/p' "${RECORD_FILE}"
+  else
+    echo "  No map has been deployed by this script yet."
+  fi
+  if [ -z "${FRESH}" ] && reusable_pruned; then
+    # Imported whatever it holds, so its dates are compared, not records.
+    echo "  A map prepared $(date -u -r "${PRUNED}" '+%Y-%m-%d %H:%M UTC') and not deployed yet is imported as it is (--fresh prepares anew):"
+    C_NOW="$(cat "${SOURCES}")"
+    C_NEW=1
+  elif ! C_NOW="$(sh osmium-scripts/prepare.sh --latest-dates)"; then
+    echo "${C_NOW}"
+    if [ -z "${FORCE}" ]; then
+      echo "ERROR: could not ask Geofabrik for the latest data"
+      exit 1
+    fi
+    # A forced run deploys whatever the dates, so they need not stop it.
+    echo "  (Could not ask Geofabrik for the latest data; forced, so the deploy can go ahead without it.)"
+    C_NOW=""
+    C_NEW=1
+  fi
+  echo ""
+
+  # The extracts listed now, in list order, then any the deployed map has that
+  # are no longer listed. C_NOW's lines are "extract: date record" (or
+  # "extract: date" for a prepared map), the record's own spaces included; the
+  # deployed dates are "extract: date", its records "extract: record".
+  C_TABLE=""
+  [ -z "${C_NOW}" ] || C_TABLE="$(echo "${C_NOW}" | awk -v dates="${RECORD_FILE}" -v records="${DEPLOYED_INPUTS_FILE}" '
+    function entry(line) {
+      i = index(line, ": ")
+      if (i == 0) return 0
+      NAME = substr(line, 1, i - 1)
+      VALUE = substr(line, i + 2)
+      return 1
+    }
+    BEGIN {
+      while ((getline line < dates) > 0)
+        if (line !~ /^#/ && entry(line)) { was[NAME] = VALUE; was_order[++n] = NAME }
+      while ((getline line < records) > 0)
+        if (entry(line)) was_record[NAME] = VALUE
+    }
+    entry($0) {
+      now[++m] = NAME
+      i = index(VALUE, " ")
+      if (i == 0) { now_date[NAME] = VALUE; now_record[NAME] = "" }
+      else { now_date[NAME] = substr(VALUE, 1, i - 1); now_record[NAME] = substr(VALUE, i + 1) }
+    }
+    END {
+      w = 0
+      for (i = 1; i <= m; i++) if (length(now[i]) > w) w = length(now[i])
+      for (i = 1; i <= n; i++) if (length(was_order[i]) > w) w = length(was_order[i])
+      for (i = 1; i <= m; i++) {
+        name = now[i]
+        to = now_date[name]
+        from = (name in was) ? was[name] : "not deployed"
+        if (now_record[name] == "")
+          same = from == to && to != "unknown"
+        else
+          same = now_record[name] != "unknown" && (name in was_record) && now_record[name] == was_record[name]
+        if (same) to = "unchanged"
+        else if (from == to) to = to " (rebuilt: not exactly the deployed data)"
+        printf "  %-" w "s  %s -> %s\n", name, from, to
+      }
+      for (i = 1; i <= n; i++)
+        if (!(was_order[i] in now_date))
+          printf "  %-" w "s  %s -> no longer listed\n", was_order[i], was[was_order[i]]
+    }')"
+  if [ -n "${C_TABLE}" ]; then
+    echo "${C_TABLE}"
+    C_TOTAL="$(echo "${C_TABLE}" | grep -c . || true)"
+    C_CHANGED="$(echo "${C_TABLE}" | grep -vc ' -> unchanged$' || true)"
+    [ "${C_CHANGED}" -eq 0 ] || C_NEW=1
+    echo ""
+    echo "  => ${C_CHANGED} of ${C_TOTAL} extracts changed"
+  fi
+
+  C_CODE="$(sh osmium-scripts/prepare.sh --code-inputs)"
+  if [ ! -f "${DEPLOYED_INPUTS_FILE}" ]; then
+    echo "  => no record of what the deployed map was built from (imported by hand?), so it is prepared anew"
+    C_NEW=1
+  elif [ "$(grep '^code:' "${DEPLOYED_INPUTS_FILE}")" != "${C_CODE}" ] || [ "${C_CODE}" = "code: unknown" ]; then
+    echo "  => the code that prepares and imports the map (prepare.sh, src/scripts) changed since the deploy"
+    C_NEW=1
+  else
+    echo "  => the code that prepares and imports the map (prepare.sh, src/scripts) is unchanged"
+  fi
+  if [ -n "${FORCE}" ]; then
+    echo "  => forced (--force or --fresh): deploys whatever changed"
+    C_NEW=1
+  elif [ -f "${FORCE_FILE}" ]; then
+    echo "  => forced: the last run was forced (--force or --fresh) and did not finish"
+    C_NEW=1
+  fi
+  if [ -n "${C_NEW}" ]; then echo new; else echo unchanged; fi
+}
+
 MODE="$1"
 shift || true
 case "${MODE}" in
@@ -155,6 +308,10 @@ case "${MODE}" in
     follow
     exit 0
     ;;
+  --check)
+    check "$@"
+    exit 0
+    ;;
   --state)
     if [ ! -f "${PID_FILE}" ]; then
       echo none
@@ -169,7 +326,7 @@ case "${MODE}" in
     ;;
   --run) ;;
   *)
-    echo "Usage: remote-deploy.sh --start [flags] | --follow | --state | --run [flags]"
+    echo "Usage: remote-deploy.sh --check [flags] | --start [flags] | --follow | --state | --run [flags]"
     exit 1
     ;;
 esac
@@ -185,20 +342,7 @@ RESULT=""
 trap 'STATUS=$?; echo "${RESULT:-${STATUS}}" > "${STATUS_FILE}"' EXIT
 trap 'exit ${STOPPED_STATUS}' TERM
 
-FRESH=""
-FORCE=""
-IMPORT_FLAGS=""
-for arg in "$@"; do
-  case "$arg" in
-    --fresh) FRESH=1 FORCE=1 ;;
-    --force) FORCE=1 ;;
-    --valid-only | --concurrency=*) IMPORT_FLAGS="${IMPORT_FLAGS} $arg" ;;
-    *)
-      echo "ERROR: Unknown argument '$arg'"
-      exit 1
-      ;;
-  esac
-done
+parse_flags "$@"
 if [ -n "${FORCE}" ]; then
   : > "${FORCE_FILE}"
 elif [ -f "${FORCE_FILE}" ]; then
@@ -226,22 +370,13 @@ if ! command -v npm > /dev/null; then
   exit 1
 fi
 
-PRUNED="${DATA_DIR}/pruned.geojson"
-SOURCES="${DATA_DIR}/pruned.sources"
-INPUTS="${DATA_DIR}/pruned.inputs"
-
 if [ -n "${FRESH}" ]; then
   echo "--fresh: discarding the pruned file and intermediates left by earlier runs"
   rm -rf "${DATA_DIR}/extracts"
   rm -f "${DATA_DIR}"/rail.tmp.* "${PRUNED}" "${SOURCES}"* "${INPUTS}"*
 fi
 
-# Reused only if it is also built from exactly the extracts listed now: a
-# country added to extracts.txt after the failed run would otherwise be left out
-# of the data without a word.
-if [ -f "${PRUNED}" ] && [ -f "${SOURCES}" ] &&
-  { [ ! -f "${RECORD_FILE}" ] || [ "${PRUNED}" -nt "${RECORD_FILE}" ]; } &&
-  [ "$(cut -d: -f1 "${SOURCES}")" = "$(sh osmium-scripts/prepare.sh --list-extracts)" ]; then
+if reusable_pruned; then
   echo "Reusing ${PRUNED}, prepared $(date -u -r "${PRUNED}" '+%Y-%m-%d %H:%M UTC') and not deployed yet (--fresh rebuilds it)"
 else
   # What a run needs (DATA_DISK_RESERVE_GB, see prepare.sh). prepare.sh
