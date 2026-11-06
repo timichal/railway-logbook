@@ -79,6 +79,32 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
     </label>
   );
 
+  // A closed line keeps its rides but leaves progress, the planner (unless asked)
+  // and the map of anyone who never rode it. The day is optional, and goes with
+  // the box: unticking it drops the day on save
+  const closedFields = (
+    <div className="space-y-2">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={value.closed}
+          onChange={(e) => set({ closed: e.target.checked })}
+          className={CHECKBOX}
+        />
+        <span className="text-sm font-medium text-gray-700">Route closed</span>
+      </label>
+      {value.closed && (
+        <TextField
+          id={`${idPrefix}-closed-on`}
+          label="Closed on"
+          type="date"
+          value={value.closed_on}
+          onChange={(closed_on) => set({ closed_on })}
+        />
+      )}
+    </div>
+  );
+
   const lineClassSelect = lineClass !== undefined && (
     <div>
       <label htmlFor={`${idPrefix}-line-class`} className={LABEL}>
@@ -215,6 +241,7 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
           {lineClassSelect}
         </>
       )}
+      {closedFields}
     </>
   );
 }

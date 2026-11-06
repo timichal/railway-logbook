@@ -23,6 +23,35 @@ export function usageTypeFilter(usageTypes: readonly UsageType[]): FilterSpecifi
 }
 
 /**
+ * The routes still running: not closed (railway_routes.closed). The one place the
+ * tile's `closed` property is read by a filter, for the user map's and the admin
+ * map's closed-route filters alike.
+ */
+export const OPEN_ROUTES_FILTER: ExpressionSpecification = ["!=", ["get", "closed"], true];
+
+/** Both filters, where either may be absent (null: everything passes). */
+export function bothFilters(
+  a: FilterSpecification | null,
+  b: FilterSpecification | null,
+): FilterSpecification | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return ["all", a, b] as FilterSpecification;
+}
+
+/**
+ * One usage type's route line filter: that type, narrowed by `routesFilter`
+ * where given (which closed routes show). Never null — a route line always
+ * draws its own type alone.
+ */
+export function routeLineFilter(
+  usageType: UsageType,
+  routesFilter: FilterSpecification | null = null,
+): FilterSpecification {
+  return bothFilters(usageTypeFilter([usageType]), routesFilter) as FilterSpecification;
+}
+
+/**
  * Every layer the two clients draw over the basemap, as MapLibre layer
  * specifications.
  *
@@ -49,6 +78,11 @@ export interface RouteLineConfig extends RailwayRoutesPaintConfig {
    * start say so.
    */
   visible?: boolean;
+  /**
+   * Which of the type's routes are drawn (`routeLineFilter`): the closed ones each
+   * map lets through. Omitted, every route of the type.
+   */
+  routesFilter?: FilterSpecification | null;
 }
 
 export interface RouteClickLayerConfig extends RailwayRoutesPaintConfig {
@@ -129,6 +163,7 @@ export function createRouteLineLayer(
     defaultWidth = WIDTHS.fallback.route,
     defaultOpacity = OPACITIES.defaultRoute,
     visible = usageType === 0,
+    routesFilter = null,
   } = config;
 
   return {
@@ -147,7 +182,7 @@ export function createRouteLineLayer(
       "line-opacity": opacityExpression || defaultOpacity,
       ...(dash ? { "line-dasharray": [...dash] } : {}),
     },
-    filter: usageTypeFilter([usageType]),
+    filter: routeLineFilter(usageType, routesFilter),
   };
 }
 

@@ -248,6 +248,12 @@ RETURNS bytea AS $$
             -- text is admin-only and this tile is public
             rr.is_valid,
             rr.under_repair,
+            -- Closed lines are in every tile: the client hides those its user
+            -- hasn't ridden (closedRoutesFilter), since the anonymous map's rides
+            -- are known only in the browser. closed_on as text: an MVT has no
+            -- date type, and a NULL is left out of the feature
+            rr.closed,
+            rr.closed_on::text AS closed_on,
             -- Include most recent journey data for client-side styling
             -- Use latest journey (by date, then by created_at) for route coloring
             recent_trip.date,

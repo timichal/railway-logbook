@@ -81,6 +81,8 @@ export function toRouteFeature(properties: Properties, id: unknown): RouteFeatur
     link: safeUrl(properties.link),
     linkLabel: routeLinkLabel(properties.link_name),
     lengthKm: Number(properties.length_km) || 0,
+    closed: properties.closed === true,
+    closed_on: text(properties.closed_on),
     // Populated together from the most-recent logged journey (both NOT NULL in
     // user_journeys), so either both are present or neither is.
     lastJourney: date && journeyName ? { date, name: journeyName } : null,
@@ -127,6 +129,8 @@ export function routeFeatureFromMetadata(route: RailwayRoute): RouteFeature {
     link: safeUrl(route.link),
     linkLabel: routeLinkLabel(route.link_name),
     lengthKm: route.length_km ?? 0,
+    closed: route.closed === true,
+    closed_on: route.closed_on ?? null,
     lastJourney: null,
   };
 }

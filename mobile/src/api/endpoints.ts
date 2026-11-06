@@ -99,13 +99,15 @@ export async function routeMetadata(trackIds: number[]): Promise<RailwayRoute[]>
  *
  * `includeSpecial` lets the search ride Special routes too, where the region counts
  * them as ordinary (`ordinaryUsageTypes` — Japan's non-JR lines; in Europe it changes
- * nothing). Absent means false.
+ * nothing). `includeClosed` lets it ride closed lines too, asked for while the map
+ * shows every closed line. Absent means false, for both.
  */
 export function plan(input: {
   fromStationId: number;
   toStationId: number;
   viaStationIds?: number[];
   includeSpecial?: boolean;
+  includeClosed?: boolean;
 }): Promise<PlannerResult> {
   return request<PlannerResult>("/planner", { method: "POST", body: input, auth: false });
 }

@@ -25,6 +25,7 @@
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
     "addRouteLinkName": "tsx src/scripts/addRouteLinkName.ts",
+    "addRouteClosed": "tsx src/scripts/addRouteClosed.ts",
     "fixSequences": "tsx src/scripts/fixSequences.ts",
     "createAdmin": "tsx src/scripts/createAdmin.ts",
     "listStations": "tsx src/scripts/listStations.ts",

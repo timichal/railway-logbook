@@ -65,13 +65,16 @@ export async function progressForUser(
 
   // Get total distance and count of all routes the region counts as ordinary
   // service (Regular, plus Japan's non-JR lines — see `ordinaryUsageTypes`) and
-  // the map shows, optionally filtered by countries
+  // the map shows, optionally filtered by countries. Never a closed route: progress
+  // is against the network as it runs today, so a ride on a closed line counts in
+  // neither the total nor the ridden figure (here, below, and in the dataAccess twin)
   const totalResult = await pool.query<{ total_km: number; total_routes: number }>(
     `SELECT
       COALESCE(SUM(length_km), 0) as total_km,
       COUNT(*)::int as total_routes
     FROM railway_routes
     WHERE length_km IS NOT NULL
+      AND NOT closed
       AND ${ordinaryUsageSql(region, "usage_type", shownUsageTypes)}
       AND ${regionContainsSql(region, "starting_coordinate")}
       ${hasCountries ? "AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])" : ""}`,
@@ -89,6 +92,7 @@ export async function progressForUser(
       COUNT(*)::int as completed_routes
     FROM railway_routes rr
     WHERE ${ordinaryUsageSql(region, "rr.usage_type", shownUsageTypes)}
+      AND NOT rr.closed
       AND rr.length_km IS NOT NULL
       AND ${regionContainsSql(region, "rr.starting_coordinate")}
       ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}
@@ -133,6 +137,7 @@ export async function progressByCountryForUser(
        FROM railway_routes rr
        LEFT JOIN (${FULLY_RIDDEN_TRACK_IDS}) done ON done.track_id = rr.track_id
        WHERE ${ordinaryUsageSql(region, "rr.usage_type")}
+         AND NOT rr.closed
          AND rr.length_km IS NOT NULL
          AND ${regionContainsSql(region, "rr.starting_coordinate")}
      )
@@ -217,6 +222,7 @@ export function coveredStretchesSql(ranges: string): string {
       t.covered_end,
       rr.line_class,
       rr.usage_type,
+      rr.closed,
       rr.start_country,
       rr.end_country,
       -- Not simplified: this is drawn directly over the route's own line, and any

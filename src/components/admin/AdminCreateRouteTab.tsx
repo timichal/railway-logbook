@@ -38,6 +38,8 @@ const EMPTY_FORM: SaveRouteData = {
   link: "",
   link_name: "",
   intended_backtracking: false,
+  closed: false,
+  closed_on: "",
 };
 
 interface AdminCreateRouteTabProps {

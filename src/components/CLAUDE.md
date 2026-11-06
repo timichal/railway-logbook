@@ -35,7 +35,7 @@ One directory per part of the app (`logbook/` sidebar and tabs, `map/`, `sharing
 
 ## Map & Stats
 
-**Show on map** first: `LayerToggles` switches for lines drawn but never counted (Heritage, and Special where it isn't ordinary), plus the scenic highlight where `hasScenicHighlight`. Then, where `hasStatsView`, the counted rows. Ticked, an entry is hidden on the map _and_ left out of the numbers. In Europe that means countries (`getProgressByCountry`, one `GROUPING SETS` query), persisted in `user_preferences`. The admin map ignores it. Where `hasOrdinaryNonRegular` (Japan) there are per-type rows instead, whose checkboxes are that type's layer switch.
+**Show on map** first: `LayerToggles` switches for lines drawn but never counted (Heritage, and Special where it isn't ordinary), "All closed lines" (which the planner follows too), plus the scenic highlight where `hasScenicHighlight`. Then, where `hasStatsView`, the counted rows. Ticked, an entry is hidden on the map _and_ left out of the numbers. In Europe that means countries (`getProgressByCountry`, one `GROUPING SETS` query), persisted in `user_preferences`. The admin map ignores it. Where `hasOrdinaryNonRegular` (Japan) there are per-type rows instead, whose checkboxes are that type's layer switch.
 
 ## Admin
 

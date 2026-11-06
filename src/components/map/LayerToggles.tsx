@@ -20,6 +20,9 @@ import { isOrdinaryUsage, type Region, regionUsagePluralLabel } from "@/lib/shar
  * ticked further down the same tab beside its numbers (Japan's JR and non-JR
  * lines), as Europe's countries are — so the switches carry Heritage alone there.
  * The shared map has no such tab, so it asks for them here (`withOrdinaryTypes`).
+ *
+ * "All closed lines" reveals the closed routes not ridden; the ridden ones are on
+ * the map whatever it says (`closedRoutesFilter`).
  */
 
 interface LayerTogglesProps {
@@ -54,6 +57,12 @@ export default function LayerToggles({
           />
         );
       })}
+      <ToggleSwitch
+        label="All closed lines"
+        checked={prefs.showClosed}
+        onChange={() => prefs.toggle("showClosed")}
+        compact={compact}
+      />
       {region.hasScenicHighlight && (
         <ToggleSwitch
           label="Scenic lines"

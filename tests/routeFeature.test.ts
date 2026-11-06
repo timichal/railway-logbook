@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  closedLabel,
   parsePgTextArray,
   parseTextArray,
   routeLinkLabel,
@@ -98,5 +99,18 @@ describe("routeLinkLabel", () => {
     assert.equal(routeLinkLabel(undefined), "Website");
     assert.equal(routeLinkLabel(""), "Website");
     assert.equal(routeLinkLabel("  "), "Website");
+  });
+});
+
+describe("closedLabel", () => {
+  test("the month and year where the day is known, as mm/yyyy", () => {
+    assert.equal(closedLabel("2024-12-15"), "Closed 12/2024");
+    assert.equal(closedLabel("2025-03-01"), "Closed 03/2025");
+  });
+
+  test("just Closed where it isn't", () => {
+    assert.equal(closedLabel(null), "Closed");
+    assert.equal(closedLabel(""), "Closed");
+    assert.equal(closedLabel(undefined), "Closed");
   });
 });

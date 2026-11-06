@@ -199,6 +199,8 @@ export const COLORS = {
     highspeed: { color: "#ffffff", bgColor: "#ef4444" },
     main: { color: "#1e40af", bgColor: "#bfdbfe" },
     frequency: { color: "#166534", bgColor: "#dcfce7" },
+    // A closed route: grey, as the line no longer runs
+    closed: { color: "#374151", bgColor: "#e5e7eb" },
   },
   /**
    * The same badges on a dark popup: a deep fill with light text, the dark-mode
@@ -210,6 +212,7 @@ export const COLORS = {
     highspeed: { color: "#fecaca", bgColor: "#991b1b" },
     main: { color: "#dbeafe", bgColor: "#1e40af" },
     frequency: { color: "#bbf7d0", bgColor: "#14532d" },
+    closed: { color: "#e5e7eb", bgColor: "#374151" },
   },
 } as const;
 
@@ -388,6 +391,9 @@ export const OPACITIES = {
   // marks the place without joining the station dots.
   placeIconDark: 0.4,
   defaultRoute: 0.8,
+  // A closed route (railway_routes.closed): in its visit colour, but faded, so it
+  // reads as not part of today's network. The admin map uses it too
+  closedRoute: 0.35,
   selectedRoute: 1.0,
   highlight: 1.0,
   // Casing under a dashed/dotted highlight: enough colour to read as selected,

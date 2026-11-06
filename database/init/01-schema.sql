@@ -84,6 +84,16 @@ CREATE TABLE railway_routes (
     is_valid BOOLEAN NOT NULL DEFAULT TRUE, -- Route validity flag (for recalculation errors)
     error_message TEXT, -- Error details if route recalculation fails. Admin-only: never served by a public query or tile
     under_repair BOOLEAN NOT NULL DEFAULT FALSE, -- Admin-set: this route is invalid only because the OSM layout is temporarily broken (bridge works etc.), not because the line really changed
+    -- Admin-set: the line has no passenger service any more (the tracks may still
+    -- be there or may be gone). Kept for the rides logged on it. A closed route
+    -- is left out of progress, drawn only to those who rode it (or who ask for
+    -- every closed line), ridden by the planner only on request, and never
+    -- recalculated: its geometry is frozen at the last one it had
+    closed BOOLEAN NOT NULL DEFAULT FALSE,
+    closed_on DATE, -- When the service ended, where known. Only on a closed route
+    CONSTRAINT railway_routes_closed_on_needs_closed CHECK (closed_on IS NULL OR closed),
+    -- Under repair says the line comes back; closed says it doesn't
+    CONSTRAINT railway_routes_closed_not_under_repair CHECK (NOT (closed AND under_repair)),
     intended_backtracking BOOLEAN NOT NULL DEFAULT FALSE, -- Flag to indicate backtracking is intentional
     has_backtracking BOOLEAN NOT NULL DEFAULT FALSE, -- Flag set by verification script indicating route uses backtracking path
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

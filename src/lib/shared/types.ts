@@ -92,6 +92,13 @@ export type RailwayRoute = {
   is_valid?: boolean;
   error_message?: string | null;
   under_repair?: boolean; // Invalid only because the OSM layout is temporarily broken (admin-set)
+  /**
+   * No passenger service any more (admin-set), kept for the rides logged on it:
+   * out of progress, drawn only to those who rode it unless asked for, never
+   * recalculated. See railway_routes.closed.
+   */
+  closed?: boolean;
+  closed_on?: string | null; // When the service ended (YYYY-MM-DD), where known
   intended_backtracking?: boolean; // Flag to indicate backtracking is intentional
   has_backtracking?: boolean; // Flag set by verification script indicating route uses backtracking path
   date?: string | null; // From most recent journey
@@ -105,12 +112,13 @@ export type RailwayRoute = {
 /**
  * What a logged-out visitor's progress and map colouring need of a route, and no
  * more: the full route list with geometry runs to tens of megabytes. Served by
- * `routeSummariesInRegion` (`getRouteSummaries` on the web).
+ * `routeSummariesInRegion` (`getRouteSummaries` on the web). `closed` because a
+ * closed route is left out of progress but still coloured where ridden.
  */
 export type RouteSummary = Pick<
   RailwayRoute,
   "track_id" | "usage_type" | "length_km" | "start_country" | "end_country"
->;
+> & { closed: boolean };
 
 // User trip from database (groups of journeys)
 export type Trip = {
@@ -344,6 +352,8 @@ export interface PartialRouteGeometry extends CoveredRange {
  */
 export interface CoveredStretch extends PartialRouteGeometry {
   line_class: LineClass | null;
+  /** The route is closed: its stretch is faded with the line under it. */
+  closed: boolean;
   start_country: string | null;
   end_country: string | null;
 }

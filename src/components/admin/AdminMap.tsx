@@ -43,12 +43,16 @@ import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapIntera
 import { useRegionId } from "@/lib/regionContext";
 import { type UsageType, usageOptions } from "@/lib/shared/constants";
 import {
+  OPEN_ROUTES_FILTER,
+  ROUTE_CLICK_LAYER_ID,
   ROUTE_LINE_LAYERS,
+  routeLineFilter,
   routeLineLayerId,
   SCENIC_ENDPOINTS_LAYER_ID,
   SCENIC_LINES_LAYER_ID,
 } from "@/lib/shared/map/layers";
 import {
+  closedRouteOpacityExpression,
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
 } from "@/lib/shared/map/utils/userRouteStyling";
@@ -67,9 +71,24 @@ const NO_USAGE_TYPES: UsageType[] = [];
 const NO_ENDPOINTS: GeoJSONFeatureCollection = { type: "FeatureCollection", features: [] };
 
 /**
+ * Which routes the admin map draws: the closed ones only under "Closed Routes",
+ * and the selected route always (one picked from the list must show, closed or
+ * not). Null — no filter — when every route is drawn.
+ */
+function adminClosedFilter(
+  showClosed: boolean,
+  selectedRouteId: number | null,
+): maplibregl.FilterSpecification | null {
+  if (showClosed) return null;
+  return selectedRouteId === null
+    ? OPEN_ROUTES_FILTER
+    : ["any", OPEN_ROUTES_FILTER, ["==", ["id"], selectedRouteId]];
+}
+
+/**
  * Apply the admin route paint (selected-route highlight + invalid-route grey,
- * violet for the ones flagged under repair) to all three route line layers at
- * once. `line-dasharray` is left untouched, so the dotted/dashed styles baked
+ * violet for the ones flagged under repair, closed ones faded) to all three route
+ * line layers at once. `line-dasharray` is left untouched, so the dotted/dashed styles baked
  * into the heritage/special factories survive.
  */
 function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | null) {
@@ -99,10 +118,15 @@ function applyAdminRouteLinePaint(m: maplibregl.Map, selectedRouteId: number | n
   // Heritage dots' diameter equals the line width, so they use their own width.
   const heritageWidthExpression = getAdminRouteHeritageWidthExpression(trackIdNum);
 
-  const opacityExpression: maplibregl.ExpressionSpecification | number =
+  const opacityExpression: maplibregl.ExpressionSpecification =
     trackIdNum !== null
-      ? ["case", ["==", ["id"], trackIdNum], OPACITIES.selectedRoute, OPACITIES.defaultRoute]
-      : OPACITIES.defaultRoute;
+      ? [
+          "case",
+          ["==", ["id"], trackIdNum],
+          OPACITIES.selectedRoute,
+          closedRouteOpacityExpression(OPACITIES.defaultRoute),
+        ]
+      : closedRouteOpacityExpression(OPACITIES.defaultRoute);
 
   for (const layerId of ROUTE_LINE_LAYERS) {
     if (!m.getLayer(layerId)) continue;
@@ -216,6 +240,7 @@ export default function AdminMap({
         createScenicLinesLayer({ visible: true }),
         // Regular solid; Heritage (dotted) and Special (dashed) get their own layers
         // so the gaps aren't filled by a solid line underneath. All three always show.
+        // Every route at first, closed ones included, as "Closed Routes" starts ticked
         createRouteLineLayer(0),
         createRouteLineLayer(1, { visible: true }),
         createRouteLineLayer(2, { visible: true }),
@@ -305,6 +330,23 @@ export default function AdminMap({
     if (!map.current || !mapLoaded) return;
     applyAdminRouteLinePaint(map.current, selectedRouteId ?? null);
   }, [selectedRouteId, mapLoaded, map]);
+
+  // Closed routes: drawn under "Closed Routes", and the selected one always
+  const showClosed = layerVisibility.visible.closed;
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !mapLoaded) return;
+    const selected = selectedRouteId ?? null;
+    for (const { id: type } of usageOptions) {
+      const id = routeLineLayerId(type);
+      if (m.getLayer(id)) {
+        m.setFilter(id, routeLineFilter(type, adminClosedFilter(showClosed, selected)));
+      }
+    }
+    if (m.getLayer(ROUTE_CLICK_LAYER_ID)) {
+      m.setFilter(ROUTE_CLICK_LAYER_ID, adminClosedFilter(showClosed, selected));
+    }
+  }, [showClosed, selectedRouteId, mapLoaded, map]);
 
   // Scenic lines: violet, grey when invalid, the selected one in the selected-route
   // orange. Nested single-condition `case`s, per the house rule for data-driven paint.

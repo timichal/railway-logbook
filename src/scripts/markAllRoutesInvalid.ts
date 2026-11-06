@@ -3,7 +3,8 @@
  * Mark all routes as invalid for rechecking
  *
  * This script sets is_valid=false and error_message='Route recheck'
- * for all routes in the database.
+ * for all routes in the database, except the closed ones: recalculation passes
+ * those by (their geometry is frozen), so nothing would ever mark them valid again.
  */
 
 import pool from "../lib/db";
@@ -19,7 +20,8 @@ async function markAllRoutesInvalid() {
       UPDATE railway_routes
       SET is_valid = FALSE,
           error_message = 'Route recheck'
-      WHERE is_valid = TRUE OR error_message IS NULL OR error_message != 'Route recheck'
+      WHERE NOT closed
+        AND (is_valid = TRUE OR error_message IS NULL OR error_message != 'Route recheck')
       RETURNING track_id, from_station, to_station;
     `);
 

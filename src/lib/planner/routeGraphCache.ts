@@ -15,37 +15,55 @@ import {
 /**
  * The SQL condition for the routes a search with these options may ride (see
  * `PlannerOptions`): Regular, plus whatever else the route's own region counts as
- * ordinary. Shared with the station matching, which must not find a route the
- * graph does not hold.
+ * ordinary, and closed routes only when asked. Shared with the station matching,
+ * which must not find a route the graph does not hold.
  */
 export function plannerRouteSql(alias: "r", options: PlannerOptions): string {
-  return options.includeSpecial ? ordinaryRouteSql(alias) : `${alias}.usage_type = 0`;
+  const usage = options.includeSpecial ? ordinaryRouteSql(alias) : `${alias}.usage_type = 0`;
+  return options.includeClosed ? usage : `(${usage} AND NOT ${alias}.closed)`;
+}
+
+/** A loaded route, with what decides which networks hold it. */
+interface LoadedRoute {
+  route: NetworkRoute;
+  usageType: number;
+  closed: boolean;
 }
 
 /**
- * Both networks a search can ask for, from one load: the Regular routes alone,
- * and those plus the non-Regular routes their region counts as ordinary
- * (`PlannerOptions`). One query, since reading the endpoints is the expensive
- * part and the second network is a superset of the first. The Regular graph is
- * built at once; the other only when a search first asks for it, which a
- * Europe-only day never does.
+ * Every network a search can ask for, from one load: the Regular routes alone or
+ * with the non-Regular ones their region counts as ordinary, each without or
+ * with the closed lines (`PlannerOptions`). One query, since reading the
+ * endpoints is the expensive part and every network is a subset of what it
+ * loads. A network's graph is built when a search first asks for it, so a day
+ * of Europe-only searches over open lines builds one.
  */
 interface CachedRouteNetworks {
   /** Network fingerprint the graphs were built from — see getNetworkSignature. */
   signature: string;
-  regular: RouteNetwork;
-  /** Every loaded route, Regular included — the input of `withOrdinary`. */
-  ordinaryRoutes: Map<number, NetworkRoute>;
-  withOrdinary: RouteNetwork | null;
+  /** Every loaded route, in load order (the graph breaks cost ties in it). */
+  routes: LoadedRoute[];
+  /** The networks built so far, by `networkKey`. */
+  built: Map<string, RouteNetwork>;
 }
 
-function networkOf(routeInfo: Map<number, NetworkRoute>): RouteNetwork {
+function networkKey(options: PlannerOptions): string {
+  return `${options.includeSpecial === true}/${options.includeClosed === true}`;
+}
+
+function networkOf(routes: LoadedRoute[], options: PlannerOptions): RouteNetwork {
+  const routeInfo = new Map<number, NetworkRoute>();
+  for (const { route, usageType, closed } of routes) {
+    if (usageType !== 0 && !options.includeSpecial) continue;
+    if (closed && !options.includeClosed) continue;
+    routeInfo.set(route.track_id, route);
+  }
   return { graph: buildRouteGraph(routeInfo), routeInfo };
 }
 
 /**
  * Load every route a search can ride — each one its region counts as ordinary
- * service — and build the Regular graph from them (see `buildRouteGraph`).
+ * service, closed ones included (see `buildRouteGraph`).
  *
  * The network is small enough (a few thousand routes, endpoints only) to load in
  * one query, so there is no buffering around the stations: pathfinding used to
@@ -54,13 +72,13 @@ function networkOf(routeInfo: Map<number, NetworkRoute>): RouteNetwork {
  */
 async function loadRouteNetworks(signature: string): Promise<CachedRouteNetworks> {
   const client = await pool.connect();
-  const regular = new Map<number, NetworkRoute>();
-  const ordinaryRoutes = new Map<number, NetworkRoute>();
+  const routes: LoadedRoute[] = [];
 
   try {
     const result = await client.query<{
       track_id: number;
       usage_type: number;
+      closed: boolean;
       length_km: number;
       line_class: string | null;
       start_x: number;
@@ -76,6 +94,7 @@ async function loadRouteNetworks(signature: string): Promise<CachedRouteNetworks
       SELECT
         r.track_id,
         r.usage_type,
+        r.closed,
         r.length_km,
         r.line_class,
         ST_X(ST_PointN(r.geometry, 1)) as start_x,
@@ -102,11 +121,10 @@ async function loadRouteNetworks(signature: string): Promise<CachedRouteNetworks
         nearEndCoord: [row.near_end_x, row.near_end_y],
         endCoord: [row.end_x, row.end_y],
       };
-      ordinaryRoutes.set(row.track_id, route);
-      if (row.usage_type === 0) regular.set(row.track_id, route);
+      routes.push({ route, usageType: row.usage_type, closed: row.closed });
     }
 
-    return { signature, regular: networkOf(regular), ordinaryRoutes, withOrdinary: null };
+    return { signature, routes, built: new Map() };
   } finally {
     client.release();
   }
@@ -149,9 +167,13 @@ async function getNetworkSignature(): Promise<string> {
  */
 export async function getRouteNetwork(options: PlannerOptions = {}): Promise<RouteNetwork> {
   const networks = await getRouteNetworks();
-  if (!options.includeSpecial) return networks.regular;
-  networks.withOrdinary ??= networkOf(networks.ordinaryRoutes);
-  return networks.withOrdinary;
+  const key = networkKey(options);
+  let network = networks.built.get(key);
+  if (!network) {
+    network = networkOf(networks.routes, options);
+    networks.built.set(key, network);
+  }
+  return network;
 }
 
 async function getRouteNetworks(): Promise<CachedRouteNetworks> {

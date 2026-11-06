@@ -29,12 +29,21 @@ const RETRY_DELAY_MS = 5000;
  * Returns the refresh to call after the local log changes. It never rejects: a
  * failed load is retried once, then logged and reported, and the map stays
  * uncoloured until the next refresh (a logged journey, a region switch).
+ *
+ * `onRiddenChange` hears the ids of the closed routes the visitor rode: a filter
+ * can't read feature state, so those are kept on the map by id
+ * (`closedRoutesFilter`). Until the statuses say which logged routes are closed —
+ * and for good if they can't be loaded — it hears every logged route instead,
+ * straight from localStorage: a ride the visitor logged never disappears from
+ * their map for want of the route list. Called only when the ids change, so the
+ * filter is not rebuilt for nothing.
  */
 export function useLocalRouteFeatureStates(
   map: React.RefObject<maplibregl.Map | null>,
   mapLoaded: boolean,
   dataAccess: DataAccess,
   onError: (message: string) => void,
+  onRiddenChange: (trackIds: number[]) => void,
 ): () => Promise<void> {
   // Which routes have feature states applied, so the ones no longer ridden can be
   // cleared
@@ -50,13 +59,29 @@ export function useLocalRouteFeatureStates(
   // A ref rather than an Effect Event, because the refresh is also called from an
   // event handler (a journey just logged), which an Effect Event may not be.
   const onErrorRef = useRef(onError);
+  const onRiddenChangeRef = useRef(onRiddenChange);
   useEffect(() => {
     onErrorRef.current = onError;
-  }, [onError]);
+    onRiddenChangeRef.current = onRiddenChange;
+  }, [onError, onRiddenChange]);
+
+  // The ids last reported, sorted, so the same list isn't reported twice
+  const reportedRef = useRef<number[]>([]);
+  const reportRidden = useCallback((trackIds: Iterable<number>) => {
+    const next = [...trackIds].sort((a, b) => a - b);
+    const prev = reportedRef.current;
+    if (next.length === prev.length && next.every((id, i) => id === prev[i])) return;
+    reportedRef.current = next;
+    onRiddenChangeRef.current(next);
+  }, []);
 
   const refresh = useCallback(async () => {
     const requestId = ++requestRef.current;
     if (!map.current) return;
+
+    // Nothing applied yet (a first load, a new data access): every logged route,
+    // until the statuses can narrow it to the closed ones
+    if (trackIdsRef.current.size === 0) reportRidden(dataAccess.getLocalLoggedTrackIds());
 
     // The local data access forgets a failed route list, so a second attempt
     // fetches afresh. Nothing else would ask again for a while: an anonymous
@@ -70,6 +95,8 @@ export function useLocalRouteFeatureStates(
         if (requestId !== requestRef.current) return;
         if (attempt > 0) {
           onErrorRef.current("Couldn't load the routes to colour your rides on the map");
+          // The log may have grown since the last statuses: keep every ride drawn
+          reportRidden(dataAccess.getLocalLoggedTrackIds());
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
@@ -98,7 +125,8 @@ export function useLocalRouteFeatureStates(
     }
 
     trackIdsRef.current = newTrackIds;
-  }, [map, dataAccess]);
+    reportRidden(statuses.filter((status) => status.closed).map((status) => status.track_id));
+  }, [map, dataAccess, reportRidden]);
 
   useEffect(() => {
     const m = map.current;
@@ -125,9 +153,10 @@ export function useLocalRouteFeatureStates(
           m.removeFeatureState({ ...ROUTE_FEATURE, id: trackId });
         }
       }
+      reportRidden([]);
       trackIdsRef.current = new Set();
     };
-  }, [map, mapLoaded, refresh]);
+  }, [map, mapLoaded, refresh, reportRidden]);
 
   return refresh;
 }

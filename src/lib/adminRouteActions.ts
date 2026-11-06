@@ -2,7 +2,7 @@
 
 import type { PoolClient } from "pg";
 import type { ActionResult } from "./actionResult";
-import { requiredStations, routeLineNames, routeLink } from "./adminValidation";
+import { requiredStations, routeClosure, routeLineNames, routeLink } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { countryAt } from "./countryUtils";
@@ -38,6 +38,10 @@ export interface SaveRouteData {
   /** What the link is shown as, in place of "Website"; "" for the default. */
   link_name: string;
   intended_backtracking: boolean;
+  /** No passenger service any more (see railway_routes.closed). */
+  closed: boolean;
+  /** When the service ended, YYYY-MM-DD; "" where not known or not closed. */
+  closed_on: string;
 }
 
 /** A row of the admin routes list: the route's metadata and flags, no geometry. */
@@ -55,6 +59,7 @@ export type AdminRouteSummary = {
   is_valid: boolean;
   error_message: string | null;
   under_repair: boolean;
+  closed: boolean;
   intended_backtracking: boolean;
   has_backtracking: boolean;
 };
@@ -67,6 +72,8 @@ export type AdminRouteDetail = AdminRouteSummary & {
   frequency: string[];
   link: string | null;
   link_name: string | null;
+  /** When a closed route's service ended (YYYY-MM-DD), where known. */
+  closed_on: string | null;
   /** The route's box, which the map flies to. */
   bounds: RouteBounds;
   length_km: number;
@@ -92,7 +99,7 @@ export async function getAllRailwayRoutes(
   return asAdmin(async () => {
     const result = await pool.query<AdminRouteSummary>(`
     SELECT track_id, name, other_names, from_station, to_station, description, usage_type, line_class,
-           is_valid, error_message, under_repair, intended_backtracking, has_backtracking
+           is_valid, error_message, under_repair, closed, intended_backtracking, has_backtracking
     FROM railway_routes
     WHERE ${regionContainsSql(region, "starting_coordinate")}
   `);
@@ -102,8 +109,9 @@ export async function getAllRailwayRoutes(
 }
 
 /**
- * Get the total length (km) of the region's valid routes. Powers the admin map
- * km counter, which sits beside a map showing that region alone.
+ * Get the total length (km) of the region's valid routes that still run (closed
+ * ones left out, as progress leaves them out). Powers the admin map km counter,
+ * which sits beside a map showing that region alone.
  */
 export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionResult<number>> {
   return asAdmin(async () => {
@@ -111,6 +119,7 @@ export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionRes
     SELECT COALESCE(SUM(length_km), 0) AS total_km
     FROM railway_routes
     WHERE is_valid = true
+      AND NOT closed
       AND ${regionContainsSql(region, "starting_coordinate")}
   `);
 
@@ -163,7 +172,8 @@ export async function getRailwayRoute(trackId: number): Promise<ActionResult<Adm
            ${boundsSql("geometry")} as bounds, length_km,
            ${lngLatSql("starting_coordinate")} as starting_coordinate,
            ${lngLatSql("ending_coordinate")} as ending_coordinate,
-           is_valid, error_message, under_repair, intended_backtracking, has_backtracking
+           is_valid, error_message, under_repair, closed, closed_on,
+           intended_backtracking, has_backtracking
     FROM railway_routes
     WHERE track_id = $1
   `,
@@ -423,17 +433,20 @@ export async function saveRailwayRoute(
         // The name is required where the region names its lines, but only the form checks it
         const { name, otherNames } = routeLineNames(routeData.name, routeData.other_names);
         const { link, linkName } = routeLink(routeData.link, routeData.link_name);
+        // A route can be created closed: one added only for the rides on a line
+        // that has already stopped running
+        const { closed, closedOn } = routeClosure(routeData.closed, routeData.closed_on);
         queryStr = `
         INSERT INTO railway_routes (
           name, other_names, from_station, to_station, description, usage_type, frequency, link,
           link_name, geometry, length_km, start_country, end_country,
           starting_coordinate, ending_coordinate,
-          is_valid, intended_backtracking, has_backtracking
+          is_valid, intended_backtracking, has_backtracking, closed, closed_on
         ) VALUES (
           $1, $15, $2, $3, $4, $5, $6, $7,
           $16, ST_GeomFromText($8, 4326), ${lineLengthKmSql("$8")}, $9, $10,
           ST_GeomFromText($11, 4326), ST_GeomFromText($12, 4326),
-          TRUE, $13, $14
+          TRUE, $13, $14, $17, $18
         )
         RETURNING track_id
       `;
@@ -455,6 +468,8 @@ export async function saveRailwayRoute(
           hasBacktracking,
           otherNames,
           linkName,
+          closed,
+          closedOn,
         ];
       }
 
@@ -524,6 +539,11 @@ export async function saveRailwayRoute(
  * Update route metadata (line name, endpoints, description, usage_type, etc.)
  * Validity is left alone: a route is invalid because its geometry is, and only a
  * geometry re-pick or a successful recalculation can say otherwise.
+ *
+ * Closing a route clears `under_repair` (a closed line is not coming back, and the
+ * table's CHECK holds the two apart). It leaves the geometry and the validity as
+ * they are: from then on recalculation passes the route by, so both stay frozen
+ * at what they were when it closed.
  */
 export async function updateRailwayRoute(
   trackId: number,
@@ -538,16 +558,20 @@ export async function updateRailwayRoute(
   linkName: string | null,
   lineClass: LineClass,
   intendedBacktracking: boolean,
+  closed: boolean,
+  closedOn: string | null,
 ): Promise<ActionResult<void>> {
   return asAdmin(async () => {
     const { from, to } = requiredStations(fromStation, toStation, "A route");
     const lineNames = routeLineNames(name, otherNames);
     const routeLinkValues = routeLink(link, linkName);
+    const closure = routeClosure(closed, closedOn);
     const result = await pool.query(
       `
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
-        link = $8, link_name = $12, line_class = $9, intended_backtracking = $10, other_names = $11
+        link = $8, link_name = $12, line_class = $9, intended_backtracking = $10, other_names = $11,
+        closed = $13, closed_on = $14, under_repair = under_repair AND NOT $13
     WHERE track_id = $1
   `,
       [
@@ -563,6 +587,8 @@ export async function updateRailwayRoute(
         intendedBacktracking,
         lineNames.otherNames,
         routeLinkValues.linkName,
+        closure.closed,
+        closure.closedOn,
       ],
     );
 
@@ -584,7 +610,7 @@ export async function updateRailwayRoute(
  *
  * It qualifies invalidity, so it is never set on a valid route and is cleared
  * the moment a route becomes valid again — on geometry re-pick and successful
- * recalculation alike.
+ * recalculation alike. Nor on a closed one, which is not coming back.
  */
 export async function setRouteUnderRepair(
   trackId: number,
@@ -595,14 +621,14 @@ export async function setRouteUnderRepair(
       `
     UPDATE railway_routes
     SET under_repair = $2
-    WHERE track_id = $1 AND ($2 = FALSE OR is_valid = FALSE)
+    WHERE track_id = $1 AND ($2 = FALSE OR (is_valid = FALSE AND NOT closed))
   `,
       [trackId, underRepair],
     );
 
     if (result.rowCount === 0) {
       throw new ValidationError(
-        "Route not found, or it is valid and cannot be marked under repair",
+        "Route not found, or it is valid or closed and cannot be marked under repair",
       );
     }
   });
@@ -638,13 +664,15 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
         name, other_names, from_station, to_station, description, usage_type, frequency, link,
         link_name, line_class, geometry, length_km, start_country, end_country,
         starting_coordinate, ending_coordinate,
-        is_valid, error_message, under_repair, intended_backtracking, has_backtracking
+        is_valid, error_message, under_repair, intended_backtracking, has_backtracking,
+        closed, closed_on
       )
       SELECT
         name, other_names, from_station || ' [duplicate]', to_station || ' [duplicate]', description,
         usage_type, frequency, link, link_name, line_class, geometry, length_km,
         start_country, end_country, starting_coordinate, ending_coordinate,
-        is_valid, error_message, under_repair, intended_backtracking, has_backtracking
+        is_valid, error_message, under_repair, intended_backtracking, has_backtracking,
+        closed, closed_on
       FROM railway_routes
       WHERE track_id = $1
       RETURNING track_id

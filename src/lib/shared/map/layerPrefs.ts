@@ -9,8 +9,8 @@
  * lines) draws it from the outset, one that doesn't (Europe's diversions and
  * festival runs) keeps it hidden until asked. One region's choice says nothing
  * about the other's — turning Japan's non-JR lines off must not hide them in
- * Europe or the other way round. The heritage and scenic switches mean the same
- * thing everywhere and stay one value each.
+ * Europe or the other way round. The heritage, closed and scenic switches mean the
+ * same thing everywhere and stay one value each.
  *
  * **The Regular switch exists only where Regular is not the only ordinary type**
  * (`hasOrdinaryNonRegular` — Japan's JR lines beside its non-JR ones), and is
@@ -32,12 +32,19 @@ export interface LayerPrefs {
   showSpecial: boolean;
   /** "Scenic lines" — the violet band under the admin-drawn scenic stretches. */
   showScenicLines: boolean;
+  /**
+   * "Show all closed lines" — closed routes (railway_routes.closed) the user hasn't
+   * ridden; those they have are drawn regardless. Also lets the planner ride them,
+   * for logging a past trip.
+   */
+  showClosed: boolean;
 }
 
 /** The stored form: anything left out is at its default. */
 export interface StoredLayerPrefs {
   showHeritage?: boolean;
   showScenicLines?: boolean;
+  showClosed?: boolean;
   showSpecialByRegion?: Partial<Record<RegionId, boolean>>;
   showRegularByRegion?: Partial<Record<RegionId, boolean>>;
 }
@@ -106,6 +113,7 @@ export function parseStoredLayerPrefs(json: string | null): StoredLayerPrefs {
   return {
     showHeritage: bool(raw.showHeritage) ?? legacyBoth,
     showScenicLines: bool(raw.showScenicLines) ?? bool(raw.showScenicOutline),
+    showClosed: bool(raw.showClosed),
     showSpecialByRegion,
     showRegularByRegion: byRegion(raw.showRegularByRegion),
   };
@@ -120,6 +128,7 @@ export function resolveLayerPrefs(stored: StoredLayerPrefs, regionId: RegionId):
     showHeritage: stored.showHeritage ?? false,
     showSpecial: stored.showSpecialByRegion?.[regionId] ?? isOrdinaryUsage(regionId, 2),
     showScenicLines: stored.showScenicLines ?? false,
+    showClosed: stored.showClosed ?? false,
   };
 }
 

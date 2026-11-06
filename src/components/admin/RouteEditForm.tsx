@@ -38,6 +38,8 @@ export default function RouteEditForm({
 }: RouteEditFormProps) {
   const region = useRegion();
   const underRepair = selectedRoute?.under_repair === true;
+  // As stored, not as ticked in the form: what the route is until Save
+  const closed = selectedRoute?.closed === true;
   const incomplete = !editForm || routeMetadataIncomplete(editForm, region.hasRouteNames);
 
   if (!selectedRoute) {
@@ -67,8 +69,20 @@ export default function RouteEditForm({
         </div>
 
         <div className="space-y-4">
+          {/* A closed route is never recalculated, so an invalid one has nothing to
+              fix and can't be under repair: it says why its geometry stays put */}
+          {closed && (
+            <div className="border rounded-md p-3 bg-gray-50 border-gray-200">
+              <h3 className="text-sm font-medium text-gray-800">Closed line</h3>
+              <p className="mt-1 text-xs text-gray-600">
+                Not recalculated: the geometry stays as it is.
+                {selectedRoute.is_valid === false && " It was invalid when last checked."}
+              </p>
+            </div>
+          )}
+
           {/* Invalid Route Alert — violet variant for routes flagged under repair */}
-          {selectedRoute.is_valid === false && (
+          {selectedRoute.is_valid === false && !closed && (
             <div
               className={`border rounded-md p-3 ${
                 underRepair ? "bg-violet-50 border-violet-200" : "bg-red-50 border-red-200"

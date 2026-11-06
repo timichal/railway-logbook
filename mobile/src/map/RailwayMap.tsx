@@ -52,6 +52,7 @@ import {
   REGULAR_ROUTE_LAYER_ID,
 } from "@shared/map/layers";
 import {
+  closedRoutesFilter,
   scenicLinesFilter,
   shownUsageTypes,
   userRouteLayerConfigs,
@@ -125,18 +126,20 @@ function flatBounds(regionId: RegionId): [number, number, number, number] {
 
 export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   const { resolved: theme } = useTheme();
-  // Built once per scheme rather than on every render, which would hand each <Layer>
-  // a new paint object
+  const { showHeritage, showSpecial, showScenicLines, showClosed } = useLayerPrefs();
+  // Built once per scheme and closed switch rather than on every render, which would
+  // hand each <Layer> a new paint object. The tile carries this user's rides, so the
+  // closed lines they rode stay whatever the switch says (closedRoutesFilter)
   const routeLayers = useMemo(() => {
     const configs = userRouteLayerConfigs(theme);
+    const routesFilter = closedRoutesFilter(showClosed);
     return {
-      route: createRouteLineLayer(0, configs.route),
-      heritage: createRouteLineLayer(1, { ...configs.heritage, visible: true }),
-      special: createRouteLineLayer(2, { ...configs.special, visible: true }),
+      route: createRouteLineLayer(0, { ...configs.route, routesFilter }),
+      heritage: createRouteLineLayer(1, { ...configs.heritage, visible: true, routesFilter }),
+      special: createRouteLineLayer(2, { ...configs.special, visible: true, routesFilter }),
     };
-  }, [theme]);
+  }, [theme, showClosed]);
   const { regionId } = useRegion();
-  const { showHeritage, showSpecial, showScenicLines } = useLayerPrefs();
   const { selected } = useSelection();
   const highlighted = useHighlight();
   // A journey logged anywhere in the app repaints this tile: the visit colours are

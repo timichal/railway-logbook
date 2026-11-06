@@ -17,7 +17,7 @@ import { ToggleSwitch } from "@/ui/ToggleSwitch";
 
 export function LayerToggles(): ReactNode {
   const { region } = useRegion();
-  const { showHeritage, showSpecial, showScenicLines, setPref } = useLayerPrefs();
+  const { showHeritage, showSpecial, showClosed, showScenicLines, setPref } = useLayerPrefs();
 
   return (
     <View className="gap-1">
@@ -30,6 +30,12 @@ export function LayerToggles(): ReactNode {
         label={region.id === "japan" ? "Non-JR lines" : "Special services"}
         value={showSpecial}
         onChange={(value) => setPref("showSpecial", value)}
+      />
+      {/* The closed lines ridden are drawn whatever this says (closedRoutesFilter) */}
+      <ToggleSwitch
+        label="All closed lines"
+        value={showClosed}
+        onChange={(value) => setPref("showClosed", value)}
       />
       {region.hasScenicHighlight ? (
         <ToggleSwitch

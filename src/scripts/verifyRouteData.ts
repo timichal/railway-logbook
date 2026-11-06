@@ -40,6 +40,8 @@ interface RecalculationResult {
   totalRoutes: number;
   successfulRoutes: number;
   invalidRoutes: number;
+  /** Closed by the admin while the run was going: left as they were. */
+  closedMeanwhile: number;
   backtrackingRoutes: Array<{ track_id: number; from_station: string; to_station: string }>;
   errors: Array<{ track_id: number; from_station: string; to_station: string; error: string }>;
 }
@@ -82,7 +84,8 @@ interface RouteRow extends StoredGeometryRow {
 /** What became of one route. Aggregated into RecalculationResult in track_id order. */
 type RouteOutcome =
   | { status: "recalculated"; hasBacktracking: boolean }
-  | { status: "invalid"; error: string };
+  | { status: "invalid"; error: string }
+  | { status: "closed" };
 
 /**
  * Recalculate a geometry from its stored click points and judge it against the
@@ -155,22 +158,23 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
   const outcome = await recalculateGeometry(db, route);
 
   if (outcome.status === "invalid") {
-    await db.query(
+    const marked = await db.query(
       `
       UPDATE railway_routes
       SET
         is_valid = FALSE,
         error_message = $1
-      WHERE track_id = $2
+      -- Closed since the run listed it: frozen from then on
+      WHERE track_id = $2 AND NOT closed
     `,
       [outcome.error, route.track_id],
     );
 
-    return outcome;
+    return marked.rowCount === 0 ? { status: "closed" } : outcome;
   }
 
   // Update route with new geometry and has_backtracking flag
-  await db.query(
+  const updated = await db.query(
     `
     UPDATE railway_routes
     SET
@@ -183,11 +187,13 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
       -- The failure branches leave the flag alone: a route still under
       -- repair keeps it across OSM updates until it recalculates.
       under_repair = FALSE
-    WHERE track_id = $4
+    WHERE track_id = $4 AND NOT closed
   `,
     [outcome.lineString, outcome.newLength, outcome.hasBacktracking, route.track_id],
   );
 
+  // No row: the route was closed (or deleted) since the run listed it, and is left be
+  if (updated.rowCount === 0) return { status: "closed" };
   return { status: "recalculated", hasBacktracking: outcome.hasBacktracking };
 }
 
@@ -214,14 +220,18 @@ async function recalculateAllRoutes(
     totalRoutes: 0,
     successfulRoutes: 0,
     invalidRoutes: 0,
+    closedMeanwhile: 0,
     backtrackingRoutes: [],
     errors: [],
   };
 
+  // Never a closed route: its geometry is frozen at what it was when it closed
+  // (railway_routes.closed). Its tracks may be gone from OSM, and a recalculation
+  // would only mark it invalid, or find some other path between its points
   const routes = await db.query<RouteRow>(`
     SELECT track_id, intended_backtracking, ${STORED_GEOMETRY_COLUMNS}
     FROM railway_routes
-    ${options.validOnly ? "WHERE is_valid" : ""}
+    WHERE NOT closed ${options.validOnly ? "AND is_valid" : ""}
     ORDER BY track_id
   `);
 
@@ -254,6 +264,8 @@ async function recalculateAllRoutes(
       if (outcome.hasBacktracking && !intended_backtracking) {
         result.backtrackingRoutes.push({ track_id, from_station, to_station });
       }
+    } else if (outcome.status === "closed") {
+      result.closedMeanwhile++;
     } else {
       result.invalidRoutes++;
       result.errors.push({ track_id, from_station, to_station, error: outcome.error });
@@ -352,6 +364,11 @@ export async function verifyAndRecalculateRoutes(
   console.log(`Successfully recalculated: ${recalcResult.successfulRoutes}`);
   console.log(`Routes with unintended backtracking: ${recalcResult.backtrackingRoutes.length}`);
   console.log(`Invalid routes: ${recalcResult.invalidRoutes}`);
+  if (recalcResult.closedMeanwhile > 0) {
+    console.log(
+      `Closed or deleted during the run, left as they were: ${recalcResult.closedMeanwhile}`,
+    );
+  }
   console.log(`Time: ${elapsedMinutes.toFixed(1)} min`);
 
   if (recalcResult.backtrackingRoutes.length > 0) {

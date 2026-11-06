@@ -14,7 +14,7 @@ interface TextFieldProps {
   onChange: (value: string) => void;
   /** A station name: Alt+J tags it as a junction (`handleJunctionShortcut`). */
   station?: boolean;
-  type?: "text" | "url";
+  type?: "text" | "url" | "date";
   placeholder?: string;
   disabled?: boolean;
 }

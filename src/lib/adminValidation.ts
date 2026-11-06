@@ -1,5 +1,6 @@
 import { ValidationError } from "./errors";
 import { foldForSearch } from "./searchText";
+import { isDateOnly } from "./shared/getUntimezonedDateStr";
 
 /**
  * A route's or scenic line's endpoint names, required. The forms say so first,
@@ -32,6 +33,28 @@ export function routeLink(
   const url = typeof link === "string" && link.trim() ? link.trim() : null;
   const name = url && typeof linkName === "string" && linkName.trim() ? linkName.trim() : null;
   return { link: url, linkName: name };
+}
+
+/**
+ * Whether a route is closed, and the day its service ended. The day goes with the
+ * flag: one typed beside an unticked box is dropped, as the table's CHECK requires.
+ * A blank day is NULL (not known); anything else must be a real YYYY-MM-DD day.
+ * Both are checked as values, not trusted to their types: every admin action is an
+ * endpoint, and a number or an object sent as the day is refused, not lost.
+ */
+export function routeClosure(
+  closed: unknown,
+  closedOn: unknown,
+): { closed: boolean; closedOn: string | null } {
+  if (typeof closed !== "boolean") throw new ValidationError("Closed must be true or false");
+  if (closedOn !== null && closedOn !== undefined && typeof closedOn !== "string") {
+    throw new ValidationError("The closing date must be a day (YYYY-MM-DD)");
+  }
+  const day = closed && typeof closedOn === "string" && closedOn.trim() ? closedOn.trim() : null;
+  if (day !== null && !isDateOnly(day)) {
+    throw new ValidationError("The closing date must be a day (YYYY-MM-DD)");
+  }
+  return { closed, closedOn: day };
 }
 
 /**

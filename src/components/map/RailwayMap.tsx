@@ -171,6 +171,10 @@ export default function RailwayMap({
   // Only the sheet can take the room away, so the desktop layout always has it.
   const showFurniture = !isMobile || furnitureFits;
 
+  // An anonymous visitor's ridden routes, reported by useLocalRouteFeatureStates
+  // below, for the closed ones among them to stay on the map
+  const [localRiddenTrackIds, setLocalRiddenTrackIds] = useState<number[]>([]);
+
   // A login, a logout or a country checkbox reloads the route tiles by itself (see
   // useUserMap); a logged ride asks with refreshTiles. The searched line stands down
   // with the search box, whose chip is the only way to clear it.
@@ -190,6 +194,7 @@ export default function RailwayMap({
     rides: userId ? "session" : undefined,
     coverageVersion,
     lineHighlightHidden: !showFurniture,
+    localRiddenTrackIds,
   });
 
   // The newest fit asked for. A fit may wait on the server for the routes' bounds,
@@ -267,7 +272,13 @@ export default function RailwayMap({
   }, [map, mapLoaded]);
 
   // An anonymous visitor's rides, coloured from their localStorage log
-  const refreshLocalRouteStates = useLocalRouteFeatureStates(map, mapLoaded, dataAccess, showError);
+  const refreshLocalRouteStates = useLocalRouteFeatureStates(
+    map,
+    mapLoaded,
+    dataAccess,
+    showError,
+    setLocalRiddenTrackIds,
+  );
 
   // Only the open tab's highlights are drawn: the planner result and the selection
   // on the Route Logger, the open trip or journey on My Trips, nothing on Countries.

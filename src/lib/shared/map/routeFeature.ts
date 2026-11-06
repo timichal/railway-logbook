@@ -56,6 +56,9 @@ export interface RouteFeatureProperties extends RouteTitleProperties {
    * survive.
    */
   frequency?: string | string[];
+  /** A closed route (railway_routes.closed), and when, where known (YYYY-MM-DD). */
+  closed?: boolean;
+  closed_on?: string | null;
 }
 
 /**
@@ -170,13 +173,32 @@ const FREQUENCY_BADGE: BadgeColors = {
   dark: COLORS.badgesDark.frequency,
 };
 
+const CLOSED_BADGE: BadgeColors = {
+  ...COLORS.badges.closed,
+  dark: COLORS.badgesDark.closed,
+};
+
 /**
- * Every badge a route earns, in the order they are shown: line class (unless
- * branch, the unremarkable default), usage type, then one per frequency
- * tag. Usage types are labelled per region — Japan calls them JR / non-JR lines.
+ * A closed route's badge text: "Closed", with the month where known ("Closed
+ * 12/2024"). The day is stored, but a month is what a reader wants of it.
+ */
+export function closedLabel(closedOn: unknown): string {
+  const match = typeof closedOn === "string" ? /^(\d{4})-(\d{2})/.exec(closedOn) : null;
+  return match ? `Closed ${match[2]}/${match[1]}` : "Closed";
+}
+
+/**
+ * Every badge a route earns, in the order they are shown: closed (first, as it
+ * says the rest no longer holds), line class (unless branch, the unremarkable
+ * default), usage type, then one per frequency tag. Usage types are labelled per
+ * region — Japan calls them JR / non-JR lines.
  */
 export function routeBadges(properties: RouteFeatureProperties, regionId: RegionId): RouteBadge[] {
   const badges: RouteBadge[] = [];
+
+  if (properties.closed === true) {
+    badges.push({ label: closedLabel(properties.closed_on), ...CLOSED_BADGE });
+  }
 
   const lineClassColors = properties.line_class && LINE_CLASS_BADGE[properties.line_class];
   if (properties.line_class && lineClassColors) {

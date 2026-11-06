@@ -271,7 +271,7 @@ export async function trackIdsInRegion(region: RegionId): Promise<number[]> {
  */
 export async function routeSummariesInRegion(region: RegionId): Promise<RouteSummary[]> {
   const result = await pool.query<RouteSummary>(`
-    SELECT track_id, usage_type, length_km, start_country, end_country
+    SELECT track_id, usage_type, length_km, start_country, end_country, closed
     FROM railway_routes
     WHERE ${regionContainsSql(region, "starting_coordinate")}
     ORDER BY track_id
@@ -338,7 +338,9 @@ export async function routeMetadataByIds(trackIds: number[]): Promise<RailwayRou
       length_km,
       start_country,
       end_country,
-      is_valid
+      is_valid,
+      closed,
+      closed_on
     FROM railway_routes
     WHERE track_id = ANY($1::int[])
   `,

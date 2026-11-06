@@ -2,11 +2,17 @@ import type * as maplibregl from "maplibre-gl";
 import { useEffect } from "react";
 import { type UsageType, usageOptions } from "@/lib/shared/constants";
 import {
+  bothFilters,
   ROUTE_CLICK_LAYER_ID,
   routeLineLayerId,
   SCENIC_LINES_LAYER_ID,
 } from "@/lib/shared/map/layers";
-import { clickBufferFilter, scenicLinesFilter } from "@/lib/shared/map/userMapLayers";
+import {
+  clickBufferFilter,
+  closedRoutesFilter,
+  scenicLinesFilter,
+  userRouteLineFilter,
+} from "@/lib/shared/map/userMapLayers";
 
 /**
  * Manages filter and visibility toggles for user map layers:
@@ -17,6 +23,8 @@ import { clickBufferFilter, scenicLinesFilter } from "@/lib/shared/map/userMapLa
  *   Japan's non-JR lines, ticked in the Map & Stats tab.
  *   All three are independent.
  * - Scenic lines: visibility, and the country filter the routes have too
+ * - Closed lines: on every route layer, those not ridden are filtered out unless
+ *   "All closed lines" is on (`closedRoutesFilter`)
  *
  * Layer responsibilities:
  * - `railway_routes` (visible solid line): Regular only. Heritage and Special
@@ -36,6 +44,10 @@ export function useLayerFilters(
   showScenicLines: boolean,
   /** The countries the routes are filtered to; the scenic lines follow them. */
   selectedCountries: string[],
+  /** "All closed lines". */
+  showClosed: boolean,
+  /** An anonymous visitor's ridden routes (see `closedRoutesFilter`); empty otherwise. */
+  localRiddenTrackIds: readonly number[],
   /** Apply persisted preferences once the map's layers exist. */
   mapLoaded: boolean,
 ) {
@@ -44,16 +56,18 @@ export function useLayerFilters(
   useEffect(() => {
     const m = map.current;
     if (!m) return;
+    const closed = closedRoutesFilter(showClosed, localRiddenTrackIds);
     for (const { id: type } of usageOptions) {
       const id = routeLineLayerId(type);
       if (m.getLayer(id)) {
         m.setLayoutProperty(id, "visibility", shownTypes.includes(type) ? "visible" : "none");
+        m.setFilter(id, userRouteLineFilter(type, showClosed, localRiddenTrackIds));
       }
     }
     if (m.getLayer(ROUTE_CLICK_LAYER_ID)) {
-      m.setFilter(ROUTE_CLICK_LAYER_ID, clickBufferFilter(shownTypes));
+      m.setFilter(ROUTE_CLICK_LAYER_ID, bothFilters(clickBufferFilter(shownTypes), closed));
     }
-  }, [map, shownTypes, mapLoaded]);
+  }, [map, shownTypes, showClosed, localRiddenTrackIds, mapLoaded]);
 
   // Scenic lines: shown by their toggle, filtered by country as the routes are
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger (apply prefs once layers exist), not a value read inside the effect.

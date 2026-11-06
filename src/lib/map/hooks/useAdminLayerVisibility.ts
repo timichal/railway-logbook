@@ -15,6 +15,9 @@ import type { Region } from "@/lib/shared/regions";
 export const ADMIN_LAYERS = [
   { key: "parts", label: "Railway Parts", layerIds: ["railway_parts"] },
   { key: "routes", label: "Railway Routes", layerIds: ROUTE_LINE_LAYERS },
+  // Not a layer of its own but a filter on the route layers (AdminMap): unticked,
+  // the map shows the network as it runs today. On by default, like the others
+  { key: "closed", label: "Closed Routes", layerIds: [] },
   {
     key: "scenic",
     label: "Scenic Lines",

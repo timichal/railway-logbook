@@ -60,9 +60,14 @@ class RouteGraph {
  * regions.ts — Japan's non-JR lines). Only ever inside such a region: Europe's
  * Special routes are irregular services, and asking for them there changes nothing.
  * Heritage is never ridden.
+ *
+ * With `includeClosed`, closed lines too (railway_routes.closed): the planner is
+ * how a past trip gets logged, and a past trip may have ridden a line since
+ * closed. The clients ask for them while the map shows every closed line.
  */
 export interface PlannerOptions {
   includeSpecial?: boolean;
+  includeClosed?: boolean;
 }
 
 /** The graph and the routes it connects, which is what every search runs over. */

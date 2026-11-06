@@ -8,9 +8,10 @@
  * normal (endpoints are hand-picked click points); a few hundred means the path
  * probably skipped a short connecting route.
  *
- * Usage: npm run inspectPath -- "Waren (Müritz)" "Rostock Hauptbahnhof" [via...] [--special]
+ * Usage: npm run inspectPath -- "Waren (Müritz)" "Rostock Hauptbahnhof" [via...] [--special] [--closed]
  *        Arguments are station names (exact, or a unique prefix) or station ids.
  *        --special searches Special routes too, as Japan's planner does by default.
+ *        --closed searches closed lines too, as the planner does under "All closed lines".
  */
 import pool from "../lib/db";
 import { haversineDistance } from "../lib/geoUtils";
@@ -19,9 +20,12 @@ import { findRoutePathBetweenStations } from "../lib/routePathFinder";
 async function main() {
   const argv = process.argv.slice(2);
   const includeSpecial = argv.includes("--special");
-  const args = argv.filter((arg) => arg !== "--special");
+  const includeClosed = argv.includes("--closed");
+  const args = argv.filter((arg) => arg !== "--special" && arg !== "--closed");
   if (args.length < 2) {
-    console.error('Usage: npm run inspectPath -- "<from>" "<to>" ["<via>"...] [--special]');
+    console.error(
+      'Usage: npm run inspectPath -- "<from>" "<to>" ["<via>"...] [--special] [--closed]',
+    );
     process.exit(1);
   }
 
@@ -47,7 +51,10 @@ async function main() {
   const [from, to, ...via] = await Promise.all(args.map(resolve));
 
   const started = performance.now();
-  const res = await findRoutePathBetweenStations(from, to, via, { includeSpecial });
+  const res = await findRoutePathBetweenStations(from, to, via, {
+    includeSpecial,
+    includeClosed,
+  });
   const elapsed = performance.now() - started;
   console.log(`search took ${elapsed.toFixed(0)} ms`);
 

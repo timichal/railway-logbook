@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { featureFilter } from "@maplibre/maplibre-gl-style-spec";
 import {
   parseStoredLayerPrefs,
   resolveLayerPrefs,
   withLayerPref,
 } from "@/lib/shared/map/layerPrefs";
-import { clickBufferFilter, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
+import {
+  clickBufferFilter,
+  closedRoutesFilter,
+  shownUsageTypes,
+  userRouteLineFilter,
+} from "@/lib/shared/map/userMapLayers";
 import { countedUsageTypes, ordinaryUsageSql } from "@/lib/shared/regions";
 
 describe("layer prefs", () => {
@@ -16,6 +22,7 @@ describe("layer prefs", () => {
       showHeritage: false,
       showSpecial: false,
       showScenicLines: false,
+      showClosed: false,
     });
     assert.equal(resolveLayerPrefs(stored, "japan").showSpecial, true);
   });
@@ -44,6 +51,14 @@ describe("layer prefs", () => {
   test("the legacy scenic key is carried over", () => {
     const stored = parseStoredLayerPrefs(JSON.stringify({ showScenicOutline: true }));
     assert.equal(resolveLayerPrefs(stored, "europe").showScenicLines, true);
+  });
+
+  test("the closed switch is one value for every region", () => {
+    const stored = withLayerPref({}, "japan", "showClosed", true);
+    assert.equal(resolveLayerPrefs(stored, "japan").showClosed, true);
+    assert.equal(resolveLayerPrefs(stored, "europe").showClosed, true);
+    const parsed = parseStoredLayerPrefs(JSON.stringify(stored));
+    assert.equal(resolveLayerPrefs(parsed, "europe").showClosed, true);
   });
 
   test("Special is set per region, the others for every region", () => {
@@ -113,5 +128,44 @@ describe("usage type filtering", () => {
       "usage_type IN (2)",
     );
     assert.equal(ordinaryUsageSql("japan", "usage_type", []), "FALSE");
+  });
+});
+
+describe("closed routes on the user map", () => {
+  /** Whether a filter passes a route tile feature. */
+  const passes = (
+    filter: ReturnType<typeof closedRoutesFilter>,
+    id: number,
+    properties: Record<string, unknown>,
+  ) =>
+    filter === null ||
+    featureFilter(filter, "layers[0].filter").filter({ zoom: 8 }, {
+      type: 2,
+      id,
+      properties,
+      geometry: [],
+    } as never);
+
+  test("an open route is always drawn", () => {
+    assert.equal(passes(closedRoutesFilter(false), 1, { closed: false, usage_type: 0 }), true);
+  });
+
+  test("a closed route not ridden is drawn only under the switch", () => {
+    assert.equal(passes(closedRoutesFilter(false), 1, { closed: true }), false);
+    assert.equal(closedRoutesFilter(true), null);
+  });
+
+  test("a closed route ridden is drawn: the tile's date, or the visitor's local log", () => {
+    assert.equal(passes(closedRoutesFilter(false), 1, { closed: true, date: "2024-05-01" }), true);
+    assert.equal(passes(closedRoutesFilter(false, [1, 7]), 7, { closed: true }), true);
+    assert.equal(passes(closedRoutesFilter(false, [1, 7]), 8, { closed: true }), false);
+  });
+
+  test("a route line keeps to its own usage type", () => {
+    const special = userRouteLineFilter(2, false);
+    assert.equal(passes(special, 1, { usage_type: 2, closed: false }), true);
+    assert.equal(passes(special, 1, { usage_type: 0, closed: false }), false);
+    assert.equal(passes(special, 1, { usage_type: 2, closed: true }), false);
+    assert.equal(passes(userRouteLineFilter(2, true), 1, { usage_type: 2, closed: true }), true);
   });
 });

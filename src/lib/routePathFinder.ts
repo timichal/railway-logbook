@@ -72,6 +72,17 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
  * Europe, "JR lines or Non-JR lines" in Japan with the non-JR switch on — for the
  * message that says they do not connect the stations.
  */
+/**
+ * What a failed search adds when it left the closed lines out: someone logging a
+ * past trip over a line since closed is told where the switch is, rather than
+ * left to guess why the stations don't connect. Empty when they were searched.
+ */
+function closedLinesHint(options: PlannerOptions): string {
+  return options.includeClosed
+    ? ""
+    : ' Closed lines are searched only while "All closed lines" is switched on.';
+}
+
 function searchedLinesLabel(regionId: RegionId | null, options: PlannerOptions): string {
   const types: readonly UsageType[] =
     regionId && options.includeSpecial ? REGIONS[regionId].ordinaryUsageTypes : [0];
@@ -179,14 +190,26 @@ export async function findRoutePathBetweenStations(
 
     // Validate we found routes near all stations
     if (stops[0].routes.length === 0) {
-      return { routes: [], totalDistance: 0, error: "No routes found near starting station" };
+      return {
+        routes: [],
+        totalDistance: 0,
+        error: `No routes found near starting station.${closedLinesHint(options)}`,
+      };
     }
     if (stops[stops.length - 1].routes.length === 0) {
-      return { routes: [], totalDistance: 0, error: "No routes found near ending station" };
+      return {
+        routes: [],
+        totalDistance: 0,
+        error: `No routes found near ending station.${closedLinesHint(options)}`,
+      };
     }
     for (let i = 1; i < stops.length - 1; i++) {
       if (stops[i].routes.length === 0) {
-        return { routes: [], totalDistance: 0, error: `No routes found near via station ${i}` };
+        return {
+          routes: [],
+          totalDistance: 0,
+          error: `No routes found near via station ${i}.${closedLinesHint(options)}`,
+        };
       }
     }
 
@@ -221,7 +244,7 @@ export async function findRoutePathBetweenStations(
         return {
           routes: [],
           totalDistance: 0,
-          error: `No path found for segment ${i + 1}. The stations might not be connected by ${searchedLinesLabel(regionId, options)}. Try adding via stations to break up the journey.`,
+          error: `No path found for segment ${i + 1}. The stations might not be connected by ${searchedLinesLabel(regionId, options)}. Try adding via stations to break up the journey.${closedLinesHint(options)}`,
         };
       }
 

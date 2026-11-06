@@ -22,7 +22,12 @@ import type { RouteBounds } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints, compareText } from "@/lib/ui/adminListSort";
 
-type RouteFilterKey = "invalid" | "underRepair" | "unintendedBacktracking" | "withoutName";
+type RouteFilterKey =
+  | "invalid"
+  | "underRepair"
+  | "closed"
+  | "unintendedBacktracking"
+  | "withoutName";
 
 interface RouteFilter {
   key: RouteFilterKey;
@@ -37,11 +42,13 @@ interface RouteFilter {
 const ROUTE_FILTERS: RouteFilter[] = [
   // The two invalid filters split the failing routes between them: "invalid" is
   // the plain worklist, "under repair" the ones parked pending OSM works. Ticking
-  // both is how you see every invalid route.
+  // both is how you see every invalid route that still runs. A closed route is in
+  // neither: it is no longer recalculated, so there is nothing to fix.
   {
     key: "invalid",
     label: "Invalid",
-    predicate: (route) => route.is_valid === false && route.under_repair !== true,
+    predicate: (route) =>
+      route.is_valid === false && route.under_repair !== true && route.closed !== true,
     group: "invalid",
   },
   {
@@ -49,6 +56,11 @@ const ROUTE_FILTERS: RouteFilter[] = [
     label: "Under repair",
     predicate: (route) => route.is_valid === false && route.under_repair === true,
     group: "invalid",
+  },
+  {
+    key: "closed",
+    label: "Closed",
+    predicate: (route) => route.closed === true,
   },
   {
     key: "unintendedBacktracking",
@@ -78,6 +90,8 @@ function editFormFromRoute(route: AdminRouteDetail): EditRouteData {
     link_name: route.link_name || "",
     line_class: route.line_class,
     intended_backtracking: route.intended_backtracking,
+    closed: route.closed,
+    closed_on: route.closed_on ?? "",
   };
 }
 
@@ -283,6 +297,8 @@ export default function AdminRoutesTab({
           editForm.link_name || null,
           editForm.line_class,
           editForm.intended_backtracking,
+          editForm.closed,
+          editForm.closed_on || null,
         ),
       );
     } catch (error) {

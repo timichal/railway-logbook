@@ -35,6 +35,8 @@ export interface LocalRouteStatus {
   track_id: number;
   /** Ridden whole — logged complete, or partial stretches covering all of it. */
   complete: boolean;
+  /** The route is closed (railway_routes.closed), so a filter must let it through. */
+  closed: boolean;
 }
 
 export interface DataAccess {
@@ -57,6 +59,13 @@ export interface DataAccess {
    */
   getLocalRouteStatuses(): Promise<LocalRouteStatus[]>;
 
+  /**
+   * The routes the local log has rides on, read straight from localStorage with
+   * nothing to load: what keeps the visitor's closed rides on the map before the
+   * statuses arrive, or if they never do. Empty for the other two.
+   */
+  getLocalLoggedTrackIds(): number[];
+
   updateUserPreferences(selectedCountries: string[]): Promise<void>;
 }
 
@@ -78,6 +87,7 @@ function createDatabaseDataAccess(region: RegionId): DataAccess {
     getCoveredStretches: dbGetCoveredStretches,
     // The route tile already carries this user's visit status
     getLocalRouteStatuses: async () => [],
+    getLocalLoggedTrackIds: () => [],
     updateUserPreferences: dbUpdateUserPreferences,
   };
 }
@@ -137,8 +147,10 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
       // progress box showing full network totals over a map the None button had
       // just emptied.
       const counted = countedUsageTypes(region, shownUsageTypes);
+      // Never a closed route, as progressForUser
       const routes = allRoutes.filter(
         (route) =>
+          !route.closed &&
           counted.includes(route.usage_type) &&
           (selectedCountries === undefined ||
             (route.start_country &&
@@ -162,7 +174,10 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
       const allRoutes = await ensureRoutes();
       const completedIds = fullyRiddenTrackIds(allRoutes);
       // The routes the region counts as ordinary service, as progressByCountryForUser
-      const counted = allRoutes.filter((route) => isOrdinaryUsage(region, route.usage_type));
+      // (open ones only)
+      const counted = allRoutes.filter(
+        (route) => !route.closed && isOrdinaryUsage(region, route.usage_type),
+      );
 
       // Ridden against total km over some of them, rounded as the server rounds
       const kmOf = (routes: RouteSummary[]) => ({
@@ -213,12 +228,19 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
     },
 
     async getLocalRouteStatuses(): Promise<LocalRouteStatus[]> {
-      const complete = fullyRiddenTrackIds(await ensureRoutes());
+      const routes = await ensureRoutes();
+      const complete = fullyRiddenTrackIds(routes);
+      const closed = new Set(routes.filter((route) => route.closed).map((r) => r.track_id));
       const logged = new Set(localStore.getLoggedParts().map((part) => part.track_id));
       return Array.from(logged, (trackId) => ({
         track_id: trackId,
         complete: complete.has(trackId),
+        closed: closed.has(trackId),
       }));
+    },
+
+    getLocalLoggedTrackIds(): number[] {
+      return [...new Set(localStore.getLoggedParts().map((part) => part.track_id))];
     },
 
     async updateUserPreferences(selectedCountries: string[]): Promise<void> {
@@ -245,6 +267,7 @@ export function createPublicDataAccess(token: string, region: RegionId): DataAcc
     // The route tile is asked for the owner's status, and a visitor has no
     // local log of their own to overlay on it
     getLocalRouteStatuses: async () => [],
+    getLocalLoggedTrackIds: () => [],
 
     // The shared view is handed the owner's list by the server component, and
     // has nowhere to change it

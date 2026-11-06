@@ -4,12 +4,14 @@ import { planJourney } from "@/lib/routePathFinder";
 import { MAX_VIA_STATIONS } from "@/lib/shared/constants";
 
 /**
- * POST /api/v1/planner — { fromStationId, toStationId, viaStationIds?, includeSpecial? }.
+ * POST /api/v1/planner — { fromStationId, toStationId, viaStationIds?, includeSpecial?, includeClosed? }.
  *
  * `includeSpecial` (default false) lets the search ride, besides Regular routes,
  * those its region counts as ordinary (`ordinaryUsageTypes`) — the planner's
  * "Include Non-JR lines" switch in Japan. Enforced in the query, not trusted to the
  * client: Europe's Special routes are never in the network, whatever is asked.
+ * `includeClosed` (default false) lets it ride closed lines too, which the app asks
+ * for while its map shows every closed line (a past trip being logged).
  *
  * The search stays on the server for good: it needs Postgres and the in-memory
  * route graph, neither of which belongs on a phone. The answer carries the
@@ -45,13 +47,20 @@ export async function POST(request: Request): Promise<Response> {
       body.includeSpecial === undefined || body.includeSpecial === null
         ? false
         : requireBoolean(body, "includeSpecial");
+    const includeClosed =
+      body.includeClosed === undefined || body.includeClosed === null
+        ? false
+        : requireBoolean(body, "includeClosed");
     const stops = [fromStationId, ...viaStationIds, toStationId];
     if (stops.some((id, i) => i > 0 && id === stops[i - 1])) {
       throw new ApiError(400, "Consecutive stops must be different stations");
     }
 
     return jsonResponse(
-      await planJourney(fromStationId, toStationId, viaStationIds, { includeSpecial }),
+      await planJourney(fromStationId, toStationId, viaStationIds, {
+        includeSpecial,
+        includeClosed,
+      }),
     );
   });
 }

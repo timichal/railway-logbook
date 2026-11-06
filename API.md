@@ -166,7 +166,7 @@ a larger set.
 
 ## Journey planner
 
-`POST /planner` — `{ fromStationId, toStationId, viaStationIds?, includeSpecial? }` →
+`POST /planner` — `{ fromStationId, toStationId, viaStationIds?, includeSpecial?, includeClosed? }` →
 `{ routes, totalDistance, bounds, error? }`. No token: route data is public and the
 planner writes nothing.
 
@@ -178,6 +178,11 @@ where the region counts more than Regular (`hasOrdinaryNonRegular`). It is
 enforced by the server, not left to the client: Europe's Special routes are
 irregular services, never in the searched network whatever is asked, so there
 the flag changes nothing. Heritage routes are never searched.
+
+Closed lines (`closed` on a route) are searched only with `includeClosed`
+(boolean, default `false`). The app sends it while its map shows every closed
+line ("All closed lines"): that is how a past trip over a line since closed is
+planned. Route rows (`POST /routes/metadata`) carry `closed` and `closed_on`.
 
 **"No path found" is a 200 with an `error` string**, not an HTTP failure: the
 request was fine, the network simply doesn't connect those stations by

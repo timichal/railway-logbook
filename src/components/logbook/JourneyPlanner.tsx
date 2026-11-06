@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import IconButton from "@/components/ui/IconButton";
 import StationSearchInput from "@/components/ui/StationSearchInput";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
+import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { findRoutePathBetweenStations } from "@/lib/plannerActions";
 import { plural } from "@/lib/plural";
 import { useRegion } from "@/lib/regionContext";
@@ -43,6 +44,9 @@ export default function JourneyPlanner({
   // ordinary service there.
   const offersSpecial = hasOrdinaryNonRegular(regionId);
   const [includeSpecial, setIncludeSpecial] = useState(true);
+  // Closed lines are ridden while the map shows them all ("All closed lines" in Map
+  // & Stats): that is how a past trip over a line since closed gets planned
+  const { showClosed } = useLayerPrefs();
 
   const nextKeyRef = useRef(0);
   const newStop = (): Stop => ({ key: nextKeyRef.current++, station: null, query: "" });
@@ -138,7 +142,7 @@ export default function JourneyPlanner({
         Number(fromStation.id),
         Number(toStation.id),
         viaStations.map((s) => Number(s.id)),
-        { includeSpecial: offersSpecial && includeSpecial },
+        { includeSpecial: offersSpecial && includeSpecial, includeClosed: showClosed },
       );
       if (requestId !== pathRequestRef.current) return;
 
@@ -205,6 +209,13 @@ export default function JourneyPlanner({
   useEffect(() => {
     resetForm();
   }, [regionId]);
+
+  // Flipping "All closed lines" drops the result, as the Include switch below does:
+  // a plan over lines just hidden must not stay one tap from the selection
+  // biome-ignore lint/correctness/useExhaustiveDependencies: showClosed is the trigger; clearResult is redefined every render and must not re-run this.
+  useEffect(() => {
+    clearResult();
+  }, [showClosed]);
 
   // A new via goes last among the vias, i.e. just before To
   const addViaStation = () => {

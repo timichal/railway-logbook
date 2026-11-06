@@ -5,6 +5,7 @@ import type { CoveredStretch } from "../types";
 import { lineClassColorExpression } from "./layers";
 import { DASHES, OPACITIES, routeColors } from "./style";
 import {
+  closedRouteOpacityExpression,
   getUserRouteHeritageWidthExpression,
   getUserRouteWidthExpression,
 } from "./utils/userRouteStyling";
@@ -63,9 +64,10 @@ export const COVERAGE_LAYER_IDS: readonly string[] = COVERAGE_VARIANTS.map((v) =
 /**
  * The stretches as drawable GeoJSON.
  *
- * `line_class` and `usage_type` ride along because they drive the same colour and
- * width expressions the base route layer uses, so the overlay lines up with the line
- * underneath; the two countries drive the same filter. The coordinates are the
+ * `line_class`, `usage_type` and `closed` ride along because they drive the same
+ * colour, width and opacity expressions the base route layer uses, so the overlay
+ * lines up with the line underneath (a closed one faded as it is); the two
+ * countries drive the same filter. The coordinates are the
  * route's own vertices, unsimplified — anything less and the overlay visibly cuts
  * corners off the line it covers.
  */
@@ -78,6 +80,7 @@ export function coverageData(stretches: CoveredStretch[]): GeoJSON.FeatureCollec
         track_id: s.track_id,
         line_class: s.line_class,
         usage_type: s.usage_type,
+        closed: s.closed,
         start_country: s.start_country,
         end_country: s.end_country,
       },
@@ -131,7 +134,7 @@ export function createCoverageLayers(
     paint: {
       "line-color": lineClassColorExpression(routeColors(theme).visited),
       "line-width": variant.width,
-      "line-opacity": OPACITIES.defaultRoute,
+      "line-opacity": closedRouteOpacityExpression(OPACITIES.defaultRoute),
       ...("dash" in variant ? { "line-dasharray": [...variant.dash] } : {}),
     },
     filter: coverageFilter(variant.usageType, selectedCountries, shownTypes),

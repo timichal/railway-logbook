@@ -3,17 +3,22 @@ import { type UsageType, usageOptions } from "../constants";
 import type { ResolvedTheme } from "../theme/types";
 import type { LayerPrefs } from "./layerPrefs";
 import {
+  bothFilters,
   createPublicNotesLayer,
   createRailwayRoutesClickLayer,
   createRouteLineLayer,
   createScenicLinesLayer,
   createStationLabelsLayer,
   createStationsLayer,
-  type RailwayRoutesPaintConfig,
+  OPEN_ROUTES_FILTER,
   type RouteClickLayerConfig,
+  type RouteLineConfig,
+  routeLineFilter,
   usageTypeFilter,
 } from "./layers";
+import { OPACITIES } from "./style";
 import {
+  closedRouteOpacityExpression,
   getUserRouteClickBufferWidthExpression,
   getUserRouteColorExpression,
   getUserRouteHeritageWidthExpression,
@@ -31,30 +36,40 @@ import {
  */
 
 interface UserRouteLayerConfigs {
-  /** The solid Regular line. */
-  route: RailwayRoutesPaintConfig;
+  /**
+   * The solid Regular line. Each line's config hides the closed routes not ridden
+   * (`closedRoutesFilter` with the switch off), as the maps start out.
+   */
+  route: RouteLineConfig;
   /**
    * Dashed Special / dotted Heritage: same visit-status colours as the solid line,
    * rendered dashed / dotted. Their usage_type filter and hidden-by-default
    * visibility are baked into the factory; useLayerFilters toggles visibility.
    */
-  special: RailwayRoutesPaintConfig;
-  heritage: RailwayRoutesPaintConfig;
+  special: RouteLineConfig;
+  heritage: RouteLineConfig;
   clickBuffer: RouteClickLayerConfig;
 }
 
 export function userRouteLayerConfigs(theme: ResolvedTheme): UserRouteLayerConfigs {
   const colorExpression = getUserRouteColorExpression(theme);
   const widthExpression = getUserRouteWidthExpression();
+  const opacityExpression = closedRouteOpacityExpression(OPACITIES.defaultRoute);
+  const routesFilter = closedRoutesFilter(false);
   return {
-    route: { colorExpression, widthExpression },
-    special: { colorExpression, widthExpression },
-    heritage: { colorExpression, widthExpression: getUserRouteHeritageWidthExpression() },
+    route: { colorExpression, widthExpression, opacityExpression, routesFilter },
+    special: { colorExpression, widthExpression, opacityExpression, routesFilter },
+    heritage: {
+      colorExpression,
+      widthExpression: getUserRouteHeritageWidthExpression(),
+      opacityExpression,
+      routesFilter,
+    },
     // Regular only, as the lines start out; useLayerFilters widens it as the
     // switches reveal Heritage and Special
     clickBuffer: {
       widthExpression: getUserRouteClickBufferWidthExpression(),
-      filter: clickBufferFilter([0]),
+      filter: bothFilters(clickBufferFilter([0]), closedRoutesFilter(false)),
     },
   };
 }
@@ -113,6 +128,43 @@ export function clickBufferFilter(clickable: readonly UsageType[]): FilterSpecif
 }
 
 /**
+ * Which closed routes the user map draws: every one under "All closed lines",
+ * otherwise only those the map's owner has ridden. Null — no filter — when all
+ * are shown.
+ *
+ * Done on the client because the tile can't do it for every map: Martin's tile
+ * (the anonymous map) carries no rides, whose rides are known only in the
+ * browser. So a ride is read two ways, as the colour reads it: the tile's `date`
+ * where the tile is coloured by someone's rides (the session, a share token, the
+ * native app), and the anonymous visitor's ridden track ids (`localRiddenTrackIds`,
+ * from the localStorage log) where it isn't. Feature state, which colours the
+ * anonymous map, can't be read by a filter.
+ */
+export function closedRoutesFilter(
+  showClosed: boolean,
+  localRiddenTrackIds: readonly number[] = [],
+): FilterSpecification | null {
+  if (showClosed) return null;
+  const shown: FilterSpecification[] = [OPEN_ROUTES_FILTER, ["has", "date"]];
+  if (localRiddenTrackIds.length > 0) {
+    shown.push(["in", ["id"], ["literal", [...localRiddenTrackIds]]]);
+  }
+  return ["any", ...shown] as FilterSpecification;
+}
+
+/**
+ * The filter of one usage type's route line on the user map: that type, and the
+ * closed routes `closedRoutesFilter` lets through.
+ */
+export function userRouteLineFilter(
+  usageType: UsageType,
+  showClosed: boolean,
+  localRiddenTrackIds?: readonly number[],
+): FilterSpecification {
+  return routeLineFilter(usageType, closedRoutesFilter(showClosed, localRiddenTrackIds));
+}
+
+/**
  * The full layer stack of the user map, bottom to top. The click-buffer layer is
  * included on the read-only map too: it carries the hover popups (routes are
  * thin, and hovering the visible line alone is finicky), and nothing but the
@@ -124,6 +176,8 @@ export function createUserMapLayers(theme: ResolvedTheme = "light"): LayerSpecif
     // Under everything: a band the route lines are drawn over. Hidden until the
     // "Scenic lines" toggle shows it (useLayerFilters).
     createScenicLinesLayer(),
+    // Closed routes not ridden start out filtered away (in the configs), as "All
+    // closed lines" starts off; useLayerFilters applies the switch once loaded
     createRouteLineLayer(0, configs.route),
     createRouteLineLayer(1, configs.heritage),
     createRouteLineLayer(2, configs.special),

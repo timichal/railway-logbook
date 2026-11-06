@@ -21,6 +21,8 @@ import type { UserProgress } from "@/lib/shared/progress";
 import { countedUsageTypes, regionCountryCodes } from "@/lib/shared/regions";
 import { useResolvedTheme } from "@/lib/theme";
 
+const NO_TRACK_IDS: readonly number[] = [];
+
 /** A number per data access, for the route tiles' refresh signal. */
 const dataAccessIds = new WeakMap<DataAccess, number>();
 let lastDataAccessId = 0;
@@ -60,6 +62,12 @@ interface UseUserMapOptions {
    * switches — there they change what is drawn and nothing else.
    */
   progressFollowsLayers?: boolean;
+  /**
+   * An anonymous visitor's ridden routes, from their localStorage log
+   * (`useLocalRouteFeatureStates`): the closed ones among them stay on the map
+   * (`closedRoutesFilter`). Empty where the tile carries the rides.
+   */
+  localRiddenTrackIds?: readonly number[];
 }
 
 /**
@@ -77,6 +85,7 @@ export function useUserMap(
     coverageVersion = 0,
     lineHighlightHidden = false,
     progressFollowsLayers = true,
+    localRiddenTrackIds = NO_TRACK_IDS,
   }: UseUserMapOptions,
 ) {
   const region = useRegion();
@@ -249,6 +258,8 @@ export function useUserMap(
     // lines keeps them off regardless of what the other region left switched on.
     layerPrefs.showScenicLines && region.hasScenicHighlight,
     effectiveCountries,
+    layerPrefs.showClosed,
+    localRiddenTrackIds,
     mapLoaded,
   );
 

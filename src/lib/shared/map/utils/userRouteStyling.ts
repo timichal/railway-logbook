@@ -1,7 +1,15 @@
 import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
 import type { ResolvedTheme } from "../../theme/types";
 import { lineClassColorExpression } from "../layers";
-import { routeColors, WIDTHS } from "../style";
+import { OPACITIES, routeColors, WIDTHS } from "../style";
+
+/**
+ * A route line's opacity: `open` for a running line, faded for a closed one
+ * (OPACITIES.closedRoute). One condition, so no `all` (see below).
+ */
+export function closedRouteOpacityExpression(open: number): ExpressionSpecification {
+  return ["case", ["==", ["get", "closed"], true], OPACITIES.closedRoute, open];
+}
 
 /**
  * Get color expression for user railway routes based on visit status AND line class

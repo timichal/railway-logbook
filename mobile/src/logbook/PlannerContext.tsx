@@ -40,6 +40,7 @@ import {
 import * as api from "@/api/endpoints";
 import { useOnSessionEnd } from "@/auth/useOnSessionEnd";
 import { useHighlight } from "@/logbook/HighlightContext";
+import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import { useRegion } from "@/region/RegionContext";
 
 /** Whose highlight on the map is the planner's (`Highlight.ownerKey`). */
@@ -89,6 +90,7 @@ function stationId(station: Station): number {
 export function PlannerProvider({ children }: { children: ReactNode }): ReactNode {
   const { regionId } = useRegion();
   const { ownerKey, highlight, refit, clear: clearHighlight } = useHighlight();
+  const { showClosed } = useLayerPrefs();
 
   const [form, setForm] = useState<PlannerForm>(EMPTY_FORM);
   const [result, setResult] = useState<PlannerResult | null>(null);
@@ -132,6 +134,15 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
     reset();
   }, [regionId, reset]);
 
+  // Flipping "All closed lines" drops the answer, as the form's own switch does: a
+  // plan over lines just hidden must not stay one tap from the selection
+  const shownClosed = useRef(showClosed);
+  useEffect(() => {
+    if (shownClosed.current === showClosed) return;
+    shownClosed.current = showClosed;
+    dropResult();
+  }, [showClosed, dropResult]);
+
   useOnSessionEnd(reset);
 
   const highlightResult = useCallback(
@@ -169,6 +180,9 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
         toStationId: stationId(to),
         viaStationIds: vias.flatMap((s) => (s ? [stationId(s)] : [])),
         includeSpecial: hasOrdinaryNonRegular(regionId) && includeSpecial,
+        // Closed lines while the map shows them all, as on the web: how a past
+        // trip over a line since closed gets planned
+        includeClosed: showClosed,
       });
       if (request !== searchRef.current) return;
 
@@ -191,7 +205,7 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
     } finally {
       if (request === searchRef.current) setSearching(false);
     }
-  }, [form, regionId, dropResult, highlightResult]);
+  }, [form, regionId, showClosed, dropResult, highlightResult]);
 
   const showOnMap = useCallback((): void => {
     if (!result) return;
