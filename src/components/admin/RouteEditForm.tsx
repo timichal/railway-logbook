@@ -184,7 +184,7 @@ export default function RouteEditForm({
                 type="button"
                 onClick={onMarkInvalid}
                 disabled={isLoading}
-                className={`${btn("outlineDanger", "md")} w-full`}
+                className={`${btn("warning", "md")} w-full`}
               >
                 {busyAction === "markInvalid" ? "Marking..." : "Mark Route as Invalid"}
               </button>
