@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RouteEditForm, { type RouteEditAction } from "@/components/admin/RouteEditForm";
 import { type EditRouteData, NO_ROUTE_SUGGESTIONS } from "@/components/admin/RouteMetadataFields";
 import RoutesList from "@/components/admin/RoutesList";
@@ -23,6 +23,7 @@ import type { Region } from "@/lib/shared/regions";
 import type { RouteBounds } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints, compareText } from "@/lib/ui/adminListSort";
+import { useSingleFlight } from "@/lib/ui/useSingleFlight";
 
 type RouteFilterKey =
   | "invalid"
@@ -102,9 +103,11 @@ interface AdminRoutesTabProps {
   /** The selected route's detail, loaded by the page. */
   selectedRoute: AdminRouteDetail | null;
   selectedRouteLoading: boolean;
-  onSelectedRouteChange: React.Dispatch<React.SetStateAction<AdminRouteDetail | null>>;
-  /** Re-reads the selected route after a save; resolves the detail, or null if superseded. */
-  onReloadSelectedRoute: () => Promise<AdminRouteDetail | null>;
+  /**
+   * A write returned the route as stored: it replaces the selected route's detail
+   * if that is still this route. Returns whether it did.
+   */
+  onRouteStored: (route: AdminRouteDetail) => boolean;
   /** `focus` flies the map to the route once it has loaded. */
   onRouteSelect?: (routeId: number | null, options?: { focus?: boolean }) => void;
   /** A route was changed or deleted: the map's route tiles are stale. */
@@ -119,8 +122,7 @@ export default function AdminRoutesTab({
   selectedRouteId,
   selectedRoute,
   selectedRouteLoading,
-  onSelectedRouteChange,
-  onReloadSelectedRoute,
+  onRouteStored,
   onRouteSelect,
   onRoutesChanged,
   onEditGeometry,
@@ -131,9 +133,15 @@ export default function AdminRoutesTab({
   const region = useRegion();
   const regionId = region.id;
   const { showError, showSuccess } = useToast();
+  // One write at a time. The tag names the button's action, for its label, and
+  // the route it was started on, so a route selected meanwhile doesn't show it.
+  const { busy, running, run } = useSingleFlight<{
+    action: RouteEditAction;
+    trackId: number;
+  }>();
 
   const [routes, setRoutes] = useState<AdminRouteSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [checkedFilters, setCheckedFilters] = useState<ReadonlySet<RouteFilterKey>>(new Set());
@@ -153,18 +161,11 @@ export default function AdminRoutesTab({
   }
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [markInvalidConfirmOpen, setMarkInvalidConfirmOpen] = useState(false);
-  // Which button's action is running, for its label alone. `isLoading` disables
-  // them all, and is also set by any list reload, so it can't name the action.
-  // Keyed by route, so a route selected while another's action runs doesn't show it.
-  const [busyAction, setBusyAction] = useState<{
-    action: RouteEditAction;
-    trackId: number;
-  } | null>(null);
   const itemsPerPage = 100;
   const [editForm, setEditForm] = useState<EditRouteData | null>(null);
   // The form is filled once per route loaded, not on every change to its detail:
-  // the under-repair toggle patches the detail in place, and refilling then would
-  // throw away edits still in progress.
+  // the under-repair toggle and Mark Invalid replace the detail too, and refilling
+  // then would throw away edits still in progress.
   const [formRouteId, setFormRouteId] = useState<number | null>(null);
   const loadedRouteId = selectedRoute?.track_id ?? null;
   if (loadedRouteId !== formRouteId) {
@@ -174,14 +175,14 @@ export default function AdminRoutesTab({
 
   const loadRoutes = async () => {
     try {
-      setIsLoading(true);
+      setListLoading(true);
       const routesData = unwrap(await getAllRailwayRoutes(regionId));
       setRoutes(routesData);
     } catch (error) {
       console.error("Error loading routes:", error);
       showError(`Failed to load routes: ${actionErrorMessage(error)}`);
     } finally {
-      setIsLoading(false);
+      setListLoading(false);
     }
   };
 
@@ -287,176 +288,141 @@ export default function AdminRoutesTab({
     onRouteSelect?.(trackId, { focus: true });
   };
 
-  const handleSaveRoute = async () => {
-    if (!selectedRoute || !editForm) return;
-    const trackId = selectedRoute.track_id;
+  // What is current when a write comes back, which may be after the admin moved
+  // on: delete and duplicate change the selection only if theirs is still the
+  // selected route, and a copy joins the list only of the region it was made in.
+  const currentRef = useRef({ regionId, selectedRouteId });
+  currentRef.current = { regionId, selectedRouteId };
 
-    setIsLoading(true);
-    setBusyAction({ action: "save", trackId });
-    try {
-      try {
-        unwrap(
-          await updateRailwayRoute(
-            trackId,
-            editForm.name.trim() || null,
-            editForm.other_names,
-            editForm.from_station.trim(),
-            editForm.to_station.trim(),
-            editForm.description || null,
-            editForm.usage_type,
-            editForm.frequency,
-            editForm.link || null,
-            editForm.link_name || null,
-            editForm.line_class,
-            editForm.intended_backtracking,
-            editForm.closed,
-            editForm.closed_on || null,
-          ),
-        );
-      } catch (error) {
-        console.error("Error updating route:", error);
-        showError(`Failed to update route: ${actionErrorMessage(error)}`);
-        return;
-      }
-
-      // The save stands from here on, whatever happens to the reads below.
-      onRoutesChanged();
-      // Editing a route may add new tags or names, or drop the last use of one.
-      onSuggestionsChanged?.();
-      showSuccess("Route updated successfully!");
-
-      // Re-read the route rather than merging the form into it, so the detail shows
-      // what the server stored. One after the other, so the form stays disabled
-      // until both are in.
-      try {
-        // Null when another route was selected meanwhile, which has a detail of its own
-        const routeDetail = await onReloadSelectedRoute();
-        if (routeDetail) setEditForm(editFormFromRoute(routeDetail));
-      } catch (error) {
-        console.error("Error reloading route after save:", error);
-        showError(`Route saved, but reloading it failed: ${actionErrorMessage(error)}`);
-      }
-      await loadRoutes();
-    } finally {
-      setIsLoading(false);
-      setBusyAction(null);
-    }
+  // A write returns the route as stored, which goes into the list row and, while
+  // it is still selected, the detail: no read back, and no reload of the list.
+  const storeRoute = (route: AdminRouteDetail) => {
+    setRoutes((prev) => prev.map((row) => (row.track_id === route.track_id ? route : row)));
+    return onRouteStored(route);
   };
 
-  const handleToggleUnderRepair = async (underRepair: boolean) => {
+  const handleSaveRoute = () => {
+    if (!selectedRoute || !editForm) return;
+    const trackId = selectedRoute.track_id;
+    const form = editForm;
+
+    run(
+      "update route",
+      async () => {
+        const route = unwrap(
+          await updateRailwayRoute(
+            trackId,
+            form.name.trim() || null,
+            form.other_names,
+            form.from_station.trim(),
+            form.to_station.trim(),
+            form.description || null,
+            form.usage_type,
+            form.frequency,
+            form.link || null,
+            form.link_name || null,
+            form.line_class,
+            form.intended_backtracking,
+            form.closed,
+            form.closed_on || null,
+          ),
+        );
+        // The form shows what the server stored (trimmed, names deduplicated),
+        // unless another route was selected meanwhile, with a form of its own,
+        // or the admin typed on while it saved: the fields stay editable, and
+        // what was typed since is newer than the save.
+        if (storeRoute(route)) {
+          setEditForm((current) => (current === form ? editFormFromRoute(route) : current));
+        }
+        onRoutesChanged();
+        // Editing a route may add new tags or names, or drop the last use of one.
+        onSuggestionsChanged?.();
+        showSuccess("Route updated successfully!");
+      },
+      { action: "save", trackId },
+    );
+  };
+
+  const handleToggleUnderRepair = (underRepair: boolean) => {
     if (!selectedRoute) return;
     const trackId = selectedRoute.track_id;
 
-    try {
-      setIsLoading(true);
-      unwrap(await setRouteUnderRepair(trackId, underRepair));
-
-      onSelectedRouteChange((prev) =>
-        prev?.track_id === trackId ? { ...prev, under_repair: underRepair } : prev,
-      );
-      await loadRoutes();
-
+    run("update under repair flag", async () => {
+      storeRoute(unwrap(await setRouteUnderRepair(trackId, underRepair)));
       // Repaints the admin map: the flag decides violet vs grey.
       onRoutesChanged();
-
       showSuccess(
         underRepair ? "Route marked as under repair." : "Route no longer marked as under repair.",
       );
-    } catch (error) {
-      console.error("Error updating under repair flag:", error);
-      showError(`Failed to update under repair flag: ${actionErrorMessage(error)}`);
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
-  const handleDeleteRoute = async () => {
+  const handleDeleteRoute = () => {
     if (!selectedRoute) return;
     setDeleteConfirmOpen(true);
   };
 
-  const confirmDeleteRoute = async () => {
+  const confirmDeleteRoute = () => {
     if (!selectedRoute) return;
     setDeleteConfirmOpen(false);
+    const route = selectedRoute;
 
-    try {
-      setIsLoading(true);
-      setBusyAction({ action: "delete", trackId: selectedRoute.track_id });
-      unwrap(await deleteRailwayRoute(selectedRoute.track_id));
-
-      await loadRoutes();
-
-      onRouteSelect?.(null);
-      onRoutesChanged();
-
-      // Deleting a route may have removed the last use of a tag or name.
-      onSuggestionsChanged?.();
-
-      showSuccess(`Route "${routeLabel(selectedRoute)}" has been deleted successfully.`);
-    } catch (error) {
-      console.error("Error deleting route:", error);
-      showError(`Error deleting route: ${actionErrorMessage(error)}`);
-    } finally {
-      setIsLoading(false);
-      setBusyAction(null);
-    }
+    run(
+      "delete route",
+      async () => {
+        unwrap(await deleteRailwayRoute(route.track_id));
+        setRoutes((prev) => prev.filter((row) => row.track_id !== route.track_id));
+        if (currentRef.current.selectedRouteId === route.track_id) onRouteSelect?.(null);
+        onRoutesChanged();
+        // Deleting a route may have removed the last use of a tag or name.
+        onSuggestionsChanged?.();
+        showSuccess(`Route "${routeLabel(route)}" has been deleted successfully.`);
+      },
+      { action: "delete", trackId: route.track_id },
+    );
   };
 
-  const handleDuplicateRoute = async () => {
+  const handleDuplicateRoute = () => {
     if (!selectedRoute) return;
+    const route = selectedRoute;
+    const startRegionId = regionId;
 
-    try {
-      setIsLoading(true);
-      setBusyAction({ action: "duplicate", trackId: selectedRoute.track_id });
-      const newTrackId = unwrap(await duplicateRailwayRoute(selectedRoute.track_id));
-
-      await loadRoutes();
-
-      // Select the new copy so the admin can immediately edit it.
-      onRouteSelect?.(newTrackId);
-
-      onRoutesChanged();
-
-      showSuccess(`Route "${routeLabel(selectedRoute)}" duplicated successfully.`);
-    } catch (error) {
-      console.error("Error duplicating route:", error);
-      showError(`Error duplicating route: ${actionErrorMessage(error)}`);
-    } finally {
-      setIsLoading(false);
-      setBusyAction(null);
-    }
+    run(
+      "duplicate route",
+      async () => {
+        const copy = unwrap(await duplicateRailwayRoute(route.track_id));
+        // A list reloaded meanwhile (a region switch and back) may have it already
+        if (currentRef.current.regionId === startRegionId) {
+          setRoutes((prev) =>
+            prev.some((row) => row.track_id === copy.track_id) ? prev : [...prev, copy],
+          );
+        }
+        // Select the new copy so the admin can immediately edit it.
+        if (currentRef.current.selectedRouteId === route.track_id) {
+          onRouteSelect?.(copy.track_id);
+        }
+        onRoutesChanged();
+        showSuccess(`Route "${routeLabel(route)}" duplicated successfully.`);
+      },
+      { action: "duplicate", trackId: route.track_id },
+    );
   };
 
-  const confirmMarkInvalid = async () => {
+  const confirmMarkInvalid = () => {
     if (!selectedRoute) return;
     setMarkInvalidConfirmOpen(false);
     const trackId = selectedRoute.track_id;
 
-    try {
-      setIsLoading(true);
-      setBusyAction({ action: "markInvalid", trackId: selectedRoute.track_id });
-      unwrap(await markRouteInvalid(trackId));
-
-      // Repaints the admin map (grey) and its km counter.
-      onRoutesChanged();
-      showSuccess("Route marked as invalid.");
-
-      // Re-read for the stored error message. The form is filled once per route,
-      // so edits still in progress survive this.
-      try {
-        await onReloadSelectedRoute();
-      } catch (error) {
-        console.error("Error reloading route after marking it invalid:", error);
-        showError(`Route marked invalid, but reloading it failed: ${actionErrorMessage(error)}`);
-      }
-      await loadRoutes();
-    } catch (error) {
-      console.error("Error marking route invalid:", error);
-      showError(`Failed to mark route invalid: ${actionErrorMessage(error)}`);
-    } finally {
-      setIsLoading(false);
-      setBusyAction(null);
-    }
+    run(
+      "mark route invalid",
+      async () => {
+        storeRoute(unwrap(await markRouteInvalid(trackId)));
+        // Repaints the admin map (grey) and its km counter.
+        onRoutesChanged();
+        showSuccess("Route marked as invalid.");
+      },
+      { action: "markInvalid", trackId },
+    );
   };
 
   // How the dialogs and toasts name the route: where lines are named (Japan), two
@@ -510,7 +476,7 @@ It becomes valid again only by re-picking its geometry or a successful recalcula
           totalRoutes={routes.length}
           filters={filterOptions}
           hasRouteNames={region.hasRouteNames}
-          isLoading={isLoading && !selectedRoute}
+          isLoading={listLoading && !selectedRoute}
           selectedRouteId={selectedRouteId}
           selectedRouteLoading={selectedRouteLoading}
           searchQuery={searchQuery}
@@ -525,10 +491,12 @@ It becomes valid again only by re-picking its geometry or a successful recalcula
         <RouteEditForm
           selectedRoute={selectedRoute}
           editForm={editForm}
-          // With no route loaded the form has no buttons, and only that load matters
-          isLoading={selectedRoute ? isLoading : selectedRouteLoading}
+          // With no route loaded the form has no buttons, and only that load matters.
+          // The list loading keeps them disabled too: a write patched into the list
+          // would be overwritten by the older rows it brings.
+          isLoading={selectedRoute ? busy || listLoading : selectedRouteLoading}
           busyAction={
-            busyAction && busyAction.trackId === selectedRoute?.track_id ? busyAction.action : null
+            running && running.trackId === selectedRoute?.track_id ? running.action : null
           }
           suggestions={suggestions}
           onEditFormChange={setEditForm}

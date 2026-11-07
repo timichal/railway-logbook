@@ -60,8 +60,8 @@ interface AdminCreateRouteTabProps {
   onSaveRoute?: (routeData: SaveRouteData) => Promise<void>;
   /** Set while an existing route's geometry is re-picked instead of a route created. */
   editingGeometry: EditingGeometry | null;
-  /** Called with the saved path once a new geometry is saved; the sidebar ends the edit and clears the form. */
-  onGeometryEditComplete?: (saved: PathPreview) => void;
+  /** Called with the route as stored once a new geometry is saved; the sidebar ends the edit and clears the form. */
+  onGeometryEditComplete?: (route: AdminRouteDetail) => void;
   onCancelGeometryEdit?: () => void;
   suggestions?: RouteSuggestions;
   onSuggestionsChanged?: () => void;
@@ -105,7 +105,7 @@ export default function AdminCreateRouteTab({
     if (!editingGeometry || !previewRoute) return;
     await run("update the route geometry", async () => {
       // With a track id, saveRailwayRoute updates the geometry and ignores the metadata
-      unwrap(
+      const route = unwrap(
         await saveRailwayRoute(
           EMPTY_FORM,
           {
@@ -119,7 +119,7 @@ export default function AdminCreateRouteTab({
         ),
       );
       showSuccess("Route geometry updated successfully!");
-      onGeometryEditComplete?.(previewRoute);
+      onGeometryEditComplete?.(route);
     });
   };
 

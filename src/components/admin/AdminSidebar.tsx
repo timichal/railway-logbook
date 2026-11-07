@@ -6,7 +6,7 @@ import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
 import AdminScenicTab, { type EditingScenicLine } from "@/components/admin/AdminScenicTab";
 import { NO_ROUTE_SUGGESTIONS } from "@/components/admin/RouteMetadataFields";
-import { actionErrorMessage, unwrap } from "@/lib/actionResult";
+import { unwrap } from "@/lib/actionResult";
 import {
   type AdminRouteDetail,
   getRouteSuggestions,
@@ -15,7 +15,6 @@ import {
 import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
 import type { RouteBounds } from "@/lib/shared/types";
-import { useToast } from "@/lib/toast";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
 export type AdminTab = "routes" | "create" | "scenic" | "notes";
@@ -39,9 +38,11 @@ interface AdminSidebarProps {
   /** The selected route's detail, loaded by the page (the map reads it too). */
   selectedRoute: AdminRouteDetail | null;
   selectedRouteLoading: boolean;
-  onSelectedRouteChange: React.Dispatch<React.SetStateAction<AdminRouteDetail | null>>;
-  /** Re-reads the selected route after a save; resolves the detail, or null if superseded. */
-  onReloadSelectedRoute: () => Promise<AdminRouteDetail | null>;
+  /**
+   * A write returned the route as stored: it replaces the selected route's detail
+   * if that is still this route. Returns whether it did.
+   */
+  onRouteStored: (route: AdminRouteDetail) => boolean;
   /** `focus` flies the map to the route once it has loaded. */
   onRouteSelect?: (routeId: number | null, options?: { focus?: boolean }) => void;
   /** The create form's points. Owned by the page, which fills them from map clicks. */
@@ -75,8 +76,7 @@ export default function AdminSidebar({
   selectedRouteId,
   selectedRoute,
   selectedRouteLoading,
-  onSelectedRouteChange,
-  onReloadSelectedRoute,
+  onRouteStored,
   onRouteSelect,
   createFormCoordinates,
   onCreateFormCoordinatesChange,
@@ -97,7 +97,6 @@ export default function AdminSidebar({
   onScenicLineSelect,
   onScenicLinesChanged,
 }: AdminSidebarProps) {
-  const { showError } = useToast();
   const region = useRegion();
   const [suggestions, setSuggestions] = useState(NO_ROUTE_SUGGESTIONS);
 
@@ -178,8 +177,7 @@ export default function AdminSidebar({
             selectedRouteId={selectedRouteId}
             selectedRoute={selectedRoute}
             selectedRouteLoading={selectedRouteLoading}
-            onSelectedRouteChange={onSelectedRouteChange}
-            onReloadSelectedRoute={onReloadSelectedRoute}
+            onRouteStored={onRouteStored}
             onRouteSelect={onRouteSelect}
             onRoutesChanged={onRoutesChanged}
             onEditGeometry={handleEditGeometry}
@@ -196,28 +194,13 @@ export default function AdminSidebar({
             previewRoute={previewRoute}
             onSaveRoute={onSaveRoute}
             editingGeometry={editingGeometry}
-            onGeometryEditComplete={(saved) => {
-              const trackId = editingGeometry?.track_id;
+            onGeometryEditComplete={(route) => {
               endGeometryEdit();
               onRoutesChanged();
-              // The new points go into the loaded detail at once: a second Edit
-              // Geometry starts from them, and must not wait for (or, if it fails,
-              // miss) the reload below.
-              onSelectedRouteChange((prev) =>
-                prev && prev.track_id === trackId
-                  ? {
-                      ...prev,
-                      starting_coordinate: saved.startCoordinate,
-                      ending_coordinate: saved.endCoordinate,
-                    }
-                  : prev,
-              );
-              // The route stays selected, and the re-pick changed its length and
-              // validity: the banner and the map's length box must follow.
-              onReloadSelectedRoute().catch((error) => {
-                console.error("Error reloading route after geometry edit:", error);
-                showError(`Route saved, but reloading it failed: ${actionErrorMessage(error)}`);
-              });
+              // The route stays selected, and the re-pick changed its points,
+              // length and validity: the banner, the map's length box and a
+              // second Edit Geometry all follow the route as stored.
+              onRouteStored(route);
             }}
             onCancelGeometryEdit={handleCancelGeometryEdit}
             suggestions={suggestions}

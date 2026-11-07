@@ -163,17 +163,25 @@ export async function getRouteSuggestions(): Promise<ActionResult<RouteSuggestio
   });
 }
 
+/**
+ * The columns of an `AdminRouteDetail`. The writes the route editor makes return
+ * them (`RETURNING`), so the editor shows what was stored without reading it back.
+ */
+const ROUTE_DETAIL_COLUMNS = `
+  track_id, name, other_names, from_station, to_station, description, usage_type, frequency, link, link_name, line_class,
+  ${boundsSql("geometry")} as bounds, length_km,
+  ${lngLatSql("starting_coordinate")} as starting_coordinate,
+  ${lngLatSql("ending_coordinate")} as ending_coordinate,
+  is_valid, error_message, under_repair, closed, closed_on,
+  intended_backtracking, has_backtracking
+`;
+
 /** Get a single railway route by track_id. */
 export async function getRailwayRoute(trackId: number): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
     const result = await pool.query<AdminRouteDetail>(
       `
-    SELECT track_id, name, other_names, from_station, to_station, description, usage_type, frequency, link, link_name, line_class,
-           ${boundsSql("geometry")} as bounds, length_km,
-           ${lngLatSql("starting_coordinate")} as starting_coordinate,
-           ${lngLatSql("ending_coordinate")} as ending_coordinate,
-           is_valid, error_message, under_repair, closed, closed_on,
-           intended_backtracking, has_backtracking
+    SELECT ${ROUTE_DETAIL_COLUMNS}
     FROM railway_routes
     WHERE track_id = $1
   `,
@@ -368,7 +376,8 @@ async function reprojectCoveredRanges(
 }
 
 /**
- * Create a new route OR update existing route geometry
+ * Create a new route OR update existing route geometry. Returns the route as
+ * stored, line class included.
  * @param trackId - If provided, updates geometry only. If omitted, creates new route.
  * @param startCoordinate - Exact start coordinate [lng, lat]
  * @param endCoordinate - Exact end coordinate [lng, lat]
@@ -379,12 +388,12 @@ export async function saveRailwayRoute(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
   trackId?: number,
-): Promise<ActionResult<number>> {
+): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
     // The write, the line_class reclassification and the station-proximity
     // refresh are one change: a failure between them would leave the route at
     // the default 'branch', or the user map showing stations no route reaches.
-    const savedTrackId = await withTransaction(async (client) => {
+    const saved = await withTransaction(async (client) => {
       // The pathfinder's coordinates, already truncated to the click points and merged
       const geometryWKT = coordinatesToWKT(pathResult.coordinates);
       const startPointWKT = pointToWKT(startCoordinate);
@@ -523,15 +532,20 @@ export async function saveRailwayRoute(
         stationIds: stationsOnOldGeometry,
       });
 
-      return id;
+      // Read last, after the reclassification has set the line class
+      const stored = await client.query<AdminRouteDetail>(
+        `SELECT ${ROUTE_DETAIL_COLUMNS} FROM railway_routes WHERE track_id = $1`,
+        [id],
+      );
+      return stored.rows[0];
     });
     // An update writes the geometry only, so routeData carries no name for it
     console.log(
       trackId
         ? `Updated geometry of railway route ${trackId}`
-        : `Saved railway route ${savedTrackId}: ${routeData.name.trim() || `${routeData.from_station} ⟷ ${routeData.to_station}`}`,
+        : `Saved railway route ${saved.track_id}: ${routeData.name.trim() || `${routeData.from_station} ⟷ ${routeData.to_station}`}`,
     );
-    return savedTrackId;
+    return saved;
   });
 }
 
@@ -560,19 +574,20 @@ export async function updateRailwayRoute(
   intendedBacktracking: boolean,
   closed: boolean,
   closedOn: string | null,
-): Promise<ActionResult<void>> {
+): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
     const { from, to } = requiredStations(fromStation, toStation, "A route");
     const lineNames = routeLineNames(name, otherNames);
     const routeLinkValues = routeLink(link, linkName);
     const closure = routeClosure(closed, closedOn);
-    const result = await pool.query(
+    const result = await pool.query<AdminRouteDetail>(
       `
     UPDATE railway_routes
     SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
         link = $8, link_name = $12, line_class = $9, intended_backtracking = $10, other_names = $11,
         closed = $13, closed_on = $14, under_repair = under_repair AND NOT $13
     WHERE track_id = $1
+    RETURNING ${ROUTE_DETAIL_COLUMNS}
   `,
       [
         trackId,
@@ -593,9 +608,11 @@ export async function updateRailwayRoute(
     );
 
     // Deleted since it was opened (another tab, a split finished elsewhere)
-    if (result.rowCount === 0) {
+    const row = result.rows[0];
+    if (!row) {
       throw new ValidationError("Route not found");
     }
+    return row;
   });
 }
 
@@ -615,22 +632,25 @@ export async function updateRailwayRoute(
 export async function setRouteUnderRepair(
   trackId: number,
   underRepair: boolean,
-): Promise<ActionResult<void>> {
+): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
-    const result = await pool.query(
+    const result = await pool.query<AdminRouteDetail>(
       `
     UPDATE railway_routes
     SET under_repair = $2
     WHERE track_id = $1 AND ($2 = FALSE OR (is_valid = FALSE AND NOT closed))
+    RETURNING ${ROUTE_DETAIL_COLUMNS}
   `,
       [trackId, underRepair],
     );
 
-    if (result.rowCount === 0) {
+    const row = result.rows[0];
+    if (!row) {
       throw new ValidationError(
         "Route not found, or it is valid or closed and cannot be marked under repair",
       );
     }
+    return row;
   });
 }
 
@@ -643,22 +663,25 @@ export async function setRouteUnderRepair(
  * A closed route is refused, as `markAllRoutesInvalid` passes it by: it is never
  * recalculated and is in no "Invalid" worklist, so the mark would do nothing.
  */
-export async function markRouteInvalid(trackId: number): Promise<ActionResult<void>> {
+export async function markRouteInvalid(trackId: number): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
-    const result = await pool.query(
+    const result = await pool.query<AdminRouteDetail>(
       `
     UPDATE railway_routes
     SET is_valid = FALSE, error_message = 'Marked invalid by admin'
     WHERE track_id = $1 AND is_valid AND NOT closed
+    RETURNING ${ROUTE_DETAIL_COLUMNS}
   `,
       [trackId],
     );
 
-    if (result.rowCount === 0) {
+    const row = result.rows[0];
+    if (!row) {
       throw new ValidationError(
         "Route not found, or it is already invalid or closed and cannot be marked invalid",
       );
     }
+    return row;
   });
 }
 
@@ -671,7 +694,7 @@ export async function markRouteInvalid(trackId: number): Promise<ActionResult<vo
  * original route are cloned to point at the new track_id, preserving each
  * journey's partial flag and ridden stretch — the geometry is identical, so the
  * covered fractions still mean the same thing. Runs in a transaction. Returns the
- * new track_id.
+ * new route.
  *
  * Every user's logs are cloned, not just the acting admin's, because duplication
  * is how a route is split: A–C grows a branch at B, so the copy is made and the
@@ -681,12 +704,14 @@ export async function markRouteInvalid(trackId: number): Promise<ActionResult<vo
  * deletes it from the half it doesn't reach (`reprojectCoveredRanges`). Finish
  * the split — a duplicate left un-split double-counts.
  */
-export async function duplicateRailwayRoute(trackId: number): Promise<ActionResult<number>> {
+export async function duplicateRailwayRoute(
+  trackId: number,
+): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {
-    const newTrackId = await withTransaction(async (client) => {
+    const copy = await withTransaction(async (client) => {
       // Clone the route row (track_id is SERIAL; created_at/updated_at default;
       // the Web Mercator geom columns are repopulated by the INSERT triggers).
-      const insertRoute = await client.query(
+      const insertRoute = await client.query<AdminRouteDetail>(
         `
       INSERT INTO railway_routes (
         name, other_names, from_station, to_station, description, usage_type, frequency, link,
@@ -703,7 +728,7 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
         closed, closed_on
       FROM railway_routes
       WHERE track_id = $1
-      RETURNING track_id
+      RETURNING ${ROUTE_DETAIL_COLUMNS}
       `,
         [trackId],
       );
@@ -712,7 +737,7 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
         throw new ValidationError(`Route with track_id ${trackId} not found`);
       }
 
-      const id = insertRoute.rows[0].track_id as number;
+      const route = insertRoute.rows[0];
 
       // Clone the user logs, remapping track_id to the new route.
       await client.query(
@@ -722,13 +747,13 @@ export async function duplicateRailwayRoute(trackId: number): Promise<ActionResu
       FROM user_logged_parts
       WHERE track_id = $1
       `,
-        [trackId, id],
+        [trackId, route.track_id],
       );
 
-      return id;
+      return route;
     });
-    console.log("Duplicated railway route", trackId, "→", newTrackId);
-    return newTrackId;
+    console.log("Duplicated railway route", trackId, "→", copy.track_id);
+    return copy;
   });
 }
 

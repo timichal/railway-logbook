@@ -177,17 +177,16 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setSelectedRouteId(null);
   }, [selectedRoute.error, showError]);
 
-  // Re-reads the selected route after a save changed it on the server (validity,
-  // length, the under-repair flag), keeping the loaded detail on screen meanwhile.
-  // Resolves the detail it applied, or null if the selection moved on first.
-  const reloadSelectedRoute = useCallback(async (): Promise<AdminRouteDetail | null> => {
-    const trackId = selectedRouteIdRef.current;
-    if (trackId === null) return null;
-    const detail = unwrap(await getRailwayRoute(trackId));
-    if (selectedRouteIdRef.current !== trackId) return null;
-    setSelectedRouteDetail(detail);
-    return detail;
-  }, [setSelectedRouteDetail]);
+  // Shows a route as a write stored it, if it is still the selected one: the
+  // selection may have moved on while the write was in flight.
+  const applyStoredRoute = useCallback(
+    (detail: AdminRouteDetail): boolean => {
+      if (selectedRouteIdRef.current !== detail.track_id) return false;
+      setSelectedRouteDetail(detail);
+      return true;
+    },
+    [setSelectedRouteDetail],
+  );
 
   // Resizable sidebar hook
   const { sidebarWidth, isResizing, handleMouseDown, sidebarOpen, toggleSidebar } =
@@ -231,7 +230,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   // so a failed save leaves everything typed into it in place, to be retried.
   const handleSaveRoute = async (routeData: SaveRouteData) => {
     if (!previewRoute) throw new Error("No route preview to save");
-    const trackId = unwrap(
+    const { track_id: trackId } = unwrap(
       await saveRailwayRoute(
         routeData,
         {
@@ -300,8 +299,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       selectedRouteId={selectedRouteId}
       selectedRoute={selectedRouteDetail}
       selectedRouteLoading={selectedRouteLoading}
-      onSelectedRouteChange={setSelectedRouteDetail}
-      onReloadSelectedRoute={reloadSelectedRoute}
+      onRouteStored={applyStoredRoute}
       onRouteSelect={handleRouteSelect}
       createFormCoordinates={createFormCoordinates}
       onCreateFormCoordinatesChange={setCreateFormCoordinates}
