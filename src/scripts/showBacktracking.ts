@@ -3,7 +3,8 @@
  * List the routes that backtrack unintentionally, each with an OpenRailwayMap
  * link to where they double back. Same set as the admin routes list's
  * "Unintended backtracking" filter: `has_backtracking` set,
- * `intended_backtracking` not.
+ * `intended_backtracking` not, and the route neither invalid nor closed: their
+ * flag is left over from whenever they last recalculated.
  *
  * The flag says a route turns back on itself somewhere along its length, but not
  * where — that is all the recalculation stores. So this re-runs the same
@@ -32,7 +33,6 @@ interface RouteRow {
   track_id: number;
   from_station: string;
   to_station: string;
-  is_valid: boolean | null;
   start_lng: string;
   start_lat: string;
   end_lng: string;
@@ -98,18 +98,18 @@ async function showBacktracking(): Promise<void> {
         track_id,
         from_station,
         to_station,
-        is_valid,
         ST_X(starting_coordinate) as start_lng,
         ST_Y(starting_coordinate) as start_lat,
         ST_X(ending_coordinate) as end_lng,
         ST_Y(ending_coordinate) as end_lat
       FROM railway_routes
       WHERE has_backtracking AND NOT intended_backtracking AND NOT closed
+        AND is_valid IS NOT FALSE
       ORDER BY from_station, to_station, track_id
     `);
 
     if (routes.rows.length === 0) {
-      console.log("No routes are flagged as backtracking unintentionally.");
+      console.log("No valid, open routes are flagged as backtracking unintentionally.");
       return;
     }
 
@@ -163,12 +163,7 @@ async function showBacktracking(): Promise<void> {
       console.log("");
       console.log(`=== Could not be searched (${unresolved.length}) ===`);
       for (const { route, reason } of unresolved) {
-        // A route already marked invalid can't be searched and isn't news: its
-        // backtracking flag is left over from whenever it last recalculated.
-        const invalid = route.is_valid === false ? " (route is marked invalid)" : "";
-        console.log(
-          `  [${route.track_id}] ${route.from_station} → ${route.to_station}: ${reason}${invalid}`,
-        );
+        console.log(`  [${route.track_id}] ${route.from_station} → ${route.to_station}: ${reason}`);
       }
     }
   } catch (error) {

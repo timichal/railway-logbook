@@ -65,10 +65,16 @@ const ROUTE_FILTERS: RouteFilter[] = [
     label: "Closed",
     predicate: (route) => route.closed === true,
   },
+  // Invalid and closed routes are left out: their has_backtracking flag is left
+  // over from whenever they last recalculated. Same set as `showBacktracking`.
   {
     key: "unintendedBacktracking",
     label: "Unintended backtracking",
-    predicate: (route) => route.has_backtracking === true && route.intended_backtracking !== true,
+    predicate: (route) =>
+      route.has_backtracking === true &&
+      route.intended_backtracking !== true &&
+      route.is_valid !== false &&
+      route.closed !== true,
   },
   // The worklist of routes still waiting for a name; only regions that name
   // their lines have one to miss.
