@@ -9,15 +9,20 @@ import type { AdminRouteDetail, RouteSuggestions } from "@/lib/adminRouteActions
 import { useRegion } from "@/lib/regionContext";
 import { btn } from "@/lib/ui/buttonStyles";
 
+/** What the form is busy with: each button names its own action while it runs. */
+export type RouteEditAction = "save" | "delete" | "duplicate" | "markInvalid";
+
 interface RouteEditFormProps {
   selectedRoute: AdminRouteDetail | null;
   editForm: EditRouteData | null;
   isLoading: boolean;
+  busyAction: RouteEditAction | null;
   suggestions: RouteSuggestions;
   onEditFormChange: (form: EditRouteData) => void;
   onSave: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onMarkInvalid: () => void;
   onEditGeometry: (route: AdminRouteDetail) => void;
   onToggleUnderRepair: (underRepair: boolean) => void;
   onUnselect: () => void;
@@ -27,11 +32,13 @@ export default function RouteEditForm({
   selectedRoute,
   editForm,
   isLoading,
+  busyAction,
   suggestions,
   onEditFormChange,
   onSave,
   onDelete,
   onDuplicate,
+  onMarkInvalid,
   onEditGeometry,
   onToggleUnderRepair,
   onUnselect,
@@ -140,7 +147,7 @@ export default function RouteEditForm({
               disabled={isLoading || incomplete}
               className={`${btn("primary", "md")} w-full`}
             >
-              {isLoading ? "Saving..." : "Save Metadata"}
+              {busyAction === "save" ? "Saving..." : "Save Metadata"}
             </button>
 
             <button
@@ -158,7 +165,7 @@ export default function RouteEditForm({
               disabled={isLoading}
               className={`${btn("danger", "md")} w-full`}
             >
-              {isLoading ? "Deleting..." : "Delete Route"}
+              {busyAction === "delete" ? "Deleting..." : "Delete Route"}
             </button>
 
             <button
@@ -167,8 +174,21 @@ export default function RouteEditForm({
               disabled={isLoading}
               className={`${btn("neutral", "md")} w-full`}
             >
-              Duplicate Route
+              {busyAction === "duplicate" ? "Duplicating..." : "Duplicate Route"}
             </button>
+
+            {/* One way: a route becomes valid again only by a geometry re-pick or a
+                recalculation. Not on a closed one, which is never recalculated. */}
+            {selectedRoute.is_valid !== false && !closed && (
+              <button
+                type="button"
+                onClick={onMarkInvalid}
+                disabled={isLoading}
+                className={`${btn("outlineDanger", "md")} w-full`}
+              >
+                {busyAction === "markInvalid" ? "Marking..." : "Mark Route as Invalid"}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -635,6 +635,34 @@ export async function setRouteUnderRepair(
 }
 
 /**
+ * Mark a valid route invalid by hand, so it joins the "Invalid" worklist (e.g.
+ * its path still routes but no longer follows the real line).
+ *
+ * One way only: there is no "mark valid". A route becomes valid again the way
+ * any invalid one does, by a geometry re-pick or a successful recalculation.
+ * A closed route is refused, as `markAllRoutesInvalid` passes it by: it is never
+ * recalculated and is in no "Invalid" worklist, so the mark would do nothing.
+ */
+export async function markRouteInvalid(trackId: number): Promise<ActionResult<void>> {
+  return asAdmin(async () => {
+    const result = await pool.query(
+      `
+    UPDATE railway_routes
+    SET is_valid = FALSE, error_message = 'Marked invalid by admin'
+    WHERE track_id = $1 AND is_valid AND NOT closed
+  `,
+      [trackId],
+    );
+
+    if (result.rowCount === 0) {
+      throw new ValidationError(
+        "Route not found, or it is already invalid or closed and cannot be marked invalid",
+      );
+    }
+  });
+}
+
+/**
  * Duplicate a railway route, including its user logs.
  *
  * The copy is an exact clone of the original geometry/metadata, except that
