@@ -238,11 +238,11 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
       </div>
 
       <div>
-        <span className={GROUP_LABEL}>Frequency Tags</span>
+        <span className={GROUP_LABEL}>Usage Tags</span>
         <TagInput
-          value={value.frequency}
+          value={value.usage_tags}
           availableTags={suggestions.tags}
-          onChange={(frequency) => set({ frequency })}
+          onChange={(usage_tags) => set({ usage_tags })}
         />
       </div>
 

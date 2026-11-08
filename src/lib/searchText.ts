@@ -32,7 +32,7 @@ const NOT_KANA_VOICING_MARK = /[^\P{M}\u3099\u309a]/gu;
 /**
  * Text lower-cased and without diacritics, so "chuo" finds "Chūō" and "lodz" finds
  * "Łódź" — but with its spaces and hyphens, for free-form text where they carry
- * meaning ("1-2x daily" is not "12x daily"): the frequency tags. Compatibility
+ * meaning ("1-2x daily" is not "12x daily"): the usage tags. Compatibility
  * forms fold too (NFKD), as unaccent folds them: full-width "３" is "3", "№" is
  * "no" — lower-cased after decomposing, so what NFKD makes a capital folds as well.
  */

@@ -66,7 +66,7 @@ CREATE TABLE railway_routes (
     to_station TEXT NOT NULL, -- Ending station/location
     description TEXT, -- Route description
     usage_type INTEGER NOT NULL CHECK (usage_type IN (0, 1, 2)), -- Usage type (0=Regular, 1=Heritage, 2=Special; 1 & 2 are non-regular)
-    frequency TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], -- Frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
+    usage_tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], -- Usage tags (Daily, Seasonal, S-Bahn, Regional, Tram-train, Diversion…)
     link TEXT, -- External URL/link for the route
     -- What the link is called where the route shows it (the heritage railway's
     -- name), in place of the default "Website". Only beside a link

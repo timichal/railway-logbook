@@ -35,7 +35,7 @@ function buildRouteFromSelected(route: SelectedRoute): RailwayRoute {
     to_station: route.to_station,
     description: route.description,
     usage_type: 0 as RailwayRoute["usage_type"],
-    frequency: [],
+    usage_tags: [],
     link: route.link ?? null,
     geometry: "",
     length_km: route.length_km,

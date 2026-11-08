@@ -33,7 +33,7 @@ export interface SaveRouteData {
   to_station: string;
   description: string;
   usage_type: UsageType;
-  frequency: string[];
+  usage_tags: string[];
   link: string;
   /** What the link is shown as, in place of "Website"; "" for the default. */
   link_name: string;
@@ -69,7 +69,7 @@ export type AdminRouteSummary = {
  * form, the map focus and the geometry re-pick need.
  */
 export type AdminRouteDetail = AdminRouteSummary & {
-  frequency: string[];
+  usage_tags: string[];
   link: string | null;
   link_name: string | null;
   /** When a closed route's service ended (YYYY-MM-DD), where known. */
@@ -129,14 +129,14 @@ export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionRes
 
 /** What the route editor's tag inputs suggest: values already in use on some route. */
 export type RouteSuggestions = {
-  /** The frequency tags. */
+  /** The usage tags. */
   tags: string[];
   /** Every line name, a route's own or one it shares, for the Other lines field. */
   lineNames: string[];
 };
 
 /**
- * The frequency tags and line names currently in use across all routes. Neither
+ * The usage tags and line names currently in use across all routes. Neither
  * has a table of its own: one exists exactly as long as some route carries it, so
  * dropping the last use removes it implicitly. Not per region — names are only
  * ever set where the region names its lines.
@@ -147,7 +147,7 @@ export async function getRouteSuggestions(): Promise<ActionResult<RouteSuggestio
     SELECT
       ARRAY(
         SELECT DISTINCT tag
-        FROM railway_routes, unnest(frequency) AS tag
+        FROM railway_routes, unnest(usage_tags) AS tag
         WHERE tag IS NOT NULL AND tag <> ''
         ORDER BY tag
       ) AS tags,
@@ -168,7 +168,7 @@ export async function getRouteSuggestions(): Promise<ActionResult<RouteSuggestio
  * them (`RETURNING`), so the editor shows what was stored without reading it back.
  */
 const ROUTE_DETAIL_COLUMNS = `
-  track_id, name, other_names, from_station, to_station, description, usage_type, frequency, link, link_name, line_class,
+  track_id, name, other_names, from_station, to_station, description, usage_type, usage_tags, link, link_name, line_class,
   ${boundsSql("geometry")} as bounds, length_km,
   ${lngLatSql("starting_coordinate")} as starting_coordinate,
   ${lngLatSql("ending_coordinate")} as ending_coordinate,
@@ -447,7 +447,7 @@ export async function saveRailwayRoute(
         const { closed, closedOn } = routeClosure(routeData.closed, routeData.closed_on);
         queryStr = `
         INSERT INTO railway_routes (
-          name, other_names, from_station, to_station, description, usage_type, frequency, link,
+          name, other_names, from_station, to_station, description, usage_type, usage_tags, link,
           link_name, geometry, length_km, start_country, end_country,
           starting_coordinate, ending_coordinate,
           is_valid, intended_backtracking, has_backtracking, closed, closed_on
@@ -466,7 +466,7 @@ export async function saveRailwayRoute(
           to,
           routeData.description || null,
           routeData.usage_type,
-          routeData.frequency || [],
+          routeData.usage_tags || [],
           link,
           geometryWKT,
           startCountry,
@@ -567,7 +567,7 @@ export async function updateRailwayRoute(
   toStation: string,
   description: string | null,
   usageType: UsageType,
-  frequency: string[],
+  usageTags: string[],
   link: string | null,
   linkName: string | null,
   lineClass: LineClass,
@@ -583,7 +583,7 @@ export async function updateRailwayRoute(
     const result = await pool.query<AdminRouteDetail>(
       `
     UPDATE railway_routes
-    SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, frequency = $7,
+    SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, usage_tags = $7,
         link = $8, link_name = $12, line_class = $9, intended_backtracking = $10, other_names = $11,
         closed = $13, closed_on = $14, under_repair = under_repair AND NOT $13
     WHERE track_id = $1
@@ -596,7 +596,7 @@ export async function updateRailwayRoute(
         to,
         description,
         usageType,
-        frequency || [],
+        usageTags || [],
         routeLinkValues.link,
         lineClass,
         intendedBacktracking,
@@ -715,7 +715,7 @@ export async function duplicateRailwayRoute(
       const insertRoute = await client.query<AdminRouteDetail>(
         `
       INSERT INTO railway_routes (
-        name, other_names, from_station, to_station, description, usage_type, frequency, link,
+        name, other_names, from_station, to_station, description, usage_type, usage_tags, link,
         link_name, line_class, geometry, length_km, start_country, end_country,
         starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking,
@@ -723,7 +723,7 @@ export async function duplicateRailwayRoute(
       )
       SELECT
         name, other_names, from_station || ' [duplicate]', to_station || ' [duplicate]', description,
-        usage_type, frequency, link, link_name, line_class, geometry, length_km,
+        usage_type, usage_tags, link, link_name, line_class, geometry, length_km,
         start_country, end_country, starting_coordinate, ending_coordinate,
         is_valid, error_message, under_repair, intended_backtracking, has_backtracking,
         closed, closed_on

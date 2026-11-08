@@ -237,7 +237,7 @@ RETURNS bytea AS $$
             rr.to_station,
             rr.description,
             rr.usage_type,
-            rr.frequency,
+            rr.usage_tags,
             rr.link,
             rr.link_name,
             rr.line_class,

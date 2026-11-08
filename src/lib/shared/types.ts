@@ -81,7 +81,7 @@ export type RailwayRoute = {
   to_station: string;
   description: string | null;
   usage_type: UsageType; // 0=Regular, 1=Heritage, 2=Special
-  frequency: string[]; // Array of frequency tags (Daily, Weekdays, Weekends, Once a week, Seasonal)
+  usage_tags: string[]; // Usage tags: service character (Daily, Seasonal, S-Bahn, Regional, Tram-train, Diversion…)
   link?: string | null; // External URL/link for the route
   link_name?: string | null; // What the link is shown as, in place of "Website"
   line_class?: LineClass | null; // Line classification: highspeed, main, branch

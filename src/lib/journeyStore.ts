@@ -61,7 +61,7 @@ const deletedRoute = (trackId: number): RailwayRoute => ({
   to_station: "no longer on the map",
   description: null,
   usage_type: 0,
-  frequency: [],
+  usage_tags: [],
   geometry: "",
 });
 

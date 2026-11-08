@@ -71,7 +71,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 
 **For Users:**
 
-- Interactive map with badge-style hover popups (color-coded: usage type, frequency)
+- Interactive map with badge-style hover popups (color-coded: usage type, usage tags)
 - **Region switch** - Europe and Japan are two coordinate-locked views of one shared backend; the map, station search, journey planner, journey list and statistics all follow the region you pick
 - **Country filtering** - Filter routes across 21 European countries (AT, BE, CZ, DK, EE, ES, FI, FR, DE, IT, LV, LT, LU, NL, NO, PL, SE, SK, SI, CH) with Select All/None options
 - Three-way color coding:
@@ -89,7 +89,7 @@ OSM PBF → Filter → GeoJSON → Prune → PostgreSQL → MapLibre
 - Create routes by clicking railway_parts on map
 - Automatic pathfinding between points (50km buffer, BFS algorithm)
 - **Automatic country detection** - Routes automatically tagged with start/end countries (worldwide support)
-- Assign usage type (Regular/Seasonal/Special) and frequency tags
+- Assign usage type (Regular/Seasonal/Special) and usage tags
 - Draw scenic lines the same way (two points on the track, From and To), independent of routes
 - Edit route geometry to fix invalid routes after OSM updates
 - Delete routes with security checks

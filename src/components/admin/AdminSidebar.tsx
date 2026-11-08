@@ -100,7 +100,7 @@ export default function AdminSidebar({
   const region = useRegion();
   const [suggestions, setSuggestions] = useState(NO_ROUTE_SUGGESTIONS);
 
-  // Load the in-use frequency tags and line names for autocomplete, and keep them
+  // Load the in-use usage tags and line names for autocomplete, and keep them
   // fresh after edits.
   const loadSuggestions = useCallback(async () => {
     try {

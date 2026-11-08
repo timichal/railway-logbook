@@ -34,7 +34,7 @@ const EMPTY_FORM: SaveRouteData = {
   description: "",
   // Default to Regular — the overwhelming majority of routes, saves a click
   usage_type: 0,
-  frequency: [],
+  usage_tags: [],
   link: "",
   link_name: "",
   intended_backtracking: false,

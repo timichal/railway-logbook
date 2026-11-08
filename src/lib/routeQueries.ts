@@ -331,7 +331,7 @@ export async function routeMetadataByIds(trackIds: number[]): Promise<RailwayRou
       to_station,
       description,
       usage_type,
-      frequency,
+      usage_tags,
       link,
       link_name,
       line_class,

@@ -198,7 +198,7 @@ export const COLORS = {
   badges: {
     highspeed: { color: "#ffffff", bgColor: "#ef4444" },
     main: { color: "#1e40af", bgColor: "#bfdbfe" },
-    frequency: { color: "#166534", bgColor: "#dcfce7" },
+    usageTag: { color: "#166534", bgColor: "#dcfce7" },
     // A closed route: grey, as the line no longer runs
     closed: { color: "#374151", bgColor: "#e5e7eb" },
   },
@@ -211,7 +211,7 @@ export const COLORS = {
   badgesDark: {
     highspeed: { color: "#fecaca", bgColor: "#991b1b" },
     main: { color: "#dbeafe", bgColor: "#1e40af" },
-    frequency: { color: "#bbf7d0", bgColor: "#14532d" },
+    usageTag: { color: "#bbf7d0", bgColor: "#14532d" },
     closed: { color: "#e5e7eb", bgColor: "#374151" },
   },
 } as const;

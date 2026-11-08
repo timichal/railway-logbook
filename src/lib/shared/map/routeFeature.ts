@@ -14,7 +14,7 @@ import { COLORS } from "./style";
  * The web app renders these as HTML spans in a MapLibre popup
  * (`utils/tooltipFormatting.ts`); the native app renders them as `<View>`s in a
  * bottom sheet. The decisions are the same in both — which badges a route earns,
- * what colour each one is, how a Postgres `TEXT[]` of frequency tags comes apart,
+ * what colour each one is, how a Postgres `TEXT[]` of usage tags comes apart,
  * and whether the line's name or its endpoints lead the heading — and they are the
  * kind of decision that quietly diverges once it is written twice. So they live
  * here and the two renderers are left with nothing but markup.
@@ -48,14 +48,14 @@ export interface RouteFeatureProperties extends RouteTitleProperties {
   usage_type: UsageType;
   line_class?: LineClass;
   /**
-   * The frequency tags. A tile serialises a Postgres `TEXT[]` as
+   * The usage tags. A tile serialises a Postgres `TEXT[]` as
    * `{Daily,"Winter break"}`; the HTTP API sends the same column as a JSON array, and
    * a route feature built from `POST /routes/metadata` rather than from a tile
    * carries that. Both are accepted so neither client has to re-serialise one into
    * the other — a round trip that a tag containing a comma or a quote would not
    * survive.
    */
-  frequency?: string | string[];
+  usage_tags?: string | string[];
   /** A closed route (railway_routes.closed), and when, where known (YYYY-MM-DD). */
   closed?: boolean;
   closed_on?: string | null;
@@ -97,7 +97,7 @@ export function routeLinkLabel(linkName: unknown): string {
 /**
  * Decode a Postgres array literal (`{Daily,"Winter break"}`) into its elements.
  *
- * `frequency` is a `TEXT[]`, but MVT carries only scalar values, so `ST_AsMVT`
+ * `usage_tags` is a `TEXT[]`, but MVT carries only scalar values, so `ST_AsMVT`
  * hands the whole array over as its text representation and the tile property
  * arrives as that literal. Splitting it on commas loses any tag that contains
  * one — Postgres quotes exactly those — so the quoting is honoured here instead:
@@ -149,9 +149,9 @@ export function parsePgTextArray(literal: string): string[] {
 }
 
 /**
- * A route's `TEXT[]` property (frequency tags, other line names), from either shape
+ * A route's `TEXT[]` property (usage tags, other line names), from either shape
  * it arrives in: the tile's Postgres array literal (`parsePgTextArray`), or the JSON
- * array the HTTP API sends (see `RouteFeatureProperties.frequency`), which is
+ * array the HTTP API sends (see `RouteFeatureProperties.usage_tags`), which is
  * already the answer. Empty and non-string elements are dropped.
  */
 export function parseTextArray(value: unknown): string[] {
@@ -168,9 +168,9 @@ const LINE_CLASS_BADGE: Partial<Record<LineClass, BadgeColors>> = {
   main: { ...COLORS.badges.main, dark: COLORS.badgesDark.main },
 };
 
-const FREQUENCY_BADGE: BadgeColors = {
-  ...COLORS.badges.frequency,
-  dark: COLORS.badgesDark.frequency,
+const USAGE_TAG_BADGE: BadgeColors = {
+  ...COLORS.badges.usageTag,
+  dark: COLORS.badgesDark.usageTag,
 };
 
 const CLOSED_BADGE: BadgeColors = {
@@ -190,7 +190,7 @@ export function closedLabel(closedOn: unknown): string {
 /**
  * Every badge a route earns, in the order they are shown: closed (first, as it
  * says the rest no longer holds), line class (unless branch, the unremarkable
- * default), usage type, then one per frequency tag. Usage types are labelled per
+ * default), usage type, then one per usage tag. Usage types are labelled per
  * region — Japan calls them JR / non-JR lines.
  */
 export function routeBadges(properties: RouteFeatureProperties, regionId: RegionId): RouteBadge[] {
@@ -210,8 +210,8 @@ export function routeBadges(properties: RouteFeatureProperties, regionId: Region
     ...getUsageBadgeColors(properties.usage_type),
   });
 
-  for (const tag of parseTextArray(properties.frequency)) {
-    badges.push({ label: tag, ...FREQUENCY_BADGE });
+  for (const tag of parseTextArray(properties.usage_tags)) {
+    badges.push({ label: tag, ...USAGE_TAG_BADGE });
   }
 
   return badges;

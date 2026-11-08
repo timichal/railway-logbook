@@ -2,7 +2,7 @@
  * Railway usage types. The axis is "what system is it, and how is it published?":
  * 0 = Regular — in the official national timetable / route planner, published in
  *     advance. Any frequency counts (even a once-a-day summer-Saturday-only train);
- *     rarity is captured by frequency tags, not by this field. Counts toward stats
+ *     rarity is captured by usage tags, not by this field. Counts toward stats
  *     and the journey planner.
  * 1 = Heritage & tourist — its own line, outside the national timetable, published
  *     through the operator's own channels. Museum and preserved railways, but also
@@ -10,7 +10,7 @@
  *     may run daily to a dependable published schedule — the discriminator is the
  *     separate system and the separate timetable, not the age of the stock or how
  *     reliable the service is. Service character (daily, seasonal, weekends-only,
- *     winter break) belongs in the frequency tags. Drawn dotted; revealed by the
+ *     winter break) belongs in the usage tags. Drawn dotted; revealed by the
  *     "Show heritage & tourist lines" toggle.
  * 2 = Special — national infrastructure, but irregular ad-hoc passenger use:
  *     diversions during engineering works, festival/anniversary runs, marketed
