@@ -21,6 +21,7 @@ route is recalculated independently of every other one.
 `recalculateAllRoutes` runs a fixed set of workers over the route list
 (`runPool`, `scripts/lib/runPool.ts`), each pulling the next route off a shared
 index and writing its own `UPDATE`:
+
 - **`DEFAULT_RECALC_CONCURRENCY` = 4 routes at a time.** This needs a `Pool`, not
   a `Client`: node-pg serialises concurrent queries on a single connection, so
   workers sharing one would just queue behind each other. Both scripts build the

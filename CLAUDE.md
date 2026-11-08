@@ -3,6 +3,7 @@
 Guidance for Claude Code working in this repo. This file holds the commands and the rules that cut across the codebase. Each area keeps its own notes in a CLAUDE.md beside its code, which loads when you read a file there. The reasoning behind each rule lives in the code comments of the file it points to; read those before changing the behaviour.
 
 **Area notes.** Read the matching file first when you change an area from outside its directory:
+
 - `src/lib/shared/map/CLAUDE.md`: what the map draws (styling, paint-expression rules, basemap, highlights), for both apps
 - `src/lib/map/CLAUDE.md`: the web map (lifecycle, popups, touch interactions, fit-to)
 - `src/components/CLAUDE.md`: UI (dark mode tokens, button styles, modals, bottom sheet, drafts, Map & Stats). Also covers `src/lib/ui/`, `src/lib/theme/` and `src/app/globals.css`.
@@ -64,6 +65,7 @@ Prerequisites: Osmium Tool (`conda install conda-forge::osmium-tool`), Node, Doc
 ## Data model (Postgres 18 + PostGIS 3.6)
 
 Schema in `database/init/01-schema.sql`. What the columns don't tell you:
+
 - **Type parsers** (`dbConfig.ts`, global to `pg`): NUMERIC arrives as a JS number, DATE as its `YYYY-MM-DD` string, and BIGINT as a string (OSM ids are handled as strings). Cast a `count(*)` to `::int` where it is read.
 - **Every `pg` pool is made by `createPool`** (`db.ts`), which attaches the `error` listener. Without it, an idle connection dying takes the process down.
 - `users.email` is stored `lower(btrim(...))`, folded in SQL on every write and lookup, and held there by a CHECK.
@@ -91,6 +93,7 @@ Schema in `database/init/01-schema.sql`. What the columns don't tell you:
 Europe and Japan are two views of one backend. A region is a **bounding box**: the map's `maxBounds`, and the filter in every query that must not leak the other network. Filter always through `regionContainsSql(region, point)` with a **point** column, never a line. There is no `region` column. The user map's routes need no bbox, because the `selected_countries` tile filter already separates the regions. A journey belongs to a region when it logged a route there, a trip when any of its journeys did; one with no routes yet belongs to every region. Region-scoped endpoints take the region explicitly.
 
 **Per-region flags keep the differences declarative. Never write `region.id === "japan"`.**
+
 - **`hasRouteNames`** (Japan): every route carries a line name, which leads its title everywhere (`routeTitle`). The map search also searches lines. Lines and stations are searched by **one** server action (`searchMap`, the admin's `searchAdminMap`, both over `searchMapByName`), because Next runs a client's server actions one at a time.
   - **A route can be on several lines** (`other_names`, "Also part of"): where named lines share a stretch, it is one route, ridden and counted once. `name` is the line it is called by. It is the admin's choice and never derived. Line membership always goes through `lineMembership.ts` (`routeLinesSql`, `onLineSql`), **never `name` alone**. Other names need a `name` (CHECK), and `routeLineNames` drops any that equal the name or another once folded (`foldForSearch`). Parallel _tracks_ of different kinds stay separate routes.
 - **`hasScenicHighlight`**: the user map's scenic toggle and the admin's Scenic tab.
@@ -118,6 +121,7 @@ The selected region lives in a cookie (`REGION_COOKIE`), read by server componen
 ## Two transports, one set of queries
 
 User-scoped queries live in plain server-only modules taking a `userId` (`progressQueries.ts`, `journeyQueries.ts`, `tripQueries.ts`, `preferencesQueries.ts`, plus the user-less `routeQueries.ts`, `authQueries.ts`, `routePathFinder.ts`). Three thin callers resolve who is asking and delegate: the `*Actions.ts` modules (session), `publicMapActions.ts` (share token), and the `src/app/api/v1` handlers (bearer, for the native app only; see `API.md`).
+
 - **A route handler never imports a `"use server"` module, and a query taking a user id is never exported from one.** Every export of a `"use server"` file is a client-callable endpoint. Where a needed query sits inside an action, lift it out. Shared input checks for the admin actions live in `adminValidation.ts` for the same reason.
 - **Errors**: queries throw `ValidationError` (→ 400), `NotFoundError` (→ 404) or `RateLimitError` (→ 429, with `Retry-After`) from `errors.ts`. Anything else is an opaque 500, so no Postgres text reaches a client. A production build replaces the message of anything thrown out of a server function, so actions wrap with `asActionResult` to _return_ `{ error }` (`asUser` / `asAdmin` apply it). The client re-throws with `unwrap` and shows the error through `actionErrorMessage(error, fallback)`. **A Biome GritQL plugin** (`biome-plugins/unwrapActions.grit`) requires every call into `@/lib/admin*Actions`, `journeyActions` or `tripActions` to be `unwrap(await action(…))` or `action(…).then(unwrap)`. When editing the plugin, look imports up among the module's top-level items (`$program <: JsModule(items=$items)`), never with `$program <: contains` (lint goes from 2s to 19s).
 - `/api/v1`: bearer auth with the same secret as the cookie, which a handler never reads. `region` is explicit everywhere and **never defaults**.
@@ -125,6 +129,7 @@ User-scoped queries live in plain server-only modules taking a `userId` (`progre
 ## Vector tiles and sharing
 
 Martin (port 3001) serves `railway_routes_tile` (`selected_countries` filter, no user), `railway_parts_tile`, `stations_tile` (every station, admin map), `public_stations_tile` (`near_route` only, user map), `public_notes_tile` (`Usage` notes, text + source only) and `scenic_lines_tile`.
+
 - **Nothing Martin publishes may depend on who is asking.** Martin answers anyone, with no session in sight.
 - **`railway_routes_mvt`, the tile coloured by someone's rides, must never be added to `martin/configuration.yml`.** It is served by `api/tiles/railway_routes/[z]/[x]/[y]`, which resolves whose rides on every tile: `?share=<token>` (only while sharing is on), else a bearer token, else the session cookie. A missing or dead credential is a 401/404, never an uncoloured tile that would pass for an unridden map. The client never names a user (`createRailwayRoutesSource({ rides: "session" | { shareToken } })`).
 - **`admin_notes_tile` is kept out of Martin too**: `api/tiles/admin_notes/...` checks the admin session on every tile. These two and `api/session` are the only route handlers that read the cookie (`lib/api/tiles.ts`), and they answer through `mvtResponse`, **uncompressed**: Caddy compresses them, and Next (16.4.5+) strips a handler's own `Content-Encoding`, so a tile gzipped in the app reaches MapLibre still gzipped.

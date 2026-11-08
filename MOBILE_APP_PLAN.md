@@ -165,6 +165,7 @@ Most of Phase 0's effort was not the map. Phase 2 pays this again on a fresh
 project, so it is recorded here rather than in the deleted spike.
 
 **iOS, on the Mac:**
+
 1. **Xcode** from the App Store; launch once to accept the licence and install
    components. Then `xcode-select --install`.
 2. **CocoaPods**: `brew install cocoapods`. **Node 20+**: `brew install node`.
@@ -175,6 +176,7 @@ project, so it is recorded here rather than in the deleted spike.
    device; its provisioning profile expires after 7 days.
 
 **Android, on the Mac (Apple Silicon):**
+
 1. `brew install --cask android-studio`, launch once, take the wizard's defaults
    (SDK + platform tools + an image under `~/Library/Android/sdk`).
 2. **JDK 17** — `brew install openjdk@17`. **Not** the JDK Android Studio bundles:
@@ -196,6 +198,7 @@ project, so it is recorded here rather than in the deleted spike.
    emulates and is unusable). Boot it, then `npx expo run:android`.
 
 **Traps that cost real time:**
+
 - **The first _device_ build cannot be done by `expo run:ios`.** A simulator build
   needs no provisioning profile, so a project that has only ever run on the simulator
   has none — and Xcode will not create one, or register the phone with the team,
@@ -274,6 +277,7 @@ The split is sharper than it looks, and it is favourable. Phase 0 confirmed the
 
 Plain data, style objects, or pure logic — no DOM, no browser. What ported now
 lives in `src/lib/shared/`, the only part of the web app `@shared/*` reaches:
+
 - `src/lib/shared/map/style.ts` — `COLORS`, `WIDTHS`, `CIRCLES`, `LABELS`, `OPACITIES`.
   The single source of truth stays the single source of truth.
 - `src/lib/shared/map/userMapLayers.ts` — the layer stack and paint configs. Same JSON
@@ -432,7 +436,6 @@ One thing to know for Phase 2: a **station id can be negative**. An OSM area
 station is stored under a negated id, so `fromStationId` is validated as non-zero
 rather than positive.
 
-
 ### Phase 2 — App shell — **DONE**
 
 The Expo app lives in **`mobile/`**: expo-router navigation, login and register
@@ -450,6 +453,7 @@ workspace would hoist the two into one tree, which is the thing to avoid.
 The app imports the web app's modules directly rather than copying them, so
 `style.ts` stays the single source of truth that "Ports nearly verbatim" above
 assumes. Two pieces make it work, and both are load-bearing:
+
 - **`metro.config.js`** adds `src/lib` to `watchFolders` (Metro will not read a
   file outside the project root otherwise) and blocks **exactly one** directory:
   the parent `node_modules`. Blocking it is what stops Metro resolving the web
@@ -485,6 +489,7 @@ filter, the region's own list where it does not).
 | `app/`                         | `index` (the fallback route), `(auth)/login`, `(auth)/register`, `(tabs)/map`, `(tabs)/logbook`, `(tabs)/settings`                                                                                                              |
 
 Three decisions worth not re-deriving:
+
 - **The refresh is single-flight.** Three requests firing at once on a cold start
   would otherwise send three refreshes, and since each one issues a _new_ pair,
   the last write would win and the other two replies would be discarded — leaving
@@ -593,6 +598,7 @@ Phase 2 chose to import the web app's `src/lib` rather than copy it, so that
 paid, and it needed a refactor **on the web side** before any of it could be
 imported. Three things blocked it, and the fixes are now invariants (they are
 written up under "`src/lib/shared/` is shared" in `CLAUDE.md`):
+
 - **The tile host.** `map/index.ts` computed it from `window.location` at module
   load, which in React Native is a `window` with no `location` — so importing
   that module at all was fatal, not merely wrong. The source factories moved to
@@ -795,6 +801,7 @@ the binding inserts children in order, a variant's casing mounted before its own
 layer still lands underneath it.
 
 Three smaller ones:
+
 - **`GeoJSONSource`, not `ShapeSource`.** The latter is rnmapbox's name; here the
   prop is `data`, not `shape`.
 - **A tile is cached by URL, so the log version is spent as `cacheBuster`.** Visit
@@ -817,6 +824,7 @@ Three smaller ones:
 
 Three more pieces moved into the shared set, on the same terms as the highlights —
 **a shared module first, then two mechanisms** — and one query gained a column.
+
 - **`src/lib/shared/map/coverageLayer.ts`** is what the ridden-stretch overlay _is_: the
   GeoJSON the stretches are drawn from, the Regular-only + selected-countries filter it
   repeats off the route layer, and the layer itself. `useCoverageOverlay` is what is
@@ -883,6 +891,7 @@ The first run of the second half, and of the 09-25 bearer tile. Routes are colou
 (the header reaches the tile handler), the coverage overlay stacks under the
 highlights, and the planner loop works from search to logged journey. Four bugs, all
 fixed the same day and **not yet re-run**:
+
 - **A changed `tiles` prop is never used.** On iOS `MLRNVectorSourceComponentView`
   stores the new templates on `MLRNVectorSource`, whose `makeSource` reads them only
   in `addToMap` — once, when the source is first added. So the country filter never
@@ -985,6 +994,7 @@ Building iOS locally on the Mac with Xcode is the plan; **EAS Build** (cloud
 compilation) and **EAS Submit** remain a working fallback and are what you would
 need if the Mac went away. Local is faster than round-tripping to a cloud builder
 and costs nothing.
+
 - **Development builds are mandatory, not optional** — Expo Go can never run this
   app. See "Getting the tooling to run".
 - Testing on your own iPhone needs only a **free** Apple ID. The $99/year Apple
@@ -1043,6 +1053,7 @@ Europe and Japan are bounding boxes and the tile volumes behave for each.
 
 Newest last. One line per session: what moved, and what the next session should
 pick up. Keep it short — the phase sections carry the detail.
+
 - **2026-08-27 — Phase 0, start to finish.** Verified the library landscape
   against the real packages and corrected six wrong assumptions in this plan.
   Built the spike, then ran it on a physical iPhone and an Android emulator.
