@@ -32,12 +32,10 @@ describe("routeLink", () => {
     });
   });
 
-  test("a blank name is the default", () => {
-    assert.deepEqual(routeLink("https://example.com", "  "), {
-      link: "https://example.com",
-      linkName: null,
-    });
-    assert.equal(routeLink("https://example.com", null).linkName, null);
+  test("a link needs a name", () => {
+    assert.throws(() => routeLink("https://example.com", "  "), ValidationError);
+    assert.throws(() => routeLink("https://example.com", ""), ValidationError);
+    assert.throws(() => routeLink("https://example.com", null), ValidationError);
   });
 
   test("no name without a link", () => {

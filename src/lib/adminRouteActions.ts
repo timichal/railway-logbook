@@ -35,7 +35,7 @@ export interface SaveRouteData {
   usage_type: UsageType;
   usage_tags: string[];
   link: string;
-  /** What the link is shown as, in place of "Website"; "" for the default. */
+  /** What the link is shown as; required with a link, "" without one (`routeLink`). */
   link_name: string;
   intended_backtracking: boolean;
   /** No passenger service any more (see railway_routes.closed). */

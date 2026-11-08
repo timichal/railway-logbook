@@ -19,13 +19,17 @@ export type EditRouteData = SaveRouteData & { line_class: LineClass };
 export const NO_ROUTE_SUGGESTIONS: RouteSuggestions = { tags: [], lineNames: [] };
 
 /**
- * Whether a form's required fields are filled — the endpoints, and the name where
- * the region names its lines. Trimmed, as the save trims them: a name of spaces
- * would otherwise enable Save and be stored as an empty string.
+ * Whether a form's required fields are filled — the endpoints, the name where the
+ * region names its lines, and the link name where there is a link (`routeLink`).
+ * Trimmed, as the save trims them: a name of spaces would otherwise enable Save
+ * and be stored as an empty string.
  */
 export function routeMetadataIncomplete(value: SaveRouteData, hasRouteNames: boolean): boolean {
   return (
-    !value.from_station.trim() || !value.to_station.trim() || (hasRouteNames && !value.name.trim())
+    !value.from_station.trim() ||
+    !value.to_station.trim() ||
+    (hasRouteNames && !value.name.trim()) ||
+    (!!value.link.trim() && !value.link_name.trim())
   );
 }
 
@@ -208,13 +212,14 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
       />
       {/* Shown in place of "Website" wherever the route offers its link — the
           heritage railway's name, say, which then needn't be in the description.
-          Off while there is no link, since the save drops a name without one. */}
+          Required with a link (`routeLink`), off without one, since the save
+          drops a name without a link. */}
       <TextField
         id={`${idPrefix}-link-name`}
-        label="Link name"
+        label={value.link.trim() ? "Link name *" : "Link name"}
         value={value.link_name}
         onChange={(link_name) => set({ link_name })}
-        placeholder="Website"
+        placeholder="Operator or railway name"
         disabled={!value.link.trim()}
       />
 

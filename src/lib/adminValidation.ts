@@ -22,16 +22,21 @@ export function requiredStations(
 }
 
 /**
- * A route's link and the name it is shown under, trimmed, blanks as NULL. The name
- * goes with the link: one typed beside an emptied link is dropped rather than kept
- * for a link that isn't there, as the table's CHECK requires.
+ * A route's link and the name it is shown under, trimmed, blanks as NULL. A link
+ * needs its name: a bare "Website" says nothing about where it leads, so a save
+ * with a link and no name is refused. Routes stored before the rule may still lack
+ * one (the column stays nullable), but no edit can be saved until it is filled.
+ * The name goes with the link: one typed beside an emptied link is dropped rather
+ * than kept for a link that isn't there, as the table's CHECK requires.
  */
 export function routeLink(
   link: string | null,
   linkName: string | null,
 ): { link: string | null; linkName: string | null } {
   const url = typeof link === "string" && link.trim() ? link.trim() : null;
-  const name = url && typeof linkName === "string" && linkName.trim() ? linkName.trim() : null;
+  if (!url) return { link: null, linkName: null };
+  const name = typeof linkName === "string" ? linkName.trim() : "";
+  if (!name) throw new ValidationError("A route with a link needs a link name");
   return { link: url, linkName: name };
 }
 
