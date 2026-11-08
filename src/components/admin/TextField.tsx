@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { handleJunctionShortcut } from "@/lib/junctionShortcut";
 
 /** The admin forms' text input and label classes. */
@@ -17,6 +18,8 @@ interface TextFieldProps {
   type?: "text" | "url" | "date";
   placeholder?: string;
   disabled?: boolean;
+  /** A small control beside the label, right-aligned (the From/To swap). */
+  labelAction?: ReactNode;
 }
 
 /** A labelled one-line input of the admin forms. */
@@ -29,12 +32,23 @@ export default function TextField({
   type = "text",
   placeholder,
   disabled,
+  labelAction,
 }: TextFieldProps) {
+  const labelElement = (
+    <label htmlFor={id} className={LABEL}>
+      {label}
+    </label>
+  );
   return (
     <div>
-      <label htmlFor={id} className={LABEL}>
-        {label}
-      </label>
+      {labelAction ? (
+        <div className="flex items-end justify-between">
+          {labelElement}
+          {labelAction}
+        </div>
+      ) : (
+        labelElement
+      )}
       <input
         id={id}
         type={type}

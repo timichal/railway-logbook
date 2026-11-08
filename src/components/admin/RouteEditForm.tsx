@@ -136,6 +136,7 @@ export default function RouteEditForm({
             idPrefix="edit"
             layout="narrow"
             withLineClass
+            withSwap
             suggestions={suggestions}
           />
 

@@ -13,6 +13,8 @@ const STROKES = {
   chevronDown: "M19 9l-7 7-7-7",
   menu: "M4 6h16M4 12h16M4 18h16",
   search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+  /** Two opposed arrows: exchange two values (a route's From and To). */
+  swapVertical: "M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4",
   /** Opens outside the app: a button that leaves for a website. */
   externalLink: "M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14",
   trash:

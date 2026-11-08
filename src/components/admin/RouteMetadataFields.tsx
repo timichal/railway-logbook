@@ -1,6 +1,7 @@
 "use client";
 
 import TextField, { INPUT, LABEL } from "@/components/admin/TextField";
+import IconButton from "@/components/ui/IconButton";
 import TagInput from "@/components/ui/TagInput";
 import type { RouteSuggestions, SaveRouteData } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
@@ -40,6 +41,8 @@ interface CommonProps {
    */
   layout: "wide" | "narrow";
   suggestions: RouteSuggestions;
+  /** Adds a button that exchanges From and To (names only: the geometry stays). */
+  withSwap?: boolean;
 }
 
 /**
@@ -55,7 +58,7 @@ type RouteMetadataFieldsProps = CommonProps &
 
 /** The route metadata fields shared by the create and edit forms. */
 export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
-  const { value, idPrefix, layout, suggestions } = props;
+  const { value, idPrefix, layout, suggestions, withSwap } = props;
   const region = useRegion();
   // Japan calls its usage types JR / non-JR lines; Europe keeps the defaults.
   const usageOptions = regionUsageOptions(region.id);
@@ -166,6 +169,19 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
         onChange={(to_station) => set({ to_station })}
         station
         placeholder="Ending station"
+        labelAction={
+          withSwap && (
+            <IconButton
+              icon="swapVertical"
+              label="Swap From and To"
+              title="Swap From and To"
+              size="responsive"
+              onClick={() =>
+                set({ from_station: value.to_station, to_station: value.from_station })
+              }
+            />
+          )
+        }
       />
 
       <div>
