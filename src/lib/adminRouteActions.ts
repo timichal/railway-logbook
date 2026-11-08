@@ -552,7 +552,7 @@ export async function saveRailwayRoute(
 /**
  * Update route metadata (line name, endpoints, description, usage_type, etc.)
  * Validity is left alone: a route is invalid because its geometry is, and only a
- * geometry re-pick or a successful recalculation can say otherwise.
+ * geometry re-pick can say otherwise.
  *
  * Closing a route clears `under_repair` (a closed line is not coming back, and the
  * table's CHECK holds the two apart). It leaves the geometry and the validity as
@@ -626,8 +626,9 @@ export async function updateRailwayRoute(
  * on the admin map, while still counting as invalid everywhere else.
  *
  * It qualifies invalidity, so it is never set on a valid route and is cleared
- * the moment a route becomes valid again — on geometry re-pick and successful
- * recalculation alike. Nor on a closed one, which is not coming back.
+ * the moment a route becomes valid again, which only a geometry re-pick does
+ * (recalculation passes invalid routes by). Nor on a closed one, which is not
+ * coming back.
  */
 export async function setRouteUnderRepair(
   trackId: number,
@@ -659,9 +660,9 @@ export async function setRouteUnderRepair(
  * its path still routes but no longer follows the real line).
  *
  * One way only: there is no "mark valid". A route becomes valid again the way
- * any invalid one does, by a geometry re-pick or a successful recalculation.
- * A closed route is refused, as `markAllRoutesInvalid` passes it by: it is never
- * recalculated and is in no "Invalid" worklist, so the mark would do nothing.
+ * any invalid one does, by a geometry re-pick; recalculation never looks at it
+ * again. A closed route is refused: it is in no "Invalid" worklist, so the mark
+ * would do nothing.
  */
 export async function markRouteInvalid(trackId: number): Promise<ActionResult<AdminRouteDetail>> {
   return asAdmin(async () => {

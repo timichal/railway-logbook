@@ -38,7 +38,7 @@
 # importMapData drops the record of what was deployed as it starts, since
 # any import, this one or one by hand, replaces the map it describes.
 #
-# Flags: --valid-only and --concurrency=N go to importMapData. --fresh throws
+# Flags: --concurrency=N goes to importMapData. --fresh throws
 # away whatever earlier runs left behind - a failed run's pruned map, and the
 # filtered extracts every run keeps - and starts from scratch. It leaves the
 # raw cache (RAW_CACHE, see prepare.sh): every file there is checked as it is
@@ -153,7 +153,7 @@ parse_flags() {
     case "$arg" in
       --fresh) FRESH=1 FORCE=1 ;;
       --force) FORCE=1 ;;
-      --valid-only | --concurrency=*) IMPORT_FLAGS="${IMPORT_FLAGS} $arg" ;;
+      --concurrency=*) IMPORT_FLAGS="${IMPORT_FLAGS} $arg" ;;
       *)
         echo "ERROR: Unknown argument '$arg'"
         exit 1

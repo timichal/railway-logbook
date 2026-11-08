@@ -178,8 +178,9 @@ export default function RouteEditForm({
               {busyAction === "duplicate" ? "Duplicating..." : "Duplicate Route"}
             </button>
 
-            {/* One way: a route becomes valid again only by a geometry re-pick or a
-                recalculation. Not on a closed one, which is never recalculated. */}
+            {/* One way: a route becomes valid again only by a geometry re-pick, since
+                recalculation passes invalid routes by. Not on a closed one, which is in
+                no "Invalid" worklist. */}
             {selectedRoute.is_valid !== false && !closed && (
               <button
                 type="button"

@@ -466,7 +466,7 @@ export default function AdminRoutesTab({
           selectedRoute
             ? `Mark the route "${routeLabel(selectedRoute)}" as invalid?
 
-It becomes valid again only by re-picking its geometry or a successful recalculation.`
+It is no longer recalculated, and becomes valid again only by re-picking its geometry.`
             : ""
         }
         confirmLabel="Mark Invalid"

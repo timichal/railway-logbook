@@ -6,7 +6,6 @@
 # osmium-scripts/extracts.txt, so there is no date to pass.
 #
 # Flags (any order):
-#   --valid-only       recalculate only routes not already invalid
 #   --concurrency=N    how many routes the import recalculates at once
 #                      (see RECALC_PERFORMANCE.md)
 #   --force            deploy even when neither the extracts nor the code
@@ -22,7 +21,7 @@
 #   --yes              start without asking (see below)
 #   --follow           start nothing; reattach to the run in progress, or
 #                      report on the last one
-# Example: npm run deployMapData -- --valid-only
+# Example: npm run deployMapData -- --concurrency=6
 #
 # Before anything starts, the server lists each extract's date in the deployed
 # map beside the latest Geofabrik has ("europe/austria  2026-11-02 ->
@@ -57,12 +56,12 @@ FOLLOW_ONLY=""
 ASSUME_YES=""
 for arg in "$@"; do
   case "$arg" in
-    --valid-only | --force | --fresh | --concurrency=*) REMOTE_ARGS="${REMOTE_ARGS} $arg" ;;
+    --force | --fresh | --concurrency=*) REMOTE_ARGS="${REMOTE_ARGS} $arg" ;;
     --yes) ASSUME_YES=1 ;;
     --follow) FOLLOW_ONLY=1 ;;
     *)
       echo "ERROR: Unknown argument '$arg'"
-      echo "Usage: npm run deployMapData -- [--valid-only] [--concurrency=N] [--force] [--fresh] [--yes] [--follow]"
+      echo "Usage: npm run deployMapData -- [--concurrency=N] [--force] [--fresh] [--yes] [--follow]"
       echo "(Extracts are always the latest from Geofabrik; there is no date to pass.)"
       exit 1
       ;;

@@ -10,7 +10,7 @@ Schema changes and data transforms are a TS script here: import `pool` from `../
 
 - The click points are matched to railway parts at 1m tolerance. The edge parts are truncated to them and the chain is stitched by `mergeLinearChain` (its rule is in the root CLAUDE.md).
 - BFS by hop count. A distance-weighted search runs only when the shortest path backtracks. That search keys on (part, end entered at) and rejects a part entered and left through the same node.
-- `verifyRouteData` recalculates routes, then scenic lines. For what a recalculation does to `under_repair`, see "Routes" in the root CLAUDE.md. It never touches a **closed** route, whose geometry is frozen (same section).
+- `verifyRouteData` recalculates the valid routes, then the valid scenic lines. It never touches an **invalid** route (the admin resolves those by hand) or a **closed** one, whose geometry is frozen (both in "Routes" in the root CLAUDE.md). Its writes are conditional on the line still being valid (and a route open), so one the admin closed or marked invalid mid-run is left be. A mid-run re-pick of a route that stays valid is not caught.
 
 ## Importing (`importMapData.ts`, `lib/loadRailwayData.ts`)
 

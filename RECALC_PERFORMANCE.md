@@ -37,7 +37,7 @@ index and writing its own `UPDATE`:
   "Chain is broken", is caught per part combination inside the finder), and
   `recalculateGeometry` turns that into an `invalid` outcome. It does
   **not** catch — it once did, and wrote a dropped connection into the route as
-  `is_valid = FALSE`, which `--valid-only` then never rechecked. So an exception
+  `is_valid = FALSE`, which a recalculation then never rechecks. So an exception
   escaping `recalculateAndStoreRoute` means the database is unhappy — `runPool`
   stops the other workers taking new routes, and it propagates. Marking a
   route invalid over a transient fault would be worse than failing loudly.
@@ -128,7 +128,7 @@ default there; the ceiling is memory as much as CPU, since each worker holds its
 own bufferful of parsed geometry (which is why `importMapData` runs with
 `--max-old-space-size=8192`).
 
-A full `verifyRouteData --valid-only` over 1744 valid routes takes about 5 min at
+A full `verifyRouteData` over 1744 valid routes takes about 5 min at
 the default concurrency. Treat single-run timings as rough: repeated runs on the
 same box varied by well over a minute.
 
@@ -160,11 +160,10 @@ mismatch too, not just on failure.
 
 `npm run verifyRouteData` runs step 2 on its own against the current data, so it
 can be timed without a full import; it prints its own elapsed time and the route
-count as `Found N routes to recalculate`. `--valid-only` restricts it to routes
-not already invalid, which is much faster — an invalid route whose ends are on
-the network but unconnected escalates through all three buffers, including the
-222 km one, before giving up. (One with an end off the network gives up after
-the first.)
+count as `Found N routes to recalculate`. Only valid routes are recalculated,
+which also keeps it fast: an invalid route whose ends are on the network but
+unconnected would escalate through all three buffers, including the 222 km one,
+before giving up. (One with an end off the network gives up after the first.)
 
 `npm run inspectPath -- "<from>" "<to>"` prints a single _journey planner_ search
 and the gaps between consecutive routes. Note that it exercises

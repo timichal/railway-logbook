@@ -20,14 +20,11 @@ async function loadGeoJSONData(): Promise<void> {
     // writes one file holding every region; several load into the same tables,
     // cleared once before the first file.
     const args = process.argv.slice(2);
-    const validOnly = args.includes("--valid-only");
     const concurrency = parseConcurrencyArg(args);
     const dataPaths = args.filter((arg) => !arg.startsWith("--"));
 
     const usage = () => {
-      console.error(
-        "Usage: npm run importMapData <filepath> [<filepath> ...] [--valid-only] [--concurrency=N]",
-      );
+      console.error("Usage: npm run importMapData <filepath> [<filepath> ...] [--concurrency=N]");
       console.error("Example: npm run importMapData ./data/pruned.geojson");
     };
 
@@ -70,12 +67,8 @@ async function loadGeoJSONData(): Promise<void> {
 
     // Step 2: Verify and recalculate routes if they exist
     console.log("");
-    console.log(
-      validOnly
-        ? "=== Step 2: Verifying routes (valid only — skipping already-invalid) ==="
-        : "=== Step 2: Verifying routes ===",
-    );
-    await verifyAndRecalculateRoutes(pool, { validOnly, concurrency });
+    console.log("=== Step 2: Verifying routes ===");
+    await verifyAndRecalculateRoutes(pool, { concurrency });
 
     // Step 3: Route geometries have just settled, so the station flags derived
     // from them are refreshed last

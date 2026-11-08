@@ -1,6 +1,9 @@
 #!/usr/bin/env tsx
 /**
- * Mark all routes as invalid for rechecking
+ * Mark all routes as invalid for rechecking by hand
+ *
+ * Recalculation passes invalid routes by, so this is a manual recheck of the
+ * whole network: each route comes back only through an admin re-pick.
  *
  * This script sets is_valid=false and error_message='Route recheck'
  * for all routes in the database, except the closed ones: recalculation passes

@@ -17,7 +17,7 @@ import type { GeoJSONFeature, GeoJSONFeatureCollection, RouteBounds } from "./sh
  *
  * Drawn like a route — two click points and the path the admin pathfinder finds
  * between them (`useRoutePreview`), recalculated from the same points on every
- * OSM import (`verifyRouteData`) — but highlight only: two names and a geometry,
+ * OSM import while valid (`verifyRouteData`) — but highlight only: two names and a geometry,
  * nothing logged against them, nothing derived from them.
  *
  * A scenic line never backtracks (`SCENIC_BACKTRACKING_ERROR`). Its paths are

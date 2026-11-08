@@ -40,15 +40,13 @@ interface RecalculationResult {
   totalRoutes: number;
   successfulRoutes: number;
   invalidRoutes: number;
-  /** Closed by the admin while the run was going: left as they were. */
-  closedMeanwhile: number;
+  /** Closed, marked invalid or deleted by the admin while the run was going: left as they were. */
+  changedMeanwhile: number;
   backtrackingRoutes: Array<{ track_id: number; from_station: string; to_station: string }>;
   errors: Array<{ track_id: number; from_station: string; to_station: string; error: string }>;
 }
 
 interface RecalculationOptions {
-  /** Skip routes already marked invalid (is_valid = FALSE); only recalculate valid ones. */
-  validOnly?: boolean;
   /** Routes to recalculate at once. Defaults to DEFAULT_RECALC_CONCURRENCY. */
   concurrency?: number;
 }
@@ -85,7 +83,7 @@ interface RouteRow extends StoredGeometryRow {
 type RouteOutcome =
   | { status: "recalculated"; hasBacktracking: boolean }
   | { status: "invalid"; error: string }
-  | { status: "closed" };
+  | { status: "changedMeanwhile" };
 
 /**
  * Recalculate a geometry from its stored click points and judge it against the
@@ -113,8 +111,9 @@ async function recalculateGeometry(
   // connect ("Chain is broken"), is caught per combination inside the finder —
   // so what does throw is the part-loading query or a bug. Catching it here
   // used to write e.g. "Connection terminated unexpectedly" as the route's
-  // error_message with is_valid = FALSE, and a `--valid-only` run (every
-  // deploy) then never looked at the route again. Let it stop the run instead.
+  // error_message with is_valid = FALSE, and since a recalculation passes
+  // invalid routes by, nothing looked at the route again. Let it stop the run
+  // instead.
   const path = await pathFinder.findPathFromCoordinates(db, row.start_point, row.end_point);
   if (!path) {
     return { status: "invalid", error: "No path found between starting and ending coordinates" };
@@ -150,6 +149,12 @@ async function recalculateGeometry(
 /**
  * Recalculate one route and write the outcome.
  *
+ * Both writes are conditional on the route still being valid and open, as it
+ * was when the run listed it. An admin who closed it or marked it invalid in the
+ * meantime has taken it over by hand, and the run leaves it be. (A re-pick of a
+ * route that stays valid is not caught: the path found from the old points
+ * overwrites the new geometry.)
+ *
  * The UPDATE is autocommitted, one per route — deliberately not wrapped in a
  * transaction spanning the whole run, which would hold row locks on
  * `railway_routes` for the length of the import.
@@ -164,13 +169,12 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
       SET
         is_valid = FALSE,
         error_message = $1
-      -- Closed since the run listed it: frozen from then on
-      WHERE track_id = $2 AND NOT closed
+      WHERE track_id = $2 AND is_valid AND NOT closed
     `,
       [outcome.error, route.track_id],
     );
 
-    return marked.rowCount === 0 ? { status: "closed" } : outcome;
+    return marked.rowCount === 0 ? { status: "changedMeanwhile" } : outcome;
   }
 
   // Update route with new geometry and has_backtracking flag
@@ -180,25 +184,24 @@ async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<Rout
     SET
       geometry = ST_GeomFromText($1, 4326),
       length_km = $2,
-      has_backtracking = $3,
-      is_valid = TRUE,
-      error_message = NULL,
-      -- The route routes again, so whatever works had broken it are over.
-      -- The failure branches leave the flag alone: a route still under
-      -- repair keeps it across OSM updates until it recalculates.
-      under_repair = FALSE
-    WHERE track_id = $4 AND NOT closed
+      has_backtracking = $3
+    WHERE track_id = $4 AND is_valid AND NOT closed
   `,
     [outcome.lineString, outcome.newLength, outcome.hasBacktracking, route.track_id],
   );
 
-  // No row: the route was closed (or deleted) since the run listed it, and is left be
-  if (updated.rowCount === 0) return { status: "closed" };
+  if (updated.rowCount === 0) return { status: "changedMeanwhile" };
   return { status: "recalculated", hasBacktracking: outcome.hasBacktracking };
 }
 
 /**
- * Recalculate all railway routes based on stored coordinates
+ * Recalculate every valid, open railway route from its stored click points.
+ *
+ * An invalid route is never recalculated. Once a route is invalid it is the
+ * admin's to resolve by hand: a geometry re-pick, closing it, or marking it
+ * under repair. A recalculation that happened to find a path again would
+ * otherwise quietly undo that decision, or revalidate a route on a path the
+ * admin had rejected (`markRouteInvalid`).
  *
  * Routes are recalculated `concurrency` at a time. This needs a Pool rather than
  * a Client: node-pg serialises concurrent queries on a single connection, so
@@ -211,27 +214,26 @@ async function recalculateAllRoutes(
   const concurrency = options.concurrency ?? DEFAULT_RECALC_CONCURRENCY;
 
   console.log(
-    options.validOnly
-      ? "Recalculating valid railway routes (skipping already-invalid)..."
-      : "Recalculating all railway routes...",
+    "Recalculating valid railway routes (invalid and closed ones are left as they are)...",
   );
 
   const result: RecalculationResult = {
     totalRoutes: 0,
     successfulRoutes: 0,
     invalidRoutes: 0,
-    closedMeanwhile: 0,
+    changedMeanwhile: 0,
     backtrackingRoutes: [],
     errors: [],
   };
 
   // Never a closed route: its geometry is frozen at what it was when it closed
   // (railway_routes.closed). Its tracks may be gone from OSM, and a recalculation
-  // would only mark it invalid, or find some other path between its points
+  // would only mark it invalid, or find some other path between its points.
+  // Nor an invalid one (see above).
   const routes = await db.query<RouteRow>(`
     SELECT track_id, intended_backtracking, ${STORED_GEOMETRY_COLUMNS}
     FROM railway_routes
-    WHERE NOT closed ${options.validOnly ? "AND is_valid" : ""}
+    WHERE is_valid AND NOT closed
     ORDER BY track_id
   `);
 
@@ -264,8 +266,8 @@ async function recalculateAllRoutes(
       if (outcome.hasBacktracking && !intended_backtracking) {
         result.backtrackingRoutes.push({ track_id, from_station, to_station });
       }
-    } else if (outcome.status === "closed") {
-      result.closedMeanwhile++;
+    } else if (outcome.status === "changedMeanwhile") {
+      result.changedMeanwhile++;
     } else {
       result.invalidRoutes++;
       result.errors.push({ track_id, from_station, to_station, error: outcome.error });
@@ -281,17 +283,18 @@ interface ScenicLineRow extends StoredGeometryRow {
 }
 
 /**
- * Recalculate every scenic line from its stored click points, exactly as routes
- * are (same pathfinder, same length check), and print a summary. A line that no
- * longer routes, or whose new path backtracks (which a save refuses outright), is
- * marked invalid and keeps its last geometry, which the user map goes on drawing
- * — it is only a highlight.
+ * Recalculate every valid scenic line from its stored click points, exactly as
+ * routes are (same pathfinder, same length check), and print a summary. A line
+ * that no longer routes, or whose new path backtracks (which a save refuses
+ * outright), is marked invalid and keeps its last geometry, which the user map
+ * goes on drawing — it is only a highlight. Like an invalid route, an invalid
+ * line is left to the admin's re-pick and never recalculated.
  */
 async function recalculateScenicLines(db: Pool, options: RecalculationOptions): Promise<void> {
   const lines = await db.query<ScenicLineRow>(`
     SELECT id, ${STORED_GEOMETRY_COLUMNS}
     FROM scenic_lines
-    ${options.validOnly ? "WHERE is_valid" : ""}
+    WHERE is_valid
     ORDER BY id
   `);
   if (lines.rows.length === 0) return;
@@ -309,15 +312,15 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
           : recalculated;
       if (outcome.status === "invalid") {
         await db.query(
-          "UPDATE scenic_lines SET is_valid = FALSE, error_message = $1 WHERE id = $2",
+          "UPDATE scenic_lines SET is_valid = FALSE, error_message = $1 WHERE id = $2 AND is_valid",
           [outcome.error, line.id],
         );
       } else {
         await db.query(
           `
           UPDATE scenic_lines
-          SET geometry = ST_GeomFromText($1, 4326), length_km = $2, is_valid = TRUE, error_message = NULL
-          WHERE id = $3
+          SET geometry = ST_GeomFromText($1, 4326), length_km = $2
+          WHERE id = $3 AND is_valid
           `,
           [outcome.lineString, outcome.newLength, line.id],
         );
@@ -364,9 +367,9 @@ export async function verifyAndRecalculateRoutes(
   console.log(`Successfully recalculated: ${recalcResult.successfulRoutes}`);
   console.log(`Routes with unintended backtracking: ${recalcResult.backtrackingRoutes.length}`);
   console.log(`Invalid routes: ${recalcResult.invalidRoutes}`);
-  if (recalcResult.closedMeanwhile > 0) {
+  if (recalcResult.changedMeanwhile > 0) {
     console.log(
-      `Closed or deleted during the run, left as they were: ${recalcResult.closedMeanwhile}`,
+      `Closed, marked invalid or deleted during the run, left as they were: ${recalcResult.changedMeanwhile}`,
     );
   }
   console.log(`Time: ${elapsedMinutes.toFixed(1)} min`);
@@ -402,8 +405,7 @@ async function verifyRoutes(): Promise<void> {
   try {
     console.log("Connected to database");
 
-    const validOnly = args.includes("--valid-only");
-    await verifyAndRecalculateRoutes(pool, { validOnly, concurrency });
+    await verifyAndRecalculateRoutes(pool, { concurrency });
 
     // Which stations the user map shows follows the route geometries this just moved
     console.log("");
