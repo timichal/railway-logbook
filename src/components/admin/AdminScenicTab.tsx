@@ -16,6 +16,7 @@ import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRout
 import { useRegionId } from "@/lib/regionContext";
 import { foldForSearch } from "@/lib/searchText";
 import type { RouteBounds } from "@/lib/shared/types";
+import { JUNCTION_SHORTCUT } from "@/lib/textShortcut";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints } from "@/lib/ui/adminListSort";
 import { btn, optionRow } from "@/lib/ui/buttonStyles";
@@ -302,7 +303,7 @@ export default function AdminScenicTab({
           label="From *"
           value={newFrom}
           onChange={setNewFrom}
-          station
+          shortcut={JUNCTION_SHORTCUT}
           placeholder="Where the scenic stretch starts"
         />
         <TextField
@@ -310,7 +311,7 @@ export default function AdminScenicTab({
           label="To *"
           value={newTo}
           onChange={setNewTo}
-          station
+          shortcut={JUNCTION_SHORTCUT}
           placeholder="Where it ends"
         />
         <button
@@ -395,14 +396,14 @@ export default function AdminScenicTab({
                       label="From *"
                       value={names.from}
                       onChange={(from) => setNames({ ...names, from })}
-                      station
+                      shortcut={JUNCTION_SHORTCUT}
                     />
                     <TextField
                       id="scenic-edit-to"
                       label="To *"
                       value={names.to}
                       onChange={(to) => setNames({ ...names, to })}
-                      station
+                      shortcut={JUNCTION_SHORTCUT}
                     />
                     <div className="grid grid-cols-3 gap-2">
                       <button

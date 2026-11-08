@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { handleJunctionShortcut } from "@/lib/junctionShortcut";
+import { handleTextShortcut, type TextShortcut } from "@/lib/textShortcut";
 
 /** The admin forms' text input and label classes. */
 export const INPUT =
@@ -13,8 +13,8 @@ interface TextFieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  /** A station name: Alt+J tags it as a junction (`handleJunctionShortcut`). */
-  station?: boolean;
+  /** An Alt+<key> that inserts text at the caret (`handleTextShortcut`), e.g. `JUNCTION_SHORTCUT` on station names. */
+  shortcut?: TextShortcut;
   type?: "text" | "url" | "date";
   placeholder?: string;
   disabled?: boolean;
@@ -28,7 +28,7 @@ export default function TextField({
   label,
   value,
   onChange,
-  station,
+  shortcut,
   type = "text",
   placeholder,
   disabled,
@@ -54,7 +54,7 @@ export default function TextField({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onKeyDown={station ? (e) => handleJunctionShortcut(e, onChange) : undefined}
+        onKeyDown={shortcut ? (e) => handleTextShortcut(e, shortcut, onChange) : undefined}
         className={`${INPUT} disabled:opacity-50`}
         placeholder={placeholder}
         disabled={disabled}

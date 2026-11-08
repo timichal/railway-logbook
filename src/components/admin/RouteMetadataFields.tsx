@@ -8,6 +8,7 @@ import { useRegion } from "@/lib/regionContext";
 import { foldForSearch } from "@/lib/searchText";
 import { type LineClass, lineClassOptions, type UsageType } from "@/lib/shared/constants";
 import { regionUsageOptions } from "@/lib/shared/regions";
+import { EGTRE_SHORTCUT, JUNCTION_SHORTCUT } from "@/lib/textShortcut";
 
 /**
  * What the edit form edits: the create form's fields plus the line class, which a
@@ -163,7 +164,7 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
         label="From *"
         value={value.from_station}
         onChange={(from_station) => set({ from_station })}
-        station
+        shortcut={JUNCTION_SHORTCUT}
         placeholder="Starting station"
       />
       <TextField
@@ -171,7 +172,7 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
         label="To *"
         value={value.to_station}
         onChange={(to_station) => set({ to_station })}
-        station
+        shortcut={JUNCTION_SHORTCUT}
         placeholder="Ending station"
         labelAction={
           withSwap && (
@@ -219,6 +220,7 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
         label={value.link.trim() ? "Link name *" : "Link name"}
         value={value.link_name}
         onChange={(link_name) => set({ link_name })}
+        shortcut={EGTRE_SHORTCUT}
         placeholder="Operator or railway name"
         disabled={!value.link.trim()}
       />
