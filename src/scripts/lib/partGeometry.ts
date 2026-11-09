@@ -123,28 +123,24 @@ export function junctionAngle(
 }
 
 /**
- * Check if appending `next` to a path ending in `prev`, `current` would create
- * backtracking.
- *
- * `current` was checked when it was added, oriented from `prev` — the only
- * neighbour it had then. Now that the part after it is known, its orientation is
- * settled by that one instead (as `findBacktracking` will judge it), and the two
- * must agree: a part entered and left through the same node is a reversal,
- * whatever the angle to the next part says. Let through, it reached the parts
- * beyond at a distance no train can travel and pruned the clean path to them,
- * only for the final check to reject it.
+ * The turn from `from` onto `to` at the node they share, `nodeKey` (one of
+ * `from`'s endpoint keys and one of `to`'s), in degrees: 0 straight on, 180
+ * straight back. The same bearings as `junctionAngle`, but with the direction of
+ * travel given rather than worked out from the neighbours, which can't tell two
+ * parts joined at both ends apart. For a search that knows which end it entered
+ * each part at.
  */
-export function wouldCreateBacktracking(
-  prev: RailwayPart | null,
-  current: RailwayPart,
-  next: RailwayPart,
-): boolean {
-  if (prev && isTraversedForward(current, prev, null) !== isTraversedForward(current, null, next)) {
-    return true;
-  }
-
-  const junction = junctionAngle(prev, current, next, null);
-  return junction !== null && junction.angleDegrees > BACKTRACKING_THRESHOLD_DEGREES;
+export function turnDegrees(from: RailwayPart, nodeKey: string, to: RailwayPart): number {
+  const a = from.coordinates;
+  const b = to.coordinates;
+  const exit: [[number, number], [number, number]] =
+    from.endKey === nodeKey ? [a[a.length - 2], a[a.length - 1]] : [a[1], a[0]];
+  const entry: [[number, number], [number, number]] =
+    to.startKey === nodeKey ? [b[0], b[1]] : [b[b.length - 1], b[b.length - 2]];
+  return normalizeBearingDifference(
+    calculateBearing(exit[0], exit[1]),
+    calculateBearing(entry[0], entry[1]),
+  );
 }
 
 /**
@@ -277,14 +273,34 @@ function findNearestPointOnPart(
 }
 
 /**
- * Calculate total distance for a path of parts
- *
- * Deliberately **not** a sum of the parts' `lengthMeters`: this is one running
- * sum over every segment of the path, and regrouping it per part rounds
- * differently in the last bits. Its result is compared against `maxDistance`
- * and between candidates, so a regrouped sum could, on a near tie, pick a
- * different path than before — and recalculation must return exactly what it
- * did. It runs once per completed path rather than per relaxation.
+ * How far along `part` a click is from each of its ends, in metres, measured
+ * from where the click projects onto it — the stretch of an edge part a path
+ * travels when it leaves (or enters) through that end. Null for a part with no
+ * segment.
+ */
+export function distancesToEnds(
+  part: RailwayPart,
+  coordinate: [number, number],
+): { toStart: number; toEnd: number } | null {
+  const nearest = findNearestPointOnPart(part, coordinate);
+  if (!nearest) return null;
+
+  const coords = part.coordinates;
+  let toStart = 0;
+  for (let i = 0; i < nearest.segmentIndex; i++) {
+    toStart += haversineDistance(coords[i], coords[i + 1]);
+  }
+  toStart += haversineDistance(coords[nearest.segmentIndex], nearest.projectedPoint);
+
+  // From the part's own length, so the two stretches add up to what the search
+  // charges for the part whole
+  return { toStart, toEnd: Math.max(0, part.lengthMeters - toStart) };
+}
+
+/**
+ * Calculate total distance for a path of parts, whole: for the search's log
+ * lines. The search itself costs parts by `lengthMeters`, and a route's length is
+ * measured on its truncated coordinates.
  */
 export function pathDistance(parts: RailwayPart[]): number {
   let totalDistance = 0;

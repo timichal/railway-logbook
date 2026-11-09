@@ -9,7 +9,7 @@ Schema changes and data transforms are a TS script here: import `pool` from `../
 ## Route pathfinding (`lib/railwayPathFinder.ts`, over `partNetwork.ts` + `partGeometry.ts`, pure)
 
 - The click points are matched to railway parts at 1m tolerance. The edge parts are truncated to them and the chain is stitched by `mergeLinearChain` (its rule is in the root CLAUDE.md).
-- BFS by hop count. A distance-weighted search runs only when the shortest path backtracks. That search keys on (part, end entered at) and rejects a part entered and left through the same node.
+- Dijkstra by length (it was a BFS by part count, which took a long way round of few ways over a short line of many). When the shortest path backtracks, a second search runs that refuses reversals: it keys on (part, end entered at), leaves a part only through its other end, and refuses a turn over `BACKTRACKING_THRESHOLD_DEGREES` (`turnDegrees`). Its path wins however much longer it is; the backtracking one is kept only when nothing else connects.
 - `verifyRouteData` recalculates the valid routes, then the valid scenic lines. It never touches an **invalid** route (the admin resolves those by hand) or a **closed** one, whose geometry is frozen (both in "Routes" in the root CLAUDE.md). Its writes are conditional on the line still being valid (and a route open), so one the admin closed or marked invalid mid-run is left be. A mid-run re-pick of a route that stays valid is not caught.
 
 ## Importing (`importMapData.ts`, `lib/loadRailwayData.ts`)

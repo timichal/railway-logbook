@@ -1,18 +1,25 @@
 import type { Client, Pool } from "pg";
 import { BACKTRACKING_THRESHOLD_DEGREES } from "../../lib/geoUtils";
 import type { BacktrackingPoint, PathResult } from "../../lib/shared/types";
+import { MinHeap } from "./minHeap";
 import {
   buildCoordinatesWithTruncation,
   coordinateDistance,
+  distancesToEnds,
   findBacktracking,
-  isTraversedForward,
   pathDistance,
-  wouldCreateBacktracking,
+  turnDegrees,
 } from "./partGeometry";
 import { PartNetwork, type RailwayPart } from "./partNetwork";
 
 /** A path as parts only; its coordinates are built by the caller, truncated to the clicks. */
 type PartPath = Omit<PathResult, "coordinates">;
+
+/** The click points on a path's start and end parts, [lng, lat]. */
+interface EdgeClicks {
+  start: [number, number];
+  end: [number, number];
+}
 
 interface PathFinderOptions {
   /**
@@ -28,17 +35,19 @@ interface PathFinderOptions {
   quiet?: boolean;
   /**
    * Between click points matched to several parts, prefer a combination whose path
-   * doesn't backtrack over a shorter one that does, within the same slack as the
-   * non-backtracking alternative (`backtrackingSlack`). Without it a straight path
+   * doesn't backtrack over a shorter one that does, within `backtrackingSlack`.
+   * (Within one combination a path that doesn't backtrack is always preferred, see
+   * `findPath`; this is the choice between combinations.) Without it a straight path
    * wins only when it is within 10m. For scenic lines, which may not backtrack at
-   * all; routes keep the default, which their stored lengths were measured with.
+   * all. Routes keep the default: a route may backtrack where nothing else connects
+   * its click points, and between combinations the shorter one wins.
    */
   avoidBacktracking?: boolean;
 }
 
 /**
- * How much longer than a backtracking path a non-backtracking one may be and still
- * be preferred: 10% or 5km, whichever is smaller (the percentage rules on long
+ * How much longer than a backtracking path a non-backtracking one of another
+ * click-point combination may be and still be preferred: 10% or 5km, whichever is smaller (the percentage rules on long
  * paths, the +5km on short ones). In metres, as `distance` is.
  */
 function backtrackingSlack(distance: number): number {
@@ -46,7 +55,7 @@ function backtrackingSlack(distance: number): number {
 }
 
 /**
- * RailwayPathFinder: BFS-based pathfinding for railway networks
+ * RailwayPathFinder: shortest-path search over railway parts
  *
  * Features:
  * - Part-based pathfinding (between railway part IDs)
@@ -95,15 +104,19 @@ export class RailwayPathFinder {
    * Find path between two railway part IDs
    *
    * Algorithm:
-   * 1. Find shortest path using BFS
+   * 1. Find the shortest path by length
    * 2. Check if it backtracks
-   * 3. If backtracking, search for non-backtracking alternative
+   * 3. If it does, find the shortest path that doesn't
    *
    * Returns the candidates in order of preference, empty if there is no path: the
    * alternative, then the backtracking path to fall back on. Which one is used is
    * the caller's call, since only the geometry it builds says whether a path connects.
+   *
+   * `clicks` are the points on the start and end parts the path is cut to; given,
+   * the search charges those two parts only for the stretch travelled (see
+   * `findShortestPath`).
    */
-  findPath(startId: string, endId: string): PartPath[] {
+  findPath(startId: string, endId: string, clicks?: EdgeClicks): PartPath[] {
     if (!this.network.has(startId) || !this.network.has(endId)) {
       return [];
     }
@@ -112,8 +125,8 @@ export class RailwayPathFinder {
       return [{ partIds: [startId], hasBacktracking: false }];
     }
 
-    // Step 1: Find shortest path using standard BFS
-    const firstPath = this.findShortestPath(startId, endId);
+    // Step 1: the shortest path, reversals and all
+    const firstPath = this.findShortestPath(startId, endId, false, clicks);
     if (!firstPath) {
       return [];
     }
@@ -130,27 +143,31 @@ export class RailwayPathFinder {
       backtrackingAt: firstBacktracking,
     };
 
-    // Step 3: Search for non-backtracking alternative. Non-backtracking paths are often
-    // slightly longer, so allow some slack (`backtrackingSlack`). The search returns
-    // nothing longer than this, so whatever it finds is acceptable.
-    const firstDistance = pathDistance(firstParts);
-    const maxDistance = backtrackingSlack(firstDistance);
-    this.log(
-      `  Searching for non-backtracking alternatives (max ${(maxDistance / 1000).toFixed(1)}km)...`,
-    );
-
-    const bestAlternative = this.findNonBacktrackingAlternative(startId, endId, maxDistance);
-
-    if (!bestAlternative) {
-      this.log(`  No non-backtracking alternative found, using original`);
+    // Step 3: the shortest path that doesn't reverse, however much longer. A
+    // reversal is nearly always a shortcut through a junction that no train takes
+    // — the real line was 5% longer on Olsztyn–Ełk, 16% on Urakami–Kikitsu — so
+    // the only reason to keep one is that nothing else connects.
+    this.log(`  Searching for a path without backtracking...`);
+    const alternative = this.findShortestPath(startId, endId, true, clicks);
+    // The search judges each turn as it goes, `findBacktracking` the finished
+    // path; and it may pass a part twice, once each way, round a loop. Either
+    // way it is not a path to prefer.
+    if (
+      !alternative ||
+      new Set(alternative).size !== alternative.length ||
+      this.locateBacktracking(this.partsOf(alternative))
+    ) {
+      this.log(`  No path without backtracking, using the shortest`);
       return [backtrackingPath];
     }
 
-    const altDistance = pathDistance(this.partsOf(bestAlternative));
-    this.log(
-      `  Preferring non-backtracking alternative (${(altDistance / 1000).toFixed(1)}km) over backtracking path (${(firstDistance / 1000).toFixed(1)}km)`,
-    );
-    return [{ partIds: bestAlternative, hasBacktracking: false }, backtrackingPath];
+    // Measured only to be logged, so not in a quiet (bulk) run
+    if (!this.quiet) {
+      this.log(
+        `  Preferring a path without backtracking (${(pathDistance(this.partsOf(alternative)) / 1000).toFixed(1)}km) over the shortest (${(pathDistance(firstParts) / 1000).toFixed(1)}km)`,
+      );
+    }
+    return [{ partIds: alternative, hasBacktracking: false }, backtrackingPath];
   }
 
   // ============================================================================
@@ -249,7 +266,10 @@ export class RailwayPathFinder {
       for (const endPartId of endPartIds) {
         this.log(`  Trying path: ${startPartId} → ${endPartId}`);
 
-        const candidates = this.findPath(startPartId, endPartId);
+        const candidates = this.findPath(startPartId, endPartId, {
+          start: startCoordinate,
+          end: endCoordinate,
+        });
         if (candidates.length === 0) {
           this.log(`    No path found`);
           continue;
@@ -338,197 +358,128 @@ export class RailwayPathFinder {
   }
 
   // ============================================================================
-  // BFS SEARCH ALGORITHMS
+  // SEARCH
   // ============================================================================
 
   /**
-   * Find shortest path using standard BFS with global visited set
-   */
-  private findShortestPath(startId: string, endId: string): string[] | null {
-    // A head index rather than `shift()`, which reindexes the whole queue on
-    // every pop. The pop order is unchanged, so the search is the same search.
-    // Consumed slots are cleared so their paths can be collected — at the 222km
-    // buffer the queue holds tens of thousands of entries.
-    const queue: ({ id: string; path: string[] } | undefined)[] = [
-      { id: startId, path: [startId] },
-    ];
-    let head = 0;
-    const visited = new Set<string>([startId]);
-
-    while (head < queue.length) {
-      const current = queue[head]!;
-      queue[head] = undefined;
-      head++;
-      const connected = this.network.connected(current.id);
-
-      for (const connectedId of connected) {
-        if (connectedId === endId) {
-          return [...current.path, connectedId];
-        }
-
-        if (!visited.has(connectedId)) {
-          visited.add(connectedId);
-          queue.push({
-            id: connectedId,
-            path: [...current.path, connectedId],
-          });
-        }
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Find non-backtracking path using BFS with backtracking rejection
-   * Optionally forces a specific first hop for retry logic
+   * The shortest path by length from one part to another, as part ids, or null if
+   * none joins them. Dijkstra, every part costing its whole length.
    *
-   * Uses best-distance tracking instead of global visited to allow alternative paths.
-   * The distance is kept per part **and the end it was entered at**, not per part:
-   * whether a part can be left without backtracking depends on which way it is being
-   * travelled, so a short arrival from one side must not prune a longer one from the
-   * other — that may be the only one that can carry on.
+   * Except, given `clicks`, the two the path is cut to: the start part costs the
+   * stretch from its click to the end it is left through, the end part the stretch
+   * from the end it is entered at to its click. A click near one end of a long
+   * part otherwise costs the same both ways, and the search left Dęblin through the
+   * far end of a 509m part whose click sat 5m from the near one. Without `clicks`
+   * the start part costs nothing and the end part its whole length.
+   *
+   * `withoutBacktracking` searches only paths that never turn back on themselves:
+   * a part is left through the end it was not entered at, and the turn onto the
+   * next is at most `BACKTRACKING_THRESHOLD_DEGREES`. The state is then the part
+   * **and the end it was entered at**, since whether it can be left onto a given
+   * neighbour depends on which way it is travelled, and a short arrival from one
+   * side must not shut out a longer one from the other that can carry on. The
+   * start part, entered at neither end, may be left through either.
+   *
+   * This replaced a breadth-first search by part count, which preferred a long way
+   * round of few ways over a short line of many, and took the lower part id
+   * between two of equal count.
    */
-  private findPathWithoutBacktracking(
+  private findShortestPath(
     startId: string,
     endId: string,
-    maxDistance: number,
-    forcedFirstHop?: string,
+    withoutBacktracking: boolean,
+    clicks?: EdgeClicks,
   ): string[] | null {
-    // Head index rather than `shift()`, as in `findShortestPath`.
-    const queue: ({ id: string; key: string; path: string[]; distance: number } | undefined)[] = [
-      {
-        id: startId,
-        key: startId,
-        path: [startId],
-        distance: 0,
-      },
-    ];
-    let head = 0;
+    const startPart = this.network.get(startId);
+    const endPart = this.network.get(endId);
+    const startStretch = clicks && startPart ? distancesToEnds(startPart, clicks.start) : null;
+    const endStretch = clicks && endPart ? distancesToEnds(endPart, clicks.end) : null;
 
-    const bestDistance = new Map<string, number>();
-    bestDistance.set(startId, 0);
+    // A state's key is the part id, or for `withoutBacktracking` the part id and
+    // the endpoint key it was entered at ("" for the start part).
+    const stateKey = (partId: string, entryKey: string) =>
+      withoutBacktracking ? `${partId}|${entryKey}` : partId;
 
-    let shortestPath: string[] | null = null;
-    let shortestPathDistance = Infinity;
+    const startKey = stateKey(startId, "");
+    const distance = new Map<string, number>([[startKey, 0]]);
+    const parent = new Map<string, string>();
+    const partOf = new Map<string, string>([[startKey, startId]]);
+    const entryOf = new Map<string, string>([[startKey, ""]]);
+    const queue = new MinHeap<string>();
+    queue.push(startKey, 0);
 
-    while (head < queue.length) {
-      const current = queue[head]!;
-      queue[head] = undefined;
-      head++;
-
-      // Skip if we already found a better path to this node
-      const currentBest = bestDistance.get(current.key);
-      if (currentBest !== undefined && current.distance > currentBest) {
-        continue;
+    let endState: string | null = null;
+    for (let popped = queue.pop(); popped; popped = queue.pop()) {
+      const { item: key, priority: currentDistance } = popped;
+      if (currentDistance > distance.get(key)!) continue; // A stale entry
+      const partId = partOf.get(key)!;
+      if (partId === endId) {
+        endState = key;
+        break;
       }
 
-      // Prune if exceeding max distance
-      if (current.distance > maxDistance) {
-        continue;
-      }
+      const part = this.network.get(partId);
+      if (!part) continue;
+      const entryKey = entryOf.get(key)!;
+      // The nodes the part may be left through: the far end from where it was
+      // entered, either end for the start part (or with reversals allowed)
+      const exitKeys =
+        !withoutBacktracking || entryKey === ""
+          ? [part.startKey, part.endKey]
+          : [entryKey === part.startKey ? part.endKey : part.startKey];
 
-      const currentPart = this.network.get(current.id);
-      if (!currentPart) continue;
-      const prevId = current.path.length > 1 ? current.path[current.path.length - 2] : null;
-      const prevPart = prevId === null ? null : (this.network.get(prevId) ?? null);
+      for (const nextId of this.network.connected(partId)) {
+        const next = this.network.get(nextId);
+        if (!next) continue;
 
-      const connected = this.network.connected(current.id);
-
-      for (const connectedId of connected) {
-        // Enforce forced first hop if specified
-        if (current.id === startId && forcedFirstHop && connectedId !== forcedFirstHop) {
-          continue;
-        }
-
-        // Prevent cycles in current path
-        if (current.path.includes(connectedId)) {
-          continue;
-        }
-
-        const connectedPart = this.network.get(connectedId);
-        if (!connectedPart) continue;
-
-        // Reject if adding this node creates backtracking. On the part that
-        // completes the path this is not redundant with the whole-path check
-        // below: `findBacktracking` orients each part from the next one only, so
-        // it cannot see a part entered and left through the same node.
-        if (wouldCreateBacktracking(prevPart, currentPart, connectedPart)) {
-          continue;
-        }
-
-        // Check if we reached the end
-        if (connectedId === endId) {
-          const completePath = [...current.path, connectedId];
-          const completeParts = this.partsOf(completePath);
-          if (this.locateBacktracking(completeParts)) continue;
-
-          const completeDistance = pathDistance(completeParts);
-          if (completeDistance <= maxDistance && completeDistance < shortestPathDistance) {
-            shortestPath = completePath;
-            shortestPathDistance = completeDistance;
+        // Every node the two share among those the part may be left through: two
+        // parts can share both ends (a loop track between the same two switches),
+        // and each node is its own way onto the next, at its own cost
+        for (const nodeKey of exitKeys) {
+          if (nodeKey !== next.startKey && nodeKey !== next.endKey) continue;
+          if (
+            withoutBacktracking &&
+            turnDegrees(part, nodeKey, next) > BACKTRACKING_THRESHOLD_DEGREES
+          ) {
+            continue;
           }
-          continue;
-        }
 
-        // Calculate distance efficiently (only add new segment)
-        const newDistance = current.distance + connectedPart.lengthMeters;
+          // What leaving the start part through this node costs, and what entering
+          // the next part through it does (see above)
+          const leaving =
+            key === startKey && startStretch
+              ? nodeKey === part.startKey
+                ? startStretch.toStart
+                : startStretch.toEnd
+              : 0;
+          const entering =
+            nextId === endId && endStretch
+              ? nodeKey === next.startKey
+                ? endStretch.toStart
+                : endStretch.toEnd
+              : next.lengthMeters;
 
-        // Only explore if this is best path to this node so far
-        const key = `${connectedId}:${isTraversedForward(connectedPart, currentPart, null) ? "start" : "end"}`;
-        const bestToNode = bestDistance.get(key);
-        if (bestToNode === undefined || newDistance < bestToNode) {
-          bestDistance.set(key, newDistance);
-          queue.push({
-            id: connectedId,
-            key,
-            path: [...current.path, connectedId],
-            distance: newDistance,
-          });
+          const nextKey = stateKey(nextId, nodeKey);
+          const nextDistance = currentDistance + leaving + entering;
+          const known = distance.get(nextKey);
+          if (known !== undefined && known <= nextDistance) continue;
+
+          distance.set(nextKey, nextDistance);
+          parent.set(nextKey, key);
+          partOf.set(nextKey, nextId);
+          entryOf.set(nextKey, nodeKey);
+          queue.push(nextKey, nextDistance);
         }
       }
     }
 
-    return shortestPath;
-  }
+    if (endState === null) return null;
 
-  /**
-   * Find non-backtracking alternative by trying different first hops
-   */
-  private findNonBacktrackingAlternative(
-    startId: string,
-    endId: string,
-    maxDistance: number,
-  ): string[] | null {
-    this.log(`  Trying to find path without backtracking...`);
-
-    // First attempt: no forced first hop
-    let path = this.findPathWithoutBacktracking(startId, endId, maxDistance);
-    if (path) {
-      const distance = pathDistance(this.partsOf(path));
-      this.log(
-        `  ✓ Found non-backtracking path via ${path[1]} (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`,
-      );
-      return path;
+    const path: string[] = [];
+    for (let key: string | undefined = endState; key !== undefined; key = parent.get(key)) {
+      path.push(partOf.get(key)!);
     }
-
-    // Retry with each possible first hop
-    this.log(`  First attempt found no path, trying different starting branches...`);
-    const firstHops = this.network.connected(startId);
-
-    for (const firstHop of firstHops) {
-      path = this.findPathWithoutBacktracking(startId, endId, maxDistance, firstHop);
-      if (path) {
-        const distance = pathDistance(this.partsOf(path));
-        this.log(
-          `  ✓ Found non-backtracking path via ${firstHop} on retry (${path.length} parts, ${(distance / 1000).toFixed(1)}km)`,
-        );
-        return path;
-      }
-    }
-
-    this.log(`  No non-backtracking path found after ${firstHops.length + 1} attempts`);
-    return null;
+    return path.reverse();
   }
 
   /** `findBacktracking`, logging what it finds. */

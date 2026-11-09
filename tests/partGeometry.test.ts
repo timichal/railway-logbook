@@ -8,7 +8,7 @@ import {
   isTraversedForward,
   junctionAngle,
   pathDistance,
-  wouldCreateBacktracking,
+  turnDegrees,
 } from "@/scripts/lib/partGeometry";
 import type { RailwayPart } from "@/scripts/lib/partNetwork";
 
@@ -107,26 +107,23 @@ describe("findBacktracking", () => {
   });
 });
 
-describe("wouldCreateBacktracking", () => {
-  const ab = part("ab", A, B);
-  const bc = part("bc", B, C);
-
-  test("carrying straight on is fine", () => {
-    assert.equal(wouldCreateBacktracking(ab, bc, part("cd", C, D)), false);
+describe("turnDegrees", () => {
+  test("straight on is 0, whichever way each part is drawn", () => {
+    assert.ok(turnDegrees(part("ab", A, B), coordinateToKey(B), part("bc", B, C)) < 0.1);
+    assert.ok(turnDegrees(part("ba", B, A), coordinateToKey(B), part("cb", C, B)) < 0.1);
   });
 
-  test("a part entered and left through the same node is a reversal", () => {
-    // bc is entered at B from ab, and the next part leaves from B too
-    const spur = part("bs", B, [14.01, 50.01]);
-    assert.equal(wouldCreateBacktracking(ab, bc, spur), true);
+  test("straight back is 180", () => {
+    const back = turnDegrees(part("ab", A, B), coordinateToKey(B), part("bx", B, [14.0, 50.0001]));
+    assert.ok(back > 179, `${back}`);
   });
 
-  test("a V at the new connection", () => {
-    assert.equal(wouldCreateBacktracking(ab, bc, part("cx", C, [14.0, 50.001])), true);
-  });
-
-  test("with no previous part only the angle counts", () => {
-    assert.equal(wouldCreateBacktracking(null, ab, bc), false);
+  test("the node given is the end the part is left through", () => {
+    // ab left at A is travelled westward, so carrying on west is straight on
+    const ab = part("ab", A, B);
+    const west = part("aw", A, [13.99, 50.0]);
+    assert.ok(turnDegrees(ab, coordinateToKey(A), west) < 0.1);
+    assert.ok(turnDegrees(ab, coordinateToKey(A), part("ab2", A, B)) > 179);
   });
 });
 

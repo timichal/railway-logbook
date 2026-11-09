@@ -42,20 +42,13 @@ index and writing its own `UPDATE`:
   escaping `recalculateAndStoreRoute` means the database is unhappy — `runPool`
   stops the other workers taking new routes, and it propagates. Marking a
   route invalid over a transient fault would be worse than failing loudly.
-- **Both BFS queues are popped through a head index, not `shift()`.** `shift()`
-  reindexes the whole queue on every pop, and at the 222 km buffer the queue
-  holds tens of thousands of entries; the consumed slot is cleared so its path
-  can be collected. The pop order is unchanged, so the search is the same search.
-  Measured against the previous form on synthetic networks: 80k parts,
-  325ms vs 374ms (`findShortestPath`) and 2.37s vs 2.46s
-  (`findPathWithoutBacktracking`); a wash on small ones.
-- **The cycle check stays `path.includes()`.** Carrying a `Set` of the path's ids
-  alongside each queue entry — the obvious fix for an O(path) scan in an inner
-  loop — is _slower here_, because a railway graph's parts have degree 2-3: the
-  scan runs about as often as the per-push `Set` copy would, at a much lower
-  constant. Measured on a 3000-part corridor, the `Set` cost 1.00s against 0.78s.
-  It would pay off only where nodes have many neighbours, which this graph does
-  not.
+- **The search is Dijkstra over a binary heap (`minHeap.ts`), with a parent per
+  state instead of a path copied into every queue entry.** It replaced a BFS by
+  part count and a label-correcting FIFO search for the non-backtracking
+  alternative, which copied the path on every push and checked it for cycles
+  with `path.includes()`. Over all 2142 valid routes and scenic lines the summed
+  finder time was the same as before (1241s against 1258s at 4 workers): as
+  below, the time is in loading parts, not in searching them.
 - **`RailwayPathFinder` takes `{quiet: true}`** instead of having its output
   silenced from outside. The old code swapped out the global `console.log` around
   each search and restored it in a `finally`; that is safe only while calls are
@@ -92,18 +85,13 @@ index and writing its own `UPDATE`:
   `lengthMeters` and its endpoint keys from `PartNetwork.add`, and
   `PartNetwork.connected` caches its sorted neighbour list per part — cleared
   whenever a part is added, since a part's neighbours depend on everything
-  loaded. The label-correcting search pops a part many times over, and used to
-  re-sum its haversines on every relaxation and rebuild and sort a `Set` on every
-  pop. `lengthMeters` is summed in the same order the relaxation summed it, so
-  the distances are identical to the bit. `pathDistance` deliberately
-  stays one running sum over every segment of the path: regrouping it per part
-  rounds differently, and its result decides between candidate paths. The
-  backtracking check per relaxation (two bearings off the connection segments)
-  is still computed each time, deliberately: it runs only in
-  `findPathWithoutBacktracking`, which only the few routes whose shortest path
-  backtracks ever enter, and there it is cheap next to the per-push path copy.
-  Caching it per part end would buy little; the time is in loading parts (see
-  "Still on the table").
+  loaded. The search used to re-sum a part's haversines on every relaxation and
+  rebuild and sort a `Set` on every pop. (`pathDistance`, which sums a whole
+  path, is now only for log lines, and a quiet run skips it.) The
+  turn check per relaxation (`turnDegrees`, two bearings) is still computed each
+  time, deliberately: only the search without backtracking makes it, which only
+  the few routes whose shortest path backtracks ever run. Caching it per part
+  end would buy little; the time is in loading parts (see "Still on the table").
 - **`loadRailwayParts`, the part-id-based loader, is gone.** Nothing called it,
   and it was the last carrier of the superseded `ST_Buffer` pattern. If part-id
   loading is ever wanted again, build it on `ST_DWithin` against `geometry_3857`
@@ -203,8 +191,8 @@ Cheaper than a full pair of runs, and enough for most changes: pull the previous
 finder out of git and run both through `findPathFromCoordinates` over a sample,
 comparing `partIds`, `coordinates`, `hasBacktracking` and `backtrackingAt` in
 memory, with no writes at all. Sample the routes that reach the code being
-changed — for this one, all 41 with `has_backtracking` (the only routes that
-enter `findPathWithoutBacktracking`) plus the longest few, which are the routes
+changed — for the backtracking search, all the routes with `has_backtracking`
+(the only ones that run it) plus the longest few, which are the routes
 whose buffer escalates and whose queues get large.
 
 The early exit for an off-network click point, the reused end parts and the
