@@ -41,7 +41,7 @@ interface CommonProps {
   /** Prefixes every element id, so the two forms never share one. */
   idPrefix: string;
   /**
-   * "wide" lays the radios and checkboxes out in rows (the create tab); "narrow"
+   * "wide" lays the radios and checkboxes out in rows (the New Route tab); "narrow"
    * stacks them for the edit form's 250px column.
    */
   layout: "wide" | "narrow";

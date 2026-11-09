@@ -458,7 +458,7 @@ export const SCENIC_ENDPOINTS_LAYER_ID = "scenic-endpoints";
 /**
  * Every scenic line's start and end point, as `createRouteEndpointsLayer` is for
  * routes: clickable to reuse as a new scenic line's point, since a click on the
- * band itself selects the line. Filled only while the Scenic tab is open.
+ * band itself selects the line. Filled only in the admin's scenic mode.
  */
 export function createScenicEndpointsLayer(): CircleLayerSpecification {
   return {

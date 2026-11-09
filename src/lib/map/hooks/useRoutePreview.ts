@@ -33,7 +33,7 @@ export interface PathPreview {
  * `avoidBacktracking` searches as a scenic line's save does (`findAdminPath`); a
  * path found in the other mode is discarded the same way.
  *
- * Lives with the page, not the create tab, which unmounts with the mobile drawer.
+ * Lives with the page, not the New Route / New Scenic tabs, which unmounts with the mobile drawer.
  */
 export function useRoutePreview(
   start: [number, number] | null,

@@ -78,7 +78,7 @@ export async function getScenicLines(region: RegionId): Promise<ActionResult<Adm
 }
 
 /**
- * The region's scenic line endpoints, for the admin map's dots in the Scenic tab
+ * The region's scenic line endpoints, for the admin map's dots in scenic mode
  * (a GeoJSON FeatureCollection of Points, as `getAllRouteEndpoints` is for routes).
  */
 export async function getScenicLineEndpoints(

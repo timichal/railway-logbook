@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EditingGeometry } from "@/components/admin/AdminCreateRouteTab";
-import type { EditingScenicLine } from "@/components/admin/AdminScenicTab";
+import type { EditingScenicLine } from "@/components/admin/AdminCreateScenicTab";
+import type { AdminListKind } from "@/components/admin/AdminList";
 import AdminSidebar, { type AdminTab } from "@/components/admin/AdminSidebar";
 import MapLoading from "@/components/layout/MapLoading";
 import Navbar from "@/components/layout/Navbar";
@@ -78,6 +79,10 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   // the list: the mobile drawer holding the list may close before the load ends.
   const focusOnLoadRef = useRef<number | null>(null);
   const [selectedTab, setSelectedTab] = useState<AdminTab>("routes");
+  // Whether the admin is working on routes or scenic lines: what the Routes tab
+  // lists, and so what the map is set up for there (see `scenicMode`). The New
+  // Route / New Scenic tabs set it as they open.
+  const [selectedListKind, setSelectedListKind] = useState<AdminListKind>("routes");
   // The create form's two picked points, held here and nowhere else: the map draws
   // them, the sidebar edits them, and the region switch below has to be able to
   // clear them. A second copy in the sidebar used to survive that clear and bring
@@ -97,28 +102,34 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     nonce: number;
   } | null>(null);
   const [notesRefreshTrigger, setNotesRefreshTrigger] = useState<number>(0);
-  // The Scenic tab's state, here rather than in the tab for the same reasons as the
-  // route's: the map reads it, and the mobile drawer unmounts the tab.
+  // The scenic lines' state, here rather than in the tabs for the same reasons as
+  // the route's: the map reads it, and the mobile drawer unmounts the tabs.
   const [selectedScenicLineId, setSelectedScenicLineId] = useState<number | null>(null);
   const [editingScenicLine, setEditingScenicLine] = useState<EditingScenicLine | null>(null);
   const [scenicRefreshTrigger, setScenicRefreshTrigger] = useState(0);
   const region = useRegion();
   const regionId = region.id;
-  // A route's geometry edit is only ever shown on the create tab, and the Scenic tab
-  // only in a region that shows scenic lines at all.
+  // Scenic lines only in a region that shows them at all.
+  const listKind: AdminListKind = region.hasScenicHighlight ? selectedListKind : "routes";
+  // A geometry edit is only ever shown on its New tab.
   const activeTab: AdminTab = editingGeometry
-    ? "create"
-    : selectedTab === "scenic" && !region.hasScenicHighlight
-      ? "routes"
-      : selectedTab;
+    ? "newRoute"
+    : editingScenicLine
+      ? "newScenic"
+      : selectedTab === "newScenic" && !region.hasScenicHighlight
+        ? "routes"
+        : selectedTab;
+  // Scenic lines are being worked on: listed, or drawn. The map then hides the
+  // routes so a click reaches the track under them, and selects scenic lines instead.
+  const scenicMode = activeTab === "newScenic" || (activeTab === "routes" && listKind === "scenic");
   // The path found between the picked points: drawn by the map, saved by the form,
   // and gone as soon as either point is. Searched as a scenic line's save searches
-  // it while the Scenic tab is open.
+  // it while scenic lines are worked on.
   const previewRoute = useRoutePreview(
     createFormCoordinates.startingCoordinate,
     createFormCoordinates.endingCoordinate,
     showError,
-    { avoidBacktracking: activeTab === "scenic" },
+    { avoidBacktracking: scenicMode },
   );
 
   // Switching regions drops everything picked out of the old one: the selected
@@ -132,26 +143,33 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     setFocusBounds(null);
     setSelectedScenicLineId(null);
     setEditingScenicLine(null);
-    // Left on a Scenic tab the new region does not have, a map click would keep
+    // Left on scenic lines the new region does not have, a map click would keep
     // picking for a form no longer on screen.
     if (!region.hasScenicHighlight) {
-      setSelectedTab((tab) => (tab === "scenic" ? "routes" : tab));
+      setSelectedTab((tab) => (tab === "newScenic" ? "routes" : tab));
+      setSelectedListKind("routes");
     }
   }, [regionId]);
 
-  // A route selected (on the map, or by a duplicate) opens the routes tab
+  // A route selected (on the map, or by a duplicate) opens the routes list
   useEffect(() => {
-    if (selectedRouteId) setSelectedTab("routes");
+    if (!selectedRouteId) return;
+    setSelectedTab("routes");
+    setSelectedListKind("routes");
   }, [selectedRouteId]);
 
-  // Leaving the Scenic tab, however it happens (a tab click, a route selected, a
-  // route's geometry edit), drops its selection and any geometry re-pick: the map
-  // would otherwise keep highlighting a line no list shows.
+  // Leaving scenic lines, however it happens (a tab or list switch, a route selected,
+  // a route's geometry edit), drops their selection and any re-pick: the map would
+  // otherwise keep highlighting a line no list shows. Coming to them drops the
+  // route's selection likewise, the routes being hidden then.
   useEffect(() => {
-    if (activeTab === "scenic") return;
-    setSelectedScenicLineId(null);
-    setEditingScenicLine(null);
-  }, [activeTab]);
+    if (scenicMode) {
+      setSelectedRouteId(null);
+    } else {
+      setSelectedScenicLineId(null);
+      setEditingScenicLine(null);
+    }
+  }, [scenicMode]);
 
   const handleRouteFocus = useCallback((bounds: RouteBounds) => {
     setFocusBounds({ bounds, nonce: Date.now() });
@@ -219,12 +237,28 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       if (!prev.endingCoordinate) return { ...prev, endingCoordinate: coordinate };
       return prev;
     });
-    // A click picks for whichever form is open: the scenic one, or else the route one
-    setSelectedTab((tab) => (tab === "scenic" ? tab : "create"));
-    // A new route's pick drops the selection; a geometry re-pick keeps its route
+    // A click picks for whichever kind is being worked on: scenic lines, or else
+    // routes (from the Notes tab too, whose map shows the routes).
+    if (scenicMode) {
+      setSelectedTab("newScenic");
+    } else {
+      setSelectedTab("newRoute");
+      setSelectedListKind("routes");
+    }
+    // A new pick drops the selection; a geometry re-pick keeps its route or line
     // selected, for the reload after the save.
     if (!editingGeometry) setSelectedRouteId(null);
+    if (!editingScenicLine) setSelectedScenicLineId(null);
   };
+
+  // A scenic line selected, from its list or on the map, opens its list; one picked
+  // on the map drops the points picked for a new line, as a route's selection does.
+  const handleScenicLineSelect = useCallback((id: number | null) => {
+    setSelectedScenicLineId(id);
+    if (id === null) return;
+    setSelectedTab("routes");
+    setCreateFormCoordinates(NO_COORDINATES);
+  }, []);
 
   // Throws on failure, which the form reports; it clears its fields only on success,
   // so a failed save leaves everything typed into it in place, to be retried.
@@ -296,6 +330,8 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
     <AdminSidebar
       selectedTab={activeTab}
       onSelectedTabChange={setSelectedTab}
+      listKind={listKind}
+      onListKindChange={setSelectedListKind}
       selectedRouteId={selectedRouteId}
       selectedRoute={selectedRouteDetail}
       selectedRouteLoading={selectedRouteLoading}
@@ -317,7 +353,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
       editingScenicLine={editingScenicLine}
       onEditingScenicLineChange={setEditingScenicLine}
       selectedScenicLineId={selectedScenicLineId}
-      onScenicLineSelect={setSelectedScenicLineId}
+      onScenicLineSelect={handleScenicLineSelect}
       onScenicLinesChanged={() => setScenicRefreshTrigger((prev) => prev + 1)}
     />
   );
@@ -368,18 +404,17 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
             selectedRouteId={selectedRouteId}
             selectedRouteLength={selectedRouteDetail?.length_km ?? null}
             onRouteSelect={handleRouteSelect}
-            // In the Scenic tab a click on a scenic line selects it, as a pick from its
-            // list does: the points picked for a new line stay, the form beside the
-            // list being still open. During a geometry re-pick the click picks a point.
+            // While scenic lines are worked on, a click on one selects it, as a pick
+            // from its list does. During a geometry re-pick the click picks a point.
             onScenicLineSelect={
-              activeTab === "scenic" && !editingScenicLine ? setSelectedScenicLineId : undefined
+              scenicMode && !editingScenicLine ? handleScenicLineSelect : undefined
             }
             onCoordinateClick={handleCoordinateClick}
             previewRoute={previewRoute}
             selectedCoordinates={createFormCoordinates}
             refreshTrigger={refreshTrigger}
             isEditingGeometry={!!editingGeometry}
-            scenicMode={activeTab === "scenic"}
+            scenicMode={scenicMode}
             selectedScenicLineId={selectedScenicLineId}
             scenicRefreshTrigger={scenicRefreshTrigger}
             focusBounds={focusBounds}

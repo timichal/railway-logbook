@@ -25,7 +25,7 @@ export const ADMIN_LAYERS = [
     offeredIn: (region: Region) => region.hasScenicHighlight,
   },
   { key: "stations", label: "Stations", layerIds: ["stations", "station_labels"] },
-  // A scenic line's endpoints are drawn only while the Scenic tab is open (see AdminMap)
+  // A scenic line's endpoints are drawn only in scenic mode (see AdminMap)
   {
     key: "endpoints",
     label: "Endpoints",
@@ -40,7 +40,7 @@ export type AdminLayerVisibility = Record<AdminLayerKey, boolean>;
 interface UseAdminLayerVisibilityOptions {
   map: React.RefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
-  /** Routes forced hidden: a geometry edit, or the Scenic lines tab (see AdminMap). */
+  /** Routes forced hidden: a geometry edit, or scenic mode (see AdminMap). */
   hideRoutes?: boolean;
 }
 

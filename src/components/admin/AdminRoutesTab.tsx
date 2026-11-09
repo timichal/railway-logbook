@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import AdminList, { usePagedList } from "@/components/admin/AdminList";
 import RouteEditForm, { type RouteEditAction } from "@/components/admin/RouteEditForm";
 import { type EditRouteData, NO_ROUTE_SUGGESTIONS } from "@/components/admin/RouteMetadataFields";
-import RoutesList from "@/components/admin/RoutesList";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import {
   type AdminRouteDetail,
@@ -86,6 +86,8 @@ const ROUTE_FILTERS: RouteFilter[] = [
   },
 ];
 
+const routeKey = (route: AdminRouteSummary) => route.track_id;
+
 function editFormFromRoute(route: AdminRouteDetail): EditRouteData {
   return {
     name: route.name || "",
@@ -122,6 +124,8 @@ interface AdminRoutesTabProps {
   onRouteFocus: (bounds: RouteBounds) => void;
   suggestions?: RouteSuggestions;
   onSuggestionsChanged?: () => void;
+  /** Heads the list: the Routes / Scenic switch. */
+  toolbar?: ReactNode;
 }
 
 export default function AdminRoutesTab({
@@ -135,6 +139,7 @@ export default function AdminRoutesTab({
   onRouteFocus,
   suggestions = NO_ROUTE_SUGGESTIONS,
   onSuggestionsChanged,
+  toolbar,
 }: AdminRoutesTabProps) {
   const region = useRegion();
   const regionId = region.id;
@@ -149,25 +154,22 @@ export default function AdminRoutesTab({
   const [routes, setRoutes] = useState<AdminRouteSummary[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
   const [checkedFilters, setCheckedFilters] = useState<ReadonlySet<RouteFilterKey>>(new Set());
   const regionFilters = useMemo(
     () => ROUTE_FILTERS.filter((filter) => filter.onlyWhen?.(region) ?? true),
     [region],
   );
-  // A region switch goes back to page 1 and unticks the filters the new region
-  // doesn't offer, so none is left applying unseen or comes back on return.
+  // A region switch unticks the filters the new region doesn't offer, so none is
+  // left applying unseen or comes back on return.
   const [filtersRegionId, setFiltersRegionId] = useState(regionId);
   if (filtersRegionId !== regionId) {
     setFiltersRegionId(regionId);
-    setCurrentPage(1);
     setCheckedFilters(
       (prev) => new Set(regionFilters.filter((f) => prev.has(f.key)).map((f) => f.key)),
     );
   }
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [markInvalidConfirmOpen, setMarkInvalidConfirmOpen] = useState(false);
-  const itemsPerPage = 100;
   const [editForm, setEditForm] = useState<EditRouteData | null>(null);
   // The form is filled once per route loaded, not on every change to its detail:
   // the under-repair toggle and Mark Invalid replace the detail too, and refilling
@@ -255,11 +257,13 @@ export default function AdminRoutesTab({
     return filtered;
   }, [orderedRoutes, searchKeys, searchQuery, checkedFilters]);
 
-  const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
-  const paginatedRoutes = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredRoutes.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredRoutes, currentPage]);
+  // Back to page 1 on a new search, filter or region
+  const paged = usePagedList(
+    filteredRoutes,
+    `${regionId}|${searchQuery}|${[...checkedFilters].join()}`,
+    routeKey,
+    selectedRouteId ?? null,
+  );
 
   const filterCounts = useMemo(
     () => regionFilters.map((filter) => routes.filter(filter.predicate).length),
@@ -279,14 +283,9 @@ export default function AdminRoutesTab({
       }),
   }));
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the filter states are intentional triggers to reset pagination to page 1 when filtering changes.
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, checkedFilters]);
-
   // Route selection. The page flies the map to a route picked here once it has
   // loaded; one already loaded has nothing to wait for.
-  const handleRouteClick = (trackId: number) => {
+  const handleRouteClick = ({ track_id: trackId }: AdminRouteSummary) => {
     if (selectedRoute?.track_id === trackId) {
       onRouteFocus(selectedRoute.bounds);
       return;
@@ -477,21 +476,33 @@ It is no longer recalculated, and becomes valid again only by re-picking its geo
       />
 
       <div className="h-full flex">
-        <RoutesList
-          paginatedRoutes={paginatedRoutes}
-          totalRoutes={routes.length}
+        <AdminList
+          toolbar={toolbar}
           filters={filterOptions}
-          hasRouteNames={region.hasRouteNames}
-          isLoading={listLoading && !selectedRoute}
-          selectedRouteId={selectedRouteId}
-          selectedRouteLoading={selectedRouteLoading}
           searchQuery={searchQuery}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          filteredCount={filteredRoutes.length}
           onSearchChange={setSearchQuery}
-          onRouteClick={handleRouteClick}
-          onPageChange={setCurrentPage}
+          searchPlaceholder={
+            region.hasRouteNames ? "Search by name, from or to..." : "Search by from or to..."
+          }
+          noun="route"
+          total={routes.length}
+          items={paged.items}
+          filteredCount={filteredRoutes.length}
+          currentPage={paged.currentPage}
+          totalPages={paged.totalPages}
+          onPageChange={paged.setCurrentPage}
+          getKey={routeKey}
+          selectedKey={selectedRouteId ?? null}
+          onItemClick={handleRouteClick}
+          renderItem={(route) => (
+            <RouteRow
+              route={route}
+              hasRouteNames={region.hasRouteNames}
+              loading={selectedRouteLoading && selectedRouteId === route.track_id}
+            />
+          )}
+          isLoading={listLoading && !selectedRoute}
+          emptyText="No routes in this region yet."
         />
 
         <RouteEditForm
@@ -515,6 +526,45 @@ It is no longer recalculated, and becomes valid again only by re-picking its geo
           onUnselect={handleUnselect}
         />
       </div>
+    </>
+  );
+}
+
+/**
+ * A routes list row. A naming region leads with the line name (and the other lines
+ * sharing the route), endpoints beneath; a route still missing its name falls back
+ * to the endpoints.
+ */
+function RouteRow({
+  route,
+  hasRouteNames,
+  loading,
+}: {
+  route: AdminRouteSummary;
+  hasRouteNames: boolean;
+  /** The route is selected and its detail is still loading. */
+  loading: boolean;
+}) {
+  return (
+    <>
+      {hasRouteNames && route.name ? (
+        <>
+          <div className="font-medium text-sm text-gray-900 truncate">
+            {route.name}
+            {route.other_names.length > 0 && (
+              <span className="font-normal text-gray-500"> + {route.other_names.join(", ")}</span>
+            )}
+          </div>
+          <div className="text-xs text-gray-500 truncate">
+            {route.from_station} ⟷ {route.to_station}
+          </div>
+        </>
+      ) : (
+        <div className="font-medium text-sm text-gray-900 truncate">
+          {route.from_station} ⟷ {route.to_station}
+        </div>
+      )}
+      {loading && <div className="text-xs text-gray-500">Loading…</div>}
     </>
   );
 }

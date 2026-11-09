@@ -33,7 +33,7 @@ interface AdminMapCallbacks {
   onCoordinateClickRef: RefObject<((coordinate: [number, number]) => void) | undefined>;
   onRouteSelectRef: RefObject<((routeId: number | null) => void) | undefined>;
   /**
-   * Set only while scenic lines can be selected (the Scenic tab, outside a geometry
+   * Set only while scenic lines can be selected (scenic mode, outside a geometry
    * re-pick): a scenic line then takes the click and shows its popup. Otherwise it
    * takes no click, which falls through to the parts under it.
    */

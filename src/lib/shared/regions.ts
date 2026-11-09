@@ -72,7 +72,7 @@ export interface Region {
    * Whether the "Scenic lines" toggle is offered on the user map. Scenic lines
    * (`scenic_lines`) are stored region-agnostically; this decides whether the
    * region's map offers to show them, and whether its admin page offers the
-   * Scenic tab to draw them — nothing drawn there would ever be shown.
+   * scenic lines to draw them — nothing drawn there would ever be shown.
    */
   hasScenicHighlight: boolean;
   /**

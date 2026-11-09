@@ -169,6 +169,32 @@ export function tabBtn(active: boolean): string {
 }
 
 /**
+ * One segment of a small in-panel segmented control (the admin's Routes / Scenic).
+ * The strip around it clips, so its focus ring is inset.
+ */
+export function segmentBtn(active: boolean): string {
+  return `flex-1 inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium transition-colors focus-visible:-outline-offset-2 border-r border-gray-300 last:border-r-0 ${
+    active
+      ? "bg-blue-600 text-white"
+      : "bg-surface text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200"
+  }`;
+}
+
+/**
+ * A toggle chip of a filter row, with its count inside. `empty` (nothing matches)
+ * dims an unticked one.
+ */
+export function filterChip(checked: boolean, empty: boolean): string {
+  return `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+    checked
+      ? "bg-blue-600 border-blue-600 text-white"
+      : `bg-surface border-gray-300 hover:bg-gray-50 active:bg-gray-100 ${
+          empty ? "text-gray-400" : "text-gray-700"
+        }`
+  }`;
+}
+
+/**
  * A full-width row in a suggestion dropdown or a picker list. `active` is the
  * keyboard/hover cursor, which is a different thing from `:hover` — the arrow keys
  * move it too.

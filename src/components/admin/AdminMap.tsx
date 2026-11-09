@@ -157,7 +157,8 @@ interface AdminMapProps {
   refreshTrigger?: number;
   isEditingGeometry?: boolean;
   /**
-   * The Scenic lines tab is open: routes are hidden, as while a route's geometry is
+   * Scenic lines are worked on (listed in the Routes tab, or drawn in New Scenic):
+   * routes are hidden, as while a route's geometry is
    * re-picked, so a click anywhere on the track picks a point - a scenic line rarely
    * starts where a route does, and a route over a part swallows the part's click.
    */
@@ -235,7 +236,7 @@ export default function AdminMap({
       layers: () => [
         createRailwayPartsLayer(),
         // Over the parts, so a scenic stretch shows while points are picked on them.
-        // It takes clicks only in the Scenic tab (`onScenicLineSelect`); otherwise
+        // It takes clicks only in scenic mode (`onScenicLineSelect`); otherwise
         // they fall through to the parts.
         createScenicLinesLayer({ visible: true }),
         // Regular solid; Heritage (dotted) and Special (dashed) get their own layers
@@ -296,7 +297,7 @@ export default function AdminMap({
       .catch((error) => console.error("Error fetching route endpoints:", error));
   }, [mapLoaded, refreshTrigger, regionId]);
 
-  // Scenic line endpoints, only while the Scenic tab is open: there a click on a
+  // Scenic line endpoints, only in scenic mode: there a click on a
   // band selects its line, so its dots are how a point at its end is picked.
   // biome-ignore lint/correctness/useExhaustiveDependencies: scenicRefreshTrigger is an intentional trigger to refetch the endpoints after a save.
   useEffect(() => {
