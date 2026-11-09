@@ -11,6 +11,7 @@ import {
   turnDegrees,
 } from "./partGeometry";
 import { PartNetwork, type RailwayPart } from "./partNetwork";
+import { loadPartRoutesAround, type PartRoutes } from "./partRoutes";
 
 /** A path as parts only; its coordinates are built by the caller, truncated to the clicks. */
 type PartPath = Omit<PathResult, "coordinates">;
@@ -21,7 +22,7 @@ interface EdgeClicks {
   end: [number, number];
 }
 
-interface PathFinderOptions {
+export interface PathFinderOptions {
   /**
    * Silence the search's progress logging.
    *
@@ -43,7 +44,29 @@ interface PathFinderOptions {
    * its click points, and between combinations the shorter one wins.
    */
   avoidBacktracking?: boolean;
+  /**
+   * Keep off track other routes already run along: such a part costs
+   * `TAKEN_PART_WEIGHT` times its length, so a route keeps to track of its own
+   * unless the only free way is much longer. For routes only; a scenic line is
+   * meant to lie on routes.
+   *
+   * `trackId` is the route being re-picked or recalculated (null for a new one):
+   * no part it runs along now counts, whoever else runs along it too. `snapshot` is every part's routes taken
+   * once before a bulk run (`loadAllPartRoutes`), so every route is judged
+   * against the same state of the others, whatever order the run takes them in.
+   * Without one the finder loads them for the area it searches, as they now
+   * stand (`loadPartRoutesAround`).
+   */
+  avoidOtherRoutes?: { trackId: number | null; snapshot?: PartRoutes };
 }
+
+/**
+ * The cost of a part another route runs along, per metre, against 1 for a free
+ * one. A shared stretch wins only where the free way round is over 50% longer.
+ * The shortcuts that made it needed were +23% (Ulikowo–Piła), +41% (Szczecin) and
+ * a parallel line's track (Fukushima–Tsukinoki).
+ */
+const TAKEN_PART_WEIGHT = 1.5;
 
 /**
  * How much longer than a backtracking path a non-backtracking one of another
@@ -72,10 +95,28 @@ export class RailwayPathFinder {
   private readonly network = new PartNetwork();
   private readonly quiet: boolean;
   private readonly avoidBacktracking: boolean;
+  private readonly avoidOtherRoutes: PathFinderOptions["avoidOtherRoutes"];
+  /** The routes of the parts loaded, for `avoidOtherRoutes`. */
+  private partRoutes: PartRoutes | null = null;
 
   constructor(options: PathFinderOptions = {}) {
     this.quiet = options.quiet ?? false;
     this.avoidBacktracking = options.avoidBacktracking ?? false;
+    this.avoidOtherRoutes = options.avoidOtherRoutes;
+    this.partRoutes = options.avoidOtherRoutes?.snapshot ?? null;
+  }
+
+  /**
+   * Whether a part is another route's: another route runs along it and the one
+   * being searched for doesn't. Track a route already shares is not held against
+   * it, so a duplicate being split (both copies on the whole stretch until each is
+   * re-picked) and two routes that share a stretch on purpose keep to it.
+   */
+  private isTaken(partId: string): boolean {
+    const routes = this.partRoutes?.get(partId);
+    if (!routes) return false;
+    const own = this.avoidOtherRoutes?.trackId ?? null;
+    return own === null || !routes.includes(own);
   }
 
   /** Progress logging, dropped entirely when the finder is quiet. */
@@ -228,6 +269,17 @@ export class RailwayPathFinder {
         this.log(`Found ${endPartIds.length} end part(s): ${endPartIds.join(", ")}`);
       }
 
+      // Which routes run along the parts just loaded, unless a bulk run handed
+      // its snapshot. After the check above, so a click off the network, the
+      // commonest way a route breaks, doesn't pay for it.
+      if (this.avoidOtherRoutes && !this.avoidOtherRoutes.snapshot) {
+        this.partRoutes = await loadPartRoutesAround(
+          dbClient,
+          [startCoordinate, endCoordinate],
+          bufferMeters,
+        );
+      }
+
       // Try all combinations
       const bestResult = this.findBestCoordinatePath(
         startPartIds,
@@ -302,9 +354,16 @@ export class RailwayPathFinder {
 
         this.log(`    Path found with ${pathResult.partIds.length} parts`);
 
-        // Calculate total distance
-        const distance = coordinateDistance(coordinates);
-        this.log(`    Distance: ${(distance / 1000).toFixed(2)} km`);
+        // What the path costs, as the search costs it: its length, plus the
+        // surcharge for track other routes run along. Combinations are compared
+        // on this, not on length alone, or a click on a junction would undo the
+        // search's keeping off other routes: the combination that starts on the
+        // taken track would win on length. Without `avoidOtherRoutes` it is the length.
+        const length = coordinateDistance(coordinates);
+        const distance =
+          length +
+          this.takenSurcharge(this.partsOf(pathResult.partIds), startCoordinate, endCoordinate);
+        this.log(`    Distance: ${(length / 1000).toFixed(2)} km`);
 
         // Selection logic: prefer non-backtracking paths when distances are close
         const isSameDistance = Math.abs(distance - bestDistance) < 10; // 10 meters tolerance
@@ -370,7 +429,8 @@ export class RailwayPathFinder {
    * from the end it is entered at to its click. A click near one end of a long
    * part otherwise costs the same both ways, and the search left Dęblin through the
    * far end of a 509m part whose click sat 5m from the near one. Without `clicks`
-   * the start part costs nothing and the end part its whole length.
+   * the start part costs nothing and the end part its whole length. A part another
+   * route runs along (`avoidOtherRoutes`) costs `TAKEN_PART_WEIGHT` times as much.
    *
    * `withoutBacktracking` searches only paths that never turn back on themselves:
    * a part is left through the end it was not entered at, and the turn onto the
@@ -393,6 +453,8 @@ export class RailwayPathFinder {
     const startPart = this.network.get(startId);
     const endPart = this.network.get(endId);
     const startStretch = clicks && startPart ? distancesToEnds(startPart, clicks.start) : null;
+    // Per metre, `TAKEN_PART_WEIGHT` for a part another route runs along
+    const weightOf = (partId: string) => (this.isTaken(partId) ? TAKEN_PART_WEIGHT : 1);
     const endStretch = clicks && endPart ? distancesToEnds(endPart, clicks.end) : null;
 
     // A state's key is the part id, or for `withoutBacktracking` the part id and
@@ -460,7 +522,8 @@ export class RailwayPathFinder {
               : next.lengthMeters;
 
           const nextKey = stateKey(nextId, nodeKey);
-          const nextDistance = currentDistance + leaving + entering;
+          const nextDistance =
+            currentDistance + leaving * weightOf(partId) + entering * weightOf(nextId);
           const known = distance.get(nextKey);
           if (known !== undefined && known <= nextDistance) continue;
 
@@ -480,6 +543,37 @@ export class RailwayPathFinder {
       path.push(partOf.get(key)!);
     }
     return path.reverse();
+  }
+
+  /**
+   * What keeping off other routes adds to a path's cost (`TAKEN_PART_WEIGHT`), in
+   * metres: the stretch travelled on taken parts, the end parts from and to their
+   * clicks, times the weight's excess over 1. As `findShortestPath` charges it.
+   */
+  private takenSurcharge(
+    parts: RailwayPart[],
+    startCoordinate: [number, number],
+    endCoordinate: [number, number],
+  ): number {
+    if (!this.partRoutes) return 0;
+    let taken = 0;
+    parts.forEach((part, i) => {
+      if (!this.isTaken(part.id)) return;
+      if (parts.length === 1) {
+        const from = distancesToEnds(part, startCoordinate);
+        const to = distancesToEnds(part, endCoordinate);
+        taken += from && to ? Math.abs(from.toStart - to.toStart) : part.lengthMeters;
+      } else if (i === 0 || i === parts.length - 1) {
+        // The stretch between the click and the end that meets the rest of the path
+        const neighbour = parts[i === 0 ? 1 : i - 1];
+        const meetsAtEnd = part.endKey === neighbour.startKey || part.endKey === neighbour.endKey;
+        const stretch = distancesToEnds(part, i === 0 ? startCoordinate : endCoordinate);
+        taken += stretch ? (meetsAtEnd ? stretch.toEnd : stretch.toStart) : part.lengthMeters;
+      } else {
+        taken += part.lengthMeters;
+      }
+    });
+    return taken * (TAKEN_PART_WEIGHT - 1);
   }
 
   /** `findBacktracking`, logging what it finds. */

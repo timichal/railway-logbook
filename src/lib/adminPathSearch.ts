@@ -25,15 +25,39 @@ function clickPoint(value: unknown, which: string): [number, number] {
 }
 
 /**
- * The path between two click points, or null if none joins them. `avoidBacktracking`
- * (scenic lines) prefers a combination that doesn't backtrack, see `PathFinderOptions`.
+ * What the admin is drawing: a scenic line, or a route — `trackId` the one whose
+ * geometry is being re-picked, null for a new one.
+ */
+export type AdminPathFor = { scenic: true } | { scenic: false; trackId: number | null };
+
+/**
+ * The path between two click points, or null if none joins them. A scenic line's
+ * search prefers a combination that doesn't backtrack; a route's keeps off track
+ * other routes run along, but never off its own (see `PathFinderOptions`).
  */
 export async function findAdminPath(
   startCoordinate: unknown,
   endCoordinate: unknown,
-  { avoidBacktracking = false }: { avoidBacktracking?: boolean } = {},
+  pathFor: AdminPathFor,
 ): Promise<PathResult | null> {
   const start = clickPoint(startCoordinate, "start");
   const end = clickPoint(endCoordinate, "end");
-  return new RailwayPathFinder({ avoidBacktracking }).findPathFromCoordinates(pool, start, end);
+  const finder = pathFor.scenic
+    ? new RailwayPathFinder({ avoidBacktracking: true })
+    : new RailwayPathFinder({ avoidOtherRoutes: { trackId: pathFor.trackId } });
+  return finder.findPathFromCoordinates(pool, start, end);
+}
+
+/**
+ * `AdminPathFor` as a client sent it, refused unless it is one: every export of
+ * a `"use server"` module is an endpoint, so its argument is not to be trusted.
+ */
+export function adminPathFor(value: unknown): AdminPathFor {
+  const { scenic, trackId } = (value ?? {}) as { scenic?: unknown; trackId?: unknown };
+  if (scenic === true) return { scenic: true };
+  if (trackId === null || trackId === undefined) return { scenic: false, trackId: null };
+  if (typeof trackId === "number" && Number.isInteger(trackId) && trackId > 0) {
+    return { scenic: false, trackId };
+  }
+  throw new ValidationError("The route being drawn is not a route id");
 }

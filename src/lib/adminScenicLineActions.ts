@@ -47,7 +47,7 @@ async function scenicLineWKT(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
 ): Promise<string> {
-  const path = await findAdminPath(startCoordinate, endCoordinate, { avoidBacktracking: true });
+  const path = await findAdminPath(startCoordinate, endCoordinate, { scenic: true });
   if (!path || path.coordinates.length < 2) {
     throw new ValidationError("No path found between the picked points");
   }

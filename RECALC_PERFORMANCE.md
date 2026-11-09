@@ -49,6 +49,14 @@ index and writing its own `UPDATE`:
   with `path.includes()`. Over all 2142 valid routes and scenic lines the summed
   finder time was the same as before (1241s against 1258s at 4 workers): as
   below, the time is in loading parts, not in searching them.
+- **Which routes run along which parts is one query per run, not per route**
+  (`loadAllPartRoutes`, for `avoidOtherRoutes`). Network-wide it costs 26–41s
+  locally, with the routes cut into 32-vertex pieces (`ST_Subdivide`) so the
+  parts' index is probed with tight boxes; joined whole, a long route's box
+  pulls in most of a country and it took 2.6 minutes. Per route instead
+  (`loadPartRoutesAround`, ~250ms for a 50km area) it would add ~2 minutes to
+  a run at 4 workers, and the outcome would depend on which routes the run had
+  already rewritten. The snapshot is ~285k entries in memory.
 - **`RailwayPathFinder` takes `{quiet: true}`** instead of having its output
   silenced from outside. The old code swapped out the global `console.log` around
   each search and restored it in a `finally`; that is safe only while calls are

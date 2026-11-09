@@ -1,7 +1,7 @@
 "use server";
 
 import type { ActionResult } from "./actionResult";
-import { findAdminPath } from "./adminPathSearch";
+import { type AdminPathFor, adminPathFor, findAdminPath } from "./adminPathSearch";
 import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import pool from "./db";
@@ -11,26 +11,23 @@ import type { RegionId } from "./shared/regions";
 import type { MapSearchResults, PathResult } from "./shared/types";
 
 /**
- * Find a path between two coordinates using BFS pathfinding — the admin's route
- * and scenic line preview.
+ * Find a path between two coordinates — the admin's route and scenic line preview.
  *
  * `lengthKm` is measured by PostGIS with the expression a save stores
  * (`lineLengthKmSql`), so the preview shows the length the route will have.
  * A path of fewer than two points is no line to measure — PostGIS would throw
  * and take the preview down with it — so it comes back with no length.
  *
- * `avoidBacktracking` for a scenic line, whose save searches the same way
- * (`findAdminPath`).
+ * `pathFor` says what is being drawn (`AdminPathFor`): a scenic line, whose save
+ * searches the same way, or a route, new or re-picked.
  */
 export async function findRailwayPathFromCoordinates(
   startCoordinate: [number, number],
   endCoordinate: [number, number],
-  options: { avoidBacktracking?: boolean } = {},
+  pathFor: AdminPathFor,
 ): Promise<ActionResult<(PathResult & { lengthKm: number | null }) | null>> {
   return asAdmin(async () => {
-    const path = await findAdminPath(startCoordinate, endCoordinate, {
-      avoidBacktracking: options?.avoidBacktracking === true,
-    });
+    const path = await findAdminPath(startCoordinate, endCoordinate, adminPathFor(pathFor));
     if (!path) return null;
     if (path.coordinates.length < 2) return { ...path, lengthKm: null };
     const result = await pool.query<{ length_km: number }>(

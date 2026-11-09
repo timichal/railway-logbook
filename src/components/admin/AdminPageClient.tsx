@@ -124,12 +124,13 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   const scenicMode = activeTab === "newScenic" || (activeTab === "routes" && listKind === "scenic");
   // The path found between the picked points: drawn by the map, saved by the form,
   // and gone as soon as either point is. Searched as a scenic line's save searches
-  // it while scenic lines are worked on.
+  // it while scenic lines are worked on; a route's keeps off the track of every
+  // route but the one being re-picked.
   const previewRoute = useRoutePreview(
     createFormCoordinates.startingCoordinate,
     createFormCoordinates.endingCoordinate,
     showError,
-    { avoidBacktracking: scenicMode },
+    scenicMode ? { scenic: true } : { scenic: false, trackId: editingGeometry?.track_id ?? null },
   );
 
   // Switching regions drops everything picked out of the old one: the selected

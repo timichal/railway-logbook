@@ -4,7 +4,8 @@ import { coordinatesToWKT } from "../lib/coordinateUtils";
 import { createPool } from "../lib/db";
 import { lineLengthKmSql } from "../lib/lineLength";
 import { formatStationProximity, refreshAllStationProximity } from "../lib/stationProximity";
-import { RailwayPathFinder } from "./lib/railwayPathFinder";
+import { loadAllPartRoutes, type PartRoutes } from "./lib/partRoutes";
+import { type PathFinderOptions, RailwayPathFinder } from "./lib/railwayPathFinder";
 import { runPool } from "./lib/runPool";
 
 /**
@@ -88,12 +89,13 @@ type RouteOutcome =
 /**
  * Recalculate a geometry from its stored click points and judge it against the
  * stored length: what a route and a scenic line have in common. Writes nothing.
- * `avoidBacktracking` for a scenic line, searched as its save searched it.
+ * `finder` is how it is searched: a scenic line avoiding backtracking as its save
+ * did, a route keeping off other routes' track (`PathFinderOptions`).
  */
 async function recalculateGeometry(
   db: Pool,
   row: StoredGeometryRow,
-  { avoidBacktracking = false }: { avoidBacktracking?: boolean } = {},
+  finder: Omit<PathFinderOptions, "quiet">,
 ): Promise<
   | { status: "invalid"; error: string }
   | { status: "ok"; lineString: string; newLength: number; hasBacktracking: boolean }
@@ -104,7 +106,7 @@ async function recalculateGeometry(
   // searches, several at a time, and their progress logging would bury the
   // summary. See PathFinderOptions for why patching the global console.log —
   // which is what this used to do — cannot survive two overlapping searches.
-  const pathFinder = new RailwayPathFinder({ quiet: true, avoidBacktracking });
+  const pathFinder = new RailwayPathFinder({ ...finder, quiet: true });
 
   // Deliberately no try/catch. Every way pathfinding can fail comes back as
   // null — the one failure that throws, a part combination whose chain doesn't
@@ -159,8 +161,14 @@ async function recalculateGeometry(
  * transaction spanning the whole run, which would hold row locks on
  * `railway_routes` for the length of the import.
  */
-async function recalculateAndStoreRoute(db: Pool, route: RouteRow): Promise<RouteOutcome> {
-  const outcome = await recalculateGeometry(db, route);
+async function recalculateAndStoreRoute(
+  db: Pool,
+  route: RouteRow,
+  partRoutes: PartRoutes,
+): Promise<RouteOutcome> {
+  const outcome = await recalculateGeometry(db, route, {
+    avoidOtherRoutes: { trackId: route.track_id, snapshot: partRoutes },
+  });
 
   if (outcome.status === "invalid") {
     const marked = await db.query(
@@ -240,6 +248,15 @@ async function recalculateAllRoutes(
   result.totalRoutes = routes.rows.length;
   console.log(`Found ${result.totalRoutes} routes to recalculate (${concurrency} at a time)`);
 
+  // Which routes run along which parts, once for the whole run: each route keeps
+  // off the others' track as it stood before the run, so the outcome doesn't
+  // depend on which routes the workers happen to rewrite first.
+  const snapshotStart = Date.now();
+  const partRoutes = await loadAllPartRoutes(db);
+  console.log(
+    `Found the routes of ${partRoutes.size} parts in ${((Date.now() - snapshotStart) / 1000).toFixed(0)}s`,
+  );
+
   // A pathfinding failure is already an outcome (see recalculateGeometry), so a
   // throw means the database itself is unhappy (or a bug): runPool stops the run
   // rather than marking a route invalid over what is probably a transient fault.
@@ -247,7 +264,7 @@ async function recalculateAllRoutes(
   const outcomes = await runPool(
     routes.rows,
     concurrency,
-    (route) => recalculateAndStoreRoute(db, route),
+    (route) => recalculateAndStoreRoute(db, route, partRoutes),
     (processed) => {
       if (processed % 10 === 0 || processed === result.totalRoutes) {
         process.stdout.write(`\r  ${processed}/${result.totalRoutes} routes recalculated...`);

@@ -1,6 +1,7 @@
 /**
  * TEMPORARY, for the switch from the part-count search to the distance search
- * (`RailwayPathFinder`). `npm run flagPathfinderChanges` marks every route and
+ * that keeps off other routes' track (`RailwayPathFinder`). Each time the search
+ * changes, `npm run flagPathfinderChanges` marks every route and
  * scenic line whose path the new search moves invalid under this reason, so the
  * admin re-picks each by hand rather than a recalculation saving it unseen; the
  * admin lists' "Recalculated" chip is the worklist. Remove this, the chip and

@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { PartNetwork } from "@/scripts/lib/partNetwork";
-import { RailwayPathFinder } from "@/scripts/lib/railwayPathFinder";
+import { type PathFinderOptions, RailwayPathFinder } from "@/scripts/lib/railwayPathFinder";
 
 type Coord = [number, number];
 
 /** A finder over the given parts, loaded as `findPathFromCoordinates` would load them. */
-function finderOver(parts: Record<string, Coord[]>): RailwayPathFinder {
-  const finder = new RailwayPathFinder({ quiet: true });
+function finderOver(
+  parts: Record<string, Coord[]>,
+  options: PathFinderOptions = {},
+): RailwayPathFinder {
+  const finder = new RailwayPathFinder({ ...options, quiet: true });
   (finder as unknown as { network: PartNetwork }).network.add(
     Object.entries(parts).map(([id, coordinates]) => ({ id, coordinates })),
   );
@@ -134,5 +137,59 @@ describe("RailwayPathFinder.findPath from click points", () => {
   test("and from the other end of it, the other way", () => {
     const clicks = { start: [0.0001, 0] as Coord, end: [0.005, 0.015] as Coord };
     assert.deepEqual(finder.findPath("1", "9", clicks)[0]?.partIds, ["1", "20", "9"]);
+  });
+});
+
+describe("RailwayPathFinder.findPath keeping off other routes", () => {
+  // The straight way from 1 to 9 is 20 + 21. A gentle way round (30 + 31) is
+  // 12% longer, the loop (10 + 11) 66% longer.
+  const gentleOut: Coord[] = [
+    [0.01, 0],
+    [0.02, 0.005],
+  ];
+  const gentleBack: Coord[] = [
+    [0.02, 0.005],
+    [0.03, 0],
+  ];
+  // Route 500 runs along the straight way
+  const straightTaken = new Map([
+    ["20", [500]],
+    ["21", [500]],
+  ]);
+
+  test("leaves track another route runs along for a way round up to 50% longer", () => {
+    const finder = finderOver(
+      { 1: start, 20: straightOut, 21: straightBack, 30: gentleOut, 31: gentleBack, 9: end },
+      { avoidOtherRoutes: { trackId: 7, snapshot: straightTaken } },
+    );
+    assert.deepEqual(finder.findPath("1", "9")[0]?.partIds, ["1", "30", "31", "9"]);
+  });
+
+  test("but not for one longer than that", () => {
+    const finder = finderOver(
+      { 1: start, 20: straightOut, 21: straightBack, 10: loopOut, 11: loopBack, 9: end },
+      { avoidOtherRoutes: { trackId: 7, snapshot: straightTaken } },
+    );
+    assert.deepEqual(finder.findPath("1", "9")[0]?.partIds, ["1", "20", "21", "9"]);
+  });
+
+  test("nor off track the route already shares (a duplicate being split)", () => {
+    const shared = new Map([
+      ["20", [500, 7]],
+      ["21", [500, 7]],
+    ]);
+    const finder = finderOver(
+      { 1: start, 20: straightOut, 21: straightBack, 30: gentleOut, 31: gentleBack, 9: end },
+      { avoidOtherRoutes: { trackId: 7, snapshot: shared } },
+    );
+    assert.deepEqual(finder.findPath("1", "9")[0]?.partIds, ["1", "20", "21", "9"]);
+  });
+
+  test("never keeps off the route's own track", () => {
+    const finder = finderOver(
+      { 1: start, 20: straightOut, 21: straightBack, 30: gentleOut, 31: gentleBack, 9: end },
+      { avoidOtherRoutes: { trackId: 500, snapshot: straightTaken } },
+    );
+    assert.deepEqual(finder.findPath("1", "9")[0]?.partIds, ["1", "20", "21", "9"]);
   });
 });

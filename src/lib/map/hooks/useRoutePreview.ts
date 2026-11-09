@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { findRailwayPathFromCoordinates } from "@/lib/adminMapActions";
+import type { AdminPathFor } from "@/lib/adminPathSearch";
 
 /** The admin's two picked points: a new route's or scenic line's, or a geometry edit's re-pick. */
 export interface CreateFormCoordinates {
@@ -30,8 +31,10 @@ export interface PathPreview {
  * changed while it ran is discarded — its answer is for points no longer picked.
  * Points are compared by identity: each click makes a new array.
  *
- * `avoidBacktracking` searches as a scenic line's save does (`findAdminPath`); a
- * path found in the other mode is discarded the same way.
+ * `pathFor` is what is being drawn (`AdminPathFor`): a scenic line searches as its
+ * save does, a route keeps off other routes' track but not its own. A path found
+ * for something else is discarded the same way. `scenic` and `trackId` are taken
+ * apart so that a new object each render doesn't search again.
  *
  * Lives with the page, not the New Route / New Scenic tabs, which unmounts with the mobile drawer.
  */
@@ -39,9 +42,13 @@ export function useRoutePreview(
   start: [number, number] | null,
   end: [number, number] | null,
   onError: (message: string) => void,
-  { avoidBacktracking = false }: { avoidBacktracking?: boolean } = {},
+  pathFor: AdminPathFor,
 ): PathPreview | null {
-  const [found, setFound] = useState<(PathPreview & { avoidBacktracking: boolean }) | null>(null);
+  const scenic = pathFor.scenic;
+  const trackId = pathFor.scenic ? null : pathFor.trackId;
+  const [found, setFound] = useState<
+    (PathPreview & { scenic: boolean; trackId: number | null }) | null
+  >(null);
   const reportError = useEffectEvent(onError);
 
   useEffect(() => {
@@ -53,7 +60,7 @@ export function useRoutePreview(
     }
     let cancelled = false;
 
-    findRailwayPathFromCoordinates(start, end, { avoidBacktracking })
+    findRailwayPathFromCoordinates(start, end, scenic ? { scenic } : { scenic, trackId })
       .then(unwrap)
       .then((result) => {
         if (cancelled) return;
@@ -70,7 +77,8 @@ export function useRoutePreview(
           endCoordinate: end,
           hasBacktracking: result.hasBacktracking,
           lengthKm: result.lengthKm,
-          avoidBacktracking,
+          scenic,
+          trackId,
         });
       })
       .catch((error) => {
@@ -82,12 +90,13 @@ export function useRoutePreview(
     return () => {
       cancelled = true;
     };
-  }, [start, end, avoidBacktracking]);
+  }, [start, end, scenic, trackId]);
 
   return found &&
     found.startCoordinate === start &&
     found.endCoordinate === end &&
-    found.avoidBacktracking === avoidBacktracking
+    found.scenic === scenic &&
+    found.trackId === trackId
     ? found
     : null;
 }

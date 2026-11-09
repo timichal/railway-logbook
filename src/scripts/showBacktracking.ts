@@ -58,8 +58,13 @@ function openRailwayMapUrl([lng, lat]: [number, number]): string {
 
 async function locateBacktracking(db: Pool, route: RouteRow): Promise<Outcome> {
   // Quiet for the same reason the bulk recalculation is: several searches run at
-  // once and their per-route chatter would bury the list.
-  const pathFinder = new RailwayPathFinder({ quiet: true });
+  // once and their per-route chatter would bury the list. Off other routes' track
+  // as the recalculation searches; loaded per search, for only the few flagged
+  // routes, rather than as the recalculation's network-wide snapshot.
+  const pathFinder = new RailwayPathFinder({
+    quiet: true,
+    avoidOtherRoutes: { trackId: route.track_id },
+  });
 
   try {
     const result = await pathFinder.findPathFromCoordinates(

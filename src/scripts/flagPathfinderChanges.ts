@@ -27,6 +27,7 @@ import type { Pool } from "pg";
 import { coordinatesToWKT } from "../lib/coordinateUtils";
 import { lineLengthKmSql } from "../lib/lineLength";
 import { PATHFINDER_CHANGE_ERROR } from "../lib/pathfinderChange";
+import { loadAllPartRoutes, type PartRoutes } from "./lib/partRoutes";
 import { RailwayPathFinder } from "./lib/railwayPathFinder";
 import { runPool } from "./lib/runPool";
 import { createRecalcPool, parseConcurrencyArg } from "./verifyRouteData";
@@ -46,6 +47,14 @@ interface LineRow {
   start_point: [number, number];
   end_point: [number, number];
   length_km: number;
+}
+
+interface FlagOptions {
+  thresholdMeters: number;
+  concurrency: number;
+  dryRun: boolean;
+  /** Which routes run along which parts, before anything is flagged. */
+  partRoutes: PartRoutes;
 }
 
 interface Change {
@@ -73,12 +82,14 @@ async function findChange(
   db: Pool,
   table: Table,
   row: LineRow,
-  thresholdMeters: number,
+  options: FlagOptions,
 ): Promise<string | null> {
-  const finder = new RailwayPathFinder({
-    quiet: true,
-    avoidBacktracking: table === "scenic_lines",
-  });
+  // Searched as the recalculation searches each (`verifyRouteData`)
+  const finder = new RailwayPathFinder(
+    table === "scenic_lines"
+      ? { quiet: true, avoidBacktracking: true }
+      : { quiet: true, avoidOtherRoutes: { trackId: row.id, snapshot: options.partRoutes } },
+  );
   const path = await finder.findPathFromCoordinates(db, row.start_point, row.end_point);
   if (!path) return `${PATHFINDER_CHANGE_ERROR}: no path found`;
 
@@ -95,16 +106,12 @@ async function findChange(
     [coordinatesToWKT(path.coordinates), row.id],
   );
   const { apart_m, new_length_km } = measured.rows[0];
-  if (apart_m <= thresholdMeters) return null;
+  if (apart_m <= options.thresholdMeters) return null;
 
   return `${PATHFINDER_CHANGE_ERROR}: stored ${row.length_km.toFixed(2)} km, now ${new_length_km.toFixed(2)} km, up to ${Math.round(apart_m)} m apart${path.hasBacktracking ? ", backtracks" : ""}`;
 }
 
-async function flagTable(
-  db: Pool,
-  table: Table,
-  options: { thresholdMeters: number; concurrency: number; dryRun: boolean },
-): Promise<Change[]> {
+async function flagTable(db: Pool, table: Table, options: FlagOptions): Promise<Change[]> {
   // The lines a recalculation would recalculate (verifyRouteData)
   const rows = await db.query<LineRow>(`
     SELECT ${idColumn(table)} AS id, ${LINE_COLUMNS}
@@ -117,7 +124,7 @@ async function flagTable(
   const errors = await runPool(
     rows.rows,
     options.concurrency,
-    (row) => findChange(db, table, row, options.thresholdMeters),
+    (row) => findChange(db, table, row, options),
     (done) => {
       if (done % 50 === 0 || done === rows.rows.length) {
         process.stdout.write(`\r  ${done}/${rows.rows.length}`);
@@ -160,7 +167,9 @@ async function main(): Promise<void> {
     console.log(
       `${dryRun ? "[dry run] " : ""}Flagging lines the new pathfinder moves by more than ${thresholdMeters} m`,
     );
-    const options = { thresholdMeters, concurrency, dryRun };
+    // The routes' snapshot, as the recalculation takes it (`verifyRouteData`)
+    const partRoutes = await loadAllPartRoutes(db);
+    const options = { thresholdMeters, concurrency, dryRun, partRoutes };
     const changes = [
       ...(await flagTable(db, "railway_routes", options)),
       ...(await flagTable(db, "scenic_lines", options)),
