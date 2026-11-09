@@ -16,7 +16,6 @@ import {
   setRouteUnderRepair,
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
-import { isPathfinderChange } from "@/lib/pathfinderChange";
 import { useRegion } from "@/lib/regionContext";
 import { foldForSearch } from "@/lib/searchText";
 import { routeTitle } from "@/lib/shared/map/routeFeature";
@@ -29,7 +28,6 @@ import { useSingleFlight } from "@/lib/ui/useSingleFlight";
 type RouteFilterKey =
   | "invalid"
   | "underRepair"
-  | "pathfinderChange"
   | "closed"
   | "unintendedBacktracking"
   | "withoutName";
@@ -61,18 +59,6 @@ const ROUTE_FILTERS: RouteFilter[] = [
     label: "Under repair",
     predicate: (route) => route.is_valid === false && route.under_repair === true,
     group: "invalid",
-  },
-  // TEMPORARY (`pathfinderChange.ts`): the invalid routes the new pathfinder
-  // moved, to re-pick. In a group of its own, so ticked beside "Invalid" it
-  // narrows the list rather than widening it.
-  {
-    key: "pathfinderChange",
-    label: "Recalculated",
-    predicate: (route) =>
-      route.is_valid === false &&
-      route.under_repair !== true &&
-      route.closed !== true &&
-      isPathfinderChange(route.error_message),
   },
   {
     key: "closed",

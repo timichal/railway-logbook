@@ -12,7 +12,6 @@ import {
   getScenicLines,
   updateScenicLineNames,
 } from "@/lib/adminScenicLineActions";
-import { isPathfinderChange } from "@/lib/pathfinderChange";
 import { useRegionId } from "@/lib/regionContext";
 import { foldForSearch } from "@/lib/searchText";
 import type { RouteBounds } from "@/lib/shared/types";
@@ -23,9 +22,6 @@ import { btn } from "@/lib/ui/buttonStyles";
 import { useSingleFlight } from "@/lib/ui/useSingleFlight";
 
 const scenicLineKey = (line: AdminScenicLine) => line.id;
-
-const isPathfinderChangeLine = (line: AdminScenicLine) =>
-  !line.is_valid && isPathfinderChange(line.error_message);
 
 interface AdminScenicLinesTabProps {
   selectedId: number | null;
@@ -61,8 +57,6 @@ export default function AdminScenicLinesTab({
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [invalidOnly, setInvalidOnly] = useState(false);
-  // TEMPORARY (`pathfinderChange.ts`): the invalid lines the new pathfinder moved
-  const [pathfinderChangeOnly, setPathfinderChangeOnly] = useState(false);
   // The selected line's names as being edited, filled once per line selected.
   const [names, setNames] = useState<{ from: string; to: string } | null>(null);
   const [namesForId, setNamesForId] = useState<number | null>(null);
@@ -109,20 +103,18 @@ export default function AdminScenicLinesTab({
         (line) =>
           line.id === selectedId ||
           ((!invalidOnly || !line.is_valid) &&
-            (!pathfinderChangeOnly || isPathfinderChangeLine(line)) &&
             (!query ||
               foldForSearch(line.from_station).includes(query) ||
               foldForSearch(line.to_station).includes(query))),
       );
-  }, [lines, search, invalidOnly, pathfinderChangeOnly, selectedId]);
+  }, [lines, search, invalidOnly, selectedId]);
   const paged = usePagedList(
     filtered,
-    `${regionId}|${search}|${invalidOnly}|${pathfinderChangeOnly}`,
+    `${regionId}|${search}|${invalidOnly}`,
     scenicLineKey,
     selectedId,
   );
   const invalidCount = useMemo(() => lines.filter((line) => !line.is_valid).length, [lines]);
-  const pathfinderChangeCount = useMemo(() => lines.filter(isPathfinderChangeLine).length, [lines]);
 
   const handleSaveNames = async () => {
     if (!selected || !names) return;
@@ -175,13 +167,6 @@ export default function AdminScenicLinesTab({
               count: invalidCount,
               checked: invalidOnly,
               onChange: setInvalidOnly,
-            },
-            {
-              key: "pathfinderChange",
-              label: "Recalculated",
-              count: pathfinderChangeCount,
-              checked: pathfinderChangeOnly,
-              onChange: setPathfinderChangeOnly,
             },
           ]}
           searchQuery={search}
