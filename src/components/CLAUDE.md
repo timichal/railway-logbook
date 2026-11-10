@@ -39,7 +39,7 @@ One directory per part of the app (`logbook/` sidebar and tabs, `map/`, `sharing
 
 ## Admin
 
-- Where `hasRouteNames`, the route forms have a required Name field above From, and the routes list is sorted and searched by name, with a "Without name" filter. Other names show after the name in the list.
+- Where `hasRouteNames`, the route forms have a required Name field above From, and the routes list is sorted and searched by name. Other names show after the name in the list.
 - The admin's tabs are Routes, New Route, New Scenic (where `hasScenicHighlight`) and Notes. The Routes tab lists routes or scenic lines (`AdminList`, switched by `listKind`, held by the page); a list mounts the first time it is shown and then stays mounted while the tab is open, keeping its search, filters and page. A newly selected item turns its list to its page (`usePagedList`). A selection shows its form in the right-hand column, and a geometry re-pick moves to the matching New tab. A New tab, a pick on the map and the list switch all drop the selection.
 - **Scenic mode** (`scenicMode` in `AdminPageClient`: New Scenic, or the Routes tab on its Scenic list): the admin map hides the routes so clicks reach the parts under them, and the preview avoids backtracking. A scenic line then shows a From/To popup and a click selects it, as a route does elsewhere (`onScenicLineSelect`, passed only then and not during its geometry re-pick). Its endpoints are drawn as violet dots that pick their coordinate (`getScenicLineEndpoints`), so a new line can still start where one ends.
 - The route preview is derived from the picked points and dropped when they change. Its length is measured by the server with `lineLengthKmSql`.

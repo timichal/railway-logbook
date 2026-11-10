@@ -21,7 +21,8 @@ export const NO_ROUTE_SUGGESTIONS: RouteSuggestions = { tags: [], lineNames: [] 
 
 /**
  * Whether a form's required fields are filled — the endpoints, the name where the
- * region names its lines, and the link name where there is a link (`routeLink`).
+ * region names its lines, the link name where there is a link (`routeLink`), and
+ * at least one usage tag (`routeUsageTags`).
  * Trimmed, as the save trims them: a name of spaces would otherwise enable Save
  * and be stored as an empty string.
  */
@@ -30,7 +31,8 @@ export function routeMetadataIncomplete(value: SaveRouteData, hasRouteNames: boo
     !value.from_station.trim() ||
     !value.to_station.trim() ||
     (hasRouteNames && !value.name.trim()) ||
-    (!!value.link.trim() && !value.link_name.trim())
+    (!!value.link.trim() && !value.link_name.trim()) ||
+    !value.usage_tags.some((tag) => tag.trim())
   );
 }
 
@@ -245,12 +247,17 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
       </div>
 
       <div>
-        <span className={GROUP_LABEL}>Usage Tags</span>
+        <span className={GROUP_LABEL}>Usage Tags *</span>
         <TagInput
           value={value.usage_tags}
           availableTags={suggestions.tags}
           onChange={(usage_tags) => set({ usage_tags })}
         />
+        {/* Save stays off without one; on the edit form this is further down than
+            the button, so say why (a route stored before the rule may have none) */}
+        {!value.usage_tags.some((tag) => tag.trim()) && (
+          <p className="text-xs text-orange-700 mt-1">Add a usage tag to save.</p>
+        )}
       </div>
 
       {narrow ? (

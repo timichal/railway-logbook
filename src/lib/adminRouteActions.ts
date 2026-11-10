@@ -2,7 +2,13 @@
 
 import type { PoolClient } from "pg";
 import type { ActionResult } from "./actionResult";
-import { requiredStations, routeClosure, routeLineNames, routeLink } from "./adminValidation";
+import {
+  requiredStations,
+  routeClosure,
+  routeLineNames,
+  routeLink,
+  routeUsageTags,
+} from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
 import { countryAt } from "./countryUtils";
@@ -55,6 +61,8 @@ export type AdminRouteSummary = {
   to_station: string;
   description: string | null;
   usage_type: UsageType;
+  /** In the list for its "Without usage tags" filter. */
+  usage_tags: string[];
   line_class: LineClass;
   is_valid: boolean;
   error_message: string | null;
@@ -69,7 +77,6 @@ export type AdminRouteSummary = {
  * form, the map focus and the geometry re-pick need.
  */
 export type AdminRouteDetail = AdminRouteSummary & {
-  usage_tags: string[];
   link: string | null;
   link_name: string | null;
   /** When a closed route's service ended (YYYY-MM-DD), where known. */
@@ -98,7 +105,7 @@ export async function getAllRailwayRoutes(
 ): Promise<ActionResult<AdminRouteSummary[]>> {
   return asAdmin(async () => {
     const result = await pool.query<AdminRouteSummary>(`
-    SELECT track_id, name, other_names, from_station, to_station, description, usage_type, line_class,
+    SELECT track_id, name, other_names, from_station, to_station, description, usage_type, usage_tags, line_class,
            is_valid, error_message, under_repair, closed, intended_backtracking, has_backtracking
     FROM railway_routes
     WHERE ${regionContainsSql(region, "starting_coordinate")}
@@ -442,6 +449,7 @@ export async function saveRailwayRoute(
         // The name is required where the region names its lines, but only the form checks it
         const { name, otherNames } = routeLineNames(routeData.name, routeData.other_names);
         const { link, linkName } = routeLink(routeData.link, routeData.link_name);
+        const usageTags = routeUsageTags(routeData.usage_tags);
         // A route can be created closed: one added only for the rides on a line
         // that has already stopped running
         const { closed, closedOn } = routeClosure(routeData.closed, routeData.closed_on);
@@ -466,7 +474,7 @@ export async function saveRailwayRoute(
           to,
           routeData.description || null,
           routeData.usage_type,
-          routeData.usage_tags || [],
+          usageTags,
           link,
           geometryWKT,
           startCountry,
@@ -580,6 +588,7 @@ export async function updateRailwayRoute(
     const lineNames = routeLineNames(name, otherNames);
     const routeLinkValues = routeLink(link, linkName);
     const closure = routeClosure(closed, closedOn);
+    const tags = routeUsageTags(usageTags);
     const result = await pool.query<AdminRouteDetail>(
       `
     UPDATE railway_routes
@@ -596,7 +605,7 @@ export async function updateRailwayRoute(
         to,
         description,
         usageType,
-        usageTags || [],
+        tags,
         routeLinkValues.link,
         lineClass,
         intendedBacktracking,

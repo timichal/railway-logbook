@@ -1,5 +1,5 @@
 import { ValidationError } from "./errors";
-import { foldForSearch } from "./searchText";
+import { foldAccents, foldForSearch } from "./searchText";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
 
 /**
@@ -60,6 +60,32 @@ export function routeClosure(
     throw new ValidationError("The closing date must be a day (YYYY-MM-DD)");
   }
   return { closed, closedOn: day };
+}
+
+/**
+ * A route's usage tags, trimmed, blanks dropped, and at least one required: the
+ * tags are what says what runs on a line (daily, seasonal, S-Bahn…). Routes stored
+ * before the rule may have none, but no edit can be saved until one is added.
+ * Duplicates are dropped as the tag input compares them (`foldAccents`: case and
+ * diacritics aside, separators kept, since "1-2x" is not "12x"), so "Daily" beside
+ * "daily" never becomes two suggestions. Checked as a value, since every admin
+ * action is an endpoint.
+ */
+export function routeUsageTags(tags: unknown): string[] {
+  if (!Array.isArray(tags) || tags.some((tag) => typeof tag !== "string")) {
+    throw new ValidationError("Usage tags must be a list of tags");
+  }
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  for (const tag of tags as string[]) {
+    const trimmed = tag.trim();
+    const folded = foldAccents(trimmed);
+    if (!trimmed || seen.has(folded)) continue;
+    seen.add(folded);
+    kept.push(trimmed);
+  }
+  if (kept.length === 0) throw new ValidationError("A route needs at least one usage tag");
+  return kept;
 }
 
 /**

@@ -23,7 +23,7 @@ import { useSingleFlight } from "@/lib/ui/useSingleFlight";
 /** A geometry edit in progress: the route whose points are being re-picked. */
 export type EditingGeometry = Pick<
   AdminRouteDetail,
-  "track_id" | "name" | "from_station" | "to_station"
+  "track_id" | "name" | "from_station" | "to_station" | "intended_backtracking"
 >;
 
 const EMPTY_FORM: SaveRouteData = {
@@ -125,6 +125,12 @@ export default function AdminCreateRouteTab({
 
   const isEditMode = editingGeometry !== null;
   const editingTitle = editingGeometry && routeTitle(editingGeometry, region.id);
+  // Warned about before the save, which would flag it (`has_backtracking`) for the
+  // "Unintended backtracking" list. Silent once the route says it is intended.
+  const intendedBacktracking = editingGeometry
+    ? editingGeometry.intended_backtracking
+    : createForm.intended_backtracking;
+  const warnBacktracking = previewRoute?.hasBacktracking === true && !intendedBacktracking;
 
   return (
     <div className="p-4 overflow-y-auto">
@@ -155,6 +161,14 @@ export default function AdminCreateRouteTab({
           locked={isPreviewMode}
           onClear={() => onCoordinatesChange((prev) => ({ ...prev, endingCoordinate: null }))}
         />
+        {warnBacktracking && (
+          <div className="border rounded-md p-3 bg-orange-50 border-orange-200 text-sm text-orange-800">
+            This path backtracks. Re-pick a point if that isn't meant to happen
+            {isEditMode
+              ? "; if it is, tick Intended backtracking on the route after saving."
+              : ", or tick Intended backtracking below if it is."}
+          </div>
+        )}
 
         {!isEditMode && (
           <RouteMetadataFields

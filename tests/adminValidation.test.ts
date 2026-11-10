@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { routeClosure, routeLink } from "@/lib/adminValidation";
+import { routeClosure, routeLink, routeUsageTags } from "@/lib/adminValidation";
 import { ValidationError } from "@/lib/errors";
 
 describe("routeClosure", () => {
@@ -21,6 +21,32 @@ describe("routeClosure", () => {
     // Not a string at all: refused even beside an unticked box, never dropped quietly
     assert.throws(() => routeClosure(true, 20241215), ValidationError);
     assert.throws(() => routeClosure(false, {}), ValidationError);
+  });
+});
+
+describe("routeUsageTags", () => {
+  test("tags, trimmed, blanks dropped", () => {
+    assert.deepEqual(routeUsageTags([" Daily ", "", "S-Bahn"]), ["Daily", "S-Bahn"]);
+  });
+
+  test("duplicates dropped, case and diacritics aside, the first kept", () => {
+    assert.deepEqual(routeUsageTags(["Daily", " daily", "Saisonní", "saisonni"]), [
+      "Daily",
+      "Saisonní",
+    ]);
+    // Separators still count: these are two different frequencies
+    assert.deepEqual(routeUsageTags(["1-2x", "12x"]), ["1-2x", "12x"]);
+  });
+
+  test("at least one tag is required", () => {
+    assert.throws(() => routeUsageTags([]), ValidationError);
+    assert.throws(() => routeUsageTags(["  "]), ValidationError);
+  });
+
+  test("anything but a list of strings is refused", () => {
+    assert.throws(() => routeUsageTags(null), ValidationError);
+    assert.throws(() => routeUsageTags("Daily"), ValidationError);
+    assert.throws(() => routeUsageTags(["Daily", 1]), ValidationError);
   });
 });
 
