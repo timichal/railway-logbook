@@ -211,11 +211,7 @@ export default function AdminCreateRouteTab({
               <button
                 type="button"
                 onClick={handleSaveRoute}
-                disabled={
-                  isSaving ||
-                  !isPreviewMode ||
-                  routeMetadataIncomplete(createForm, region.hasRouteNames)
-                }
+                disabled={isSaving || !isPreviewMode || routeMetadataIncomplete(createForm, region)}
                 className={`${btn("success", "md")} w-full`}
               >
                 {isSaving ? "Saving…" : "Save Route to Database"}

@@ -8,6 +8,7 @@ import {
   routeLineNames,
   routeLink,
   routeUsageTags,
+  usageTagsRequiredAt,
 } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
@@ -449,7 +450,9 @@ export async function saveRailwayRoute(
         // The name is required where the region names its lines, but only the form checks it
         const { name, otherNames } = routeLineNames(routeData.name, routeData.other_names);
         const { link, linkName } = routeLink(routeData.link, routeData.link_name);
-        const usageTags = routeUsageTags(routeData.usage_tags);
+        const usageTags = routeUsageTags(routeData.usage_tags, {
+          required: usageTagsRequiredAt(startCoordinate),
+        });
         // A route can be created closed: one added only for the rides on a line
         // that has already stopped running
         const { closed, closedOn } = routeClosure(routeData.closed, routeData.closed_on);
@@ -588,40 +591,50 @@ export async function updateRailwayRoute(
     const lineNames = routeLineNames(name, otherNames);
     const routeLinkValues = routeLink(link, linkName);
     const closure = routeClosure(closed, closedOn);
-    const tags = routeUsageTags(usageTags);
-    const result = await pool.query<AdminRouteDetail>(
-      `
-    UPDATE railway_routes
-    SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, usage_tags = $7,
-        link = $8, link_name = $12, line_class = $9, intended_backtracking = $10, other_names = $11,
-        closed = $13, closed_on = $14, under_repair = under_repair AND NOT $13
-    WHERE track_id = $1
-    RETURNING ${ROUTE_DETAIL_COLUMNS}
-  `,
-      [
-        trackId,
-        lineNames.name,
-        from,
-        to,
-        description,
-        usageType,
-        tags,
-        routeLinkValues.link,
-        lineClass,
-        intendedBacktracking,
-        lineNames.otherNames,
-        routeLinkValues.linkName,
-        closure.closed,
-        closure.closedOn,
-      ],
-    );
+    return withTransaction(async (client) => {
+      // Whether a tag is required follows the route's region, read from where it
+      // starts rather than from the client. Locked, so a geometry re-pick can't
+      // move the start between this check and the write.
+      const start = await client.query<{ start: [number, number] }>(
+        `SELECT ${lngLatSql("starting_coordinate")} AS start FROM railway_routes
+         WHERE track_id = $1 FOR UPDATE`,
+        [trackId],
+      );
+      // Deleted since it was opened (another tab, a split finished elsewhere)
+      if (!start.rows[0]) throw new ValidationError("Route not found");
+      const tags = routeUsageTags(usageTags, {
+        required: usageTagsRequiredAt(start.rows[0].start),
+      });
 
-    // Deleted since it was opened (another tab, a split finished elsewhere)
-    const row = result.rows[0];
-    if (!row) {
-      throw new ValidationError("Route not found");
-    }
-    return row;
+      // The row is locked, so the update finds it
+      const result = await client.query<AdminRouteDetail>(
+        `
+      UPDATE railway_routes
+      SET name = $2, from_station = $3, to_station = $4, description = $5, usage_type = $6, usage_tags = $7,
+          link = $8, link_name = $12, line_class = $9, intended_backtracking = $10, other_names = $11,
+          closed = $13, closed_on = $14, under_repair = under_repair AND NOT $13
+      WHERE track_id = $1
+      RETURNING ${ROUTE_DETAIL_COLUMNS}
+    `,
+        [
+          trackId,
+          lineNames.name,
+          from,
+          to,
+          description,
+          usageType,
+          tags,
+          routeLinkValues.link,
+          lineClass,
+          intendedBacktracking,
+          lineNames.otherNames,
+          routeLinkValues.linkName,
+          closure.closed,
+          closure.closedOn,
+        ],
+      );
+      return result.rows[0];
+    });
   });
 }
 

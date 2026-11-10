@@ -19,6 +19,7 @@ import {
 import { useRegion } from "@/lib/regionContext";
 import { foldForSearch } from "@/lib/searchText";
 import { routeTitle } from "@/lib/shared/map/routeFeature";
+import type { Region } from "@/lib/shared/regions";
 import type { RouteBounds } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints, compareText } from "@/lib/ui/adminListSort";
@@ -37,6 +38,8 @@ interface RouteFilter {
   predicate: (route: AdminRouteSummary) => boolean;
   /** Ticked filters sharing a group are OR'd; groups are AND'd. Defaults to the key. */
   group?: string;
+  /** Offered only in the regions this returns true for. */
+  onlyWhen?: (region: Region) => boolean;
 }
 
 const ROUTE_FILTERS: RouteFilter[] = [
@@ -74,11 +77,13 @@ const ROUTE_FILTERS: RouteFilter[] = [
       route.closed !== true,
   },
   // The worklist of routes stored before a tag was required (`routeUsageTags`):
-  // none of them can have an edit saved until one is added.
+  // none of them can have an edit saved until one is added. Only where the region
+  // requires one.
   {
     key: "withoutUsageTags",
     label: "Without usage tags",
     predicate: (route) => route.usage_tags.length === 0,
+    onlyWhen: (region) => region.requiresUsageTags,
   },
 ];
 
@@ -151,6 +156,19 @@ export default function AdminRoutesTab({
   const [listLoading, setListLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [checkedFilters, setCheckedFilters] = useState<ReadonlySet<RouteFilterKey>>(new Set());
+  const regionFilters = useMemo(
+    () => ROUTE_FILTERS.filter((filter) => filter.onlyWhen?.(region) ?? true),
+    [region],
+  );
+  // A region switch unticks the filters the new region doesn't offer, so none is
+  // left applying unseen or comes back on return.
+  const [filtersRegionId, setFiltersRegionId] = useState(regionId);
+  if (filtersRegionId !== regionId) {
+    setFiltersRegionId(regionId);
+    setCheckedFilters(
+      (prev) => new Set(regionFilters.filter((f) => prev.has(f.key)).map((f) => f.key)),
+    );
+  }
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [markInvalidConfirmOpen, setMarkInvalidConfirmOpen] = useState(false);
   const [editForm, setEditForm] = useState<EditRouteData | null>(null);
@@ -220,7 +238,7 @@ export default function AdminRoutesTab({
 
   const filteredRoutes = useMemo(() => {
     const groups = new Map<string, RouteFilter["predicate"][]>();
-    for (const filter of ROUTE_FILTERS) {
+    for (const filter of regionFilters) {
       if (!checkedFilters.has(filter.key)) continue;
       const group = filter.group ?? filter.key;
       groups.set(group, [...(groups.get(group) ?? []), filter.predicate]);
@@ -238,7 +256,7 @@ export default function AdminRoutesTab({
     }
 
     return filtered;
-  }, [orderedRoutes, searchKeys, searchQuery, checkedFilters]);
+  }, [orderedRoutes, searchKeys, searchQuery, checkedFilters, regionFilters]);
 
   // Back to page 1 on a new search, filter or region
   const paged = usePagedList(
@@ -249,10 +267,10 @@ export default function AdminRoutesTab({
   );
 
   const filterCounts = useMemo(
-    () => ROUTE_FILTERS.map((filter) => routes.filter(filter.predicate).length),
-    [routes],
+    () => regionFilters.map((filter) => routes.filter(filter.predicate).length),
+    [regionFilters, routes],
   );
-  const filterOptions = ROUTE_FILTERS.map((filter, i) => ({
+  const filterOptions = regionFilters.map((filter, i) => ({
     key: filter.key,
     label: filter.label,
     count: filterCounts[i],

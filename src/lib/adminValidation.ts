@@ -1,6 +1,7 @@
 import { ValidationError } from "./errors";
 import { foldAccents, foldForSearch } from "./searchText";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
+import { REGIONS, regionOfPoint } from "./shared/regions";
 
 /**
  * A route's or scenic line's endpoint names, required. The forms say so first,
@@ -63,15 +64,17 @@ export function routeClosure(
 }
 
 /**
- * A route's usage tags, trimmed, blanks dropped, and at least one required: the
- * tags are what says what runs on a line (daily, seasonal, S-Bahn…). Routes stored
- * before the rule may have none, but no edit can be saved until one is added.
+ * A route's usage tags, trimmed, blanks dropped, and at least one required where
+ * the route's region says so (`requiresUsageTags`, decided from the route's start
+ * point by `usageTagsRequiredAt`, never taken from the client). There, a route
+ * stored before the rule may have none, but no edit to it can be saved until one
+ * is added; elsewhere an untagged route saves as it is.
  * Duplicates are dropped as the tag input compares them (`foldAccents`: case and
  * diacritics aside, separators kept, since "1-2x" is not "12x"), so "Daily" beside
  * "daily" never becomes two suggestions. Checked as a value, since every admin
  * action is an endpoint.
  */
-export function routeUsageTags(tags: unknown): string[] {
+export function routeUsageTags(tags: unknown, { required }: { required: boolean }): string[] {
   if (!Array.isArray(tags) || tags.some((tag) => typeof tag !== "string")) {
     throw new ValidationError("Usage tags must be a list of tags");
   }
@@ -84,8 +87,20 @@ export function routeUsageTags(tags: unknown): string[] {
     seen.add(folded);
     kept.push(trimmed);
   }
-  if (kept.length === 0) throw new ValidationError("A route needs at least one usage tag");
+  if (required && kept.length === 0) {
+    throw new ValidationError("A route needs at least one usage tag");
+  }
   return kept;
+}
+
+/**
+ * Whether a route starting at `start` needs a usage tag: its region's rule, and
+ * required outside every region too (a route drawn there is listed in none, so
+ * nothing would ever show it up as untagged).
+ */
+export function usageTagsRequiredAt(start: [number, number]): boolean {
+  const region = regionOfPoint(start);
+  return region === null || REGIONS[region].requiresUsageTags;
 }
 
 /**

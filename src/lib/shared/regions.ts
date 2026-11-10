@@ -62,12 +62,19 @@ export interface Region {
   /**
    * Whether every route here carries a line name of its own, alongside its two
    * endpoints. Japan's network is named line by line ("Chuo Main Line"), and the
-   * name is what identifies a route there — so the admin forms require it, the
-   * routes list can filter for the ones still missing it, and the hover popups
-   * lead with it. Europe names nothing: a route is its endpoints, and the field
-   * is not even shown.
+   * name is what identifies a route there — so the admin forms require it and
+   * the hover popups lead with it. Europe names nothing: a route is its
+   * endpoints, and the field is not even shown.
    */
   hasRouteNames: boolean;
+  /**
+   * Whether every route here needs at least one usage tag to be saved
+   * (`routeUsageTags`). In Europe the tags are what says what runs on a line
+   * (daily, seasonal, S-Bahn…); Japan's routes are told apart by their line
+   * names and mostly go untagged. Where required, the admin's routes list also
+   * offers the untagged ones as a worklist.
+   */
+  requiresUsageTags: boolean;
   /**
    * Whether the "Scenic lines" toggle is offered on the user map. Scenic lines
    * (`scenic_lines`) are stored region-agnostically; this decides whether the
@@ -111,6 +118,7 @@ export const REGIONS: Record<RegionId, Region> = {
     countries: SUPPORTED_COUNTRIES,
     hasCountryFilter: true,
     hasRouteNames: false,
+    requiresUsageTags: true,
     hasScenicHighlight: true,
     ordinaryUsageTypes: [0],
   },
@@ -127,6 +135,7 @@ export const REGIONS: Record<RegionId, Region> = {
     countries: [{ code: "JP", name: "Japan" }],
     hasCountryFilter: false,
     hasRouteNames: true,
+    requiresUsageTags: false,
     hasScenicHighlight: false,
     ordinaryUsageTypes: [0, 2],
     usageLabels: { 0: "JR line", 2: "Non-JR line" },

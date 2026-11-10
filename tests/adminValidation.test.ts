@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { routeClosure, routeLink, routeUsageTags } from "@/lib/adminValidation";
+import {
+  routeClosure,
+  routeLink,
+  routeUsageTags,
+  usageTagsRequiredAt,
+} from "@/lib/adminValidation";
 import { ValidationError } from "@/lib/errors";
 
 describe("routeClosure", () => {
@@ -26,27 +31,43 @@ describe("routeClosure", () => {
 
 describe("routeUsageTags", () => {
   test("tags, trimmed, blanks dropped", () => {
-    assert.deepEqual(routeUsageTags([" Daily ", "", "S-Bahn"]), ["Daily", "S-Bahn"]);
+    assert.deepEqual(routeUsageTags([" Daily ", "", "S-Bahn"], { required: true }), [
+      "Daily",
+      "S-Bahn",
+    ]);
   });
 
   test("duplicates dropped, case and diacritics aside, the first kept", () => {
-    assert.deepEqual(routeUsageTags(["Daily", " daily", "Saisonní", "saisonni"]), [
-      "Daily",
-      "Saisonní",
-    ]);
+    assert.deepEqual(
+      routeUsageTags(["Daily", " daily", "Saisonní", "saisonni"], { required: true }),
+      ["Daily", "Saisonní"],
+    );
     // Separators still count: these are two different frequencies
-    assert.deepEqual(routeUsageTags(["1-2x", "12x"]), ["1-2x", "12x"]);
+    assert.deepEqual(routeUsageTags(["1-2x", "12x"], { required: true }), ["1-2x", "12x"]);
   });
 
-  test("at least one tag is required", () => {
-    assert.throws(() => routeUsageTags([]), ValidationError);
-    assert.throws(() => routeUsageTags(["  "]), ValidationError);
+  test("at least one tag where required, none needed elsewhere", () => {
+    assert.throws(() => routeUsageTags([], { required: true }), ValidationError);
+    assert.throws(() => routeUsageTags(["  "], { required: true }), ValidationError);
+    assert.deepEqual(routeUsageTags([], { required: false }), []);
+    assert.deepEqual(routeUsageTags(["  "], { required: false }), []);
   });
 
-  test("anything but a list of strings is refused", () => {
-    assert.throws(() => routeUsageTags(null), ValidationError);
-    assert.throws(() => routeUsageTags("Daily"), ValidationError);
-    assert.throws(() => routeUsageTags(["Daily", 1]), ValidationError);
+  test("anything but a list of strings is refused, required or not", () => {
+    assert.throws(() => routeUsageTags(null, { required: false }), ValidationError);
+    assert.throws(() => routeUsageTags("Daily", { required: false }), ValidationError);
+    assert.throws(() => routeUsageTags(["Daily", 1], { required: true }), ValidationError);
+  });
+});
+
+describe("usageTagsRequiredAt", () => {
+  test("follows the region the route starts in", () => {
+    assert.equal(usageTagsRequiredAt([14.42, 50.09]), true); // Prague
+    assert.equal(usageTagsRequiredAt([139.77, 35.68]), false); // Tokyo
+  });
+
+  test("required outside every region", () => {
+    assert.equal(usageTagsRequiredAt([-74, 40.7]), true);
   });
 });
 

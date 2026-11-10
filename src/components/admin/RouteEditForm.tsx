@@ -47,7 +47,7 @@ export default function RouteEditForm({
   const underRepair = selectedRoute?.under_repair === true;
   // As stored, not as ticked in the form: what the route is until Save
   const closed = selectedRoute?.closed === true;
-  const incomplete = !editForm || routeMetadataIncomplete(editForm, region.hasRouteNames);
+  const incomplete = !editForm || routeMetadataIncomplete(editForm, region);
 
   if (!selectedRoute) {
     return (

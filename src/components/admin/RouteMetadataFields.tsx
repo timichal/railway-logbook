@@ -7,7 +7,7 @@ import type { RouteSuggestions, SaveRouteData } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
 import { foldForSearch } from "@/lib/searchText";
 import { type LineClass, lineClassOptions, type UsageType } from "@/lib/shared/constants";
-import { regionUsageOptions } from "@/lib/shared/regions";
+import { type Region, regionUsageOptions } from "@/lib/shared/regions";
 import { EGTRE_SHORTCUT, JUNCTION_SHORTCUT } from "@/lib/textShortcut";
 
 /**
@@ -22,19 +22,24 @@ export const NO_ROUTE_SUGGESTIONS: RouteSuggestions = { tags: [], lineNames: [] 
 /**
  * Whether a form's required fields are filled — the endpoints, the name where the
  * region names its lines, the link name where there is a link (`routeLink`), and
- * at least one usage tag (`routeUsageTags`).
+ * a usage tag where the region requires one (`routeUsageTags`).
  * Trimmed, as the save trims them: a name of spaces would otherwise enable Save
  * and be stored as an empty string.
  */
-export function routeMetadataIncomplete(value: SaveRouteData, hasRouteNames: boolean): boolean {
+export function routeMetadataIncomplete(
+  value: SaveRouteData,
+  region: Pick<Region, "hasRouteNames" | "requiresUsageTags">,
+): boolean {
   return (
     !value.from_station.trim() ||
     !value.to_station.trim() ||
-    (hasRouteNames && !value.name.trim()) ||
+    (region.hasRouteNames && !value.name.trim()) ||
     (!!value.link.trim() && !value.link_name.trim()) ||
-    !value.usage_tags.some((tag) => tag.trim())
+    (region.requiresUsageTags && !hasUsageTag(value))
   );
 }
+
+const hasUsageTag = (value: SaveRouteData) => value.usage_tags.some((tag) => tag.trim());
 
 const GROUP_LABEL = "block text-sm font-medium text-gray-700 mb-2";
 const CHECKBOX = "w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500";
@@ -247,7 +252,9 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
       </div>
 
       <div>
-        <span className={GROUP_LABEL}>Usage Tags *</span>
+        <span className={GROUP_LABEL}>
+          {region.requiresUsageTags ? "Usage Tags *" : "Usage Tags"}
+        </span>
         <TagInput
           value={value.usage_tags}
           availableTags={suggestions.tags}
@@ -255,7 +262,7 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
         />
         {/* Save stays off without one; on the edit form this is further down than
             the button, so say why (a route stored before the rule may have none) */}
-        {!value.usage_tags.some((tag) => tag.trim()) && (
+        {region.requiresUsageTags && !hasUsageTag(value) && (
           <p className="text-xs text-orange-700 mt-1">Add a usage tag to save.</p>
         )}
       </div>
