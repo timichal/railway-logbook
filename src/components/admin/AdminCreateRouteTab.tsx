@@ -177,6 +177,7 @@ export default function AdminCreateRouteTab({
             idPrefix="route"
             layout="wide"
             suggestions={suggestions}
+            withDailyTag
           />
         )}
 

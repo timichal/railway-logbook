@@ -5,10 +5,11 @@ import IconButton from "@/components/ui/IconButton";
 import TagInput from "@/components/ui/TagInput";
 import type { RouteSuggestions, SaveRouteData } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
-import { foldForSearch } from "@/lib/searchText";
+import { foldAccents, foldForSearch } from "@/lib/searchText";
 import { type LineClass, lineClassOptions, type UsageType } from "@/lib/shared/constants";
 import { type Region, regionUsageOptions } from "@/lib/shared/regions";
 import { EGTRE_SHORTCUT, JUNCTION_SHORTCUT } from "@/lib/textShortcut";
+import { btn } from "@/lib/ui/buttonStyles";
 
 /**
  * What the edit form edits: the create form's fields plus the line class, which a
@@ -55,7 +56,11 @@ interface CommonProps {
   suggestions: RouteSuggestions;
   /** Adds a button that exchanges From and To (names only: the geometry stays). */
   withSwap?: boolean;
+  /** Adds a button beside Usage Tags that adds the Daily tag, which most routes carry. */
+  withDailyTag?: boolean;
 }
+
+const DAILY_TAG = "Daily";
 
 /**
  * `withLineClass` adds the Line class select, and can only be asked for with a
@@ -70,7 +75,7 @@ type RouteMetadataFieldsProps = CommonProps &
 
 /** The route metadata fields shared by the create and edit forms. */
 export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
-  const { value, idPrefix, layout, suggestions, withSwap } = props;
+  const { value, idPrefix, layout, suggestions, withSwap, withDailyTag } = props;
   const region = useRegion();
   // Japan calls its usage types JR / non-JR lines; Europe keeps the defaults.
   const usageOptions = regionUsageOptions(region.id);
@@ -81,6 +86,12 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
   // cannot follow that across the union, hence the cast.
   const set = (patch: Partial<EditRouteData>) =>
     props.onChange({ ...props.value, ...patch } as EditRouteData);
+
+  // Spelled as the routes already spell it, so the shortcut never starts a second
+  // "daily" beside the stored one; compared as TagInput compares its chips.
+  const dailyTag =
+    suggestions.tags.find((tag) => foldAccents(tag) === foldAccents(DAILY_TAG)) ?? DAILY_TAG;
+  const hasDailyTag = value.usage_tags.some((tag) => foldAccents(tag) === foldAccents(dailyTag));
 
   const intendedBacktracking = (
     <label className="flex items-center gap-2">
@@ -252,9 +263,21 @@ export default function RouteMetadataFields(props: RouteMetadataFieldsProps) {
       </div>
 
       <div>
-        <span className={GROUP_LABEL}>
-          {region.requiresUsageTags ? "Usage Tags *" : "Usage Tags"}
-        </span>
+        <div className="flex items-end justify-between gap-2 mb-2">
+          <span className="text-sm font-medium text-gray-700">
+            {region.requiresUsageTags ? "Usage Tags *" : "Usage Tags"}
+          </span>
+          {withDailyTag && (
+            <button
+              type="button"
+              onClick={() => set({ usage_tags: [...value.usage_tags, dailyTag] })}
+              disabled={hasDailyTag}
+              className={btn("softSuccess", "xs")}
+            >
+              + {dailyTag}
+            </button>
+          )}
+        </div>
         <TagInput
           value={value.usage_tags}
           availableTags={suggestions.tags}
