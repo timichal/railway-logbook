@@ -6,11 +6,6 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Country filter on the client.** `selected_countries` is in the route tile URL (`useUserMap.ts`), so ticking a country refetches every route tile in view. The tile already carries `start_country` / `end_country`, and scenic lines and the coverage layers already filter by country on the client (`scenicLinesFilter`).
-  - Fold an `in` filter into `routeLineFilter` and the click buffer filter, and keep the tile URL stable. The anonymous map's Martin URL then becomes the same for every visitor, which also helps caching.
-  - Trade-offs: bigger tiles for someone with few countries ticked. Highlights ignore layer filters, so a planner or trip highlight would now show routes in unticked countries. Decide whether that's fine.
-  - The native app shares `tileSources.ts`: keep the server-side parameter until both apps move.
-  - Remember the "no `["all", …]` in data-driven paint" rule. It applies to paint, not filters, but check `src/lib/shared/map/CLAUDE.md`.
 - **React Compiler.** Nothing in `src/components` is memoised, and a selection or highlight change re-renders `RailwayMap` → `UserSidebar` → the hidden Route Logger and planner.
   - Try `reactCompiler: true` (`node_modules/next/dist/docs`, `reactCompiler.md`) with `babel-plugin-react-compiler`.
   - Components that write refs during render (`RailwayMap.tsx`) are skipped by the compiler.

@@ -29,6 +29,20 @@ export function usageTypeFilter(usageTypes: readonly UsageType[]): FilterSpecifi
  */
 export const OPEN_ROUTES_FILTER: ExpressionSpecification = ["!=", ["get", "closed"], true];
 
+/**
+ * Both ends in one of the countries: the user map's country filter, for its route
+ * lines and their hit area, the scenic lines and the ridden stretches. Applied on
+ * the client, so a country toggle needs no tile refresh and the route tile's URL
+ * stays the same whatever is ticked. An empty list passes nothing.
+ */
+export function countryFilter(countries: readonly string[]): FilterSpecification {
+  return [
+    "all",
+    ["in", ["get", "start_country"], ["literal", [...countries]]],
+    ["in", ["get", "end_country"], ["literal", [...countries]]],
+  ];
+}
+
 /** Both filters, where either may be absent (null: everything passes). */
 export function bothFilters(
   a: FilterSpecification | null,
@@ -41,7 +55,8 @@ export function bothFilters(
 
 /**
  * One usage type's route line filter: that type, narrowed by `routesFilter`
- * where given (which closed routes show). Never null — a route line always
+ * where given (which closed routes show, and on the web user map which
+ * countries: `userRoutesFilter`). Never null — a route line always
  * draws its own type alone.
  */
 export function routeLineFilter(
@@ -80,7 +95,8 @@ export interface RouteLineConfig extends RailwayRoutesPaintConfig {
   visible?: boolean;
   /**
    * Which of the type's routes are drawn (`routeLineFilter`): the closed ones each
-   * map lets through. Omitted, every route of the type.
+   * map lets through, and on the web user map the selected countries. Omitted,
+   * every route of the type.
    */
   routesFilter?: FilterSpecification | null;
 }

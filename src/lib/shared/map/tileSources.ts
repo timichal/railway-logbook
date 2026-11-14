@@ -31,6 +31,12 @@ export interface RailwayRoutesSourceOptions {
   /** Omitted: the plain Martin tile, every route unvisited (admin, anonymous map). */
   rides?: RouteTileRides;
   cacheBuster?: number;
+  /**
+   * Filters the tile to routes with both ends in these countries. Only the native
+   * app still passes it: the web user map filters by country on the client
+   * (`userRoutesFilter`), so its tile URL doesn't change with the ticked countries.
+   * Drop it here and in the tile handler once the native app moves too.
+   */
   selectedCountries?: string[];
 }
 

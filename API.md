@@ -212,7 +212,10 @@ it is `null` when no path was found.
 Not under `/api/v1`, but the app needs it: the route tile coloured by the user's
 rides is `GET /api/tiles/railway_routes/{z}/{x}/{y}`, sent with the same
 `Authorization: Bearer <accessToken>`, which the native map has to attach
-to that one source. `?selected_countries=["CZ","SK"]` filters as on the web. The answer
+to that one source. `?selected_countries=["CZ","SK"]` filters it to routes with both
+ends in those countries. The web map no longer sends it (it filters by country on
+the client, so its tile URL doesn't change with the ticked countries); the parameter
+stays until the app does the same. The answer
 is an MVT (`application/x-protobuf`), a 204 for an empty tile, and a bare 401
 for a missing or expired token — never an uncoloured tile, which would pass for a
 map with nothing ridden. `?v=` is the client's cache buster: with one, the tile

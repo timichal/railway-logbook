@@ -105,7 +105,7 @@ Schema in `database/init/01-schema.sql`. What the columns don't tell you:
 
 ## Regions (`src/lib/shared/regions.ts`)
 
-Europe and Japan are two views of one backend. A region is a **bounding box**: the map's `maxBounds`, and the filter in every query that must not leak the other network. Filter always through `regionContainsSql(region, point)` with a **point** column, never a line. There is no `region` column. The user map's routes need no bbox, because the `selected_countries` tile filter already separates the regions. A journey belongs to a region when it logged a route there, a trip when any of its journeys did; one with no routes yet belongs to every region. Region-scoped endpoints take the region explicitly.
+Europe and Japan are two views of one backend. A region is a **bounding box**: the map's `maxBounds`, and the filter in every query that must not leak the other network. Filter always through `regionContainsSql(region, point)` with a **point** column, never a line. There is no `region` column. The user map's routes need no bbox, because the country filter already separates the regions (a layer filter on the web, `selected_countries` in the native app's tile URL). A journey belongs to a region when it logged a route there, a trip when any of its journeys did; one with no routes yet belongs to every region. Region-scoped endpoints take the region explicitly.
 
 **Per-region flags keep the differences declarative. Never write `region.id === "japan"`.**
 

@@ -2,7 +2,7 @@ import type { FilterSpecification, LineLayerSpecification } from "@maplibre/mapl
 import type { UsageType } from "../constants";
 import type { ResolvedTheme } from "../theme/types";
 import type { CoveredStretch } from "../types";
-import { lineClassColorExpression } from "./layers";
+import { countryFilter, lineClassColorExpression } from "./layers";
 import { DASHES, OPACITIES, routeColors } from "./style";
 import {
   closedRouteOpacityExpression,
@@ -104,9 +104,8 @@ function coverageFilter(
   return [
     "all",
     ["==", ["get", "usage_type"], shownTypes.includes(usageType) ? usageType : -1],
-    ["in", ["get", "start_country"], ["literal", selectedCountries]],
-    ["in", ["get", "end_country"], ["literal", selectedCountries]],
-  ];
+    countryFilter(selectedCountries),
+  ] as FilterSpecification;
 }
 
 /** Each overlay layer's filter by id, for a live map to `setFilter` without re-adding. */

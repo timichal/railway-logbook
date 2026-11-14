@@ -4,6 +4,7 @@ import type { ResolvedTheme } from "../theme/types";
 import type { LayerPrefs } from "./layerPrefs";
 import {
   bothFilters,
+  countryFilter,
   createPublicNotesLayer,
   createRailwayRoutesClickLayer,
   createRouteLineLayer,
@@ -51,11 +52,19 @@ interface UserRouteLayerConfigs {
   clickBuffer: RouteClickLayerConfig;
 }
 
-export function userRouteLayerConfigs(theme: ResolvedTheme): UserRouteLayerConfigs {
+/**
+ * `countries`: the country filter the web map starts out with, so a route outside
+ * it never flashes before useLayerFilters takes over. Omitted by the native app,
+ * whose tile is still filtered by country on the server.
+ */
+export function userRouteLayerConfigs(
+  theme: ResolvedTheme,
+  countries?: readonly string[],
+): UserRouteLayerConfigs {
   const colorExpression = getUserRouteColorExpression(theme);
   const widthExpression = getUserRouteWidthExpression();
   const opacityExpression = closedRouteOpacityExpression(OPACITIES.defaultRoute);
-  const routesFilter = closedRoutesFilter(false);
+  const routesFilter = userRoutesFilter({ countries, showClosed: false });
   return {
     route: { colorExpression, widthExpression, opacityExpression, routesFilter },
     special: { colorExpression, widthExpression, opacityExpression, routesFilter },
@@ -69,7 +78,7 @@ export function userRouteLayerConfigs(theme: ResolvedTheme): UserRouteLayerConfi
     // switches reveal Heritage and Special
     clickBuffer: {
       widthExpression: getUserRouteClickBufferWidthExpression(),
-      filter: bothFilters(clickBufferFilter([0]), closedRoutesFilter(false)),
+      filter: bothFilters(clickBufferFilter([0]), routesFilter),
     },
   };
 }
@@ -105,15 +114,10 @@ export function shownUsageTypes({
 /**
  * Scenic lines follow the country filter as the routes do — both ends in a selected
  * country — so a filtered-out country is not left with highlighted stretches on an
- * otherwise empty map. Applied as a layer filter rather than in the tile query, so
- * a country toggle needs no tile refresh for it.
+ * otherwise empty map.
  */
-export function scenicLinesFilter(selectedCountries: string[]): FilterSpecification {
-  return [
-    "all",
-    ["in", ["get", "start_country"], ["literal", selectedCountries]],
-    ["in", ["get", "end_country"], ["literal", selectedCountries]],
-  ];
+export function scenicLinesFilter(selectedCountries: readonly string[]): FilterSpecification {
+  return countryFilter(selectedCountries);
 }
 
 /**
@@ -152,16 +156,42 @@ export function closedRoutesFilter(
   return ["any", ...shown] as FilterSpecification;
 }
 
+interface UserRoutesFilterOptions {
+  /**
+   * The countries the map is filtered to (`countryFilter`). Omitted, every country:
+   * the native app's tile is still filtered on the server (`selected_countries`).
+   */
+  countries?: readonly string[];
+  /** "All closed lines" (`closedRoutesFilter`). */
+  showClosed: boolean;
+  /** An anonymous visitor's ridden routes (`closedRoutesFilter`). */
+  localRiddenTrackIds?: readonly number[];
+}
+
 /**
- * The filter of one usage type's route line on the user map: that type, and the
- * closed routes `closedRoutesFilter` lets through.
+ * Which routes the user map draws, whatever their usage type: those in the selected
+ * countries, and of the closed ones those `closedRoutesFilter` lets through. The
+ * route lines and the click buffer narrow it further by usage type. Highlights
+ * don't take it: a journey, trip or plan shows whole, as its partial stretches
+ * (GeoJSON, never filtered by country) always did. Null when everything passes.
  */
+export function userRoutesFilter({
+  countries,
+  showClosed,
+  localRiddenTrackIds,
+}: UserRoutesFilterOptions): FilterSpecification | null {
+  return bothFilters(
+    countries === undefined ? null : countryFilter(countries),
+    closedRoutesFilter(showClosed, localRiddenTrackIds),
+  );
+}
+
+/** The filter of one usage type's route line on the user map (`userRoutesFilter`). */
 export function userRouteLineFilter(
   usageType: UsageType,
-  showClosed: boolean,
-  localRiddenTrackIds?: readonly number[],
+  options: UserRoutesFilterOptions,
 ): FilterSpecification {
-  return routeLineFilter(usageType, closedRoutesFilter(showClosed, localRiddenTrackIds));
+  return routeLineFilter(usageType, userRoutesFilter(options));
 }
 
 /**
@@ -170,14 +200,18 @@ export function userRouteLineFilter(
  * thin, and hovering the visible line alone is finicky), and nothing but the
  * absence of a click handler makes that map read-only.
  */
-export function createUserMapLayers(theme: ResolvedTheme = "light"): LayerSpecification[] {
-  const configs = userRouteLayerConfigs(theme);
+export function createUserMapLayers(
+  theme: ResolvedTheme = "light",
+  countries?: readonly string[],
+): LayerSpecification[] {
+  const configs = userRouteLayerConfigs(theme, countries);
   return [
     // Under everything: a band the route lines are drawn over. Hidden until the
     // "Scenic lines" toggle shows it (useLayerFilters).
     createScenicLinesLayer(),
     // Closed routes not ridden start out filtered away (in the configs), as "All
-    // closed lines" starts off; useLayerFilters applies the switch once loaded
+    // closed lines" starts off, and so do the countries not ticked; useLayerFilters
+    // applies the switches once loaded
     createRouteLineLayer(0, configs.route),
     createRouteLineLayer(1, configs.heritage),
     createRouteLineLayer(2, configs.special),

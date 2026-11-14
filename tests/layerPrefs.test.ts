@@ -11,6 +11,7 @@ import {
   closedRoutesFilter,
   shownUsageTypes,
   userRouteLineFilter,
+  userRoutesFilter,
 } from "@/lib/shared/map/userMapLayers";
 import { countedUsageTypes, ordinaryUsageSql } from "@/lib/shared/regions";
 
@@ -162,10 +163,41 @@ describe("closed routes on the user map", () => {
   });
 
   test("a route line keeps to its own usage type", () => {
-    const special = userRouteLineFilter(2, false);
+    const special = userRouteLineFilter(2, { showClosed: false });
     assert.equal(passes(special, 1, { usage_type: 2, closed: false }), true);
     assert.equal(passes(special, 1, { usage_type: 0, closed: false }), false);
     assert.equal(passes(special, 1, { usage_type: 2, closed: true }), false);
-    assert.equal(passes(userRouteLineFilter(2, true), 1, { usage_type: 2, closed: true }), true);
+    const allClosed = userRouteLineFilter(2, { showClosed: true });
+    assert.equal(passes(allClosed, 1, { usage_type: 2, closed: true }), true);
+  });
+
+  test("a route is drawn only with both ends in a selected country", () => {
+    const line = userRouteLineFilter(0, { countries: ["CZ", "PL"], showClosed: false });
+    const route = { usage_type: 0, closed: false };
+    assert.equal(passes(line, 1, { ...route, start_country: "CZ", end_country: "PL" }), true);
+    assert.equal(passes(line, 1, { ...route, start_country: "CZ", end_country: "DE" }), false);
+    assert.equal(passes(line, 1, { ...route, start_country: "DE", end_country: "CZ" }), false);
+    const none = userRouteLineFilter(0, { countries: [], showClosed: false });
+    assert.equal(passes(none, 1, { ...route, start_country: "CZ", end_country: "CZ" }), false);
+  });
+
+  test("the country filter and the closed filter apply together", () => {
+    const filter = userRoutesFilter({ countries: ["CZ"], showClosed: false });
+    const inCz = { start_country: "CZ", end_country: "CZ" };
+    assert.equal(passes(filter, 1, { ...inCz, closed: true }), false);
+    assert.equal(passes(filter, 1, { ...inCz, closed: true, date: "2024-05-01" }), true);
+    assert.equal(
+      passes(filter, 1, {
+        start_country: "PL",
+        end_country: "PL",
+        closed: true,
+        date: "2024-05-01",
+      }),
+      false,
+    );
+  });
+
+  test("no countries given: no country filter (the native app's tile filters itself)", () => {
+    assert.equal(userRoutesFilter({ showClosed: true }), null);
   });
 });

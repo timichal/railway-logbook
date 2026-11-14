@@ -20,8 +20,9 @@
  *
  * The user map's route filtering is a separate mechanism that happens to line up:
  * routes carry `start_country`/`end_country`, and each region declares the
- * countries it contains, so the existing `selected_countries` tile filter already
- * keeps the regions apart (Japan view asks for `['JP']`). Regions with a single
+ * countries it contains, so the country filter already keeps the regions apart
+ * (Japan view filters to `['JP']`: a layer filter on the web, the
+ * `selected_countries` tile parameter in the native app). Regions with a single
  * country (`hasCountryFilter: false`) hide the country list and simply pass
  * their own country list.
  */

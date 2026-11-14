@@ -112,21 +112,19 @@ export function useUserMap(
   const routesCacheBusterRef = useRef<number | undefined>(undefined);
 
   // The route source is the one thing here that changes without the map being
-  // rebuilt: a login, a logout, a country checkbox or a logged ride only point it at
-  // new tiles (`setTiles`), since rebuilding would throw away the WebGL context and
-  // the basemap to change one source. So its inputs are the refresh signal: the URL
+  // rebuilt: a login, a logout or a logged ride only point it at new tiles
+  // (`setTiles`), since rebuilding would throw away the WebGL context and the
+  // basemap to change one source. So its inputs are the refresh signal: the URL
   // can't change without its tiles being reloaded, and nothing outside has to keep
   // the two in step. Beside them, a counter for a ride logged (`refreshTiles`), and
   // the data access, which stands for whose rides: a session tile's URL doesn't name
   // its user, so going from one account straight to another changes nothing else.
+  // The country filter is not among them: it is a layer filter (`useLayerFilters`),
+  // so the tile URL is the same whatever is ticked — for Martin's tile, the same for
+  // every anonymous visitor — and a country checkbox refetches nothing.
   const [refreshCount, setRefreshCount] = useState(0);
   const ridesKey = rides === undefined ? "" : rides === "session" ? "session" : rides.shareToken;
-  const routesSignal = [
-    refreshCount,
-    dataAccessId(dataAccess),
-    ridesKey,
-    effectiveCountries.join(","),
-  ].join("|");
+  const routesSignal = [refreshCount, dataAccessId(dataAccess), ridesKey].join("|");
 
   const { map, mapLoaded } = useMapLibre(
     mapContainer,
@@ -145,14 +143,15 @@ export function useUserMap(
           railway_routes: createRailwayRoutesSource({
             rides,
             cacheBuster: routesCacheBusterRef.current,
-            selectedCountries: effectiveCountries,
           }),
           stations: createPublicStationsSource(),
           scenic_lines: createScenicLinesSource(),
           public_notes: createPublicNotesSource(),
         };
       },
-      layers: () => createUserMapLayers(theme),
+      // Built with the countries as they are, so none outside them flashes before
+      // useLayerFilters takes over
+      layers: () => createUserMapLayers(theme, effectiveCountries),
     },
     [region.id],
   );
@@ -163,8 +162,7 @@ export function useUserMap(
     sourceId: "railway_routes",
     signal: routesSignal,
     cacheBusterRef: routesCacheBusterRef,
-    tileUrl: (cacheBuster) =>
-      railwayRoutesTileUrl({ rides, cacheBuster, selectedCountries: effectiveCountries }),
+    tileUrl: (cacheBuster) => railwayRoutesTileUrl({ rides, cacheBuster }),
   });
   // Stable identity: consumers list it in effect/callback dependency arrays.
   const refreshTiles = useCallback(() => setRefreshCount((count) => count + 1), []);
