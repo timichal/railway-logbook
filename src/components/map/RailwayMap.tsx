@@ -70,6 +70,12 @@ interface RailwayMapProps {
   onSidebarResize: () => void;
   isResizing: boolean;
   isMobile: boolean;
+  /**
+   * Counts the session checks on returning to the page (`useSessionKeepAlive`). Each
+   * one re-reads the rides: the log may have changed elsewhere meanwhile, and the
+   * route tiles may sit in the browser's cache.
+   */
+  sessionRechecks?: number;
 }
 
 /**
@@ -92,6 +98,7 @@ export default function RailwayMap({
   onSidebarResize,
   isResizing,
   isMobile,
+  sessionRechecks = 0,
 }: RailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapPane = useRef<HTMLDivElement>(null);
@@ -412,6 +419,16 @@ export default function RailwayMap({
     // Journeys changed, so the ridden stretches of unfinished routes may have too
     setCoverageVersion((v) => v + 1);
   }, [user, refreshTiles, refreshLocalRouteStates, refreshProgress]);
+
+  // A return to the page re-reads the rides as a logged one does: a ride logged in
+  // another tab or the app, or a session revoked elsewhere, which turns the
+  // refetched tiles into refusals and blanks the map
+  const appliedRechecks = useRef(sessionRechecks);
+  useEffect(() => {
+    if (appliedRechecks.current === sessionRechecks) return;
+    appliedRechecks.current = sessionRechecks;
+    handleRoutesLogged();
+  }, [sessionRechecks, handleRoutesLogged]);
 
   // Edit in My Trips: the card has written the journey's draft, and the Route
   // Logger takes it up. The journey it was showing keeps its draft if it has

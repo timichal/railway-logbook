@@ -18,11 +18,14 @@
  *
  * The URL does not say whose colours a tile holds — the bearer header does — so a
  * sign-in bumps it (`AuthContext`): the next account must not meet the last one's
- * tiles in memory. It also starts at **the launch time rather than 0**, as a guard:
- * the handler sends `private, no-store`, but whether MapLibre Native's disk cache
- * honours that is unconfirmed (`MOBILE_AUDIT_TODO.md`), and a counter restarting at
- * 0 would ask for URLs an earlier launch, or another account, already fetched. If the
- * header turns out to be honoured, the clock is merely harmless.
+ * tiles in memory. It also starts at **the launch time rather than 0**: the handler
+ * lets a tile be kept for an hour (`private, max-age=3600`, `TileCaching` in
+ * `src/lib/api/tiles.ts`), and a counter restarting at 0 would ask for URLs an
+ * earlier launch, or another account, already fetched and MapLibre Native's disk
+ * cache may still hold. That header is safe only while this version moves on every
+ * new session and every write made here. A ride logged on the web reaches tiles
+ * the map drops and refetches only once the version moves (a return after a minute
+ * away, `AuthContext`), or up to an hour later.
  */
 import { useSyncExternalStore } from "react";
 

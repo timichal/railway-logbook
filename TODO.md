@@ -6,11 +6,6 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Cache session route tiles in the browser.** `mvtResponse` (`src/lib/api/tiles.ts`) sends `private, no-store`, so panning back over an evicted area re-runs the per-user tile query. The URL's `v` is set once per page load (`useUserMap.ts`, `routesCacheBusterRef.current ??= Date.now()`) and bumped by `useSourceTileRefresh` on every refresh.
-  - Before switching session tiles (`rides: "session"`) to `private, max-age=3600`, confirm that `v` changes on login, logout, a journey logged, a country change and a region switch.
-  - Keep `no-store` for `?share=` tiles, so turning sharing off still stops a map that is already open.
-  - The native app (`mobile/src/map/tileAuth.ts`) also requests these tiles. Check how it builds `v`.
-  - Superseded by "Route tiles identical for everyone" below, if that is done.
 - **Country filter on the client.** `selected_countries` is in the route tile URL (`useUserMap.ts`), so ticking a country refetches every route tile in view. The tile already carries `start_country` / `end_country`, and scenic lines and the coverage layers already filter by country on the client (`scenicLinesFilter`).
   - Fold an `in` filter into `routeLineFilter` and the click buffer filter, and keep the tile URL stable. The anonymous map's Martin URL then becomes the same for every visitor, which also helps caching.
   - Trade-offs: bigger tiles for someone with few countries ticked. Highlights ignore layer filters, so a planner or trip highlight would now show routes in unticked countries. Decide whether that's fine.

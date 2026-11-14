@@ -30,7 +30,8 @@ type Context = { params: Promise<{ z: string; x: string; y: string }> };
  * answer anyway.
  *
  * `?selected_countries=<JSON array>` filters as Martin's `railway_routes_tile`
- * does, and `?v=` is the client's cache buster, ignored here. The tile with no
+ * does. `?v=` is the client's cache buster: its value is ignored here, but only a
+ * tile requested with one may be kept in the requester's browser (`TileCaching`). The tile with no
  * user is still Martin's; see `createRailwayRoutesSource`.
  */
 export async function GET(request: Request, context: Context): Promise<Response> {
@@ -52,7 +53,11 @@ export async function GET(request: Request, context: Context): Promise<Response>
     // loaded), or a session from before a password change.
     if (body === null) return new Response(null, { status: "shareToken" in rides ? 404 : 401 });
 
-    return mvtResponse(body);
+    // The requester's own rides may stay in their browser for a while, a shared
+    // map's never; nor a tile with no `v`, whose URL would be the same for the next
+    // account (see `TileCaching`)
+    const cacheable = !("shareToken" in rides) && url.searchParams.has("v");
+    return mvtResponse(body, cacheable ? "session" : "no-store");
   } catch (error) {
     console.error("Route tile failed:", error);
     return new Response(null, { status: 500 });

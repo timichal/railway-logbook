@@ -215,7 +215,10 @@ rides is `GET /api/tiles/railway_routes/{z}/{x}/{y}`, sent with the same
 to that one source. `?selected_countries=["CZ","SK"]` filters as on the web. The answer
 is an MVT (`application/x-protobuf`), a 204 for an empty tile, and a bare 401
 for a missing or expired token — never an uncoloured tile, which would pass for a
-map with nothing ridden. Martin's `/tiles/railway_routes_tile` is the same tile
+map with nothing ridden. `?v=` is the client's cache buster: with one, the tile
+may be kept for an hour (`private, max-age=3600`), so it must change with every new
+session, every launch and every write to the log (the app's `logVersion.ts`);
+without one, the tile is `no-store`. Martin's `/tiles/railway_routes_tile` is the same tile
 with no user, and no longer takes a `user_id` at all; see "Vector tiles" in
 `CLAUDE.md`.
 

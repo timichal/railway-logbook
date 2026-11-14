@@ -27,12 +27,14 @@ becomes an item of its own.
     in `RootNavigator` (it renders without any provider). In a development build the
     red LogBox overlay comes first; dismiss it to see the screen behind.
 
-- [ ] **Does MapLibre Native's disk cache honour `no-store`?** _(device)_ The route
-      tile handler sends `private, no-store`. The cache buster no longer repeats across
-      launches or accounts (`logVersion.ts` starts at the launch time and moves on every
-      sign-in), so a cache that ignores the header can no longer show another account's
-      colours. It would still store every tile it is sent, so check its size after some
-      use, and whether a tile fetched offline is served from it (which would matter for
+- [ ] **How does MapLibre Native's disk cache treat the route tile?** _(device)_ The
+      handler sends `private, max-age=3600` with `Vary: Authorization, Cookie` when the
+      request has a `?v=` (`TileCaching` in `src/lib/api/tiles.ts`). The cache buster
+      never repeats across launches or accounts (`logVersion.ts` starts at the launch
+      time and moves on every sign-in), so even a cache that keys on the URL alone and
+      ignores `Vary` can't show another account's colours. Check that a tile is reused
+      within the hour and refetched after a `logVersion` bump, how big the cache gets
+      after some use, and whether a cached tile is served offline (which matters for
       the offline colouring decision at the bottom).
 
 - [ ] **Run it on Android.** The app shell, the map with overlays, the modals and the

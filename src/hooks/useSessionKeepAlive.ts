@@ -15,16 +15,32 @@ const MIN_CHECK_INTERVAL_MS = 60 * 1000;
  * signed out and in again), since this page's saves would go to that account.
  * Reported once each time it goes; signing back in re-arms it. A failed check
  * (offline, a server fault) says nothing either way.
+ *
+ * `onRechecked` is told of every answered check after the first, i.e. each return
+ * to the page at least a minute after the last check, whatever the answer. The
+ * user map refetches its route tiles there: they may sit in the browser's cache
+ * (`TileCaching`), and meanwhile the log may have changed in another tab or the app,
+ * or the session may have been revoked with the cookie unchanged (a password
+ * changed on another device), where the refetch is what blanks the map. Not after
+ * the first check, which runs as the page loads its tiles anyway, nor after a failed
+ * one: refetching with no connection behind it would wipe the routes drawn.
  */
-export function useSessionKeepAlive(userId: number | null, onSignedOut: () => void): void {
+export function useSessionKeepAlive(
+  userId: number | null,
+  onSignedOut: () => void,
+  onRechecked?: () => void,
+): void {
   const onSignedOutRef = useRef(onSignedOut);
   onSignedOutRef.current = onSignedOut;
+  const onRecheckedRef = useRef(onRechecked);
+  onRecheckedRef.current = onRechecked;
 
   useEffect(() => {
     if (userId === null) return;
 
     let lastCheck = 0;
     let signedIn = true;
+    let answered = false;
     const check = () => {
       if (document.visibilityState !== "visible") return;
       const now = Date.now();
@@ -38,6 +54,8 @@ export function useSessionKeepAlive(userId: number | null, onSignedOut: () => vo
             const wasSignedIn = signedIn;
             signedIn = session.userId === userId;
             if (wasSignedIn && !signedIn) onSignedOutRef.current();
+            if (answered) onRecheckedRef.current?.();
+            answered = true;
           },
           () => {},
         );

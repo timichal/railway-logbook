@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useReducer, useState } from "react";
 import MapLoading from "@/components/layout/MapLoading";
 import MenuSheet, { type MenuView } from "@/components/layout/MenuSheet";
 import Navbar from "@/components/layout/Navbar";
@@ -81,16 +81,22 @@ function MainPage({
   // straight to the form, without `openMenu`'s question: signing back in to the
   // same account keeps the drafts, and saving them is the point. Not now leaves
   // the page as it is; its saves then say why they fail.
+  // Each later check is a return to the page, after which the map re-reads the
+  // rides (`sessionRechecks` on RailwayMap).
   const { showConfirm } = useToast();
-  useSessionKeepAlive(user?.id ?? null, () =>
-    showConfirm({
-      title: "Signed out",
-      message: "Your session has ended. Sign in again to keep logging and to save your changes.",
-      confirmLabel: "Sign in",
-      cancelLabel: "Not now",
-      variant: "info",
-      onConfirm: () => setMenuView("login"),
-    }),
+  const [sessionRechecks, countSessionRecheck] = useReducer((count: number) => count + 1, 0);
+  useSessionKeepAlive(
+    user?.id ?? null,
+    () =>
+      showConfirm({
+        title: "Signed out",
+        message: "Your session has ended. Sign in again to keep logging and to save your changes.",
+        confirmLabel: "Sign in",
+        cancelLabel: "Not now",
+        variant: "info",
+        onConfirm: () => setMenuView("login"),
+      }),
+    countSessionRecheck,
   );
 
   // Handle successful login/register - switch to Route Logger tab
@@ -122,6 +128,7 @@ function MainPage({
           onSidebarResize={handleMouseDown}
           isResizing={isResizing}
           isMobile={isMobile}
+          sessionRechecks={sessionRechecks}
         />
       </main>
 
