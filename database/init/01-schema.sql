@@ -106,6 +106,22 @@ CREATE TABLE railway_routes (
     -- Journey Planner's network is built from, stored)
 );
 
+-- The text stays in the row. The geometries have PostGIS's `main` storage, and
+-- an overflowing row moves its `extended` values (over ~24 bytes) out of line
+-- before any `main` one, so every usage tag list and longer name would sit in
+-- TOAST, a lookup per read. As `main`, the geometries, the biggest, go first.
+-- Existing databases: src/scripts/inlineRouteText.ts
+ALTER TABLE railway_routes
+    ALTER COLUMN name SET STORAGE MAIN,
+    ALTER COLUMN other_names SET STORAGE MAIN,
+    ALTER COLUMN from_station SET STORAGE MAIN,
+    ALTER COLUMN to_station SET STORAGE MAIN,
+    ALTER COLUMN description SET STORAGE MAIN,
+    ALTER COLUMN usage_tags SET STORAGE MAIN,
+    ALTER COLUMN link SET STORAGE MAIN,
+    ALTER COLUMN link_name SET STORAGE MAIN,
+    ALTER COLUMN error_message SET STORAGE MAIN;
+
 -- Scenic lines: stretches of track the user map can highlight as scenic.
 -- Deliberately not a flag on railway_routes: a scenic stretch is a piece of
 -- track, and almost never starts and ends where a route does. Built and
@@ -128,6 +144,12 @@ CREATE TABLE scenic_lines (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- As on railway_routes: the text stays in the row, the geometries go out first
+ALTER TABLE scenic_lines
+    ALTER COLUMN from_station SET STORAGE MAIN,
+    ALTER COLUMN to_station SET STORAGE MAIN,
+    ALTER COLUMN error_message SET STORAGE MAIN;
 
 -- User trips (groups of journeys, e.g., "Summer Holiday in Austria")
 CREATE TABLE user_trips (
