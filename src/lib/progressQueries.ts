@@ -199,6 +199,15 @@ export async function progressByCountryForUser(
   };
 }
 
+/**
+ * Whether the logged part `ulp` carries the stretch it covered. A partial ride
+ * ticked by hand has none, and like a whole ride it counts the route's full length
+ * — the same rule the Route Logger's total follows (`loggedLengthKm`), and the test
+ * `knownStretches` makes in JS.
+ */
+export const HAS_STRETCH_SQL =
+  "ulp.partial AND ulp.covered_start IS NOT NULL AND ulp.covered_end IS NOT NULL";
+
 /** Cap on ranges accepted from the client, so a crafted call can't ask for the world. */
 const MAX_COVERED_RANGES = 2000;
 const MAX_PG_INT = 2147483647;
@@ -223,11 +232,20 @@ export function coveredStretchesSql(ranges: string): string {
       rr.closed,
       rr.start_country,
       rr.end_country,
-      -- Not simplified: this is drawn directly over the route's own line, and any
-      -- dropped vertex shows up as the overlay visibly cutting corners at zoom.
-      ST_AsGeoJSON(ST_LineSubstring(rr.geometry, t.covered_start, t.covered_end)) AS geojson
+      ${coveredStretchGeoJsonSql("rr.geometry", "t.covered_start", "t.covered_end")} AS geojson
     FROM ${ranges}
     JOIN railway_routes rr ON rr.track_id = t.track_id`;
+}
+
+/**
+ * The stretch of `geometry` between two fractions along it, as GeoJSON text, as
+ * `coveredStretchesSql` cuts it — for a read that has the route already joined.
+ *
+ * Not simplified: this is drawn directly over the route's own line, and any
+ * dropped vertex shows up as the overlay visibly cutting corners at zoom.
+ */
+export function coveredStretchGeoJsonSql(geometry: string, start: string, end: string): string {
+  return `ST_AsGeoJSON(ST_LineSubstring(${geometry}, ${start}, ${end}))`;
 }
 
 export type CoveredStretchRow = Omit<CoveredStretch, "coordinates"> & { geojson: string };

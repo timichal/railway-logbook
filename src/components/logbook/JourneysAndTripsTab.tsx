@@ -12,6 +12,7 @@ import type { TripsAndJourneysItem } from "@/lib/tripActions";
 import { createTrip, getJourneysAndTrips } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
 import { NEW_TRIP_EDIT_KEY, useDraft } from "@/lib/ui/editGuard";
+import { useRevealJourneyCard } from "@/lib/ui/scrollInContainer";
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -21,7 +22,10 @@ interface JourneysAndTripsTabProps {
   onJourneyChanged?: () => void;
   /** Edit pressed on a journey, whose draft is written: the Route Logger takes it up. */
   onEditJourney?: (journeyId: number) => void;
-  /** Opened, inside its trip where it has one, as the first page lists it: the journey just edited. */
+  /**
+   * The journey just edited: the first load asks for the page that lists it, and
+   * opens it there, inside its trip where it has one.
+   */
   initialOpenJourneyId?: number | null;
 }
 
@@ -53,8 +57,10 @@ export default function JourneysAndTripsTab({
   const [openItem, setOpenItem] = useState<OpenItem>(null);
   // For nested journey edit inside an open trip
   const [openNestedJourneyId, setOpenNestedJourneyId] = useState<number | null>(null);
-  // The journey to open once the list first arrives (see initialOpenJourneyId)
+  // The journey to open once the list first arrives (see initialOpenJourneyId),
+  // and to scroll to once it is drawn
   const pendingOpenRef = useRef(initialOpenJourneyId);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // A draft like the cards' edits, so the form outlives leaving the tab
   const { draft: newTrip, setDraft: setNewTrip } = useDraft<{ name: string; description: string }>(
@@ -78,19 +84,34 @@ export default function JourneysAndTripsTab({
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // The first load lands on the journey's page and opens it in the same render
+  // that ends the loading
+  useRevealJourneyCard(rootRef, initialOpenJourneyId, !isLoading, regionId);
+
   // Only the latest request may write: a slow filtered query otherwise lands
   // after the search was cleared, and fast Prev/Next shows whichever page
   // answered last.
   const loadRequestRef = useRef(0);
+  // The page the reopened journey was found on, already loaded: the page change
+  // that shows it would otherwise load it again
+  const landedPageRef = useRef<number | null>(null);
 
   const loadItems = useCallback(
     async (showSpinner = false) => {
+      if (landedPageRef.current === page) {
+        landedPageRef.current = null;
+        return;
+      }
+      landedPageRef.current = null;
       const requestId = ++loadRequestRef.current;
       let steppedBack = false;
       if (showSpinner) setIsLoading(true);
+      // Asked for the page that lists it, wherever the list has it now (an edit
+      // can change its date, and so its place)
+      const reopen = pendingOpenRef.current;
       try {
         const result = unwrap(
-          await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch, regionId),
+          await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch, regionId, reopen),
         );
         if (requestId !== loadRequestRef.current) return;
         // Deleting the last item on the last page leaves `page` past the end;
@@ -98,17 +119,20 @@ export default function JourneysAndTripsTab({
         // stale page (the deleted item included) goes at once, and the spinner
         // stays up until the earlier page arrives.
         const lastPage = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
-        if (page > lastPage) {
+        if (result.page > lastPage) {
           steppedBack = true;
           setItems([]);
           setIsLoading(true);
           setPage(lastPage);
           return;
         }
+        if (result.page !== page) {
+          landedPageRef.current = result.page;
+          setPage(result.page);
+        }
         setItems(result.items);
         setTotal(result.total);
         // Before the effect below can see the open item missing from the list
-        const reopen = pendingOpenRef.current;
         pendingOpenRef.current = null;
         if (reopen !== null) {
           for (const item of result.items) {
@@ -122,6 +146,9 @@ export default function JourneysAndTripsTab({
         }
       } catch (error) {
         if (requestId !== loadRequestRef.current) return;
+        // Asked once: left set, it would pull every later search or page change
+        // to the journey's page
+        pendingOpenRef.current = null;
         console.error("Error loading items:", error);
         showError(actionErrorMessage(error, "Failed to load journeys and trips"));
         setItems([]);
@@ -207,7 +234,7 @@ export default function JourneysAndTripsTab({
   };
 
   return (
-    <div className="p-4 text-fg space-y-4">
+    <div ref={rootRef} className="p-4 text-fg space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-bold">My Trips</h3>

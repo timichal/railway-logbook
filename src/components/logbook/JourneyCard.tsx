@@ -190,6 +190,7 @@ export default function JourneyCard<Id extends number | string>({
 
   return (
     <div
+      data-journey-id={journey.id}
       className={`border rounded shadow-sm ${nested ? "bg-gray-50 border-gray-200" : "bg-surface border-gray-300"}`}
     >
       <CardHeader

@@ -8,14 +8,16 @@
  * a `ValidationError` or `NotFoundError`, as in `journeyQueries.ts`.
  */
 
+import { unionBounds } from "./coordinateUtils";
 import pool, { asMissingRow, escapeLikePattern } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
 import {
   type CoveredStretchRow,
   coveredStretchesSql,
+  HAS_STRETCH_SQL,
   parseCoveredStretches,
 } from "./progressQueries";
-import { routeBoundsByIds } from "./routeQueries";
+import { routeBoxSql } from "./routeQueries";
 import { type RegionId, regionContainsSql } from "./shared/regions";
 import type { Journey, PartialRouteGeometry, RouteBounds, Trip } from "./shared/types";
 
@@ -58,14 +60,6 @@ export type TripWithStats = Trip & {
 };
 
 /**
- * Whether the logged part `ulp` carries the stretch it covered. A partial ride
- * ticked by hand has none, and like a whole ride it counts the route's full length
- * — the same rule the Route Logger's total follows (`loggedLengthKm`).
- */
-const HAS_STRETCH_SQL =
-  "ulp.partial AND ulp.covered_start IS NOT NULL AND ulp.covered_end IS NOT NULL";
-
-/**
  * How far the logged part `ulp` of route `rr` went: the stretch travelled where it
  * is known, the whole line otherwise.
  */
@@ -81,8 +75,8 @@ const LOGGED_KM_SQL = `CASE WHEN ${HAS_STRETCH_SQL}
  * up to A–C. `where` is a condition on `uj` (the trip's journeys) and must hold the
  * user condition.
  *
- * The trip's distance (tripStatsSql) and its highlighted stretches (tripForUser) both
- * read this, so what the map lights up is what the distance counts.
+ * The trip's distance (tripStatsSql) and its highlighted stretches
+ * (tripWithBoundsForUser) both read this, so what the map lights up is what the distance counts.
  */
 function tripRouteCoverageSql(where: string): string {
   return `
@@ -224,35 +218,45 @@ export async function tripNamesForUser(userId: number, region: RegionId): Promis
 }
 
 /**
- * A single trip with its assigned journeys, and every route they logged.
+ * A trip as it is opened: with its assigned journeys, and every route they logged.
  *
  * `partials` are the routes the trip rode only part of, cut to what it rode — each
  * disjoint stretch of the union its distance counts (tripRouteCoverageSql). A route
  * any journey rode whole, or partial with no known stretch, has none and is
  * highlighted whole, as the distance counts it whole.
+ *
+ * `bounds` is the box of its routes in `region`, which the map fits to (see
+ * journeyWithBoundsForUser), read with the route ids rather than in a query of its
+ * own.
  */
-export async function tripForUser(
+export async function tripWithBoundsForUser(
   userId: number,
   tripId: number,
+  region: RegionId,
 ): Promise<{
   trip: Trip;
   journeys: JourneyWithStats[];
   routeIds: number[];
   partials: PartialRouteGeometry[];
+  bounds: RouteBounds | null;
 }> {
   // All at once: the journey and route reads are scoped to the user, so for
   // someone else's trip they come back empty and are discarded with the 404
-  const [tripResult, journeysResult, routeIdsResult, stretchesResult] = await Promise.all([
+  const [tripResult, journeysResult, routesResult, stretchesResult] = await Promise.all([
     pool.query<Trip>("SELECT * FROM user_trips WHERE id = $1 AND user_id = $2", [tripId, userId]),
     pool.query<JourneyWithStats>(journeyStatsSql("$2", "uj.trip_id = $1", "uj.date ASC"), [
       tripId,
       userId,
     ]),
-    pool.query<{ track_id: number }>(
-      `SELECT DISTINCT ulp.track_id
-      FROM user_logged_parts ulp
-      JOIN user_journeys uj ON ulp.journey_id = uj.id
-      WHERE uj.trip_id = $1 AND uj.user_id = $2`,
+    pool.query<{ track_id: number; box: RouteBounds | null }>(
+      `SELECT rr.track_id, ${routeBoxSql("rr", region)} AS box
+      FROM railway_routes rr
+      WHERE rr.track_id IN (
+        SELECT ulp.track_id
+        FROM user_logged_parts ulp
+        JOIN user_journeys uj ON ulp.journey_id = uj.id
+        WHERE uj.trip_id = $1 AND uj.user_id = $2
+      )`,
       [tripId, userId],
     ),
     pool.query<CoveredStretchRow>(
@@ -271,25 +275,10 @@ export async function tripForUser(
   return {
     trip,
     journeys: journeysResult.rows,
-    routeIds: routeIdsResult.rows.map((r) => r.track_id),
+    routeIds: routesResult.rows.map((r) => r.track_id),
     partials: parseCoveredStretches(stretchesResult.rows),
+    bounds: unionBounds(routesResult.rows.map((r) => r.box)),
   };
-}
-
-/** A trip as it is opened: with the bounds of its routes in `region` (see journeyWithBoundsForUser). */
-export async function tripWithBoundsForUser(
-  userId: number,
-  tripId: number,
-  region: RegionId,
-): Promise<{
-  trip: Trip;
-  journeys: JourneyWithStats[];
-  routeIds: number[];
-  partials: PartialRouteGeometry[];
-  bounds: RouteBounds | null;
-}> {
-  const result = await tripForUser(userId, tripId);
-  return { ...result, bounds: await routeBoundsByIds(result.routeIds, region) };
 }
 
 function assertTripName(name: unknown): void {
@@ -390,6 +379,11 @@ export type TripsAndJourneysItem =
  * item's routes on the map, and the map is locked to one region. The trip picker
  * (getTripNames) and the journey picker (getUnassignedJourneys) are scoped the
  * same way.
+ *
+ * `focusJourneyId` asks for the page that lists that journey (its own row, or
+ * its trip's) in place of `page`, which stays the answer where it isn't listed:
+ * My Trips reopening on the journey just edited, wherever it sits. The page
+ * returned is the one served.
  */
 export async function journeysAndTripsForUser(
   userId: number,
@@ -397,10 +391,13 @@ export async function journeysAndTripsForUser(
   pageSize: number,
   search: string,
   region: RegionId,
-): Promise<{ items: TripsAndJourneysItem[]; total: number }> {
+  focusJourneyId: number | null = null,
+): Promise<{ items: TripsAndJourneysItem[]; total: number; page: number }> {
+  if (focusJourneyId !== null && !Number.isSafeInteger(focusJourneyId)) {
+    throw new ValidationError("Invalid journey id");
+  }
   const safePage = Math.max(1, Math.floor(page));
   const safePageSize = Math.max(1, Math.min(100, Math.floor(pageSize)));
-  const offset = (safePage - 1) * safePageSize;
   const searchPattern = search.trim()
     ? `%${escapeLikePattern(search.trim().toLowerCase())}%`
     : null;
@@ -431,21 +428,54 @@ export async function journeysAndTripsForUser(
     )
   `;
 
-  // Page of (type, id) ordered by effective_date desc, then created_at desc as
-  // tiebreaker, each row carrying the total count for the pagination UI (the
-  // window runs before LIMIT) — one statement, so the count matches the page
-  const params: (string | number)[] = searchPattern ? [userId, searchPattern] : [userId];
-  const pageResult = await pool.query<{ type: "trip" | "journey"; item_id: number; total: number }>(
-    `${baseCte}
-     SELECT type, item_id, COUNT(*) OVER ()::int AS total FROM ordered
-     ORDER BY effective_date DESC NULLS FIRST, sort_created_at DESC
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, safePageSize, offset],
+  // The page of (type, id) in one statement, each row carrying the total count for
+  // the pagination UI and the page it is on, so the count matches the page. Rows
+  // are numbered by effective_date desc, then created_at desc, then the row itself
+  // (a total order, so a position is stable between calls). The page is the one
+  // holding the focused journey's row (or its trip's) where there is one, else the
+  // one asked for.
+  const params: (string | number | null)[] = searchPattern ? [userId, searchPattern] : [userId];
+  const sizeParam = `$${params.length + 1}`;
+  const pageParam = `$${params.length + 2}`;
+  const focusParam = `$${params.length + 3}`;
+  const pageResult = await pool.query<{
+    type: "trip" | "journey";
+    item_id: number;
+    total: number;
+    page: number;
+  }>(
+    `${baseCte},
+     numbered AS (
+       SELECT type, item_id,
+              ROW_NUMBER() OVER (
+                ORDER BY effective_date DESC NULLS FIRST, sort_created_at DESC, type, item_id
+              ) AS position,
+              COUNT(*) OVER ()::int AS total
+       FROM ordered
+     ),
+     target AS (
+       SELECT COALESCE((
+         SELECT (position - 1) / ${sizeParam} + 1 FROM numbered
+         WHERE (type = 'journey' AND item_id = ${focusParam})
+            OR (type = 'trip' AND item_id = (
+              SELECT trip_id FROM user_journeys WHERE id = ${focusParam} AND user_id = $1
+            ))
+         LIMIT 1
+       ), ${pageParam})::int AS page
+     )
+     SELECT numbered.type, numbered.item_id, numbered.total, target.page
+     FROM numbered CROSS JOIN target
+     WHERE numbered.position > (target.page - 1) * ${sizeParam}
+       AND numbered.position <= target.page * ${sizeParam}
+     ORDER BY numbered.position`,
+    [...params, safePageSize, safePage, focusJourneyId],
   );
-  // A page past the end has no row to carry the count, so it is asked for apart
+  // A page past the end (never a focused one) has no row to carry the count or
+  // the page, so the count is asked for apart
+  const servedPage = pageResult.rows[0]?.page ?? safePage;
   const total =
     pageResult.rows[0]?.total ??
-    (offset > 0
+    (safePage > 1
       ? (
           await pool.query<{ total: number }>(
             `${baseCte} SELECT COUNT(*)::int AS total FROM ordered`,
@@ -507,7 +537,7 @@ export async function journeysAndTripsForUser(
     }
   }
 
-  return { items, total };
+  return { items, total, page: servedPage };
 }
 
 /**

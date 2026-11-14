@@ -15,7 +15,8 @@ export default async function Home() {
 
   // Fetch user preferences server-side to avoid flash (only for logged-in users),
   // for the user just resolved rather than through an action that resolves the
-  // session again
+  // session again. Two quick reads; one statement doing both would save a round
+  // trip of well under a millisecond.
   const selectedCountries = user
     ? await selectedCountriesForUser(user.id)
     : SUPPORTED_COUNTRIES.map((country) => country.code);

@@ -17,21 +17,32 @@ import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
  * The default is written explicitly rather than left to the column's SQL
  * DEFAULT, so a row inserted here always carries the full list.
  *
- * One upsert rather than a SELECT and then an INSERT, as in
- * `getPublicMapSettings`: two concurrent first reads for the same user raced on
- * the primary key, and the loser's unique violation surfaced as a hard read
- * failure. `DO UPDATE` with a self-assignment keeps whatever is already stored
- * while still letting `RETURNING` answer on the conflict path, which `DO
- * NOTHING` would not.
+ * One statement rather than a SELECT and then an INSERT: two concurrent first
+ * reads for the same user raced on the primary key, and the loser's unique
+ * violation surfaced as a hard read failure. `DO UPDATE` with a self-assignment
+ * keeps whatever is already stored while still letting `RETURNING` answer on the
+ * conflict path, which `DO NOTHING` would not.
+ *
+ * The insert runs only when the read found no row. Every signed-in page load
+ * reads this, and a bare upsert rewrites the row each time — a commit to flush,
+ * ~4ms where the read alone is ~0.2ms (measured 2026-11-14).
  */
 export async function selectedCountriesForUser(userId: number): Promise<string[]> {
   try {
     const result = await pool.query<{ selected_countries: string[] }>(
-      `INSERT INTO user_preferences (user_id, selected_countries)
-       VALUES ($1, $2)
-       ON CONFLICT (user_id) DO UPDATE
-         SET selected_countries = user_preferences.selected_countries
-       RETURNING selected_countries`,
+      `WITH existing AS (
+         SELECT selected_countries FROM user_preferences WHERE user_id = $1
+       ), inserted AS (
+         INSERT INTO user_preferences (user_id, selected_countries)
+         SELECT $1, $2::text[]
+         WHERE NOT EXISTS (SELECT 1 FROM existing)
+         ON CONFLICT (user_id) DO UPDATE
+           SET selected_countries = user_preferences.selected_countries
+         RETURNING selected_countries
+       )
+       SELECT selected_countries FROM existing
+       UNION ALL
+       SELECT selected_countries FROM inserted`,
       [userId, SUPPORTED_COUNTRIES.map((c) => c.code)],
     );
 

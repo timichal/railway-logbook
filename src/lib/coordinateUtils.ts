@@ -2,6 +2,8 @@
  * Shared coordinate utilities for route geometry processing
  */
 
+import type { RouteBounds } from "./shared/types";
+
 export type Coord = [number, number];
 
 /**
@@ -107,3 +109,20 @@ export const lngLatSql = (column: string): string => `ARRAY[ST_X(${column}), ST_
 /** SQL reading a geometry column's box as `[west, south, east, north]` (a `RouteBounds`). */
 export const boundsSql = (column: string): string =>
   `ARRAY[ST_XMin(${column}), ST_YMin(${column}), ST_XMax(${column}), ST_YMax(${column})]`;
+
+/** The box holding every one of `boxes` (nulls skipped), or null when there is none. */
+export function unionBounds(boxes: Iterable<RouteBounds | null | undefined>): RouteBounds | null {
+  let union: RouteBounds | null = null;
+  for (const box of boxes) {
+    if (!box) continue;
+    union = union
+      ? [
+          Math.min(union[0], box[0]),
+          Math.min(union[1], box[1]),
+          Math.max(union[2], box[2]),
+          Math.max(union[3], box[3]),
+        ]
+      : box;
+  }
+  return union;
+}

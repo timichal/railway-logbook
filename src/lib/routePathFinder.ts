@@ -15,6 +15,7 @@
  * Phase 1). Nothing here touches a cookie or a request.
  */
 
+import { unionBounds } from "./coordinateUtils";
 import pool from "./db";
 import type { PlannerOptions } from "./planner/routeGraph";
 import { getRouteNetwork } from "./planner/routeGraphCache";
@@ -26,7 +27,7 @@ import {
 } from "./planner/routeSearch";
 import { planTrims, planVisits, type TrimSpec } from "./planner/routeVisits";
 import { findRoutesNearStations } from "./planner/stations";
-import { routeBoundsByIds } from "./routeQueries";
+import { routeBoxSql } from "./routeQueries";
 import { getUsagePluralLabel, MAX_VIA_STATIONS, type UsageType } from "./shared/constants";
 import { REGIONS, type RegionId, regionOfPoint, regionUsagePluralLabel } from "./shared/regions";
 import type { PartialRouteGeometry, PlannerRoute, RouteBounds } from "./shared/types";
@@ -34,14 +35,20 @@ import type { PartialRouteGeometry, PlannerRoute, RouteBounds } from "./shared/t
 export interface PathResult {
   routes: PlannerRoute[];
   totalDistance: number;
+  /** What the map fits to when the plan is shown (`planBounds`); absent on a refusal. */
+  bounds?: RouteBounds | null;
   error?: string;
 }
 
 /**
- * Get route details for a list of route IDs
+ * Get route details for a list of route IDs, with each route's box by track id
+ * (for `planBounds`, so fitting the map to a plan costs no query of its own)
  */
-async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
-  if (routeIds.length === 0) return [];
+async function getRouteDetails(
+  routeIds: number[],
+): Promise<{ routes: PlannerRoute[]; boxes: Map<number, RouteBounds> }> {
+  const boxes = new Map<number, RouteBounds>();
+  if (routeIds.length === 0) return { routes: [], boxes };
 
   const result = await pool.query<{
     track_id: number;
@@ -50,16 +57,22 @@ async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
     to_station: string;
     description: string;
     length_km: number;
+    box: RouteBounds | null;
   }>(
     `
-    SELECT track_id, name, from_station, to_station, description, length_km
-    FROM railway_routes
-    WHERE track_id = ANY($1)
-    ORDER BY array_position($1, track_id)
+    SELECT rr.track_id, rr.name, rr.from_station, rr.to_station, rr.description, rr.length_km,
+      ${routeBoxSql("rr")} AS box
+    FROM railway_routes rr
+    WHERE rr.track_id = ANY($1)
+    ORDER BY array_position($1, rr.track_id)
     `,
     [routeIds],
   );
-  return result.rows.map((row) => ({ ...row, travelled_length_km: row.length_km }));
+  const routes = result.rows.map(({ box, ...row }) => {
+    if (box) boxes.set(row.track_id, box);
+    return { ...row, travelled_length_km: row.length_km };
+  });
+  return { routes, boxes };
 }
 
 /**
@@ -250,7 +263,7 @@ export async function findRoutePathBetweenStations(
     const { trims, untravelled } = planTrims(visits, network.routeInfo);
 
     // Get route details, then cut each route down to the stretch travelled
-    const [pathRoutes, stretches] = await Promise.all([
+    const [{ routes: pathRoutes, boxes }, stretches] = await Promise.all([
       getRouteDetails(visits.map((visit) => visit.trackId)),
       cutTravelledStretches(trims),
     ]);
@@ -274,7 +287,7 @@ export async function findRoutePathBetweenStations(
 
     const totalDistance = routes.reduce((sum, r) => sum + r.travelled_length_km, 0);
 
-    return { routes, totalDistance };
+    return { routes, totalDistance, bounds: planBounds(routes, boxes) };
   } catch (error) {
     console.error("Error finding route path:", error);
     return {
@@ -292,22 +305,14 @@ export async function findRoutePathBetweenStations(
  * plan is reached from its stations, so it never leaves their region. A refused plan
  * has no routes, and so no bounds.
  */
-async function planBounds(routes: PlannerRoute[]): Promise<RouteBounds | null> {
-  const whole = routes.filter((r) => !r.partial).map((r) => r.track_id);
-  let bounds = await routeBoundsByIds(whole, null);
-  for (const route of routes) {
-    for (const [lng, lat] of route.partial?.coordinates ?? []) {
-      bounds = bounds
-        ? [
-            Math.min(bounds[0], lng),
-            Math.min(bounds[1], lat),
-            Math.max(bounds[2], lng),
-            Math.max(bounds[3], lat),
-          ]
-        : [lng, lat, lng, lat];
-    }
-  }
-  return bounds;
+function planBounds(routes: PlannerRoute[], boxes: Map<number, RouteBounds>): RouteBounds | null {
+  return unionBounds(
+    routes.flatMap((route) =>
+      route.partial
+        ? route.partial.coordinates.map(([lng, lat]): RouteBounds => [lng, lat, lng, lat])
+        : [boxes.get(route.track_id)],
+    ),
+  );
 }
 
 /**
@@ -326,5 +331,5 @@ export async function planJourney(
     viaStationIds,
     options,
   );
-  return { ...result, bounds: await planBounds(result.routes) };
+  return { ...result, bounds: result.bounds ?? null };
 }

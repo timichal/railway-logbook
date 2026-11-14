@@ -60,7 +60,7 @@ export interface RiddenPart {
 /**
  * The stretches of `parts` that can be drawn: those of rides logged in part whose
  * extent is known. A ride logged whole has none (it covered the route), nor has a
- * route ticked partial by hand. `HAS_STRETCH_SQL` (`tripQueries.ts`) is the same
+ * route ticked partial by hand. `HAS_STRETCH_SQL` (`progressQueries.ts`) is the same
  * test in SQL.
  */
 export function knownStretches(

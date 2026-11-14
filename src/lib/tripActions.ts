@@ -43,7 +43,7 @@ export async function getTripNames(region: RegionId): Promise<ActionResult<TripN
 /**
  * Get a single trip with its assigned journeys, and the bounds of its routes in
  * `region` — what the map fits to when the trip is opened — and the stretches of
- * those it rode only part of (see getJourney, tripForUser).
+ * those it rode only part of (see getJourney, tripWithBoundsForUser).
  */
 export async function getTrip(
   tripId: number,
@@ -93,17 +93,19 @@ export async function assignJourneyToTrip(
 
 /**
  * A paginated, search-filtered page of top-level items (trips and standalone
- * journeys), sorted by effective date desc and scoped to `region`.
+ * journeys), sorted by effective date desc and scoped to `region`. With
+ * `focusJourneyId`, the page that lists that journey (see journeysAndTripsForUser).
  */
 export async function getJourneysAndTrips(
   page: number,
   pageSize: number,
   search: string,
   region: RegionId,
-): Promise<ActionResult<{ items: TripsAndJourneysItem[]; total: number }>> {
+  focusJourneyId: number | null = null,
+): Promise<ActionResult<{ items: TripsAndJourneysItem[]; total: number; page: number }>> {
   return asUser((userId) => {
     assertRegionId(region);
-    return journeysAndTripsForUser(userId, page, pageSize, search, region);
+    return journeysAndTripsForUser(userId, page, pageSize, search, region, focusJourneyId);
   });
 }
 

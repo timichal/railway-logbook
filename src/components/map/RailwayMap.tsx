@@ -29,6 +29,7 @@ import type {
   Station,
 } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
+import { scrollInContainer } from "@/lib/ui/scrollInContainer";
 import { getRoutesBounds } from "@/lib/userActions";
 
 /** One highlight set: whole routes by id, plus the stretches of those covered only in part. */
@@ -614,23 +615,13 @@ export default function RailwayMap({
 
   // The summary bar's "Log journey": the sheet raises itself, this brings the form
   // into view — after the commit that unhides the Route Logger, since a hidden
-  // element cannot be scrolled to. Its own scroll container only, never
-  // `scrollIntoView`: the sheet is still translated down at the start of its snap,
-  // and the browser would make up the difference by scrolling the overflow-hidden
-  // ancestors — the map root and the map pane — which then jump back when the
-  // transform comes off. Both rects sit under the same transform, so their
-  // difference is the form's offset in the container whatever the sheet is doing.
+  // element cannot be scrolled to. The sheet is still translated down at the
+  // start of its snap, which is why it is `scrollInContainer`.
   const handleLogFromSummary = useCallback(() => {
     setActiveTab("routes");
     requestAnimationFrame(() => {
       const form = document.getElementById(NEW_JOURNEY_FORM_ID);
-      let scroller = form?.parentElement ?? null;
-      while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
-        scroller = scroller.parentElement;
-      }
-      if (!form || !scroller) return;
-      const offset = form.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-      scroller.scrollTo({ top: scroller.scrollTop + offset - 8, behavior: "smooth" });
+      if (form) scrollInContainer(form);
     });
   }, [setActiveTab]);
 

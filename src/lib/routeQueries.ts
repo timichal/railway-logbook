@@ -316,6 +316,24 @@ export async function routeBoundsByIds(
 }
 
 /**
+ * The bounding box of the route aliased `alias`, as a `RouteBounds` column, NULL
+ * where it has no geometry — or, given `region`, where it is not in that region
+ * (as `routeBoundsByIds` leaves it out). For a read that already lists the routes
+ * a fit is made from (opening a journey or trip, a plan), which then unions the
+ * boxes (`unionBounds`) rather than asking for them in a query of its own.
+ *
+ * The box is taken once (OFFSET 0 keeps the subquery from being flattened into
+ * four copies): `boundsSql` on the column itself would read a long, TOASTed line
+ * four times.
+ */
+export function routeBoxSql(alias: "rr" | "r", region: RegionId | null = null): string {
+  const box = `(SELECT ${boundsSql("b")} FROM (SELECT Box2D(${alias}.geometry) AS b OFFSET 0) x WHERE b IS NOT NULL)`;
+  return region
+    ? `CASE WHEN ${regionContainsSql(region, `${alias}.starting_coordinate`)} THEN ${box} END`
+    : box;
+}
+
+/**
  * `RailwayRoute.ends` of the route aliased `alias`: its geometry's first and last
  * point, all a journey needs of the geometry to be read as station chains
  * (`journeyChains.ts`).

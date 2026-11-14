@@ -13,13 +13,19 @@
  */
 
 import type { PoolClient } from "pg";
+import { unionBounds } from "./coordinateUtils";
 import pool, { asMissingRow, withTransaction } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
-import { buildCoveredStretches } from "./progressQueries";
-import { routeBoundsByIds, routeEndsSql } from "./routeQueries";
+import {
+  type CoveredStretchRow,
+  coveredStretchGeoJsonSql,
+  HAS_STRETCH_SQL,
+  parseCoveredStretches,
+} from "./progressQueries";
+import { routeBoxSql, routeEndsSql } from "./routeQueries";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
 import type { RegionId } from "./shared/regions";
-import { knownStretches, sanitizeRange } from "./shared/routeCoverage";
+import { sanitizeRange } from "./shared/routeCoverage";
 import type {
   Journey,
   JourneyEdits,
@@ -107,11 +113,28 @@ function loggedPartRows(
   return { placeholders: valuePlaceholders.join(", "), values };
 }
 
-/** A single journey with all its logged routes. */
-export async function journeyForUser(
+/**
+ * A journey as it is opened, with all its logged routes. Both transports open a
+ * journey through this. Beside the routes it returns
+ *
+ * - `bounds`, the box of its routes in `region`, which the map fits to (see
+ *   routeBoundsByIds), so the fit needs no request of its own;
+ * - `partials`, the stretch ridden of each route logged in part where it is known
+ *   (knownStretches), which the highlight draws in place of the whole route.
+ *
+ * Both are read with the routes, in the same row: one snapshot, and no query of
+ * their own.
+ */
+export async function journeyWithBoundsForUser(
   userId: number,
   journeyId: number,
-): Promise<{ journey: Journey; routes: RailwayRoute[] }> {
+  region: RegionId,
+): Promise<{
+  journey: Journey;
+  routes: RailwayRoute[];
+  bounds: RouteBounds | null;
+  partials: PartialRouteGeometry[];
+}> {
   // Both at once: the routes are read under the user too, so for a journey that
   // isn't theirs they come back empty, and the missing journey answers
   const journeyQuery = pool.query<Journey>(
@@ -119,14 +142,22 @@ export async function journeyForUser(
     [journeyId, userId],
   );
 
-  // Exclude the heavy geometry column; its two ends are enough to chain the routes
-  const routesQuery = pool.query<RailwayRoute & LoggedPart>(
+  // Exclude the heavy geometry column; its two ends are enough to chain the routes.
+  // `box`, `closed` and `stretch` are for the bounds and partials, not the route.
+  const routesQuery = pool.query<
+    RailwayRoute & LoggedPart & { box: RouteBounds | null; closed: boolean; stretch: string | null }
+  >(
     `SELECT
       rr.track_id, rr.name, rr.from_station, rr.to_station,
       rr.description, rr.usage_type, rr.usage_tags, rr.link, rr.link_name, rr.line_class,
       rr.length_km, rr.start_country, rr.end_country,
       rr.is_valid, ${routeEndsSql("rr")} AS ends,
-      ulp.partial, ulp.covered_start, ulp.covered_end
+      ulp.partial, ulp.covered_start, ulp.covered_end,
+      ${routeBoxSql("rr", region)} AS box,
+      rr.closed,
+      CASE WHEN ${HAS_STRETCH_SQL}
+        THEN ${coveredStretchGeoJsonSql("rr.geometry", "ulp.covered_start", "ulp.covered_end")}
+      END AS stretch
     FROM user_logged_parts ulp
     JOIN railway_routes rr ON ulp.track_id = rr.track_id
     WHERE ulp.journey_id = $1 AND ulp.user_id = $2
@@ -141,35 +172,34 @@ export async function journeyForUser(
   const journey = journeyResult.rows[0];
   if (!journey) throw new NotFoundError("Journey not found");
 
-  return { journey, routes: routesResult.rows };
-}
+  const routes: RailwayRoute[] = [];
+  const boxes: (RouteBounds | null)[] = [];
+  const stretches: CoveredStretchRow[] = [];
+  for (const { box, closed, stretch, ...route } of routesResult.rows) {
+    routes.push(route);
+    boxes.push(box);
+    if (stretch !== null) {
+      stretches.push({
+        track_id: route.track_id,
+        // Set wherever there is a stretch (HAS_STRETCH_SQL)
+        covered_start: route.covered_start as number,
+        covered_end: route.covered_end as number,
+        line_class: route.line_class ?? null,
+        usage_type: route.usage_type,
+        closed,
+        start_country: route.start_country ?? null,
+        end_country: route.end_country ?? null,
+        geojson: stretch,
+      });
+    }
+  }
 
-/**
- * A journey as it is opened: with the bounds of its routes in `region`, which the map
- * fits to (see routeBoundsByIds) — returned with it, so the fit needs no request of
- * its own — and `partials`, the stretch ridden of each route logged in part where
- * it is known, which the highlight draws in place of the whole route. Both
- * transports open a journey through this.
- */
-export async function journeyWithBoundsForUser(
-  userId: number,
-  journeyId: number,
-  region: RegionId,
-): Promise<{
-  journey: Journey;
-  routes: RailwayRoute[];
-  bounds: RouteBounds | null;
-  partials: PartialRouteGeometry[];
-}> {
-  const result = await journeyForUser(userId, journeyId);
-  const [bounds, partials] = await Promise.all([
-    routeBoundsByIds(
-      result.routes.map((r) => r.track_id),
-      region,
-    ),
-    buildCoveredStretches(knownStretches(result.routes)),
-  ]);
-  return { ...result, bounds, partials };
+  return {
+    journey,
+    routes,
+    bounds: unionBounds(boxes),
+    partials: parseCoveredStretches(stretches),
+  };
 }
 
 /** Create a new journey and log routes to it, in one transaction. */

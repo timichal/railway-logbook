@@ -4,14 +4,6 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 **Where to measure.** The server is small (2 vCPU / 4GB, see `osmium-scripts/CLAUDE.md`). The dev machine has plenty of cores and disk, so pipeline measurements (prepare timings, extract sizes, changed-part counts, recalculation runs) go there, against the local Docker database and a local `data/` copy. Only sizing decisions (memory, `shared_buffers`, concurrency) need re-checking against the server's limits.
 
-## Quick wins
-
-- **Small sequential round trips** (a few ms each; do them while you're in each file):
-  - `journeyWithBoundsForUser` and `tripWithBoundsForUser` compute bounds after the main query.
-  - `planJourney` runs `planBounds` after the details; `ST_Extent` could go into `getRouteDetails`.
-  - The public map resolves the share token in its own query before reading progress.
-  - `page.tsx` does `getUser`, then preferences (now two queries, was three): one query could do both.
-
 ## Medium
 
 - **Drop the text attributes from low-zoom route tiles.** `railway_routes_mvt` (`database/init/02-vector-tiles.sql`) puts `name`, `other_names`, `from_station`, `to_station`, `description`, `usage_tags`, `link`, `link_name`, `journey_name` and so on into every tile at every zoom. Measured at z4 (tile 4/8/5), the same rows:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import JourneyCard from "@/components/logbook/JourneyCard";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { localJourneyStore } from "@/lib/journeyStore";
@@ -9,6 +9,7 @@ import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn, LocalJourney, LocalLoggedPart } from "@/lib/shared/types";
 import { usePruneJourneyDrafts } from "@/lib/ui/editGuard";
+import { useRevealJourneyCard } from "@/lib/ui/scrollInContainer";
 import { getRegionTrackIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
@@ -38,13 +39,17 @@ export default function LocalJourneyLogTab({
   // localStorage journey knows only track ids, so this is what tells the list
   // which journeys belong here; null while it loads (or if it failed), and then
   // everything is shown rather than nothing.
-  const { data: regionTrackIds } = useAsyncLoad(
+  const { data: regionTrackIds, loading: regionLoading } = useAsyncLoad(
     () => getRegionTrackIds(regionId).then((ids) => new Set(ids)),
     [regionId],
     "region route ids",
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [openJourneyId, setOpenJourneyId] = useState<string | null>(initialOpenJourneyId);
+  // Scrolled to once the region's ids have settled which journeys are listed (the
+  // stored ones are read on mount, before that answer comes back)
+  const rootRef = useRef<HTMLDivElement>(null);
+  useRevealJourneyCard(rootRef, initialOpenJourneyId, !regionLoading, regionId);
 
   // Any journey open when the region changes is collapsed: it may not be in this
   // region at all, and its highlight is dropped by the map anyway. Done during
@@ -122,7 +127,7 @@ export default function LocalJourneyLogTab({
   }, [filteredJourneys, openJourneyId, onHighlightRoutes]);
 
   return (
-    <div className="p-4 text-fg space-y-4">
+    <div ref={rootRef} className="p-4 text-fg space-y-4">
       {/* Header */}
       <div>
         <h3 className="text-lg font-bold mb-2">My Journeys (Local Storage)</h3>

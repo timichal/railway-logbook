@@ -13,7 +13,7 @@ What the map draws is decided in `src/lib/shared/map/` (its CLAUDE.md has the st
 
 ## Opening something flies to it
 
-`{ fit: true }`, the fourth argument of `HighlightRoutesFn`, uses a bbox from the server limited to the region (`routeBoundsByIds`). For a plan the box is widened by the stretch travelled. Each transport gets the box from one query (`journeyWithBoundsForUser`, `tripWithBoundsForUser`, `planJourney`); local journeys use `getRoutesBounds`. The fit happens only on open, and any later highlight or camera move drops a pending fit, except the `sheetPadding` jump. `fitCamera.ts` keeps clear of the progress box and the sheet, capped by `FIT_MAX_ZOOM`.
+`{ fit: true }`, the fourth argument of `HighlightRoutesFn`, uses a bbox from the server limited to the region. For a plan the box is widened by the stretch travelled. Opening a journey, a trip or a plan returns the box with it, read in the same query as its routes (`routeBoxSql` + `unionBounds`, in `journeyWithBoundsForUser`, `tripWithBoundsForUser`, `planJourney`); local journeys use `getRoutesBounds` (`routeBoundsByIds`). The fit happens only on open, and any later highlight or camera move drops a pending fit, except the `sheetPadding` jump. `fitCamera.ts` keeps clear of the progress box and the sheet, capped by `FIT_MAX_ZOOM`.
 
 ## Popups
 

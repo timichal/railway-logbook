@@ -90,7 +90,13 @@ export async function setPublicMapEnabled(enabled: boolean): Promise<PublicMapSe
   return { ...settings, enabled };
 }
 
-/** Progress figures for a shared map. Empty-ish zeros if the link is dead. */
+/**
+ * Progress figures for a shared map. Empty-ish zeros if the link is dead.
+ *
+ * The token is resolved in its own query, as in the two reads below. Folding
+ * `sharedMapOwnerIdSql` into the progress query was measured (2026-11-14) to cost
+ * the query about what the lookup costs, so it saves nothing.
+ */
 export async function getPublicProgress(
   token: string,
   region: RegionId,
