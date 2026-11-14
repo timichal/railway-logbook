@@ -24,21 +24,12 @@ import {
   type TripName,
   type TripsAndJourneysItem,
   type TripWithStats,
-  tripNamesForUser,
   tripWithBoundsForUser,
   unassignedJourneysForUser,
   updateTripForUser,
 } from "./tripQueries";
 
 export type { JourneyWithStats, TripName, TripsAndJourneysItem, TripWithStats };
-
-/** The current user's trips in `region`, as the journey forms' trip picker offers them. */
-export async function getTripNames(region: RegionId): Promise<ActionResult<TripName[]>> {
-  return asUser((userId) => {
-    assertRegionId(region);
-    return tripNamesForUser(userId, region);
-  });
-}
 
 /**
  * Get a single trip with its assigned journeys, and the bounds of its routes in

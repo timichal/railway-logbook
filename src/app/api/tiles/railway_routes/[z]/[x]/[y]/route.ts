@@ -1,5 +1,6 @@
 import { bearerClaims } from "@/lib/api/auth";
-import { mvtResponse, parseTile, sessionClaims } from "@/lib/api/tiles";
+import { mvtResponse, parseTile } from "@/lib/api/tiles";
+import { sessionClaims } from "@/lib/api/webSession";
 import { type RouteTileRidesOf, routeTile } from "@/lib/routeTileQueries";
 import { normalizeCountryCodes } from "@/lib/shared/constants";
 import { ZOOM_RANGES } from "@/lib/shared/map/zoomRanges";

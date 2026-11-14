@@ -6,10 +6,11 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Move read-only calls off server actions.** Next runs a client's server actions one at a time (`node_modules/next/dist/docs/01-app/02-guides/backend-for-frontend.md`, "Server Actions are queued"). So on a signed-in load `getTripNames` → `getUserProgress` → `getCoveredStretches` run in sequence, a slow `findRoutePathBetweenStations` holds up station search and progress, and the admin page queues four or more loads.
-  - Serve the reads from GET route handlers that resolve the session the way `src/lib/api/tiles.ts` does and call the existing `*Queries.ts` functions. Keep writes as server actions.
-  - Rules that apply ("Two transports" in the root CLAUDE.md): a route handler never imports a `"use server"` module; errors go through `errors.ts`; every handler checks the session itself.
-  - Start with the load-time trio. The cheaper alternative is one combined "map init" action, which saves the queueing but not the caching.
+- **Move the remaining read-only calls off server actions.** Next runs a client's server actions one at a time. The signed-in page's own loads are done (`api/me`, `sessionReads.ts`, see "Two transports" in the root CLAUDE.md). Still actions, and still queued behind a slow `findRoutePathBetweenStations`:
+  - The public reads in `userActions.ts`: `searchStations` and `searchMap` (typed while a planner search runs), `getLineGeometry`, `getRoutesBounds`, `getRoutesByIds`, `getRegionTrackIds`. They need no session, so plain public GET handlers. `getRouteSummaries` belongs to the next item.
+  - The shared map's `publicMapActions.ts` reads (progress, by country, stretches): GET handlers that re-resolve the token on every call, as the actions do.
+  - The admin page's load-time reads (it queues four or more): `api/me`-style handlers that check the admin (user 1) on every call, as `asAdmin` does.
+  - My Trips' list and trip/journey loads (`tripActions`, `journeyActions`) where they run beside other reads.
 - **Cache the route summaries for anonymous visitors.** `dataAccess.ts` calls `getRouteSummaries(region)` on mount: Europe is 5,956 rows, about 722KB of JSON, identical for everyone. It is a POST server action, so nothing caches it. Progress, colouring and stretches all wait on it, even with an empty local log.
   - Serve it from a public GET handler with an ETag, from the planner's network fingerprint or a routes-version counter (see the next item), plus `stale-while-revalidate`. `trackIdsInRegion` can go the same way.
   - With an empty local log, skip it: ask for the totals alone, and skip the coverage and status work.

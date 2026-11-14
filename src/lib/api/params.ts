@@ -47,6 +47,28 @@ export function optionalCountries(url: URL): string[] | undefined {
   return normalizeCountryCodes(raw.split(","));
 }
 
+/**
+ * A comma-separated list of integers, with the same three states as
+ * `optionalCountries`: absent is undefined, present-but-empty is [].
+ */
+export function optionalIntList(url: URL, name: string): number[] | undefined {
+  const raw = url.searchParams.get(name);
+  if (raw === null) return undefined;
+  if (raw.trim() === "") return [];
+
+  const items = raw.split(",");
+  if (items.length > MAX_ARRAY_LENGTH) {
+    throw new ApiError(400, `${name} must hold at most ${MAX_ARRAY_LENGTH} items`);
+  }
+  return items.map((item) => {
+    const value = Number(item);
+    if (item.trim() === "" || !Number.isInteger(value)) {
+      throw new ApiError(400, `${name} must hold integers`);
+    }
+    return value;
+  });
+}
+
 export function optionalInt(url: URL, name: string, fallback: number): number {
   const raw = url.searchParams.get(name);
   if (raw === null) return fallback;

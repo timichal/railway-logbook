@@ -11,6 +11,7 @@ import {
   getPublicProgress,
   getPublicProgressByCountry,
 } from "./publicMapActions";
+import { fetchCoveredStretches, fetchProgress, fetchProgressByCountry } from "./sessionReads";
 import type { UsageType } from "./shared/constants";
 import {
   type ProgressByCountry,
@@ -21,13 +22,7 @@ import {
 import { countedUsageTypes, isOrdinaryUsage, REGIONS, type RegionId } from "./shared/regions";
 import { isRouteFullyRidden } from "./shared/routeCoverage";
 import type { CoveredRange, CoveredStretch, LocalLoggedPart, RouteSummary } from "./shared/types";
-import {
-  getCoveredStretches as dbGetCoveredStretches,
-  getProgressByCountry as dbGetProgressByCountry,
-  getUserProgress as dbGetUserProgress,
-  getCoveredStretchesFor,
-  getRouteSummaries,
-} from "./userActions";
+import { getCoveredStretchesFor, getRouteSummaries } from "./userActions";
 import { updateUserPreferences as dbUpdateUserPreferences } from "./userPreferencesActions";
 
 /** How one route reads on the map for a localStorage user (see getLocalRouteStatuses). */
@@ -81,10 +76,11 @@ export function createDataAccess(userId: number | null, region: RegionId): DataA
 
 function createDatabaseDataAccess(region: RegionId): DataAccess {
   return {
+    // GET route handlers, not actions, so they run beside each other (sessionReads.ts)
     getUserProgress: (selectedCountries, shownUsageTypes) =>
-      dbGetUserProgress(region, selectedCountries, shownUsageTypes),
-    getProgressByCountry: () => dbGetProgressByCountry(region),
-    getCoveredStretches: () => dbGetCoveredStretches(region),
+      fetchProgress(region, selectedCountries, shownUsageTypes),
+    getProgressByCountry: () => fetchProgressByCountry(region),
+    getCoveredStretches: () => fetchCoveredStretches(region),
     // The route tile already carries this user's visit status
     getLocalRouteStatuses: async () => [],
     getLocalLoggedTrackIds: () => [],

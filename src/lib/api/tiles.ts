@@ -1,25 +1,9 @@
 /**
  * Plumbing for the tile handlers under `src/app/api/tiles` — the tiles the app
  * serves itself rather than leaving to Martin, because whether to answer depends
- * on who is asking (see "Vector tiles" in CLAUDE.md).
+ * on who is asking (see "Vector tiles" in CLAUDE.md). Who is asking comes from
+ * `webSession.ts` (the cookie) or `auth.ts` (a bearer token).
  */
-
-import { cookies } from "next/headers";
-import { COOKIE_NAME, readToken, type TokenClaims } from "../authTokens";
-
-/**
- * What the web session's cookie claims, or null. Tile handlers are, besides
- * `api/session` (which renews it), the only route handlers that read the cookie
- * (see "Vector tiles" in CLAUDE.md); this is the one place they do it. Not `authActions.getUser`, which is a `"use server"`
- * module a route handler must not import.
- *
- * Signature checked, **not** held against the account: the tile query does that
- * (`currentAccountIdSql`), so a tile stays one round trip on the tile pool.
- */
-export async function sessionClaims(): Promise<TokenClaims | null> {
-  const session = (await cookies()).get(COOKIE_NAME)?.value;
-  return session ? readToken(session) : null;
-}
 
 /** `z`/`x`/`y` from the path, or null when they are not a tile inside `zooms`. */
 export function parseTile(

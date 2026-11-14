@@ -1,23 +1,15 @@
 "use server";
 
 /**
- * The web app's user-facing server actions.
+ * The web app's public route and station reads, as server actions. None needs a
+ * session; the signed-in user's own reads are the `api/me` route handlers
+ * (`sessionReads.ts`).
  *
- * Each one resolves the session and delegates: the public route and station
- * reads live in `routeQueries.ts`, the user-scoped progress and coverage SQL in
- * `progressQueries.ts`. Both are plain modules so the mobile API's route
- * handlers can call them after resolving a bearer token instead
- * (MOBILE_APP_PLAN.md, Phase 1).
+ * Each delegates to a plain module (`routeQueries.ts`, `progressQueries.ts`),
+ * which the mobile API's route handlers call too (MOBILE_APP_PLAN.md, Phase 1).
  */
 
-import { getUser } from "./authActions";
-import {
-  buildCoveredStretches,
-  coveredStretchesForUser,
-  normalizeCoveredRanges,
-  progressByCountryForUser,
-  progressForUser,
-} from "./progressQueries";
+import { buildCoveredStretches, normalizeCoveredRanges } from "./progressQueries";
 import { assertRegionId } from "./regionArgument";
 import {
   lineGeometryByName,
@@ -28,7 +20,6 @@ import {
   searchStationsByName,
   trackIdsInRegion,
 } from "./routeQueries";
-import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type {
   CoveredRange,
@@ -96,53 +87,8 @@ export async function getRoutesBounds(
 }
 
 /**
- * Progress figures for the logged-in user. The query itself lives in
- * `progressQueries.ts`, shared with the token-checked public-map version.
- */
-export async function getUserProgress(
-  region: RegionId,
-  selectedCountries?: string[],
-  shownUsageTypes?: number[],
-): Promise<UserProgress> {
-  assertRegionId(region);
-  const user = await getUser();
-  if (!user) {
-    throw new Error("User not authenticated");
-  }
-
-  return progressForUser(user.id, region, selectedCountries, shownUsageTypes);
-}
-
-/**
- * Get progress statistics broken down by country
- * Returns stats for each country (routes starting AND ending in that country)
- * Plus overall total across all countries
- */
-export async function getProgressByCountry(region: RegionId): Promise<ProgressByCountry> {
-  assertRegionId(region);
-  const user = await getUser();
-  if (!user) {
-    throw new Error("User not authenticated");
-  }
-
-  return progressByCountryForUser(user.id, region);
-}
-
-/**
- * The stretches the logged-in user has ridden on routes in `region` they haven't
- * completed.
- */
-export async function getCoveredStretches(region: RegionId): Promise<CoveredStretch[]> {
-  assertRegionId(region);
-  const user = await getUser();
-  if (!user) return [];
-
-  return coveredStretchesForUser(user.id, region);
-}
-
-/**
- * Same as getCoveredStretches, for ranges the caller holds itself — the
- * localStorage journeys of a user who isn't logged in. Route geometry is public
+ * The ridden stretches, as `api/me/coverage` draws them, for ranges the caller
+ * holds itself — the localStorage journeys of a user who isn't logged in. Route geometry is public
  * (it is served as tiles to everyone), so this needs no authentication; the
  * ranges are validated and capped instead.
  */

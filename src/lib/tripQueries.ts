@@ -377,7 +377,7 @@ export type TripsAndJourneysItem =
  *
  * Scoped to `region` (see journeyInRegionSql): browsing the list highlights the
  * item's routes on the map, and the map is locked to one region. The trip picker
- * (getTripNames) and the journey picker (getUnassignedJourneys) are scoped the
+ * (tripNamesForUser) and the journey picker (getUnassignedJourneys) are scoped the
  * same way.
  *
  * `focusJourneyId` asks for the page that lists that journey (its own row, or
@@ -542,7 +542,7 @@ export async function journeysAndTripsForUser(
 
 /**
  * Get journeys not assigned to any trip (for the assignment picker), scoped to
- * `region` — the same reason as getTripNames: the picker offers journeys to file
+ * `region` — the same reason as tripNamesForUser: the picker offers journeys to file
  * under a trip being browsed on one region's map, and a journey from the other
  * region has no business in that list. A journey with no logged routes yet
  * belongs to every region (see journeyInRegionSql), so an empty one stays

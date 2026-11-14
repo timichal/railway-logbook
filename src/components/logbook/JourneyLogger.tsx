@@ -9,8 +9,8 @@ import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { createJourney } from "@/lib/journeyActions";
 import { databaseJourneyStore } from "@/lib/journeyStore";
 import { useRegionId } from "@/lib/regionContext";
+import { fetchTripNames } from "@/lib/sessionReads";
 import type { TripName } from "@/lib/tripActions";
-import { getTripNames } from "@/lib/tripActions";
 
 const NO_TRIPS: TripName[] = [];
 
@@ -57,7 +57,7 @@ export default function JourneyLogger({
   // rather than running on every return to the tab.
   // biome-ignore lint/correctness/useExhaustiveDependencies: tripsVersion is the reload trigger; the trips themselves come from the server.
   const { data: availableTrips } = useAsyncLoad(
-    () => getTripNames(regionId).then(unwrap),
+    () => fetchTripNames(regionId),
     [regionId, tripsVersion],
     "trips",
   );

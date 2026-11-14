@@ -1,5 +1,6 @@
 import { adminNotesTile } from "@/lib/adminNotesTileQueries";
-import { mvtResponse, parseTile, sessionClaims } from "@/lib/api/tiles";
+import { mvtResponse, parseTile } from "@/lib/api/tiles";
+import { sessionClaims } from "@/lib/api/webSession";
 import { ZOOM_RANGES } from "@/lib/shared/map/zoomRanges";
 
 type Context = { params: Promise<{ z: string; x: string; y: string }> };
