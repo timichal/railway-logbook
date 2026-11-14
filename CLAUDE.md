@@ -29,6 +29,9 @@ A unified Next.js app for OSM railway data. It fetches, processes and visualizes
 - `npx tsc --noEmit`: **run after every batch of changes**.
 - `npm run lint` (Biome: formatter + linter): **all code must conform**, so run it and fix findings before calling a change done. Use `npm run lint:fix` for fixes. **Never blanket-apply `--unsafe`**, because the `useExhaustiveDependencies` autofix mangles intentional dependency arrays. Fix hook deps by hand, or add `// biome-ignore lint/correctness/useExhaustiveDependencies: <reason>`.
 - `npm test`: `node:test` through tsx, `tests/*.test.ts`, no framework. They cover the pure logic where a mistake is silent (coverage, the planner, chain merging, the GeoJSON stream, layer prefs, selection…), so run them after touching `src/lib` or `src/scripts/lib`. Tests live in `tests/` because the shared folder can't import `node:test`, and import through `@/`. The `*.sql.test.ts` files need the database and skip themselves without it.
+- **Never commit, merge commits included.** The user commits. Leave the work in the tree and say it's ready; stage only when asked. For a merge, `git merge --no-commit` and stop once conflicts are resolved and checks pass. "Merge" or "finish" is not permission to commit.
+- **Line endings are LF** (`.gitattributes`), and `npm run lint` is clean. A Biome `format` finding showing `␍` on a file you touched is CRLF you wrote: convert it back. Windows Python's text mode writes CRLF, so open with `newline=""` or use Node's `fs`. Check endings with Node (count `/\r\n/`), not Git Bash `grep $'\r$'`, which miscounts.
+- **`TODO.md`** (repo root, when present) is the current audit's worklist, replaced with each audit. Items are written to be actionable cold, and "the next thing in TODO.md" means the first remaining one. **Delete an item once it's done** (don't tick it), and delete one found wrong or deliberate too, moving the reasoning here if it's worth keeping. Delete the file when it's empty. Don't re-audit ground it already covers.
 
 ### Data pipeline and database (details in `src/scripts/CLAUDE.md`, `osmium-scripts/CLAUDE.md`)
 
@@ -87,6 +90,16 @@ Schema in `database/init/01-schema.sql`. What the columns don't tell you:
 - **Duplicating a route clones every user's logs, on purpose** (`duplicateRailwayRoute`). Duplication exists to split A–C into A–B and B–C, and everyone who rode A–C rode both. `reprojectCoveredRanges` in `saveRailwayRoute` carries a partial ride through the re-pick. A duplicate left un-split double-counts.
 - **Scenic lines** are their own table, drawn and recalculated exactly like routes, but they carry only From/To and are used for highlighting alone. Nothing is logged against them or derived from them (no `near_route`, planner or stats). An invalid one keeps its last geometry and, like an invalid route, is not recalculated until re-picked. **A scenic line never backtracks**: its preview, save and recalculation all search with `avoidBacktracking` (`findAdminPath`), a save re-finds the path from the points and refuses one that still backtracks, and a recalculation that does marks the line invalid.
 - Every stored `length_km` and the admin preview use one expression, `lineLengthKmSql` (`lineLength.ts`).
+
+## Route labels (From/To, line names)
+
+- **Name routes by From → To** (with the line name in Japan) whenever you report them, never by bare `track_id`: the admin searches by from/to.
+- **From and To are interchangeable** (the UI shows "from ↔ to"). The loose habit is left to right and top to bottom, with exceptions such as short branch lines, by feel. Which end of the geometry a label sits at is never an error: check a label against the stations near _either_ endpoint, and flag only one that matches neither.
+- A point that is not a station is `<Place> [junction]`, or `[north junction]`, `[east junction]`, `[central junction]`… where a place has several. **One point has one name** across every route that ends there.
+- **Europe** keeps the local spelling with its diacritics (Starołęka, Zemitāni, Vácrátót); the OSM station name is the reference. A shortened form is fine ("Rīga" for Rīgas Centrālā stacija).
+- **Japan** keeps each operator's own English spelling (hyphen or space, "-mae" or "-Mae", Onsen forms, n or m before b/m/p) and only adds macrons, because operators romanize differently even on their signs. Don't report those differences. Do report real typos, wrong pastes, labels that don't match the endpoints, and a missing macron. Same-named stations far apart (Fukushima, Ōmiya…) are different stations, and so are two operators' stations side by side (Meitetsu Nagoya, Kintetsu-Nagoya).
+- An endpoint with no OSM station nearby is usually a station missing from OSM (Alūksne, Olecko, underground stations in Japan), not a wrong label.
+- Audit findings the admin has reviewed and accepted are in `ROUTE_DATA_AUDIT.md`. Don't report them again.
 
 ## Regions (`src/lib/shared/regions.ts`)
 
