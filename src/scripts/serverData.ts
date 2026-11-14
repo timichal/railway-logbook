@@ -213,21 +213,17 @@ function downloadRouteBackup(): string {
  * tables. TRUNCATE rather than DELETE, as there is no one to block locally.
  * With the triggers goes the `data_versions` bump, so the restore makes it
  * itself, or a running dev server would keep serving its cache of the old routes.
- * Skipped where the table doesn't exist yet (`npm run addDataVersions` not run
- * here): there is no counter to move, and failing would throw the
- * restore away. Dollar-quoted, because the line sits inside the shell's single
- * quotes.
  */
 function restore(containerFile: string, tables: string[]): void {
   const bump = tables.includes("railway_routes")
-    ? "DO $b$ BEGIN IF to_regclass($t$data_versions$t$) IS NOT NULL THEN UPDATE data_versions SET version = version + 1 WHERE table_name = $t$railway_routes$t$; END IF; END $b$; "
+    ? "UPDATE data_versions SET version = version + 1 WHERE table_name = 'railway_routes'; "
     : "";
   run("Restoring into the local database", "docker", [
     "exec",
     CONTAINER,
     "sh",
     "-c",
-    `set -o pipefail; { echo "BEGIN; SET session_replication_role = replica; TRUNCATE ${tables.join(", ")};" && pg_restore -f - ${containerFile} && echo '${bump}COMMIT;'; } | psql -X -q -v ON_ERROR_STOP=1 ${PG_CONNECT} > /dev/null`,
+    `set -o pipefail; { echo "BEGIN; SET session_replication_role = replica; TRUNCATE ${tables.join(", ")};" && pg_restore -f - ${containerFile} && echo "${bump}COMMIT;"; } | psql -X -q -v ON_ERROR_STOP=1 ${PG_CONNECT} > /dev/null`,
   ]);
 }
 

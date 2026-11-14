@@ -24,9 +24,8 @@ export async function routesFingerprint(): Promise<string> {
     "SELECT version::text FROM data_versions WHERE table_name = 'railway_routes'",
   );
   const version = result.rows[0]?.version;
-  // The row is seeded by 01-schema.sql (or the addDataVersions migration);
-  // without it nothing would ever invalidate, so fail loudly rather than cache
-  // forever
+  // The row is seeded by 01-schema.sql; without it nothing would ever
+  // invalidate, so fail loudly rather than cache forever
   if (version === undefined) throw new Error("data_versions has no railway_routes row");
   return version;
 }

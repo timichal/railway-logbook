@@ -9,8 +9,8 @@
  * commit would, which shows both that nothing moved before it and what moves
  * at it.
  *
- * Needs the local database with `data_versions` (`npm run addDataVersions`) and at least two
- * routes; skipped when it cannot be reached.
+ * Needs the local database and at least two routes; skipped when it cannot be
+ * reached.
  */
 
 import assert from "node:assert/strict";
