@@ -76,12 +76,12 @@ limited — everything else costs a query, while a password costs a bcrypt.
 
 No token. These are the same data the tiles already serve to anyone.
 
-|                                 |                                                                                                                                                                                                                              |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /stations?region=&q=`      | `{ stations }` — at most 10, `near_route` only, case, diacritics, spaces and hyphens ignored. Under two characters (so folded) returns none                                                                                  |
-| `GET /routes/track-ids?region=` | `{ trackIds }` — a few thousand integers, for telling which locally-held journeys belong to the region on screen                                                                                                             |
-| `POST /routes/metadata`         | `{ trackIds }` → `{ routes }` without geometry, `name`, `other_names` (the other lines sharing the route, a JSON array) and `link_name` (null for "Website") included. A POST for a read because the id list is the argument |
-| `POST /coverage/stretches`      | `{ ranges: [{ track_id, covered_start, covered_end }] }` → `{ stretches }` — fraction ranges cut into drawable geometry, for journeys held on the device. Validated and capped at 2000                                       |
+|                                 |                                                                                                                                                                                                                                                                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /stations?region=&q=`      | `{ stations }` — at most 10, `near_route` only, case, diacritics, spaces and hyphens ignored. Under two characters (so folded) returns none                                                                                                                                                     |
+| `GET /routes/track-ids?region=` | `{ trackIds }` — a few thousand integers, for telling which locally-held journeys belong to the region on screen                                                                                                                                                                                |
+| `POST /routes/metadata`         | `{ trackIds }` → `{ routes }` without geometry, `name`, `other_names` (the other lines sharing the route, a JSON array) and `link_name` (null for "Website") included. What a tapped route's sheet says (the route tile carries no text). A POST for a read because the id list is the argument |
+| `POST /coverage/stretches`      | `{ ranges: [{ track_id, covered_start, covered_end }] }` → `{ stretches }` — fraction ranges cut into drawable geometry, for journeys held on the device. Validated and capped at 2000                                                                                                          |
 
 ## The user's own data
 
@@ -218,6 +218,12 @@ for a missing or expired token — never an uncoloured tile, which would pass fo
 map with nothing ridden. Martin's `/tiles/railway_routes_tile` is the same tile
 with no user, and no longer takes a `user_id` at all; see "Vector tiles" in
 `CLAUDE.md`.
+
+A route feature carries its id (`track_id`, the feature id), what the layers
+style and filter by (`usage_type`, `line_class`, `start_country`, `end_country`,
+`is_valid`, `under_repair`, `closed`) and the rides (`date`, `journey_name`,
+`partial`, `has_complete_trip`). **No text**: a tapped route's names, note, tags,
+link and length come from `POST /routes/metadata`.
 
 ## Not here
 

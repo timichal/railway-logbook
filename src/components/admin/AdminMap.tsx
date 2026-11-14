@@ -40,6 +40,7 @@ import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { setupAdminMapInteractions } from "@/lib/map/interactions/adminMapInteractions";
+import { loadRouteDetails } from "@/lib/map/routeDetails";
 import { useRegionId } from "@/lib/regionContext";
 import { type UsageType, usageOptions } from "@/lib/shared/constants";
 import {
@@ -381,6 +382,11 @@ export default function AdminMap({
           ],
     );
   }, [selectedScenicLineId, mapLoaded, map]);
+
+  // The popups' text comes from the route details, not the tile: reloaded with it
+  useEffect(() => {
+    if (refreshTrigger) void loadRouteDetails(regionId, { reload: true });
+  }, [refreshTrigger, regionId]);
 
   // Refresh the route tiles when routes are saved/deleted, and the note tiles when
   // a note is, from the popup or the Notes tab.

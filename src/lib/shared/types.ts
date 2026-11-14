@@ -125,6 +125,28 @@ export type RouteSummary = Pick<
   "track_id" | "usage_type" | "length_km" | "start_country" | "end_country"
 > & { closed: boolean };
 
+/**
+ * What the web map says about a route beyond what its tile carries: the text of
+ * its popup, and what a click puts in the selection. The route tile holds only
+ * what the layers style and filter by (see railway_routes_mvt), so this is read
+ * by track_id. Served for a whole region by `GET /api/route-details`
+ * (`routeDetailsJson`); an absent field is null or empty in the database.
+ */
+export interface RouteDetails {
+  track_id: number;
+  name?: string;
+  other_names?: string[];
+  from_station: string;
+  to_station: string;
+  description?: string;
+  usage_tags?: string[];
+  link?: string;
+  link_name?: string;
+  length_km: number;
+  /** YYYY-MM-DD, on a closed route where known. */
+  closed_on?: string;
+}
+
 // User trip from database (groups of journeys)
 export type Trip = {
   id: number;

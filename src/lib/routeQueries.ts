@@ -265,6 +265,36 @@ export async function trackIdsInRegion(region: RegionId): Promise<number[]> {
 }
 
 /**
+ * Every route in a region's `RouteDetails`, as the JSON array the client is sent.
+ *
+ * Built in SQL, so the ~850KB for Europe never becomes rows and objects in Node.
+ * Nulls and empty values are left out (`json_strip_nulls`). It costs ~300ms, most
+ * of it reading `usage_tags` (out of line, see TODO.md), so the route handler
+ * keeps the answer per `routesFingerprint` rather than asking again.
+ */
+export async function routeDetailsJson(region: RegionId): Promise<string> {
+  const result = await pool.query<{ details: string }>(`
+    SELECT coalesce(json_agg(json_strip_nulls(json_build_object(
+             'track_id', track_id,
+             'name', nullif(name, ''),
+             'other_names', nullif(other_names, '{}'),
+             'from_station', from_station,
+             'to_station', to_station,
+             'description', nullif(description, ''),
+             'usage_tags', nullif(usage_tags, '{}'),
+             'link', nullif(link, ''),
+             'link_name', nullif(link_name, ''),
+             'length_km', length_km,
+             'closed_on', closed_on
+           )) ORDER BY track_id), '[]')::text AS details
+    FROM railway_routes
+    WHERE ${regionContainsSql(region, "starting_coordinate")}
+  `);
+
+  return result.rows[0].details;
+}
+
+/**
  * Every route in a region, reduced to what progress needs (`RouteSummary`). The
  * logged-out map works out its progress and colouring from this client-side, and
  * waits for it to do so: with geometry the list is ~50MB for Europe, which held

@@ -8,6 +8,12 @@ import {
 } from "@/lib/map/hooks/useRouteHighlighting";
 import { createMapHover, type FeatureProperties } from "@/lib/map/interactions/mapHover";
 import {
+  loadRouteDetails,
+  onRouteDetails,
+  routeDetails,
+  routeDetailsAsync,
+} from "@/lib/map/routeDetails";
+import {
   DOUBLE_CLICK_HINT,
   escapeHtml,
   formatRouteBody,
@@ -18,7 +24,7 @@ import {
 import { ROUTE_CLICK_LAYER_ID } from "@/lib/shared/map/layers";
 import { routeLinkLabel } from "@/lib/shared/map/routeFeature";
 import type { RegionId } from "@/lib/shared/regions";
-import type { SelectedRoute, Station } from "@/lib/shared/types";
+import type { RouteDetails, SelectedRoute, Station } from "@/lib/shared/types";
 import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
 
 /** What a tap on a route would do, as the touch sheet's button has to word it. */
@@ -190,6 +196,14 @@ export function setupUserMapInteractions(
     onShow: () => openSheet?.remove(),
   });
 
+  // The route text isn't in the tile (`routeDetails`): fetched now, so it is here
+  // before a pointer is, and a popup opened before it arrived is filled in then.
+  void loadRouteDetails(getCallbacks().region);
+  const stopDetails = onRouteDetails(hover.refresh);
+  let disposed = false;
+  /** Every map click, counted: a route click that had to wait is dropped if another came since. */
+  let clicks = 0;
+
   /** Whatever popup is open, the hover popup or the sheet. */
   const removePopup = () => {
     hover.hide();
@@ -298,8 +312,15 @@ export function setupUserMapInteractions(
   };
 
   /** The route popup's body; the sheet carries a button in place of the link row. */
-  const buildRouteBody = (properties: FeatureProperties, { linkRow }: { linkRow: boolean }) =>
-    formatRouteBody(properties, getCallbacks().region, { linkRow, linkHint: DOUBLE_CLICK_HINT });
+  const buildRouteBody = (
+    properties: FeatureProperties,
+    details: RouteDetails | undefined,
+    { linkRow }: { linkRow: boolean },
+  ) =>
+    formatRouteBody(properties, details, getCallbacks().region, {
+      linkRow,
+      linkHint: DOUBLE_CLICK_HINT,
+    });
 
   /** `sourceRow` mirrors `linkRow` above: the sheet gets a button, not a hint. */
   const buildNoteBody = (properties: FeatureProperties, { sourceRow }: { sourceRow: boolean }) => {
@@ -332,21 +353,23 @@ export function setupUserMapInteractions(
     })[0];
   };
 
-  const handleRouteClick = (e: maplibreglType.MapMouseEvent) => {
+  const handleRouteClick = async (e: maplibreglType.MapMouseEvent) => {
+    const click = ++clicks;
     // Map-wide, so this fires for every tap and is where an open sheet is taken
     // away — including a tap on bare map, which the layer-scoped handlers miss.
     if (sheetTookThisClick(e)) return;
 
-    const callbacks = getCallbacks();
-    const { onRouteClick, onStationClick } = callbacks;
+    let callbacks = getCallbacks();
+    const { onStationClick } = callbacks;
+    const touch = lastPointerWasTouch;
 
     // With a pointer there is nothing to do here on a read-only map; a finger still
     // gets the sheet, which is the only way to read a route where hover cannot.
-    if (!onRouteClick && !lastPointerWasTouch) return;
+    if (!callbacks.onRouteClick && !touch) return;
 
     // Public notes render on top of everything and have no hover on a phone, so on
     // touch their own sheet takes the tap.
-    if (lastPointerWasTouch && featuresAt(mapInstance, e.point, ["public_notes"]).length > 0) {
+    if (touch && featuresAt(mapInstance, e.point, ["public_notes"]).length > 0) {
       return;
     }
 
@@ -354,26 +377,35 @@ export function setupUserMapInteractions(
     // map-wide click while the station handler is layer-scoped, so both fire. The
     // station wins whenever it has something of its own to do — filling a from/to
     // field in the Journey Planner, or (on touch) opening its own sheet.
-    if (
-      (onStationClick || lastPointerWasTouch) &&
-      featuresAt(mapInstance, e.point, ["stations"]).length > 0
-    ) {
+    if ((onStationClick || touch) && featuresAt(mapInstance, e.point, ["stations"]).length > 0) {
       return;
     }
 
     const feature = routeFeatureAt(e.point);
     const properties = feature?.properties;
-    const trackId = feature?.id;
+    const trackId = Number(feature?.id);
     if (!properties || !trackId) return;
 
+    // Nearly always here already (fetched as the map loaded). If not, the click
+    // waits for them: a selection without the route's name is no use to anyone.
+    let details = routeDetails(trackId, callbacks.region);
+    if (!details) {
+      details = await routeDetailsAsync(trackId, callbacks.region);
+      // Over if another click came meanwhile, or the map went. Otherwise what it
+      // does is decided now: the sidebar may have moved on since it was made.
+      if (!details || disposed || click !== clicks) return;
+      callbacks = getCallbacks();
+    }
+    const { onRouteClick } = callbacks;
+
     const route: SelectedRoute = {
-      track_id: Number(trackId),
-      name: properties.name ?? null,
-      from_station: properties.from_station,
-      to_station: properties.to_station,
-      description: properties.description,
-      usage_types: properties.usage_types,
-      link: properties.link || null,
+      track_id: trackId,
+      name: details.name ?? null,
+      from_station: details.from_station,
+      to_station: details.to_station,
+      description: details.description ?? "",
+      usage_types: "",
+      link: details.link ?? null,
       date: properties.date,
       journey_name: properties.journey_name,
       // Deliberately NOT properties.partial: the tile carries the partial flag of
@@ -381,10 +413,10 @@ export function setupUserMapInteractions(
       // "partial" on a fresh selection just because the route was ridden in part
       // once before. A click is a new ride, whole until said otherwise.
       partial: null,
-      length_km: Number(properties.length_km) || 0,
+      length_km: details.length_km,
     };
 
-    if (lastPointerWasTouch) {
+    if (touch) {
       const actions: SheetAction[] = [];
       // No `routeTapAction` supplied means every tap selects, so the button is
       // labelled for the only thing it can do.
@@ -407,18 +439,19 @@ export function setupUserMapInteractions(
           },
         });
       }
-      if (safeHref(properties.link)) {
+      const { link } = details;
+      if (safeHref(link)) {
         actions.push({
-          label: routeLinkLabel(properties.link_name),
+          label: routeLinkLabel(details.link_name),
           variant: "outline",
           external: true,
-          onClick: () => openLink(properties.link),
+          onClick: () => openLink(link),
         });
       }
       openTouchSheet(
         e.lngLat,
         "railway-popup",
-        buildRouteBody(properties, { linkRow: false }),
+        buildRouteBody(properties, details, { linkRow: false }),
         actions,
       );
       return;
@@ -430,7 +463,10 @@ export function setupUserMapInteractions(
   // Hover and cursor go off the wide click buffer, so the thin visible lines don't
   // make them finicky.
   hover.layer(ROUTE_CLICK_LAYER_ID, {
-    buildBody: (properties) => buildRouteBody(properties, { linkRow: true }),
+    buildBody: (properties, feature) =>
+      buildRouteBody(properties, routeDetails(Number(feature.id), getCallbacks().region), {
+        linkRow: true,
+      }),
   });
   hover.layer("stations", { className: "station-popup", buildBody: formatStationBody });
   // Read-only: text + optional source link.
@@ -514,7 +550,7 @@ export function setupUserMapInteractions(
     const route = routeFeatureAt(e.point);
     if (route) {
       e.preventDefault();
-      openLink(route.properties?.link);
+      openLink(routeDetails(Number(route.id), getCallbacks().region)?.link);
     }
   };
 
@@ -522,12 +558,16 @@ export function setupUserMapInteractions(
   // and sees every tap (see `sheetTookThisClick`).
   const subscriptions = [
     mapInstance.on("dblclick", handleDblClick),
-    mapInstance.on("click", handleRouteClick),
+    mapInstance.on("click", (e) => {
+      handleRouteClick(e).catch((error) => console.error("Route click failed:", error));
+    }),
     mapInstance.on("click", "stations", handleStationClick),
     mapInstance.on("click", "public_notes", handleNoteClick),
   ];
 
   return () => {
+    disposed = true;
+    stopDetails();
     hover.dispose();
     openSheet?.remove();
     // The sheet's own close handler schedules this; tearing down mid-sheet would

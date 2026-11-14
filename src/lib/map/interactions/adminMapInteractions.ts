@@ -2,6 +2,7 @@ import type * as maplibreglType from "maplibre-gl";
 import type { RefObject } from "react";
 import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
 import { createMapHover, type FeatureProperties } from "@/lib/map/interactions/mapHover";
+import { loadRouteDetails, onRouteDetails, routeDetails } from "@/lib/map/routeDetails";
 import {
   DOUBLE_CLICK_HINT,
   escapeHtml,
@@ -147,8 +148,17 @@ export function setupAdminMapInteractions(
   // Every `click` below is what the click handlers above do there.
   hover.layer("railway_parts");
 
-  const buildRouteBody = (properties: FeatureProperties) =>
-    formatRouteBody(properties, region, { linkRow: true });
+  // The route text isn't in the tile (`routeDetails`). AdminMap reloads it after
+  // each save, and an open popup is filled in again when it arrives.
+  void loadRouteDetails(region);
+  mapInstance.once("remove", onRouteDetails(hover.refresh));
+  const buildRouteBody = (
+    properties: FeatureProperties,
+    feature: maplibreglType.MapGeoJSONFeature,
+  ) =>
+    formatRouteBody(properties, routeDetails(Number(feature.id), region), region, {
+      linkRow: true,
+    });
   hover.layer(ROUTE_CLICK_LAYER_ID, { buildBody: buildRouteBody });
 
   // Routes re-shown for reference during a re-pick have no hit area (see

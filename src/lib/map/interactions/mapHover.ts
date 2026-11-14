@@ -15,8 +15,11 @@ export type FeatureProperties = maplibreglType.MapGeoJSONFeature["properties"];
 export type HoverClick = "acts" | "blocks" | "passes";
 
 export interface HoverLayerOptions {
-  /** The popup body; without it the layer shows no popup. */
-  buildBody?: (properties: FeatureProperties) => string;
+  /**
+   * The popup body; without it the layer shows no popup. The feature is there for
+   * its id, which is not among its properties.
+   */
+  buildBody?: (properties: FeatureProperties, feature: maplibreglType.MapGeoJSONFeature) => string;
   /** The body's content class (default `railway-popup`, styled in globals.css). */
   className?: string;
   /** Default `acts`. */
@@ -37,6 +40,11 @@ export interface MapHover {
   layer: (layerId: string, options?: HoverLayerOptions) => void;
   /** Takes the popup down now, e.g. for a touch sheet opening in its place. */
   hide: () => void;
+  /**
+   * Builds the open popup's body again, for something it reads from outside the
+   * feature that has changed since (the route details arriving).
+   */
+  refresh: () => void;
   dispose: () => void;
 }
 
@@ -90,6 +98,8 @@ export function createMapHover(
 ): MapHover {
   let popup: maplibregl.Popup | null = null;
   let popupKey: string | null = null;
+  /** What the open popup was built from, for `refresh`. */
+  let shownOffer: { offer: Offer; build: NonNullable<Offer["popup"]> } | null = null;
   let offers: Offer[] = [];
   let scheduled = false;
   let pointer = false;
@@ -105,6 +115,7 @@ export function createMapHover(
     popup?.remove();
     popup = null;
     popupKey = null;
+    shownOffer = null;
   };
 
   const show = (offer: Offer, build: NonNullable<Offer["popup"]>) => {
@@ -112,6 +123,7 @@ export function createMapHover(
     const key = `${layerId}:${feature.id}:${JSON.stringify(feature.properties)}`;
     if (popup && key === popupKey) {
       popup.setLngLat(lngLat);
+      shownOffer = { offer, build };
       return;
     }
 
@@ -134,10 +146,18 @@ export function createMapHover(
         if (popup !== added) return;
         popup = null;
         popupKey = null;
+        shownOffer = null;
       });
       popup = added;
     }
     popupKey = key;
+    shownOffer = { offer, build };
+  };
+
+  const refresh = () => {
+    if (!popup || !shownOffer) return;
+    popupKey = null;
+    show(shownOffer.offer, shownOffer.build);
   };
 
   const settle = (moveOffers: Offer[]) => {
@@ -194,7 +214,7 @@ export function createMapHover(
           feature,
           click,
           lngLat: e.lngLat,
-          popup: buildBody && (() => ({ className, body: buildBody(feature.properties) })),
+          popup: buildBody && (() => ({ className, body: buildBody(feature.properties, feature) })),
         });
       }),
     );
@@ -203,6 +223,7 @@ export function createMapHover(
   return {
     layer,
     hide,
+    refresh,
     dispose: () => {
       hide();
       setPointer(false);

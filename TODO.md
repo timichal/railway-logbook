@@ -6,19 +6,10 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Drop the text attributes from low-zoom route tiles.** `railway_routes_mvt` (`database/init/02-vector-tiles.sql`) puts `name`, `other_names`, `from_station`, `to_station`, `description`, `usage_tags`, `link`, `link_name`, `journey_name` and so on into every tile at every zoom. Measured at z4 (tile 4/8/5), the same rows:
-
-  | What's in the tile                                                                                                                         | Size  | Time  |
-  | ------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----- |
-  | Everything, as today                                                                                                                       | 536KB | 213ms |
-  | Geometry + styling and filtering attributes only (`track_id`, `usage_type`, `line_class`, countries, `is_valid`, `under_repair`, `closed`) | 228KB | 56ms  |
-  | Geometry + `track_id`                                                                                                                      | 140KB | 59ms  |
-  - Options:
-    - Emit the text only from some zoom up (z8?).
-    - Never emit it, and have popups and hover fetch a route's details by id. One cached JSON per region, or a small lookup endpoint.
-  - First list every reader of each property, on the web (popups, `routeFeature.ts`, `routeTitle`, the highlight code) and in `mobile/`. The hover popup at low zoom needs the names right away, so fetching on demand needs a cache or a prefetch.
-  - Keep the `ORDER BY` and `track_id` as the feature id.
-  - Check the admin map too: it reads the same Martin source (`railway_routes_tile`).
+- **Keep the route text inline, out of TOAST.** `railway_routes.geometry` and `geometry_3857` have PostGIS's `main` storage. A row that overflows has its `extended` values over ~24 bytes moved out of line _before_ the `main` geometries are touched: every non-empty `usage_tags`, longer descriptions and names. Each read of one is a TOAST index lookup. _Measured_: `sum(cardinality(usage_tags))` over 7.4k routes takes 115ms, against 5ms for `other_names` (mostly empty, so inline). It is most of the ~300ms of `routeDetailsJson` (`/api/route-details`, which is cached per `routesFingerprint`, so it is paid once per route change) and it slows every other read of those columns (admin list, search, metadata).
+  - Fix: `ALTER COLUMN … SET STORAGE MAIN` on the text columns, so the geometries, the biggest `main` values, go out first. Measure the toast and heap sizes before and after: the heap grows by the text.
+  - Existing rows keep their out-of-line values until rewritten (storage applies to new tuple writes, and an UPDATE that leaves a value unchanged keeps its pointer). Check whether `VACUUM FULL` re-inlines them, or rewrite each value.
+  - A migration script (`01-schema.sql` is never re-run), plus the same in `01` for a fresh database. Check `scenic_lines` for the same pattern.
 - **Move read-only calls off server actions.** Next runs a client's server actions one at a time (`node_modules/next/dist/docs/01-app/02-guides/backend-for-frontend.md`, "Server Actions are queued"). So on a signed-in load `getTripNames` → `getUserProgress` → `getCoveredStretches` run in sequence, a slow `findRoutePathBetweenStations` holds up station search and progress, and the admin page queues four or more loads.
   - Serve the reads from GET route handlers that resolve the session the way `src/lib/api/tiles.ts` does and call the existing `*Queries.ts` functions. Keep writes as server actions.
   - Rules that apply ("Two transports" in the root CLAUDE.md): a route handler never imports a `"use server"` module; errors go through `errors.ts`; every handler checks the session itself.
@@ -27,7 +18,7 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
   - Serve it from a public GET handler with an ETag, from the planner's network fingerprint or a routes-version counter (see the next item), plus `stale-while-revalidate`. `trackIdsInRegion` can go the same way.
   - With an empty local log, skip it: ask for the totals alone, and skip the coverage and status work.
   - The handler must stay user-independent.
-- **Routes-version counter.** Several items here want a cheap "have the routes changed" value: the summaries ETag, a tile URL version, the planner cache. Today the planner fingerprints with `sum(xmin)`, which scans the 32MB `railway_routes` heap (~5–7ms).
+- **Routes-version counter.** Several items here want a cheap "have the routes changed" value: the summaries ETag, a tile URL version, the planner cache. Today `routesFingerprint` (`src/lib/routesFingerprint.ts`, used by the planner cache and the `/api/route-details` ETag) runs `sum(xmin)`, which scans the 32MB `railway_routes` heap (~5–7ms). Swap its body for the counter.
   - Add a one-row table bumped by a statement-level trigger on `railway_routes` (and `scenic_lines`, `admin_notes` if the tiles use it). Put it in `02-vector-tiles.sql` idempotently, or in a migration.
 - **Cache session route tiles in the browser.** `mvtResponse` (`src/lib/api/tiles.ts`) sends `private, no-store`, so panning back over an evicted area re-runs the per-user tile query. The URL's `v` is set once per page load (`useUserMap.ts`, `routesCacheBusterRef.current ??= Date.now()`) and bumped by `useSourceTileRefresh` on every refresh.
   - Before switching session tiles (`rides: "session"`) to `private, max-age=3600`, confirm that `v` changes on login, logout, a journey logged, a country change and a region switch.

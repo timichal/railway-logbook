@@ -270,7 +270,12 @@ STABLE
 PARALLEL SAFE;
 
 -- Function: railway_routes_mvt
--- Serves railway routes (combined lines with metadata) as vector tiles
+-- Serves railway routes as vector tiles: the geometry and what the layers style
+-- and filter by, nothing more. The text a popup or a click shows (names, note,
+-- tags, link, length) is not in the tile: it was over half of a low-zoom tile's
+-- bytes and most of its time, repeated in every tile a route crosses. The clients
+-- read it by track_id instead (GET /api/route-details on the web, POST
+-- /api/v1/routes/metadata in the native app).
 -- Includes user-specific journey data for styling (most recent journey's date/name/partial)
 -- Uses "most permissive wins" logic: route is complete if it's complete in ANY
 -- journey, or if its partial stretches union to the whole route (see
@@ -297,19 +302,8 @@ RETURNS bytea AS $$
     FROM (
         SELECT
             rr.track_id,
-            rr.name,
-            -- The other lines the route is part of; a TEXT[], so it reaches the
-            -- client as an array literal (parsePgTextArray)
-            rr.other_names,
-            rr.from_station,
-            rr.to_station,
-            rr.description,
             rr.usage_type,
-            rr.usage_tags,
-            rr.link,
-            rr.link_name,
             rr.line_class,
-            rr.length_km,
             rr.start_country,
             rr.end_country,
             -- Validity alone: the admin map greys invalid routes, but the error
@@ -318,10 +312,8 @@ RETURNS bytea AS $$
             rr.under_repair,
             -- Closed lines are in every tile: the client hides those its user
             -- hasn't ridden (closedRoutesFilter), since the anonymous map's rides
-            -- are known only in the browser. closed_on as text: an MVT has no
-            -- date type, and a NULL is left out of the feature
+            -- are known only in the browser
             rr.closed,
-            rr.closed_on::text AS closed_on,
             -- Include most recent journey data for client-side styling
             -- Use latest journey (by date, then by created_at) for route coloring
             recent_trip.date,

@@ -64,6 +64,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { LayoutChangeEvent, NativeSyntheticEvent } from "react-native";
 import { ActivityIndicator, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as api from "@/api/endpoints";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useLogVersion } from "@/logbook/logVersion";
 import { useSelection } from "@/logbook/SelectionContext";
@@ -75,8 +76,9 @@ import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import { MapTopControls } from "@/map/MapTopControls";
 import {
   type MapFeature,
+  routeFeatureFromMetadata,
   toNoteFeature,
-  toRouteFeature,
+  toRouteTap,
   toStationFeature,
 } from "@/map/mapFeatures";
 import { loadMapPosition, type MapPosition, saveMapPosition } from "@/map/mapPosition";
@@ -159,6 +161,9 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
 
   const cameraRef = useRef<CameraRef>(null);
   const [feature, setFeature] = useState<MapFeature | null>(null);
+  // Every press counts itself, so a route's sheet whose details arrive after a
+  // later press (another feature, the map's dismissal, a region switch) is dropped.
+  const pressRef = useRef(0);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
@@ -190,6 +195,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   useEffect(() => {
     if (mountedRegion.current === regionId) return;
     mountedRegion.current = regionId;
+    pressRef.current++;
     setFeature(null);
 
     // Nothing picked out of the old region survives into the new one, and neither
@@ -284,6 +290,10 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   // A press on a source stops there rather than bubbling to the map, whose own
   // handler is the dismissal — otherwise the press that opened the sheet would close
   // it in the same gesture.
+  const showFeature = useCallback((next: MapFeature | null) => {
+    pressRef.current++;
+    setFeature(next);
+  }, []);
   const takePress = useCallback(
     (
       event: NativeSyntheticEvent<PressEventWithFeatures>,
@@ -293,7 +303,28 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
       const hit = event.nativeEvent.features[0];
       if (!hit) return;
       const next = read((hit.properties ?? null) as Record<string, unknown> | null, hit.id);
-      if (next) setFeature(next);
+      if (next) showFeature(next);
+    },
+    [showFeature],
+  );
+  // The route tile carries only what the layers draw with, so the sheet's text
+  // is read by id. Nothing opens until it is here: a sheet without the route's
+  // name, or a selection made from one, is no use.
+  const takeRoutePress = useCallback(
+    async (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
+      event.stopPropagation();
+      const hit = event.nativeEvent.features[0];
+      const tap = hit && toRouteTap((hit.properties ?? null) as Record<string, unknown>, hit.id);
+      if (!tap) return;
+      const press = ++pressRef.current;
+      try {
+        const [route] = await api.routeMetadata([tap.trackId]);
+        if (route && press === pressRef.current) {
+          setFeature(routeFeatureFromMetadata(route, tap.lastJourney));
+        }
+      } catch (error) {
+        console.warn("Route details failed:", error);
+      }
     },
     [],
   );
@@ -319,7 +350,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
         logo={false}
         compass={false}
         attributionPosition={{ bottom: 8, right: 8 }}
-        onPress={() => setFeature(null)}
+        onPress={() => showFeature(null)}
         onRegionDidChange={handleRegionDidChange}
         onDidFinishLoadingStyle={() => setLoadedStyle(basemapStyle)}
       >
@@ -362,7 +393,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
           tiles={[routesUrl]}
           minzoom={ZOOM_RANGES.railwayRoutes.min}
           maxzoom={ZOOM_RANGES.railwayRoutes.max}
-          onPress={(event) => takePress(event, toRouteFeature)}
+          onPress={takeRoutePress}
         >
           <Layer {...routeLayers.route} beforeId={COVERAGE_LAYER_IDS[0]} />
           {showHeritage ? (
@@ -435,7 +466,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
       <MapTopControls onSelectStation={flyToStation} />
 
       {feature ? (
-        <FeatureSheet feature={feature} regionId={regionId} onClose={() => setFeature(null)} />
+        <FeatureSheet feature={feature} regionId={regionId} onClose={() => showFeature(null)} />
       ) : null}
     </View>
   );

@@ -9,13 +9,14 @@ import { REGIONS, type RegionId, regionUsageLabel } from "../regions";
 import { COLORS } from "./style";
 
 /**
- * What a route's tile feature *says*, separated from how either client draws it.
+ * What a route *says*, separated from how either client draws it. The fields come
+ * from the route tile (usage type, line class, closed) and from the route's row read
+ * by id (the web's `RouteDetails`, the API's route metadata): the tile carries no text.
  *
  * The web app renders these as HTML spans in a MapLibre popup
  * (`utils/tooltipFormatting.ts`); the native app renders them as `<View>`s in a
  * bottom sheet. The decisions are the same in both — which badges a route earns,
- * what colour each one is, how a Postgres `TEXT[]` of usage tags comes apart,
- * and whether the line's name or its endpoints lead the heading — and they are the
+ * what colour each one is, and whether the line's name or its endpoints lead the heading — and they are the
  * kind of decision that quietly diverges once it is written twice. So they live
  * here and the two renderers are left with nothing but markup.
  *
@@ -30,32 +31,22 @@ interface RouteBadge extends BadgeColors {
 
 /**
  * The heading's half of a route feature, split out because a heading can be drawn
- * for a feature whose metadata was never read — and both come straight off an MVT
- * feature, so every field is loosely typed.
+ * for a feature whose metadata was never read. Loosely typed: the web's popup
+ * merges it from an MVT feature and the route details.
  */
 export interface RouteTitleProperties {
   from_station?: unknown;
   to_station?: unknown;
   name?: unknown;
-  /**
-   * The other lines the route is part of: a Postgres array literal off a tile, a
-   * JSON array from the HTTP API (see `parseTextArray`).
-   */
+  /** The other lines the route is part of (see `parseTextArray`). */
   other_names?: unknown;
 }
 
 export interface RouteFeatureProperties extends RouteTitleProperties {
   usage_type: UsageType;
   line_class?: LineClass;
-  /**
-   * The usage tags. A tile serialises a Postgres `TEXT[]` as
-   * `{Daily,"Winter break"}`; the HTTP API sends the same column as a JSON array, and
-   * a route feature built from `POST /routes/metadata` rather than from a tile
-   * carries that. Both are accepted so neither client has to re-serialise one into
-   * the other — a round trip that a tag containing a comma or a quote would not
-   * survive.
-   */
-  usage_tags?: string | string[];
+  /** The usage tags. */
+  usage_tags?: string[];
   /** A closed route (railway_routes.closed), and when, where known (YYYY-MM-DD). */
   closed?: boolean;
   closed_on?: string | null;
@@ -95,71 +86,12 @@ export function routeLinkLabel(linkName: unknown): string {
 }
 
 /**
- * Decode a Postgres array literal (`{Daily,"Winter break"}`) into its elements.
- *
- * `usage_tags` is a `TEXT[]`, but MVT carries only scalar values, so `ST_AsMVT`
- * hands the whole array over as its text representation and the tile property
- * arrives as that literal. Splitting it on commas loses any tag that contains
- * one — Postgres quotes exactly those — so the quoting is honoured here instead:
- * inside quotes a backslash escapes the next character, and an unquoted `NULL`
- * is a null element rather than the four letters.
- */
-export function parsePgTextArray(literal: string): string[] {
-  const trimmed = literal.trim();
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
-
-  const body = trimmed.slice(1, -1);
-  if (!body.trim()) return [];
-
-  const values: string[] = [];
-  let current = "";
-  let quoted = false;
-  let inQuotes = false;
-
-  const flush = () => {
-    // An unquoted element is whitespace-padded at will; a quoted one is verbatim.
-    const value = quoted ? current : current.trim();
-    if (quoted || value.toUpperCase() !== "NULL") values.push(value);
-    current = "";
-    quoted = false;
-  };
-
-  for (let i = 0; i < body.length; i++) {
-    const char = body[i];
-    if (inQuotes) {
-      if (char === "\\") {
-        current += body[++i] ?? "";
-      } else if (char === '"') {
-        inQuotes = false;
-      } else {
-        current += char;
-      }
-    } else if (char === '"') {
-      inQuotes = true;
-      quoted = true;
-    } else if (char === ",") {
-      flush();
-    } else {
-      current += char;
-    }
-  }
-  flush();
-
-  return values;
-}
-
-/**
- * A route's `TEXT[]` property (usage tags, other line names), from either shape
- * it arrives in: the tile's Postgres array literal (`parsePgTextArray`), or the JSON
- * array the HTTP API sends (see `RouteFeatureProperties.usage_tags`), which is
- * already the answer. Empty and non-string elements are dropped.
+ * A route's text-array field (usage tags, other line names), with empty and
+ * non-string elements dropped. Absent is empty.
  */
 export function parseTextArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string" && item !== "");
-  }
-  if (typeof value !== "string" || !value) return [];
-  return parsePgTextArray(value).filter(Boolean);
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item !== "");
 }
 
 /** Line class is only worth a badge when it is not the unremarkable default. */

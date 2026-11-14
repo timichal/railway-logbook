@@ -2,14 +2,15 @@
  * What a press on the map turned out to have hit.
  *
  * The properties come off an MVT feature, so everything is read defensively and
- * nothing is trusted to be present. The web app builds the same three bodies as HTML
+ * nothing is trusted to be present. A route's tile carries only what the layers
+ * draw with, so a pressed route is read by id (`toRouteTap`, then
+ * `routeFeatureFromMetadata`). The web app builds the same three bodies as HTML
  * strings and has to escape every one of them (`tooltipFormatting.ts`); here they
  * become `<Text>` children, which is the whole of why `escapeHtml` does not port.
  * `safeHref` does: it still guards `Linking.openURL` against a route link or a note
  * source edited by a third party.
  */
 
-import type { UsageType } from "@shared/constants";
 import { type RouteFeatureProperties, routeLinkLabel } from "@shared/map/routeFeature";
 import type { RailwayRoute } from "@shared/types";
 
@@ -57,7 +58,13 @@ export function safeUrl(value: unknown): string | null {
   return raw;
 }
 
-export function toRouteFeature(properties: Properties, id: unknown): RouteFeature | null {
+/** What a pressed route's tile feature says: which route, and the last ride on it. */
+export interface RouteTap {
+  trackId: number;
+  lastJourney: RouteFeature["lastJourney"];
+}
+
+export function toRouteTap(properties: Properties, id: unknown): RouteTap | null {
   if (!properties) return null;
   // `track_id` is the feature id on the tile, not a property. A route with no id is
   // one nothing can be done with.
@@ -66,27 +73,9 @@ export function toRouteFeature(properties: Properties, id: unknown): RouteFeatur
 
   const date = text(properties.date);
   const journeyName = text(properties.journey_name);
-
-  return {
-    kind: "route",
-    trackId,
-    from_station: properties.from_station,
-    to_station: properties.to_station,
-    name: properties.name,
-    other_names: properties.other_names,
-    usage_type: Number(properties.usage_type ?? 0) as UsageType,
-    line_class: properties.line_class as RouteFeatureProperties["line_class"],
-    usage_tags: typeof properties.usage_tags === "string" ? properties.usage_tags : undefined,
-    description: text(properties.description),
-    link: safeUrl(properties.link),
-    linkLabel: routeLinkLabel(properties.link_name),
-    lengthKm: Number(properties.length_km) || 0,
-    closed: properties.closed === true,
-    closed_on: text(properties.closed_on),
-    // Populated together from the most-recent logged journey (both NOT NULL in
-    // user_journeys), so either both are present or neither is.
-    lastJourney: date && journeyName ? { date, name: journeyName } : null,
-  };
+  // Populated together from the most-recent logged journey (both NOT NULL in
+  // user_journeys), so either both are present or neither is.
+  return { trackId, lastJourney: date && journeyName ? { date, name: journeyName } : null };
 }
 
 export function toStationFeature(properties: Properties): StationFeature | null {
@@ -101,20 +90,22 @@ export function toNoteFeature(properties: Properties): NoteFeature | null {
 }
 
 /**
- * A route feature built from the HTTP API's route row rather than from a tile.
+ * A route feature, from the HTTP API's route row (`POST /routes/metadata`).
  *
- * The journey planner identifies its routes by id and endpoint name, and the
- * selection holds whole features — so the ids are exchanged for the route rows
- * (`POST /routes/metadata`) and each row becomes the feature the map would have
- * handed over for a tap. A planned route is then described by exactly the same
- * `routeTitle` and `routeBadges` as a tapped one, rather than by a second, thinner
- * account of the same route.
+ * Both a tapped route and the journey planner's go through here: the tile holds
+ * only what the layers draw with, and the planner identifies its routes by id. So a
+ * route is described by exactly the same `routeTitle` and `routeBadges` wherever it
+ * came from.
  *
  * `lastJourney` is the one thing a row cannot answer: it is a per-user join the tile
- * carries and this endpoint, being public, does not. Nothing reading a planner result
- * asks for it — a plan is about where you are going, not where you have been.
+ * carries and this endpoint, being public, does not. A tap passes the tile's
+ * (`toRouteTap`); nothing reading a planner result asks for it — a plan is about
+ * where you are going, not where you have been.
  */
-export function routeFeatureFromMetadata(route: RailwayRoute): RouteFeature {
+export function routeFeatureFromMetadata(
+  route: RailwayRoute,
+  lastJourney: RouteFeature["lastJourney"] = null,
+): RouteFeature {
   return {
     kind: "route",
     trackId: route.track_id,
@@ -131,6 +122,6 @@ export function routeFeatureFromMetadata(route: RailwayRoute): RouteFeature {
     lengthKm: route.length_km ?? 0,
     closed: route.closed === true,
     closed_on: route.closed_on ?? null,
-    lastJourney: null,
+    lastJourney,
   };
 }

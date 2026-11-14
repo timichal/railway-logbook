@@ -23,8 +23,10 @@ postgres:
       minzoom: 4
       maxzoom: 18
       # This function accepts z, x, y parameters
-    # Railway routes (combined lines with metadata), with no user: every route
-    # reads as unvisited. Accepts z, x, y, and query_params (selected_countries).
+    # Railway routes, with no user: every route reads as unvisited. Geometry and
+    # the styling and filter attributes only, no text (names, note, tags, link):
+    # the clients read that by track_id. Accepts z, x, y, and query_params
+    # (selected_countries).
     #
     # Everything published here answers anyone who asks, so nothing user-specific
     # may be. The tile coloured by a user's rides is railway_routes_mvt, served by

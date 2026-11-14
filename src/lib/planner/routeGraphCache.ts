@@ -4,6 +4,7 @@
  */
 
 import pool from "../db";
+import { routesFingerprint } from "../routesFingerprint";
 import { ordinaryRouteSql } from "../shared/regions";
 import {
   buildRouteGraph,
@@ -39,7 +40,7 @@ interface LoadedRoute {
  * of Europe-only searches over open lines builds one.
  */
 interface CachedRouteNetworks {
-  /** Network fingerprint the graphs were built from — see getNetworkSignature. */
+  /** Network fingerprint the graphs were built from — see routesFingerprint. */
   signature: string;
   /** Every loaded route, in load order (the graph breaks cost ties in it). */
   routes: LoadedRoute[];
@@ -136,30 +137,6 @@ let cachedNetwork: CachedRouteNetworks | null = null;
 let networkInFlight: { signature: string; promise: Promise<CachedRouteNetworks> } | null = null;
 
 /**
- * Cheap fingerprint of the route network: the row count and the sum of every
- * row's `xmin`, the id of the transaction that last wrote it.
- *
- * An insert or update gives its row a new `xmin` and a delete moves the count,
- * so any committed write changes the signature — whatever the write path, and
- * whichever order concurrent writes commit in. `max(updated_at)`, the previous
- * fingerprint, had neither property: it relied on every write path setting the
- * column, and a timestamp is taken when a transaction starts, so an admin save
- * committing after a later-started `verifyRouteData` update left the maximum
- * where it was and the cache stale. (Freezing can rewrite an old row's `xmin`,
- * which costs one needless rebuild and nothing else.)
- */
-async function getNetworkSignature(): Promise<string> {
-  const result = await pool.query<{ total: string; xmins: string | null }>(
-    `
-    SELECT count(*) AS total, sum(xmin::text::bigint)::text AS xmins
-    FROM railway_routes
-    `,
-  );
-  const row = result.rows[0];
-  return `${row.total}/${row.xmins ?? "-"}`;
-}
-
-/**
  * The network a search with these options rides (see `PlannerOptions`), for the
  * current state of `railway_routes`, reused across requests.
  *
@@ -179,7 +156,7 @@ export async function getRouteNetwork(options: PlannerOptions = {}): Promise<Rou
 }
 
 async function getRouteNetworks(): Promise<CachedRouteNetworks> {
-  const signature = await getNetworkSignature();
+  const signature = await routesFingerprint();
   if (cachedNetwork?.signature === signature) return cachedNetwork;
 
   // Concurrent searches share one rebuild, as long as they want the same network

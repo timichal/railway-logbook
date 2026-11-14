@@ -8,6 +8,7 @@ import {
   routeTitle,
 } from "@/lib/shared/map/routeFeature";
 import type { RegionId } from "@/lib/shared/regions";
+import type { RouteDetails } from "@/lib/shared/types";
 
 /** Straight off an MVT feature, so every field is loosely typed. */
 type FeatureProperties = { [key: string]: unknown };
@@ -143,22 +144,32 @@ export function popupLink(url: unknown, label: string, hint?: string): string {
   return `${link} <span style="color: var(--color-gray-500); font-size: 0.85em;">(${escapeHtml(hint)})</span>`;
 }
 
+/** The heading while a route's details are on their way (`routeDetails`). */
+const LOADING_TITLE = `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 0 0 6px; color: var(--color-gray-500);">Loading…</h3>`;
+
 /**
  * The body of a route popup: the user map's hover popup and touch sheet, and the
  * admin map's hover popup. Title, badge row, then one block per piece of body text
  * — each its own element rather than `<br />`-separated runs, so the note never
  * continues the badge line.
  *
+ * `properties` are the tile's: usage type, line class, closed, and the rides. The
+ * text is the route's `details`, which the tile doesn't carry; until they arrive
+ * the heading says so and the rest waits, and the caller builds the body again.
+ *
  * `linkRow` is off in the touch sheet, which carries a button in its place;
  * `linkHint` says how a mouse opens it where the map supports that. The "most
  * recent" row appears only on a tile coloured by someone's rides — never the admin's.
  */
 export function formatRouteBody(
-  properties: FeatureProperties,
+  tileProperties: FeatureProperties,
+  details: RouteDetails | undefined,
   regionId: RegionId,
   { linkRow, linkHint }: { linkRow: boolean; linkHint?: string },
 ): string {
-  let body = formatRouteTitle(properties, regionId);
+  // The details last: the text is theirs, whatever a tile still carries
+  const properties: FeatureProperties = { ...tileProperties, ...details };
+  let body = details ? formatRouteTitle(properties, regionId) : LOADING_TITLE;
   body += formatRouteMetadataBadges(properties as unknown as RouteFeatureProperties, regionId);
 
   if (properties.description) {
