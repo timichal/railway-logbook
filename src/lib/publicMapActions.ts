@@ -62,7 +62,7 @@ export async function getPublicMapSettings(): Promise<PublicMapSettings> {
        SET public_map_token = COALESCE(user_preferences.public_map_token, EXCLUDED.public_map_token)
      RETURNING public_map_enabled, public_map_token`,
     // The country list is only used when this call is what creates the row;
-    // getUserPreferences() writes the same default, and never relies on the
+    // selectedCountriesForUser() writes the same default, and never relies on the
     // column's SQL default either.
     [user.id, mintToken(), SUPPORTED_COUNTRIES.map((country) => country.code)],
   );
@@ -116,9 +116,12 @@ export async function getPublicProgressByCountry(
 }
 
 /** Ridden stretches of unfinished routes, for the shared map's overlay. */
-export async function getPublicCoveredStretches(token: string): Promise<CoveredStretch[]> {
+export async function getPublicCoveredStretches(
+  token: string,
+  region: RegionId,
+): Promise<CoveredStretch[]> {
   const owner = await publicMapOwner(token);
   if (!owner) return [];
 
-  return coveredStretchesForUser(owner.userId);
+  return coveredStretchesForUser(owner.userId, region);
 }

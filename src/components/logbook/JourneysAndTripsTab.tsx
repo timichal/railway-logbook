@@ -8,8 +8,8 @@ import { databaseJourneyStore } from "@/lib/journeyStore";
 import { useRegionId } from "@/lib/regionContext";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { TripsAndJourneysItem, TripWithStats } from "@/lib/tripActions";
-import { createTrip, getAllTrips, getJourneysAndTrips } from "@/lib/tripActions";
+import type { TripName, TripsAndJourneysItem } from "@/lib/tripActions";
+import { createTrip, getJourneysAndTrips, getTripNames } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
 import { NEW_TRIP_EDIT_KEY, useDraft } from "@/lib/ui/editGuard";
 
@@ -48,7 +48,7 @@ export default function JourneysAndTripsTab({
   const [isLoading, setIsLoading] = useState(true);
 
   // Null until loaded: a journey draft takes a trip missing from it for deleted
-  const [availableTrips, setAvailableTrips] = useState<TripWithStats[] | null>(null);
+  const [availableTrips, setAvailableTrips] = useState<TripName[] | null>(null);
 
   // Single-open coordination across all top-level cards
   const [openItem, setOpenItem] = useState<OpenItem>(null);
@@ -123,7 +123,7 @@ export default function JourneysAndTripsTab({
     // A failure leaves the picker as it was, which only costs filing a journey
     // under a trip later.
     try {
-      setAvailableTrips(unwrap(await getAllTrips(regionId)));
+      setAvailableTrips(unwrap(await getTripNames(regionId)));
     } catch (error) {
       console.error("Error loading trips:", error);
     }

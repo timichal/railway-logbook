@@ -120,13 +120,14 @@ export async function getProgressByCountry(region: RegionId): Promise<ProgressBy
 }
 
 /**
- * The stretches the logged-in user has ridden on routes they haven't completed.
+ * The stretches the logged-in user has ridden on routes in `region` they haven't
+ * completed.
  */
-export async function getCoveredStretches(): Promise<CoveredStretch[]> {
+export async function getCoveredStretches(region: RegionId): Promise<CoveredStretch[]> {
   const user = await getUser();
   if (!user) return [];
 
-  return coveredStretchesForUser(user.id);
+  return coveredStretchesForUser(user.id, region);
 }
 
 /**

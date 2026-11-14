@@ -13,9 +13,34 @@
  */
 import type { ClientBase, Pool } from "pg";
 import { withinMetersSql } from "./mercatorDistance";
+import { REGIONS } from "./shared/regions";
 
 /** How close a route has to run for a station to show on the user map. */
 export const STATION_ROUTE_PROXIMITY_METERS = 250;
+
+/**
+ * The latitude the proximity box is sized at: a degree north of the northernmost
+ * region bound (72° today, from Europe's 71°). The degree is margin for a route
+ * that starts inside its region's box but runs a little past it.
+ */
+const PROXIMITY_BOX_LATITUDE = Math.max(...Object.values(REGIONS).map((r) => r.bounds[1][1])) + 1;
+
+/**
+ * The radius in 3857 units at PROXIMITY_BOX_LATITUDE, as a constant for a
+ * bounding-box prefilter. `withinMetersSql` scales its radius by each station's
+ * own latitude, a per-row distance the GIST index can't use, so on its own a
+ * per-route check scans every station (~1s for 66k). The box
+ * `s.coordinates_3857 && ST_Expand(r.geometry_3857, BOX)` is index-driven, and
+ * because 1/cos(lat) grows with latitude, a box sized at that latitude contains
+ * the exact check for every station south of it. The exact check stays after the
+ * box, so the result is unchanged.
+ */
+const PROXIMITY_BOX_3857 = `${STATION_ROUTE_PROXIMITY_METERS} / cos(radians(${PROXIMITY_BOX_LATITUDE}))`;
+
+/** Index-usable prefilter: `s` within the proximity box of route `r`. */
+function nearRouteBoxSql(route: string, station: string): string {
+  return `${station}.coordinates_3857 && ST_Expand(${route}.geometry_3857, ${PROXIMITY_BOX_3857})`;
+}
 
 /** TRUE when any route runs within range of station `s`. */
 const NEAR_ROUTE_EXISTS = `
@@ -84,6 +109,7 @@ export async function getStationsNearRoute(db: ClientBase, trackId: number): Pro
     FROM stations s
     JOIN railway_routes r ON r.track_id = $1
     WHERE r.geometry_3857 IS NOT NULL
+      AND ${nearRouteBoxSql("r", "s")}
       AND ${withinMetersSql("r.geometry_3857", "s.coordinates_3857", STATION_ROUTE_PROXIMITY_METERS, "ST_Y(s.coordinates)")}
     `,
     [trackId],
@@ -106,12 +132,13 @@ export async function refreshStationProximityFor(
   await db.query(
     updateNearRouteSql(`
       s.id = ANY($1::bigint[])
-      OR EXISTS (
-        SELECT 1
-        FROM railway_routes r
-        WHERE r.track_id = $2
-          AND r.geometry_3857 IS NOT NULL
-          AND ${withinMetersSql("r.geometry_3857", "s.coordinates_3857", STATION_ROUTE_PROXIMITY_METERS, "ST_Y(s.coordinates)")}
+      OR s.id IN (
+        SELECT s2.id
+        FROM stations s2
+        JOIN railway_routes r ON r.track_id = $2
+        WHERE r.geometry_3857 IS NOT NULL
+          AND ${nearRouteBoxSql("r", "s2")}
+          AND ${withinMetersSql("r.geometry_3857", "s2.coordinates_3857", STATION_ROUTE_PROXIMITY_METERS, "ST_Y(s2.coordinates)")}
       )`),
     [stationIds, trackId ?? null],
   );

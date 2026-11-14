@@ -22,7 +22,7 @@ import type {
   SelectedRoute,
 } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { TripWithStats } from "@/lib/tripActions";
+import type { TripName } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
 import { journeyEditKey, useDraft } from "@/lib/ui/editGuard";
 import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
@@ -62,7 +62,7 @@ interface JourneyCardProps<Id> {
    * The trips it can be filed under; left out, it has no trip field. Null while
    * they load, so a trip missing from the list can be told from one not yet in it.
    */
-  availableTrips?: TripWithStats[] | null;
+  availableTrips?: TripName[] | null;
   // Tells parent whether this card is the currently-open one. Parent enforces single-open.
   isOpen: boolean;
   onRequestOpen: () => void;

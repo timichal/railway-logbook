@@ -10,6 +10,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { useSessionKeepAlive } from "@/hooks/useSessionKeepAlive";
 import type { User } from "@/lib/authActions";
+import { usePrefetchBasemap } from "@/lib/map/hooks/usePrefetchBasemap";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
@@ -51,6 +52,7 @@ function MainPage({
   // in button lands on the login form rather than making the user find it).
   const [menuView, setMenuView] = useState<MenuView | null>(null);
   const isMobile = useIsMobile();
+  usePrefetchBasemap();
   const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar({
     storageKey: "railway-sidebar-width",
     isMobile,

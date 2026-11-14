@@ -84,7 +84,7 @@ function createDatabaseDataAccess(region: RegionId): DataAccess {
     getUserProgress: (selectedCountries, shownUsageTypes) =>
       dbGetUserProgress(region, selectedCountries, shownUsageTypes),
     getProgressByCountry: () => dbGetProgressByCountry(region),
-    getCoveredStretches: dbGetCoveredStretches,
+    getCoveredStretches: () => dbGetCoveredStretches(region),
     // The route tile already carries this user's visit status
     getLocalRouteStatuses: async () => [],
     getLocalLoggedTrackIds: () => [],
@@ -263,7 +263,7 @@ export function createPublicDataAccess(token: string, region: RegionId): DataAcc
     getUserProgress: (selectedCountries, shownUsageTypes) =>
       getPublicProgress(token, region, selectedCountries, shownUsageTypes),
     getProgressByCountry: () => getPublicProgressByCountry(token, region),
-    getCoveredStretches: () => getPublicCoveredStretches(token),
+    getCoveredStretches: () => getPublicCoveredStretches(token, region),
     // The route tile is asked for the owner's status, and a visitor has no
     // local log of their own to overlay on it
     getLocalRouteStatuses: async () => [],

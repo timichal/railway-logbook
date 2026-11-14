@@ -11,7 +11,7 @@ import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly, formatDateOnlyRange } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { JourneyWithStats, TripWithStats } from "@/lib/tripActions";
+import type { JourneyWithStats, TripName, TripWithStats } from "@/lib/tripActions";
 import {
   assignJourneyToTrip,
   deleteTrip,
@@ -27,7 +27,7 @@ interface TripCardProps {
   trip: TripWithStats;
   initialJourneys: JourneyWithStats[];
   /** Null while they load (see JourneyCard). */
-  availableTrips: TripWithStats[] | null;
+  availableTrips: TripName[] | null;
   // Parent enforces single-open across all top-level cards
   isOpen: boolean;
   onRequestOpen: () => void;

@@ -43,28 +43,23 @@ export interface PathResult {
 async function getRouteDetails(routeIds: number[]): Promise<PlannerRoute[]> {
   if (routeIds.length === 0) return [];
 
-  const client = await pool.connect();
-  try {
-    const result = await client.query<{
-      track_id: number;
-      name: string | null;
-      from_station: string;
-      to_station: string;
-      description: string;
-      length_km: number;
-    }>(
-      `
-      SELECT track_id, name, from_station, to_station, description, length_km
-      FROM railway_routes
-      WHERE track_id = ANY($1)
-      ORDER BY array_position($1, track_id)
-      `,
-      [routeIds],
-    );
-    return result.rows.map((row) => ({ ...row, travelled_length_km: row.length_km }));
-  } finally {
-    client.release();
-  }
+  const result = await pool.query<{
+    track_id: number;
+    name: string | null;
+    from_station: string;
+    to_station: string;
+    description: string;
+    length_km: number;
+  }>(
+    `
+    SELECT track_id, name, from_station, to_station, description, length_km
+    FROM railway_routes
+    WHERE track_id = ANY($1)
+    ORDER BY array_position($1, track_id)
+    `,
+    [routeIds],
+  );
+  return result.rows.map((row) => ({ ...row, travelled_length_km: row.length_km }));
 }
 
 /**

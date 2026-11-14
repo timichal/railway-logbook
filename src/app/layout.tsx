@@ -55,6 +55,10 @@ export default function RootLayout({
             a `useEffect` both run too late to beat the first paint. */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed, self-authored constant with no interpolated input — see THEME_INIT_SCRIPT. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* The basemap style, its tiles, glyphs and sprite all come from here, and the
+            map can draw nothing until the style is in. CORS mode, as fetch() and
+            MapLibre request them, or the warmed connection goes unused. */}
+        <link rel="preconnect" href="https://tiles.openfreemap.org" crossOrigin="anonymous" />
       </head>
       <body className={`${inter.variable} antialiased`}>
         <ToastProvider>

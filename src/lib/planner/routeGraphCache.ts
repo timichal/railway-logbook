@@ -71,63 +71,78 @@ function networkOf(routes: LoadedRoute[], options: PlannerOptions): RouteNetwork
  * each time a segment failed.
  */
 async function loadRouteNetworks(signature: string): Promise<CachedRouteNetworks> {
-  const client = await pool.connect();
   const routes: LoadedRoute[] = [];
 
-  try {
-    const result = await client.query<{
-      track_id: number;
-      usage_type: number;
-      closed: boolean;
-      length_km: number;
-      line_class: string | null;
-      start_x: number;
-      start_y: number;
-      near_start_x: number;
-      near_start_y: number;
-      near_end_x: number;
-      near_end_y: number;
-      end_x: number;
-      end_y: number;
-    }>(
-      `
+  const result = await pool.query<{
+    track_id: number;
+    usage_type: number;
+    closed: boolean;
+    length_km: number;
+    line_class: string | null;
+    start_x: number;
+    start_y: number;
+    near_start_x: number;
+    near_start_y: number;
+    near_end_x: number;
+    near_end_y: number;
+    end_x: number;
+    end_y: number;
+  }>(
+    `
       SELECT
         r.track_id,
         r.usage_type,
         r.closed,
         r.length_km,
         r.line_class,
-        ST_X(ST_PointN(r.geometry, 1)) as start_x,
-        ST_Y(ST_PointN(r.geometry, 1)) as start_y,
-        ST_X(ST_PointN(r.geometry, 2)) as near_start_x,
-        ST_Y(ST_PointN(r.geometry, 2)) as near_start_y,
-        ST_X(ST_PointN(r.geometry, GREATEST(ST_NPoints(r.geometry) - 1, 1))) as near_end_x,
-        ST_Y(ST_PointN(r.geometry, GREATEST(ST_NPoints(r.geometry) - 1, 1))) as near_end_y,
-        ST_X(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_x,
-        ST_Y(ST_PointN(r.geometry, ST_NPoints(r.geometry))) as end_y
-      FROM railway_routes r
-      WHERE ${ordinaryRouteSql("r")}
-        AND ST_NPoints(r.geometry) >= 2
+        ST_X(ST_PointN(r.ends, 1)) as start_x,
+        ST_Y(ST_PointN(r.ends, 1)) as start_y,
+        ST_X(ST_PointN(r.ends, 2)) as near_start_x,
+        ST_Y(ST_PointN(r.ends, 2)) as near_start_y,
+        ST_X(ST_PointN(r.ends, 3)) as near_end_x,
+        ST_Y(ST_PointN(r.ends, 3)) as near_end_y,
+        ST_X(ST_PointN(r.ends, 4)) as end_x,
+        ST_Y(ST_PointN(r.ends, 4)) as end_y
+      FROM (
+        -- Each ST_PointN on a route deserialises the whole line, so the four
+        -- points are taken from it once, into a four-point line that the reads
+        -- above pick apart cheaply (~370ms → ~165ms for 7k routes; the scan
+        -- itself is ~90ms). OFFSET 0 keeps the subquery from being inlined,
+        -- which would put a full-line ST_PointN back into every read. For a
+        -- two-point route the near points are the far ends, as before.
+        SELECT
+          r.track_id, r.usage_type, r.closed, r.length_km, r.line_class,
+          ST_MakeLine(ARRAY[
+            ST_StartPoint(r.geometry),
+            ST_PointN(r.geometry, 2),
+            ST_PointN(r.geometry, -2),
+            ST_EndPoint(r.geometry)
+          ]) AS ends
+        FROM railway_routes r
+        WHERE ${ordinaryRouteSql("r")}
+          AND ST_NPoints(r.geometry) >= 2
+        OFFSET 0
+      ) r
+      -- The graph breaks cost ties in load order, so it is fixed here: a bare
+      -- scan returns the heap in whatever order it starts and writes leave it
+      ORDER BY r.track_id
       `,
-    );
+  );
 
-    for (const row of result.rows) {
-      const route: NetworkRoute = {
-        track_id: row.track_id,
-        length_km: row.length_km,
-        line_class: row.line_class,
-        startCoord: [row.start_x, row.start_y],
-        nearStartCoord: [row.near_start_x, row.near_start_y],
-        nearEndCoord: [row.near_end_x, row.near_end_y],
-        endCoord: [row.end_x, row.end_y],
-      };
-      routes.push({ route, usageType: row.usage_type, closed: row.closed });
-    }
-
-    return { signature, routes, built: new Map() };
-  } finally {
-    client.release();
+  for (const row of result.rows) {
+    const route: NetworkRoute = {
+      track_id: row.track_id,
+      length_km: row.length_km,
+      line_class: row.line_class,
+      startCoord: [row.start_x, row.start_y],
+      nearStartCoord: [row.near_start_x, row.near_start_y],
+      nearEndCoord: [row.near_end_x, row.near_end_y],
+      endCoord: [row.end_x, row.end_y],
+    };
+    routes.push({ route, usageType: row.usage_type, closed: row.closed });
   }
+
+  return { signature, routes, built: new Map() };
 }
 
 let cachedNetwork: CachedRouteNetworks | null = null;
@@ -161,9 +176,9 @@ async function getNetworkSignature(): Promise<string> {
  * The network a search with these options rides (see `PlannerOptions`), for the
  * current state of `railway_routes`, reused across requests.
  *
- * Extracting endpoint coordinates costs ~450ms because every ST_PointN has to
- * walk the full linestring, so the loaded routes and the graphs built from them
- * are kept in memory and only reloaded when the network fingerprint changes.
+ * Reading the endpoints is the slow part (see loadRouteNetworks), so the loaded
+ * routes and the graphs built from them are kept in memory and only reloaded
+ * when the network fingerprint changes.
  */
 export async function getRouteNetwork(options: PlannerOptions = {}): Promise<RouteNetwork> {
   const networks = await getRouteNetworks();

@@ -20,19 +20,20 @@ import {
   deleteTripForUser,
   type JourneyWithStats,
   journeysAndTripsForUser,
+  type TripName,
   type TripsAndJourneysItem,
   type TripWithStats,
-  tripsForUser,
+  tripNamesForUser,
   tripWithBoundsForUser,
   unassignedJourneysForUser,
   updateTripForUser,
 } from "./tripQueries";
 
-export type { JourneyWithStats, TripsAndJourneysItem, TripWithStats };
+export type { JourneyWithStats, TripName, TripsAndJourneysItem, TripWithStats };
 
-/** All of the current user's trips with computed stats, scoped to `region`. */
-export async function getAllTrips(region: RegionId): Promise<ActionResult<TripWithStats[]>> {
-  return asUser((userId) => tripsForUser(userId, region));
+/** The current user's trips in `region`, as the journey forms' trip picker offers them. */
+export async function getTripNames(region: RegionId): Promise<ActionResult<TripName[]>> {
+  return asUser((userId) => tripNamesForUser(userId, region));
 }
 
 /**

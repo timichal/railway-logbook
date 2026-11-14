@@ -55,67 +55,73 @@ export async function findRoutesNearStations(
   if (stationIds.length === 0) return matches;
 
   const maxTolerance = STATION_TOLERANCES[STATION_TOLERANCES.length - 1];
-  const client = await pool.connect();
-  try {
-    // An indexed, Mercator-scaled prefilter (withinMetersSql); the exact distance
-    // is then measured on the few candidates that survive.
-    const rows = await client.query<{
-      station_id: string | number;
-      track_id: number;
-      distance_m: number;
-      frac: number;
-      lon: number;
-      lat: number;
-    }>(
-      `
+  // An indexed, Mercator-scaled prefilter (withinMetersSql); the exact distance
+  // is then measured on the few candidates that survive.
+  const rows = await pool.query<{
+    station_id: string | number;
+    track_id: number;
+    distance_m: number;
+    frac: number;
+    lon: number;
+    lat: number;
+  }>(
+    `
       WITH s AS (
-        SELECT id, coordinates, ST_Transform(coordinates, 3857) AS geom_3857
+        SELECT id, coordinates, coordinates_3857 AS geom_3857
         FROM stations
         WHERE id = ANY($1)
       )
       SELECT
         s.id AS station_id,
         r.track_id,
-        ST_Distance(r.geometry::geography, s.coordinates::geography) AS distance_m,
-        ST_LineLocatePoint(r.geometry, s.coordinates) AS frac,
-        ST_X(ST_ClosestPoint(r.geometry, s.coordinates)) AS lon,
-        ST_Y(ST_ClosestPoint(r.geometry, s.coordinates)) AS lat
+        ST_Distance(c.point::geography, s.coordinates::geography) AS distance_m,
+        ST_LineLocatePoint(r.geometry, c.point) AS frac,
+        ST_X(c.point) AS lon,
+        ST_Y(c.point) AS lat
       FROM s
       JOIN railway_routes r
         ON ${plannerRouteSql("r", options)}
        AND ${withinMetersSql("r.geometry_3857", "s.geom_3857", "$2", "ST_Y(s.coordinates)")}
+      -- The route's point nearest the station, found once and in 3857, where it
+      -- is the true nearest point to within centimetres: Mercator is conformal,
+      -- and the scale barely changes across a few kilometres. Taken planar in
+      -- 4326 it can be off by hundreds of metres (a degree of longitude is
+      -- shorter than one of latitude). The distance is then measured on the
+      -- spheroid from that point alone, rather than from the whole route as a
+      -- geography, which costs several times more. The fraction is located from
+      -- the same point, so it and the boarding point name one place on the route.
+      CROSS JOIN LATERAL (
+        SELECT ST_Transform(ST_ClosestPoint(r.geometry_3857, s.geom_3857), 4326) AS point
+      ) c
       ORDER BY s.id, distance_m
       `,
-      [stationIds, maxTolerance],
-    );
+    [stationIds, maxTolerance],
+  );
 
-    const byStation = new Map<number, { track_id: number; distance: number }[]>();
-    for (const row of rows.rows) {
-      const stationId = Number(row.station_id);
-      const distance = row.distance_m;
-      if (distance > maxTolerance) continue;
-      if (!byStation.has(stationId)) byStation.set(stationId, []);
-      byStation.get(stationId)!.push({ track_id: row.track_id, distance });
-      const match = matches.get(stationId)!;
-      match.fractions.set(row.track_id, row.frac);
-      match.points.set(row.track_id, [Number(row.lon), Number(row.lat)]);
-    }
-
-    for (const stationId of stationIds) {
-      const candidates = byStation.get(stationId) ?? [];
-
-      for (let i = 0; i < STATION_TOLERANCES.length; i++) {
-        if (!candidates.some((c) => c.distance <= STATION_TOLERANCES[i])) continue;
-        const cutoff = STATION_TOLERANCES[Math.min(i + 1, STATION_TOLERANCES.length - 1)];
-        matches.get(stationId)!.routes = candidates
-          .filter((c) => c.distance <= cutoff)
-          .map((c) => c.track_id);
-        break;
-      }
-    }
-
-    return matches;
-  } finally {
-    client.release();
+  const byStation = new Map<number, { track_id: number; distance: number }[]>();
+  for (const row of rows.rows) {
+    const stationId = Number(row.station_id);
+    const distance = row.distance_m;
+    if (distance > maxTolerance) continue;
+    if (!byStation.has(stationId)) byStation.set(stationId, []);
+    byStation.get(stationId)!.push({ track_id: row.track_id, distance });
+    const match = matches.get(stationId)!;
+    match.fractions.set(row.track_id, row.frac);
+    match.points.set(row.track_id, [Number(row.lon), Number(row.lat)]);
   }
+
+  for (const stationId of stationIds) {
+    const candidates = byStation.get(stationId) ?? [];
+
+    for (let i = 0; i < STATION_TOLERANCES.length; i++) {
+      if (!candidates.some((c) => c.distance <= STATION_TOLERANCES[i])) continue;
+      const cutoff = STATION_TOLERANCES[Math.min(i + 1, STATION_TOLERANCES.length - 1)];
+      matches.get(stationId)!.routes = candidates
+        .filter((c) => c.distance <= cutoff)
+        .map((c) => c.track_id);
+      break;
+    }
+  }
+
+  return matches;
 }

@@ -131,15 +131,15 @@ export async function journeyForUser(
   userId: number,
   journeyId: number,
 ): Promise<{ journey: Journey; routes: RailwayRoute[] }> {
-  const journeyResult = await pool.query<Journey>(
+  // Both at once: the routes are read under the user too, so for a journey that
+  // isn't theirs they come back empty, and the missing journey answers
+  const journeyQuery = pool.query<Journey>(
     "SELECT * FROM user_journeys WHERE id = $1 AND user_id = $2",
     [journeyId, userId],
   );
-  const journey = journeyResult.rows[0];
-  if (!journey) throw new NotFoundError("Journey not found");
 
   // Exclude the heavy geometry column
-  const routesResult = await pool.query<RailwayRoute & LoggedPart>(
+  const routesQuery = pool.query<RailwayRoute & LoggedPart>(
     `SELECT
       rr.track_id, rr.name, rr.from_station, rr.to_station,
       rr.description, rr.usage_type, rr.usage_tags, rr.link, rr.link_name, rr.line_class,
@@ -152,6 +152,10 @@ export async function journeyForUser(
     ORDER BY ulp.created_at ASC`,
     [journeyId, userId],
   );
+
+  const [journeyResult, routesResult] = await Promise.all([journeyQuery, routesQuery]);
+  const journey = journeyResult.rows[0];
+  if (!journey) throw new NotFoundError("Journey not found");
 
   return { journey, routes: routesResult.rows };
 }

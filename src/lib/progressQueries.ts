@@ -63,45 +63,43 @@ export async function progressForUser(
     return EMPTY_PROGRESS;
   }
 
-  // Get total distance and count of all routes the region counts as ordinary
-  // service (Regular, plus Japan's non-JR lines — see `ordinaryUsageTypes`) and
-  // the map shows, optionally filtered by countries. Never a closed route: progress
-  // is against the network as it runs today, so a ride on a closed line counts in
-  // neither the total nor the ridden figure (here, below, and in the dataAccess twin)
-  const totalResult = await pool.query<{ total_km: number; total_routes: number }>(
-    `SELECT
-      COALESCE(SUM(length_km), 0) as total_km,
-      COUNT(*)::int as total_routes
-    FROM railway_routes
-    WHERE length_km IS NOT NULL
-      AND NOT closed
-      AND ${ordinaryUsageSql(region, "usage_type", shownUsageTypes)}
-      AND ${regionContainsSql(region, "starting_coordinate")}
-      ${hasCountries ? "AND start_country = ANY($1::text[]) AND end_country = ANY($1::text[])" : ""}`,
-    hasCountries ? [selectedCountries] : [],
-  );
-
-  // Get completed distance and count (routes ridden whole, over the same routes)
+  // Total distance and count of all routes the region counts as ordinary service
+  // (Regular, plus Japan's non-JR lines — see `ordinaryUsageTypes`) and the map
+  // shows, optionally filtered by countries, and of those the ones ridden whole.
+  // Never a closed route: progress is against the network as it runs today, so a
+  // ride on a closed line counts in neither the total nor the ridden figure (here
+  // and in the dataAccess twin).
   // "Most permissive wins": a route is complete if any journey logged it whole,
   // or if its partial stretches add up to all of it (FULLY_RIDDEN_TRACK_IDS).
-  // The subquery yields distinct ids, so a route counts once however many
-  // journeys rode it.
-  const completedResult = await pool.query<{ completed_km: number; completed_routes: number }>(
+  // That subquery yields distinct ids, so the join keeps one row per route
+  // however many journeys rode it.
+  const result = await pool.query<{
+    total_km: number;
+    total_routes: number;
+    completed_km: number;
+    completed_routes: number;
+  }>(
     `SELECT
-      COALESCE(SUM(rr.length_km), 0) as completed_km,
-      COUNT(*)::int as completed_routes
+      COALESCE(SUM(rr.length_km), 0) AS total_km,
+      COUNT(*)::int AS total_routes,
+      COALESCE(SUM(rr.length_km) FILTER (WHERE done.track_id IS NOT NULL), 0) AS completed_km,
+      (COUNT(*) FILTER (WHERE done.track_id IS NOT NULL))::int AS completed_routes
     FROM railway_routes rr
-    WHERE ${ordinaryUsageSql(region, "rr.usage_type", shownUsageTypes)}
+    LEFT JOIN (${FULLY_RIDDEN_TRACK_IDS}) done ON done.track_id = rr.track_id
+    WHERE rr.length_km IS NOT NULL
       AND NOT rr.closed
-      AND rr.length_km IS NOT NULL
+      AND ${ordinaryUsageSql(region, "rr.usage_type", shownUsageTypes)}
       AND ${regionContainsSql(region, "rr.starting_coordinate")}
-      ${hasCountries ? "AND start_country = ANY($2::text[]) AND end_country = ANY($2::text[])" : ""}
-      AND rr.track_id IN (${FULLY_RIDDEN_TRACK_IDS})`,
+      ${hasCountries ? "AND rr.start_country = ANY($2::text[]) AND rr.end_country = ANY($2::text[])" : ""}`,
     hasCountries ? [userId, selectedCountries] : [userId],
   );
 
-  const { total_km: totalKm, total_routes: totalRoutes } = totalResult.rows[0];
-  const { completed_km: completedKm, completed_routes: completedRoutes } = completedResult.rows[0];
+  const {
+    total_km: totalKm,
+    total_routes: totalRoutes,
+    completed_km: completedKm,
+    completed_routes: completedRoutes,
+  } = result.rows[0];
   return toUserProgress({ totalKm, completedKm, totalRoutes, completedRoutes });
 }
 
@@ -294,12 +292,20 @@ export function normalizeCoveredRanges(ranges: CoveredRange[]): CoveredRange[] {
  * the visited colour, so an overlay would add nothing. Stretches from different
  * journeys are returned separately and simply painted over each other — the
  * union comes out right without computing it.
+ *
+ * `region` keeps the other region's stretches out: the map shows one region,
+ * and each stretch is cut from its route's full geometry. `null` returns every
+ * region's, for the mobile API, whose overlay relies on its country filter.
  */
-export async function coveredStretchesForUser(userId: number): Promise<CoveredStretch[]> {
+export async function coveredStretchesForUser(
+  userId: number,
+  region: RegionId | null,
+): Promise<CoveredStretch[]> {
   const result = await pool.query<CoveredRange>(
     `
     SELECT DISTINCT ulp.track_id, ulp.covered_start, ulp.covered_end
     FROM user_logged_parts ulp
+    ${region ? `JOIN railway_routes rr ON rr.track_id = ulp.track_id AND ${regionContainsSql(region, "rr.starting_coordinate")}` : ""}
     WHERE ulp.user_id = $1
       AND ulp.partial = TRUE
       AND ulp.covered_start IS NOT NULL

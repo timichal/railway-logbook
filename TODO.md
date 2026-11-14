@@ -6,38 +6,23 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Quick wins
 
-- **Station proximity per route: add a fixed-size box the index can use.** `getStationsNearRoute` and `refreshStationProximityFor` (`src/lib/stationProximity.ts`) filter with `withinMetersSql`, whose distance depends on each station's latitude (`ST_Y(s.coordinates)`). PostGIS can't use the GIST index with a per-row distance, so each call scans all 66k stations. Both run on every admin route save/delete (`adminRouteActions.ts`), metadata-only saves included.
-  - Fix: put `s.coordinates_3857 && ST_Expand(r.geometry_3857, 250 / cos(radians(72)))` in front of the exact check and keep the exact check. In `refreshStationProximityFor`, write the `OR EXISTS (…)` as `s.id IN (SELECT s2.id FROM stations s2 JOIN railway_routes r … box AND exact check)` so the planner can drive it from the index.
-  - Measured: `getStationsNearRoute(850)` went from 917ms to 3.8ms, returning the same 15 stations. The box is a superset of the exact check for every latitude below 72°, which covers both regions. Add a comment saying why 72°, and that a region further north needs it raised.
-  - Leave `refreshAllStationProximity` alone: the bulk check measured 790ms against 670ms with the box.
-- **Postgres settings.** `docker-compose.yml` gives the `db` service no `command:`, so the server runs `jit=on`, `shared_buffers=128MB` and `work_mem=4MB`. JIT added ~435ms of compile time to the proximity query above: PostGIS functions carry high cost estimates, which push cheap queries over JIT's threshold.
+- **Postgres settings.** `docker-compose.yml` gives the `db` service no `command:`, so the server runs `jit=on`, `shared_buffers=128MB` and `work_mem=4MB`. JIT added ~435ms of compile time to the per-route station proximity query (since given an index-usable box): PostGIS functions carry high cost estimates, which push cheap queries over JIT's threshold.
   - Add `command: postgres -c jit=off -c shared_buffers=<~25% of RAM>` (about 1GB on the 4GB server; `railway_parts` alone is ~834MB). Optionally raise `maintenance_work_mem` for the import's index work.
   - Changing it recreates the `db` container (a Postgres restart), so take `backupRouteData` first. Check memory headroom together with the recalculation item below, and with `importMapData`'s `--max-old-space-size=8192`, which on a 4GB host means swapping before an out-of-memory error.
-- **Keep pool connections warm.** `createPool` (`src/lib/db.ts`) and the tile pool (`routeTileQueries.ts`) use pg's defaults: idle connections close after 10s. Measured: a new connection costs ~8ms, and its first query ~25ms against ~7ms warm (cold catalog and PostGIS caches; planning drops from 10–15ms to ~1ms). On a quiet site most requests come after a pause. Set `min: 2` or a longer `idleTimeoutMillis`, and record the reason in a comment.
-- **Fetch the basemap style earlier.** `loadBasemapStyle` runs inside `useMapLibre`'s effect, so the style request waits for the `RailwayMap` chunk (MapLibre, ~1.1MB minified) to download and mount.
-  - Add `<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>` in the root layout (style, tiles, glyphs and sprite all come from there).
-  - Call `loadBasemapStyle(theme)` from the main bundle (`MainLayout` / `PublicMapLayout`) so the fetch overlaps the chunk download. It is memoised per theme, so a second call is free.
-  - Read `src/lib/shared/map/CLAUDE.md` "Basemap" first: never mutate the memoised layers.
-- **The trip picker loads full trip statistics for names alone.** `JourneyLogger.tsx` calls `getAllTrips` → `tripsForUser` → `tripStatsSql` (`range_agg` and distances per trip) on every signed-in load, region switch and trips change. `RouteLogger` reads only `{id, name}`. Add a `tripNamesForUser(userId, region)` query and an action for it, and keep `getAllTrips` for the views that show the stats.
-- **Scope `getCoveredStretches` to the region.** `userActions.ts` returns a user's partial stretches for both Europe and Japan, again on every map rebuild. Pass the region and filter with `regionContainsSql` on the route's `starting_coordinate` (a point column, as "Regions" in the root CLAUDE.md requires).
-- **Planner station matching: one closest point, computed in 3857.** `src/lib/planner/stations.ts` runs `ST_Distance(r.geometry::geography, …)` over whole routes and calls `ST_ClosestPoint` twice. Instead, take `ST_ClosestPoint(r.geometry_3857, <station 3857>)` once in a LATERAL, transform that point to 4326, and measure the geography distance from it to the station.
-  - Measured: 10.7ms → 3ms warm (37–45ms cold before), with at most 9cm difference over 1,383 random station–route pairs.
-  - Don't take the closest point planar in 4326: it is off by up to 359m.
-  - Run `tests/planner.test.ts` and `npm run inspectPath` on a few known journeys before and after, and compare the output.
 - **Stored search key for stations.** Two-character station searches (below a trigram) and the admin search (`nearRouteOnly: false`, outside the partial trigram index) run `search_key(name)` on every row: 42–70ms. Over the same rows `search_key(name) LIKE` costs 42ms where `lower(name) LIKE` costs 11ms, so the function dominates.
   - Add a stored generated column `name_key text GENERATED ALWAYS AS (search_key(name)) STORED` and point the queries (`searchStationsByName` in `routeQueries.ts`, the map search) at it.
   - Make its trigram index non-partial so the admin search uses it too, or keep two indexes.
   - The column needs a migration script (`src/scripts/CLAUDE.md`) plus `01-schema.sql`. Note in `02-vector-tiles.sql` that a new `search_key` body means rewriting the column (`UPDATE … SET name = name` won't do for a generated column: drop and re-add it). Keep `tests/searchText.sql.test.ts` passing.
-- **Planner network load (~360ms per rebuild).** `routeGraphCache.ts` reads each route's endpoints with `ST_PointN` about 9 times per row, and each call detoasts the whole line: 194k buffer reads for 7k rows. It is paid on the first search after every deploy and every route write.
-  - Either store the endpoint coordinates in columns maintained by the `sync_geometry_3857` trigger (or a sibling trigger), or detoast once per row in a LATERAL (`ST_StartPoint` / `ST_EndPoint` over one geometry value).
+- **Planner network load (~165ms per rebuild).** `routeGraphCache.ts` now reads the four endpoint coordinates once per row (a four-point `ST_MakeLine`, down from ~370ms), but the scan alone, detoasting every route line, is ~90ms. It is paid on the first search after every deploy and every route write.
+  - Store the endpoint coordinates in columns maintained by the `sync_geometry_3857` trigger (or a sibling trigger), which takes it to a few ms. Needs a migration script plus `01-schema.sql`. Keep the load `ORDER BY track_id` (the graph breaks ties in load order).
   - Optionally warm the cache from `src/instrumentation.ts` after startup.
+- **Validate `region` in server actions.** Every `"use server"` export that takes a `region: RegionId` (`userActions`, `publicMapActions`, `tripActions`, `journeyActions`, the `admin*Actions`) trusts the type, but a client can send any string. `REGIONS[region]` is then undefined, and `regionContainsSql` throws a `TypeError`: an opaque 500 rather than a 400. Not a leak (nothing is interpolated from the string), only the wrong error.
+  - Add one guard (`assertRegionId`, built on `isRegionId` in `shared/regions.ts`, throwing `ValidationError`) and call it at the top of each such action, or inside `asUser` / `asAdmin` / `asActionResult` where the region is an argument. The `/api/v1` handlers already go through `requireRegion`.
 - **Small sequential round trips** (a few ms each; do them while you're in each file):
-  - `progressForUser` (`progressQueries.ts`) runs its two queries one after the other: use `Promise.all`, or one query with `FILTER`.
-  - `journeyForUser` runs the journey and its routes in sequence. `journeyWithBoundsForUser` and `tripWithBoundsForUser` compute bounds after the main query.
+  - `journeyWithBoundsForUser` and `tripWithBoundsForUser` compute bounds after the main query.
   - `planJourney` runs `planBounds` after the details; `ST_Extent` could go into `getRouteDetails`.
-  - Single-query functions that `pool.connect()` can use `pool.query`.
   - The public map resolves the share token in its own query before reading progress.
-  - `page.tsx` does `getUser`, then preferences: one query could do both.
+  - `page.tsx` does `getUser`, then preferences (now two queries, was three): one query could do both.
   - `migrationActions.ts` inserts one row per journey and per part on login: batch with `unnest`.
 
 ## Medium
@@ -55,7 +40,7 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
   - First list every reader of each property, on the web (popups, `routeFeature.ts`, `routeTitle`, the highlight code) and in `mobile/`. The hover popup at low zoom needs the names right away, so fetching on demand needs a cache or a prefetch.
   - Keep the `ORDER BY` and `track_id` as the feature id.
   - Check the admin map too: it reads the same Martin source (`railway_routes_tile`).
-- **Move read-only calls off server actions.** Next runs a client's server actions one at a time (`node_modules/next/dist/docs/01-app/02-guides/backend-for-frontend.md`, "Server Actions are queued"). So on a signed-in load `getAllTrips` → `getUserProgress` → `getCoveredStretches` run in sequence, a slow `findRoutePathBetweenStations` holds up station search and progress, and the admin page queues four or more loads.
+- **Move read-only calls off server actions.** Next runs a client's server actions one at a time (`node_modules/next/dist/docs/01-app/02-guides/backend-for-frontend.md`, "Server Actions are queued"). So on a signed-in load `getTripNames` → `getUserProgress` → `getCoveredStretches` run in sequence, a slow `findRoutePathBetweenStations` holds up station search and progress, and the admin page queues four or more loads.
   - Serve the reads from GET route handlers that resolve the session the way `src/lib/api/tiles.ts` does and call the existing `*Queries.ts` functions. Keep writes as server actions.
   - Rules that apply ("Two transports" in the root CLAUDE.md): a route handler never imports a `"use server"` module; errors go through `errors.ts`; every handler checks the session itself.
   - Start with the load-time trio. The cheaper alternative is one combined "map init" action, which saves the queueing but not the caching.

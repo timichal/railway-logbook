@@ -3,6 +3,19 @@ import { dbConfig } from "./dbConfig";
 import { NotFoundError } from "./errors";
 
 /**
+ * Keep a couple of connections open through quiet spells. pg closes an idle one
+ * after 10s, and on a quiet site most requests come after a longer pause than
+ * that: a new connection costs ~8ms, and its first query ~25ms against ~7ms warm,
+ * because each backend starts with cold catalog and PostGIS caches (planning
+ * alone drops from 10–15ms to ~1ms once warm). `min` exempts that many idle
+ * connections from the timeout; it never opens one ahead of need.
+ *
+ * `allowExitOnIdle` unrefs the idle sockets, so a script that forgets
+ * `pool.end()` still exits instead of hanging on the connections kept here.
+ */
+const KEEP_WARM: PoolConfig = { min: 2, allowExitOnIdle: true };
+
+/**
  * A pool on the app's database, `overrides` on top of `dbConfig`. Every pool is
  * made here, so none can miss the listener: an idle connection that dies
  * (Postgres restarted, an idle timeout) is reported as an 'error' on the pool.
@@ -11,7 +24,7 @@ import { NotFoundError } from "./errors";
  * pool has already dropped the connection and opens a new one on the next query.
  */
 export function createPool(overrides: PoolConfig = {}): Pool {
-  const pool = new Pool({ ...dbConfig, ...overrides });
+  const pool = new Pool({ ...dbConfig, ...KEEP_WARM, ...overrides });
   pool.on("error", (error) => {
     console.error("Idle database connection failed:", error.message);
   });

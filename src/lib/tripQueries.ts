@@ -97,7 +97,7 @@ function tripRouteCoverageSql(where: string): string {
 }
 
 /**
- * Trip stats SELECT, shared by getAllTrips and getJourneysAndTrips.
+ * Trip stats SELECT, shared by tripsForUser (the mobile API) and getJourneysAndTrips.
  *
  * Journey and route stats are aggregated in separate subqueries rather than by
  * joining user_journeys × user_logged_parts directly: that join fans out (one
@@ -176,17 +176,45 @@ function journeyStatsSql(userParam: string, where: string, orderBy?: string): st
 }
 
 /**
- * All of the user's trips with computed stats, scoped to `region`.
- *
- * This is the trip picker used when filing a journey under a trip, and a journey
- * is logged on the map of one region — so offering trips from the other side of
- * the planet only invites a misfile. A trip with no logged routes yet belongs to
- * every region (see tripInRegionSql), so a trip created empty can still be
- * picked in the region that created it.
+ * All of the user's trips with computed stats, scoped to `region` (the native
+ * app's trip list). A trip with no logged routes yet belongs to every region
+ * (see tripInRegionSql), so a trip created empty never vanishes from the list
+ * that made it. The web's pickers use tripNamesForUser, which must keep this
+ * order.
  */
 export async function tripsForUser(userId: number, region: RegionId): Promise<TripWithStats[]> {
   const result = await pool.query<TripWithStats>(
     `${tripStatsSql()}
+     WHERE ut.user_id = $1
+       AND ${tripInRegionSql(region, "ut.id")}
+     ORDER BY j.end_date DESC NULLS LAST, ut.created_at DESC`,
+    [userId],
+  );
+  return result.rows;
+}
+
+/** A trip as a picker offers it. */
+export type TripName = Pick<Trip, "id" | "name">;
+
+/**
+ * The trips a journey can be filed under: tripsForUser's list in its order,
+ * without the stats, which a picker never shows and which cost a `range_agg` and
+ * a distance per trip (tripStatsSql) on every signed-in load.
+ *
+ * Scoped to `region` because a journey is logged on the map of one region, so
+ * offering trips from the other side of the planet only invites a misfile. A
+ * trip with no logged routes yet belongs to every region (see tripInRegionSql),
+ * so a trip created empty can still be picked in the region that created it.
+ */
+export async function tripNamesForUser(userId: number, region: RegionId): Promise<TripName[]> {
+  const result = await pool.query<TripName>(
+    `SELECT ut.id, ut.name
+     FROM user_trips ut
+     LEFT JOIN LATERAL (
+       SELECT MAX(uj.date) AS end_date
+       FROM user_journeys uj
+       WHERE uj.trip_id = ut.id AND uj.user_id = $1
+     ) j ON TRUE
      WHERE ut.user_id = $1
        AND ${tripInRegionSql(region, "ut.id")}
      ORDER BY j.end_date DESC NULLS LAST, ut.created_at DESC`,
@@ -360,7 +388,7 @@ export type TripsAndJourneysItem =
  *
  * Scoped to `region` (see journeyInRegionSql): browsing the list highlights the
  * item's routes on the map, and the map is locked to one region. The trip picker
- * (getAllTrips) and the journey picker (getUnassignedJourneys) are scoped the
+ * (getTripNames) and the journey picker (getUnassignedJourneys) are scoped the
  * same way.
  */
 export async function journeysAndTripsForUser(
@@ -484,7 +512,7 @@ export async function journeysAndTripsForUser(
 
 /**
  * Get journeys not assigned to any trip (for the assignment picker), scoped to
- * `region` — the same reason as getAllTrips: the picker offers journeys to file
+ * `region` — the same reason as getTripNames: the picker offers journeys to file
  * under a trip being browsed on one region's map, and a journey from the other
  * region has no business in that list. A journey with no logged routes yet
  * belongs to every region (see journeyInRegionSql), so an empty one stays

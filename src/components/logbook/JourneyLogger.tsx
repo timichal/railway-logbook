@@ -8,10 +8,10 @@ import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { createJourney } from "@/lib/journeyActions";
 import { useRegionId } from "@/lib/regionContext";
-import type { TripWithStats } from "@/lib/tripActions";
-import { getAllTrips } from "@/lib/tripActions";
+import type { TripName } from "@/lib/tripActions";
+import { getTripNames } from "@/lib/tripActions";
 
-const NO_TRIPS: TripWithStats[] = [];
+const NO_TRIPS: TripName[] = [];
 
 /**
  * RouteLogger shows a failure's own message, which is right for the local store's
@@ -56,7 +56,7 @@ export default function JourneyLogger({
   // rather than running on every return to the tab.
   // biome-ignore lint/correctness/useExhaustiveDependencies: tripsVersion is the reload trigger; the trips themselves come from the server.
   const { data: availableTrips } = useAsyncLoad(
-    () => getAllTrips(regionId).then(unwrap),
+    () => getTripNames(regionId).then(unwrap),
     [regionId, tripsVersion],
     "trips",
   );
