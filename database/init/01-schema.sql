@@ -40,8 +40,8 @@ CREATE TABLE stations (
     near_route BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    -- Added by 02-vector-tiles.sql: coordinates_3857, and name_key (the name as
-    -- the station search compares it, stored)
+    -- Added by 02-vector-tiles.sql: coordinates_3857, and name_key and name_words
+    -- (the name as the station search compares it, stored)
 );
 
 -- Railway parts/segments (original line data from OSM)

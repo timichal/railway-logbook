@@ -84,64 +84,108 @@ CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text
 LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
 RETURN public.unaccent('public.unaccent'::regdictionary, $1);
 
--- A name as the searches compare it: lower-cased, without diacritics, and without
--- the spaces, hyphens, dashes, apostrophes and dots between its parts, so
--- "owariseto", "owari-seto" and "Owari Seto" are one query, and "sanyo" finds
+-- A name as its words, for the station and line searches: lower-cased, without
+-- diacritics or apostrophes, one space before each word and none after the last.
+-- The separators between words (spaces, hyphens, dashes, dots and middle dots)
+-- become that one space, and the punctuation a word can follow with no space
+-- before it — an opening bracket, a slash, a comma — keeps a space after it, so in
+-- "Frankfurt (Main)" and "Halle/Saale" "main" and "saale" are words. Apostrophes
+-- join the parts of one word ("San'yō" is the word "sanyo"). The leading space
+-- lets a LIKE pattern find the first word as it finds the others, and a pattern
+-- goes through the same function: `search_words('pr% de%')` is `' pr% de%'`,
+-- which finds " praha dejvice", and `'%' || search_words(…)` finds the words
+-- anywhere in the name (wordPrefixPattern in src/lib/routeQueries.ts).
+-- The word breaks' JavaScript twin is SEARCH_WORD_BREAKS (src/lib/shared/
+-- searchQuery.ts). The whitespace is JavaScript's `\s` spelled out, not
+-- [[:space:]], which follows the locale and leaves out the no-break spaces.
+CREATE OR REPLACE FUNCTION search_words(text) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+RETURN ' ' || btrim(regexp_replace(
+  regexp_replace(
+    regexp_replace(lower(public.immutable_unaccent($1)), '[''’‘ʼ]+', '', 'g'),
+    '([(（\[［/／,，、])',
+    '\1 ',
+    'g'
+  ),
+  '[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff.·・‐‑‒–—―-]+',
+  ' ',
+  'g'
+));
+
+-- A name as the searches compare it whole: its words with the spaces taken out,
+-- so "owariseto", "owari-seto" and "Owari Seto" are one query, and "sanyo" finds
 -- "San'yō" — operators romanize the same name with and without them. The SQL
 -- twin of foldForSearch (src/lib/searchText.ts, its separators in
 -- src/lib/shared/searchQuery.ts); tests/searchText.sql.test.ts holds the two
--- together. The whitespace is JavaScript's `\s` spelled out, not [[:space:]],
--- which follows the locale and leaves out the no-break spaces. stations.name_key
--- stores its results; the block after it recomputes them when this body (or
--- immutable_unaccent's) changes.
+-- together. Written over search_words, so a name's words without their spaces
+-- are its key by construction.
 CREATE OR REPLACE FUNCTION search_key(text) RETURNS text
 LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
-RETURN regexp_replace(
-  lower(public.immutable_unaccent($1)),
-  '[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff''’‘ʼ.·・‐‑‒–—―-]+',
-  '',
-  'g'
-);
+RETURN replace(search_words($1), ' ', '');
 
--- stations.name_key = search_key(name), stored. A generated column is computed
--- once, on write, so a change in how search_key folds would leave every stored
--- key folded the old way. Folding can change without the functions above
--- changing: unaccent reads its rules from a file the db image ships, and lower()
--- follows the image's locale. So the column's comment records a fingerprint of
--- what search_key *returns*, character by character, over the blocks where
+-- Two stored folds of stations.name: name_key = search_key(name) and
+-- name_words = search_words(name). A generated column is computed once, on
+-- write, so a change in how it folds would leave every stored value folded the
+-- old way. So each column's comment records a fingerprint, and when it no longer
+-- matches, SET EXPRESSION recomputes the column (a rewrite of the ~66k rows and
+-- their indexes, about a second under an exclusive lock, once). The fingerprint
+-- covers the column's expression, the source of the three functions, and what
+-- its function *returns*, character by character, over the blocks where
 -- unaccent, lower() and the separators act (Latin to Katakana, Latin Extended-D,
--- the ligatures, the mathematical letters, the full-width forms; ~22ms). When the
--- fingerprint no longer matches, SET EXPRESSION recomputes the column (a rewrite
--- of the ~66k rows and their indexes, about a second under an exclusive lock,
--- once). Added here rather than in 01-schema.sql, which runs before search_key
--- exists on a new database.
+-- the ligatures, the mathematical letters, the full-width forms; ~22ms each):
+-- folding can change without any source changing, since unaccent reads its rules
+-- from a file the db image ships and lower() follows the image's locale. Added
+-- here rather than in 01-schema.sql, which runs before the functions exist on a
+-- new database.
 DO $$
 DECLARE
+  col record;
   fold_hash text;
 BEGIN
-  SELECT md5(string_agg(search_key(chr(c)), '|' ORDER BY c)) INTO fold_hash
-  FROM (
-    SELECT generate_series(x'20'::int, x'30ff'::int)
-    UNION ALL SELECT generate_series(x'a720'::int, x'a7ff'::int)
-    UNION ALL SELECT generate_series(x'fb00'::int, x'fb4f'::int)
-    UNION ALL SELECT generate_series(x'ff00'::int, x'ffef'::int)
-    UNION ALL SELECT generate_series(x'1d400'::int, x'1d7ff'::int)
-  ) AS codepoints(c);
+  FOR col IN
+    SELECT * FROM (VALUES
+      ('name_key', 'search_key', 'search_key(name)'),
+      ('name_words', 'search_words', 'search_words(name)')
+    ) AS folds(name, fold, expression)
+  LOOP
+    EXECUTE format($query$
+      SELECT md5(
+        %L
+        || pg_get_functiondef('immutable_unaccent(text)'::regprocedure)
+        || pg_get_functiondef('search_words(text)'::regprocedure)
+        || pg_get_functiondef('search_key(text)'::regprocedure)
+        || string_agg(%I(chr(c)), '|' ORDER BY c)
+      )
+      FROM (
+        SELECT generate_series(x'20'::int, x'30ff'::int)
+        UNION ALL SELECT generate_series(x'a720'::int, x'a7ff'::int)
+        UNION ALL SELECT generate_series(x'fb00'::int, x'fb4f'::int)
+        UNION ALL SELECT generate_series(x'ff00'::int, x'ffef'::int)
+        UNION ALL SELECT generate_series(x'1d400'::int, x'1d7ff'::int)
+      ) AS codepoints(c)
+    $query$, col.expression, col.fold) INTO fold_hash;
 
-  IF NOT EXISTS (
-    SELECT FROM pg_attribute
-    WHERE attrelid = 'stations'::regclass AND attname = 'name_key' AND NOT attisdropped
-  ) THEN
-    ALTER TABLE stations ADD COLUMN name_key text GENERATED ALWAYS AS (search_key(name)) STORED;
-  ELSIF col_description(
-    'stations'::regclass,
-    (SELECT attnum FROM pg_attribute WHERE attrelid = 'stations'::regclass AND attname = 'name_key')
-  ) IS DISTINCT FROM fold_hash THEN
-    ALTER TABLE stations ALTER COLUMN name_key SET EXPRESSION AS (search_key(name));
-  ELSE
-    RETURN;
-  END IF;
-  EXECUTE format('COMMENT ON COLUMN stations.name_key IS %L', fold_hash);
+    IF NOT EXISTS (
+      SELECT FROM pg_attribute
+      WHERE attrelid = 'stations'::regclass AND attname = col.name AND NOT attisdropped
+    ) THEN
+      EXECUTE format(
+        'ALTER TABLE stations ADD COLUMN %I text GENERATED ALWAYS AS (%s) STORED',
+        col.name, col.expression
+      );
+    ELSIF col_description(
+      'stations'::regclass,
+      (SELECT attnum FROM pg_attribute WHERE attrelid = 'stations'::regclass AND attname = col.name)
+    ) IS DISTINCT FROM fold_hash THEN
+      EXECUTE format(
+        'ALTER TABLE stations ALTER COLUMN %I SET EXPRESSION AS (%s)',
+        col.name, col.expression
+      );
+    ELSE
+      CONTINUE;
+    END IF;
+    EXECUTE format('COMMENT ON COLUMN stations.%I IS %L', col.name, fold_hash);
+  END LOOP;
 END $$;
 
 -- Not partial: the user map's search narrows to near_route after the index, and
@@ -152,6 +196,12 @@ DROP INDEX IF EXISTS idx_stations_search_key_trgm_near_route;
 
 CREATE INDEX IF NOT EXISTS idx_stations_name_key_trgm
 ON stations USING GIN (name_key gin_trgm_ops);
+
+-- The word-prefix search. pg_trgm reads a space in a LIKE pattern as a word
+-- start, so `% pr% de%` asks the index for "  p", " pr", "  d" and " de" (about
+-- 0.3ms, against a scan for the two-letter words name_key alone would get).
+CREATE INDEX IF NOT EXISTS idx_stations_name_words_trgm
+ON stations USING GIN (name_words gin_trgm_ops);
 
 -- Function: tile_unit
 -- One unit of a 4096-extent tile at zoom z, in metres of Web Mercator (the world

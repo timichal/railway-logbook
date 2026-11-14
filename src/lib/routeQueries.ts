@@ -13,7 +13,7 @@ import pool, { escapeLikePattern } from "./db";
 import { onLineSql, routeLinesSql } from "./lineMembership";
 import { MIN_SEARCH_QUERY_LENGTH, type UsageType } from "./shared/constants";
 import { REGIONS, type RegionId, regionContainsSql } from "./shared/regions";
-import { searchQueryLength } from "./shared/searchQuery";
+import { SEARCH_WORD_BREAKS, searchQueryLength } from "./shared/searchQuery";
 import type {
   LineGeometry,
   LineSearchResult,
@@ -23,6 +23,28 @@ import type {
   RouteSummary,
   Station,
 } from "./shared/types";
+
+/**
+ * A query of two words or more as LIKE patterns over a name's words
+ * (`search_words(name)`, stored on stations as `name_words`): each word the
+ * start of a word of the name, in the query's order, so "pr de" finds
+ * "Praha-Dejvice", "pr hl" "Praha hlavní nádraží" and "fr ma" "Frankfurt (Main)
+ * Hbf". The pattern (` pr% de%`) finds them from the name's first word on; SQL
+ * folds it with `search_words`, as the name is folded, and puts a `%` before the
+ * folded pattern to let them start at any word (`'%' || search_words($n)`: a `%`
+ * folded with it would get a space of its own before it). Null for a single word,
+ * which the whole-query substring match already covers.
+ */
+function wordPrefixPattern(searchQuery: string): string | null {
+  const words = searchQuery
+    .split(SEARCH_WORD_BREAKS)
+    .filter((word) => searchQueryLength(word) > 0)
+    .map(escapeLikePattern);
+  if (words.length < 2) {
+    return null;
+  }
+  return `${words.map((word) => ` ${word}`).join("%")}%`;
+}
 
 /**
  * Station name search for the map search boxes and the Journey Planner.
@@ -42,6 +64,12 @@ import type {
  * built over; calling `search_key(name)` here instead would compute it on every
  * row and miss the index. The two-character floor is
  * counted without separators (`searchQueryLength`), so "a-" is one character.
+ *
+ * A query of several words also matches word by word (`wordPrefixPattern`), on
+ * the stored and indexed `name_words`. A name starting as the query does comes
+ * first: the whole query at its start, or the query's first word at its first.
+ * The word pattern is NULL for a one-word query, and `LIKE NULL` matches
+ * nothing.
  */
 export async function searchStationsByName(
   searchQuery: string,
@@ -53,6 +81,7 @@ export async function searchStationsByName(
   }
 
   const pattern = escapeLikePattern(searchQuery);
+  const words = wordPrefixPattern(searchQuery);
 
   // A BIGINT id comes back from pg as a string
   const result = await pool.query<{ id: string; name: string; lon: number; lat: number }>(
@@ -63,16 +92,16 @@ export async function searchStationsByName(
     FROM stations
     WHERE ($3 OR near_route)
       AND ${regionContainsSql(region, "coordinates")}
-      AND name_key LIKE search_key($1)
+      AND (name_key LIKE search_key($1) OR name_words LIKE '%' || search_words($4))
     ORDER BY
       CASE
-        WHEN name_key LIKE search_key($2) THEN 0  -- Start match first
+        WHEN name_key LIKE search_key($2) OR name_words LIKE search_words($4) THEN 0  -- Start match first
         ELSE 1  -- Contains match second
       END,
       name
     LIMIT 10
   `,
-    [`%${pattern}%`, `${pattern}%`, !nearRouteOnly],
+    [`%${pattern}%`, `${pattern}%`, !nearRouteOnly, words],
   );
 
   return result.rows.map((row) => ({
@@ -88,8 +117,10 @@ export async function searchStationsByName(
  * sharing a name come back as one line, boxed round all of them, so picking it
  * shows the whole line. A route is on a line whether the line is its `name` or
  * one of its `other_names` (a stretch two lines share). Every usage type: a line is a place to look at, whichever
- * layers happen to be on. Matched as station names are — by `search_key`, start
- * matches first. Unindexed, which a region's few thousand routes do not need.
+ * layers happen to be on. Matched as station names are — by `search_key`, or word
+ * by word for a query of several words, start matches first. Unindexed, which a
+ * region's few thousand routes do not need. Each name is folded once (`folded`,
+ * materialized so the planner doesn't inline it and fold each name twice).
  *
  * The five names are picked before anything is boxed: `ST_Extent` reads each
  * route's whole (TOASTed) line, and a query like "Li" matches nearly every route
@@ -105,6 +136,7 @@ async function searchLinesByName(
   }
 
   const pattern = escapeLikePattern(searchQuery);
+  const words = wordPrefixPattern(searchQuery);
 
   const result = await pool.query<{
     name: string;
@@ -113,16 +145,23 @@ async function searchLinesByName(
     bounds: RouteBounds;
   }>(
     `
-    WITH matched AS (
-      SELECT line.name,
-             CASE WHEN search_key(line.name) LIKE search_key($2) THEN 0 ELSE 1 END AS rank
-      FROM railway_routes rr
-      CROSS JOIN LATERAL ${routeLinesSql("rr")} AS line(name)
-      WHERE line.name IS NOT NULL
-        AND ${regionContainsSql(region, "rr.starting_coordinate")}
-        AND search_key(line.name) LIKE search_key($1)
-      GROUP BY line.name
-      ORDER BY rank, line.name
+    WITH folded AS MATERIALIZED (
+      SELECT name, search_key(name) AS key, search_words(name) AS words
+      FROM (
+        SELECT DISTINCT line.name
+        FROM railway_routes rr
+        CROSS JOIN LATERAL ${routeLinesSql("rr")} AS line(name)
+        WHERE line.name IS NOT NULL
+          AND ${regionContainsSql(region, "rr.starting_coordinate")}
+      ) names
+    ),
+    matched AS (
+      SELECT name,
+             CASE WHEN key LIKE search_key($2) OR words LIKE search_words($3) THEN 0
+                  ELSE 1 END AS rank
+      FROM folded
+      WHERE key LIKE search_key($1) OR words LIKE '%' || search_words($3)
+      ORDER BY rank, name
       LIMIT 5
     )
     SELECT name, route_count, usage_types, ${boundsSql("box")} AS bounds
@@ -138,7 +177,7 @@ async function searchLinesByName(
     WHERE box IS NOT NULL
     ORDER BY rank, name
   `,
-    [`%${pattern}%`, `${pattern}%`],
+    [`%${pattern}%`, `${pattern}%`, words],
   );
 
   return result.rows.map((row) => ({
