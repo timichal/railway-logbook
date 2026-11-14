@@ -7,11 +7,11 @@ import IconButton from "@/components/ui/IconButton";
 import { fitCamera } from "@/lib/map/fitCamera";
 import type { LineHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { plural } from "@/lib/plural";
+import { searchMap } from "@/lib/publicReads";
 import { REGIONS, type RegionId } from "@/lib/shared/regions";
 import type { LineSearchResult, MapSearchResults, Station } from "@/lib/shared/types";
 import { optionRow } from "@/lib/ui/buttonStyles";
 import { useSearchCombobox } from "@/lib/ui/useSearchCombobox";
-import { searchMap } from "@/lib/userActions";
 
 /** One entry of the box's list. */
 type MapSearchResult =

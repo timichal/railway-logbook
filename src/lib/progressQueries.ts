@@ -4,7 +4,7 @@
  * A plain server-only module rather than a "use server" one on purpose: every
  * export of a "use server" file becomes a client-callable endpoint, and these
  * take the user id as an argument — exposed, anyone could ask for anyone's
- * numbers. The authenticated wrappers live in `userActions.ts`, and the
+ * numbers. The session's wrappers are the `api/me` handlers, and the
  * token-checked ones for a shared public map in `publicMapActions.ts`; both
  * resolve *which* user first and then come here.
  */
@@ -210,7 +210,8 @@ export const HAS_STRETCH_SQL =
 
 /** Cap on ranges accepted from the client, so a crafted call can't ask for the world. */
 const MAX_COVERED_RANGES = 2000;
-const MAX_PG_INT = 2147483647;
+/** Postgres `int`, which track ids are cast to: a larger id would fail the query. */
+export const MAX_PG_INT = 2147483647;
 
 /**
  * Covered fraction ranges cut into drawable geometry, as a SELECT over `ranges` — a

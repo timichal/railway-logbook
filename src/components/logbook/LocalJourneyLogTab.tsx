@@ -5,12 +5,12 @@ import JourneyCard from "@/components/logbook/JourneyCard";
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { localJourneyStore } from "@/lib/journeyStore";
 import * as localStore from "@/lib/localStorage";
+import { getRegionTrackIds } from "@/lib/publicReads";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn, LocalJourney, LocalLoggedPart } from "@/lib/shared/types";
 import { usePruneJourneyDrafts } from "@/lib/ui/editGuard";
 import { useRevealJourneyCard } from "@/lib/ui/scrollInContainer";
-import { getRegionTrackIds } from "@/lib/userActions";
 
 interface JourneyWithRoutes {
   journey: LocalJourney;

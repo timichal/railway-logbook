@@ -7,10 +7,10 @@
 import { ActionError, unwrap } from "./actionResult";
 import { deleteJourney, getJourney, saveJourneyEdits } from "./journeyActions";
 import * as localStore from "./localStorage";
+import { getCoveredStretchesFor, getRoutesByIds } from "./publicReads";
 import type { RegionId } from "./shared/regions";
 import { knownStretches } from "./shared/routeCoverage";
 import type { JourneyEdits, PartialRouteGeometry, RailwayRoute, RouteBounds } from "./shared/types";
-import { getCoveredStretchesFor, getRoutesByIds } from "./userActions";
 
 export interface LoadedJourney {
   journey: { name: string; date: string; description: string | null; trip_id?: number | null };
@@ -73,7 +73,7 @@ export const localJourneyStore: JourneyStore<string> = {
     // stretches' geometry, come from the server
     const [found, partials] = await Promise.all([
       getRoutesByIds(parts.map((part) => part.track_id)),
-      ranges.length > 0 ? getCoveredStretchesFor(ranges) : [],
+      getCoveredStretchesFor(ranges),
     ]);
     const routes = new Map(found.map((r) => [r.track_id, r]));
     return {

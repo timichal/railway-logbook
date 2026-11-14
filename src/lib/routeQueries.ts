@@ -5,7 +5,7 @@
  * tiles — so unlike `progressQueries.ts` these are not withheld for privacy.
  * They live in a plain module for the other reason: a route handler must not
  * import a "use server" action (see MOBILE_APP_PLAN.md, Phase 1), so the query
- * is here and `userActions.ts` is one of its callers.
+ * is here and the `api/public` handlers are among its callers.
  */
 
 import { boundsSql } from "./coordinateUtils";
@@ -226,10 +226,11 @@ export async function lineGeometryByName(name: string, region: RegionId): Promis
 }
 
 /**
- * Everything the map's search box offers for a query, in one call: a server action
- * is dispatched one at a time per client, so two actions per keystroke would run
- * back to back. Lines only where the region names them (see searchLinesByName), and
- * a failed line search costs only the lines — the stations are what the box is for.
+ * Everything the map's search box offers for a query, in one call: one request
+ * per keystroke, and the admin's search is a server action, which Next dispatches
+ * one at a time per client, so two per keystroke would run back to back. Lines
+ * only where the region names them (see searchLinesByName), and a failed line
+ * search costs only the lines — the stations are what the box is for.
  */
 export async function searchMapByName(
   searchQuery: string,

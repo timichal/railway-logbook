@@ -1,5 +1,6 @@
 import type * as maplibregl from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getLineGeometry } from "@/lib/publicReads";
 import type { UsageType } from "@/lib/shared/constants";
 import {
   createLineSearchHighlightLayer,
@@ -13,7 +14,6 @@ import { REGULAR_ROUTE_LAYER_ID, usageTypeFilter } from "@/lib/shared/map/layers
 import type { RegionId } from "@/lib/shared/regions";
 import type { LineGeometry, LineSearchResult } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
-import { getLineGeometry } from "@/lib/userActions";
 
 /**
  * What the band is doing, for the chip: its geometry still on the way, drawn, every

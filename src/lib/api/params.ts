@@ -5,6 +5,7 @@
  */
 
 import type { LoggedRange } from "../journeyQueries";
+import { MAX_PG_INT } from "../progressQueries";
 import { normalizeCountryCodes } from "../shared/constants";
 import { isRegionId, type RegionId } from "../shared/regions";
 import type { CoveredRange } from "../shared/types";
@@ -180,6 +181,32 @@ export function requireIntArray(body: JsonBody, key: string): number[] {
     }
     return item as number;
   });
+}
+
+/**
+ * The route ids of a public read: any array, keeping only what can be a track id,
+ * uncapped (the query takes them as one array parameter). A malformed entry is
+ * dropped rather than refused, so one bad id in a local journey costs only that
+ * route, which then shows as no longer on the map.
+ */
+export function trackIdList(body: JsonBody, key: string): number[] {
+  const value = body[key];
+  if (!Array.isArray(value)) {
+    throw new ApiError(400, `${key} must be an array`);
+  }
+  return value.filter((id): id is number => Number.isInteger(id) && id > 0 && id <= MAX_PG_INT);
+}
+
+/**
+ * Any array, uncapped and unchecked: for a caller that validates and caps the
+ * entries itself (`normalizeCoveredRanges`).
+ */
+export function requireUncheckedArray(body: JsonBody, key: string): unknown[] {
+  const value = body[key];
+  if (!Array.isArray(value)) {
+    throw new ApiError(400, `${key} must be an array`);
+  }
+  return value;
 }
 
 export function requireStringArray(body: JsonBody, key: string): string[] {

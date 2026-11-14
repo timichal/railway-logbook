@@ -11,6 +11,7 @@ import {
   getPublicProgress,
   getPublicProgressByCountry,
 } from "./publicMapActions";
+import { getCoveredStretchesFor } from "./publicReads";
 import { fetchCoveredStretches, fetchProgress, fetchProgressByCountry } from "./sessionReads";
 import type { UsageType } from "./shared/constants";
 import {
@@ -22,7 +23,7 @@ import {
 import { countedUsageTypes, isOrdinaryUsage, REGIONS, type RegionId } from "./shared/regions";
 import { isRouteFullyRidden } from "./shared/routeCoverage";
 import type { CoveredRange, CoveredStretch, LocalLoggedPart, RouteSummary } from "./shared/types";
-import { getCoveredStretchesFor, getRouteSummaries } from "./userActions";
+import { getRouteSummaries } from "./userActions";
 import { updateUserPreferences as dbUpdateUserPreferences } from "./userPreferencesActions";
 
 /** How one route reads on the map for a localStorage user (see getLocalRouteStatuses). */
@@ -219,7 +220,6 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
         });
       }
 
-      if (ranges.length === 0) return [];
       return await getCoveredStretchesFor(ranges);
     },
 

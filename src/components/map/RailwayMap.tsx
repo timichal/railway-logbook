@@ -17,6 +17,7 @@ import { useLocalRouteFeatureStates } from "@/lib/map/hooks/useLocalRouteFeature
 import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
 import { useUserMap } from "@/lib/map/hooks/useUserMap";
 import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
+import { getRoutesBounds } from "@/lib/publicReads";
 import { useRegion } from "@/lib/regionContext";
 import { NEW_JOURNEY_FORM_ID } from "@/lib/selectedRoutes";
 import type {
@@ -30,7 +31,6 @@ import type {
 } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import { scrollInContainer } from "@/lib/ui/scrollInContainer";
-import { getRoutesBounds } from "@/lib/userActions";
 
 /** One highlight set: whole routes by id, plus the stretches of those covered only in part. */
 interface HighlightSet {

@@ -1,8 +1,8 @@
 /**
  * Response and error plumbing for the route handlers that answer JSON: the HTTP
  * API under `src/app/api/v1` (the native app, MOBILE_APP_PLAN.md, Phase 1) and
- * the web session's reads under `src/app/api/me`, whose `{ error }` bodies
- * `sessionReads.ts` turns back into `ActionError`s. Every
+ * the web page's reads under `src/app/api/me` and `src/app/api/public`, whose
+ * `{ error }` bodies `fetchJson.ts` turns back into `ActionError`s. Every
  * handler is wrapped in `apiHandler`, so a thrown `ApiError` becomes its status,
  * the query modules' own error classes (`errors.ts`) theirs, and anything else
  * becomes a 500 with the detail logged rather than returned —

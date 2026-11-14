@@ -1,11 +1,11 @@
 "use client";
 
 import IconButton from "@/components/ui/IconButton";
+import { searchStations } from "@/lib/publicReads";
 import { useRegionId } from "@/lib/regionContext";
 import type { Station } from "@/lib/shared/types";
 import { optionRow } from "@/lib/ui/buttonStyles";
 import { useSearchCombobox } from "@/lib/ui/useSearchCombobox";
-import { searchStations } from "@/lib/userActions";
 
 interface StationSearchInputProps {
   /** Optional id for the input; one is generated otherwise. */

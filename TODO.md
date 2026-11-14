@@ -6,8 +6,7 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Move the remaining read-only calls off server actions.** Next runs a client's server actions one at a time. The signed-in page's own loads are done (`api/me`, `sessionReads.ts`, see "Two transports" in the root CLAUDE.md). Still actions, and still queued behind a slow `findRoutePathBetweenStations`:
-  - The public reads in `userActions.ts`: `searchStations` and `searchMap` (typed while a planner search runs), `getLineGeometry`, `getRoutesBounds`, `getRoutesByIds`, `getRegionTrackIds`. They need no session, so plain public GET handlers. `getRouteSummaries` belongs to the next item.
+- **Move the remaining read-only calls off server actions.** Next runs a client's server actions one at a time. The signed-in page's own loads are done (`api/me`, `sessionReads.ts`), and so are the public route and station reads (`api/public`, `publicReads.ts`; see "Two transports" in the root CLAUDE.md). Still actions, and still queued behind a slow `findRoutePathBetweenStations`:
   - The shared map's `publicMapActions.ts` reads (progress, by country, stretches): GET handlers that re-resolve the token on every call, as the actions do.
   - The admin page's load-time reads (it queues four or more): `api/me`-style handlers that check the admin (user 1) on every call, as `asAdmin` does.
   - My Trips' list and trip/journey loads (`tripActions`, `journeyActions`) where they run beside other reads.
