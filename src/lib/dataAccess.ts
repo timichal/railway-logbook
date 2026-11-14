@@ -6,11 +6,6 @@
  */
 
 import * as localStore from "./localStorage";
-import {
-  getPublicCoveredStretches,
-  getPublicProgress,
-  getPublicProgressByCountry,
-} from "./publicMapActions";
 import { getCoveredStretchesFor } from "./publicReads";
 import { fetchCoveredStretches, fetchProgress, fetchProgressByCountry } from "./sessionReads";
 import type { UsageType } from "./shared/constants";
@@ -23,6 +18,11 @@ import {
 import { countedUsageTypes, isOrdinaryUsage, REGIONS, type RegionId } from "./shared/regions";
 import { isRouteFullyRidden } from "./shared/routeCoverage";
 import type { CoveredRange, CoveredStretch, LocalLoggedPart, RouteSummary } from "./shared/types";
+import {
+  fetchSharedCoveredStretches,
+  fetchSharedProgress,
+  fetchSharedProgressByCountry,
+} from "./sharedMapReads";
 import { getRouteSummaries } from "./userActions";
 import { updateUserPreferences as dbUpdateUserPreferences } from "./userPreferencesActions";
 
@@ -257,9 +257,9 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 export function createPublicDataAccess(token: string, region: RegionId): DataAccess {
   return {
     getUserProgress: (selectedCountries, shownUsageTypes) =>
-      getPublicProgress(token, region, selectedCountries, shownUsageTypes),
-    getProgressByCountry: () => getPublicProgressByCountry(token, region),
-    getCoveredStretches: () => getPublicCoveredStretches(token, region),
+      fetchSharedProgress(token, region, selectedCountries, shownUsageTypes),
+    getProgressByCountry: () => fetchSharedProgressByCountry(token, region),
+    getCoveredStretches: () => fetchSharedCoveredStretches(token, region),
     // The route tile is asked for the owner's status, and a visitor has no
     // local log of their own to overlay on it
     getLocalRouteStatuses: async () => [],

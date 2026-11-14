@@ -11,25 +11,19 @@
  * The token and the switch are deliberately separate. The token is minted once
  * and kept, so a link already copied or bookmarked keeps working across
  * enable/disable cycles; the switch is the only thing that grants access, and
- * every read below goes through `publicMapOwner` (`publicMapQueries.ts`),
- * which joins on `public_map_enabled = TRUE`. Turning sharing off
- * therefore breaks the link immediately without invalidating it.
+ * every read of a shared map goes through `publicMapOwner`
+ * (`publicMapQueries.ts`), which joins on `public_map_enabled = TRUE`. Turning
+ * sharing off therefore breaks the link immediately without invalidating it.
+ *
+ * Only the owner's settings are actions here. The shared map's reads are route
+ * handlers under `api/shared/<token>`: Next runs a client's actions one at a
+ * time, so as actions they queued behind each other.
  */
 
 import { randomBytes } from "node:crypto";
 import { getUser } from "./authActions";
 import pool from "./db";
-import {
-  coveredStretchesForUser,
-  progressByCountryForUser,
-  progressForUser,
-} from "./progressQueries";
-import { publicMapOwner } from "./publicMapQueries";
-import { assertRegionId } from "./regionArgument";
 import { SUPPORTED_COUNTRIES } from "./shared/constants";
-import { EMPTY_PROGRESS, type ProgressByCountry, type UserProgress } from "./shared/progress";
-import type { RegionId } from "./shared/regions";
-import type { CoveredStretch } from "./shared/types";
 
 interface PublicMapSettings {
   enabled: boolean;
@@ -88,50 +82,4 @@ export async function setPublicMapEnabled(enabled: boolean): Promise<PublicMapSe
   );
 
   return { ...settings, enabled };
-}
-
-/**
- * Progress figures for a shared map. Empty-ish zeros if the link is dead.
- *
- * The token is resolved in its own query, as in the two reads below. Folding
- * `sharedMapOwnerIdSql` into the progress query was measured (2026-11-14) to cost
- * the query about what the lookup costs, so it saves nothing.
- */
-export async function getPublicProgress(
-  token: string,
-  region: RegionId,
-  selectedCountries?: string[],
-  shownUsageTypes?: number[],
-): Promise<UserProgress> {
-  assertRegionId(region);
-  const owner = await publicMapOwner(token);
-  if (!owner) return EMPTY_PROGRESS;
-
-  return progressForUser(owner.userId, region, selectedCountries, shownUsageTypes);
-}
-
-/** Per-country progress for a shared map. */
-export async function getPublicProgressByCountry(
-  token: string,
-  region: RegionId,
-): Promise<ProgressByCountry> {
-  assertRegionId(region);
-  const owner = await publicMapOwner(token);
-  if (!owner) {
-    return { byCountry: [], byUsage: [], total: { totalKm: 0, completedKm: 0 } };
-  }
-
-  return progressByCountryForUser(owner.userId, region);
-}
-
-/** Ridden stretches of unfinished routes, for the shared map's overlay. */
-export async function getPublicCoveredStretches(
-  token: string,
-  region: RegionId,
-): Promise<CoveredStretch[]> {
-  assertRegionId(region);
-  const owner = await publicMapOwner(token);
-  if (!owner) return [];
-
-  return coveredStretchesForUser(owner.userId, region);
 }

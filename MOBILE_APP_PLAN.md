@@ -330,7 +330,7 @@ lives in `src/lib/shared/`, the only part of the web app `@shared/*` reaches:
 **The entire data layer was server actions, and React Native cannot call them.**
 Phase 1 fixed that: every user-scoped query now lives in a plain module taking a
 `userId`, and three callers resolve _which_ user — a server action from the
-cookie, `publicMapActions` from a share token, a route handler from a bearer
+cookie, an `api/shared` route handler from a share token, a route handler from a bearer
 token. `API.md` is the endpoint reference; the web app is unchanged.
 
 ### Tiles are already fine

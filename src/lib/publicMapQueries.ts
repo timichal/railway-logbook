@@ -1,15 +1,27 @@
 /**
- * Resolving a share token to the map's owner.
+ * Resolving a share token to the map's owner, and the shared map's reads.
  *
  * A plain server-only module rather than part of `publicMapActions.ts`, for two
- * reasons. The route tile handler (`src/app/api/tiles`) needs it, and a route
- * handler never imports a "use server" module. And every export of one is a
- * client-callable endpoint: exported from there, this would hand any holder of
- * a link the owner's user id and country filter as a remote call of its own,
- * where the shared page only ever needed it server-side.
+ * reasons. The route handlers need it (the route tile and the `api/shared`
+ * reads), and a route handler never imports a "use server" module. And every
+ * export of one is a client-callable endpoint: exported from there,
+ * `publicMapOwner` would hand any holder of a link the owner's user id and
+ * country filter as a remote call of its own, where the shared page only ever
+ * needed it server-side.
+ *
+ * The reads at the bottom resolve the token on every call, so a link switched
+ * off mid-visit stops answering at once.
  */
-
 import pool from "./db";
+import { NotFoundError } from "./errors";
+import {
+  coveredStretchesForUser,
+  progressByCountryForUser,
+  progressForUser,
+} from "./progressQueries";
+import type { ProgressByCountry, UserProgress } from "./shared/progress";
+import type { RegionId } from "./shared/regions";
+import type { CoveredStretch } from "./shared/types";
 
 /** The owner of a shared map, as resolved from a token. */
 interface PublicMapOwner {
@@ -68,4 +80,60 @@ export async function publicMapOwner(token: string): Promise<PublicMapOwner | nu
     displayName: row.name || row.email.split("@")[0],
     selectedCountries: row.selected_countries,
   };
+}
+
+/** A shared map's refusal once its link is dead. */
+const SHARED_MAP_GONE_MESSAGE = "This map is no longer shared.";
+
+/**
+ * The id of a shared map's owner, for the reads below: one indexed lookup, none
+ * of `publicMapOwner`'s join. A dead link (unknown token, or sharing switched
+ * off, perhaps since the page loaded) is a `NotFoundError`, never an empty
+ * answer: as with the route tile, zeros would pass for a map with nothing
+ * ridden, where the visitor should see that the map stopped answering.
+ *
+ * The token is resolved in its own query. Folding `sharedMapOwnerIdSql` into the
+ * progress query was measured (2026-11-14) to cost the query about what the
+ * lookup costs, so it saves nothing.
+ */
+async function sharedMapOwnerId(token: string): Promise<number> {
+  const result = isPlausibleShareToken(token)
+    ? await pool.query<{ user_id: number | null }>(
+        `SELECT ${sharedMapOwnerIdSql("$1")} AS user_id`,
+        [token],
+      )
+    : null;
+
+  const userId = result?.rows[0]?.user_id ?? null;
+  if (userId === null) throw new NotFoundError(SHARED_MAP_GONE_MESSAGE);
+  return userId;
+}
+
+/** Progress figures for a shared map. */
+export async function sharedMapProgress(
+  token: string,
+  region: RegionId,
+  selectedCountries?: string[],
+  shownUsageTypes?: number[],
+): Promise<UserProgress> {
+  const ownerId = await sharedMapOwnerId(token);
+  return progressForUser(ownerId, region, selectedCountries, shownUsageTypes);
+}
+
+/** Per-country progress for a shared map. */
+export async function sharedMapProgressByCountry(
+  token: string,
+  region: RegionId,
+): Promise<ProgressByCountry> {
+  const ownerId = await sharedMapOwnerId(token);
+  return progressByCountryForUser(ownerId, region);
+}
+
+/** Ridden stretches of unfinished routes, for the shared map's overlay. */
+export async function sharedMapCoveredStretches(
+  token: string,
+  region: RegionId,
+): Promise<CoveredStretch[]> {
+  const ownerId = await sharedMapOwnerId(token);
+  return coveredStretchesForUser(ownerId, region);
 }

@@ -14,7 +14,7 @@ import { cookies } from "next/headers";
 import { COOKIE_NAME, readToken, type TokenClaims, type User } from "../authTokens";
 import { SIGNED_OUT_MESSAGE } from "../errors";
 import { verifyToken } from "../sessionQueries";
-import { ApiError } from "./response";
+import { ApiError, noStoreJson } from "./response";
 
 async function sessionToken(): Promise<string | undefined> {
   return (await cookies()).get(COOKIE_NAME)?.value;
@@ -49,5 +49,5 @@ export async function requireSessionUser(): Promise<User> {
  * wants it fresh.
  */
 export function sessionJson(data: unknown): Response {
-  return Response.json(data, { headers: { "Cache-Control": "private, no-store" } });
+  return noStoreJson(data);
 }

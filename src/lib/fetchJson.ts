@@ -1,8 +1,8 @@
 /**
- * The web page's side of its own route handlers (`api/me`, `api/public`): a JSON
- * answer, or the `{ error }` body `apiHandler` writes thrown as an `ActionError`,
- * so call sites read a refusal exactly as they read an `unwrap`ped action
- * (`actionErrorMessage`; `notFound` on a 404).
+ * The web page's side of its own route handlers (`api/me`, `api/public`,
+ * `api/shared`): a JSON answer, or the `{ error }` body `apiHandler` writes
+ * thrown as an `ActionError`, so call sites read a refusal exactly as they read
+ * an `unwrap`ped action (`actionErrorMessage`; `notFound` on a 404).
  */
 
 import { ActionError } from "./actionResult";
@@ -31,6 +31,12 @@ export function queryString(params: Record<string, string | undefined>): string 
   }
   return query.toString();
 }
+
+/**
+ * A list parameter keeping its three states: undefined (no filter) leaves it out,
+ * [] (filter out everything) sends it empty.
+ */
+export const listParam = (values: readonly (string | number)[] | undefined) => values?.join(",");
 
 /** A JSON POST: for a read whose argument is a list too long for a query string. */
 export function postJson<T>(url: string, body: unknown): Promise<T> {

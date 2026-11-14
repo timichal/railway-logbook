@@ -1,13 +1,13 @@
 /**
  * Response and error plumbing for the route handlers that answer JSON: the HTTP
  * API under `src/app/api/v1` (the native app, MOBILE_APP_PLAN.md, Phase 1) and
- * the web page's reads under `src/app/api/me` and `src/app/api/public`, whose
- * `{ error }` bodies `fetchJson.ts` turns back into `ActionError`s. Every
- * handler is wrapped in `apiHandler`, so a thrown `ApiError` becomes its status,
- * the query modules' own error classes (`errors.ts`) theirs, and anything else
- * becomes a 500 with the detail logged rather than returned —
- * the query modules' messages are written for a user, an unexpected exception's
- * is not.
+ * the web page's reads under `src/app/api/me`, `src/app/api/public` and
+ * `src/app/api/shared`, whose `{ error }` bodies `fetchJson.ts` turns back into
+ * `ActionError`s. Every handler is wrapped in `apiHandler`, so a thrown
+ * `ApiError` becomes its status, the query modules' own error classes
+ * (`errors.ts`) theirs, and anything else becomes a 500 with the detail logged
+ * rather than returned — the query modules' messages are written for a user, an
+ * unexpected exception's is not.
  */
 
 import { NotFoundError, RateLimitError, ValidationError } from "../errors";
@@ -25,6 +25,14 @@ export class ApiError extends Error {
 
 export function jsonResponse(data: unknown, status = 200): Response {
   return Response.json(data, { status });
+}
+
+/**
+ * JSON that no cache may keep (`private, no-store`): an answer that depends on
+ * who asks, or on a share link that may be switched off at any moment.
+ */
+export function noStoreJson(data: unknown): Response {
+  return Response.json(data, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 function errorResponse(status: number, message: string, headers?: HeadersInit): Response {

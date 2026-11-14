@@ -5,8 +5,8 @@
  * export of a "use server" file becomes a client-callable endpoint, and these
  * take the user id as an argument — exposed, anyone could ask for anyone's
  * numbers. The session's wrappers are the `api/me` handlers, and the
- * token-checked ones for a shared public map in `publicMapActions.ts`; both
- * resolve *which* user first and then come here.
+ * token-checked ones for a shared public map the `api/shared` handlers (through
+ * `publicMapQueries.ts`); both resolve *which* user first and then come here.
  */
 
 import pool from "./db";

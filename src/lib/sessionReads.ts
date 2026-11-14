@@ -7,7 +7,7 @@
  * A refusal is thrown as an `ActionError` (`fetchJson.ts`).
  */
 
-import { fetchJson, queryString } from "./fetchJson";
+import { fetchJson, listParam, queryString } from "./fetchJson";
 import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type { CoveredStretch } from "./shared/types";
@@ -16,12 +16,6 @@ import type { TripName } from "./tripQueries";
 function getMine<T>(path: string, params: Record<string, string | undefined>): Promise<T> {
   return fetchJson<T>(`/api/me/${path}?${queryString(params)}`, { cache: "no-store" });
 }
-
-/**
- * A list parameter keeping its three states: undefined (no filter) leaves it out,
- * [] (filter out everything) sends it empty.
- */
-const listParam = (values: readonly (string | number)[] | undefined) => values?.join(",");
 
 export function fetchProgress(
   region: RegionId,
