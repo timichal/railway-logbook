@@ -6,7 +6,12 @@
  */
 
 import * as localStore from "./localStorage";
-import { getCoveredStretchesFor } from "./publicReads";
+import {
+  getCoveredStretchesFor,
+  getNetworkProgress,
+  getNetworkProgressByCountry,
+  getRouteSummaries,
+} from "./publicReads";
 import { fetchCoveredStretches, fetchProgress, fetchProgressByCountry } from "./sessionReads";
 import type { UsageType } from "./shared/constants";
 import {
@@ -23,7 +28,6 @@ import {
   fetchSharedProgress,
   fetchSharedProgressByCountry,
 } from "./sharedMapReads";
-import { getRouteSummaries } from "./userActions";
 import { updateUserPreferences as dbUpdateUserPreferences } from "./userPreferencesActions";
 
 /** How one route reads on the map for a localStorage user (see getLocalRouteStatuses). */
@@ -90,11 +94,13 @@ function createDatabaseDataAccess(region: RegionId): DataAccess {
 }
 
 function createLocalStorageDataAccess(region: RegionId): DataAccess {
-  // This region's routes (used for progress calculation). The promise is what is
-  // cached, not its result: progress, the map colouring and the ridden stretches
-  // all ask on mount, and caching the result let each of them start a fetch of
-  // its own before the first one landed. A failure is forgotten so the next
-  // caller retries.
+  // This region's routes (used for progress calculation), asked for only once the
+  // local log holds a ride: with an empty log, progress is the network's totals
+  // (`getNetworkProgress`) and there is nothing to colour or draw. The promise is
+  // what is cached, not its result: progress, the map colouring and the ridden
+  // stretches all ask on mount, and caching the result let each of them start a
+  // fetch of its own before the first one landed. A failure is forgotten so the
+  // next caller retries.
   let routesPromise: Promise<RouteSummary[]> | null = null;
 
   const ensureRoutes = (): Promise<RouteSummary[]> => {
@@ -111,9 +117,9 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
    * of the same rule is the SQL function `user_fully_ridden_routes`). Route lengths
    * come from the route list, since the tolerance is in kilometres.
    */
-  const fullyRiddenTrackIds = (routes: RouteSummary[]): Set<number> => {
+  const fullyRiddenTrackIds = (routes: RouteSummary[], logged: LocalLoggedPart[]): Set<number> => {
     const partsByTrack = new Map<number, LocalLoggedPart[]>();
-    for (const part of localStore.getLoggedParts()) {
+    for (const part of logged) {
       const parts = partsByTrack.get(part.track_id);
       if (parts) {
         parts.push(part);
@@ -135,6 +141,10 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 
   return {
     async getUserProgress(selectedCountries, shownUsageTypes): Promise<UserProgress> {
+      const logged = localStore.getLoggedParts();
+      if (logged.length === 0) {
+        return getNetworkProgress(region, selectedCountries, shownUsageTypes);
+      }
       const allRoutes = await ensureRoutes();
 
       // Only the usage types the region counts as ordinary service (Regular, plus
@@ -156,7 +166,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
               selectedCountries.includes(route.end_country))),
       );
 
-      const completedIds = fullyRiddenTrackIds(allRoutes);
+      const completedIds = fullyRiddenTrackIds(allRoutes, logged);
       const completed = routes.filter((route) => completedIds.has(route.track_id));
 
       return toUserProgress({
@@ -168,8 +178,10 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
     },
 
     async getProgressByCountry(): Promise<ProgressByCountry> {
+      const logged = localStore.getLoggedParts();
+      if (logged.length === 0) return getNetworkProgressByCountry(region);
       const allRoutes = await ensureRoutes();
-      const completedIds = fullyRiddenTrackIds(allRoutes);
+      const completedIds = fullyRiddenTrackIds(allRoutes, logged);
       // The routes the region counts as ordinary service, as progressByCountryForUser
       // (open ones only)
       const counted = allRoutes.filter(
@@ -204,31 +216,32 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
     async getCoveredStretches(): Promise<CoveredStretch[]> {
       // Same shape as the database query in getCoveredStretches: partial rides
       // with a known stretch, on routes that aren't ridden whole (a route whose
-      // stretches add up to all of it draws in the visited colour already)
-      const parts = localStore.getLoggedParts();
-      const completed = fullyRiddenTrackIds(await ensureRoutes());
-
+      // stretches add up to all of it draws in the visited colour already). The
+      // route list is asked for only where there is a stretch to check.
+      const logged = localStore.getLoggedParts();
       const ranges: CoveredRange[] = [];
-      for (const part of parts) {
+      for (const part of logged) {
         if (!part.partial) continue;
         if (part.covered_start == null || part.covered_end == null) continue;
-        if (completed.has(part.track_id)) continue;
         ranges.push({
           track_id: part.track_id,
           covered_start: part.covered_start,
           covered_end: part.covered_end,
         });
       }
+      if (ranges.length === 0) return [];
 
-      return await getCoveredStretchesFor(ranges);
+      const completed = fullyRiddenTrackIds(await ensureRoutes(), logged);
+      return await getCoveredStretchesFor(ranges.filter((range) => !completed.has(range.track_id)));
     },
 
     async getLocalRouteStatuses(): Promise<LocalRouteStatus[]> {
+      const logged = localStore.getLoggedParts();
+      if (logged.length === 0) return [];
       const routes = await ensureRoutes();
-      const complete = fullyRiddenTrackIds(routes);
+      const complete = fullyRiddenTrackIds(routes, logged);
       const closed = new Set(routes.filter((route) => route.closed).map((r) => r.track_id));
-      const logged = new Set(localStore.getLoggedParts().map((part) => part.track_id));
-      return Array.from(logged, (trackId) => ({
+      return Array.from(new Set(logged.map((part) => part.track_id)), (trackId) => ({
         track_id: trackId,
         complete: complete.has(trackId),
         closed: closed.has(trackId),

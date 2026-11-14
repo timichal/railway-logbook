@@ -39,8 +39,14 @@ import type { CoveredRange, CoveredStretch } from "./shared/types";
  */
 const FULLY_RIDDEN_TRACK_IDS = "SELECT track_id FROM user_fully_ridden_routes($1)";
 
-export async function progressForUser(
-  userId: number,
+/**
+ * The user's km and route counts (`progressForUser`), or with a null user, who has
+ * ridden nothing, the network's totals alone (`networkProgress`). Private, so a
+ * caller holding a user id that may be null can't reach the second by mistake
+ * and show a user 0% ridden.
+ */
+async function progressFor(
+  userId: number | null,
   region: RegionId,
   selectedCountries?: string[],
   /**
@@ -103,13 +109,35 @@ export async function progressForUser(
   return toUserProgress({ totalKm, completedKm, totalRoutes, completedRoutes });
 }
 
+export function progressForUser(
+  userId: number,
+  region: RegionId,
+  selectedCountries?: string[],
+  shownUsageTypes?: readonly unknown[],
+): Promise<UserProgress> {
+  return progressFor(userId, region, selectedCountries, shownUsageTypes);
+}
+
+/**
+ * The network's km and route counts with nothing ridden: a logged-out visitor's
+ * progress box while their local log is empty (`api/public/progress`).
+ */
+export function networkProgress(
+  region: RegionId,
+  selectedCountries?: string[],
+  shownUsageTypes?: readonly unknown[],
+): Promise<UserProgress> {
+  return progressFor(null, region, selectedCountries, shownUsageTypes);
+}
+
 /**
  * Get progress statistics broken down by country and by usage type
  * Returns stats for each country (routes starting AND ending in that country),
- * for each usage type the region counts, plus the overall total
+ * for each usage type the region counts, plus the overall total. A null user is
+ * the network's totals alone, as in progressFor.
  */
-export async function progressByCountryForUser(
-  userId: number,
+async function progressByCountryFor(
+  userId: number | null,
   region: RegionId,
 ): Promise<ProgressByCountry> {
   // One pass over the routes the region counts as ordinary service, aggregated
@@ -197,6 +225,18 @@ export async function progressByCountryForUser(
       completedKm: round1(overallCompletedKm),
     },
   };
+}
+
+export function progressByCountryForUser(
+  userId: number,
+  region: RegionId,
+): Promise<ProgressByCountry> {
+  return progressByCountryFor(userId, region);
+}
+
+/** As networkProgress, per country and usage type (Map & Stats). */
+export function networkProgressByCountry(region: RegionId): Promise<ProgressByCountry> {
+  return progressByCountryFor(null, region);
 }
 
 /**

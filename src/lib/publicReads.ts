@@ -6,7 +6,8 @@
  * (`fetchJson.ts`).
  */
 
-import { fetchJson, postJson, queryString } from "./fetchJson";
+import { fetchJson, listParam, postJson, queryString } from "./fetchJson";
+import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type {
   CoveredRange,
@@ -15,10 +16,11 @@ import type {
   MapSearchResults,
   RailwayRoute,
   RouteBounds,
+  RouteSummary,
   Station,
 } from "./shared/types";
 
-const getPublic = <T>(path: string, params: Record<string, string>): Promise<T> =>
+const getPublic = <T>(path: string, params: Record<string, string | undefined>): Promise<T> =>
   fetchJson<T>(`/api/public/${path}?${queryString(params)}`);
 
 /** Station name search for the Journey Planner's station fields. */
@@ -34,6 +36,36 @@ export function searchMap(q: string, region: RegionId): Promise<MapSearchResults
 /** A line picked in the map search box, as the geometry its highlight is drawn from. */
 export function getLineGeometry(name: string, region: RegionId): Promise<LineGeometry[]> {
   return getPublic("line-geometry", { name, region });
+}
+
+/**
+ * Every route in a region without geometry, for a logged-out visitor's progress
+ * and colouring. The browser keeps it between loads (`routesCachedJson`).
+ */
+export function getRouteSummaries(region: RegionId): Promise<RouteSummary[]> {
+  return getPublic("route-summaries", { region });
+}
+
+/**
+ * The network's totals with nothing ridden, for a logged-out visitor with an
+ * empty local log, who then needn't load the route summaries. `selectedCountries`
+ * and `shownUsageTypes` keep their three states, as `fetchProgress`.
+ */
+export function getNetworkProgress(
+  region: RegionId,
+  selectedCountries?: string[],
+  shownUsageTypes?: readonly number[],
+): Promise<UserProgress> {
+  return getPublic("progress", {
+    region,
+    countries: listParam(selectedCountries),
+    usage: listParam(shownUsageTypes),
+  });
+}
+
+/** As getNetworkProgress, per country and usage type (Map & Stats). */
+export function getNetworkProgressByCountry(region: RegionId): Promise<ProgressByCountry> {
+  return getPublic("progress/by-country", { region });
 }
 
 /** The track ids of every route in a region. */

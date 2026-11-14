@@ -117,8 +117,9 @@ export type RailwayRoute = {
 /**
  * What a logged-out visitor's progress and map colouring need of a route, and no
  * more: the full route list with geometry runs to tens of megabytes. Served by
- * `routeSummariesInRegion` (`getRouteSummaries` on the web). `closed` because a
- * closed route is left out of progress but still coloured where ridden.
+ * `routeSummariesInRegion` (`GET /api/public/route-summaries` on the web).
+ * `closed` because a closed route is left out of progress but still coloured
+ * where ridden.
  */
 export type RouteSummary = Pick<
   RailwayRoute,

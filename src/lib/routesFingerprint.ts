@@ -1,6 +1,7 @@
 /**
  * "Have the routes changed": what an in-memory cache of anything read from
- * `railway_routes` is keyed on (the planner's route network, the route details).
+ * `railway_routes` is keyed on (the planner's route network, and the public
+ * answers `routesCachedJson` keeps: route details, summaries, track ids).
  */
 
 import pool from "./db";

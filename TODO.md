@@ -6,11 +6,7 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Cache the route summaries for anonymous visitors.** `dataAccess.ts` calls `getRouteSummaries(region)` on mount: Europe is 5,956 rows, about 722KB of JSON, identical for everyone. It is a POST server action, so nothing caches it. Progress, colouring and stretches all wait on it, even with an empty local log.
-  - Serve it from a public GET handler with an ETag, from the planner's network fingerprint or a routes-version counter (see the next item), plus `stale-while-revalidate`. `trackIdsInRegion` can go the same way.
-  - With an empty local log, skip it: ask for the totals alone, and skip the coverage and status work.
-  - The handler must stay user-independent.
-- **Routes-version counter.** Several items here want a cheap "have the routes changed" value: the summaries ETag, a tile URL version, the planner cache. Today `routesFingerprint` (`src/lib/routesFingerprint.ts`, used by the planner cache and the `/api/route-details` ETag) runs `sum(xmin)`, which scans the 32MB `railway_routes` heap (~5–7ms). Swap its body for the counter.
+- **Routes-version counter.** Several items here want a cheap "have the routes changed" value: a tile URL version, the planner cache. Today `routesFingerprint` (`src/lib/routesFingerprint.ts`, used by the planner cache and `routesCachedJson`, which keeps `/api/route-details`, the route summaries and the track ids and asks it on every request) runs `sum(xmin)`, which scans the 32MB `railway_routes` heap (~5–7ms). Swap its body for the counter.
   - Add a one-row table bumped by a statement-level trigger on `railway_routes` (and `scenic_lines`, `admin_notes` if the tiles use it). Put it in `02-vector-tiles.sql` idempotently, or in a migration.
 - **Cache session route tiles in the browser.** `mvtResponse` (`src/lib/api/tiles.ts`) sends `private, no-store`, so panning back over an evicted area re-runs the per-user tile query. The URL's `v` is set once per page load (`useUserMap.ts`, `routesCacheBusterRef.current ??= Date.now()`) and bumped by `useSourceTileRefresh` on every refresh.
   - Before switching session tiles (`rides: "session"`) to `private, max-age=3600`, confirm that `v` changes on login, logout, a journey logged, a country change and a region switch.

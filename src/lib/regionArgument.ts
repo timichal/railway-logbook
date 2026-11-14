@@ -8,11 +8,10 @@ import { isRegionId, type RegionId } from "./shared/regions";
  * error) rather than a refusal. Nothing is interpolated from the string, so this
  * is about the error, not a leak. Every server action taking a region calls it
  * first, inside `asUser` / `asAdmin` where it has one, so the refusal comes back
- * as `{ error }`. An action without a wrapper (`getRouteSummaries` in
- * `userActions`) throws, and a production build
- * masks a thrown message, so there the client still sees a generic error; what
- * the check buys is that nothing runs first. The HTTP API checks the same in
- * `requireRegion`.
+ * as `{ error }`. An action without a wrapper would throw, and a production
+ * build masks a thrown message, so there the client would still see a generic
+ * error; what the check buys is that nothing runs first. The HTTP API checks the
+ * same in `requireRegion`.
  */
 export function assertRegionId(region: unknown): asserts region is RegionId {
   if (!isRegionId(region)) {
