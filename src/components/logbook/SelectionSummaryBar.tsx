@@ -7,7 +7,9 @@ import { btn } from "@/lib/ui/buttonStyles";
 
 interface SelectionSummaryBarProps {
   routes: SelectedRoute[];
-  /** Brings the new-journey form into view; the sheet is raised here, first. */
+  /** The name of the saved journey being edited, whose routes these are; null for a new one. */
+  editing?: string | null;
+  /** Brings the journey form into view; the sheet is raised here, first. */
   onLog: () => void;
   /**
    * Why no journey can be created (the anonymous journey limit). Shown in place of
@@ -23,6 +25,7 @@ interface SelectionSummaryBarProps {
  */
 export default function SelectionSummaryBar({
   routes,
+  editing,
   onLog,
   blockedReason,
 }: SelectionSummaryBarProps) {
@@ -35,8 +38,8 @@ export default function SelectionSummaryBar({
           {routes.length} route{routes.length === 1 ? "" : "s"} ·{" "}
           {selectionLengthKm(routes).toFixed(1)} km
         </div>
-        <div className={`text-xs ${blockedReason ? "text-orange-700" : "text-gray-500"}`}>
-          {blockedReason ?? "Selected for a new journey"}
+        <div className={`text-xs truncate ${blockedReason ? "text-orange-700" : "text-gray-500"}`}>
+          {blockedReason ?? (editing ? `Editing “${editing}”` : "Selected for a new journey")}
         </div>
       </div>
       {!blockedReason && (
@@ -48,7 +51,7 @@ export default function SelectionSummaryBar({
           }}
           className={`${btn("success", "lg")} flex-shrink-0`}
         >
-          Log journey
+          {editing ? "Review & save" : "Log journey"}
         </button>
       )}
     </div>

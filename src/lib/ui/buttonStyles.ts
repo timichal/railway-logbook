@@ -204,3 +204,16 @@ export function optionRow(active: boolean): string {
     active ? "bg-blue-50" : ""
   }`;
 }
+
+/**
+ * A pickable line of a card's content: one chain of stations of an open journey
+ * (`JourneyChainList`). Picked, it is the one the map shows on its own, in the
+ * orange the map draws it in.
+ */
+export function pickRow(picked: boolean): string {
+  return `w-full text-left rounded-md border px-2.5 py-2 transition-colors ${
+    picked
+      ? "bg-orange-50 border-orange-300"
+      : "bg-surface border-gray-200 hover:bg-gray-50 active:bg-gray-100"
+  }`;
+}

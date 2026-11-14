@@ -7,6 +7,7 @@ import RouteLogger, {
 import { useAsyncLoad } from "@/hooks/useAsyncLoad";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { createJourney } from "@/lib/journeyActions";
+import { databaseJourneyStore } from "@/lib/journeyStore";
 import { useRegionId } from "@/lib/regionContext";
 import type { TripName } from "@/lib/tripActions";
 import { getTripNames } from "@/lib/tripActions";
@@ -62,6 +63,12 @@ export default function JourneyLogger({
   );
 
   return (
-    <RouteLogger {...props} trips={availableTrips ?? NO_TRIPS} onCreate={createAccountJourney} />
+    <RouteLogger
+      {...props}
+      trips={availableTrips ?? NO_TRIPS}
+      onCreate={createAccountJourney}
+      onSaveEdit={(id, edits) => databaseJourneyStore.save(Number(id), edits)}
+      onDeleteEdit={(id) => databaseJourneyStore.remove(Number(id))}
+    />
   );
 }

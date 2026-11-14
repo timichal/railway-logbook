@@ -1,5 +1,3 @@
-import IconButton from "@/components/ui/IconButton";
-
 interface LoggedRouteRowProps {
   title: string;
   /** A second line under the title — the endpoints, where the title is a line name. */
@@ -16,54 +14,28 @@ interface LoggedRouteRowProps {
    * than as the whole line. Ignored unless `partial`.
    */
   covered?: { start?: number | null; end?: number | null };
-  /** Both handlers, or neither for a read-only row: the journey being looked at, not edited. */
-  onPartialChange?: (partial: boolean) => void;
-  onRemove?: () => void;
 }
 
-/** One route of a journey, in the account and the local journey lists alike. */
+/**
+ * One route of an open journey, in the account and the local journey lists alike.
+ * Read-only: a journey is edited in the Route Logger.
+ */
 export default function LoggedRouteRow({
   title,
   subtitle,
   lengthKm,
   partial,
   covered,
-  onPartialChange,
-  onRemove,
 }: LoggedRouteRowProps) {
-  const editable = onPartialChange !== undefined && onRemove !== undefined;
   return (
     <div className="p-2 bg-surface border border-gray-200 rounded text-xs">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-medium truncate" title={title}>
-            {title}
-          </div>
-          {subtitle && (
-            <div className="text-gray-500 truncate" title={subtitle}>
-              {subtitle}
-            </div>
-          )}
+      <div className="min-w-0">
+        <div className="font-medium truncate" title={title}>
+          {title}
         </div>
-        {editable && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <label className="flex items-center gap-1.5 select-none min-h-11 md:min-h-0 px-1 md:px-0">
-              <input
-                type="checkbox"
-                checked={partial}
-                onChange={(e) => onPartialChange(e.target.checked)}
-                className="w-4 h-4"
-              />
-              <span className="text-gray-500">partial</span>
-            </label>
-            <IconButton
-              icon="trash"
-              label="Remove route from journey"
-              title="Remove route from journey"
-              onClick={onRemove}
-              size="responsive"
-              tone="danger"
-            />
+        {subtitle && (
+          <div className="text-gray-500 truncate" title={subtitle}>
+            {subtitle}
           </div>
         )}
       </div>

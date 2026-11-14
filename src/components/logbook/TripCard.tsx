@@ -9,9 +9,9 @@ import { databaseJourneyStore } from "@/lib/journeyStore";
 import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly, formatDateOnlyRange } from "@/lib/shared/getUntimezonedDateStr";
-import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
+import type { HighlightRoutesFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { JourneyWithStats, TripName, TripWithStats } from "@/lib/tripActions";
+import type { JourneyWithStats, TripWithStats } from "@/lib/tripActions";
 import {
   assignJourneyToTrip,
   deleteTrip,
@@ -26,8 +26,6 @@ import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
 interface TripCardProps {
   trip: TripWithStats;
   initialJourneys: JourneyWithStats[];
-  /** Null while they load (see JourneyCard). */
-  availableTrips: TripName[] | null;
   // Parent enforces single-open across all top-level cards
   isOpen: boolean;
   onRequestOpen: () => void;
@@ -37,14 +35,12 @@ interface TripCardProps {
   // Forwarded to nested journey cards
   openNestedJourneyId: number | null;
   onNestedJourneyOpenChange: (journeyId: number | null) => void;
-  onJourneyEditStart?: JourneyEditStartFn;
-  onJourneyEditEnd?: () => void;
+  onEditJourney?: (journeyId: number) => void;
 }
 
 export default function TripCard({
   trip,
   initialJourneys,
-  availableTrips,
   isOpen,
   onRequestOpen,
   onRequestClose,
@@ -52,8 +48,7 @@ export default function TripCard({
   onHighlightRoutes,
   openNestedJourneyId,
   onNestedJourneyOpenChange,
-  onJourneyEditStart,
-  onJourneyEditEnd,
+  onEditJourney,
 }: TripCardProps) {
   const regionId = useRegionId();
   const { showSuccess, showError } = useToast();
@@ -313,14 +308,12 @@ export default function TripCard({
                     <JourneyCard
                       journey={journey}
                       store={databaseJourneyStore}
-                      availableTrips={availableTrips}
                       isOpen={openNestedJourneyId === journey.id}
                       onRequestOpen={() => onNestedJourneyOpenChange(journey.id)}
                       onRequestClose={() => onNestedJourneyOpenChange(null)}
                       onChanged={onChanged}
                       onHighlightRoutes={onHighlightRoutes}
-                      onJourneyEditStart={onJourneyEditStart}
-                      onJourneyEditEnd={onJourneyEditEnd}
+                      onEditJourney={onEditJourney}
                       nested
                     />
                   </div>

@@ -2,7 +2,7 @@
 
 import { getUser } from "./authActions";
 import { withTransaction } from "./db";
-import { sanitizeRange } from "./journeyQueries";
+import { sanitizeRange } from "./shared/routeCoverage";
 
 export interface JourneyMigrationResult {
   journeysMigrated: number;

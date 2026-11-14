@@ -9,7 +9,7 @@ What the map draws is decided in `src/lib/shared/map/` (its CLAUDE.md has the st
 - **Clear a highlight by filtering its layers to nothing, never by removing them** (`syncHighlightOverlay` in `useRouteHighlighting`). MapLibre keeps parsed tile features per layer id, so a re-added layer flashes the old ones.
 - `useCoverageOverlay`: sync as soon as the data arrives. Don't gate on `isStyleLoaded()`.
 - An anonymous visitor's rides are feature state (`useLocalRouteFeatureStates`), cleared on login.
-- **The map shows only the open sidebar tab's highlights** (`TAB_HIGHLIGHT_KIND`: `planner` ↔ Route Logger, `view` ↔ My Trips). Map clicks act only in the Route Logger tab.
+- **The map shows only the open sidebar tab's highlights** (`TAB_HIGHLIGHT_KIND`: `planner` ↔ Route Logger, `view` ↔ My Trips). Map clicks act only in the Route Logger tab, on its routes: the new journey's selection, or the saved journey it is editing (`updateLoggerRoutes` in `RailwayMap`).
 
 ## Opening something flies to it
 
@@ -30,7 +30,7 @@ What the map draws is decided in `src/lib/shared/map/` (its CLAUDE.md has the st
 - A sheet with an action is placed so its button sits under the finger (`anchor: "center"` + a measured offset). It has no ×, because every tap ends it.
 - `sheetTookThisClick` is consulted first by every click handler. It tells sheet taps from map taps by the sheet's rect, swallows taps for `SHEET_TAP_GRACE_MS` (400ms) around opening and closing, and suspends double-click zoom meanwhile. MapLibre's `closeOnClick` stays off.
 - `useUserMapInteractions` attaches the handlers **once per map** and reads the callbacks through `useEffectEvent`. It cancels a setup deferred to `"idle"` on teardown. A sheet therefore outlives callback changes, so its button asks `routeTapAction` again before acting.
-- The button says what it will do ("Add to selection", "Remove from journey"…) via `routeTapAction` and a journey card's `isRouteInJourney` (`JourneyEditStartFn`).
+- The button says what it will do ("Add to selection", "Remove from journey"…) via `routeTapAction`, which reads the Route Logger's routes (the new journey's, or the journey being edited) in `RailwayMap`.
 - The shared map is read-only by calling `useUserMapInteractions` without `onRouteClick`.
 
 ## Line search highlight

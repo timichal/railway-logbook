@@ -4,6 +4,7 @@ import RouteLogger, {
   type NewJourney,
   type RouteSelectionProps,
 } from "@/components/logbook/RouteLogger";
+import { localJourneyStore } from "@/lib/journeyStore";
 import * as localStore from "@/lib/localStorage";
 
 async function createLocalJourney(journey: NewJourney): Promise<string> {
@@ -56,6 +57,8 @@ export default function LocalTripLogger(props: RouteSelectionProps) {
       notice={notice}
       blockedReason={remainingJourneys > 0 ? null : localStore.JOURNEY_LIMIT_MESSAGE}
       onCreate={createLocalJourney}
+      onSaveEdit={(id, edits) => localJourneyStore.save(String(id), edits)}
+      onDeleteEdit={(id) => localJourneyStore.remove(String(id))}
     />
   );
 }

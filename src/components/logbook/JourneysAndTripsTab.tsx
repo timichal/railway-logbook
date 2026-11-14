@@ -6,10 +6,10 @@ import TripCard from "@/components/logbook/TripCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { databaseJourneyStore } from "@/lib/journeyStore";
 import { useRegionId } from "@/lib/regionContext";
-import type { HighlightRoutesFn, JourneyEditStartFn } from "@/lib/shared/types";
+import type { HighlightRoutesFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
-import type { TripName, TripsAndJourneysItem } from "@/lib/tripActions";
-import { createTrip, getJourneysAndTrips, getTripNames } from "@/lib/tripActions";
+import type { TripsAndJourneysItem } from "@/lib/tripActions";
+import { createTrip, getJourneysAndTrips } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
 import { NEW_TRIP_EDIT_KEY, useDraft } from "@/lib/ui/editGuard";
 
@@ -19,8 +19,10 @@ const SEARCH_DEBOUNCE_MS = 300;
 interface JourneysAndTripsTabProps {
   onHighlightRoutes?: HighlightRoutesFn;
   onJourneyChanged?: () => void;
-  onJourneyEditStart?: JourneyEditStartFn;
-  onJourneyEditEnd?: () => void;
+  /** Edit pressed on a journey, whose draft is written: the Route Logger takes it up. */
+  onEditJourney?: (journeyId: number) => void;
+  /** Opened, inside its trip where it has one, as the first page lists it: the journey just edited. */
+  initialOpenJourneyId?: number | null;
 }
 
 type OpenItem = { type: "trip" | "journey"; id: number } | null;
@@ -34,8 +36,8 @@ function isItem(item: TripsAndJourneysItem, open: NonNullable<OpenItem>): boolea
 export default function JourneysAndTripsTab({
   onHighlightRoutes,
   onJourneyChanged,
-  onJourneyEditStart,
-  onJourneyEditEnd,
+  onEditJourney,
+  initialOpenJourneyId = null,
 }: JourneysAndTripsTabProps) {
   const regionId = useRegionId();
   const { showSuccess, showError } = useToast();
@@ -47,13 +49,12 @@ export default function JourneysAndTripsTab({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Null until loaded: a journey draft takes a trip missing from it for deleted
-  const [availableTrips, setAvailableTrips] = useState<TripName[] | null>(null);
-
   // Single-open coordination across all top-level cards
   const [openItem, setOpenItem] = useState<OpenItem>(null);
   // For nested journey edit inside an open trip
   const [openNestedJourneyId, setOpenNestedJourneyId] = useState<number | null>(null);
+  // The journey to open once the list first arrives (see initialOpenJourneyId)
+  const pendingOpenRef = useRef(initialOpenJourneyId);
 
   // A draft like the cards' edits, so the form outlives leaving the tab
   const { draft: newTrip, setDraft: setNewTrip } = useDraft<{ name: string; description: string }>(
@@ -72,7 +73,7 @@ export default function JourneysAndTripsTab({
     setListedRegionId(regionId);
     setOpenItem(null);
     setOpenNestedJourneyId(null);
-    setAvailableTrips(null);
+    pendingOpenRef.current = null;
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -106,6 +107,19 @@ export default function JourneysAndTripsTab({
         }
         setItems(result.items);
         setTotal(result.total);
+        // Before the effect below can see the open item missing from the list
+        const reopen = pendingOpenRef.current;
+        pendingOpenRef.current = null;
+        if (reopen !== null) {
+          for (const item of result.items) {
+            if (item.type === "journey" && item.journey.id === reopen) {
+              setOpenItem({ type: "journey", id: reopen });
+            } else if (item.type === "trip" && item.journeys.some((j) => j.id === reopen)) {
+              setOpenItem({ type: "trip", id: item.trip.id });
+              setOpenNestedJourneyId(reopen);
+            }
+          }
+        }
       } catch (error) {
         if (requestId !== loadRequestRef.current) return;
         console.error("Error loading items:", error);
@@ -119,31 +133,15 @@ export default function JourneysAndTripsTab({
     [page, debouncedSearch, regionId, showError],
   );
 
-  const loadAvailableTrips = useCallback(async () => {
-    // A failure leaves the picker as it was, which only costs filing a journey
-    // under a trip later.
-    try {
-      setAvailableTrips(unwrap(await getTripNames(regionId)));
-    } catch (error) {
-      console.error("Error loading trips:", error);
-    }
-  }, [regionId]);
-
   // Initial + when page/search changes
   useEffect(() => {
     loadItems(true);
   }, [loadItems]);
 
-  // Trip dropdown options for journey edit forms
-  useEffect(() => {
-    loadAvailableTrips();
-  }, [loadAvailableTrips]);
-
   // A page or search change, or a reload after a delete, can take the open card
-  // out of the list. The card ends its own map edit session as it unmounts, and
-  // its edit is kept (editGuard); what is left here is the open state and its
-  // highlights, which would otherwise linger for an item no longer shown. Only
-  // then: a card still in the new results stays open.
+  // out of the list. What is left here is the open state and its highlights,
+  // which would otherwise linger for an item no longer shown. Only then: a card
+  // still in the new results stays open.
   useEffect(() => {
     if (!openItem) return;
     if (items.some((item) => isItem(item, openItem))) return;
@@ -163,22 +161,21 @@ export default function JourneysAndTripsTab({
     return () => clearTimeout(t);
   }, [searchInput, debouncedSearch]);
 
-  // Cleanup on unmount: clear highlights and any in-flight edit session
+  // Cleanup on unmount: clear highlights
   useEffect(() => {
     return () => {
       onHighlightRoutes?.([]);
-      onJourneyEditEnd?.();
     };
-  }, [onHighlightRoutes, onJourneyEditEnd]);
+  }, [onHighlightRoutes]);
 
   const handleChanged = useCallback(() => {
     loadItems();
-    loadAvailableTrips();
     onJourneyChanged?.();
-  }, [loadItems, loadAvailableTrips, onJourneyChanged]);
+  }, [loadItems, onJourneyChanged]);
 
-  // Opening another card closes the open one, nested journey and all; an edit in
-  // either is kept for when it reopens. When the open item closes, clear highlights.
+  // Opening another card closes the open one, nested journey and all; a trip
+  // edit in it is kept for when it reopens. When the open item closes, clear
+  // highlights.
   const handleRequestOpen = (next: OpenItem) => {
     setOpenItem(next);
     setOpenNestedJourneyId(null);
@@ -308,7 +305,6 @@ export default function JourneysAndTripsTab({
                   key={`trip-${item.trip.id}`}
                   trip={item.trip}
                   initialJourneys={item.journeys}
-                  availableTrips={availableTrips}
                   isOpen={isOpen}
                   onRequestOpen={() => handleRequestOpen({ type: "trip", id: item.trip.id })}
                   onRequestClose={() => handleRequestOpen(null)}
@@ -316,8 +312,7 @@ export default function JourneysAndTripsTab({
                   onHighlightRoutes={onHighlightRoutes}
                   openNestedJourneyId={isOpen ? openNestedJourneyId : null}
                   onNestedJourneyOpenChange={setOpenNestedJourneyId}
-                  onJourneyEditStart={onJourneyEditStart}
-                  onJourneyEditEnd={onJourneyEditEnd}
+                  onEditJourney={onEditJourney}
                 />
               );
             }
@@ -328,14 +323,12 @@ export default function JourneysAndTripsTab({
                 key={`journey-${item.journey.id}`}
                 journey={item.journey}
                 store={databaseJourneyStore}
-                availableTrips={availableTrips}
                 isOpen={isOpen}
                 onRequestOpen={() => handleRequestOpen({ type: "journey", id: item.journey.id })}
                 onRequestClose={() => handleRequestOpen(null)}
                 onChanged={handleChanged}
                 onHighlightRoutes={onHighlightRoutes}
-                onJourneyEditStart={onJourneyEditStart}
-                onJourneyEditEnd={onJourneyEditEnd}
+                onEditJourney={onEditJourney}
               />
             );
           })

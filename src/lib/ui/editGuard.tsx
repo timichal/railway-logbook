@@ -162,21 +162,81 @@ function useDraftStore(): DraftStore {
 /**
  * For a form: its draft under `key` (null while it isn't being edited), whether
  * that draft has changes, and the setter — null ends the edit. `isChanged` is read
- * on every write, and `label` names the draft in the question.
+ * on every write, and `label` names the draft in the question (from the draft
+ * itself, where the form doesn't know the name until it reads it).
  */
-export function useDraft<T>(key: string, label: string, isChanged: (draft: T) => boolean) {
+export function useDraft<T>(
+  key: string,
+  label: string | ((draft: T) => string),
+  isChanged: (draft: T) => boolean,
+) {
   const store = useDraftStore();
   const entry = useSyncExternalStore(
     store.subscribe,
     () => store.get(key),
     () => undefined,
   );
-  const setDraft = (next: T | null) =>
-    store.set(key, next === null ? null : { value: next, label, changed: isChanged(next) });
+  const setDraft = (next: T | null) => writeDraft(store, key, next, label, isChanged);
   return {
     draft: entry === undefined ? null : (entry.value as T),
     changed: entry?.changed ?? false,
     setDraft,
+  };
+}
+
+function writeDraft<T>(
+  store: DraftStore,
+  key: string,
+  next: T | null,
+  label: string | ((draft: T) => string),
+  isChanged: (draft: T) => boolean,
+) {
+  store.set(
+    key,
+    next === null
+      ? null
+      : {
+          value: next,
+          label: typeof label === "function" ? label(next) : label,
+          changed: isChanged(next),
+        },
+  );
+}
+
+/**
+ * A part of the draft under `key`, for a component that shows or acts on it but
+ * isn't its form: it re-renders only when what `select` returns changes, so a
+ * keystroke in the form elsewhere passes it by. `select` must hand back something
+ * the draft holds (a field, a nested list), never a value built afresh. Undefined
+ * while there is no draft.
+ */
+export function useDraftSelect<T, S>(key: string, select: (draft: T) => S): S | undefined {
+  const store = useDraftStore();
+  return useSyncExternalStore(
+    store.subscribe,
+    () => {
+      const entry = store.get(key);
+      return entry === undefined ? undefined : select(entry.value as T);
+    },
+    () => undefined,
+  );
+}
+
+/**
+ * Changes the draft under `key` from the draft as it stands at the call, without
+ * subscribing to it: `update` returns the next draft, or null to drop it. Nothing
+ * happens while there is no draft.
+ */
+export function useDraftUpdate<T>(
+  key: string,
+  label: string | ((draft: T) => string),
+  isChanged: (draft: T) => boolean,
+) {
+  const store = useDraftStore();
+  return (update: (draft: T) => T | null) => {
+    const entry = store.get(key);
+    if (entry === undefined) return;
+    writeDraft(store, key, update(entry.value as T), label, isChanged);
   };
 }
 

@@ -10,13 +10,7 @@ import type { RouteSelectionProps } from "@/components/logbook/RouteLogger";
 import Icon from "@/components/ui/Icon";
 import type { User } from "@/lib/authActions";
 import type { DataAccess } from "@/lib/dataAccess";
-import type {
-  HighlightRoutesFn,
-  JourneyEditStartFn,
-  PlannerRoute,
-  SelectedRoute,
-  Station,
-} from "@/lib/shared/types";
+import type { HighlightRoutesFn, PlannerRoute, SelectedRoute, Station } from "@/lib/shared/types";
 import { tabBtn } from "@/lib/ui/buttonStyles";
 
 /**
@@ -30,10 +24,18 @@ export type ActiveTab = "routes" | "journeylog" | "map";
 interface UserSidebarProps {
   user: User | null;
   dataAccess: DataAccess;
+  /** The Route Logger's routes: the new journey's, or those of the journey being edited. */
   selectedRoutes: SelectedRoute[];
+  /** The saved journey the Route Logger is editing (see journeyEdit.ts). */
+  editingJourneyId: number | string | null;
+  /** Edit pressed on a journey card, whose draft is written. */
+  onEditJourney: (id: number | string) => void;
+  /** The Route Logger's edit was saved or cancelled, its draft dropped. */
+  onJourneyEditEnd: (saved: boolean) => void;
+  /** The journey My Trips opens on as it mounts: the one just edited. */
+  reopenJourneyId: number | string | null;
   onRemoveRoute: (trackId: number) => void;
   onClearAll: () => void;
-  onUpdateRoutePartial: (trackId: number, partial: boolean) => void;
   onHighlightRoutes?: HighlightRoutesFn;
   onAddRoutesFromPlanner?: (routes: PlannerRoute[]) => void;
   onRoutesLogged?: () => void;
@@ -43,17 +45,18 @@ interface UserSidebarProps {
   setActiveTab: (tab: ActiveTab) => void;
   onStationClickHandler?: (handler: ((station: Station | null) => void) | null) => void;
   sidebarWidth?: string | null;
-  onJourneyEditStart?: JourneyEditStartFn;
-  onJourneyEditEnd?: () => void;
 }
 
 export default function UserSidebar({
   user,
   dataAccess,
   selectedRoutes,
+  editingJourneyId,
+  onEditJourney,
+  onJourneyEditEnd,
+  reopenJourneyId,
   onRemoveRoute,
   onClearAll,
-  onUpdateRoutePartial,
   onHighlightRoutes,
   onAddRoutesFromPlanner,
   onRoutesLogged,
@@ -63,8 +66,6 @@ export default function UserSidebar({
   setActiveTab,
   onStationClickHandler,
   sidebarWidth,
-  onJourneyEditStart,
-  onJourneyEditEnd,
 }: UserSidebarProps) {
   // The Route Logger's trip picker loaded its trips once and stays mounted while My
   // Trips is open, so a trip created, renamed or deleted there has to be passed on.
@@ -78,11 +79,12 @@ export default function UserSidebar({
     selectedRoutes,
     onRemoveRoute,
     onClearSelection: onClearAll,
-    onUpdateRoutePartial,
     onRoutesLogged,
     onHighlightRoutes,
     onAddRoutesFromPlanner,
     onStationClickHandler,
+    editingJourneyId,
+    onEditEnd: onJourneyEditEnd,
   };
 
   return (
@@ -109,14 +111,22 @@ export default function UserSidebar({
           <span className="hidden md:inline">Route Logger</span>
           {/* The selection is built on the map, beside or under this panel, so the tab
               says it grew. Re-keyed on the count so each change replays the bump. */}
-          {selectedRoutes.length > 0 && (
-            <span
-              key={selectedRoutes.length}
-              className="count-bump ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold leading-none align-[1px]"
-            >
-              {selectedRoutes.length}
-              <span className="sr-only"> selected</span>
+          {/* While a saved journey is being edited, its routes are no selection */}
+          {editingJourneyId !== null ? (
+            <span className="ml-1.5 inline-flex items-center h-5 px-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold leading-none align-[1px]">
+              editing
+              <span className="sr-only"> a journey</span>
             </span>
+          ) : (
+            selectedRoutes.length > 0 && (
+              <span
+                key={selectedRoutes.length}
+                className="count-bump ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold leading-none align-[1px]"
+              >
+                {selectedRoutes.length}
+                <span className="sr-only"> selected</span>
+              </span>
+            )
           )}
         </button>
         <button
@@ -161,8 +171,8 @@ export default function UserSidebar({
           <JourneysAndTripsTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={handleTripsChanged}
-            onJourneyEditStart={onJourneyEditStart}
-            onJourneyEditEnd={onJourneyEditEnd}
+            onEditJourney={onEditJourney}
+            initialOpenJourneyId={typeof reopenJourneyId === "number" ? reopenJourneyId : null}
           />
         )}
 
@@ -170,8 +180,8 @@ export default function UserSidebar({
           <LocalJourneyLogTab
             onHighlightRoutes={onHighlightRoutes}
             onJourneyChanged={onRoutesLogged}
-            onJourneyEditStart={onJourneyEditStart}
-            onJourneyEditEnd={onJourneyEditEnd}
+            onEditJourney={onEditJourney}
+            initialOpenJourneyId={typeof reopenJourneyId === "string" ? reopenJourneyId : null}
           />
         )}
 

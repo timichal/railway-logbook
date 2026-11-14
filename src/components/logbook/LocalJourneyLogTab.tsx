@@ -7,12 +7,7 @@ import { localJourneyStore } from "@/lib/journeyStore";
 import * as localStore from "@/lib/localStorage";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
-import type {
-  HighlightRoutesFn,
-  JourneyEditStartFn,
-  LocalJourney,
-  LocalLoggedPart,
-} from "@/lib/shared/types";
+import type { HighlightRoutesFn, LocalJourney, LocalLoggedPart } from "@/lib/shared/types";
 import { usePruneJourneyDrafts } from "@/lib/ui/editGuard";
 import { getRegionTrackIds } from "@/lib/userActions";
 
@@ -24,16 +19,18 @@ interface JourneyWithRoutes {
 interface LocalJourneyLogTabProps {
   onHighlightRoutes?: HighlightRoutesFn;
   onJourneyChanged?: () => void;
-  onJourneyEditStart?: JourneyEditStartFn;
-  onJourneyEditEnd?: () => void;
+  /** Edit pressed on a journey, whose draft is written: the Route Logger takes it up. */
+  onEditJourney?: (journeyId: string) => void;
+  /** Open from the start: the journey just edited. */
+  initialOpenJourneyId?: string | null;
 }
 
 /** My Journeys for an anonymous visitor: the journeys saved in this browser, as `JourneyCard`s. */
 export default function LocalJourneyLogTab({
   onHighlightRoutes,
   onJourneyChanged,
-  onJourneyEditStart,
-  onJourneyEditEnd,
+  onEditJourney,
+  initialOpenJourneyId = null,
 }: LocalJourneyLogTabProps) {
   const regionId = useRegionId();
   const [journeys, setJourneys] = useState<JourneyWithRoutes[]>([]);
@@ -47,7 +44,7 @@ export default function LocalJourneyLogTab({
     "region route ids",
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [openJourneyId, setOpenJourneyId] = useState<string | null>(null);
+  const [openJourneyId, setOpenJourneyId] = useState<string | null>(initialOpenJourneyId);
 
   // Any journey open when the region changes is collapsed: it may not be in this
   // region at all, and its highlight is dropped by the map anyway. Done during
@@ -115,8 +112,7 @@ export default function LocalJourneyLogTab({
     );
   }, [regionJourneys, searchQuery]);
 
-  // A search (or another tab's delete) can take the open card out of the list. The
-  // card ends its own map edit session as it unmounts and its edit is kept; its
+  // A search (or another tab's delete) can take the open card out of the list; its
   // open state and highlights are left here, as in JourneysAndTripsTab.
   useEffect(() => {
     if (openJourneyId && !filteredJourneys.some(({ journey }) => journey.id === openJourneyId)) {
@@ -166,8 +162,7 @@ export default function LocalJourneyLogTab({
               onRequestClose={handleClose}
               onChanged={handleChanged}
               onHighlightRoutes={onHighlightRoutes}
-              onJourneyEditStart={onJourneyEditStart}
-              onJourneyEditEnd={onJourneyEditEnd}
+              onEditJourney={onEditJourney}
             />
           ))
         )}

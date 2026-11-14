@@ -11,4 +11,4 @@ The planner searches over **whole routes**, not OSM parts. Nodes are `(track_id,
 - Station → routes is one indexed query with progressive tolerance (100m → 5km) in memory.
 - Every route is trimmed to the stretch travelled (`planVisits` → `planTrims` → `cutTravelledStretches`), getting `partial` + `travelled_length_km`. The endpoints travelled come from the search (`SearchResult.sides`) and are never inferred. A route visited twice, or left with under `MIN_UNTRAVELLED_KM` (0.3km) untravelled, stays whole. One barely touched (a stop within 0.3km of its endpoint) is dropped. A plan with no route left is refused.
 - A segment after a via is seeded from every route serving the via. Changing lines there costs the gap between the lines at the station (× `GAP_PENALTY_PER_KM`) plus `VIA_CHANGE_PENALTY` (5): `changeCosts`.
-- A route the plan only partly covers arrives in the Route Logger with `partial` ticked and its stretch attached.
+- A route the plan only partly covers arrives in the Route Logger marked `partial`, with its stretch attached. The planner is the web's only way to log a partial ride: the Route Logger has no partial checkbox.

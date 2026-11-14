@@ -101,6 +101,7 @@ Schema in `database/init/01-schema.sql`. What the columns don't tell you:
 - **Japan** keeps each operator's own English spelling (hyphen or space, "-mae" or "-Mae", Onsen forms, n or m before b/m/p) and only adds macrons, because operators romanize differently even on their signs. Don't report those differences. Do report real typos, wrong pastes, labels that don't match the endpoints, and a missing macron. Same-named stations far apart (Fukushima, Ōmiya…) are different stations, and so are two operators' stations side by side (Meitetsu Nagoya, Kintetsu-Nagoya).
 - An endpoint with no OSM station nearby is usually a station missing from OSM (Alūksne, Olecko, underground stations in Japan), not a wrong label.
 - Audit findings the admin has reviewed and accepted are in `ROUTE_DATA_AUDIT.md`. Don't report them again.
+- Audit the labels of **invalid routes too**. A label is fixed before the geometry is re-picked, and an invalid route still shows in the journeys that logged it.
 
 ## Regions (`src/lib/shared/regions.ts`)
 
@@ -118,7 +119,7 @@ Europe and Japan are two views of one backend. A region is a **bounding box**: t
 
 **A server action taking a region checks it first** with `assertRegionId` (`regionArgument.ts`), inside `asUser`/`asAdmin` where there is one: the type is only a promise, and an unknown id fails deep in `regionContainsSql` otherwise. The HTTP API does the same through `requireRegion`.
 
-The selected region lives in a cookie (`REGION_COOKIE`), read by server components for a correct first paint. On the client it comes from `useRegion`/`useRegionId` (`regionContext.tsx`). **Switching clears everything picked in the old region**: selection and highlights, the planner form, the admin's selection and geometry pick, the logger's picked trip. Saved map position is per region.
+The selected region lives in a cookie (`REGION_COOKIE`), read by server components for a correct first paint. On the client it comes from `useRegion`/`useRegionId` (`regionContext.tsx`). **Switching clears everything picked in the old region**: selection and highlights, the planner form, the admin's selection and geometry pick, the logger's picked trip. A saved journey being edited in the Route Logger is a draft and stays. Saved map position is per region.
 
 ## Progress and partial rides
 

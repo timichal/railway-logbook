@@ -15,7 +15,7 @@
  * Keep the two in step — the tolerances below are the numbers the SQL hard-codes.
  */
 
-import type { CoveredRange } from "./types";
+import type { CoveredRange, LoggedRange } from "./types";
 
 /**
  * How much untravelled track at the end of a route is noise rather than track
@@ -116,4 +116,22 @@ export function isRouteFullyRidden(
     reached = Math.max(reached, end);
   }
   return reached >= 1;
+}
+
+/**
+ * A ridden stretch is only stored when it is a genuine, non-degenerate part of
+ * the route, and only for a partial ride: a route logged whole covers all of it,
+ * so a range would be redundant (and would draw a stray overlay). The rule of
+ * every write, to the database and to localStorage alike.
+ */
+export function sanitizeRange(
+  range: LoggedRange | null | undefined,
+  partial: boolean,
+): LoggedRange | null {
+  if (!partial || !range) return null;
+  const start = Number(range.covered_start);
+  const end = Number(range.covered_end);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (start < 0 || end > 1 || start >= end) return null;
+  return { covered_start: start, covered_end: end };
 }

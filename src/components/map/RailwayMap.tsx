@@ -10,6 +10,7 @@ import MapStationSearch from "@/components/map/MapStationSearch";
 import MobileBottomSheet from "@/components/ui/MobileBottomSheet";
 import type { User } from "@/lib/authActions";
 import { createDataAccess, type DataAccess } from "@/lib/dataAccess";
+import { journeyEditChanged, useJourneyEditRoutes } from "@/lib/journeyEdit";
 import * as localStore from "@/lib/localStorage";
 import { fitCamera } from "@/lib/map/fitCamera";
 import { useLocalRouteFeatureStates } from "@/lib/map/hooks/useLocalRouteFeatureStates";
@@ -21,7 +22,6 @@ import { NEW_JOURNEY_FORM_ID } from "@/lib/selectedRoutes";
 import type {
   HighlightKind,
   HighlightRoutesFn,
-  JourneyEditStartFn,
   PartialRouteGeometry,
   PlannerRoute,
   RouteBounds,
@@ -117,22 +117,24 @@ export default function RailwayMap({
     [],
   );
 
-  // Journey edit mode: route clicks in My Journeys tab go to the edit handler.
-  // The handler being set *is* the mode — there is no separate flag, which could
-  // disagree with it while a card mounts or unmounts, and then the touch sheet
-  // would promise one thing and its button do another.
-  const journeyRouteClickHandlerRef = useRef<((route: SelectedRoute) => void) | null>(null);
-  // Whether a route is already in the journey being edited — the touch sheet asks
-  // before it labels its button. Only the open card knows.
-  const journeyContainsRouteRef = useRef<((trackId: number) => boolean) | null>(null);
-  const handleJourneyEditStart = useCallback<JourneyEditStartFn>((handler, isRouteInJourney) => {
-    journeyRouteClickHandlerRef.current = handler;
-    journeyContainsRouteRef.current = isRouteInJourney;
-  }, []);
-  const handleJourneyEditEnd = useCallback(() => {
-    journeyRouteClickHandlerRef.current = null;
-    journeyContainsRouteRef.current = null;
-  }, []);
+  // The saved journey the Route Logger is editing (see journeyEdit.ts), null while
+  // it puts together a new one. Its routes are the draft's, and every selection
+  // handler below works on them in place of `selectedRoutes`, which waits
+  // untouched for the edit to end. Editing is the draft existing: one dropped
+  // elsewhere (its journey deleted) ends the edit with it. Only its routes and
+  // name are read here, so typing in its form doesn't re-render the map.
+  const [editingJourneyId, setEditingJourneyId] = useState<number | string | null>(null);
+  const journeyEdit = useJourneyEditRoutes(editingJourneyId);
+  const editing = journeyEdit.routes !== undefined;
+  useEffect(() => {
+    if (editingJourneyId !== null && !editing) setEditingJourneyId(null);
+  }, [editingJourneyId, editing]);
+  // The journey My Trips opens on its next mount: the one just edited, so Save or
+  // Cancel lands back on it. Dropped once My Trips is left again.
+  const [reopenJourneyId, setReopenJourneyId] = useState<number | string | null>(null);
+  useEffect(() => {
+    if (activeTab !== "journeylog") setReopenJourneyId(null);
+  }, [activeTab]);
 
   // Highlighted routes, one set per kind: 'planner' (gold) is the Journey Planner's
   // result, 'view' (orange) the My Trips item open. `partials` carries the covered
@@ -158,15 +160,36 @@ export default function RailwayMap({
     setStateUserId(userId);
     setSelectedCountries(initialSelectedCountries);
     setHighlights(NO_HIGHLIGHTS);
+    // The drafts went with the account (editGuard)
+    setEditingJourneyId(null);
+    setReopenJourneyId(null);
   }
 
   // Bumped whenever journeys change, to refetch the ridden-stretch overlay
   const [coverageVersion, setCoverageVersion] = useState(0);
 
-  // Selected routes state
+  // Selected routes state: the new journey's
   const [selectedRoutes, setSelectedRoutes] = useState<SelectedRoute[]>([]);
-  const selectedRoutesRef = useRef<SelectedRoute[]>([]);
-  selectedRoutesRef.current = selectedRoutes;
+
+  // What the Route Logger shows and the map clicks change: the journey being
+  // edited, or the new one. The handlers read through refs, and a draft update
+  // works from the draft as it stands, so two changes before a render both land.
+  const loggerRoutes = journeyEdit.routes ?? selectedRoutes;
+  const loggerRoutesRef = useRef(loggerRoutes);
+  loggerRoutesRef.current = loggerRoutes;
+  const editRef = useRef({ editing, update: journeyEdit.update });
+  editRef.current = { editing, update: journeyEdit.update };
+  const updateLoggerRoutes = useCallback((update: (routes: SelectedRoute[]) => SelectedRoute[]) => {
+    const { editing, update: updateDraft } = editRef.current;
+    if (!editing) {
+      setSelectedRoutes(update);
+      return;
+    }
+    updateDraft((draft) => ({
+      ...draft,
+      edit: { ...draft.edit, routes: update(draft.edit.routes) },
+    }));
+  }, []);
 
   // Only the sheet can take the room away, so the desktop layout always has it.
   const showFurniture = !isMobile || furnitureFits;
@@ -289,37 +312,28 @@ export default function RailwayMap({
     mapLoaded,
     shownHighlight.ids,
     shownKind ?? "view",
-    activeTab === "routes" ? selectedRoutes : NO_SELECTED_ROUTES,
+    activeTab === "routes" ? loggerRoutes : NO_SELECTED_ROUTES,
     shownHighlight.partials,
   );
 
-  // Route click handler
+  // Route click handler: toggles the route in the Route Logger's routes, the new
+  // journey's or the edited one's
   const handleRouteClick = useCallback(
     (route: SelectedRoute) => {
-      // Journey edit mode: delegate to the journey edit handler
-      const journeyHandler = journeyRouteClickHandlerRef.current;
-      if (journeyHandler) {
-        journeyHandler(route);
-        return;
-      }
-
       if (activeTab !== "routes") return;
-
-      // Toggle: if already selected, remove it
-      const isSelected = selectedRoutesRef.current.some((r) => r.track_id === route.track_id);
-      if (isSelected) {
-        setSelectedRoutes((prev) => prev.filter((r) => r.track_id !== route.track_id));
-        return;
-      }
 
       // No journey-cap check here: selecting a route is reading the map, not
       // logging, and the cap is enforced where it is actually reached — the
       // local logger's banner counts the journeys down and its Log Journey
       // button is disabled at the limit. Checking on every click only meant an
       // error toast for a capped user who wanted to look at a line.
-      setSelectedRoutes((prev) => [...prev, route]);
+      updateLoggerRoutes((routes) =>
+        routes.some((r) => r.track_id === route.track_id)
+          ? routes.filter((r) => r.track_id !== route.track_id)
+          : [...routes, route],
+      );
     },
-    [activeTab],
+    [activeTab, updateLoggerRoutes],
   );
 
   // What a tap on a route is about to do, worded for the touch sheet's button.
@@ -327,12 +341,11 @@ export default function RailwayMap({
   // press will do, so the two must not drift. Null where a tap does nothing.
   const routeTapAction = useCallback(
     (trackId: number) => {
-      if (journeyRouteClickHandlerRef.current) {
-        const inJourney = journeyContainsRouteRef.current?.(trackId) ?? false;
-        return { label: inJourney ? "Remove from journey" : "Add to journey" };
-      }
       if (activeTab !== "routes") return null;
-      const isSelected = selectedRoutesRef.current.some((r) => r.track_id === trackId);
+      const isSelected = loggerRoutesRef.current.some((r) => r.track_id === trackId);
+      if (editRef.current.editing) {
+        return { label: isSelected ? "Remove from journey" : "Add to journey" };
+      }
       return { label: isSelected ? "Remove from selection" : "Add to selection" };
     },
     [activeTab],
@@ -340,7 +353,8 @@ export default function RailwayMap({
 
   // Switching regions drops everything picked out of the old one: a selection
   // logged after the switch would file the other continent's routes under this
-  // journey, and a highlight would point at track the map can no longer show.
+  // journey, and a highlight would point at track the map can no longer show. A
+  // journey being edited is a draft, and is kept (editGuard): its routes are its own.
   // biome-ignore lint/correctness/useExhaustiveDependencies: region.id is the trigger; the setters are stable and intentionally not read here.
   useEffect(() => {
     setSelectedRoutes([]);
@@ -348,47 +362,47 @@ export default function RailwayMap({
     fitRequest.current++;
   }, [region.id]);
 
-  const handleRemoveRoute = useCallback((trackId: number) => {
-    setSelectedRoutes((prev) => prev.filter((r) => r.track_id !== trackId));
-  }, []);
+  const handleRemoveRoute = useCallback(
+    (trackId: number) => {
+      updateLoggerRoutes((prev) => prev.filter((r) => r.track_id !== trackId));
+    },
+    [updateLoggerRoutes],
+  );
 
   const handleClearAll = useCallback(() => {
-    setSelectedRoutes([]);
-  }, []);
+    updateLoggerRoutes(() => []);
+  }, [updateLoggerRoutes]);
 
-  const handleUpdateRoutePartial = useCallback((trackId: number, partial: boolean) => {
-    setSelectedRoutes((routes) =>
-      routes.map((r) => (r.track_id === trackId ? { ...r, partial } : r)),
-    );
-  }, []);
+  const handleAddRoutesFromLogger = useCallback(
+    (routes: PlannerRoute[]) => {
+      const newRoutes = routes.map((route) => ({
+        track_id: route.track_id,
+        name: route.name,
+        from_station: route.from_station,
+        to_station: route.to_station,
+        description: route.description || "",
+        usage_types: "",
+        link: null,
+        date: null,
+        journey_name: null,
+        // A plan that joins this route mid-way only covers part of it, so the
+        // route arrives in the selection with "partial" already ticked and the
+        // ridden stretch attached, ready to be stored with the journey
+        partial: route.partial ? true : null,
+        covered: route.partial ?? null,
+        travelled_length_km: route.partial ? route.travelled_length_km : null,
+        length_km: route.length_km,
+      }));
 
-  const handleAddRoutesFromLogger = useCallback((routes: PlannerRoute[]) => {
-    const newRoutes = routes.map((route) => ({
-      track_id: route.track_id,
-      name: route.name,
-      from_station: route.from_station,
-      to_station: route.to_station,
-      description: route.description || "",
-      usage_types: "",
-      link: null,
-      date: null,
-      journey_name: null,
-      // A plan that joins this route mid-way only covers part of it, so the
-      // route arrives in the selection with "partial" already ticked and the
-      // ridden stretch attached, ready to be stored with the journey
-      partial: route.partial ? true : null,
-      covered: route.partial ?? null,
-      travelled_length_km: route.partial ? route.travelled_length_km : null,
-      length_km: route.length_km,
-    }));
-
-    setSelectedRoutes((prev) => {
-      const routesToAdd = newRoutes.filter(
-        (newRoute) => !prev.some((existingRoute) => existingRoute.track_id === newRoute.track_id),
-      );
-      return [...prev, ...routesToAdd];
-    });
-  }, []);
+      updateLoggerRoutes((prev) => {
+        const routesToAdd = newRoutes.filter(
+          (newRoute) => !prev.some((existingRoute) => existingRoute.track_id === newRoute.track_id),
+        );
+        return [...prev, ...routesToAdd];
+      });
+    },
+    [updateLoggerRoutes],
+  );
 
   const handleRoutesLogged = useCallback(() => {
     if (user) refreshTiles();
@@ -397,6 +411,33 @@ export default function RailwayMap({
     // Journeys changed, so the ridden stretches of unfinished routes may have too
     setCoverageVersion((v) => v + 1);
   }, [user, refreshTiles, refreshLocalRouteStates, refreshProgress]);
+
+  // Edit in My Trips: the card has written the journey's draft, and the Route
+  // Logger takes it up. The journey it was showing keeps its draft if it has
+  // changes, and is put away with an Unsaved on its card; one with none goes.
+  const handleEditJourney = useCallback(
+    (id: number | string) => {
+      const { editing, update } = editRef.current;
+      if (editing && editingJourneyId !== id) {
+        update((draft) => (journeyEditChanged(draft) ? draft : null));
+      }
+      setEditingJourneyId(id);
+      setActiveTab("routes");
+    },
+    [editingJourneyId, setActiveTab],
+  );
+
+  // Saved or cancelled (the Route Logger drops the draft first): back to My Trips,
+  // open on the journey
+  const handleJourneyEditEnd = useCallback(
+    (saved: boolean) => {
+      setReopenJourneyId(editingJourneyId);
+      setEditingJourneyId(null);
+      if (saved) handleRoutesLogged();
+      setActiveTab("journeylog");
+    },
+    [editingJourneyId, handleRoutesLogged, setActiveTab],
+  );
 
   // A login or logout clears the highlights (with the country list, above), and a
   // fit still waiting on one is dropped with them
@@ -565,8 +606,11 @@ export default function RailwayMap({
           ? "My Trips"
           : "My Journeys"
         : "Map & Stats";
-  const sheetLabel =
-    selectedRoutes.length > 0 ? `${tabName} · ${selectedRoutes.length} selected` : tabName;
+  const sheetLabel = editing
+    ? `${tabName} · editing`
+    : selectedRoutes.length > 0
+      ? `${tabName} · ${selectedRoutes.length} selected`
+      : tabName;
 
   // The summary bar's "Log journey": the sheet raises itself, this brings the form
   // into view — after the commit that unhides the Route Logger, since a hidden
@@ -593,7 +637,7 @@ export default function RailwayMap({
   // The same limit LocalTripLogger disables its form on, read per render as it is
   // there: logging clears the selection, which re-renders this.
   const summaryBlockedReason =
-    selectedRoutes.length > 0 && !user && !localStore.canAddMoreJourneys()
+    !editing && selectedRoutes.length > 0 && !user && !localStore.canAddMoreJourneys()
       ? localStore.JOURNEY_LIMIT_MESSAGE
       : null;
 
@@ -602,10 +646,13 @@ export default function RailwayMap({
     <UserSidebar
       user={user}
       dataAccess={dataAccess}
-      selectedRoutes={selectedRoutes}
+      selectedRoutes={loggerRoutes}
+      editingJourneyId={editing ? editingJourneyId : null}
+      onEditJourney={handleEditJourney}
+      onJourneyEditEnd={handleJourneyEditEnd}
+      reopenJourneyId={reopenJourneyId}
       onRemoveRoute={handleRemoveRoute}
       onClearAll={handleClearAll}
-      onUpdateRoutePartial={handleUpdateRoutePartial}
       onHighlightRoutes={handleHighlightRoutes}
       onAddRoutesFromPlanner={handleAddRoutesFromLogger}
       onRoutesLogged={handleRoutesLogged}
@@ -615,8 +662,6 @@ export default function RailwayMap({
       setActiveTab={setActiveTab}
       onStationClickHandler={handleSetStationClickHandler}
       sidebarWidth={isMobile ? null : sidebarWidth}
-      onJourneyEditStart={handleJourneyEditStart}
-      onJourneyEditEnd={handleJourneyEditEnd}
     />
   );
 
@@ -672,9 +717,10 @@ export default function RailwayMap({
           onCoverChange={handleSheetCoverChange}
           collapsedLabel={sheetLabel}
           peekContent={
-            selectedRoutes.length > 0 ? (
+            editing || selectedRoutes.length > 0 ? (
               <SelectionSummaryBar
-                routes={selectedRoutes}
+                routes={loggerRoutes}
+                editing={editing ? journeyEdit.name : null}
                 onLog={handleLogFromSummary}
                 blockedReason={summaryBlockedReason}
               />

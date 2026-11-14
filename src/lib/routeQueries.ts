@@ -316,8 +316,22 @@ export async function routeBoundsByIds(
 }
 
 /**
- * Metadata (no geometry) for a specific set of routes by track_id. Used to
- * label logged parts held in localStorage, which retain only the track id.
+ * `RailwayRoute.ends` of the route aliased `alias`: its geometry's first and last
+ * point, all a journey needs of the geometry to be read as station chains
+ * (`journeyChains.ts`).
+ */
+export function routeEndsSql(alias: string): string {
+  const geometry = `${alias}.geometry`;
+  return `CASE WHEN ${geometry} IS NOT NULL THEN json_build_array(
+      json_build_array(ST_X(ST_StartPoint(${geometry})), ST_Y(ST_StartPoint(${geometry}))),
+      json_build_array(ST_X(ST_EndPoint(${geometry})), ST_Y(ST_EndPoint(${geometry})))
+    ) END`;
+}
+
+/**
+ * Metadata (no geometry beyond its two ends) for a specific set of routes by
+ * track_id. Used to label logged parts held in localStorage, which retain only
+ * the track id.
  */
 export async function routeMetadataByIds(trackIds: number[]): Promise<RailwayRoute[]> {
   if (trackIds.length === 0) return [];
@@ -341,7 +355,8 @@ export async function routeMetadataByIds(trackIds: number[]): Promise<RailwayRou
       end_country,
       is_valid,
       closed,
-      closed_on
+      closed_on,
+      ${routeEndsSql("railway_routes")} AS ends
     FROM railway_routes
     WHERE track_id = ANY($1::int[])
   `,

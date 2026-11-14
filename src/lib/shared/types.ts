@@ -107,6 +107,11 @@ export type RailwayRoute = {
   // The stretch ridden, where a journey's routes are read (see LoggedPart)
   covered_start?: number | null;
   covered_end?: number | null;
+  /**
+   * The geometry's first and last point, [lng, lat], where a journey's routes are
+   * read without the geometry itself: what joins them into lines of stations.
+   */
+  ends?: [[number, number], [number, number]] | null;
 };
 
 /**
@@ -158,16 +163,23 @@ export type LoggedPart = {
 
 /**
  * An edit of a journey as a whole — saved by `saveJourneyEditsForUser`, or by
- * `saveJourneyEdits` in localStorage.ts for an anonymous visitor.
+ * `saveJourneyEdits` in localStorage.ts for an anonymous visitor. Only what the
+ * edit changed: a field left out (undefined) keeps whatever the journey holds
+ * now, which may have changed elsewhere since the edit began.
  */
 export interface JourneyEdits {
-  name: string;
-  description: string | null;
-  date: string;
-  /** The trip to file it under (null for none), or undefined to leave it where it is. */
+  name?: string;
+  /** Null clears it. */
+  description?: string | null;
+  date?: string;
+  /** The trip to file it under (null for none). */
   tripId?: number | null;
-  /** Routes to log, or whose partial flag changed, with the flag they now carry. */
-  upsert: { trackId: number; partial: boolean }[];
+  /**
+   * Routes to log, or whose ride changed, as they now stand: the partial flag and,
+   * for a partial ride of known extent, its stretch. The stretch is written as sent,
+   * so a route upserted without one has none.
+   */
+  upsert: { trackId: number; partial: boolean; range?: LoggedRange | null }[];
   /** Routes to unlog. */
   remove: number[];
 }
@@ -304,21 +316,11 @@ export interface MapSearchResults {
   stations: Station[];
 }
 
-/**
- * A journey card opening for editing hands the map two things: the handler that
- * toggles a route in and out of that journey, and a predicate saying whether a
- * route is in it already.
- *
- * The predicate exists for touch: there the tap opens a sheet whose button has to
- * say which way it goes ("Add to journey" / "Remove from journey") *before* it is
- * pressed, and only the card holds that journey's route list. Both callbacks must
- * be stable — the map registers them once per edit session and reads fresh state
- * through refs.
- */
-export type JourneyEditStartFn = (
-  onRouteClick: (route: SelectedRoute) => void,
-  isRouteInJourney: (trackId: number) => boolean,
-) => void;
+/** A ridden stretch, as fractions along the route (see CoveredRange). */
+export interface LoggedRange {
+  covered_start: number;
+  covered_end: number;
+}
 
 /**
  * Which stretch of a route was covered, as fractions along its geometry

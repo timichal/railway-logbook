@@ -7,6 +7,7 @@
  */
 
 import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
+import { sanitizeRange } from "./shared/routeCoverage";
 import type { JourneyEdits, LocalJourney, LocalLoggedPart } from "./shared/types";
 
 const JOURNEYS_KEY = "railway_journeys";
@@ -186,11 +187,10 @@ export function addJourneyWithParts(
 }
 
 /**
- * Saves an edited journey — its name, description and date, and its routes — as
- * `saveJourneyEditsForUser` does on the server. An upserted route keeps its stretch
- * while it stays partial and loses it when it doesn't: a stretch kept would come
- * back when the flag is ticked again, claiming a range nobody re-entered. Both
- * lists or neither.
+ * Saves an edited journey — what changed of its name, description and date, and
+ * its routes — as `saveJourneyEditsForUser` does on the server: an upserted route
+ * is written as the edit has it, its stretch included (none if it carries none).
+ * Both lists or neither.
  */
 export function saveJourneyEdits(id: string, edits: JourneyEdits): void {
   const journeys = journeysToWrite();
@@ -198,21 +198,26 @@ export function saveJourneyEdits(id: string, edits: JourneyEdits): void {
   if (!journeys.some((journey) => journey.id === id)) throw new StorageError(GONE_MESSAGE, true);
 
   const now = new Date().toISOString();
-  const flags = new Map(edits.upsert.map(({ trackId, partial }) => [trackId, partial]));
+  const ride = ({ partial, range }: JourneyEdits["upsert"][number]) => {
+    const known = sanitizeRange(range, partial);
+    return {
+      partial,
+      covered_start: known?.covered_start ?? null,
+      covered_end: known?.covered_end ?? null,
+    };
+  };
+  const upserts = new Map(edits.upsert.map((upsert) => [upsert.trackId, upsert]));
   const removed = new Set(edits.remove);
   const kept = parts.filter((part) => part.journey_id !== id || !removed.has(part.track_id));
   const logged = new Set(kept.filter((part) => part.journey_id === id).map((p) => p.track_id));
   const updated = kept.map((part) => {
-    const partial = part.journey_id === id ? flags.get(part.track_id) : undefined;
-    if (partial === undefined) return part;
-    return partial
-      ? { ...part, partial }
-      : { ...part, partial, covered_start: null, covered_end: null };
+    const upsert = part.journey_id === id ? upserts.get(part.track_id) : undefined;
+    return upsert ? { ...part, ...ride(upsert) } : part;
   });
   const added = edits.upsert
     .filter(({ trackId }) => !logged.has(trackId))
-    .map(({ trackId, partial }) =>
-      newLoggedPart({ journey_id: id, track_id: trackId, partial }, now),
+    .map((upsert) =>
+      newLoggedPart({ journey_id: id, track_id: upsert.trackId, ...ride(upsert) }, now),
     );
 
   writeParts([...updated, ...added]);
@@ -222,9 +227,10 @@ export function saveJourneyEdits(id: string, edits: JourneyEdits): void {
         journey.id === id
           ? {
               ...journey,
-              name: edits.name,
-              description: edits.description,
-              date: edits.date,
+              name: edits.name ?? journey.name,
+              description:
+                edits.description !== undefined ? edits.description : journey.description,
+              date: edits.date ?? journey.date,
               updated_at: now,
             }
           : journey,

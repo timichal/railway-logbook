@@ -16,41 +16,22 @@ import type { PoolClient } from "pg";
 import pool, { asMissingRow, withTransaction } from "./db";
 import { NotFoundError, ValidationError } from "./errors";
 import { buildCoveredStretches } from "./progressQueries";
-import { routeBoundsByIds } from "./routeQueries";
+import { routeBoundsByIds, routeEndsSql } from "./routeQueries";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
 import type { RegionId } from "./shared/regions";
-import { knownStretches } from "./shared/routeCoverage";
+import { knownStretches, sanitizeRange } from "./shared/routeCoverage";
 import type {
   Journey,
   JourneyEdits,
   LoggedPart,
+  LoggedRange,
   PartialRouteGeometry,
   RailwayRoute,
   RouteBounds,
 } from "./shared/types";
 
 /** Fraction range along a route's geometry — see user_logged_parts.covered_start. */
-export interface LoggedRange {
-  covered_start: number;
-  covered_end: number;
-}
-
-/**
- * A ridden stretch is only stored when it is a genuine, non-degenerate part of
- * the route, and only for a partial ride: a route logged whole covers all of it,
- * so a range would be redundant (and would draw a stray overlay).
- */
-export function sanitizeRange(
-  range: LoggedRange | null | undefined,
-  partial: boolean,
-): LoggedRange | null {
-  if (!partial || !range) return null;
-  const start = Number(range.covered_start);
-  const end = Number(range.covered_end);
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-  if (start < 0 || end > 1 || start >= end) return null;
-  return { covered_start: start, covered_end: end };
-}
+export type { LoggedRange };
 
 /** Throws unless a journey's name and date can be written. */
 function assertJourneyMeta(name: unknown, date: unknown): void {
@@ -138,18 +119,21 @@ export async function journeyForUser(
     [journeyId, userId],
   );
 
-  // Exclude the heavy geometry column
+  // Exclude the heavy geometry column; its two ends are enough to chain the routes
   const routesQuery = pool.query<RailwayRoute & LoggedPart>(
     `SELECT
       rr.track_id, rr.name, rr.from_station, rr.to_station,
       rr.description, rr.usage_type, rr.usage_tags, rr.link, rr.link_name, rr.line_class,
       rr.length_km, rr.start_country, rr.end_country,
-      rr.is_valid,
+      rr.is_valid, ${routeEndsSql("rr")} AS ends,
       ulp.partial, ulp.covered_start, ulp.covered_end
     FROM user_logged_parts ulp
     JOIN railway_routes rr ON ulp.track_id = rr.track_id
     WHERE ulp.journey_id = $1 AND ulp.user_id = $2
-    ORDER BY ulp.created_at ASC`,
+    -- In the order they were logged: a journey's are all inserted at once, so
+    -- they share created_at, but the id follows the selection, which is roughly
+    -- the order they were ridden in (journeyChains reads a chain's way from it)
+    ORDER BY ulp.id`,
     [journeyId, userId],
   );
 
@@ -345,40 +329,59 @@ export async function updateLoggedPartPartialForUser(
  * no longer matched it, so retrying re-sent changes that had already landed. All
  * or nothing, a failed save leaves the journey exactly as the card loaded it.
  *
- * An upserted route keeps its stretch while it stays partial and loses it when it
- * doesn't — the rule `updateLoggedPartPartialForUser` applies. A newly logged one
- * has no stretch: only the Journey Planner knows one, and it logs through
- * `createJourneyForUser`.
+ * An upserted route is written as the edit has it, stretch included: the Route
+ * Logger edits a journey as a whole selection, and a route re-picked through the
+ * Journey Planner arrives with the stretch it measured. One sent without a stretch
+ * has none, which is what unticking partial or ticking it by hand means.
  */
 export async function saveJourneyEditsForUser(
   userId: number,
   journeyId: number,
   edits: JourneyEdits,
 ): Promise<void> {
-  assertJourneyMeta(edits?.name, edits?.date);
+  // Each only where it is sent: one left out keeps what the journey holds
+  if (edits?.name !== undefined && (typeof edits.name !== "string" || edits.name.trim() === "")) {
+    throw new ValidationError("Journey name is required");
+  }
+  if (edits?.date !== undefined && (typeof edits.date !== "string" || !isDateOnly(edits.date))) {
+    throw new ValidationError("Journey date must be a real day, as YYYY-MM-DD");
+  }
   const validRoutes =
     Array.isArray(edits.upsert) &&
     Array.isArray(edits.remove) &&
-    edits.upsert.every((u) => Number.isInteger(u?.trackId) && typeof u.partial === "boolean") &&
+    edits.upsert.every(
+      (u) =>
+        Number.isInteger(u?.trackId) &&
+        typeof u.partial === "boolean" &&
+        (u.range == null || typeof u.range === "object"),
+    ) &&
     edits.remove.every((trackId) => Number.isInteger(trackId));
   if (!validRoutes) throw new ValidationError("Malformed route changes");
-  if (edits.description !== null && typeof edits.description !== "string") {
+  if (
+    edits.description !== undefined &&
+    edits.description !== null &&
+    typeof edits.description !== "string"
+  ) {
     throw new ValidationError("Journey description must be text");
   }
 
   await inTransaction(async (client) => {
     // First, so the journey row is locked against a concurrent delete for the
     // rest of the transaction; a journey that isn't the caller's stops here, and a
-    // trip that isn't fails the composite FK (trip_id, user_id) as "Trip not found"
+    // trip that isn't fails the composite FK (trip_id, user_id) as "Trip not found".
+    // It runs when no field changed too, for the lock and the check.
     const updated = await client.query(
       `UPDATE user_journeys
-       SET name = $1, description = $2, date = $3,
-           trip_id = CASE WHEN $4 THEN $5::int ELSE trip_id END
-       WHERE id = $6 AND user_id = $7`,
+       SET name = COALESCE($1, name),
+           description = CASE WHEN $2 THEN $3 ELSE description END,
+           date = COALESCE($4::date, date),
+           trip_id = CASE WHEN $5 THEN $6::int ELSE trip_id END
+       WHERE id = $7 AND user_id = $8`,
       [
-        edits.name.trim(),
-        edits.description,
-        edits.date,
+        edits.name?.trim() ?? null,
+        edits.description !== undefined,
+        edits.description ?? null,
+        edits.date ?? null,
         edits.tripId !== undefined,
         edits.tripId ?? null,
         journeyId,
@@ -400,14 +403,15 @@ export async function saveJourneyEditsForUser(
         journeyId,
         edits.upsert.map((u) => u.trackId),
         edits.upsert.map((u) => u.partial),
+        edits.upsert.map((u) => u.range ?? null),
       );
       await client.query(
         `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
          VALUES ${rows.placeholders}
          ON CONFLICT (journey_id, track_id) DO UPDATE SET
            partial = EXCLUDED.partial,
-           covered_start = CASE WHEN EXCLUDED.partial THEN user_logged_parts.covered_start END,
-           covered_end = CASE WHEN EXCLUDED.partial THEN user_logged_parts.covered_end END`,
+           covered_start = EXCLUDED.covered_start,
+           covered_end = EXCLUDED.covered_end`,
         rows.values,
       );
     }
