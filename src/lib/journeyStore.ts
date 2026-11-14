@@ -5,9 +5,10 @@
  */
 
 import { ActionError, unwrap } from "./actionResult";
-import { deleteJourney, getJourney, saveJourneyEdits } from "./journeyActions";
+import { deleteJourney, saveJourneyEdits } from "./journeyActions";
 import * as localStore from "./localStorage";
 import { getCoveredStretchesFor, getRoutesByIds } from "./publicReads";
+import { fetchJourney } from "./sessionReads";
 import type { RegionId } from "./shared/regions";
 import { knownStretches } from "./shared/routeCoverage";
 import type { JourneyEdits, PartialRouteGeometry, RailwayRoute, RouteBounds } from "./shared/types";
@@ -32,7 +33,7 @@ export interface JourneyStore<Id> {
 }
 
 export const databaseJourneyStore: JourneyStore<number> = {
-  load: async (id, region) => unwrap(await getJourney(id, region)),
+  load: (id, region) => fetchJourney(id, region),
   save: async (id, edits) => unwrap(await saveJourneyEdits(id, edits)),
   remove: async (id) => unwrap(await deleteJourney(id)),
 };

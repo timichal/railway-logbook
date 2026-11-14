@@ -7,14 +7,20 @@
  * A refusal is thrown as an `ActionError` (`fetchJson.ts`).
  */
 
-import { fetchJson, listParam, queryString } from "./fetchJson";
+import { getNoStore, listParam } from "./fetchJson";
+import type { journeyWithBoundsForUser } from "./journeyQueries";
 import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type { CoveredStretch } from "./shared/types";
-import type { TripName } from "./tripQueries";
+import type {
+  JourneyWithStats,
+  journeysAndTripsForUser,
+  TripName,
+  tripWithBoundsForUser,
+} from "./tripQueries";
 
 function getMine<T>(path: string, params: Record<string, string | undefined>): Promise<T> {
-  return fetchJson<T>(`/api/me/${path}?${queryString(params)}`, { cache: "no-store" });
+  return getNoStore(`/api/me/${path}`, params);
 }
 
 export function fetchProgress(
@@ -39,4 +45,48 @@ export function fetchCoveredStretches(region: RegionId): Promise<CoveredStretch[
 
 export function fetchTripNames(region: RegionId): Promise<TripName[]> {
   return getMine("trip-names", { region });
+}
+
+/**
+ * One page of My Trips. With `focusJourneyId`, the page that lists that journey,
+ * whichever `page` asked (see journeysAndTripsForUser).
+ */
+export function fetchJourneysAndTrips(
+  page: number,
+  pageSize: number,
+  search: string,
+  region: RegionId,
+  focusJourneyId: number | null = null,
+): ReturnType<typeof journeysAndTripsForUser> {
+  return getMine("logbook", {
+    region,
+    page: String(page),
+    pageSize: String(pageSize),
+    search: search || undefined,
+    focus: focusJourneyId === null ? undefined : String(focusJourneyId),
+  });
+}
+
+/** An opened trip: its journeys, routes, partial stretches and bounds in `region`. */
+export function fetchTrip(
+  tripId: number,
+  region: RegionId,
+): ReturnType<typeof tripWithBoundsForUser> {
+  return getMine(`trips/${tripId}`, { region });
+}
+
+/**
+ * An opened journey: its routes, their bounds in `region` and the stretches of
+ * those ridden in part. A journey that is gone is an `ActionError` with `notFound`.
+ */
+export function fetchJourney(
+  journeyId: number,
+  region: RegionId,
+): ReturnType<typeof journeyWithBoundsForUser> {
+  return getMine(`journeys/${journeyId}`, { region });
+}
+
+/** The journeys in `region` filed under no trip, for a trip's assignment picker. */
+export function fetchUnassignedJourneys(region: RegionId): Promise<JourneyWithStats[]> {
+  return getMine("journeys/unassigned", { region });
 }

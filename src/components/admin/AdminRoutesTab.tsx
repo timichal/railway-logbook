@@ -5,12 +5,12 @@ import AdminList, { usePagedList } from "@/components/admin/AdminList";
 import RouteEditForm, { type RouteEditAction } from "@/components/admin/RouteEditForm";
 import { type EditRouteData, NO_ROUTE_SUGGESTIONS } from "@/components/admin/RouteMetadataFields";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
+import { fetchAdminRoutes } from "@/lib/adminReads";
 import {
   type AdminRouteDetail,
   type AdminRouteSummary,
   deleteRailwayRoute,
   duplicateRailwayRoute,
-  getAllRailwayRoutes,
   markRouteInvalid,
   type RouteSuggestions,
   setRouteUnderRepair,
@@ -182,16 +182,21 @@ export default function AdminRoutesTab({
     setEditForm(selectedRoute ? editFormFromRoute(selectedRoute) : null);
   }
 
+  // The latest load: the reads are parallel fetches, so after a region switch the
+  // previous region's slower list could otherwise land last
+  const loadRequestRef = useRef(0);
   const loadRoutes = async () => {
+    const request = ++loadRequestRef.current;
     try {
       setListLoading(true);
-      const routesData = unwrap(await getAllRailwayRoutes(regionId));
-      setRoutes(routesData);
+      const routesData = await fetchAdminRoutes(regionId);
+      if (request === loadRequestRef.current) setRoutes(routesData);
     } catch (error) {
+      if (request !== loadRequestRef.current) return;
       console.error("Error loading routes:", error);
       showError(`Failed to load routes: ${actionErrorMessage(error)}`);
     } finally {
-      setListLoading(false);
+      if (request === loadRequestRef.current) setListLoading(false);
     }
   };
 
@@ -200,7 +205,7 @@ export default function AdminRoutesTab({
     loadRoutes();
   }, [regionId]);
 
-  // The list arrives unordered (see getAllRailwayRoutes) and is sorted here, by
+  // The list arrives unordered (see adminRoutes) and is sorted here, by
   // from/to — or, where the region names its lines, by name first, the ones
   // still unnamed after them. track_id last, so two routes between the same
   // stations (two lines, say) keep their order from one reload to the next.

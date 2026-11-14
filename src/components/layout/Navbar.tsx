@@ -6,6 +6,7 @@ import ShareMapDialog from "@/components/sharing/ShareMapDialog";
 import IconButton from "@/components/ui/IconButton";
 import RegionSwitch from "@/components/ui/RegionSwitch";
 import ThemeSwitch, { ThemeCycleButton } from "@/components/ui/ThemeSwitch";
+import { isAdmin } from "@/lib/adminUser";
 import type { User } from "@/lib/authActions";
 import { useRegion } from "@/lib/regionContext";
 import { btn } from "@/lib/ui/buttonStyles";
@@ -118,7 +119,7 @@ export default function Navbar({ user, onLogout, isAdminPage = false, onOpenMenu
             {/* The Admin link is in the menu too, but it stays in the bar as well:
                 switching between the map and the admin view is a constant back and
                 forth, and two clicks each way is two too many. */}
-            {user?.id === 1 && !isAdminPage && (
+            {isAdmin(user) && !isAdminPage && (
               <Link href="/admin" onClick={handleAdminClick} className={btn("primary", "bar")}>
                 Admin
               </Link>

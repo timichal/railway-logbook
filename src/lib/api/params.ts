@@ -81,10 +81,14 @@ export function optionalInt(url: URL, name: string, fallback: number): number {
   return value;
 }
 
-/** A numeric path segment, e.g. the `id` in `/api/v1/journeys/12`. */
+/**
+ * A numeric path segment, e.g. the `id` in `/api/v1/journeys/12`. Capped at
+ * Postgres's integer: past it the query would fail, an opaque 500 for what is a
+ * malformed request.
+ */
 export function requireIdParam(value: string, name: string): number {
   const id = Number(value);
-  if (!Number.isInteger(id) || id <= 0) {
+  if (!Number.isInteger(id) || id <= 0 || id > MAX_PG_INT) {
     throw new ApiError(400, `${name} must be a positive integer`);
   }
   return id;

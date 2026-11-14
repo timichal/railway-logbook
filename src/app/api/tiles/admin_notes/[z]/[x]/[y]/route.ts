@@ -1,4 +1,5 @@
 import { adminNotesTile } from "@/lib/adminNotesTileQueries";
+import { ADMIN_USER_ID } from "@/lib/adminUser";
 import { mvtResponse, parseTile } from "@/lib/api/tiles";
 import { sessionClaims } from "@/lib/api/webSession";
 import { ZOOM_RANGES } from "@/lib/shared/map/zoomRanges";
@@ -24,7 +25,7 @@ export async function GET(_request: Request, context: Context): Promise<Response
 
   const claims = await sessionClaims();
   if (!claims) return new Response(null, { status: 401 });
-  if (claims.userId !== 1) return new Response(null, { status: 403 });
+  if (claims.userId !== ADMIN_USER_ID) return new Response(null, { status: 403 });
 
   try {
     const body = await adminNotesTile(tile.z, tile.x, tile.y, claims);

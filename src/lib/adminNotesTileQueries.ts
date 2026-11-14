@@ -14,6 +14,7 @@
  * saves behind them.
  */
 
+import { ADMIN_USER_ID } from "./adminUser";
 import type { TokenClaims } from "./authTokens";
 import { tilePool } from "./routeTileQueries";
 import { currentAccountIdSql, issuedAtParam } from "./sessionQueries";
@@ -32,12 +33,12 @@ export async function adminNotesTile(
   const result = await tilePool.query<{ admin_id: number | null; tile: Buffer | null }>(
     `WITH admin AS (SELECT ${currentAccountIdSql("$4", "$5")} AS user_id)
      SELECT admin.user_id AS admin_id,
-            CASE WHEN admin.user_id = 1 THEN admin_notes_tile($1, $2, $3) END AS tile
+            CASE WHEN admin.user_id = ${ADMIN_USER_ID} THEN admin_notes_tile($1, $2, $3) END AS tile
      FROM admin`,
     [z, x, y, claims.userId, issuedAtParam(claims)],
   );
 
   const row = result.rows[0];
-  if (row?.admin_id !== 1) return null;
+  if (row?.admin_id !== ADMIN_USER_ID) return null;
   return row.tile ?? Buffer.alloc(0);
 }

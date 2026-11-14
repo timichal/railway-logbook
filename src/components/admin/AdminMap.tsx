@@ -5,10 +5,12 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import AdminLayerControls from "@/components/admin/AdminLayerControls";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { unwrap } from "@/lib/actionResult";
-import { searchAdminMap } from "@/lib/adminMapActions";
-import { getAllRouteEndpoints, getValidRoutesTotalKm } from "@/lib/adminRouteActions";
-import { getScenicLineEndpoints } from "@/lib/adminScenicLineActions";
+import {
+  fetchRouteEndpoints,
+  fetchScenicLineEndpoints,
+  fetchValidRoutesTotalKm,
+  searchAdminMap,
+} from "@/lib/adminReads";
 import {
   adminNotesTileUrl,
   COLORS,
@@ -57,15 +59,8 @@ import {
   getAdminRouteHeritageWidthExpression,
   getAdminRouteWidthExpression,
 } from "@/lib/shared/map/utils/userRouteStyling";
-import type { RegionId } from "@/lib/shared/regions";
-import type { GeoJSONFeatureCollection, MapSearchResults, RouteBounds } from "@/lib/shared/types";
+import type { GeoJSONFeatureCollection, RouteBounds } from "@/lib/shared/types";
 import { useResolvedTheme } from "@/lib/theme";
-
-// The admin map draws every station, so its search offers every station too — not
-// only the near-route ones the user map's does — and lines as the user map's does.
-// Module-level: the search hook re-creates its search whenever the function changes.
-const searchAdminStations = (query: string, region: RegionId): Promise<MapSearchResults> =>
-  searchAdminMap(query, region).then(unwrap);
 
 const ALL_USAGE_TYPES: UsageType[] = usageOptions.map((option) => option.id);
 const NO_USAGE_TYPES: UsageType[] = [];
@@ -292,10 +287,15 @@ export default function AdminMap({
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch endpoints on demand.
   useEffect(() => {
     if (!mapLoaded) return;
-    getAllRouteEndpoints(regionId)
-      .then(unwrap)
-      .then(setRouteEndpoints)
+    let current = true;
+    fetchRouteEndpoints(regionId)
+      .then((endpoints) => {
+        if (current) setRouteEndpoints(endpoints);
+      })
       .catch((error) => console.error("Error fetching route endpoints:", error));
+    return () => {
+      current = false;
+    };
   }, [mapLoaded, refreshTrigger, regionId]);
 
   // Scenic line endpoints, only in scenic mode: there a click on a
@@ -307,8 +307,7 @@ export default function AdminMap({
       return;
     }
     let current = true;
-    getScenicLineEndpoints(regionId)
-      .then(unwrap)
+    fetchScenicLineEndpoints(regionId)
       .then((endpoints) => {
         if (current) setScenicEndpoints(endpoints);
       })
@@ -321,10 +320,15 @@ export default function AdminMap({
   // Fetch total km of valid routes (refreshes when routes are saved/deleted)
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger is an intentional trigger to refetch the total on demand.
   useEffect(() => {
-    getValidRoutesTotalKm(regionId)
-      .then(unwrap)
-      .then(setValidRoutesTotalKm)
+    let current = true;
+    fetchValidRoutesTotalKm(regionId)
+      .then((totalKm) => {
+        if (current) setValidRoutesTotalKm(totalKm);
+      })
       .catch((error) => console.error("Error fetching valid routes total km:", error));
+    return () => {
+      current = false;
+    };
   }, [refreshTrigger, regionId]);
 
   // Selected route highlighting
@@ -443,7 +447,7 @@ export default function AdminMap({
         lineHighlight={lineHighlight}
         region={regionId}
         isMobile={isMobile}
-        search={searchAdminStations}
+        search={searchAdminMap}
         // On a phone the collapsed "Layers" pill holds the top-left corner, and the
         // expanded panel, later in the tree, covers the box while it is open.
         positionClassName={isMobile ? "top-3 left-20 right-14" : undefined}

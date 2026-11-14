@@ -2,8 +2,7 @@ import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import NotesPopup from "@/components/admin/NotesPopup";
-import { unwrap } from "@/lib/actionResult";
-import { getAdminNote } from "@/lib/adminNotesActions";
+import { fetchAdminNote } from "@/lib/adminReads";
 import { featuresAt } from "@/lib/map/featuresAt";
 import type { NoteType } from "@/lib/shared/constants";
 import type { AdminNote } from "@/lib/shared/types";
@@ -59,7 +58,7 @@ export function useAdminNotesPopup({ map, mapLoaded, onNotesChanged }: UseAdminN
         if (noteId) {
           let note: AdminNote | null;
           try {
-            note = unwrap(await getAdminNote(noteId));
+            note = await fetchAdminNote(noteId);
           } catch (error) {
             console.error("Failed to load note:", error);
             if (!disposed && clickId === latestClick) showError("Failed to load note");

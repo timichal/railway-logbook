@@ -6,12 +6,9 @@ import AdminList, { usePagedList } from "@/components/admin/AdminList";
 import TextField from "@/components/admin/TextField";
 import Icon from "@/components/ui/Icon";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
-import {
-  type AdminScenicLine,
-  deleteScenicLine,
-  getScenicLines,
-  updateScenicLineNames,
-} from "@/lib/adminScenicLineActions";
+import { fetchScenicLines } from "@/lib/adminReads";
+import { deleteScenicLine, updateScenicLineNames } from "@/lib/adminScenicLineActions";
+import type { AdminScenicLine } from "@/lib/adminScenicLineQueries";
 import { useRegionId } from "@/lib/regionContext";
 import { foldForSearch } from "@/lib/searchText";
 import type { RouteBounds } from "@/lib/shared/types";
@@ -76,7 +73,7 @@ export default function AdminScenicLinesTab({
     const request = ++loadRequestRef.current;
     setLoading(true);
     try {
-      const loaded = unwrap(await getScenicLines(regionId));
+      const loaded = await fetchScenicLines(regionId);
       if (request === loadRequestRef.current) setLines(loaded);
     } catch (error) {
       if (request === loadRequestRef.current) {

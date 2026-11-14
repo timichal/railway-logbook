@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AdminPageClient from "@/components/admin/AdminPageClient";
+import { isAdmin } from "@/lib/adminUser";
 import { getUser } from "@/lib/authActions";
 import { REGION_COOKIE, regionIdOrDefault } from "@/lib/shared/regions";
 
@@ -8,7 +9,7 @@ export default async function AdminPage() {
   // Check if user is authenticated and is admin
   const user = await getUser();
 
-  if (user?.id !== 1) {
+  if (!isAdmin(user)) {
     redirect("/");
   }
 

@@ -5,7 +5,7 @@
  * mid-visit stops answering: a 404, thrown as an `ActionError` (`notFound`).
  */
 
-import { fetchJson, listParam, queryString } from "./fetchJson";
+import { getNoStore, listParam } from "./fetchJson";
 import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type { CoveredStretch } from "./shared/types";
@@ -15,9 +15,7 @@ function getShared<T>(
   path: string,
   params: Record<string, string | undefined>,
 ): Promise<T> {
-  return fetchJson<T>(`/api/shared/${encodeURIComponent(token)}/${path}?${queryString(params)}`, {
-    cache: "no-store",
-  });
+  return getNoStore(`/api/shared/${encodeURIComponent(token)}/${path}`, params);
 }
 
 export function fetchSharedProgress(

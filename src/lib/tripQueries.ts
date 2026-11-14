@@ -91,7 +91,7 @@ function tripRouteCoverageSql(where: string): string {
 }
 
 /**
- * Trip stats SELECT, shared by tripsForUser (the mobile API) and getJourneysAndTrips.
+ * Trip stats SELECT, shared by tripsForUser (the mobile API) and journeysAndTripsForUser.
  *
  * Journey and route stats are aggregated in separate subqueries rather than by
  * joining user_journeys × user_logged_parts directly: that join fans out (one
@@ -377,7 +377,7 @@ export type TripsAndJourneysItem =
  *
  * Scoped to `region` (see journeyInRegionSql): browsing the list highlights the
  * item's routes on the map, and the map is locked to one region. The trip picker
- * (tripNamesForUser) and the journey picker (getUnassignedJourneys) are scoped the
+ * (tripNamesForUser) and the journey picker (unassignedJourneysForUser) are scoped the
  * same way.
  *
  * `focusJourneyId` asks for the page that lists that journey (its own row, or

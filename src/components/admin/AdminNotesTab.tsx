@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
-import { getAllAdminNotes, updateAdminNote } from "@/lib/adminNotesActions";
+import { updateAdminNote } from "@/lib/adminNotesActions";
+import { fetchAdminNotes } from "@/lib/adminReads";
 import { useRegionId } from "@/lib/regionContext";
 import { getNoteTypeColor, type NoteType, noteTypeOptions } from "@/lib/shared/constants";
 import type { AdminNote } from "@/lib/shared/types";
@@ -29,15 +30,20 @@ export default function AdminNotesTab({
   const [filter, setFilter] = useState<TypeFilter>("all");
   const [savingId, setSavingId] = useState<number | null>(null);
 
+  // The latest load: a refresh or a region switch while one is in flight must not
+  // be overwritten by the earlier, slower answer
+  const loadRequestRef = useRef(0);
   const loadNotes = useCallback(async () => {
+    const request = ++loadRequestRef.current;
     try {
       setIsLoading(true);
-      const data = unwrap(await getAllAdminNotes(regionId));
-      setNotes(data);
+      const data = await fetchAdminNotes(regionId);
+      if (request === loadRequestRef.current) setNotes(data);
     } catch (error) {
+      if (request !== loadRequestRef.current) return;
       showError(`Failed to load notes: ${actionErrorMessage(error)}`);
     } finally {
-      setIsLoading(false);
+      if (request === loadRequestRef.current) setIsLoading(false);
     }
   }, [showError, regionId]);
 

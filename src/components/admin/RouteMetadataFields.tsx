@@ -17,7 +17,7 @@ import { btn } from "@/lib/ui/buttonStyles";
  */
 export type EditRouteData = SaveRouteData & { line_class: LineClass };
 
-/** The suggestions before they have loaded (see `getRouteSuggestions`). */
+/** The suggestions before they have loaded (see `routeSuggestions`). */
 export const NO_ROUTE_SUGGESTIONS: RouteSuggestions = { tags: [], lineNames: [] };
 
 /**

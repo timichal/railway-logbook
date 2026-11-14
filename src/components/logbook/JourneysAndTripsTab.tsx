@@ -6,10 +6,11 @@ import TripCard from "@/components/logbook/TripCard";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { databaseJourneyStore } from "@/lib/journeyStore";
 import { useRegionId } from "@/lib/regionContext";
+import { fetchJourneysAndTrips } from "@/lib/sessionReads";
 import type { HighlightRoutesFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import type { TripsAndJourneysItem } from "@/lib/tripActions";
-import { createTrip, getJourneysAndTrips } from "@/lib/tripActions";
+import { createTrip } from "@/lib/tripActions";
 import { btn } from "@/lib/ui/buttonStyles";
 import { NEW_TRIP_EDIT_KEY, useDraft } from "@/lib/ui/editGuard";
 import { useRevealJourneyCard } from "@/lib/ui/scrollInContainer";
@@ -110,8 +111,12 @@ export default function JourneysAndTripsTab({
       // can change its date, and so its place)
       const reopen = pendingOpenRef.current;
       try {
-        const result = unwrap(
-          await getJourneysAndTrips(page, PAGE_SIZE, debouncedSearch, regionId, reopen),
+        const result = await fetchJourneysAndTrips(
+          page,
+          PAGE_SIZE,
+          debouncedSearch,
+          regionId,
+          reopen,
         );
         if (requestId !== loadRequestRef.current) return;
         // Deleting the last item on the last page leaves `page` past the end;

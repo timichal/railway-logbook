@@ -1,6 +1,6 @@
 /**
- * The web page's side of its own route handlers (`api/me`, `api/public`,
- * `api/shared`): a JSON answer, or the `{ error }` body `apiHandler` writes
+ * The web page's side of its own route handlers (`api/me`, `api/admin`,
+ * `api/public`, `api/shared`): a JSON answer, or the `{ error }` body `apiHandler` writes
  * thrown as an `ActionError`, so call sites read a refusal exactly as they read
  * an `unwrap`ped action (`actionErrorMessage`; `notFound` on a 404).
  */
@@ -30,6 +30,19 @@ export function queryString(params: Record<string, string | undefined>): string 
     if (value !== undefined) query.set(name, value);
   }
   return query.toString();
+}
+
+/**
+ * A GET whose answer no cache may hold: the reads that depend on the session or
+ * on a share link (`sessionReads.ts`, `adminReads.ts`, `sharedMapReads.ts`).
+ * Parameters left undefined are left out.
+ */
+export function getNoStore<T>(
+  path: string,
+  params: Record<string, string | undefined> = {},
+): Promise<T> {
+  const query = queryString(params);
+  return fetchJson<T>(query ? `${path}?${query}` : path, { cache: "no-store" });
 }
 
 /**

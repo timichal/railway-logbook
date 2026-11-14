@@ -18,6 +18,7 @@
  */
 
 import bcrypt from "bcryptjs";
+import { ADMIN_USER_ID } from "./adminUser";
 import type { User } from "./authTokens";
 import pool from "./db";
 import { ValidationError } from "./errors";
@@ -145,7 +146,7 @@ export async function deleteAccount(userId: number, password: string): Promise<v
     throw new ValidationError("Password is required");
   }
 
-  if (userId === 1) {
+  if (userId === ADMIN_USER_ID) {
     throw new ValidationError("The admin account cannot be deleted");
   }
 

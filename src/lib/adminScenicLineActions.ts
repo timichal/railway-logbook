@@ -4,14 +4,11 @@ import type { ActionResult } from "./actionResult";
 import { findAdminPath } from "./adminPathSearch";
 import { requiredStations, SCENIC_BACKTRACKING_ERROR } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
-import { boundsSql, coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
+import { coordinatesToWKT, pointToWKT } from "./coordinateUtils";
 import { countryAt } from "./countryUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
-import { assertRegionId } from "./regionArgument";
-import { type RegionId, regionContainsSql } from "./shared/regions";
-import type { GeoJSONFeature, GeoJSONFeatureCollection, RouteBounds } from "./shared/types";
 
 /**
  * Scenic lines: stretches of track the user map highlights as scenic.
@@ -28,21 +25,6 @@ import type { GeoJSONFeature, GeoJSONFeatureCollection, RouteBounds } from "./sh
  * recalculation that comes out backtracking marks the line invalid.
  */
 
-/** One scenic line as the admin list shows and edits it. */
-export type AdminScenicLine = {
-  id: number;
-  from_station: string;
-  to_station: string;
-  length_km: number;
-  is_valid: boolean;
-  error_message: string | null;
-  /** The line's box, which the map flies to. */
-  bounds: RouteBounds;
-  /** The stored click points the line is recalculated from. */
-  starting_coordinate: [number, number];
-  ending_coordinate: [number, number];
-};
-
 /** The path between the click points as WKT, refused if there is none or it backtracks. */
 async function scenicLineWKT(
   startCoordinate: [number, number],
@@ -56,68 +38,6 @@ async function scenicLineWKT(
     throw new ValidationError(SCENIC_BACKTRACKING_ERROR);
   }
   return coordinatesToWKT(path.coordinates);
-}
-
-/**
- * The region's scenic lines, by bounding box as the admin routes list is — a
- * line may run through a country outside SUPPORTED_COUNTRIES. Each with its box:
- * a line picked from the list is flown to at once.
- * Unordered: the tab sorts it, as the routes list is sorted (`adminListSort.ts`).
- */
-export async function getScenicLines(region: RegionId): Promise<ActionResult<AdminScenicLine[]>> {
-  return asAdmin(async () => {
-    assertRegionId(region);
-    const result = await pool.query<AdminScenicLine>(`
-      SELECT id, from_station, to_station, length_km, is_valid, error_message,
-             ${boundsSql("geometry")} AS bounds,
-             ${lngLatSql("starting_coordinate")} AS starting_coordinate,
-             ${lngLatSql("ending_coordinate")} AS ending_coordinate
-      FROM scenic_lines
-      WHERE ${regionContainsSql(region, "starting_coordinate")}
-    `);
-    return result.rows;
-  });
-}
-
-/**
- * The region's scenic line endpoints, for the admin map's dots in scenic mode
- * (a GeoJSON FeatureCollection of Points, as `getAllRouteEndpoints` is for routes).
- */
-export async function getScenicLineEndpoints(
-  region: RegionId,
-): Promise<ActionResult<GeoJSONFeatureCollection>> {
-  return asAdmin(async () => {
-    assertRegionId(region);
-    const result = await pool.query<{
-      id: number;
-      from_station: string;
-      to_station: string;
-      start: [number, number];
-      end: [number, number];
-    }>(`
-      SELECT id, from_station, to_station,
-             ${lngLatSql("starting_coordinate")} AS start, ${lngLatSql("ending_coordinate")} AS end
-      FROM scenic_lines
-      WHERE ${regionContainsSql(region, "starting_coordinate")}
-    `);
-
-    return {
-      type: "FeatureCollection",
-      features: result.rows.flatMap((row) =>
-        (["start", "end"] as const).map(
-          (endpoint): GeoJSONFeature => ({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: row[endpoint] },
-            properties: {
-              scenic_line_id: row.id,
-              endpoint_type: endpoint,
-              line_name: `${row.from_station} ⟷ ${row.to_station}`,
-            },
-          }),
-        ),
-      ),
-    };
-  });
 }
 
 /** Create a scenic line along the path between two click points. Returns its id. */

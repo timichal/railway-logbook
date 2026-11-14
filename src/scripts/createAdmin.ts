@@ -13,6 +13,7 @@
  * an argument, so it does not end up in shell history or a process listing.
  */
 
+import { ADMIN_USER_ID } from "../lib/adminUser";
 import pool from "../lib/db";
 import { hashPassword } from "../lib/passwordHash";
 
@@ -122,7 +123,7 @@ async function createAdmin() {
   }
 
   try {
-    const existing = await pool.query("SELECT email FROM users WHERE id = 1");
+    const existing = await pool.query("SELECT email FROM users WHERE id = $1", [ADMIN_USER_ID]);
     if (existing.rows.length > 0 && !reset) {
       console.error(
         `The admin (user 1) already exists as ${existing.rows[0].email}. Pass --reset to replace its email and password.`,
@@ -147,13 +148,13 @@ async function createAdmin() {
     // this JWT_SECRET may outlive the database it was issued against.
     await pool.query(
       `INSERT INTO users (id, email, name, password, password_changed_at)
-       VALUES (1, lower(btrim($1)), $2, $3, now())
+       VALUES ($4, lower(btrim($1)), $2, $3, now())
        ON CONFLICT (id) DO UPDATE
          SET email = EXCLUDED.email,
              name = COALESCE(EXCLUDED.name, users.name),
              password = EXCLUDED.password,
              password_changed_at = EXCLUDED.password_changed_at`,
-      [email, name, await hashPassword(password)],
+      [email, name, await hashPassword(password), ADMIN_USER_ID],
     );
 
     console.log(

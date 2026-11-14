@@ -1,4 +1,5 @@
 import { type ActionResult, asActionResult } from "./actionResult";
+import { isAdmin } from "./adminUser";
 import { getUser } from "./authActions";
 import { SIGNED_OUT_MESSAGE, ValidationError } from "./errors";
 
@@ -15,7 +16,7 @@ import { SIGNED_OUT_MESSAGE, ValidationError } from "./errors";
 export async function asAdmin<T>(action: () => Promise<T>): Promise<ActionResult<T>> {
   return asActionResult(async () => {
     const user = await getUser();
-    if (user?.id !== 1) {
+    if (!isAdmin(user)) {
       throw new ValidationError("Admin access required");
     }
     return action();

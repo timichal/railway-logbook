@@ -16,9 +16,9 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { useSessionKeepAlive } from "@/hooks/useSessionKeepAlive";
 import { actionErrorMessage, unwrap } from "@/lib/actionResult";
+import { fetchAdminRoute } from "@/lib/adminReads";
 import {
   type AdminRouteDetail,
-  getRailwayRoute,
   type SaveRouteData,
   saveRailwayRoute,
 } from "@/lib/adminRouteActions";
@@ -62,10 +62,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   // landing last. Here rather than in the sidebar because the mobile drawer
   // unmounts the sidebar, and the map still wants the length.
   const selectedRoute = useAsyncLoad(
-    () =>
-      selectedRouteId === null
-        ? Promise.resolve(null)
-        : getRailwayRoute(selectedRouteId).then(unwrap),
+    () => (selectedRouteId === null ? Promise.resolve(null) : fetchAdminRoute(selectedRouteId)),
     [selectedRouteId],
     "route details",
   );

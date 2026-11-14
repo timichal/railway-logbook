@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AdminCreateRouteTab, { type EditingGeometry } from "@/components/admin/AdminCreateRouteTab";
 import AdminCreateScenicTab, {
   type EditingScenicLine,
@@ -10,12 +10,8 @@ import AdminNotesTab from "@/components/admin/AdminNotesTab";
 import AdminRoutesTab from "@/components/admin/AdminRoutesTab";
 import AdminScenicLinesTab from "@/components/admin/AdminScenicLinesTab";
 import { NO_ROUTE_SUGGESTIONS } from "@/components/admin/RouteMetadataFields";
-import { unwrap } from "@/lib/actionResult";
-import {
-  type AdminRouteDetail,
-  getRouteSuggestions,
-  type SaveRouteData,
-} from "@/lib/adminRouteActions";
+import { fetchRouteSuggestions } from "@/lib/adminReads";
+import type { AdminRouteDetail, SaveRouteData } from "@/lib/adminRouteActions";
 import type { CreateFormCoordinates, PathPreview } from "@/lib/map/hooks/useRoutePreview";
 import { useRegion } from "@/lib/regionContext";
 import type { RouteBounds } from "@/lib/shared/types";
@@ -113,10 +109,14 @@ export default function AdminSidebar({
   const [suggestions, setSuggestions] = useState(NO_ROUTE_SUGGESTIONS);
 
   // Load the in-use usage tags and line names for autocomplete, and keep them
-  // fresh after edits.
+  // fresh after edits. Only the latest load lands: two quick saves each reload,
+  // and the first answer may come back last.
+  const suggestionsRequestRef = useRef(0);
   const loadSuggestions = useCallback(async () => {
+    const request = ++suggestionsRequestRef.current;
     try {
-      setSuggestions(unwrap(await getRouteSuggestions()));
+      const loaded = await fetchRouteSuggestions();
+      if (request === suggestionsRequestRef.current) setSuggestions(loaded);
     } catch (error) {
       console.error("Error loading route suggestions:", error);
     }

@@ -1,29 +1,12 @@
 "use server";
 
 import type { ActionResult } from "./actionResult";
+import { type AdminNoteRow, NOTE_COLUMNS, rowToNote } from "./adminNotesQueries";
 import { asAdmin } from "./authHelpers";
-import { lngLatSql } from "./coordinateUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
-import { assertRegionId } from "./regionArgument";
 import { type NoteType, noteTypeOptions } from "./shared/constants";
-import { type RegionId, regionContainsSql } from "./shared/regions";
 import type { AdminNote } from "./shared/types";
-
-type AdminNoteRow = Omit<AdminNote, "created_at" | "updated_at"> & {
-  created_at: Date;
-  updated_at: Date;
-};
-
-const NOTE_COLUMNS = `id, ${lngLatSql("coordinate")} AS coordinate, text, note_type, source, created_at, updated_at`;
-
-function rowToNote(row: AdminNoteRow): AdminNote {
-  return {
-    ...row,
-    created_at: row.created_at.toISOString(),
-    updated_at: row.updated_at.toISOString(),
-  };
-}
 
 /**
  * The popup trims and validates before it calls, but every export here is an
@@ -44,47 +27,6 @@ function validNoteFields(
   }
   const trimmedSource = typeof source === "string" ? source.trim() : "";
   return { text: trimmedText, noteType, source: trimmedSource || null };
-}
-
-/**
- * Get the region's admin notes
- * Admin-only (user_id=1)
- */
-export async function getAllAdminNotes(region: RegionId): Promise<ActionResult<AdminNote[]>> {
-  return asAdmin(async () => {
-    assertRegionId(region);
-    const result = await pool.query<AdminNoteRow>(`
-    SELECT ${NOTE_COLUMNS}
-    FROM admin_notes
-    WHERE ${regionContainsSql(region, "coordinate")}
-    ORDER BY updated_at DESC
-  `);
-
-    return result.rows.map(rowToNote);
-  });
-}
-
-/**
- * Get a single admin note by ID
- * Admin-only (user_id=1)
- */
-export async function getAdminNote(id: number): Promise<ActionResult<AdminNote | null>> {
-  return asAdmin(async () => {
-    const result = await pool.query<AdminNoteRow>(
-      `
-    SELECT ${NOTE_COLUMNS}
-    FROM admin_notes
-    WHERE id = $1
-  `,
-      [id],
-    );
-
-    if (result.rows.length === 0) {
-      return null;
-    }
-
-    return rowToNote(result.rows[0]);
-  });
 }
 
 /**

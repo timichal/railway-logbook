@@ -6,9 +6,6 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Move the remaining read-only calls off server actions.** Next runs a client's server actions one at a time. The signed-in page's own loads are done (`api/me`, `sessionReads.ts`), and so are the public route and station reads (`api/public`, `publicReads.ts`) and the shared map's reads (`api/shared/<token>`, `sharedMapReads.ts`; see "Two transports" in the root CLAUDE.md). Still actions, and still queued behind a slow `findRoutePathBetweenStations`:
-  - The admin page's load-time reads (it queues four or more): `api/me`-style handlers that check the admin (user 1) on every call, as `asAdmin` does.
-  - My Trips' list and trip/journey loads (`tripActions`, `journeyActions`) where they run beside other reads.
 - **Cache the route summaries for anonymous visitors.** `dataAccess.ts` calls `getRouteSummaries(region)` on mount: Europe is 5,956 rows, about 722KB of JSON, identical for everyone. It is a POST server action, so nothing caches it. Progress, colouring and stretches all wait on it, even with an empty local log.
   - Serve it from a public GET handler with an ETag, from the planner's network fingerprint or a routes-version counter (see the next item), plus `stale-while-revalidate`. `trackIdsInRegion` can go the same way.
   - With an empty local log, skip it: ask for the totals alone, and skip the coverage and status work.

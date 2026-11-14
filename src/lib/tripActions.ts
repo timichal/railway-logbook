@@ -7,52 +7,26 @@
  * (MOBILE_APP_PLAN.md, Phase 1).
  *
  * `asUser` returns the queries' thrown rejections as an `ActionResult`, so a call
- * site reads it through `unwrap`.
+ * site reads it through `unwrap`. The reads are route handlers instead
+ * (`api/me`, called through `sessionReads.ts`), because Next runs a client's
+ * actions one at a time.
  */
 
 import type { ActionResult } from "./actionResult";
 import { asUser } from "./authHelpers";
-import { assertRegionId } from "./regionArgument";
-import type { RegionId } from "./shared/regions";
-import type { PartialRouteGeometry, RouteBounds, Trip } from "./shared/types";
+import type { Trip } from "./shared/types";
 import {
   assignJourneyToTripForUser,
   createTripForUser,
   deleteTripForUser,
   type JourneyWithStats,
-  journeysAndTripsForUser,
   type TripName,
   type TripsAndJourneysItem,
   type TripWithStats,
-  tripWithBoundsForUser,
-  unassignedJourneysForUser,
   updateTripForUser,
 } from "./tripQueries";
 
 export type { JourneyWithStats, TripName, TripsAndJourneysItem, TripWithStats };
-
-/**
- * Get a single trip with its assigned journeys, and the bounds of its routes in
- * `region` — what the map fits to when the trip is opened — and the stretches of
- * those it rode only part of (see getJourney, tripWithBoundsForUser).
- */
-export async function getTrip(
-  tripId: number,
-  region: RegionId,
-): Promise<
-  ActionResult<{
-    trip: Trip;
-    journeys: JourneyWithStats[];
-    routeIds: number[];
-    partials: PartialRouteGeometry[];
-    bounds: RouteBounds | null;
-  }>
-> {
-  return asUser((userId) => {
-    assertRegionId(region);
-    return tripWithBoundsForUser(userId, tripId, region);
-  });
-}
 
 export async function createTrip(
   name: string,
@@ -80,32 +54,4 @@ export async function assignJourneyToTrip(
   tripId: number,
 ): Promise<ActionResult<void>> {
   return asUser((userId) => assignJourneyToTripForUser(userId, journeyId, tripId));
-}
-
-/**
- * A paginated, search-filtered page of top-level items (trips and standalone
- * journeys), sorted by effective date desc and scoped to `region`. With
- * `focusJourneyId`, the page that lists that journey (see journeysAndTripsForUser).
- */
-export async function getJourneysAndTrips(
-  page: number,
-  pageSize: number,
-  search: string,
-  region: RegionId,
-  focusJourneyId: number | null = null,
-): Promise<ActionResult<{ items: TripsAndJourneysItem[]; total: number; page: number }>> {
-  return asUser((userId) => {
-    assertRegionId(region);
-    return journeysAndTripsForUser(userId, page, pageSize, search, region, focusJourneyId);
-  });
-}
-
-/** Journeys not assigned to any trip (for the assignment picker), scoped to `region`. */
-export async function getUnassignedJourneys(
-  region: RegionId,
-): Promise<ActionResult<JourneyWithStats[]>> {
-  return asUser((userId) => {
-    assertRegionId(region);
-    return unassignedJourneysForUser(userId, region);
-  });
 }

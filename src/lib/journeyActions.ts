@@ -7,7 +7,9 @@
  * (MOBILE_APP_PLAN.md, Phase 1).
  *
  * `asUser` returns the queries' thrown rejections as an `ActionResult`, so a call
- * site reads it through `unwrap`.
+ * site reads it through `unwrap`. The journey load is a route handler instead
+ * (`api/me/journeys/:id`, called through `sessionReads.ts`), because Next runs
+ * a client's actions one at a time.
  */
 
 import type { ActionResult } from "./actionResult";
@@ -15,42 +17,10 @@ import { asUser } from "./authHelpers";
 import {
   createJourneyForUser,
   deleteJourneyForUser,
-  journeyWithBoundsForUser,
   type LoggedRange,
   saveJourneyEditsForUser,
 } from "./journeyQueries";
-import { assertRegionId } from "./regionArgument";
-import type { RegionId } from "./shared/regions";
-import type {
-  Journey,
-  JourneyEdits,
-  PartialRouteGeometry,
-  RailwayRoute,
-  RouteBounds,
-} from "./shared/types";
-
-/**
- * Get a single journey with all its logged routes, and the bounds of those in
- * `region` — what the map fits to when the journey is opened, returned here so it
- * needs no request of its own — and the stretches ridden of those logged in part,
- * which the highlight draws in place of the whole route.
- */
-export async function getJourney(
-  journeyId: number,
-  region: RegionId,
-): Promise<
-  ActionResult<{
-    journey: Journey;
-    routes: RailwayRoute[];
-    bounds: RouteBounds | null;
-    partials: PartialRouteGeometry[];
-  }>
-> {
-  return asUser((userId) => {
-    assertRegionId(region);
-    return journeyWithBoundsForUser(userId, journeyId, region);
-  });
-}
+import type { Journey, JourneyEdits } from "./shared/types";
 
 /** Create a new journey and log routes to it (atomic operation). */
 export async function createJourney(

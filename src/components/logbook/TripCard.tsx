@@ -8,17 +8,12 @@ import { actionErrorMessage, unwrap } from "@/lib/actionResult";
 import { databaseJourneyStore } from "@/lib/journeyStore";
 import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
+import { fetchTrip, fetchUnassignedJourneys } from "@/lib/sessionReads";
 import { formatDateOnly, formatDateOnlyRange } from "@/lib/shared/getUntimezonedDateStr";
 import type { HighlightRoutesFn } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
 import type { JourneyWithStats, TripWithStats } from "@/lib/tripActions";
-import {
-  assignJourneyToTrip,
-  deleteTrip,
-  getTrip,
-  getUnassignedJourneys,
-  updateTrip,
-} from "@/lib/tripActions";
+import { assignJourneyToTrip, deleteTrip, updateTrip } from "@/lib/tripActions";
 import { btn, LINK_BTN } from "@/lib/ui/buttonStyles";
 import { journeyEditKey, tripEditKey, useDraft, useHasChanges } from "@/lib/ui/editGuard";
 import { useFocusAfterRender } from "@/lib/ui/useFocusAfterRender";
@@ -100,20 +95,34 @@ export default function TripCard({
   // Otherwise, when the trip is open, highlight all routes in the trip. `fit` brings
   // them into view, which only opening the trip asks for — a nested journey closing
   // or a journey assigned re-highlights a trip already being looked at.
+  //
+  // Only the latest refresh lands: opening the trip and then assigning a journey
+  // runs two at once, and the earlier answer, missing the journey, may come back
+  // last. A fit asked for by a refresh that was overtaken is carried to the one
+  // that lands, so opening still brings the trip into view.
+  const refreshRequestRef = useRef(0);
+  const pendingFitRef = useRef(false);
   const refreshTripHighlights = useCallback(
     async (fit = false) => {
       const ownsHighlight = () =>
         latest.current.isOpen && latest.current.openNestedJourneyId === null;
       if (!ownsHighlight()) return;
+      const request = ++refreshRequestRef.current;
+      pendingFitRef.current ||= fit;
       try {
-        const result = unwrap(await getTrip(trip.id, latest.current.regionId));
+        const result = await fetchTrip(trip.id, latest.current.regionId);
+        if (request !== refreshRequestRef.current) return;
+        const fitNow = pendingFitRef.current;
+        pendingFitRef.current = false;
         if (!ownsHighlight()) return;
         setJourneys(result.journeys);
         onHighlightRoutes?.(result.routeIds, "view", result.partials, {
-          fit,
+          fit: fitNow,
           bounds: result.bounds,
         });
       } catch (error) {
+        if (request !== refreshRequestRef.current) return;
+        pendingFitRef.current = false;
         console.error("Error loading trip:", error);
       }
     },
@@ -186,7 +195,7 @@ export default function TripCard({
     setShowPicker(true);
     setIsLoadingUnassigned(true);
     try {
-      setUnassignedJourneys(unwrap(await getUnassignedJourneys(regionId)));
+      setUnassignedJourneys(await fetchUnassignedJourneys(regionId));
     } catch (error) {
       console.error("Error loading unassigned journeys:", error);
       showError(actionErrorMessage(error, "Failed to load unassigned journeys"));

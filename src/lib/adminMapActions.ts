@@ -6,10 +6,7 @@ import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import pool from "./db";
 import { lineLengthKmSql } from "./lineLength";
-import { assertRegionId } from "./regionArgument";
-import { searchMapByName } from "./routeQueries";
-import type { RegionId } from "./shared/regions";
-import type { MapSearchResults, PathResult } from "./shared/types";
+import type { PathResult } from "./shared/types";
 
 /**
  * Find a path between two coordinates — the admin's route and scenic line preview.
@@ -36,19 +33,5 @@ export async function findRailwayPathFromCoordinates(
       [coordinatesToWKT(path.coordinates)],
     );
     return { ...path, lengthKm: result.rows[0].length_km };
-  });
-}
-
-/**
- * The admin map's search box. Every station, not only the `near_route` ones the
- * user map's search offers: the admin map draws them all. Lines as on the user map.
- */
-export async function searchAdminMap(
-  searchQuery: string,
-  region: RegionId,
-): Promise<ActionResult<MapSearchResults>> {
-  return asAdmin(() => {
-    assertRegionId(region);
-    return searchMapByName(searchQuery, region, { nearRouteOnly: false });
   });
 }

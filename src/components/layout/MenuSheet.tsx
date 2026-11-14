@@ -11,6 +11,7 @@ import Icon, { type IconName } from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import RegionSwitch from "@/components/ui/RegionSwitch";
 import ThemeSwitch from "@/components/ui/ThemeSwitch";
+import { isAdmin } from "@/lib/adminUser";
 import type { User } from "@/lib/authActions";
 import { btn } from "@/lib/ui/buttonStyles";
 import { useConfirmDiscard, useGuardedLinkClick } from "@/lib/ui/editGuard";
@@ -241,7 +242,7 @@ export default function MenuSheet({
         <nav className="divide-y divide-gray-100">
           <Row icon="book" label="How To Use" opens="howto" onOpen={openView} />
           <Row icon="document" label="Railway Notes" opens="notes" onOpen={openView} />
-          {user?.id === 1 && (
+          {isAdmin(user) && (
             <Link href="/admin" onClick={handleAdminClick} className={ROW}>
               <Icon name="cog" className="w-5 h-5 text-gray-400 flex-shrink-0" />
               <span className="flex-1">Admin</span>
@@ -250,7 +251,7 @@ export default function MenuSheet({
           )}
           {/* Last, and as neutral as the rows above it: the red is in the form it
               opens. Not for the admin, whose account the server refuses to delete. */}
-          {user && user.id !== 1 && (
+          {user && !isAdmin(user) && (
             <Row icon="trash" label="Delete account" opens="deleteAccount" onOpen={openView} />
           )}
         </nav>
