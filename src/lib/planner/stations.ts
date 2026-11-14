@@ -75,7 +75,11 @@ export async function findRoutesNearStations(
         s.id AS station_id,
         r.track_id,
         ST_Distance(c.point::geography, s.coordinates::geography) AS distance_m,
-        ST_LineLocatePoint(r.geometry, c.point) AS frac,
+        -- Clamped: a point at the very end of the route can locate a float ulp
+        -- past it (1.0000000000000002), which ST_LineSubstring refuses when the
+        -- stretch is cut (cutTravelledStretches) and which would be stored as a
+        -- partial ride's covered_end
+        least(1, greatest(0, ST_LineLocatePoint(r.geometry, c.point))) AS frac,
         ST_X(c.point) AS lon,
         ST_Y(c.point) AS lat
       FROM s
