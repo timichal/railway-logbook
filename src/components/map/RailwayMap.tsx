@@ -2,6 +2,7 @@
 
 import type { MapLibreEvent } from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MapPaneStatus } from "@/components/layout/MapLoading";
 import SidebarResizer from "@/components/layout/SidebarResizer";
 import SelectionSummaryBar from "@/components/logbook/SelectionSummaryBar";
 import UserSidebar, { type ActiveTab } from "@/components/logbook/UserSidebar";
@@ -212,6 +213,7 @@ export default function RailwayMap({
   const {
     map,
     mapLoaded,
+    mapStatus,
     progress,
     progressFailed,
     progressPending,
@@ -697,6 +699,7 @@ export default function RailwayMap({
           className={`w-full h-full ${className}`}
           style={{ height: "100%", minHeight: isMobile ? undefined : "400px" }}
         />
+        <MapPaneStatus status={mapStatus} />
 
         {/* Progress Stats Box */}
         <MapProgressBox

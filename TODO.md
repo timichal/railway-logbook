@@ -4,16 +4,6 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 **Where to measure.** The server is small (2 vCPU / 4GB, see `osmium-scripts/CLAUDE.md`). The dev machine has plenty of cores and disk, so pipeline measurements (prepare timings, extract sizes, changed-part counts, recalculation runs) go there, against the local Docker database and a local `data/` copy. Only sizing decisions (memory, `shared_buffers`, concurrency) need re-checking against the server's limits.
 
-## Medium
-
-- **React Compiler.** Nothing in `src/components` is memoised, and a selection or highlight change re-renders `RailwayMap` → `UserSidebar` → the hidden Route Logger and planner.
-  - Try `reactCompiler: true` (`node_modules/next/dist/docs`, `reactCompiler.md`) with `babel-plugin-react-compiler`.
-  - Components that write refs during render (`RailwayMap.tsx`) are skipped by the compiler.
-  - Profile with React DevTools before and after, and check the Biome `useExhaustiveDependencies` setup still makes sense.
-- **Smaller bundle items:**
-  - `MenuSheet` pulls the articles and auth forms (~30KB of source) into the main bundle: load them with `next/dynamic` when the sheet opens.
-  - The sidebar waits for MapLibre because both sit in the `ssr:false` `RailwayMap` chunk. Loading `maplibre-gl` with `await import()` inside `useMapLibre`'s init would let the sidebar render first. `mapHover`, `userMapInteractions` and `fitCamera` would then need type-only imports or the module passed in.
-
 ## Big: route tiles identical for everyone
 
 Measured at z7 (7/69/43): a signed-in route tile takes 51ms, an anonymous one 19ms. About 30ms of every tile on every pan goes on working out the user's rides (`user_fully_ridden_routes` plus the latest-journey LATERAL). The anonymous map already colours routes by feature state (`useLocalRouteFeatureStates`) and keeps closed routes it rode by id (`closedRoutesFilter`).

@@ -3,6 +3,7 @@
 import type * as maplibregl from "maplibre-gl";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import AdminLayerControls from "@/components/admin/AdminLayerControls";
+import { MapPaneStatus } from "@/components/layout/MapLoading";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
@@ -216,7 +217,7 @@ export default function AdminMap({
   // they follow the scheme. useMapLibre rebuilds the map when it changes.
   const theme = useResolvedTheme();
 
-  const { map, mapLoaded } = useMapLibre(
+  const { map, mapLoaded, mapStatus } = useMapLibre(
     mapContainer,
     {
       region: regionId,
@@ -441,6 +442,7 @@ export default function AdminMap({
   return (
     <div className={`${className} relative`}>
       <div ref={mapContainer} className="w-full h-full" />
+      <MapPaneStatus status={mapStatus} />
 
       <MapStationSearch
         map={map}

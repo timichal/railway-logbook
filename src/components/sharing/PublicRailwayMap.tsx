@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef } from "react";
+import { MapPaneStatus } from "@/components/layout/MapLoading";
 import MapProgressBox from "@/components/map/MapProgressBox";
 import MapStationSearch from "@/components/map/MapStationSearch";
 import { createPublicDataAccess } from "@/lib/dataAccess";
@@ -45,6 +46,7 @@ export default function PublicRailwayMap({
   const {
     map,
     mapLoaded,
+    mapStatus,
     progress,
     progressFailed,
     progressPending,
@@ -66,6 +68,7 @@ export default function PublicRailwayMap({
   return (
     <div className="h-full w-full relative">
       <div ref={mapContainer} className="w-full h-full" style={{ minHeight: "400px" }} />
+      <MapPaneStatus status={mapStatus} />
 
       {/* Progress Stats Box */}
       <MapProgressBox

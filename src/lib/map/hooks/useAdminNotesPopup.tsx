@@ -1,9 +1,10 @@
-import * as maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import NotesPopup from "@/components/admin/NotesPopup";
 import { fetchAdminNote } from "@/lib/adminReads";
 import { featuresAt } from "@/lib/map/featuresAt";
+import { mapLibre } from "@/lib/map/maplibre";
 import type { NoteType } from "@/lib/shared/constants";
 import type { AdminNote } from "@/lib/shared/types";
 import { useToast } from "@/lib/toast";
@@ -89,7 +90,8 @@ export function useAdminNotesPopup({ map, mapLoaded, onNotesChanged }: UseAdminN
       const mapHeight = mapInstance.getContainer().clientHeight;
       const anchor = clickY < mapHeight * 0.3 ? "top" : "bottom";
 
-      const popup = new maplibregl.Popup({
+      const { Popup } = mapLibre();
+      const popup = new Popup({
         closeButton: false,
         closeOnClick: false,
         maxWidth: "none",

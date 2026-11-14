@@ -1,5 +1,4 @@
 import type * as maplibreglType from "maplibre-gl";
-import * as maplibregl from "maplibre-gl";
 import { iconMarkup } from "@/components/ui/Icon";
 import { featuresAt, ROUTE_HIT_LAYERS } from "@/lib/map/featuresAt";
 import {
@@ -7,6 +6,7 @@ import {
   PARTIAL_HIGHLIGHT_LAYER_IDS,
 } from "@/lib/map/hooks/useRouteHighlighting";
 import { createMapHover, type FeatureProperties } from "@/lib/map/interactions/mapHover";
+import { mapLibre } from "@/lib/map/maplibre";
 import {
   loadRouteDetails,
   onRouteDetails,
@@ -128,7 +128,7 @@ export function setupUserMapInteractions(
    * - and double-click zoom is suspended over the same span, so a press in the
    *   sheet followed by a tap on the map cannot be read as a double tap and zoom.
    */
-  let openSheet: maplibregl.Popup | null = null;
+  let openSheet: maplibreglType.Popup | null = null;
   let sheetOpenedAt = Number.NEGATIVE_INFINITY;
   let sheetClosedAt = Number.NEGATIVE_INFINITY;
 
@@ -266,7 +266,8 @@ export function setupUserMapInteractions(
       content.appendChild(row);
     }
 
-    const popup = new maplibregl.Popup({
+    const { Popup } = mapLibre();
+    const popup = new Popup({
       closeButton: false,
       // Dismissal is `sheetTookThisClick`, not MapLibre's own: its closer is
       // registered on the map during the very click that opens the sheet, and it

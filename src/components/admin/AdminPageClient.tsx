@@ -23,6 +23,7 @@ import {
   saveRailwayRoute,
 } from "@/lib/adminRouteActions";
 import { logout, type User } from "@/lib/authActions";
+import { usePrefetchMap } from "@/lib/map/hooks/usePrefetchMap";
 import { type CreateFormCoordinates, useRoutePreview } from "@/lib/map/hooks/useRoutePreview";
 import { RegionProvider, useRegion } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
@@ -55,6 +56,7 @@ function AdminPage({ user }: { user: AdminPageClientProps["user"] }) {
   const { showError, showSuccess, showConfirm } = useToast();
   const router = useRouter();
   const isMobile = useIsMobile();
+  usePrefetchMap();
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   // The selected route's detail, loaded here once for both of its readers: the
   // sidebar's edit form and the map's length box. The map used to fetch it again

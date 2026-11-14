@@ -17,6 +17,7 @@ One directory per part of the app (`logbook/` sidebar and tabs, `map/`, `sharing
 - **Suggestion dropdowns** use `useSearchCombobox`: 300ms debounce, a two-character floor counted without separators (`searchQueryLength`), a latest-request guard, ARIA combobox. The list `preventDefault`s on **pointerdown** so focus never leaves the input, which is why **selecting a result blurs the input explicitly** (or the on-screen keyboard stays up).
 - **Scrolling to something in the main map's sidebar** goes through `scrollInContainer` (`lib/ui/scrollInContainer.ts`), never `scrollIntoView`: the same panel is the mobile bottom sheet, whose overflow-hidden ancestors `scrollIntoView` would drag along. The admin page has no sheet, and `AdminList` uses `scrollIntoView`.
 - Admin saves go through `useSingleFlight` (one at a time, failure toasted). Admin lists sort in the browser with a fixed `en` collation (`adminListSort.ts`).
+- **No React Compiler** (tried 2026-11-14 with `babel-plugin-react-compiler` 1.0). It skips about 30 functions here, the hot path among them: `try/finally` is unsupported, and `RailwayMap`, `MobileBottomSheet` and several map hooks keep latest values in refs written during render. The re-renders it could save were measured with a `<Profiler>` around `UserSidebar` (dev build): a route selection costs 1–3ms, a highlight change 4–11ms and a tab switch about 1ms, and a pan, zoom or hover commits nothing. That isn't worth rewriting those patterns plus a Babel pass in every build. Re-measure before reconsidering.
 
 ## Main map layout
 

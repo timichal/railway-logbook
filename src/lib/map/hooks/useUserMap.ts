@@ -126,7 +126,7 @@ export function useUserMap(
   const ridesKey = rides === undefined ? "" : rides === "session" ? "session" : rides.shareToken;
   const routesSignal = [refreshCount, dataAccessId(dataAccess), ridesKey].join("|");
 
-  const { map, mapLoaded } = useMapLibre(
+  const { map, mapLoaded, mapStatus } = useMapLibre(
     mapContainer,
     {
       region: region.id,
@@ -273,6 +273,7 @@ export function useUserMap(
   return {
     map,
     mapLoaded,
+    mapStatus,
     progress: shownAnswer?.progress ?? null,
     progressFailed: shownAnswer?.failed ?? false,
     progressPending,

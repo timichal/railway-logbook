@@ -1,5 +1,5 @@
 import type * as maplibreglType from "maplibre-gl";
-import * as maplibregl from "maplibre-gl";
+import { mapLibre } from "@/lib/map/maplibre";
 
 /** Straight off an MVT feature, so every field is loosely typed. */
 export type FeatureProperties = maplibreglType.MapGeoJSONFeature["properties"];
@@ -96,7 +96,7 @@ export function createMapHover(
   map: maplibreglType.Map,
   { enabled = () => true, onSettle, onShow }: MapHoverOptions = {},
 ): MapHover {
-  let popup: maplibregl.Popup | null = null;
+  let popup: maplibreglType.Popup | null = null;
   let popupKey: string | null = null;
   /** What the open popup was built from, for `refresh`. */
   let shownOffer: { offer: Offer; build: NonNullable<Offer["popup"]> } | null = null;
@@ -133,7 +133,8 @@ export function createMapHover(
       popup.setHTML(html).setLngLat(lngLat);
     } else {
       onShow?.();
-      const added = new maplibregl.Popup({
+      const { Popup } = mapLibre();
+      const added = new Popup({
         closeButton: false,
         closeOnClick: false,
         className: "map-hover-popup",

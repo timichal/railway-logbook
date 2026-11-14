@@ -7,7 +7,7 @@ import { copyFileSync, mkdirSync } from "node:fs";
  * asset without bundling that sibling, so the shared chunk 404s and no tiles
  * render. Copying both files to `public/maplibre/` keeps them as siblings on a
  * stable same-origin path, so the relative import resolves. `setWorkerUrl` in
- * useMapLibre.ts points at the copied worker.
+ * maplibre.ts points at the copied worker.
  *
  * Runs automatically via `predev` / `prebuild`; re-run manually with
  * `npm run copyMaplibreWorker` after bumping maplibre-gl.

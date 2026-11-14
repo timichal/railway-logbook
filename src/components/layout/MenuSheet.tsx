@@ -56,7 +56,7 @@ import { useModalDialog } from "@/lib/ui/useModalDialog";
  * nothing is open over it — the local-journeys confirm after a sign-in is.
  */
 
-interface MenuSheetProps {
+export interface MenuSheetProps {
   user: User | null;
   onClose: () => void;
   onLogout: () => void;

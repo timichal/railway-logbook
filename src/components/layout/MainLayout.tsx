@@ -1,16 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useReducer, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import MapLoading from "@/components/layout/MapLoading";
-import MenuSheet, { type MenuView } from "@/components/layout/MenuSheet";
+import type { MenuSheetProps, MenuView } from "@/components/layout/MenuSheet";
 import Navbar from "@/components/layout/Navbar";
 import type { ActiveTab } from "@/components/logbook/UserSidebar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useResizableSidebar } from "@/hooks/useResizableSidebar";
 import { useSessionKeepAlive } from "@/hooks/useSessionKeepAlive";
 import type { User } from "@/lib/authActions";
-import { usePrefetchBasemap } from "@/lib/map/hooks/usePrefetchBasemap";
+import { usePrefetchMap } from "@/lib/map/hooks/usePrefetchMap";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
@@ -22,6 +22,40 @@ const RailwayMap = dynamic(() => import("@/components/map/RailwayMap"), {
   ssr: false,
   loading: MapLoading,
 });
+
+// The menu is its own chunk: the articles and the auth forms it carries are no
+// part of the first paint, and it only mounts once opened. It is preloaded once the
+// page has settled (`usePreloadMenuSheet`), so the first open doesn't wait on the
+// network, and a page left open across a deploy, whose chunk names the server no
+// longer has, still has it. Opened before that and failing to load, it says so and
+// closes again rather than throwing out of the render, which would take the page.
+const loadMenuSheet = () => import("@/components/layout/MenuSheet");
+const MenuSheet = dynamic(() => loadMenuSheet().catch(() => MenuUnavailable));
+
+function MenuUnavailable({ onClose }: MenuSheetProps) {
+  const { showError } = useToast();
+  useEffect(() => {
+    showError("Couldn't open the menu. Reload the page and try again.");
+    onClose();
+  }, [showError, onClose]);
+  return null;
+}
+
+function usePreloadMenuSheet(): void {
+  useEffect(() => {
+    const preload = () => {
+      loadMenuSheet().catch(() => {
+        // Opening the menu asks again
+      });
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(preload, { timeout: 5000 });
+      return () => cancelIdleCallback(id);
+    }
+    const timer = setTimeout(preload, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+}
 
 interface MainLayoutProps {
   user: User | null;
@@ -52,7 +86,8 @@ function MainPage({
   // in button lands on the login form rather than making the user find it).
   const [menuView, setMenuView] = useState<MenuView | null>(null);
   const isMobile = useIsMobile();
-  usePrefetchBasemap();
+  usePrefetchMap();
+  usePreloadMenuSheet();
   const { sidebarWidth, isResizing, handleMouseDown } = useResizableSidebar({
     storageKey: "railway-sidebar-width",
     isMobile,

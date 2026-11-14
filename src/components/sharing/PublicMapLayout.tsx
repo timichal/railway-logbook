@@ -5,7 +5,7 @@ import Link from "next/link";
 import MapLoading from "@/components/layout/MapLoading";
 import RegionSwitch from "@/components/ui/RegionSwitch";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { usePrefetchBasemap } from "@/lib/map/hooks/usePrefetchBasemap";
+import { usePrefetchMap } from "@/lib/map/hooks/usePrefetchMap";
 import { LayerPrefsProvider } from "@/lib/map/layerPrefsContext";
 import { RegionProvider } from "@/lib/regionContext";
 import type { RegionId } from "@/lib/shared/regions";
@@ -36,7 +36,7 @@ export default function PublicMapLayout({
   initialRegion,
 }: PublicMapLayoutProps) {
   const isMobile = useIsMobile();
-  usePrefetchBasemap();
+  usePrefetchMap();
 
   return (
     <RegionProvider initialRegion={initialRegion}>

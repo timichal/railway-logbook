@@ -1,4 +1,4 @@
-import * as maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DEFAULT_REGION, REGIONS, type RegionId } from "@/lib/shared/regions";
@@ -11,14 +11,9 @@ import {
   GLYPHS_URL,
   loadBasemapStyle,
 } from "../../shared/map/basemap";
+import { loadMapLibre } from "../maplibre";
 import { loadMapState, saveMapState } from "../mapState";
 import { resolveMissingBasemapIcons } from "../missingIcons";
-
-// v6 ships ESM-only. Its worker does a relative import of maplibre-gl-shared.mjs
-// at runtime; Next.js emits a `new URL(...)` worker as a bare asset without that
-// sibling, so it 404s. Instead we serve both files from public/maplibre/ (copied
-// by the copyMaplibreWorker script) where the relative import resolves.
-maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 /**
  * Release the GeolocateControl's location lock when the user zooms.
@@ -38,9 +33,9 @@ maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
  * renames those internals, the guarded lookups simply do nothing and we are
  * back to the current upstream behaviour instead of a half-applied state.
  *
- * Returns the listener so the caller can detach it.
+ * The listener goes with the map: nothing detaches it before `remove()`.
  */
-function watchGeolocateZoom(map: maplibregl.Map, geolocate: maplibregl.GeolocateControl) {
+function watchGeolocateZoom(map: maplibregl.Map, geolocate: maplibregl.GeolocateControl): void {
   const handler = (event: maplibregl.MapMovementEvent) => {
     // The control's own re-centering passes `geolocateSource` through fitBounds,
     // and event data is copied onto the event object.
@@ -61,7 +56,6 @@ function watchGeolocateZoom(map: maplibregl.Map, geolocate: maplibregl.Geolocate
     }
   };
   map.on("zoomstart", handler);
-  return handler;
 }
 
 /**
@@ -91,8 +85,8 @@ function watchGeolocateZoom(map: maplibregl.Map, geolocate: maplibregl.Geolocate
  * Guarded like `watchGeolocateZoom`: if the internal is renamed, the attribution is
  * merely left open, which is what it does today.
  */
-function addAttribution(map: maplibregl.Map): void {
-  const control = new maplibregl.AttributionControl({
+function addAttribution(lib: typeof maplibregl, map: maplibregl.Map): void {
+  const control = new lib.AttributionControl({
     // Passing options at all replaces MapLibre's defaults wholesale, and the
     // library's own credit is one of them. Restated rather than silently dropped.
     customAttribution: '<a href="https://maplibre.org/" target="_blank">MapLibre</a>',
@@ -134,9 +128,18 @@ interface UseMapLibreOptions {
   onLoad?: (map: maplibregl.Map) => void;
 }
 
+/**
+ * Where the map's construction stands, for the pane's placeholder (`MapPaneStatus`):
+ * `loading` while MapLibre and the style download, `ready` once the map exists and
+ * draws for itself (well before `mapLoaded`, which waits for the first tiles), and
+ * `failed` if it couldn't be built.
+ */
+export type MapStatus = "loading" | "ready" | "failed";
+
 interface UseMapLibreReturn {
   map: React.RefObject<maplibregl.Map | null>;
   mapLoaded: boolean;
+  mapStatus: MapStatus;
 }
 
 /**
@@ -163,6 +166,7 @@ export function useMapLibre(
 
   const map = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
 
   // The basemap style, the fade over it and the station colours are all chosen per
   // scheme, and MapLibre takes one style object at construction — so a scheme change
@@ -184,7 +188,8 @@ export function useMapLibre(
     let teardown: (() => void) | undefined;
 
     const init = async () => {
-      const basemap = await loadBasemapStyle(theme);
+      // MapLibre itself is loaded on its own (see maplibre.ts), alongside the style
+      const [basemap, lib] = await Promise.all([loadBasemapStyle(theme), loadMapLibre()]);
       // The effect may have been torn down, or run twice, while we waited.
       if (cancelled || !containerRef.current || map.current) return;
 
@@ -215,7 +220,7 @@ export function useMapLibre(
       ];
 
       // Create map instance
-      map.current = new maplibregl.Map({
+      const instance = new lib.Map({
         container: containerRef.current,
         style: {
           version: 8,
@@ -237,6 +242,15 @@ export function useMapLibre(
         // Added by hand below, so it can pick its corner — see addAttribution.
         attributionControl: false,
       });
+      map.current = instance;
+      // Set before anything below can throw, so a failure still removes the map
+      // rather than leaving it in `map.current`, where it would block every rebuild.
+      // Its listeners go with it.
+      teardown = () => {
+        instance.remove();
+        if (map.current === instance) map.current = null;
+        setMapLoaded(false);
+      };
 
       // Pinch still zooms, but no longer turns the map: a two-finger zoom drifted it
       // off north as often as not, and nothing on a railway map wants it rotated.
@@ -247,28 +261,28 @@ export function useMapLibre(
       resolveMissingBasemapIcons(map.current);
 
       // Add navigation controls
-      map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+      map.current.addControl(new lib.NavigationControl(), "top-right");
 
       // Add geolocation control (show current location)
-      const geolocate = new maplibregl.GeolocateControl({
+      const geolocate = new lib.GeolocateControl({
         positionOptions: {
           enableHighAccuracy: true,
         },
         trackUserLocation: true,
       });
       map.current.addControl(geolocate, "top-right");
-      const releaseLockOnZoom = watchGeolocateZoom(map.current, geolocate);
+      watchGeolocateZoom(map.current, geolocate);
 
       // Add scale control
       map.current.addControl(
-        new maplibregl.ScaleControl({
+        new lib.ScaleControl({
           maxWidth: 100,
           unit: "metric",
         }),
         "bottom-left",
       );
 
-      addAttribution(map.current);
+      addAttribution(lib, map.current);
 
       // Save map state on move or zoom
       const saveState = () => {
@@ -297,26 +311,23 @@ export function useMapLibre(
         }
       });
 
-      teardown = () => {
-        if (map.current) {
-          map.current.off("moveend", saveState);
-          map.current.off("zoomend", saveState);
-          map.current.off("zoomstart", releaseLockOnZoom);
-          map.current.remove();
-          map.current = null;
-          setMapLoaded(false);
-        }
-      };
+      setMapStatus("ready");
     };
 
-    init();
+    init().catch((error: unknown) => {
+      // MapLibre's chunk failed to load (offline, or a deploy replaced it under an
+      // open page), or building the map threw. The pane says so and offers a reload.
+      console.error("Error building the map:", error);
+      if (!cancelled) setMapStatus("failed");
+    });
 
     // Cleanup on unmount
     return () => {
       cancelled = true;
       teardown?.();
+      setMapStatus("loading");
     };
   }, [...deps, theme]);
 
-  return { map, mapLoaded };
+  return { map, mapLoaded, mapStatus };
 }
