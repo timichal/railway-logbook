@@ -6,24 +6,11 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Quick wins
 
-- **Postgres settings.** `docker-compose.yml` gives the `db` service no `command:`, so the server runs `jit=on`, `shared_buffers=128MB` and `work_mem=4MB`. JIT added ~435ms of compile time to the per-route station proximity query (since given an index-usable box): PostGIS functions carry high cost estimates, which push cheap queries over JIT's threshold.
-  - Add `command: postgres -c jit=off -c shared_buffers=<~25% of RAM>` (about 1GB on the 4GB server; `railway_parts` alone is ~834MB). Optionally raise `maintenance_work_mem` for the import's index work.
-  - Changing it recreates the `db` container (a Postgres restart), so take `backupRouteData` first. Check memory headroom together with the recalculation item below, and with `importMapData`'s `--max-old-space-size=8192`, which on a 4GB host means swapping before an out-of-memory error.
-- **Stored search key for stations.** Two-character station searches (below a trigram) and the admin search (`nearRouteOnly: false`, outside the partial trigram index) run `search_key(name)` on every row: 42–70ms. Over the same rows `search_key(name) LIKE` costs 42ms where `lower(name) LIKE` costs 11ms, so the function dominates.
-  - Add a stored generated column `name_key text GENERATED ALWAYS AS (search_key(name)) STORED` and point the queries (`searchStationsByName` in `routeQueries.ts`, the map search) at it.
-  - Make its trigram index non-partial so the admin search uses it too, or keep two indexes.
-  - The column needs a migration script (`src/scripts/CLAUDE.md`) plus `01-schema.sql`. Note in `02-vector-tiles.sql` that a new `search_key` body means rewriting the column (`UPDATE … SET name = name` won't do for a generated column: drop and re-add it). Keep `tests/searchText.sql.test.ts` passing.
-- **Planner network load (~165ms per rebuild).** `routeGraphCache.ts` now reads the four endpoint coordinates once per row (a four-point `ST_MakeLine`, down from ~370ms), but the scan alone, detoasting every route line, is ~90ms. It is paid on the first search after every deploy and every route write.
-  - Store the endpoint coordinates in columns maintained by the `sync_geometry_3857` trigger (or a sibling trigger), which takes it to a few ms. Needs a migration script plus `01-schema.sql`. Keep the load `ORDER BY track_id` (the graph breaks ties in load order).
-  - Optionally warm the cache from `src/instrumentation.ts` after startup.
-- **Validate `region` in server actions.** Every `"use server"` export that takes a `region: RegionId` (`userActions`, `publicMapActions`, `tripActions`, `journeyActions`, the `admin*Actions`) trusts the type, but a client can send any string. `REGIONS[region]` is then undefined, and `regionContainsSql` throws a `TypeError`: an opaque 500 rather than a 400. Not a leak (nothing is interpolated from the string), only the wrong error.
-  - Add one guard (`assertRegionId`, built on `isRegionId` in `shared/regions.ts`, throwing `ValidationError`) and call it at the top of each such action, or inside `asUser` / `asAdmin` / `asActionResult` where the region is an argument. The `/api/v1` handlers already go through `requireRegion`.
 - **Small sequential round trips** (a few ms each; do them while you're in each file):
   - `journeyWithBoundsForUser` and `tripWithBoundsForUser` compute bounds after the main query.
   - `planJourney` runs `planBounds` after the details; `ST_Extent` could go into `getRouteDetails`.
   - The public map resolves the share token in its own query before reading progress.
   - `page.tsx` does `getUser`, then preferences (now two queries, was three): one query could do both.
-  - `migrationActions.ts` inserts one row per journey and per part on login: batch with `unnest`.
 
 ## Medium
 
@@ -98,7 +85,7 @@ Measure these on the dev machine (see the top).
   - `connected()` becomes the global sorted neighbour list filtered to the loaded set, in the same order.
   - This is the "still on the table" shared-cache item, taken further.
   - Verify with the PathResult JSON comparison over **all** routes described in `RECALC_PERFORMANCE.md` "Regression check".
-  - Watch memory: estimate 0.3–1GB for 1.5M parts. Measure on the dev machine and check it fits the server next to Postgres.
+  - Watch memory: estimate 0.3–1GB for 1.5M parts. Measure on the dev machine and check it fits the server next to Postgres (now `shared_buffers=1GB`) and `importMapData`'s `--max-old-space-size=8192`, which on a 4GB host means swapping before an out-of-memory error.
   - Read `RECALC_PERFORMANCE.md` in full first: don't shrink the buffer ladder, and don't wrap the run in a transaction.
 - **Insert `railway_parts` in spatial order.** Rows go in in file order (OSM id order), so a 50km load or a tile reads roughly one heap page per part.
   - In `loadRailwayData.ts`, load into a temp table first, then `INSERT … SELECT … ORDER BY ST_GeoHash(ST_Centroid(geometry))` (or a Hilbert key), inside the same all-or-nothing transaction.
@@ -127,4 +114,4 @@ Measure these on the dev machine (see the top).
 
 ## Ongoing
 
-- **Enable `pg_stat_statements` on the server** (`shared_preload_libraries` in the same `command:` as the Postgres settings, then `CREATE EXTENSION`). Check it after a week of real traffic and add what it shows to this list.
+- **Read `pg_stat_statements` on the server** after a week of real traffic (enabled 2026-11-14: preloaded by the `db` service's `command:`, the extension created in `02-vector-tiles.sql`), and add what it shows to this list.

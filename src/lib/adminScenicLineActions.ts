@@ -9,6 +9,7 @@ import { countryAt } from "./countryUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
+import { assertRegionId } from "./regionArgument";
 import { type RegionId, regionContainsSql } from "./shared/regions";
 import type { GeoJSONFeature, GeoJSONFeatureCollection, RouteBounds } from "./shared/types";
 
@@ -65,6 +66,7 @@ async function scenicLineWKT(
  */
 export async function getScenicLines(region: RegionId): Promise<ActionResult<AdminScenicLine[]>> {
   return asAdmin(async () => {
+    assertRegionId(region);
     const result = await pool.query<AdminScenicLine>(`
       SELECT id, from_station, to_station, length_km, is_valid, error_message,
              ${boundsSql("geometry")} AS bounds,
@@ -85,6 +87,7 @@ export async function getScenicLineEndpoints(
   region: RegionId,
 ): Promise<ActionResult<GeoJSONFeatureCollection>> {
   return asAdmin(async () => {
+    assertRegionId(region);
     const result = await pool.query<{
       id: number;
       from_station: string;

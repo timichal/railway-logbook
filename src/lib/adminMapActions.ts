@@ -6,6 +6,7 @@ import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT } from "./coordinateUtils";
 import pool from "./db";
 import { lineLengthKmSql } from "./lineLength";
+import { assertRegionId } from "./regionArgument";
 import { searchMapByName } from "./routeQueries";
 import type { RegionId } from "./shared/regions";
 import type { MapSearchResults, PathResult } from "./shared/types";
@@ -46,5 +47,8 @@ export async function searchAdminMap(
   searchQuery: string,
   region: RegionId,
 ): Promise<ActionResult<MapSearchResults>> {
-  return asAdmin(() => searchMapByName(searchQuery, region, { nearRouteOnly: false }));
+  return asAdmin(() => {
+    assertRegionId(region);
+    return searchMapByName(searchQuery, region, { nearRouteOnly: false });
+  });
 }

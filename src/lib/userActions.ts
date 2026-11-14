@@ -18,6 +18,7 @@ import {
   progressByCountryForUser,
   progressForUser,
 } from "./progressQueries";
+import { assertRegionId } from "./regionArgument";
 import {
   lineGeometryByName,
   routeBoundsByIds,
@@ -42,6 +43,7 @@ import type {
 
 /** Station name search for the map search box and the Journey Planner. */
 export async function searchStations(searchQuery: string, region: RegionId): Promise<Station[]> {
+  assertRegionId(region);
   return searchStationsByName(searchQuery, region);
 }
 
@@ -50,6 +52,7 @@ export async function searchStations(searchQuery: string, region: RegionId): Pro
  * its lines. No authentication required — route data is public.
  */
 export async function searchMap(searchQuery: string, region: RegionId): Promise<MapSearchResults> {
+  assertRegionId(region);
   return searchMapByName(searchQuery, region);
 }
 
@@ -58,16 +61,19 @@ export async function searchMap(searchQuery: string, region: RegionId): Promise<
  * No authentication required — route data is public.
  */
 export async function getLineGeometry(name: string, region: RegionId): Promise<LineGeometry[]> {
+  assertRegionId(region);
   return lineGeometryByName(name, region);
 }
 
 /** The track ids of every route in a region. */
 export async function getRegionTrackIds(region: RegionId): Promise<number[]> {
+  assertRegionId(region);
   return trackIdsInRegion(region);
 }
 
 /** Every route in a region, without geometry (see RouteSummary). No authentication required. */
 export async function getRouteSummaries(region: RegionId): Promise<RouteSummary[]> {
+  assertRegionId(region);
   return routeSummariesInRegion(region);
 }
 
@@ -85,6 +91,7 @@ export async function getRoutesBounds(
   trackIds: number[],
   region: RegionId,
 ): Promise<RouteBounds | null> {
+  assertRegionId(region);
   return routeBoundsByIds(trackIds, region);
 }
 
@@ -97,6 +104,7 @@ export async function getUserProgress(
   selectedCountries?: string[],
   shownUsageTypes?: number[],
 ): Promise<UserProgress> {
+  assertRegionId(region);
   const user = await getUser();
   if (!user) {
     throw new Error("User not authenticated");
@@ -111,6 +119,7 @@ export async function getUserProgress(
  * Plus overall total across all countries
  */
 export async function getProgressByCountry(region: RegionId): Promise<ProgressByCountry> {
+  assertRegionId(region);
   const user = await getUser();
   if (!user) {
     throw new Error("User not authenticated");
@@ -124,6 +133,7 @@ export async function getProgressByCountry(region: RegionId): Promise<ProgressBy
  * completed.
  */
 export async function getCoveredStretches(region: RegionId): Promise<CoveredStretch[]> {
+  assertRegionId(region);
   const user = await getUser();
   if (!user) return [];
 

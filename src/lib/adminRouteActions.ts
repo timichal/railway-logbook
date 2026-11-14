@@ -17,6 +17,7 @@ import pool, { withTransaction } from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
 import { routeLinesSql } from "./lineMembership";
+import { assertRegionId } from "./regionArgument";
 import type { LineClass, UsageType } from "./shared/constants";
 import { type RegionId, regionContainsSql } from "./shared/regions";
 import { MAX_TOLERANCE_FRACTION, UNTRAVELLED_NOISE_KM } from "./shared/routeCoverage";
@@ -105,6 +106,7 @@ export async function getAllRailwayRoutes(
   region: RegionId,
 ): Promise<ActionResult<AdminRouteSummary[]>> {
   return asAdmin(async () => {
+    assertRegionId(region);
     const result = await pool.query<AdminRouteSummary>(`
     SELECT track_id, name, other_names, from_station, to_station, description, usage_type, usage_tags, line_class,
            is_valid, error_message, under_repair, closed, intended_backtracking, has_backtracking
@@ -123,6 +125,7 @@ export async function getAllRailwayRoutes(
  */
 export async function getValidRoutesTotalKm(region: RegionId): Promise<ActionResult<number>> {
   return asAdmin(async () => {
+    assertRegionId(region);
     const result = await pool.query<{ total_km: number }>(`
     SELECT COALESCE(SUM(length_km), 0) AS total_km
     FROM railway_routes
@@ -212,6 +215,7 @@ export async function getAllRouteEndpoints(
   region: RegionId,
 ): Promise<ActionResult<GeoJSONFeatureCollection>> {
   return asAdmin(async () => {
+    assertRegionId(region);
     const result = await pool.query<{
       track_id: number;
       from_station: string;

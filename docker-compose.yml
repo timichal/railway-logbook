@@ -12,6 +12,29 @@ services:
     # Named so an arm64 machine pulls the amd64 image instead of finding no match.
     platform: linux/amd64
     container_name: db
+    # Sized for the 4GB server (osmium-scripts/CLAUDE.md), which also runs the app,
+    # Martin and the map data pipeline. Changing any of this recreates the container,
+    # i.e. restarts Postgres mid-deploy: take backupRouteData first.
+    # - jit off: PostGIS functions carry high cost estimates, which push cheap
+    #   queries over JIT's threshold. It added ~435ms of compile time to a 5ms
+    #   station proximity query, and no query here runs long enough to repay it.
+    # - shared_buffers ~25% of RAM (the default 128MB is less than the railway_parts
+    #   indexes alone; the table is ~834MB). Filled as pages are read, and a map
+    #   import or recalculation reads enough to fill it, so count the whole 1GB as
+    #   taken when sizing anything beside it.
+    # - maintenance_work_mem for vacuum and index builds, which a map import leaves
+    #   plenty of. autovacuum_work_mem caps each autovacuum worker separately (it
+    #   would otherwise take maintenance_work_mem, times up to three workers, all
+    #   busy right after an import).
+    # - pg_stat_statements, to see which queries the real traffic spends on. Its
+    #   extension is created in 02-vector-tiles.sql; the library must be preloaded.
+    command: >-
+      postgres
+      -c jit=off
+      -c shared_buffers=1GB
+      -c maintenance_work_mem=256MB
+      -c autovacuum_work_mem=64MB
+      -c shared_preload_libraries=pg_stat_statements
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${DB_USER}

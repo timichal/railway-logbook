@@ -8,6 +8,9 @@
  * station names, which only SQL folds: unaccent maps a few symbols NFKD leaves
  * alone („, 〈, ´), and nobody types those into a search box.
  *
+ * Also checks that the key stored on stations (`name_key`) is still what
+ * `search_key` gives.
+ *
  * Needs the local database with `02-vector-tiles.sql` applied; skipped when it
  * cannot be reached. Only reads.
  */
@@ -78,6 +81,29 @@ test("foldForSearch agrees with the SQL search_key", async (t) => {
       .filter((row) => foldForSearch(row.name) !== row.key)
       .map((row) => ({ name: row.name, js: foldForSearch(row.name), sql: row.key }));
     assert.deepEqual(disagreements, []);
+  } finally {
+    await client.end();
+  }
+});
+
+// stations.name_key stores search_key(name). 02-vector-tiles.sql recomputes it
+// when the folding functions change; a stored key that no longer matches the
+// function means that step was missed, and the station search misses names.
+test("stations.name_key is search_key(name)", async (t) => {
+  const client = await connect();
+  if (!client) {
+    t.skip("database not reachable");
+    return;
+  }
+
+  try {
+    const { rows } = await client.query<{ name: string; stored: string; key: string }>(
+      `SELECT name, name_key AS stored, search_key(name) AS key
+       FROM stations
+       WHERE name_key IS DISTINCT FROM search_key(name)
+       LIMIT 10`,
+    );
+    assert.deepEqual(rows, []);
   } finally {
     await client.end();
   }

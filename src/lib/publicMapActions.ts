@@ -25,6 +25,7 @@ import {
   progressForUser,
 } from "./progressQueries";
 import { publicMapOwner } from "./publicMapQueries";
+import { assertRegionId } from "./regionArgument";
 import { SUPPORTED_COUNTRIES } from "./shared/constants";
 import { EMPTY_PROGRESS, type ProgressByCountry, type UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
@@ -96,6 +97,7 @@ export async function getPublicProgress(
   selectedCountries?: string[],
   shownUsageTypes?: number[],
 ): Promise<UserProgress> {
+  assertRegionId(region);
   const owner = await publicMapOwner(token);
   if (!owner) return EMPTY_PROGRESS;
 
@@ -107,6 +109,7 @@ export async function getPublicProgressByCountry(
   token: string,
   region: RegionId,
 ): Promise<ProgressByCountry> {
+  assertRegionId(region);
   const owner = await publicMapOwner(token);
   if (!owner) {
     return { byCountry: [], byUsage: [], total: { totalKm: 0, completedKm: 0 } };
@@ -120,6 +123,7 @@ export async function getPublicCoveredStretches(
   token: string,
   region: RegionId,
 ): Promise<CoveredStretch[]> {
+  assertRegionId(region);
   const owner = await publicMapOwner(token);
   if (!owner) return [];
 

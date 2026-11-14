@@ -5,6 +5,7 @@ import { asAdmin } from "./authHelpers";
 import { lngLatSql } from "./coordinateUtils";
 import pool from "./db";
 import { ValidationError } from "./errors";
+import { assertRegionId } from "./regionArgument";
 import { type NoteType, noteTypeOptions } from "./shared/constants";
 import { type RegionId, regionContainsSql } from "./shared/regions";
 import type { AdminNote } from "./shared/types";
@@ -51,6 +52,7 @@ function validNoteFields(
  */
 export async function getAllAdminNotes(region: RegionId): Promise<ActionResult<AdminNote[]>> {
   return asAdmin(async () => {
+    assertRegionId(region);
     const result = await pool.query<AdminNoteRow>(`
     SELECT ${NOTE_COLUMNS}
     FROM admin_notes

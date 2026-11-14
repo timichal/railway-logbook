@@ -12,6 +12,7 @@
 
 import type { ActionResult } from "./actionResult";
 import { asUser } from "./authHelpers";
+import { assertRegionId } from "./regionArgument";
 import type { RegionId } from "./shared/regions";
 import type { PartialRouteGeometry, RouteBounds, Trip } from "./shared/types";
 import {
@@ -33,7 +34,10 @@ export type { JourneyWithStats, TripName, TripsAndJourneysItem, TripWithStats };
 
 /** The current user's trips in `region`, as the journey forms' trip picker offers them. */
 export async function getTripNames(region: RegionId): Promise<ActionResult<TripName[]>> {
-  return asUser((userId) => tripNamesForUser(userId, region));
+  return asUser((userId) => {
+    assertRegionId(region);
+    return tripNamesForUser(userId, region);
+  });
 }
 
 /**
@@ -53,7 +57,10 @@ export async function getTrip(
     bounds: RouteBounds | null;
   }>
 > {
-  return asUser((userId) => tripWithBoundsForUser(userId, tripId, region));
+  return asUser((userId) => {
+    assertRegionId(region);
+    return tripWithBoundsForUser(userId, tripId, region);
+  });
 }
 
 export async function createTrip(
@@ -94,12 +101,18 @@ export async function getJourneysAndTrips(
   search: string,
   region: RegionId,
 ): Promise<ActionResult<{ items: TripsAndJourneysItem[]; total: number }>> {
-  return asUser((userId) => journeysAndTripsForUser(userId, page, pageSize, search, region));
+  return asUser((userId) => {
+    assertRegionId(region);
+    return journeysAndTripsForUser(userId, page, pageSize, search, region);
+  });
 }
 
 /** Journeys not assigned to any trip (for the assignment picker), scoped to `region`. */
 export async function getUnassignedJourneys(
   region: RegionId,
 ): Promise<ActionResult<JourneyWithStats[]>> {
-  return asUser((userId) => unassignedJourneysForUser(userId, region));
+  return asUser((userId) => {
+    assertRegionId(region);
+    return unassignedJourneysForUser(userId, region);
+  });
 }

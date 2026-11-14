@@ -103,26 +103,13 @@ async function loadRouteNetworks(signature: string): Promise<CachedRouteNetworks
         ST_Y(ST_PointN(r.ends, 3)) as near_end_y,
         ST_X(ST_PointN(r.ends, 4)) as end_x,
         ST_Y(ST_PointN(r.ends, 4)) as end_y
-      FROM (
-        -- Each ST_PointN on a route deserialises the whole line, so the four
-        -- points are taken from it once, into a four-point line that the reads
-        -- above pick apart cheaply (~370ms → ~165ms for 7k routes; the scan
-        -- itself is ~90ms). OFFSET 0 keeps the subquery from being inlined,
-        -- which would put a full-line ST_PointN back into every read. For a
-        -- two-point route the near points are the far ends, as before.
-        SELECT
-          r.track_id, r.usage_type, r.closed, r.length_km, r.line_class,
-          ST_MakeLine(ARRAY[
-            ST_StartPoint(r.geometry),
-            ST_PointN(r.geometry, 2),
-            ST_PointN(r.geometry, -2),
-            ST_EndPoint(r.geometry)
-          ]) AS ends
-        FROM railway_routes r
-        WHERE ${ordinaryRouteSql("r")}
-          AND ST_NPoints(r.geometry) >= 2
-        OFFSET 0
-      ) r
+      -- ends is the four points stored beside the geometry (02-vector-tiles.sql),
+      -- so the load never reads a full line: each ST_PointN on one deserialised
+      -- the whole route (~370ms for 7k routes, ~165ms with the points taken once
+      -- per row, a few ms stored). NULL when the line has under two points.
+      FROM railway_routes r
+      WHERE ${ordinaryRouteSql("r")}
+        AND r.ends IS NOT NULL
       -- The graph breaks cost ties in load order, so it is fixed here: a bare
       -- scan returns the heap in whatever order it starts and writes leave it
       ORDER BY r.track_id

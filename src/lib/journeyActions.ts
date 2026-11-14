@@ -19,6 +19,7 @@ import {
   type LoggedRange,
   saveJourneyEditsForUser,
 } from "./journeyQueries";
+import { assertRegionId } from "./regionArgument";
 import type { RegionId } from "./shared/regions";
 import type {
   Journey,
@@ -45,7 +46,10 @@ export async function getJourney(
     partials: PartialRouteGeometry[];
   }>
 > {
-  return asUser((userId) => journeyWithBoundsForUser(userId, journeyId, region));
+  return asUser((userId) => {
+    assertRegionId(region);
+    return journeyWithBoundsForUser(userId, journeyId, region);
+  });
 }
 
 /** Create a new journey and log routes to it (atomic operation). */

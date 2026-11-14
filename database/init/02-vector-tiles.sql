@@ -1,6 +1,29 @@
 -- Vector Tile Optimization
 -- This file adds optimizations for serving vector tiles via Martin
 
+-- railway_routes.ends: the four points the Journey Planner's network is built
+-- from (src/lib/planner/routeGraphCache.ts), as a four-point line: the start, the
+-- point after it, the point before the end, and the end. For a two-point route
+-- the inner two are the far ends. Taking them from the full line meant reading
+-- (detoasting) every route's geometry on each network load, ~165ms after every
+-- route write; stored, the load reads a few kB. Generated, so it can never
+-- disagree with the geometry. Added here, like the 3857 columns, so a deploy adds
+-- it; the first add rewrites railway_routes once (a few seconds).
+ALTER TABLE railway_routes
+ADD COLUMN IF NOT EXISTS ends GEOMETRY(LINESTRING, 4326) GENERATED ALWAYS AS (
+  CASE WHEN ST_NPoints(geometry) >= 2 THEN ST_MakeLine(ARRAY[
+    ST_StartPoint(geometry),
+    ST_PointN(geometry, 2),
+    ST_PointN(geometry, -2),
+    ST_EndPoint(geometry)
+  ]) END
+) STORED;
+
+-- Query statistics (SELECT … FROM pg_stat_statements ORDER BY total_exec_time
+-- DESC). The view reads only once the library is preloaded, which the db service's
+-- command in docker-compose.yml does; creating the extension doesn't need it.
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
 -- Add Web Mercator (EPSG:3857) geometry columns for tile serving
 -- These are used by Martin for efficient tile generation
 
@@ -47,14 +70,14 @@ CREATE INDEX IF NOT EXISTS idx_stations_coordinates_3857_near_route
 ON stations USING GIST (coordinates_3857) WHERE near_route;
 
 -- Station name search (searchStationsByName in src/lib/routeQueries.ts) is a
--- substring match, `%…%`, on search_key(name), which no btree can serve: a
--- sequential scan running unaccent over every station name, ~60ms a keystroke.
--- A trigram index answers it in about 1ms from three characters up (two are
--- below a trigram, and still scan). unaccent() itself is only STABLE — it reads
--- its dictionary through search_path — so the index goes through a wrapper that
--- names the dictionary outright and can therefore be declared IMMUTABLE. The
--- query must call the same function, or the planner cannot match the index.
--- Partial on near_route, the only stations the search offers.
+-- substring match, `%…%`, on search_key(name), which no btree can serve. It reads
+-- the key from a stored column, stations.name_key (below), with a trigram index
+-- over it: about 1ms from three characters up. Two characters are below a
+-- trigram and still scan, but a scan of the stored key costs about a quarter of
+-- one computing search_key on every row. unaccent() itself is only STABLE — it
+-- reads its dictionary through search_path — so search_key goes through a
+-- wrapper that names the dictionary outright and can therefore be declared
+-- IMMUTABLE, as a generated column requires.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text
@@ -68,9 +91,9 @@ RETURN public.unaccent('public.unaccent'::regdictionary, $1);
 -- twin of foldForSearch (src/lib/searchText.ts, its separators in
 -- src/lib/shared/searchQuery.ts); tests/searchText.sql.test.ts holds the two
 -- together. The whitespace is JavaScript's `\s` spelled out, not [[:space:]],
--- which follows the locale and leaves out the no-break spaces. The index below
--- stores its results, so a new body needs a new index name (and a DROP of the
--- old one) for the deploy to rebuild it.
+-- which follows the locale and leaves out the no-break spaces. stations.name_key
+-- stores its results; the block after it recomputes them when this body (or
+-- immutable_unaccent's) changes.
 CREATE OR REPLACE FUNCTION search_key(text) RETURNS text
 LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
 RETURN regexp_replace(
@@ -80,10 +103,55 @@ RETURN regexp_replace(
   'g'
 );
 
-DROP INDEX IF EXISTS idx_stations_name_trgm_near_route;
+-- stations.name_key = search_key(name), stored. A generated column is computed
+-- once, on write, so a change in how search_key folds would leave every stored
+-- key folded the old way. Folding can change without the functions above
+-- changing: unaccent reads its rules from a file the db image ships, and lower()
+-- follows the image's locale. So the column's comment records a fingerprint of
+-- what search_key *returns*, character by character, over the blocks where
+-- unaccent, lower() and the separators act (Latin to Katakana, Latin Extended-D,
+-- the ligatures, the mathematical letters, the full-width forms; ~22ms). When the
+-- fingerprint no longer matches, SET EXPRESSION recomputes the column (a rewrite
+-- of the ~66k rows and their indexes, about a second under an exclusive lock,
+-- once). Added here rather than in 01-schema.sql, which runs before search_key
+-- exists on a new database.
+DO $$
+DECLARE
+  fold_hash text;
+BEGIN
+  SELECT md5(string_agg(search_key(chr(c)), '|' ORDER BY c)) INTO fold_hash
+  FROM (
+    SELECT generate_series(x'20'::int, x'30ff'::int)
+    UNION ALL SELECT generate_series(x'a720'::int, x'a7ff'::int)
+    UNION ALL SELECT generate_series(x'fb00'::int, x'fb4f'::int)
+    UNION ALL SELECT generate_series(x'ff00'::int, x'ffef'::int)
+    UNION ALL SELECT generate_series(x'1d400'::int, x'1d7ff'::int)
+  ) AS codepoints(c);
 
-CREATE INDEX IF NOT EXISTS idx_stations_search_key_trgm_near_route
-ON stations USING GIN (search_key(name) gin_trgm_ops) WHERE near_route;
+  IF NOT EXISTS (
+    SELECT FROM pg_attribute
+    WHERE attrelid = 'stations'::regclass AND attname = 'name_key' AND NOT attisdropped
+  ) THEN
+    ALTER TABLE stations ADD COLUMN name_key text GENERATED ALWAYS AS (search_key(name)) STORED;
+  ELSIF col_description(
+    'stations'::regclass,
+    (SELECT attnum FROM pg_attribute WHERE attrelid = 'stations'::regclass AND attname = 'name_key')
+  ) IS DISTINCT FROM fold_hash THEN
+    ALTER TABLE stations ALTER COLUMN name_key SET EXPRESSION AS (search_key(name));
+  ELSE
+    RETURN;
+  END IF;
+  EXECUTE format('COMMENT ON COLUMN stations.name_key IS %L', fold_hash);
+END $$;
+
+-- Not partial: the user map's search narrows to near_route after the index, and
+-- the admin map's (every station) uses it too. It replaces the expression index
+-- the search used before the column existed.
+DROP INDEX IF EXISTS idx_stations_name_trgm_near_route;
+DROP INDEX IF EXISTS idx_stations_search_key_trgm_near_route;
+
+CREATE INDEX IF NOT EXISTS idx_stations_name_key_trgm
+ON stations USING GIN (name_key gin_trgm_ops);
 
 -- Function: tile_unit
 -- One unit of a 4096-extent tile at zoom z, in metres of Web Mercator (the world

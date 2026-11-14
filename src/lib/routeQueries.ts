@@ -37,9 +37,10 @@ import type {
  * the other one could neither be flown to nor routed from.
  *
  * Compared as `search_key` (02-vector-tiles.sql) on both sides — case,
- * diacritics, spaces and hyphens aside, so "owariseto" finds "Owari Seto": it is
- * what the trigram index on station names is built over, and the planner uses
- * that index only for the exact expression it indexes. The two-character floor is
+ * diacritics, spaces and hyphens aside, so "owariseto" finds "Owari Seto". The
+ * station side is `name_key`, the same key stored, which the trigram index is
+ * built over; calling `search_key(name)` here instead would compute it on every
+ * row and miss the index. The two-character floor is
  * counted without separators (`searchQueryLength`), so "a-" is one character.
  */
 export async function searchStationsByName(
@@ -62,10 +63,10 @@ export async function searchStationsByName(
     FROM stations
     WHERE ($3 OR near_route)
       AND ${regionContainsSql(region, "coordinates")}
-      AND search_key(name) LIKE search_key($1)
+      AND name_key LIKE search_key($1)
     ORDER BY
       CASE
-        WHEN search_key(name) LIKE search_key($2) THEN 0  -- Start match first
+        WHEN name_key LIKE search_key($2) THEN 0  -- Start match first
         ELSE 1  -- Contains match second
       END,
       name
