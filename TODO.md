@@ -6,8 +6,6 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Routes-version counter.** Several items here want a cheap "have the routes changed" value: a tile URL version, the planner cache. Today `routesFingerprint` (`src/lib/routesFingerprint.ts`, used by the planner cache and `routesCachedJson`, which keeps `/api/route-details`, the route summaries and the track ids and asks it on every request) runs `sum(xmin)`, which scans the 32MB `railway_routes` heap (~5–7ms). Swap its body for the counter.
-  - Add a one-row table bumped by a statement-level trigger on `railway_routes` (and `scenic_lines`, `admin_notes` if the tiles use it). Put it in `02-vector-tiles.sql` idempotently, or in a migration.
 - **Cache session route tiles in the browser.** `mvtResponse` (`src/lib/api/tiles.ts`) sends `private, no-store`, so panning back over an evicted area re-runs the per-user tile query. The URL's `v` is set once per page load (`useUserMap.ts`, `routesCacheBusterRef.current ??= Date.now()`) and bumped by `useSourceTileRefresh` on every refresh.
   - Before switching session tiles (`rides: "session"`) to `private, max-age=3600`, confirm that `v` changes on login, logout, a journey logged, a country change and a region switch.
   - Keep `no-store` for `?share=` tiles, so turning sharing off still stops a map that is already open.
@@ -34,7 +32,7 @@ Measured at z7 (7/69/43): a signed-in route tile takes 51ms, an anonymous one 19
   - Signed-in and shared maps fetch their ride status once: track_id → latest date, journey name, partial, ridden whole.
   - They apply it as feature state, as the anonymous map does.
   - Every route tile then comes from Martin and is the same for everyone.
-  - With a routes-version in the tile URL (see above), tiles can be `Cache-Control: public, immutable`, cacheable by browsers, Caddy or a CDN. Martin's `cache_size_mb` could then go above 0 too.
+  - With the routes version in the tile URL (`routesFingerprint`, the `data_versions` counter; add rows and triggers for `scenic_lines` and `admin_notes` if their tiles want one too), tiles can be `Cache-Control: public, immutable`, cacheable by browsers, Caddy or a CDN. Martin's `cache_size_mb` could then go above 0 too.
 - **What must still hold** (root CLAUDE.md "Vector tiles and sharing"):
   - A dead session or a dead share link must still blank the map rather than draw it unridden. That rule moves to the ride-status endpoint, which must re-resolve the share token on every call.
   - The "latest journey" styling and hover data must come out identical.

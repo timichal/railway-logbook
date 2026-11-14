@@ -245,6 +245,21 @@ CREATE TABLE admin_notes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Data versions: one counter per table, moved by every committed write to it
+-- (bump_data_version, below). What the app's in-memory caches of a table are
+-- keyed on (routesFingerprint in src/lib/routesFingerprint.ts), read with one
+-- primary-key lookup instead of scanning the table. Holds no data of its own, so
+-- it is in no backup. A new row starts from the clock, not 1, so a recreated
+-- database doesn't reuse a version a browser may still hold in an ETag.
+CREATE TABLE data_versions (
+    table_name TEXT PRIMARY KEY,
+    version BIGINT NOT NULL,
+    bumped_in XID8 -- The transaction that last bumped it, so it bumps once per transaction
+);
+
+INSERT INTO data_versions (table_name, version)
+VALUES ('railway_routes', (extract(epoch FROM clock_timestamp()) * 1000)::bigint);
+
 -- Create indexes for better performance
 CREATE INDEX idx_stations_coordinates ON stations USING GIST (coordinates);
 CREATE INDEX idx_railway_parts_geometry ON railway_parts USING GIST (geometry);
@@ -281,10 +296,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to auto-update updated_at on railway_routes updates. The journey
--- planner's graph cache is fingerprinted off this table (getNetworkSignature in
--- src/lib/routePathFinder.ts), and a write path that forgot the column used to
--- be the one way to leave the cache stale.
+-- Trigger to auto-update updated_at on railway_routes updates
 CREATE TRIGGER railway_routes_update_timestamp
 BEFORE UPDATE ON railway_routes
 FOR EACH ROW
@@ -312,3 +324,42 @@ CREATE TRIGGER admin_notes_update_timestamp
 BEFORE UPDATE ON admin_notes
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
+
+-- Bump data_versions for the table written. A plain row in the writer's
+-- transaction, not a sequence: it moves exactly when the write becomes visible.
+-- A sequence moves before the commit, so a reader could rebuild from the old rows
+-- and file them under the new version, stale until the next write.
+--
+-- Bumped at commit (a deferred constraint trigger), not as the write runs. The
+-- row lock is then held only while the transaction commits, by one that waits on
+-- nothing else, so no deadlock is possible. Taken mid-transaction, after the row
+-- locks (AFTER) it deadlocks an admin transaction that writes a second route
+-- against verifyRouteData's autocommitted update of it, and before them (BEFORE)
+-- it deadlocks the admin save's SELECT … FOR UPDATE the same way. A constraint
+-- trigger fires per row, so bumped_in keeps it to one bump per transaction (an
+-- update of every route queues ~7k events, ~70ms at commit), and a statement that
+-- touches no row moves nothing. TRUNCATE has no row trigger and takes an
+-- exclusive table lock anyway, so it bumps through a plain statement trigger.
+-- Triggers don't fire under session_replication_role = replica, so a restore
+-- (serverData.ts) bumps it itself. 02-vector-tiles.sql makes them immediate
+-- while it applies (the comment at its top).
+CREATE OR REPLACE FUNCTION bump_data_version()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE data_versions
+    SET version = version + 1, bumped_in = pg_current_xact_id()
+    WHERE table_name = TG_TABLE_NAME AND bumped_in IS DISTINCT FROM pg_current_xact_id();
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER railway_routes_bump_version
+AFTER INSERT OR UPDATE OR DELETE ON railway_routes
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION bump_data_version();
+
+CREATE TRIGGER railway_routes_bump_version_truncate
+AFTER TRUNCATE ON railway_routes
+FOR EACH STATEMENT
+EXECUTE FUNCTION bump_data_version();

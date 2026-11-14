@@ -27,7 +27,7 @@ const SERVER_STARTED = Date.now().toString(36);
  * name everything the answer depends on: what it is and the region) until
  * `routesFingerprint` moves. Its ETag follows the fingerprint, so a browser that
  * holds the answer revalidates and gets a 304 for the price of the fingerprint
- * (~5ms), not of the query. A deploy changes it too (`SERVER_STARTED`).
+ * (one primary-key read), not of the query. A deploy changes it too (`SERVER_STARTED`).
  *
  * The browser revalidates on every load (`no-cache`), so a change is seen on the
  * next one. Not `stale-while-revalidate`: that answers the first load after a

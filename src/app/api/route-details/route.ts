@@ -10,7 +10,7 @@ import { routeDetailsJson } from "@/lib/routeQueries";
  *
  * Public and the same for everyone, so it takes no session and must never take
  * one. Kept in memory per `routesFingerprint` and revalidated by the browser on
- * every load (`routesCachedJson`): a 304 costs the fingerprint (~5ms), not the
+ * every load (`routesCachedJson`): a 304 costs the fingerprint (one primary-key read), not the
  * query (~300ms). An admin's save is seen on the next load, or at once by a
  * client that asks again (`loadRouteDetails`).
  */

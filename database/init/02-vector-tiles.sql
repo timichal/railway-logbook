@@ -1,6 +1,14 @@
 -- Vector Tile Optimization
 -- This file adds optimizations for serving vector tiles via Martin
 
+-- The data_versions bump on railway_routes (01-schema.sql) is a deferred trigger.
+-- Deferred, a backfill UPDATE here that touches a route would leave its event
+-- pending until commit, and every later ALTER TABLE or CREATE INDEX on
+-- railway_routes in this file would fail ("pending trigger events"). The apply
+-- holds exclusive locks on these tables anyway, so bumping at each statement's
+-- end costs nothing.
+SET CONSTRAINTS ALL IMMEDIATE;
+
 -- railway_routes.ends: the four points the Journey Planner's network is built
 -- from (src/lib/planner/routeGraphCache.ts), as a four-point line: the start, the
 -- point after it, the point before the end, and the end. For a two-point route
