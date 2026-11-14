@@ -110,7 +110,8 @@ CREATE TABLE railway_routes (
 -- an overflowing row moves its `extended` values (over ~24 bytes) out of line
 -- before any `main` one, so every usage tag list and longer name would sit in
 -- TOAST, a lookup per read. As `main`, the geometries, the biggest, go first.
--- Existing databases: src/scripts/inlineRouteText.ts
+-- Changing it on a table that has rows moves nothing by itself (only new
+-- tuples follow it): a VACUUM FULL rewrite brings the old values back inline.
 ALTER TABLE railway_routes
     ALTER COLUMN name SET STORAGE MAIN,
     ALTER COLUMN other_names SET STORAGE MAIN,

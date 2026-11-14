@@ -6,7 +6,6 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 ## Medium
 
-- **Run `npm run inlineRouteText` on the server**, from its checkout, after the app deploy that carries it and outside a map deploy (it fails after 10s rather than wait for a lock). _Measured_ locally: the 7.2k out-of-line text values all came back inline, `sum(cardinality(usage_tags))` went from 92ms to 3.4ms, and the `VACUUM FULL` held `railway_routes` for 3.8s. Delete this item once its "After" output on the server shows no text out of line.
 - **Move read-only calls off server actions.** Next runs a client's server actions one at a time (`node_modules/next/dist/docs/01-app/02-guides/backend-for-frontend.md`, "Server Actions are queued"). So on a signed-in load `getTripNames` → `getUserProgress` → `getCoveredStretches` run in sequence, a slow `findRoutePathBetweenStations` holds up station search and progress, and the admin page queues four or more loads.
   - Serve the reads from GET route handlers that resolve the session the way `src/lib/api/tiles.ts` does and call the existing `*Queries.ts` functions. Keep writes as server actions.
   - Rules that apply ("Two transports" in the root CLAUDE.md): a route handler never imports a `"use server"` module; errors go through `errors.ts`; every handler checks the session itself.

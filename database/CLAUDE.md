@@ -1,7 +1,7 @@
 # Database files (`database/init/`)
 
 - `01-schema.sql`: tables and indexes. **Never re-run on deploy**, so a schema change also needs a migration script (see `src/scripts/CLAUDE.md`). The exception is a column derived from others (the 3857 geometries, the generated `name_key` and `ends`): `02-vector-tiles.sql` adds it with `IF NOT EXISTS`, so the deploy adds it and needs no migration, and a generated column over `search_key` can't go in `01`, which runs before the function exists. `01` notes each such column on its table. For a new user-data table, see "Data model" in the root CLAUDE.md.
-- **A new text or array column on `railway_routes` or `scenic_lines` gets `SET STORAGE MAIN`** (beside the others in `01`, plus its migration). With the default `extended`, an overflowing row moves it out to TOAST ahead of the `main` geometries (`src/scripts/inlineRouteText.ts`).
+- **A new text or array column on `railway_routes` or `scenic_lines` gets `SET STORAGE MAIN`** (beside the others in `01`, plus its migration). With the default `extended`, an overflowing row moves it out to TOAST ahead of the `main` geometries (the comment above the ALTERs in `01`).
 - `02-vector-tiles.sql`: tile functions, the 3857 columns and their triggers, the generated columns `stations.name_key` and `railway_routes.ends`, `user_fully_ridden_routes`, `immutable_unaccent`, `search_key`, the `pg_stat_statements` extension. **Every app deploy re-applies it** in one transaction before the containers are replaced (locally: `npm run applyVectorTiles`). So it must stay **idempotent**. A change `CREATE OR REPLACE` can't make (a new return type) needs its `DROP FUNCTION IF EXISTS` in the file.
 
 ## Tile functions
