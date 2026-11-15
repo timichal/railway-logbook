@@ -242,6 +242,18 @@ file_date() {
     esac
 }
 
+# How long since $1 (seconds since the epoch, from date +%s): "4m 12s", "38s".
+# For the timings that go with each update, download, filter and step, which
+# say where a run's time goes (RECALC_PERFORMANCE.md).
+took() {
+    T_SECS=$(($(date +%s) - $1))
+    if [ "${T_SECS}" -ge 60 ]; then
+        echo "$((T_SECS / 60))m $((T_SECS % 60))s"
+    else
+        echo "${T_SECS}s"
+    fi
+}
+
 # The last line of each extract a phase works on: "done 3/42", counted in the
 # order they finish, so the count only goes up however the work overlaps.
 DONE_N=0
@@ -479,6 +491,7 @@ start_download() {
     # instead, for the time the filter is actually kept waiting.
     curl --fail -sS -C - -o "${DL_FILE}" "${DL_URL}" &
     DL_PID=$!
+    DL_START="$(date +%s)"
 }
 
 # Wait for the download in flight to finish. While it runs, the size of the
@@ -488,6 +501,7 @@ start_download() {
 # waits on the sleep.
 wait_download() {
     W_WAITED=""
+    W_START="$(date +%s)"
     while kill -0 "${DL_PID}" 2>/dev/null; do
         if [ -f "${DL_FILE}" ]; then
             printf "\r  %-${NAME_W}s  %d%s MB downloaded " "${DL_EXTRACT}" \
@@ -503,6 +517,13 @@ wait_download() {
         exit 1
     }
     DL_PID=""
+    # How long the download took, and how much of it the run sat waiting
+    # (the rest ran beside an update or a filter).
+    if [ $(($(date +%s) - W_START)) -gt 0 ]; then
+        say "${DL_EXTRACT}" "downloaded in $(took "${DL_START}"), $(took "${W_START}") of it waited for"
+    else
+        say "${DL_EXTRACT}" "downloaded in $(took "${DL_START}")"
+    fi
 }
 
 # What tags-filter keeps (see filter_extract), as its expressions separated by
@@ -528,8 +549,12 @@ raw_record() {
 # header says which diff it is at, on that extract's own replication. Checked
 # before every update rather than trusted, because pyosmium-up-to-date takes a
 # file with no replication URL as a planet and would apply the planet's diffs.
+# The URL is compared without a trailing slash: pyosmium 4.3.2 writes one
+# after an update and 4.3.0 doesn't, and a mismatch here deletes the file
+# just updated, so every update after a pyosmium upgrade would empty the cache.
 updatable_raw() {
-    [ "$(header_option "$2" osmosis_replication_base_url)" = "${GEOFABRIK}/$1-updates" ] &&
+    U_BASE_URL="$(header_option "$2" osmosis_replication_base_url)"
+    [ "${U_BASE_URL%/}" = "${GEOFABRIK}/$1-updates" ] &&
         [ -n "$(header_option "$2" osmosis_replication_sequence_number)" ]
 }
 
@@ -581,6 +606,7 @@ update_raw() {
 
     U_SEQ="$(header_option "${U_RAW}" osmosis_replication_sequence_number)"
     say "${U_EXTRACT}" "updating from Geofabrik's diffs (data from $(extract_date "${U_RAW}"))"
+    U_START="$(date +%s)"
     # In place: pyosmium writes the update to a temporary file beside the
     # input and renames it over the input only once it is complete (a stopped
     # run's temporary file is swept on the next). Exit 1 means it stopped at
@@ -599,9 +625,9 @@ update_raw() {
         exit 1
     done
     if [ "$(header_option "${U_RAW}" osmosis_replication_sequence_number)" = "${U_SEQ}" ]; then
-        say "${U_EXTRACT}" "no new diffs"
+        say "${U_EXTRACT}" "no new diffs (checked in $(took "${U_START}"))"
     else
-        say "${U_EXTRACT}" "updated to data from $(extract_date "${U_RAW}")"
+        say "${U_EXTRACT}" "updated to data from $(extract_date "${U_RAW}") in $(took "${U_START}")"
     fi
 }
 
@@ -616,6 +642,7 @@ filter_extract() {
     mkdir -p "$(dirname "${F_RAIL_FILE}")"
 
     say "${F_EXTRACT}" "filtering rail features"
+    F_START="$(date +%s)"
     # Stations are matched on nodes AND ways (nw/): plenty of them - most of
     # France, from the SNCF/cadastre import - carry railway=station on the
     # station building instead of a node. osmium export turns those closed ways
@@ -657,7 +684,7 @@ filter_extract() {
         esac
     fi
     FILTERED_NOW=1
-    finish "${F_EXTRACT}" "data from $(extract_date "${F_RAIL_FILE}")"
+    finish "${F_EXTRACT}" "data from $(extract_date "${F_RAIL_FILE}"), filtered in $(took "${F_START}")"
 }
 
 # --make-room: bring the data disk back to DATA_DISK_RESERVE_GB free by moving
@@ -819,6 +846,7 @@ fi
 # selection, so a partial run leaves the other extracts alone - and not at all
 # when the list is a trial one of its own (EXTRACTS_FILE), which would
 # otherwise cost the next real run every extract it leaves out.
+RUN_START="$(date +%s)"
 echo "[1/4] Checking $(count_extracts "${COUNT}")"
 if [ "${EXTRACTS_FILE}" = "${LISTED_EXTRACTS_FILE}" ]; then
     ALL_EXTRACTS="$(all_extracts)"
@@ -1027,6 +1055,9 @@ while [ $# -gt 0 ]; do
     fi
 done
 
+echo "[1/4] took $(took "${RUN_START}")"
+echo ""
+
 # What the map is built from, exactly: each extract's .source, the dated file
 # or the last diff it was filtered from, plus the filter. A date alone would
 # not do, since a diff applied later the same day changes the data. Then the
@@ -1077,6 +1108,7 @@ if [ -f "${FILTERED_FILE}" ]; then
     echo "[2/4] Merging: reusing ${FILTERED_FILE}, merged by an earlier run"
 else
     echo "[2/4] Merging $(count_extracts "${COUNT}")"
+    STEP_START="$(date +%s)"
     RAIL_FILES=""
     for EXTRACT in ${EXTRACTS}; do
         RAIL_FILES="${RAIL_FILES} ${WORK_DIR}/${EXTRACT}.rail.pbf"
@@ -1087,6 +1119,8 @@ else
         exit 1
     }
     mv "${MERGED_FILE}.part" "${MERGED_FILE}"
+    echo "  merged in $(took "${STEP_START}")"
+    STEP_START="$(date +%s)"
     osmium time-filter --overwrite -f pbf -o "${FILTERED_FILE}.part" "${MERGED_FILE}" || {
         echo "ERROR: Failed to deduplicate merged extracts"
         rm -f "${FILTERED_FILE}.part"
@@ -1095,7 +1129,7 @@ else
     echo "${EXTRACTS}" > "${MERGED_LIST_FILE}"
     mv "${FILTERED_FILE}.part" "${FILTERED_FILE}"
     rm -f "${MERGED_FILE}"
-    echo "  done"
+    echo "  deduplicated in $(took "${STEP_START}")"
 fi
 
 # Written now, while the filtered extracts are still here to read, and
@@ -1110,26 +1144,28 @@ if [ -f "${GEOJSON_FILE}" ]; then
     echo "[3/4] Converting to GeoJSON: reusing ${GEOJSON_FILE}, converted by an earlier run"
 else
     echo "[3/4] Converting to GeoJSON"
+    STEP_START="$(date +%s)"
     osmium export "${FILTERED_FILE}" -a id -f geojson -o "${GEOJSON_FILE}.part" || {
         echo "ERROR: Failed to convert to GeoJSON"
         rm -f "${GEOJSON_FILE}.part"
         exit 1
     }
     mv "${GEOJSON_FILE}.part" "${GEOJSON_FILE}"
-    echo "  done"
+    echo "  done in $(took "${STEP_START}")"
 fi
 echo ""
 
 # 4. Prune data (pruneData.ts does its own .part/rename on the output, and
 # fails rather than writing a short file if the input ends mid-feature)
 echo "[4/4] Pruning (resolving station names)"
+STEP_START="$(date +%s)"
 tsx src/scripts/pruneData.ts "${OUTPUT_FILE}" < "${GEOJSON_FILE}" || {
     echo "ERROR: Failed to prune data"
     exit 1
 }
 mv "${SOURCES_FILE}.part" "${SOURCES_FILE}"
 mv "${INPUTS_FILE}.part" "${INPUTS_FILE}"
-echo "  done"
+echo "  done in $(took "${STEP_START}")"
 echo ""
 
 # 5. Cleanup: remove this run's intermediate files. Only reached once pruning
@@ -1139,7 +1175,7 @@ rm -f "${MERGED_FILE}"
 find "${WORK_DIR}" -depth -type d -empty -exec rmdir {} \;
 rm -f "${FILTERED_FILE}" "${MERGED_LIST_FILE}" "${GEOJSON_FILE}"
 
-echo "=== Done: ${OUTPUT_FILE}, with the data of each extract from ==="
+echo "=== Done in $(took "${RUN_START}"): ${OUTPUT_FILE}, with the data of each extract from ==="
 while IFS= read -r LINE; do
     say "${LINE%%: *}" "${LINE#*: }"
 done < "${SOURCES_FILE}"

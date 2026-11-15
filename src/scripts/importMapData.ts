@@ -10,6 +10,17 @@ import {
 // Relative to the repository root, where npm runs the script.
 const DEPLOYED_INPUTS_FILE = "data/deployed-extracts.inputs";
 
+/**
+ * "Step 2 took 4m 12s": each step's wall-clock, so a run's split can be read
+ * off its log (RECALC_PERFORMANCE.md). deploy.sh replays the log from the
+ * route summary to the Step 3 header, which this line sits inside.
+ */
+function logStepTime(step: number, startedAt: number): void {
+  const seconds = Math.round((performance.now() - startedAt) / 1000);
+  const minutes = Math.floor(seconds / 60);
+  console.log(`Step ${step} took ${minutes > 0 ? `${minutes}m ` : ""}${seconds % 60}s`);
+}
+
 async function loadGeoJSONData(): Promise<void> {
   // A pool rather than a single client: step 2 recalculates several routes at
   // once, and node-pg serialises concurrent queries on one connection.
@@ -58,23 +69,30 @@ async function loadGeoJSONData(): Promise<void> {
     // One dedicated session, because the load runs as a single transaction.
     console.log("");
     console.log("=== Step 1: Loading map data ===");
+    const step1 = performance.now();
     const loader = await pool.connect();
     try {
       await loadStationsAndParts(loader, dataPaths);
     } finally {
       loader.release();
     }
+    logStepTime(1, step1);
 
     // Step 2: Verify and recalculate routes if they exist
     console.log("");
     console.log("=== Step 2: Verifying routes ===");
+    const step2 = performance.now();
     await verifyAndRecalculateRoutes(pool, { concurrency });
+    console.log("");
+    logStepTime(2, step2);
 
     // Step 3: Route geometries have just settled, so the station flags derived
     // from them are refreshed last
     console.log("");
     console.log("=== Step 3: Flagging stations near routes ===");
+    const step3 = performance.now();
     console.log(formatStationProximity(await refreshAllStationProximity(pool)));
+    logStepTime(3, step3);
 
     console.log("");
     console.log("Database update completed!");

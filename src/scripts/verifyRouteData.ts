@@ -4,6 +4,7 @@ import { coordinatesToWKT } from "../lib/coordinateUtils";
 import { createPool } from "../lib/db";
 import { lineLengthKmSql } from "../lib/lineLength";
 import { formatStationProximity, refreshAllStationProximity } from "../lib/stationProximity";
+import { emptySearchTimings, type SearchTimings } from "./lib/partNetwork";
 import { loadAllPartRoutes, type PartRoutes } from "./lib/partRoutes";
 import { type PathFinderOptions, RailwayPathFinder } from "./lib/railwayPathFinder";
 import { runPool } from "./lib/runPool";
@@ -45,6 +46,40 @@ interface RecalculationResult {
   changedMeanwhile: number;
   backtrackingRoutes: Array<{ track_id: number; from_station: string; to_station: string }>;
   errors: Array<{ track_id: number; from_station: string; to_station: string; error: string }>;
+  timings: RecalcTimings;
+}
+
+/**
+ * Where a run spent its time, summed over every route (see `SearchTimings`),
+ * plus its round trips besides the part loads: the length query and the
+ * UPDATE. `poolMs` is the wall-clock of the workers' run, the snapshot of
+ * `partRoutes` before it left out.
+ */
+interface RecalcTimings extends SearchTimings {
+  writeMs: number;
+  poolMs: number;
+}
+
+function emptyRecalcTimings(): RecalcTimings {
+  return { ...emptySearchTimings(), writeMs: 0, poolMs: 0 };
+}
+
+/**
+ * The split of a run's time, as printed under its summary. The synchronous
+ * parts (parsing, end parts, search) are time on the one JS thread every worker
+ * shares, so their share of the wall-clock says how far that thread is the
+ * bottleneck; the rest is waiting on Postgres.
+ */
+function formatTimings(timings: RecalcTimings): string[] {
+  const seconds = (ms: number) => `${(ms / 1000).toFixed(0)}s`;
+  const jsMs = timings.loadParseMs + timings.endPartsMs + timings.searchMs;
+  const busy = timings.poolMs > 0 ? ((jsMs / timings.poolMs) * 100).toFixed(0) : "0";
+  return [
+    `Summed over the workers: part queries ${seconds(timings.loadQueryMs)} (${timings.loads} loads), ` +
+      `parsing ${seconds(timings.loadParseMs)}, end parts ${seconds(timings.endPartsMs)}, ` +
+      `search ${seconds(timings.searchMs)}, length query and write ${seconds(timings.writeMs)}`,
+    `JS thread busy parsing and searching: ${seconds(jsMs)} of ${seconds(timings.poolMs)} (${busy}%)`,
+  ];
 }
 
 interface RecalculationOptions {
@@ -95,7 +130,8 @@ type RouteOutcome =
 async function recalculateGeometry(
   db: Pool,
   row: StoredGeometryRow,
-  finder: Omit<PathFinderOptions, "quiet">,
+  finder: Omit<PathFinderOptions, "quiet" | "timings">,
+  timings: RecalcTimings,
 ): Promise<
   | { status: "invalid"; error: string }
   | { status: "ok"; lineString: string; newLength: number; hasBacktracking: boolean }
@@ -106,7 +142,7 @@ async function recalculateGeometry(
   // searches, several at a time, and their progress logging would bury the
   // summary. See PathFinderOptions for why patching the global console.log —
   // which is what this used to do — cannot survive two overlapping searches.
-  const pathFinder = new RailwayPathFinder({ ...finder, quiet: true });
+  const pathFinder = new RailwayPathFinder({ ...finder, quiet: true, timings });
 
   // Deliberately no try/catch. Every way pathfinding can fail comes back as
   // null — the one failure that throws, a part combination whose chain doesn't
@@ -122,10 +158,12 @@ async function recalculateGeometry(
   }
 
   const lineString = coordinatesToWKT(path.coordinates);
+  const lengthStart = performance.now();
   const lengthQuery = await db.query<{ new_length_km: number }>(
     `SELECT ${lineLengthKmSql("$1")} AS new_length_km`,
     [lineString],
   );
+  timings.writeMs += performance.now() - lengthStart;
 
   const newLength = lengthQuery.rows[0].new_length_km;
   const lengthDiff = Math.abs(newLength - originalLength);
@@ -165,11 +203,16 @@ async function recalculateAndStoreRoute(
   db: Pool,
   route: RouteRow,
   partRoutes: PartRoutes,
+  timings: RecalcTimings,
 ): Promise<RouteOutcome> {
-  const outcome = await recalculateGeometry(db, route, {
-    avoidOtherRoutes: { trackId: route.track_id, snapshot: partRoutes },
-  });
+  const outcome = await recalculateGeometry(
+    db,
+    route,
+    { avoidOtherRoutes: { trackId: route.track_id, snapshot: partRoutes } },
+    timings,
+  );
 
+  const writeStart = performance.now();
   if (outcome.status === "invalid") {
     const marked = await db.query(
       `
@@ -181,6 +224,7 @@ async function recalculateAndStoreRoute(
     `,
       [outcome.error, route.track_id],
     );
+    timings.writeMs += performance.now() - writeStart;
 
     return marked.rowCount === 0 ? { status: "changedMeanwhile" } : outcome;
   }
@@ -197,6 +241,7 @@ async function recalculateAndStoreRoute(
   `,
     [outcome.lineString, outcome.newLength, outcome.hasBacktracking, route.track_id],
   );
+  timings.writeMs += performance.now() - writeStart;
 
   if (updated.rowCount === 0) return { status: "changedMeanwhile" };
   return { status: "recalculated", hasBacktracking: outcome.hasBacktracking };
@@ -232,6 +277,7 @@ async function recalculateAllRoutes(
     changedMeanwhile: 0,
     backtrackingRoutes: [],
     errors: [],
+    timings: emptyRecalcTimings(),
   };
 
   // Never a closed route: its geometry is frozen at what it was when it closed
@@ -261,16 +307,19 @@ async function recalculateAllRoutes(
   // throw means the database itself is unhappy (or a bug): runPool stops the run
   // rather than marking a route invalid over what is probably a transient fault.
   // Outcomes come back in track_id order, so the summary reads that way too.
+  const poolStart = performance.now();
   const outcomes = await runPool(
     routes.rows,
     concurrency,
-    (route) => recalculateAndStoreRoute(db, route, partRoutes),
+    (route) => recalculateAndStoreRoute(db, route, partRoutes, result.timings),
     (processed) => {
       if (processed % 10 === 0 || processed === result.totalRoutes) {
         process.stdout.write(`\r  ${processed}/${result.totalRoutes} routes recalculated...`);
       }
     },
   );
+
+  result.timings.poolMs = performance.now() - poolStart;
 
   for (const [index, route] of routes.rows.entries()) {
     const outcome = outcomes[index];
@@ -318,15 +367,23 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
 
   console.log("");
   console.log(`Recalculating ${lines.rows.length} scenic lines...`);
+  const timings = emptyRecalcTimings();
+  const poolStart = performance.now();
   const outcomes = await runPool(
     lines.rows,
     options.concurrency ?? DEFAULT_RECALC_CONCURRENCY,
     async (line) => {
-      const recalculated = await recalculateGeometry(db, line, { avoidBacktracking: true });
+      const recalculated = await recalculateGeometry(
+        db,
+        line,
+        { avoidBacktracking: true },
+        timings,
+      );
       const outcome =
         recalculated.status === "ok" && recalculated.hasBacktracking
           ? { status: "invalid" as const, error: SCENIC_BACKTRACKING_ERROR }
           : recalculated;
+      const writeStart = performance.now();
       if (outcome.status === "invalid") {
         await db.query(
           "UPDATE scenic_lines SET is_valid = FALSE, error_message = $1 WHERE id = $2 AND is_valid",
@@ -342,9 +399,11 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
           [outcome.lineString, outcome.newLength, line.id],
         );
       }
+      timings.writeMs += performance.now() - writeStart;
       return outcome;
     },
   );
+  timings.poolMs = performance.now() - poolStart;
 
   const invalid = lines.rows.flatMap((line, index) => {
     const outcome = outcomes[index];
@@ -355,6 +414,7 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
   console.log("=== Scenic Line Recalculation Summary ===");
   console.log(`Total scenic lines: ${lines.rows.length}`);
   console.log(`Invalid scenic lines: ${invalid.length}`);
+  for (const line of formatTimings(timings)) console.log(line);
   for (const { line, error } of invalid) {
     console.log(`  [${line.id}] ${line.from_station} → ${line.to_station}: ${error}`);
   }
@@ -390,6 +450,7 @@ export async function verifyAndRecalculateRoutes(
     );
   }
   console.log(`Time: ${elapsedMinutes.toFixed(1)} min`);
+  for (const line of formatTimings(recalcResult.timings)) console.log(line);
 
   if (recalcResult.backtrackingRoutes.length > 0) {
     console.log("");

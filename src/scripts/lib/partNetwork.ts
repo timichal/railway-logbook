@@ -21,6 +21,33 @@ export interface RailwayPart {
 }
 
 /**
+ * Where searches spend their time, summed over every search a bulk run makes
+ * (and so over its workers: with several at once, the sums can exceed the
+ * run's wall-clock). Measured to tell what to optimise (RECALC_PERFORMANCE.md).
+ *
+ * `loadQueryMs` is the wait for the part query: Postgres, the transfer, and
+ * whatever the event loop was busy with meanwhile, so it overlaps the other
+ * workers' JS. The other three are synchronous, so they are time on the one JS
+ * thread that every worker shares, and their sum against the wall-clock is how
+ * busy that thread was.
+ */
+export interface SearchTimings {
+  /** Part loads made, one per buffer tried. */
+  loads: number;
+  loadQueryMs: number;
+  /** `JSON.parse` of each part and indexing it (`add`). */
+  loadParseMs: number;
+  /** Finding the parts that hold the click points (`partsContaining`). */
+  endPartsMs: number;
+  /** The searches between those parts, and building the path. */
+  searchMs: number;
+}
+
+export function emptySearchTimings(): SearchTimings {
+  return { loads: 0, loadQueryMs: 0, loadParseMs: 0, endPartsMs: 0, searchMs: 0 };
+}
+
+/**
  * The railway parts loaded around a route's click points, and which of them
  * meet: two parts are connected when they share an endpoint coordinate, which is
  * how OSM ways are joined.
@@ -74,9 +101,11 @@ export class PartNetwork {
     dbClient: Client | Pool,
     coordinates: [number, number][],
     bufferMeters: number,
+    timings?: SearchTimings,
   ): Promise<void> {
     if (coordinates.length === 0) return;
 
+    const queryStart = performance.now();
     const client = await getClient(dbClient);
 
     try {
@@ -107,6 +136,7 @@ export class PartNetwork {
       `,
         values,
       );
+      const parseStart = performance.now();
 
       // A part already loaded is skipped before its GeoJSON is parsed, not after:
       // with additive loading, the overlap with the earlier area is every part in it
@@ -118,6 +148,12 @@ export class PartNetwork {
         if (geom.type === "LineString") parts.push({ id, coordinates: geom.coordinates });
       }
       this.add(parts);
+
+      if (timings) {
+        timings.loads++;
+        timings.loadQueryMs += parseStart - queryStart;
+        timings.loadParseMs += performance.now() - parseStart;
+      }
     } finally {
       releaseClient(dbClient, client);
     }

@@ -10,7 +10,7 @@ import {
   pathDistance,
   turnDegrees,
 } from "./partGeometry";
-import { PartNetwork, type RailwayPart } from "./partNetwork";
+import { PartNetwork, type RailwayPart, type SearchTimings } from "./partNetwork";
 import { loadPartRoutesAround, type PartRoutes } from "./partRoutes";
 
 /** A path as parts only; its coordinates are built by the caller, truncated to the clicks. */
@@ -58,6 +58,8 @@ export interface PathFinderOptions {
    * stand (`loadPartRoutesAround`).
    */
   avoidOtherRoutes?: { trackId: number | null; snapshot?: PartRoutes };
+  /** Where to add up the time `findPathFromCoordinates` spends, for a bulk run. */
+  timings?: SearchTimings;
 }
 
 /**
@@ -98,9 +100,11 @@ export class RailwayPathFinder {
   private readonly avoidOtherRoutes: PathFinderOptions["avoidOtherRoutes"];
   /** The routes of the parts loaded, for `avoidOtherRoutes`. */
   private partRoutes: PartRoutes | null = null;
+  private readonly timings: SearchTimings | undefined;
 
   constructor(options: PathFinderOptions = {}) {
     this.quiet = options.quiet ?? false;
+    this.timings = options.timings;
     this.avoidBacktracking = options.avoidBacktracking ?? false;
     this.avoidOtherRoutes = options.avoidOtherRoutes;
     this.partRoutes = options.avoidOtherRoutes?.snapshot ?? null;
@@ -248,12 +252,19 @@ export class RailwayPathFinder {
       this.network.clear();
 
       // Load parts around both coordinates, in one query (see `loadAround`)
-      await this.network.loadAround(dbClient, [startCoordinate, endCoordinate], bufferMeters);
+      await this.network.loadAround(
+        dbClient,
+        [startCoordinate, endCoordinate],
+        bufferMeters,
+        this.timings,
+      );
 
       if (!startPartIds || !endPartIds) {
         // Find parts containing the coordinates (1m tolerance)
+        const endPartsStart = performance.now();
         startPartIds = this.network.partsContaining(startCoordinate, 1);
         endPartIds = this.network.partsContaining(endCoordinate, 1);
+        if (this.timings) this.timings.endPartsMs += performance.now() - endPartsStart;
 
         if (startPartIds.length === 0) {
           this.log(`Start coordinate not found on any part (buffer: ${bufferMeters / 1000}km)`);
@@ -281,12 +292,14 @@ export class RailwayPathFinder {
       }
 
       // Try all combinations
+      const searchStart = performance.now();
       const bestResult = this.findBestCoordinatePath(
         startPartIds,
         endPartIds,
         startCoordinate,
         endCoordinate,
       );
+      if (this.timings) this.timings.searchMs += performance.now() - searchStart;
 
       if (bestResult) {
         return bestResult;

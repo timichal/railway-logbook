@@ -10,11 +10,62 @@ the two things still on the table.
 `npm run importMapData` has three steps. Step 1 (loading stations and parts) is
 I/O over a few gigabytes and finishes in minutes. Step 3 (station proximity) is a
 single query. **Step 2 — recalculating every route against the new OSM data — is
-where the import spends most of its wall-clock**, and it is the reason a deploy
-takes as long as it does.
+where the import spends most of its wall-clock.** It is not where a deploy
+spends it, though: preparing the map takes far longer (next section).
 
 It is also, structurally, the easiest part of the pipeline to make fast: every
 route is recalculated independently of every other one.
+
+## Where a deploy's time goes
+
+Measured 2026-11-15 on the dev machine (16 cores, local SSD, Dockerised
+Postgres), from the timings `prepare.sh` and `importMapData` print: the
+server's raw cache copied down (35 GiB, data of 2026-11-13), then a full
+`prepareMapData` with `RAW_CACHE=data/raw`, updating every extract from
+Geofabrik's diffs to 2026-11-14 as the server does, then `importMapData`. The
+server's figures are from its deploy of 2026-11-14 (data of 2026-11-13), which
+printed no step timings: step 1's end is the newest kept `.rail.pbf`'s mtime,
+step 2 the recalculation's own `Time:` line, and the rest is what is left of
+the log's start-to-finish.
+
+| Step                                  | dev machine | server (2 vCPU) |
+| ------------------------------------- | ----------- | --------------- |
+| prepare 1: check, 54 updates, filters | 20m 40s     | ~97 min         |
+| — of which `pyosmium-up-to-date`      | 15m 54s     |                 |
+| — of which `tags-filter`              | 3m 58s      |                 |
+| prepare 2–4: merge, export, prune     | 51s         | ~9 min, with    |
+| import 1: load stations and parts     | 2m 17s      | the load        |
+| import 2: part-routes snapshot        | 24s         | 80s             |
+| import 2: recalculation (2552 routes) | 2m 13s      | 12.1 min        |
+| import 3: station proximity           | 3s          |                 |
+| **total**                             | **~26 min** | **~2 h**        |
+
+**Step 1 of prepare is ~80% of a deploy on both machines, and most of it is
+`pyosmium-up-to-date` rewriting each raw extract in full** — France 2m 0s,
+Germany 1m 45s, Japan 1m 1s locally, while filtering each takes a quarter of
+that. The diffs applied were one to two days' worth; a weekly deploy applies a
+week's, but the rewrite of the whole file is the bulk of an update either way.
+The recalculation is ~11%.
+
+The recalculation's own split (the summary's "Summed over the workers" lines,
+`SearchTimings`), locally at 4 workers:
+
+| Summed over the 4 workers     | time | per route |
+| ----------------------------- | ---- | --------- |
+| part queries (2582 loads)     | 278s | 109ms     |
+| `JSON.parse` + `add`          | 75s  | 29ms      |
+| end parts (`partsContaining`) | 17s  | 7ms       |
+| search                        | 4s   | 2ms       |
+| length query and `UPDATE`     | 156s | 61ms      |
+
+The JS thread was busy 72% of the pool's 133s wall-clock (parse, end parts and
+search, 96s), so it is close to the bottleneck at 4 workers, as the scaling
+table below suggests. The two awaited figures include time queued behind that
+thread, so they overstate Postgres. The search itself is negligible: what costs
+is moving parts out of Postgres and parsing them, which is what an in-memory
+network would remove — at most the parse and most of the query time, a minute
+or two of the dev machine's 2m 13s, and of the server's 12 minutes
+proportionally.
 
 ## What it does now
 
@@ -157,7 +208,10 @@ mismatch too, not just on failure.
 
 `npm run verifyRouteData` runs step 2 on its own against the current data, so it
 can be timed without a full import; it prints its own elapsed time and the route
-count as `Found N routes to recalculate`. Only valid routes are recalculated,
+count as `Found N routes to recalculate`, and under each summary the time
+summed over the workers per phase and how busy the JS thread was (see "Where a
+deploy's time goes"). `importMapData` prints each step's time, and `prepare.sh`
+each update's, download's, filter's and step's. Only valid routes are recalculated,
 which also keeps it fast: an invalid route whose ends are on the network but
 unconnected would escalate through all three buffers, including the 222 km one,
 before giving up. (One with an end off the network gives up after the first.)
