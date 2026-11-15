@@ -213,10 +213,11 @@ function downloadRouteBackup(): string {
  * tables. TRUNCATE rather than DELETE, as there is no one to block locally.
  * With the triggers goes the `data_versions` bump, so the restore makes it
  * itself, or a running dev server would keep serving its cache of the old routes.
+ * Schema-qualified, because pg_restore's script empties `search_path`.
  */
 function restore(containerFile: string, tables: string[]): void {
   const bump = tables.includes("railway_routes")
-    ? "UPDATE data_versions SET version = version + 1 WHERE table_name = 'railway_routes'; "
+    ? "UPDATE public.data_versions SET version = version + 1 WHERE table_name = 'railway_routes'; "
     : "";
   run("Restoring into the local database", "docker", [
     "exec",
