@@ -5,10 +5,8 @@ poznámky
 
 dodělat:
 
-- scénické značení: zatím je Dánsko Norsko Švédsko Finsko
 - atlas část: europe by rail trasy
 - about/faq
-- correct utf8 sorting in admin routes
 
 ČESKO
 traťové jř https://www.cd.cz/jizdni-rad/tratove-jizdni-rady
