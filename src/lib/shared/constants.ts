@@ -145,6 +145,7 @@ export const getNoteTypeLabel = (noteType: NoteType): string => noteTypeById[not
 export const SUPPORTED_COUNTRIES = [
   { code: "AT", name: "Austria" },
   { code: "BE", name: "Belgium" },
+  { code: "BG", name: "Bulgaria" },
   { code: "CZ", name: "Czechia" },
   { code: "DK", name: "Denmark" },
   { code: "EE", name: "Estonia" },
