@@ -4,21 +4,16 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 **Where to measure.** The server is small (2 vCPU / 4GB, see `osmium-scripts/CLAUDE.md`). The dev machine has plenty of cores and disk, so pipeline measurements (prepare timings, extract sizes, changed-part counts, recalculation runs) go there, against the local Docker database and a local `data/` copy. Only sizing decisions (memory, `shared_buffers`, concurrency) need re-checking against the server's limits.
 
-## Big: route tiles identical for everyone
+## Cache the route tiles
 
-Measured at z7 (7/69/43): a signed-in route tile takes 51ms, an anonymous one 19ms. About 30ms of every tile on every pan goes on working out the user's rides (`user_fully_ridden_routes` plus the latest-journey LATERAL). The anonymous map already colours routes by feature state (`useLocalRouteFeatureStates`) and keeps closed routes it rode by id (`closedRoutesFilter`).
+The route tile is Martin's and the same for everyone since 2026-11-15 (the rides come as a list, `src/lib/shared/map/routeRides.ts`), so it can be cached. It isn't yet: Martin answers with an ETag and no `Cache-Control`, and runs with `cache_size_mb: 0` (`martin/configuration.yml`).
 
 - **Proposal:**
-  - Signed-in and shared maps fetch their ride status once: track_id → latest date, journey name, partial, ridden whole.
-  - They apply it as feature state, as the anonymous map does.
-  - Every route tile then comes from Martin and is the same for everyone.
-  - With the routes version in the tile URL (`routesFingerprint`, the `data_versions` counter; add rows and triggers for `scenic_lines` and `admin_notes` if their tiles want one too), tiles can be `Cache-Control: public, immutable`, cacheable by browsers, Caddy or a CDN. Martin's `cache_size_mb` could then go above 0 too.
-- **What must still hold** (root CLAUDE.md "Vector tiles and sharing"):
-  - A dead session or a dead share link must still blank the map rather than draw it unridden. That rule moves to the ride-status endpoint, which must re-resolve the share token on every call.
-  - The "latest journey" styling and hover data must come out identical.
-  - The native app draws the same tiles and must move in step.
-  - `railway_routes_mvt` stays out of Martin.
-- **Measure first:** the size of the status JSON for the heaviest user, and how long applying feature state takes for a few thousand routes.
+  - Put the routes version in the route tile URL (`routesFingerprint`, the `data_versions` counter), so a changed route is a new URL. The web page needs it at first paint (from the server render, beside the region), and the native app from the API.
+  - Serve tiles that carry it with `Cache-Control: public, max-age=31536000, immutable` (Caddy, on `/tiles/railway_routes_tile/*` with a `v`), cacheable by browsers, Caddy or a CDN. Raise Martin's `cache_size_mb` above 0, sized against the 4GB server.
+  - Add `data_versions` rows and triggers for `scenic_lines` and `admin_notes` if their tiles want the same.
+- **What must still hold:** an admin's route save shows on the user map at the next page load at the latest; the admin map keeps refetching its own tiles after a save (`useSourceTileRefresh`).
+- **Measure first:** how often a page load refetches tiles it already fetched (browser devtools, a few pans and a reload), and Martin's tile times on the server from `pg_stat_statements`.
 
 ## Pipeline and deploy
 

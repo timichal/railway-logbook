@@ -129,7 +129,7 @@ export type RouteSummary = Pick<
 /**
  * What the web map says about a route beyond what its tile carries: the text of
  * its popup, and what a click puts in the selection. The route tile holds only
- * what the layers style and filter by (see railway_routes_mvt), so this is read
+ * what the layers style and filter by (see railway_routes_tile), so this is read
  * by track_id. Served for a whole region by `GET /api/route-details`
  * (`routeDetailsJson`); an absent field is null or empty in the database.
  */

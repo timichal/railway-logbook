@@ -23,6 +23,7 @@ import {
 } from "@/lib/map/utils/tooltipFormatting";
 import { ROUTE_CLICK_LAYER_ID } from "@/lib/shared/map/layers";
 import { routeLinkLabel } from "@/lib/shared/map/routeFeature";
+import type { RouteRide } from "@/lib/shared/map/routeRides";
 import type { RegionId } from "@/lib/shared/regions";
 import type { RouteDetails, SelectedRoute, Station } from "@/lib/shared/types";
 import { type ButtonVariant, btn } from "@/lib/ui/buttonStyles";
@@ -50,6 +51,11 @@ export interface UserMapInteractionCallbacks {
    * is no button to label.
    */
   routeTapAction?: (trackId: number) => RouteTapAction | null;
+  /**
+   * The map owner's ride on a route (`routeRides.ts`), for the popup's "Most
+   * recent" row. The tile carries no rides: it is the same for everyone.
+   */
+  routeRide?: (trackId: number) => RouteRide | undefined;
 }
 
 interface SheetAction {
@@ -314,14 +320,17 @@ export function setupUserMapInteractions(
 
   /** The route popup's body; the sheet carries a button in place of the link row. */
   const buildRouteBody = (
+    trackId: number,
     properties: FeatureProperties,
     details: RouteDetails | undefined,
     { linkRow }: { linkRow: boolean },
-  ) =>
-    formatRouteBody(properties, details, getCallbacks().region, {
+  ) => {
+    const { region, routeRide } = getCallbacks();
+    return formatRouteBody(properties, details, routeRide?.(trackId), region, {
       linkRow,
       linkHint: DOUBLE_CLICK_HINT,
     });
+  };
 
   /** `sourceRow` mirrors `linkRow` above: the sheet gets a button, not a hint. */
   const buildNoteBody = (properties: FeatureProperties, { sourceRow }: { sourceRow: boolean }) => {
@@ -398,6 +407,7 @@ export function setupUserMapInteractions(
       callbacks = getCallbacks();
     }
     const { onRouteClick } = callbacks;
+    const ride = callbacks.routeRide?.(trackId);
 
     const route: SelectedRoute = {
       track_id: trackId,
@@ -407,12 +417,11 @@ export function setupUserMapInteractions(
       description: details.description ?? "",
       usage_types: "",
       link: details.link ?? null,
-      date: properties.date,
-      journey_name: properties.journey_name,
-      // Deliberately NOT properties.partial: the tile carries the partial flag of
-      // the most recent journey on this route, and inheriting it would pre-tick
-      // "partial" on a fresh selection just because the route was ridden in part
-      // once before. A click is a new ride, whole until said otherwise.
+      date: ride?.date ?? null,
+      journey_name: ride?.journey_name ?? null,
+      // Never the route's earlier rides: inheriting how it was ridden would
+      // pre-tick "partial" on a fresh selection just because the route was ridden
+      // in part once before. A click is a new ride, whole until said otherwise.
       partial: null,
       length_km: details.length_km,
     };
@@ -452,7 +461,7 @@ export function setupUserMapInteractions(
       openTouchSheet(
         e.lngLat,
         "railway-popup",
-        buildRouteBody(properties, details, { linkRow: false }),
+        buildRouteBody(trackId, properties, details, { linkRow: false }),
         actions,
       );
       return;
@@ -464,10 +473,12 @@ export function setupUserMapInteractions(
   // Hover and cursor go off the wide click buffer, so the thin visible lines don't
   // make them finicky.
   hover.layer(ROUTE_CLICK_LAYER_ID, {
-    buildBody: (properties, feature) =>
-      buildRouteBody(properties, routeDetails(Number(feature.id), getCallbacks().region), {
+    buildBody: (properties, feature) => {
+      const trackId = Number(feature.id);
+      return buildRouteBody(trackId, properties, routeDetails(trackId, getCallbacks().region), {
         linkRow: true,
-      }),
+      });
+    },
   });
   hover.layer("stations", { className: "station-popup", buildBody: formatStationBody });
   // Read-only: text + optional source link.

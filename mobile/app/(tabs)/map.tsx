@@ -2,8 +2,8 @@
  * The map tab: the map, filling the screen, with the region's numbers over one corner.
  *
  * `RailwayMap` needs one thing from outside itself: which countries to draw at all.
- * Whose visit colours to draw is not a prop — the route tile is served per bearer
- * token (`map/tileAuth.ts`), so the signed-in user is simply whoever the request
+ * Whose visit colours to draw is not a prop — the rides are read with the bearer
+ * token (`map/useRides.ts`), so the signed-in user is simply whoever the request
  * says. The country list is `useEffectiveCountries`
  * — the stored preference where the region allows a filter, the region's own list
  * where it does not — and until it arrives there is nothing to draw, since a tile

@@ -6,7 +6,7 @@ import { routeDetailsJson } from "@/lib/routeQueries";
 /**
  * GET /api/route-details?region=<id> — every route's `RouteDetails` in a region:
  * the text the web map's popups and clicks need, which the route tile no longer
- * carries (see railway_routes_mvt).
+ * carries (see railway_routes_tile).
  *
  * Public and the same for everyone, so it takes no session and must never take
  * one. Kept in memory per `routesFingerprint` and revalidated by the browser on

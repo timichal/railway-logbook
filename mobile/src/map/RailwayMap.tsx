@@ -66,7 +66,6 @@ import { ActivityIndicator, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as api from "@/api/endpoints";
 import { useHighlight } from "@/logbook/HighlightContext";
-import { useLogVersion } from "@/logbook/logVersion";
 import { useSelection } from "@/logbook/SelectionContext";
 import { CoverageOverlay } from "@/map/CoverageOverlay";
 import { FeatureSheet } from "@/map/FeatureSheet";
@@ -75,10 +74,11 @@ import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay"
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import { MapTopControls } from "@/map/MapTopControls";
 import {
+  lastJourneyOf,
   type MapFeature,
   routeFeatureFromMetadata,
   toNoteFeature,
-  toRouteTap,
+  toRouteTrackId,
   toStationFeature,
 } from "@/map/mapFeatures";
 import { loadMapPosition, type MapPosition, saveMapPosition } from "@/map/mapPosition";
@@ -90,6 +90,7 @@ import {
   ZOOM_RANGES,
 } from "@/map/tileUrls";
 import { useBasemapStyle } from "@/map/useBasemapStyle";
+import { useRides } from "@/map/useRides";
 import { useRegion } from "@/region/RegionContext";
 import { useTheme } from "@/theme/ThemeContext";
 
@@ -129,24 +130,28 @@ function flatBounds(regionId: RegionId): [number, number, number, number] {
 export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   const { resolved: theme } = useTheme();
   const { showHeritage, showSpecial, showScenicLines, showClosed } = useLayerPrefs();
-  // Built once per scheme and closed switch rather than on every render, which would
-  // hand each <Layer> a new paint object. The tile carries this user's rides, so the
-  // closed lines they rode stay whatever the switch says (closedRoutesFilter)
+  // The user's rides, coloured and ordered over Martin's tile by id. None yet (or
+  // none to be had): no route lines, rather than every route drawn unridden.
+  const rides = useRides();
+  // Built once per scheme, closed switch and rides rather than on every render,
+  // which would hand each <Layer> a new paint object. The closed lines the user
+  // rode stay whatever the switch says (closedRoutesFilter)
   const routeLayers = useMemo(() => {
-    const configs = userRouteLayerConfigs(theme);
-    const routesFilter = closedRoutesFilter(showClosed);
+    if (!rides) return null;
+    const configs = userRouteLayerConfigs(theme, undefined, rides);
+    const routesFilter = closedRoutesFilter(showClosed, rides.closed);
     return {
       route: createRouteLineLayer(0, { ...configs.route, routesFilter }),
       heritage: createRouteLineLayer(1, { ...configs.heritage, visible: true, routesFilter }),
       special: createRouteLineLayer(2, { ...configs.special, visible: true, routesFilter }),
     };
-  }, [theme, showClosed]);
+  }, [theme, showClosed, rides]);
+  // Read by a press, which must not be rebuilt whenever the rides change
+  const ridesRef = useRef(rides);
+  ridesRef.current = rides;
   const { regionId } = useRegion();
   const { selected } = useSelection();
   const highlighted = useHighlight();
-  // A journey logged anywhere in the app repaints this tile: the visit colours are
-  // rendered into it per user, so a new URL is the only way past the tile cache.
-  const logVersion = useLogVersion();
 
   const basemapStyle = useBasemapStyle(theme);
   // Memoised: a new array each render would be sent across to the native layer again
@@ -272,12 +277,8 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
     [],
   );
 
-  // Whose visit colours these are is not in the URL: the server reads it off the
-  // bearer token the tile requests carry (`tileAuth.ts`).
-  const routesUrl = useMemo(
-    () => routesTileUrl({ selectedCountries: countries, cacheBuster: logVersion }),
-    [countries, logVersion],
-  );
+  // Martin's tile, the same for everyone: the colours are the rides, laid over it
+  const routesUrl = useMemo(() => routesTileUrl({ selectedCountries: countries }), [countries]);
 
   const selectedIds = useMemo(() => selected.map((s) => s.route.trackId), [selected]);
   // Only while the route is still ticked partial: unticking claims the whole route,
@@ -308,19 +309,21 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
     [showFeature],
   );
   // The route tile carries only what the layers draw with, so the sheet's text
-  // is read by id. Nothing opens until it is here: a sheet without the route's
-  // name, or a selection made from one, is no use.
+  // is read by id, and the last ride from the rides. Nothing opens until the text
+  // is here: a sheet without the route's name, or a selection made from one, is
+  // no use.
   const takeRoutePress = useCallback(
     async (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
       event.stopPropagation();
       const hit = event.nativeEvent.features[0];
-      const tap = hit && toRouteTap((hit.properties ?? null) as Record<string, unknown>, hit.id);
-      if (!tap) return;
+      const trackId = hit ? toRouteTrackId(hit.id) : null;
+      if (trackId === null) return;
       const press = ++pressRef.current;
       try {
-        const [route] = await api.routeMetadata([tap.trackId]);
+        const [route] = await api.routeMetadata([trackId]);
         if (route && press === pressRef.current) {
-          setFeature(routeFeatureFromMetadata(route, tap.lastJourney));
+          const lastJourney = lastJourneyOf(ridesRef.current?.byId.get(trackId));
+          setFeature(routeFeatureFromMetadata(route, lastJourney));
         }
       } catch (error) {
         console.warn("Route details failed:", error);
@@ -382,11 +385,12 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
 
         {/* Keyed on its URL: the binding reads `tiles` once, when it builds the
             source, and a new URL handed to a built one is stored and never used — so
-            neither the country filter nor the log version would reach the map. A new
-            key is a new source. Which is also why every route layer carries a
-            `beforeId`: a remounted source re-adds its layers, and one without an
-            anchor would be appended to the top, over the stations. Under the
-            coverage overlay is where they belong, and it is mounted with the map. */}
+            the country filter would never reach the map. A new key is a new source.
+            Which is also why every route layer carries a `beforeId`: a remounted
+            source re-adds its layers (as do the rides, arriving after the map), and
+            one without an anchor would be appended to the top, over the stations.
+            Under the coverage overlay is where they belong, and it is mounted with
+            the map. */}
         <VectorSource
           key={routesUrl}
           id="railway_routes"
@@ -395,11 +399,13 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
           maxzoom={ZOOM_RANGES.railwayRoutes.max}
           onPress={takeRoutePress}
         >
-          <Layer {...routeLayers.route} beforeId={COVERAGE_LAYER_IDS[0]} />
-          {showHeritage ? (
+          {routeLayers ? <Layer {...routeLayers.route} beforeId={COVERAGE_LAYER_IDS[0]} /> : null}
+          {routeLayers && showHeritage ? (
             <Layer {...routeLayers.heritage} beforeId={COVERAGE_LAYER_IDS[0]} />
           ) : null}
-          {showSpecial ? <Layer {...routeLayers.special} beforeId={COVERAGE_LAYER_IDS[0]} /> : null}
+          {routeLayers && showSpecial ? (
+            <Layer {...routeLayers.special} beforeId={COVERAGE_LAYER_IDS[0]} />
+          ) : null}
           {/* What the logbook or the planner pointed the map at — gold or orange. */}
           <HighlightLayers
             baseId="highlighted_routes"
@@ -423,7 +429,12 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
         {/* The stretches already ridden of routes not yet finished, in the visited
             green over their own partial-orange line. Mounted here, with the map, so
             it settles below every highlight set — see `CoverageOverlay`. */}
-        <CoverageOverlay countries={countries} shownTypes={shownTypes} theme={theme} />
+        <CoverageOverlay
+          countries={countries}
+          shownTypes={shownTypes}
+          theme={theme}
+          hidden={rides === null}
+        />
 
         <PartialHighlightSource
           baseId="highlighted_routes"

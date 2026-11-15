@@ -17,12 +17,14 @@ import {
   routeLineFilter,
   usageTypeFilter,
 } from "./layers";
+import { NO_RIDES, type RouteRides } from "./routeRides";
 import { OPACITIES } from "./style";
 import {
   closedRouteOpacityExpression,
   getUserRouteClickBufferWidthExpression,
   getUserRouteColorExpression,
   getUserRouteHeritageWidthExpression,
+  getUserRouteSortKeyExpression,
   getUserRouteWidthExpression,
 } from "./utils/userRouteStyling";
 
@@ -33,13 +35,14 @@ import {
  * Both maps must draw the same lines in the same colours — a shared map that
  * styled its routes differently from the owner's own would be a bug that only
  * shows up once someone opens the link — so the configs are built here, from
- * nothing but the scheme.
+ * nothing but the scheme and the rides (`routeRides.ts`).
  */
 
 interface UserRouteLayerConfigs {
   /**
-   * The solid Regular line. Each line's config hides the closed routes not ridden
-   * (`closedRoutesFilter` with the switch off), as the maps start out.
+   * The solid Regular line. Each line's config is coloured and ordered by the rides,
+   * and hides the closed routes not ridden (`closedRoutesFilter` with the switch
+   * off), as the maps start out.
    */
   route: RouteLineConfig;
   /**
@@ -60,20 +63,22 @@ interface UserRouteLayerConfigs {
 export function userRouteLayerConfigs(
   theme: ResolvedTheme,
   countries?: readonly string[],
+  rides: RouteRides = NO_RIDES,
 ): UserRouteLayerConfigs {
-  const colorExpression = getUserRouteColorExpression(theme);
+  const colorExpression = getUserRouteColorExpression(theme, rides);
+  const sortKeyExpression = getUserRouteSortKeyExpression(rides);
   const widthExpression = getUserRouteWidthExpression();
   const opacityExpression = closedRouteOpacityExpression(OPACITIES.defaultRoute);
-  const routesFilter = userRoutesFilter({ countries, showClosed: false });
+  const routesFilter = userRoutesFilter({
+    countries,
+    showClosed: false,
+    riddenClosed: rides.closed,
+  });
+  const line = { colorExpression, sortKeyExpression, opacityExpression, routesFilter };
   return {
-    route: { colorExpression, widthExpression, opacityExpression, routesFilter },
-    special: { colorExpression, widthExpression, opacityExpression, routesFilter },
-    heritage: {
-      colorExpression,
-      widthExpression: getUserRouteHeritageWidthExpression(),
-      opacityExpression,
-      routesFilter,
-    },
+    route: { ...line, widthExpression },
+    special: { ...line, widthExpression },
+    heritage: { ...line, widthExpression: getUserRouteHeritageWidthExpression() },
     // Regular only, as the lines start out; useLayerFilters widens it as the
     // switches reveal Heritage and Special
     clickBuffer: {
@@ -133,27 +138,25 @@ export function clickBufferFilter(clickable: readonly UsageType[]): FilterSpecif
 
 /**
  * Which closed routes the user map draws: every one under "All closed lines",
- * otherwise only those the map's owner has ridden. Null — no filter — when all
- * are shown.
+ * otherwise only those the map's owner has ridden (`riddenClosed`, the closed ones
+ * among `RouteRides`). Null — no filter — when all are shown.
  *
- * Done on the client because the tile can't do it for every map: Martin's tile
- * (the anonymous map) carries no rides, whose rides are known only in the
- * browser. So a ride is read two ways, as the colour reads it: the tile's `date`
- * where the tile is coloured by someone's rides (the session, a share token, the
- * native app), and the anonymous visitor's ridden track ids (`localRiddenTrackIds`,
- * from the localStorage log) where it isn't. Feature state, which colours the
- * anonymous map, can't be read by a filter.
+ * Done on the client because the tile is the same for everyone and carries no
+ * rides. An `in` over a literal list is a linear search, but only the closed
+ * routes reach it (`any` stops at the open ones), over the few closed routes
+ * ridden.
  */
 export function closedRoutesFilter(
   showClosed: boolean,
-  localRiddenTrackIds: readonly number[] = [],
+  riddenClosed: readonly number[] = [],
 ): FilterSpecification | null {
   if (showClosed) return null;
-  const shown: FilterSpecification[] = [OPEN_ROUTES_FILTER, ["has", "date"]];
-  if (localRiddenTrackIds.length > 0) {
-    shown.push(["in", ["id"], ["literal", [...localRiddenTrackIds]]]);
-  }
-  return ["any", ...shown] as FilterSpecification;
+  if (riddenClosed.length === 0) return OPEN_ROUTES_FILTER;
+  return [
+    "any",
+    OPEN_ROUTES_FILTER,
+    ["in", ["id"], ["literal", [...riddenClosed]]],
+  ] as FilterSpecification;
 }
 
 interface UserRoutesFilterOptions {
@@ -164,8 +167,8 @@ interface UserRoutesFilterOptions {
   countries?: readonly string[];
   /** "All closed lines" (`closedRoutesFilter`). */
   showClosed: boolean;
-  /** An anonymous visitor's ridden routes (`closedRoutesFilter`). */
-  localRiddenTrackIds?: readonly number[];
+  /** The closed routes the map's owner has ridden (`closedRoutesFilter`). */
+  riddenClosed?: readonly number[];
 }
 
 /**
@@ -178,11 +181,11 @@ interface UserRoutesFilterOptions {
 export function userRoutesFilter({
   countries,
   showClosed,
-  localRiddenTrackIds,
+  riddenClosed,
 }: UserRoutesFilterOptions): FilterSpecification | null {
   return bothFilters(
     countries === undefined ? null : countryFilter(countries),
-    closedRoutesFilter(showClosed, localRiddenTrackIds),
+    closedRoutesFilter(showClosed, riddenClosed),
   );
 }
 
@@ -203,8 +206,16 @@ export function userRouteLineFilter(
 export function createUserMapLayers(
   theme: ResolvedTheme = "light",
   countries?: readonly string[],
+  /**
+   * The map owner's rides as they stand when the map is built. Null while they
+   * aren't known for an owner on the server, or were refused: the routes start
+   * hidden, since drawn uncoloured they would pass for a map with nothing ridden.
+   * useLayerFilters shows them once the rides arrive.
+   */
+  rides: RouteRides | null = NO_RIDES,
 ): LayerSpecification[] {
-  const configs = userRouteLayerConfigs(theme, countries);
+  const configs = userRouteLayerConfigs(theme, countries, rides ?? NO_RIDES);
+  const shown = rides !== null;
   return [
     // Under everything: a band the route lines are drawn over. Hidden until the
     // "Scenic lines" toggle shows it (useLayerFilters).
@@ -212,10 +223,10 @@ export function createUserMapLayers(
     // Closed routes not ridden start out filtered away (in the configs), as "All
     // closed lines" starts off, and so do the countries not ticked; useLayerFilters
     // applies the switches once loaded
-    createRouteLineLayer(0, configs.route),
+    createRouteLineLayer(0, { ...configs.route, visible: shown }),
     createRouteLineLayer(1, configs.heritage),
     createRouteLineLayer(2, configs.special),
-    createRailwayRoutesClickLayer(configs.clickBuffer),
+    createRailwayRoutesClickLayer({ ...configs.clickBuffer, visible: shown }),
     createStationsLayer(theme),
     createStationLabelsLayer(theme),
     // Public Usage notes render on top (route tile refresh re-inserts route

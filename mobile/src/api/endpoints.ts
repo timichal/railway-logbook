@@ -9,6 +9,7 @@
  * server-only code. Only dependency-free modules cross over (the progress
  * figures, `@shared/progress`); see `@shared` in `tsconfig.json`.
  */
+import type { RouteRide } from "@shared/map/routeRides";
 import type { ProgressByCountry, UserProgress } from "@shared/progress";
 import type { RegionId } from "@shared/regions";
 import type {
@@ -149,6 +150,15 @@ export function progressByCountry(region: RegionId): Promise<ProgressByCountry> 
 export async function coverage(signal?: AbortSignal): Promise<CoveredStretch[]> {
   const { stretches } = await request<{ stretches: CoveredStretch[] }>("/coverage", { signal });
   return stretches;
+}
+
+/**
+ * Every route the user has ridden, for the map's colours: Martin's route tile is
+ * the same for everyone, and these are laid over it by id (`useRides`).
+ */
+export async function rides(signal?: AbortSignal): Promise<RouteRide[]> {
+  const { rides } = await request<{ rides: RouteRide[] }>("/rides", { signal });
+  return rides;
 }
 
 export async function preferences(): Promise<string[]> {

@@ -19,8 +19,8 @@
  * map's own build settles the order once: every highlight set mounts afterwards, and
  * therefore above.
  *
- * Refetched on the log version, for the same reason the route tile is re-requested on
- * it: logging a journey is exactly what changes which stretches are ridden.
+ * Refetched on the log version, as the rides are: logging a journey is exactly what
+ * changes which stretches are ridden.
  */
 import { GeoJSONSource, Layer } from "@maplibre/maplibre-react-native";
 import type { UsageType } from "@shared/constants";
@@ -35,12 +35,18 @@ export function CoverageOverlay({
   countries,
   shownTypes,
   theme,
+  hidden,
 }: {
   countries: string[];
   /** The usage types the map draws (`shownUsageTypes`), which the overlay follows. */
   shownTypes: readonly UsageType[];
   /** The visited colour's scheme. */
   theme: ResolvedTheme;
+  /**
+   * While the route lines aren't drawn (no rides yet): the stretches go with them,
+   * as an empty collection, since the source stays mounted for its stacking.
+   */
+  hidden: boolean;
 }): ReactNode {
   const logVersion = useLogVersion();
   const [stretches, setStretches] = useState<CoveredStretch[]>([]);
@@ -52,14 +58,14 @@ export function CoverageOverlay({
       .coverage(controller.signal)
       .then(setStretches)
       .catch(() => {
-        // The overlay is a refinement of colours the route tile already carries: a
+        // The overlay is a refinement of the route colours (the rides): a
         // half-ridden route without it reads as partial rather than as half done,
         // which is wrong but not misleading. Not worth an error over the map.
       });
     return () => controller.abort();
   }, [logVersion]);
 
-  const data = useMemo(() => coverageData(stretches), [stretches]);
+  const data = useMemo(() => coverageData(hidden ? [] : stretches), [hidden, stretches]);
   const layers = useMemo(
     () => createCoverageLayers(countries, shownTypes, theme),
     [countries, shownTypes, theme],

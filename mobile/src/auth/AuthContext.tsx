@@ -128,8 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
 
   const accept = useCallback(async (response: ApiUser, result: AuthResponse) => {
     await Promise.all([saveTokens(result, result.expiresIn), saveUser(response)]);
-    // A new session draws its own colours: the route tile's URL does not say whose
-    // they are (the bearer header does), so the cache buster has to move instead.
+    // A new session draws its own colours: the rides, the numbers and the logbook
+    // are read again for the account now signed in.
     bumpLogVersion();
     setNotice(null);
     setUser(response);
@@ -153,8 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
         void saveUser(current);
       } catch {
         // Offline, or the session is over — and that one has already been handled
-        // through `onSignedOut`. Either way nothing is re-read: a new tile URL with
-        // no connection behind it would wipe the routes already drawn.
+        // through `onSignedOut`. Either way nothing is re-read: a re-read with no
+        // connection behind it would only fail.
         return;
       }
       if (awayMs >= STALE_AFTER_MS) bumpLogVersion();

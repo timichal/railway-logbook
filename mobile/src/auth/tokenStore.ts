@@ -10,13 +10,10 @@
  * and each SecureStore read crosses the native bridge, so the cache is what keeps
  * that off the request path; it is the single writer, so it cannot go stale.
  *
- * Being the single writer is also why it moves the route tile's header
- * (`map/tileAuth.ts`): the map's tile requests carry the access token too, and
- * this is the one place every change of it passes through.
- *
  * **The expiry** is kept so the token can be replaced *before* it runs out
  * (`refreshIfExpiring` in `api/client.ts`): the API client refreshes on a 401 by
- * itself, but a route tile answered 401 is just drawn as nothing.
+ * itself, but replacing it ahead of time saves the first request back a refused
+ * round trip.
  *
  * **The user** is kept so a cold start with no connection can still open the app
  * signed in (`AuthContext`) — the tokens alone say nothing about whose they are
@@ -24,7 +21,6 @@
  */
 import * as SecureStore from "expo-secure-store";
 import type { ApiUser } from "@/api/client";
-import { setTileAuthToken } from "@/map/tileAuth";
 
 const ACCESS_KEY = "railwayLogbook.accessToken";
 const REFRESH_KEY = "railwayLogbook.refreshToken";
@@ -55,7 +51,6 @@ export async function loadTokens(): Promise<TokenPair | null> {
   cached = accessToken && refreshToken ? { accessToken, refreshToken } : null;
   const parsed = expiresAt ? Number(expiresAt) : Number.NaN;
   cachedExpiresAt = Number.isFinite(parsed) ? parsed : null;
-  setTileAuthToken(cached?.accessToken ?? null);
   return cached;
 }
 
@@ -68,7 +63,6 @@ export function accessTokenExpiresAt(): number | null {
 export async function saveTokens(pair: TokenPair, expiresIn: number): Promise<void> {
   cached = pair;
   cachedExpiresAt = Date.now() + expiresIn * 1000;
-  setTileAuthToken(pair.accessToken);
   await Promise.all([
     SecureStore.setItemAsync(ACCESS_KEY, pair.accessToken),
     SecureStore.setItemAsync(REFRESH_KEY, pair.refreshToken),
@@ -79,7 +73,6 @@ export async function saveTokens(pair: TokenPair, expiresIn: number): Promise<vo
 export async function clearTokens(): Promise<void> {
   cached = null;
   cachedExpiresAt = null;
-  setTileAuthToken(null);
   await Promise.all([
     SecureStore.deleteItemAsync(ACCESS_KEY),
     SecureStore.deleteItemAsync(REFRESH_KEY),

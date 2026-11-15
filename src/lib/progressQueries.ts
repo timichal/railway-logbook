@@ -1,5 +1,5 @@
 /**
- * User-scoped progress and coverage queries, taking the user id explicitly.
+ * User-scoped progress, ride and coverage queries, taking the user id explicitly.
  *
  * A plain server-only module rather than a "use server" one on purpose: every
  * export of a "use server" file becomes a client-callable endpoint, and these
@@ -11,6 +11,7 @@
 
 import pool from "./db";
 import type { UsageType } from "./shared/constants";
+import type { RouteRide } from "./shared/map/routeRides";
 import {
   type CountryProgress,
   EMPTY_PROGRESS,
@@ -34,7 +35,7 @@ import type { CoveredRange, CoveredStretch } from "./shared/types";
  *
  * The rule lives in the SQL function `user_fully_ridden_routes`
  * (`database/init/02-vector-tiles.sql`) rather than here, so these numbers and
- * the route tile that colours the map can't disagree: a route logged whole, or
+ * the map's colours (`routeRidesForUser`) can't disagree: a route logged whole, or
  * one whose partial stretches union to the whole line.
  */
 const FULLY_RIDDEN_TRACK_IDS = "SELECT track_id FROM user_fully_ridden_routes($1)";
@@ -341,6 +342,47 @@ export function normalizeCoveredRanges(ranges: CoveredRange[]): CoveredRange[] {
   }
 
   return valid;
+}
+
+/**
+ * Every route a user has ridden, for the map to colour (`RouteRide`, see
+ * `shared/map/routeRides.ts`): whether ridden whole, whether closed, and the most
+ * recent journey over it.
+ *
+ * The most recent journey is the latest by date, then the latest logged, as the
+ * route tile used to pick it. "Whole" is `user_fully_ridden_routes`, as progress
+ * reads it.
+ *
+ * `region` as for `coveredStretchesForUser`: the web map asks for its region's,
+ * the mobile API (`null`) for every region's, which its country filter separates.
+ * About 3ms and 1,400 rows for the heaviest user (2026-11-15).
+ */
+export async function routeRidesForUser(
+  userId: number,
+  region: RegionId | null,
+): Promise<RouteRide[]> {
+  const result = await pool.query<RouteRide>(
+    `
+    SELECT latest.track_id,
+           (ridden.track_id IS NOT NULL) AS whole,
+           rr.closed,
+           latest.date,
+           latest.journey_name
+    FROM (
+      SELECT DISTINCT ON (ulp.track_id) ulp.track_id, uj.date, uj.name AS journey_name
+      FROM user_logged_parts ulp
+      JOIN user_journeys uj ON uj.id = ulp.journey_id
+      WHERE ulp.user_id = $1
+      ORDER BY ulp.track_id, uj.date DESC NULLS LAST, uj.created_at DESC
+    ) latest
+    JOIN railway_routes rr ON rr.track_id = latest.track_id
+      ${region ? `AND ${regionContainsSql(region, "rr.starting_coordinate")}` : ""}
+    LEFT JOIN (${FULLY_RIDDEN_TRACK_IDS}) ridden ON ridden.track_id = latest.track_id
+    ORDER BY latest.track_id
+    `,
+    [userId],
+  );
+  return result.rows;
 }
 
 /**

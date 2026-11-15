@@ -26,6 +26,7 @@ function syncCoverageOverlay(
   selectedCountries: string[],
   shownTypes: readonly UsageType[],
   theme: ResolvedTheme,
+  visible: boolean,
 ): void {
   if (stretches.length === 0) {
     for (const id of COVERAGE_LAYER_IDS) if (m.getLayer(id)) m.removeLayer(id);
@@ -48,6 +49,7 @@ function syncCoverageOverlay(
     } else {
       m.addLayer(layer as maplibregl.LayerSpecification);
     }
+    m.setLayoutProperty(layer.id, "visibility", visible ? "visible" : "none");
     // Sit above the route lines but below the stations — and therefore below the
     // selection/planner highlights, which are added on top of everything. In
     // order, so the variants keep their own stacking.
@@ -69,10 +71,12 @@ export function useCoverageOverlay(
   coverageVersion: number,
   /** The visited colour's scheme. A scheme change rebuilds the map, which re-adds the layers. */
   theme: ResolvedTheme,
+  /** False while the route lines are hidden (no rides known), which the stretches follow. */
+  visible: boolean,
 ) {
   // Read by the fetch when it lands, so a filter change alone never refetches
-  const filtersRef = useRef({ selectedCountries, shownTypes, theme });
-  filtersRef.current = { selectedCountries, shownTypes, theme };
+  const filtersRef = useRef({ selectedCountries, shownTypes, theme, visible });
+  filtersRef.current = { selectedCountries, shownTypes, theme, visible };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: coverageVersion is an intentional trigger — it refetches the stretches after journeys change.
   useEffect(() => {
@@ -97,6 +101,7 @@ export function useCoverageOverlay(
           filters.selectedCountries,
           filters.shownTypes,
           filters.theme,
+          filters.visible,
         );
       })
       .catch((error) => {
@@ -117,4 +122,12 @@ export function useCoverageOverlay(
       if (m.getLayer(id)) m.setFilter(id, filter);
     }
   }, [map, mapLoaded, selectedCountries, shownTypes]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!mapLoaded || !m) return;
+    for (const id of COVERAGE_LAYER_IDS) {
+      if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+    }
+  }, [map, mapLoaded, visible]);
 }

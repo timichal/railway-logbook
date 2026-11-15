@@ -23,15 +23,14 @@ postgres:
       minzoom: 4
       maxzoom: 18
       # This function accepts z, x, y parameters
-    # Railway routes, with no user: every route reads as unvisited. Geometry and
-    # the styling and filter attributes only, no text (names, note, tags, link):
-    # the clients read that by track_id. Accepts z, x, y, and query_params
+    # Railway routes, the same for everyone. Geometry and the styling and filter
+    # attributes only: no text (names, note, tags, link), which the clients read
+    # by track_id, and no rides, which they lay over the tile by id
+    # (src/lib/shared/map/routeRides.ts). Accepts z, x, y, and query_params
     # (selected_countries).
     #
     # Everything published here answers anyone who asks, so nothing user-specific
-    # may be. The tile coloured by a user's rides is railway_routes_mvt, served by
-    # the Next route handler under src/app/api/tiles once it has resolved the
-    # session or share token — never add that function here.
+    # may be.
     railway_routes_tile:
       schema: public
       function: railway_routes_tile

@@ -348,16 +348,14 @@ factories moved into `map/tileSources.ts` and take the host as an argument, so
 `map/index.ts` binds the web app's and `mobile/src/map/tileUrls.ts` binds the
 app's, with one copy of the URL templates between them.
 
-The **route tile coloured by the user's rides is not Martin's**: Martin answers
-anyone, so it no longer takes a `user_id`, and the per-user tile is
-`/api/tiles/railway_routes/{z}/{x}/{y}` on the app's own origin, authenticated
-with the same bearer access token as `/api/v1` (`API.md`, "Route tiles"). The
-native map attaches it through the binding's `TransformRequestManager.addHeader`,
-matched to that one path (`mobile/src/map/tileAuth.ts`), and `tokenStore.ts` — the
-single writer of the token pair — moves the header on every load, refresh and
-sign-out, so the map itself never names a user. What it does not do is refresh: a
-tile answered 401 never reaches the API client, so an access token expiring while
-the map is open (7 days) leaves the routes undrawn until the next API call.
+**Every tile is Martin's, the route tile included**, and the same for every user.
+The visit colours are the user's rides, read through the API like everything else
+(`GET /api/v1/rides`, `mobile/src/map/useRides.ts`) and laid over the tile by
+feature id in the style (`@shared/map/routeRides`, `userRouteLayerConfigs`), as
+the web app does. So no tile request carries a credential, and an expiring token
+is refreshed by the API client as for any other request. (Until 2026-11-15 the
+route tile was served per user by the app, with the bearer token attached to its
+requests through `TransformRequestManager`.)
 
 ---
 
@@ -1212,3 +1210,13 @@ pick up. Keep it short — the phase sections carry the detail.
   Corrected Phase 3's claim that the region switch proved
   the source reloads. `tsc` and Biome clean. **Next: re-run those on the
   phone**, then the Japan checkboxes.
+- **2026-11-15 — the route tile is Martin's for everyone; the rides come as a list.**
+  Done on the web side as a performance change (the per-user tile spent about 30ms of
+  every tile on the rides), and the app moved in step: `useRides` reads
+  `GET /api/v1/rides` on the log version, the route layers take the rides through
+  `userRouteLayerConfigs` (a `match` on the feature id for colour and draw order,
+  `closedRoutesFilter` for the closed ones ridden) and are not mounted until the rides
+  arrive. `tileAuth.ts` is gone, and the tile URL no longer carries the log version.
+  A tapped route's "Most recent" comes from the rides (`lastJourneyOf`). Typecheck
+  and Biome clean; **not yet run on a device**: check that routes are coloured,
+  ridden ones drawn over unridden, and that logging a journey recolours its route.

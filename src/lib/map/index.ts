@@ -6,8 +6,8 @@ import * as sources from "../shared/map/tileSources";
  * Everything here is a re-export, and the one thing this module *does* is bind the
  * web app's tile hosts to the source factories in `tileSources.ts`, which take them
  * as arguments so the native app can pass its own (see that file's header). So a web
- * call site still writes `createRailwayRoutesSource({ rides: "session" })` and never
- * mentions a URL.
+ * call site writes `createRailwayRoutesSource({ cacheBuster })` and never mentions a
+ * URL.
  *
  * **The native app must not import this module.** `getTileBaseUrl()` runs at module
  * load and reads `window.location`, which in React Native is a `window` with no
@@ -53,19 +53,16 @@ const getTileBaseUrl = () => {
 const TILE_BASE_URL = getTileBaseUrl();
 
 /**
- * The app's own origin, for the tiles served by Next (the per-user route tile, the
- * admin notes). Absolute, because MapLibre fetches tiles from a worker whose base
- * URL is not the page's.
+ * The app's own origin, for the tile served by Next (the admin notes). Absolute,
+ * because MapLibre fetches tiles from a worker whose base URL is not the page's.
  */
 const APP_ORIGIN = typeof window === "undefined" || !window.location ? "" : window.location.origin;
 
-const ROUTE_TILE_HOSTS = { tileBaseUrl: TILE_BASE_URL, appOrigin: APP_ORIGIN };
-
 export const createRailwayRoutesSource = (options: sources.RailwayRoutesSourceOptions = {}) =>
-  sources.createRailwayRoutesSource(ROUTE_TILE_HOSTS, options);
+  sources.createRailwayRoutesSource(TILE_BASE_URL, options);
 
 export const railwayRoutesTileUrl = (options: sources.RailwayRoutesSourceOptions = {}) =>
-  sources.railwayRoutesTileUrl(ROUTE_TILE_HOSTS, options);
+  sources.railwayRoutesTileUrl(TILE_BASE_URL, options);
 
 export const createStationsSource = () => sources.createStationsSource(TILE_BASE_URL);
 

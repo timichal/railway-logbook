@@ -178,9 +178,8 @@ async function endSession(): Promise<void> {
  * Replace the pair ahead of time when the access token is within `marginMs` of
  * running out (or when it is not known when it does).
  *
- * `request` refreshes on a 401 by itself, but the map's route tiles are requested
- * natively (`map/tileAuth.ts`) and a tile answered 401 is drawn as nothing — so a
- * token must not be left to run out while the map is open. Called on a return to the
+ * `request` refreshes on a 401 by itself, but a token replaced ahead of time saves
+ * the first request back a refused round trip. Called on a return to the
  * foreground. A refusal ends the session as any other would; a refresh that cannot
  * reach the server changes nothing, and the next request tries again.
  */

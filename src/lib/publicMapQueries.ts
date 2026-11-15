@@ -2,8 +2,8 @@
  * Resolving a share token to the map's owner, and the shared map's reads.
  *
  * A plain server-only module rather than part of `publicMapActions.ts`, for two
- * reasons. The route handlers need it (the route tile and the `api/shared`
- * reads), and a route handler never imports a "use server" module. And every
+ * reasons. The route handlers need it (the `api/shared` reads), and a route
+ * handler never imports a "use server" module. And every
  * export of one is a client-callable endpoint: exported from there,
  * `publicMapOwner` would hand any holder of a link the owner's user id and
  * country filter as a remote call of its own, where the shared page only ever
@@ -18,7 +18,9 @@ import {
   coveredStretchesForUser,
   progressByCountryForUser,
   progressForUser,
+  routeRidesForUser,
 } from "./progressQueries";
+import type { RouteRide } from "./shared/map/routeRides";
 import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type { CoveredStretch } from "./shared/types";
@@ -44,11 +46,9 @@ export function isPlausibleShareToken(token: string): boolean {
  * The share rule as SQL: the id of the user whose share token is in `param`,
  * and NULL unless sharing is switched on.
  *
- * Every public read goes through it — `publicMapOwner` below, and the shared
- * map's route tiles (`routeTileQueries.ts`), which embed it in the tile query so
- * a tile costs one round trip on the tile pool rather than a token lookup on the
- * app's pool first. So "sharing switched off" is written in exactly one place,
- * and checked on every call rather than once per page load.
+ * Every public read goes through it (`publicMapOwner`, `sharedMapOwnerId`), so
+ * "sharing switched off" is written in exactly one place, and checked on every
+ * call rather than once per page load.
  */
 export function sharedMapOwnerIdSql(param: string): string {
   return `(SELECT user_id FROM user_preferences
@@ -89,8 +89,8 @@ const SHARED_MAP_GONE_MESSAGE = "This map is no longer shared.";
  * The id of a shared map's owner, for the reads below: one indexed lookup, none
  * of `publicMapOwner`'s join. A dead link (unknown token, or sharing switched
  * off, perhaps since the page loaded) is a `NotFoundError`, never an empty
- * answer: as with the route tile, zeros would pass for a map with nothing
- * ridden, where the visitor should see that the map stopped answering.
+ * answer: zeros, or no rides, would pass for a map with nothing ridden, where the
+ * visitor should see that the map stopped answering.
  *
  * The token is resolved in its own query. Folding `sharedMapOwnerIdSql` into the
  * progress query was measured (2026-11-14) to cost the query about what the
@@ -136,4 +136,13 @@ export async function sharedMapCoveredStretches(
 ): Promise<CoveredStretch[]> {
   const ownerId = await sharedMapOwnerId(token);
   return coveredStretchesForUser(ownerId, region);
+}
+
+/**
+ * The owner's rides, for the shared map's colours. A dead link is a 404 here as
+ * everywhere, and the map then draws no routes rather than all of them unridden.
+ */
+export async function sharedMapRouteRides(token: string, region: RegionId): Promise<RouteRide[]> {
+  const ownerId = await sharedMapOwnerId(token);
+  return routeRidesForUser(ownerId, region);
 }

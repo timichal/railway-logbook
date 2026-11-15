@@ -14,7 +14,6 @@ import { createDataAccess, type DataAccess } from "@/lib/dataAccess";
 import { journeyEditChanged, useJourneyEditRoutes } from "@/lib/journeyEdit";
 import * as localStore from "@/lib/localStorage";
 import { fitCamera } from "@/lib/map/fitCamera";
-import { useLocalRouteFeatureStates } from "@/lib/map/hooks/useLocalRouteFeatureStates";
 import { useRouteHighlighting } from "@/lib/map/hooks/useRouteHighlighting";
 import { useUserMap } from "@/lib/map/hooks/useUserMap";
 import { useUserMapInteractions } from "@/lib/map/hooks/useUserMapInteractions";
@@ -73,8 +72,8 @@ interface RailwayMapProps {
   isMobile: boolean;
   /**
    * Counts the session checks on returning to the page (`useSessionKeepAlive`). Each
-   * one re-reads the rides: the log may have changed elsewhere meanwhile, and the
-   * route tiles may sit in the browser's cache.
+   * one re-reads the rides: the log may have changed elsewhere meanwhile, or the
+   * session gone, which blanks the routes.
    */
   sessionRechecks?: number;
 }
@@ -203,13 +202,9 @@ export default function RailwayMap({
   // Only the sheet can take the room away, so the desktop layout always has it.
   const showFurniture = !isMobile || furnitureFits;
 
-  // An anonymous visitor's ridden routes, reported by useLocalRouteFeatureStates
-  // below, for the closed ones among them to stay on the map
-  const [localRiddenTrackIds, setLocalRiddenTrackIds] = useState<number[]>([]);
-
-  // A login, a logout or a country checkbox reloads the route tiles by itself (see
-  // useUserMap); a logged ride asks with refreshTiles. The searched line stands down
-  // with the search box, whose chip is the only way to clear it.
+  // A login or a logout brings the next owner's rides by itself (a new data access,
+  // see useUserMap); a logged ride asks with refreshRides. The searched line stands
+  // down with the search box, whose chip is the only way to clear it.
   const {
     map,
     mapLoaded,
@@ -218,16 +213,14 @@ export default function RailwayMap({
     progressFailed,
     progressPending,
     refreshProgress,
-    refreshTiles,
+    routeRide,
+    refreshRides,
     lineHighlight,
   } = useUserMap(mapContainer, {
     dataAccess,
     selectedCountries,
-    // A visitor's tile is Martin's; their rides are laid on as feature state below
-    rides: userId ? "session" : undefined,
     coverageVersion,
     lineHighlightHidden: !showFurniture,
-    localRiddenTrackIds,
   });
 
   // The newest fit asked for. A fit may wait on the server for the routes' bounds,
@@ -303,15 +296,6 @@ export default function RailwayMap({
       m.off("movestart", cancelFit);
     };
   }, [map, mapLoaded]);
-
-  // An anonymous visitor's rides, coloured from their localStorage log
-  const refreshLocalRouteStates = useLocalRouteFeatureStates(
-    map,
-    mapLoaded,
-    dataAccess,
-    showError,
-    setLocalRiddenTrackIds,
-  );
 
   // Only the open tab's highlights are drawn: the planner result and the selection
   // on the Route Logger, the open trip or journey on My Trips, nothing on Countries.
@@ -415,16 +399,15 @@ export default function RailwayMap({
   );
 
   const handleRoutesLogged = useCallback(() => {
-    if (user) refreshTiles();
-    else void refreshLocalRouteStates();
+    void refreshRides();
     void refreshProgress();
     // Journeys changed, so the ridden stretches of unfinished routes may have too
     setCoverageVersion((v) => v + 1);
-  }, [user, refreshTiles, refreshLocalRouteStates, refreshProgress]);
+  }, [refreshRides, refreshProgress]);
 
   // A return to the page re-reads the rides as a logged one does: a ride logged in
-  // another tab or the app, or a session revoked elsewhere, which turns the
-  // refetched tiles into refusals and blanks the map
+  // another tab or the app, or a session revoked elsewhere, which the rides
+  // refuse, and the routes go
   const appliedRechecks = useRef(sessionRechecks);
   useEffect(() => {
     if (appliedRechecks.current === sessionRechecks) return;
@@ -472,6 +455,7 @@ export default function RailwayMap({
       activeTab === "routes" && journeyStationClickHandler ? journeyStationClickHandler : undefined,
     region: region.id,
     routeTapAction,
+    routeRide,
   });
 
   // Country filter saves run one at a time, and while one is in flight only the

@@ -15,9 +15,10 @@ type Context = { params: Promise<{ z: string; x: string; y: string }> };
  * simply stays empty for anyone else. The public map's notes are
  * `public_notes_tile`, which Martin serves to anyone.
  *
- * Reading the cookie is safe for the reasons the route tile handler gives: a read
- * that changes nothing, a `SameSite=Lax` cookie, and no CORS headers. `?v=` is the
- * admin map's cache buster, ignored here.
+ * Reading the cookie is safe here: a read that changes nothing, the cookie is
+ * `SameSite=Lax` so a cross-site page embedding the URL sends none, and without
+ * CORS headers it could not read the answer anyway. `?v=` is the admin map's cache
+ * buster, ignored here.
  */
 export async function GET(_request: Request, context: Context): Promise<Response> {
   const tile = parseTile(await context.params, ZOOM_RANGES.adminNotes);
@@ -32,7 +33,7 @@ export async function GET(_request: Request, context: Context): Promise<Response
     // A session from before the admin's password was last changed.
     if (body === null) return new Response(null, { status: 401 });
 
-    return mvtResponse(body, "no-store");
+    return mvtResponse(body);
   } catch (error) {
     console.error("Admin notes tile failed:", error);
     return new Response(null, { status: 500 });

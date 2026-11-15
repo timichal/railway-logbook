@@ -1,6 +1,7 @@
 import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
 import type { ResolvedTheme } from "../../theme/types";
 import { lineClassColorExpression } from "../layers";
+import { NO_RIDES, type RouteRides } from "../routeRides";
 import { OPACITIES, routeColors, WIDTHS } from "../style";
 
 /**
@@ -12,58 +13,52 @@ export function closedRouteOpacityExpression(open: number): ExpressionSpecificat
 }
 
 /**
- * Get color expression for user railway routes based on visit status AND line class
- * Each status (visited/partial/unvisited) has 3 shades: light (branch), medium (main), dark (highspeed)
+ * The user map's route colour: visit status × line class. Each status (ridden
+ * whole, ridden in part, not ridden) has three shades: light (branch), medium
+ * (main), dark (highspeed).
  *
- * Logic:
- * - For logged users: Uses 'date' property from tile data
- * - For unlogged users: Uses feature-state set from localStorage
+ * The status is the map owner's rides, matched by feature id (`routeRides.ts`):
+ * the tile is the same for everyone and says nothing of who rode what. With no
+ * rides it is the unridden colour throughout.
  *
- * **Nested single-condition `case`s, and deliberately no `["all", ...]`.** The
- * flat five-branch form this replaced said the same thing more readably, but
- * MapLibre Native's React binding throws `std::bad_alloc` converting a `case`
- * that carries an `all` condition alongside a further branch — which killed the
- * Phase 0 mobile spike on launch, with no JS error and no crash report (see
- * MOBILE_APP_PLAN.md, "The colour expression"). Nesting expresses exactly the
- * same precedence: reaching an inner `case` already means the outer condition
- * held, so `has date` + `whole` needs no conjunction. GL JS is indifferent
- * between the two forms, so the web app carries the shape that also works on
- * native rather than leaving a second implementation to be written later.
- *
- * The tile branches still take precedence over the feature-state ones, as
- * before: a logged-in user's `date` decides it outright and the localStorage
- * path is only consulted when there is none.
+ * **A `match`, and deliberately no `["all", ...]`.** MapLibre Native's React
+ * binding throws `std::bad_alloc` converting a `case` that carries an `all`
+ * condition alongside a further branch, which killed the Phase 0 mobile spike on
+ * launch with no JS error and no crash report (see MOBILE_APP_PLAN.md, "The colour
+ * expression"). A `match` with a list of labels per branch is a shape both
+ * renderers take, and a hash lookup however long the lists are.
  *
  * The colours follow the scheme (`routeColors`); the logic doesn't.
  */
-export function getUserRouteColorExpression(theme: ResolvedTheme): ExpressionSpecification {
+export function getUserRouteColorExpression(
+  theme: ResolvedTheme,
+  rides: RouteRides = NO_RIDES,
+): ExpressionSpecification {
   const colors = routeColors(theme);
-  return [
-    "case",
-    // Logged users: the tile carries this user's trips.
-    ["has", "date"],
-    [
-      "case",
-      // At least one complete trip → green shades, else orange.
-      ["==", ["get", "has_complete_trip"], true],
-      lineClassColorExpression(colors.visited),
-      lineClassColorExpression(colors.partial),
-    ],
-    // Unlogged users: feature-state, set from localStorage.
-    [
-      "case",
-      ["==", ["feature-state", "hasTrip"], true],
-      [
-        "case",
-        // Partial → orange shades, whole → green.
-        ["==", ["feature-state", "partial"], true],
-        lineClassColorExpression(colors.partial),
-        lineClassColorExpression(colors.visited),
-      ],
-      // No trips → red shades
-      lineClassColorExpression(colors.unvisited),
-    ],
-  ] as ExpressionSpecification;
+  const unridden = lineClassColorExpression(colors.unvisited);
+  // A match may not have a branch with no labels, so an empty list is left out
+  const branches: unknown[] = [];
+  if (rides.whole.length > 0) {
+    branches.push([...rides.whole], lineClassColorExpression(colors.visited));
+  }
+  if (rides.partial.length > 0) {
+    branches.push([...rides.partial], lineClassColorExpression(colors.partial));
+  }
+  if (branches.length === 0) return unridden;
+  return ["match", ["id"], ...branches, unridden] as ExpressionSpecification;
+}
+
+/**
+ * The user map's draw order: ridden routes over unridden ones, so a ride stays
+ * visible where lines run side by side or cross (most of all zoomed out). A
+ * `line-sort-key`, which orders the features within a tile; a constant 0 with no
+ * rides. The tile is drawn in `track_id` order otherwise.
+ */
+export function getUserRouteSortKeyExpression(
+  rides: RouteRides = NO_RIDES,
+): ExpressionSpecification | number {
+  if (rides.ridden.length === 0) return 0;
+  return ["match", ["id"], [...rides.ridden], 1, 0] as ExpressionSpecification;
 }
 
 type WidthStop = { branch: number; main: number; highspeed: number };

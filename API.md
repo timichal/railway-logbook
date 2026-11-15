@@ -92,6 +92,7 @@ Bearer token required.
 | `GET /progress?region=&countries=` | km and route counts. `countries` absent = no filter; `countries=` (empty) = filter everything out, which answers zeros. Over the usage types the region counts (`ordinaryUsageTypes`): Regular, plus Japan's non-JR lines                                                                     |
 | `GET /progress/countries?region=`  | `{ byCountry, byUsage, total }` — one `byCountry` row per country the region declares and one `byUsage` row (`{ usageType, totalKm, completedKm }`) per usage type it counts, ridden or not. Japan's two `byUsage` rows (JR, non-JR) are its statistics screen; Europe's one equals the total |
 | `GET /coverage`                    | `{ stretches }` — ridden stretches of routes not yet finished                                                                                                                                                                                                                                 |
+| `GET /rides`                       | `{ rides }` — every route ridden, for the map's colours: `{ track_id, whole, closed, date, journey_name }` (the most recent journey). Not region-scoped. See "Route tiles"                                                                                                                    |
 | `GET /preferences`                 | `{ selectedCountries }`, defaulted to every supported country on first read                                                                                                                                                                                                                   |
 | `PUT /preferences`                 | `{ selectedCountries }` — a whole-list replacement, empty list allowed. Codes are upper-cased and deduplicated, anything that is not ISO 3166-1 alpha-2 is dropped, and the response echoes the list as stored                                                                                |
 
@@ -209,27 +210,19 @@ it is `null` when no path was found.
 
 ## Route tiles
 
-Not under `/api/v1`, but the app needs it: the route tile coloured by the user's
-rides is `GET /api/tiles/railway_routes/{z}/{x}/{y}`, sent with the same
-`Authorization: Bearer <accessToken>`, which the native map has to attach
-to that one source. `?selected_countries=["CZ","SK"]` filters it to routes with both
-ends in those countries. The web map no longer sends it (it filters by country on
-the client, so its tile URL doesn't change with the ticked countries); the parameter
-stays until the app does the same. The answer
-is an MVT (`application/x-protobuf`), a 204 for an empty tile, and a bare 401
-for a missing or expired token — never an uncoloured tile, which would pass for a
-map with nothing ridden. `?v=` is the client's cache buster: with one, the tile
-may be kept for an hour (`private, max-age=3600`), so it must change with every new
-session, every launch and every write to the log (the app's `logVersion.ts`);
-without one, the tile is `no-store`. Martin's `/tiles/railway_routes_tile` is the same tile
-with no user, and no longer takes a `user_id` at all; see "Vector tiles" in
-`CLAUDE.md`.
+Not under `/api/v1`: the route tile is Martin's, `GET /tiles/railway_routes_tile/{z}/{x}/{y}`,
+the same for everyone and sent with no credential. `?selected_countries=["CZ","SK"]`
+filters it to routes with both ends in those countries. The web map no longer sends
+it (it filters by country on the client, so its tile URL doesn't change with the
+ticked countries); the parameter stays until the app does the same.
 
-A route feature carries its id (`track_id`, the feature id), what the layers
+A route feature carries its id (`track_id`, the feature id) and what the layers
 style and filter by (`usage_type`, `line_class`, `start_country`, `end_country`,
-`is_valid`, `under_repair`, `closed`) and the rides (`date`, `journey_name`,
-`partial`, `has_complete_trip`). **No text**: a tapped route's names, note, tags,
-link and length come from `POST /routes/metadata`.
+`is_valid`, `under_repair`, `closed`). **No text**: a tapped route's names, note,
+tags, link and length come from `POST /routes/metadata`. **No rides**: they come from
+`GET /rides`, laid over the tile by feature id (`src/lib/shared/map/routeRides.ts`).
+Until they arrive, or if they can't, the app draws no routes: uncoloured, they would
+pass for a map with nothing ridden.
 
 ## Not here
 

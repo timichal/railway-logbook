@@ -2,10 +2,10 @@ import type { VectorSourceSpecification } from "@maplibre/maplibre-gl-style-spec
 import { ZOOM_RANGES } from "./zoomRanges";
 
 /**
- * The tile sources, as MapLibre source specifications — Martin's, plus the
- * per-user route tile and the admin notes tile, which the app serves itself.
+ * The tile sources, as MapLibre source specifications — Martin's, plus the admin
+ * notes tile, which the app serves itself.
  *
- * **Every factory here takes the tile server's base URL (and, for the route tile,
+ * **Every factory here takes the tile server's base URL (and, for the admin notes,
  * the app's origin) rather than reading it from the environment**, and that is
  * the whole reason this module is separate from `index.ts`. The web app derives
  * its hosts from `window.location`; the native app has no `window` and carries
@@ -20,37 +20,15 @@ import { ZOOM_RANGES } from "./zoomRanges";
  * `mobile/tsconfig.json`).
  */
 
-/**
- * Whose rides colour the route tile: the requester's own (`"session"` — the web
- * session cookie, or on the native app the bearer token it attaches to the
- * request), or a shared map's owner, named by its share token.
- */
-export type RouteTileRides = "session" | { shareToken: string };
-
 export interface RailwayRoutesSourceOptions {
-  /** Omitted: the plain Martin tile, every route unvisited (admin, anonymous map). */
-  rides?: RouteTileRides;
   cacheBuster?: number;
   /**
    * Filters the tile to routes with both ends in these countries. Only the native
    * app still passes it: the web user map filters by country on the client
    * (`userRoutesFilter`), so its tile URL doesn't change with the ticked countries.
-   * Drop it here and in the tile handler once the native app moves too.
+   * Drop it here and in `railway_routes_tile` once the native app moves too.
    */
   selectedCountries?: string[];
-}
-
-/**
- * The two hosts a route tile can come from. Martin serves the tile with no user;
- * the tile coloured by someone's rides is the app's own route handler
- * (`src/app/api/tiles`), so it lives on the app's origin rather than under
- * Martin's `/tiles`.
- */
-interface RouteTileHosts {
-  /** Martin: `/tiles` in production, port 3001 in development. */
-  tileBaseUrl: string;
-  /** The Next app, absolute (`https://host`). */
-  appOrigin: string;
 }
 
 /**
@@ -78,34 +56,25 @@ function vectorSource(url: string, zooms: { min: number; max: number }): VectorS
 }
 
 /**
- * The route tile's URL template.
- *
- * A tile coloured by someone's rides never comes from Martin, which answers
- * anyone: it comes from our own handler, which works out whose rides to show from
- * the share token, the bearer token or the session cookie — the client never names
- * a user. On the web it is same-origin, so the cookie goes with it; the native app
- * attaches its bearer token to requests for this path (`mobile/src/map/tileAuth.ts`).
+ * The route tile's URL template: Martin's, and the same for everyone. It carries
+ * no rides; each map lays its owner's over it by id (`routeRides.ts`).
  */
 export function railwayRoutesTileUrl(
-  hosts: RouteTileHosts,
-  { rides, cacheBuster, selectedCountries }: RailwayRoutesSourceOptions = {},
+  tileBaseUrl: string,
+  { cacheBuster, selectedCountries }: RailwayRoutesSourceOptions = {},
 ): string {
-  const params: [string, string][] = [];
-  if (rides && rides !== "session") params.push(["share", rides.shareToken]);
-  params.push(...cacheBusterParam(cacheBuster));
+  const params = cacheBusterParam(cacheBuster);
   if (selectedCountries !== undefined) {
     params.push(["selected_countries", JSON.stringify(selectedCountries)]);
   }
-  return rides
-    ? tileUrl(`${hosts.appOrigin}/api/tiles`, "railway_routes", params)
-    : tileUrl(hosts.tileBaseUrl, "railway_routes_tile", params);
+  return tileUrl(tileBaseUrl, "railway_routes_tile", params);
 }
 
 export const createRailwayRoutesSource = (
-  hosts: RouteTileHosts,
+  tileBaseUrl: string,
   options: RailwayRoutesSourceOptions = {},
 ): VectorSourceSpecification =>
-  vectorSource(railwayRoutesTileUrl(hosts, options), ZOOM_RANGES.railwayRoutes);
+  vectorSource(railwayRoutesTileUrl(tileBaseUrl, options), ZOOM_RANGES.railwayRoutes);
 
 /** Every station — the admin map's. */
 export const createStationsSource = (tileBaseUrl: string): VectorSourceSpecification =>
@@ -142,8 +111,7 @@ export const adminNotesTileUrl = (appOrigin: string, cacheBuster?: number): stri
   tileUrl(`${appOrigin}/api/tiles`, "admin_notes", cacheBusterParam(cacheBuster));
 
 /**
- * Every admin note, drafts included — so, like a ride-coloured route tile, it is
- * served by the app's own handler (`src/app/api/tiles/admin_notes`), which checks
+ * Every admin note, drafts included — so it is served by the app's own handler (`src/app/api/tiles/admin_notes`), which checks
  * the session for the admin, and never by Martin, which answers anyone. Takes the
  * app's origin rather than Martin's base URL for that reason.
  */

@@ -3,7 +3,7 @@
  *
  * The properties come off an MVT feature, so everything is read defensively and
  * nothing is trusted to be present. A route's tile carries only what the layers
- * draw with, so a pressed route is read by id (`toRouteTap`, then
+ * draw with, so a pressed route is read by id (`toRouteTrackId`, then
  * `routeFeatureFromMetadata`). The web app builds the same three bodies as HTML
  * strings and has to escape every one of them (`tooltipFormatting.ts`); here they
  * become `<Text>` children, which is the whole of why `escapeHtml` does not port.
@@ -12,6 +12,7 @@
  */
 
 import { type RouteFeatureProperties, routeLinkLabel } from "@shared/map/routeFeature";
+import type { RouteRide } from "@shared/map/routeRides";
 import type { RailwayRoute } from "@shared/types";
 
 export interface RouteFeature extends RouteFeatureProperties {
@@ -58,24 +59,23 @@ export function safeUrl(value: unknown): string | null {
   return raw;
 }
 
-/** What a pressed route's tile feature says: which route, and the last ride on it. */
-export interface RouteTap {
-  trackId: number;
-  lastJourney: RouteFeature["lastJourney"];
+/**
+ * Which route a press hit. `track_id` is the feature id on the tile, not a
+ * property, and a route with no id is one nothing can be done with.
+ */
+export function toRouteTrackId(id: unknown): number | null {
+  const trackId = Number(id);
+  return Number.isFinite(trackId) && trackId !== 0 ? trackId : null;
 }
 
-export function toRouteTap(properties: Properties, id: unknown): RouteTap | null {
-  if (!properties) return null;
-  // `track_id` is the feature id on the tile, not a property. A route with no id is
-  // one nothing can be done with.
-  const trackId = Number(id);
-  if (!Number.isFinite(trackId) || trackId === 0) return null;
-
-  const date = text(properties.date);
-  const journeyName = text(properties.journey_name);
-  // Populated together from the most-recent logged journey (both NOT NULL in
-  // user_journeys), so either both are present or neither is.
-  return { trackId, lastJourney: date && journeyName ? { date, name: journeyName } : null };
+/**
+ * The most recent journey over a route, from the user's ride on it (`useRides`):
+ * both fields or neither, as they come together from one journey.
+ */
+export function lastJourneyOf(ride: RouteRide | undefined): RouteFeature["lastJourney"] {
+  const date = text(ride?.date);
+  const name = text(ride?.journey_name);
+  return date && name ? { date, name } : null;
 }
 
 export function toStationFeature(properties: Properties): StationFeature | null {
@@ -97,10 +97,10 @@ export function toNoteFeature(properties: Properties): NoteFeature | null {
  * route is described by exactly the same `routeTitle` and `routeBadges` wherever it
  * came from.
  *
- * `lastJourney` is the one thing a row cannot answer: it is a per-user join the tile
- * carries and this endpoint, being public, does not. A tap passes the tile's
- * (`toRouteTap`); nothing reading a planner result asks for it — a plan is about
- * where you are going, not where you have been.
+ * `lastJourney` is the one thing a row cannot answer: it is the user's, and this
+ * endpoint is public. A tap passes it from the rides (`lastJourneyOf`); nothing
+ * reading a planner result asks for it — a plan is about where you are going, not
+ * where you have been.
  */
 export function routeFeatureFromMetadata(
   route: RailwayRoute,

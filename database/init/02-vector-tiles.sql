@@ -288,11 +288,14 @@ ON user_logged_parts (user_id, track_id) WHERE covered_start IS NOT NULL;
 -- say a piece was ridden without saying which, and GREATEST/LEAST ignore NULLs,
 -- so a row let through would widen into the whole route and complete it alone.
 --
+-- Read by the progress figures and the map's rides (routeRidesForUser,
+-- src/lib/progressQueries.ts), so the numbers and the colours can't disagree.
+--
 -- **Set-returning rather than a per-route boolean on purpose.** As a scalar
--- function the tile called it once per route, and the per-call overhead cost 50%
--- on a z4 tile of 5000 routes (593ms against 398ms for the plain "has a complete
--- journey" LATERAL it replaced). Joined as a set it is evaluated once per tile,
--- which measured at or below that LATERAL from z4 to z12 -- the fixed cost is one
+-- function the route tile (which then carried the rides) called it once per
+-- route, and the per-call overhead cost 50% on a z4 tile of 5000 routes (593ms
+-- against 398ms for the plain "has a complete journey" LATERAL it replaced).
+-- Joined as a set it is evaluated once per query -- the fixed cost is one
 -- index-only scan of the user's own logged rows.
 --
 -- The same rule is implemented in TypeScript for the unauthenticated map's
@@ -327,35 +330,33 @@ $$ LANGUAGE sql
 STABLE
 PARALLEL SAFE;
 
--- Function: railway_routes_mvt
+-- Function: railway_routes_tile
 -- Serves railway routes as vector tiles: the geometry and what the layers style
--- and filter by, nothing more. The text a popup or a click shows (names, note,
--- tags, link, length) is not in the tile: it was over half of a low-zoom tile's
--- bytes and most of its time, repeated in every tile a route crosses. The clients
--- read it by track_id instead (GET /api/route-details on the web, POST
--- /api/v1/routes/metadata in the native app).
--- Includes user-specific journey data for styling (most recent journey's date/name/partial)
--- Uses "most permissive wins" logic: route is complete if it's complete in ANY
--- journey, or if its partial stretches union to the whole route (see
--- user_fully_ridden_routes above)
--- Country filter: NULL shows every route, otherwise both endpoints must be listed.
+-- and filter by, nothing more, and the same for everyone. Martin publishes it.
 --
--- **Not a Martin source, and it must never become one.** A user's ride history is
--- private, and anything Martin publishes answers anyone who asks: it used to take
--- user_id from the query string, so /tiles/railway_routes_tile/6/34/21?user_id=7
--- served user 7's logbook to whoever typed it. The per-user tile is now served by
--- the Next route handler under src/app/api/tiles, which resolves the session,
--- bearer or share token first and calls this function itself. Martin publishes
--- only railway_routes_tile below, which passes no user.
-CREATE OR REPLACE FUNCTION railway_routes_mvt(
-    z integer,
-    x integer,
-    y integer,
-    user_id_param integer,
-    selected_countries_param text[]
-)
+-- No rides. The user map lays its owner's rides over the tile by feature id
+-- (src/lib/shared/map/routeRides.ts), fetched once as a list (/api/me/rides,
+-- /api/shared/<token>/rides, /api/v1/rides). Working them out per tile cost about
+-- 30ms of every signed-in tile on every pan (51ms against 19ms at z7, measured
+-- 2026-11-14), and made each tile private to its user.
+--
+-- No text either. The text a popup or a click shows (names, note, tags, link,
+-- length) was over half of a low-zoom tile's bytes and most of its time, repeated
+-- in every tile a route crosses. The clients read it by track_id instead (GET
+-- /api/route-details on the web, POST /api/v1/routes/metadata in the native app).
+--
+-- selected_countries (a JSON array in the query string): only routes with both
+-- endpoints among them. Only the native app still sends it; the web map filters
+-- by country on the client. Any other query parameter is ignored.
+--
+-- railway_routes_mvt was the function behind this one, taking a user id. Its
+-- per-user tile was served by an app route handler and kept out of Martin;
+-- dropped with it.
+DROP FUNCTION IF EXISTS railway_routes_mvt(integer, integer, integer, integer, text[]);
+
+CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
 RETURNS bytea AS $$
-    -- 'track_id' is the feature id, for MapLibre feature state
+    -- 'track_id' is the feature id, for the clients' rides and selection by id
     SELECT ST_AsMVT(mvtgeom.*, 'railway_routes', 4096, 'geom', 'track_id')
     FROM (
         SELECT
@@ -368,76 +369,34 @@ RETURNS bytea AS $$
             -- text is admin-only and this tile is public
             rr.is_valid,
             rr.under_repair,
-            -- Closed lines are in every tile: the client hides those its user
-            -- hasn't ridden (closedRoutesFilter), since the anonymous map's rides
-            -- are known only in the browser
+            -- Closed lines are in every tile: the client hides those its map's
+            -- owner hasn't ridden (closedRoutesFilter)
             rr.closed,
-            -- Include most recent journey data for client-side styling
-            -- Use latest journey (by date, then by created_at) for route coloring
-            recent_trip.date,
-            recent_trip.journey_name,
-            recent_trip.partial,
-            -- Whether the route reads as ridden: a complete journey, or partial
-            -- stretches that add up to the whole line (user_fully_ridden_routes)
-            (ridden.track_id IS NOT NULL) AS has_complete_trip,
             ST_AsMVTGeom(ST_Simplify(rr.geometry_3857, tile_unit(z), true), envelope, 4096, 64, true) AS geom
         FROM railway_routes rr
         CROSS JOIN ST_TileEnvelope(z, x, y) AS envelope
-        -- Most recent journey for this route (drives the hover popup and the
-        -- partial styling of a route that isn't fully ridden yet)
-        LEFT JOIN LATERAL (
-            SELECT uj.date, uj.name as journey_name, ulp.partial
-            FROM user_logged_parts ulp
-            JOIN user_journeys uj ON ulp.journey_id = uj.id
-            WHERE ulp.track_id = rr.track_id
-                AND user_id_param IS NOT NULL
-                AND ulp.user_id = user_id_param
-            ORDER BY
-                uj.date DESC NULLS LAST,
-                uj.created_at DESC
-            LIMIT 1
-        ) recent_trip ON true
-        -- Evaluated once per tile, not once per route (see the function's comment).
-        -- With no user_id it yields nothing, so every route reads as unvisited.
-        LEFT JOIN user_fully_ridden_routes(user_id_param) ridden
-            ON ridden.track_id = rr.track_id
+        CROSS JOIN (
+            SELECT CASE
+                WHEN query_params->>'selected_countries' IS NOT NULL
+                -- Folded as normalizeCountryCodes folds them, so 'cz' is CZ
+                THEN ARRAY(SELECT upper(btrim(code)) FROM json_array_elements_text((query_params->>'selected_countries')::json) AS code)
+            END AS countries
+        ) filter
         WHERE rr.geometry_3857 && envelope
             -- Every zoom level. Country filter: if countries are specified, both
             -- the start AND end country must be among them
             AND (
-                selected_countries_param IS NULL OR
-                (rr.start_country = ANY(selected_countries_param) AND rr.end_country = ANY(selected_countries_param))
+                filter.countries IS NULL OR
+                (rr.start_country = ANY(filter.countries) AND rr.end_country = ANY(filter.countries))
             )
-        ORDER BY
-            -- Render order: unvisited routes first (so visited are on top)
-            CASE WHEN recent_trip.date IS NULL THEN 0 ELSE 1 END,
-            -- Then by id, only so the order (and with it the tile bytes and Martin's
-            -- ETag) doesn't follow the plan. Not by station names, whose collation
-            -- cost a z4 tile about a third of its time.
-            rr.track_id
+        -- By id, only so the order (and with it the tile bytes and Martin's ETag)
+        -- doesn't follow the plan. Not by station names, whose collation cost a z4
+        -- tile about a third of its time. The user map draws ridden lines over
+        -- unridden ones with line-sort-key instead (userRouteStyling.ts).
+        ORDER BY rr.track_id
     ) AS mvtgeom;
 $$ LANGUAGE sql
--- STABLE, not IMMUTABLE: it reads tables. And not STRICT, which would turn the
--- NULL user of an anonymous tile into a NULL tile.
-STABLE
-PARALLEL SAFE;
-
--- Function: railway_routes_tile
--- The Martin source: the route tile with no user, so every route reads as
--- unvisited (the admin map, the anonymous map — whose colours come from
--- localStorage via feature state). Takes selected_countries from the query
--- string and nothing else; a user_id in the query string is ignored.
-CREATE OR REPLACE FUNCTION railway_routes_tile(z integer, x integer, y integer, query_params json DEFAULT '{}'::json)
-RETURNS bytea AS $$
-    SELECT railway_routes_mvt(
-        z, x, y,
-        NULL,
-        CASE
-            WHEN query_params->>'selected_countries' IS NOT NULL
-            THEN ARRAY(SELECT json_array_elements_text((query_params->>'selected_countries')::json))
-        END
-    );
-$$ LANGUAGE sql
+-- STABLE, not IMMUTABLE: it reads tables.
 STABLE
 STRICT
 PARALLEL SAFE;

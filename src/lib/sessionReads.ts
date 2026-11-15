@@ -9,6 +9,7 @@
 
 import { getNoStore, listParam } from "./fetchJson";
 import type { journeyWithBoundsForUser } from "./journeyQueries";
+import type { RouteRide } from "./shared/map/routeRides";
 import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type { CoveredStretch } from "./shared/types";
@@ -41,6 +42,11 @@ export function fetchProgressByCountry(region: RegionId): Promise<ProgressByCoun
 
 export function fetchCoveredStretches(region: RegionId): Promise<CoveredStretch[]> {
   return getMine("coverage", { region });
+}
+
+/** Every route ridden in `region`, for the map's colours. */
+export function fetchRides(region: RegionId): Promise<RouteRide[]> {
+  return getMine("rides", { region });
 }
 
 export function fetchTripNames(region: RegionId): Promise<TripName[]> {

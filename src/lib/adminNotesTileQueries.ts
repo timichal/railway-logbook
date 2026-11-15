@@ -1,28 +1,31 @@
 /**
  * The admin notes tile: every note, drafts included.
  *
- * Not a Martin source on purpose, for the reason `routeTileQueries.ts` gives:
- * Martin answers anyone who asks, and published under `/tiles` this tile handed
+ * Not a Martin source on purpose: Martin answers anyone who asks, and published
+ * under `/tiles` this tile handed
  * the `Works`/`Todo`/`UsageInternal` notes — the ones `public_notes_tile` exists
  * to hide — to whoever typed its URL. The SQL function behind it,
  * `admin_notes_tile` (`database/init/02-vector-tiles.sql`), is left out of
  * Martin's config, and its only caller is the admin-checking handler under
  * `src/app/api/tiles/admin_notes`.
  *
- * On the route tile's pool, not the app's: a pan over the admin map asks for a
- * dozen tiles at once, and on the shared pool they would queue the admin's own
- * saves behind them.
+ * On a pool of its own, not the app's: a pan over the admin map asks for a dozen
+ * tiles at once, and on the shared pool (10 connections) they would queue the
+ * admin's own saves behind them. Small, because one person pans this map and a
+ * notes tile is light; the route tiles, which needed ten, are Martin's now.
  */
 
 import { ADMIN_USER_ID } from "./adminUser";
 import type { TokenClaims } from "./authTokens";
-import { tilePool } from "./routeTileQueries";
+import { createPool } from "./db";
 import { currentAccountIdSql, issuedAtParam } from "./sessionQueries";
+
+const tilePool = createPool({ max: 4 });
 
 /**
  * One admin notes tile as MVT bytes; an empty buffer is an empty tile. Null when
  * the claims are not the admin's as the account stands now — a token from before
- * a password change — checked in the same statement, as `routeTile` does.
+ * a password change — checked in the same statement, so a tile is one round trip.
  */
 export async function adminNotesTile(
   z: number,

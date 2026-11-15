@@ -5,52 +5,37 @@ import {
   createPublicStationsSource,
   createRailwayRoutesSource,
   createScenicLinesSource,
-  railwayRoutesTileUrl,
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
 import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
-import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
+import { useRouteRides } from "@/lib/map/hooks/useRouteRides";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
-import type { UsageType } from "@/lib/shared/constants";
-import type { RouteTileRides } from "@/lib/shared/map/tileSources";
+import { type UsageType, usageOptions } from "@/lib/shared/constants";
+import { routeLineLayerId } from "@/lib/shared/map/layers";
+import { NO_RIDES } from "@/lib/shared/map/routeRides";
 import { createUserMapLayers, shownUsageTypes } from "@/lib/shared/map/userMapLayers";
+import {
+  getUserRouteColorExpression,
+  getUserRouteSortKeyExpression,
+} from "@/lib/shared/map/utils/userRouteStyling";
 import type { UserProgress } from "@/lib/shared/progress";
 import { countedUsageTypes, regionCountryCodes } from "@/lib/shared/regions";
 import { useResolvedTheme } from "@/lib/theme";
-
-const NO_TRACK_IDS: readonly number[] = [];
-
-/** A number per data access, for the route tiles' refresh signal. */
-const dataAccessIds = new WeakMap<DataAccess, number>();
-let lastDataAccessId = 0;
-function dataAccessId(dataAccess: DataAccess): number {
-  let id = dataAccessIds.get(dataAccess);
-  if (id === undefined) {
-    id = ++lastDataAccessId;
-    dataAccessIds.set(dataAccess, id);
-  }
-  return id;
-}
+import { useToast } from "@/lib/toast";
 
 interface UseUserMapOptions {
   /**
-   * Whose numbers, ridden stretches and route tile colours: the session,
-   * localStorage or a share token. A new one is a new owner — another account
-   * reloads the route tiles even where their URL stays the same — so memoise it on
-   * who it is, not on objects that are replaced without that changing.
+   * Whose numbers, rides and ridden stretches: the session, localStorage or a
+   * share token. A new one is a new owner, whose rides replace the last one's at
+   * once, so memoise it on who it is, not on objects that are replaced without that
+   * changing.
    */
   dataAccess: DataAccess;
   /** The country filter as stored, before a single-country region pins it. */
   selectedCountries: string[];
-  /**
-   * Whose rides colour the route tiles: the session's or a share token's. Omitted,
-   * they are Martin's, every route unvisited (an anonymous visitor's rides are laid
-   * on as feature state by the caller).
-   */
-  rides?: RouteTileRides;
   /** Bumped when journeys change, to refetch the ridden-stretch overlay. */
   coverageVersion?: number;
   /** Stands the searched-line band down — see `useLineSearchHighlight`. */
@@ -62,34 +47,27 @@ interface UseUserMapOptions {
    * switches — there they change what is drawn and nothing else.
    */
   progressFollowsLayers?: boolean;
-  /**
-   * An anonymous visitor's ridden routes, from their localStorage log
-   * (`useLocalRouteFeatureStates`): the closed ones among them stay on the map
-   * (`closedRoutesFilter`). Empty where the tile carries the rides.
-   */
-  localRiddenTrackIds?: readonly number[];
 }
 
 /**
  * The map both user maps draw — the signed-in or anonymous one and the shared one:
- * the sources and layers, the route tiles' refreshes, the progress figures, the
- * ridden stretches, the layer switches and the searched line. What either adds on
- * top (selection, highlights, interactions) stays with it.
+ * the sources and layers, the owner's rides over the route tiles, the progress
+ * figures, the ridden stretches, the layer switches and the searched line. What
+ * either adds on top (selection, highlights, interactions) stays with it.
  */
 export function useUserMap(
   mapContainer: React.RefObject<HTMLDivElement | null>,
   {
     dataAccess,
     selectedCountries,
-    rides,
     coverageVersion = 0,
     lineHighlightHidden = false,
     progressFollowsLayers = true,
-    localRiddenTrackIds = NO_TRACK_IDS,
   }: UseUserMapOptions,
 ) {
   const region = useRegion();
   const layerPrefs = useLayerPrefs();
+  const { showError } = useToast();
 
   // The country list everything on the map actually filters by. A region the user
   // can't filter by country (Japan, one country) pins it to its own list, which is
@@ -106,66 +84,48 @@ export function useUserMap(
   // rebuilds the map when it changes.
   const theme = useResolvedTheme();
 
-  // The route tiles' `v`. A map rebuilt for a region or scheme change has to carry
-  // the latest one, or it would be back on a URL from before the last refresh — a
-  // stale tile, the moment anything caches them.
-  const routesCacheBusterRef = useRef<number | undefined>(undefined);
-
-  // The route source is the one thing here that changes without the map being
-  // rebuilt: a login, a logout or a logged ride only point it at new tiles
-  // (`setTiles`), since rebuilding would throw away the WebGL context and the
-  // basemap to change one source. So its inputs are the refresh signal: the URL
-  // can't change without its tiles being reloaded, and nothing outside has to keep
-  // the two in step. Beside them, a counter for a ride logged (`refreshTiles`), and
-  // the data access, which stands for whose rides: a session tile's URL doesn't name
-  // its user, so going from one account straight to another changes nothing else.
-  // The country filter is not among them: it is a layer filter (`useLayerFilters`),
-  // so the tile URL is the same whatever is ticked — for Martin's tile, the same for
-  // every anonymous visitor — and a country checkbox refetches nothing.
-  const [refreshCount, setRefreshCount] = useState(0);
-  const ridesKey = rides === undefined ? "" : rides === "session" ? "session" : rides.shareToken;
-  const routesSignal = [refreshCount, dataAccessId(dataAccess), ridesKey].join("|");
+  // The owner's rides, which colour and order the routes and keep their closed
+  // ones on the map. The route tile is Martin's, the same for everyone and never
+  // refetched for them: a login, a logout or a logged ride only restyle the layers
+  // (below), from the tiles already loaded. Asked for at once, so they are usually
+  // here when the map is built (read through the ref, since `layers` runs in an
+  // earlier render's closure).
+  const { rides, refresh: refreshRides } = useRouteRides(dataAccess, showError);
+  const ridesRef = useRef(rides);
+  ridesRef.current = rides;
 
   const { map, mapLoaded, mapStatus } = useMapLibre(
     mapContainer,
     {
       region: region.id,
-      sources: () => {
-        // Runs once the map is being built, well after this render has declared it
-        routesSourceBuilt(routesSignal);
-        // A tile coloured by someone's rides has a `v` from its first request:
-        // without one its URL would be the same across page loads, and for the
-        // session across everyone who signs in on this browser. Martin's tile is the
-        // same for everyone and gets none until a refresh needs one, so it stays
-        // cacheable.
-        if (rides) routesCacheBusterRef.current ??= Date.now();
-        return {
-          railway_routes: createRailwayRoutesSource({
-            rides,
-            cacheBuster: routesCacheBusterRef.current,
-          }),
-          stations: createPublicStationsSource(),
-          scenic_lines: createScenicLinesSource(),
-          public_notes: createPublicNotesSource(),
-        };
-      },
-      // Built with the countries as they are, so none outside them flashes before
-      // useLayerFilters takes over
-      layers: () => createUserMapLayers(theme, effectiveCountries),
+      sources: () => ({
+        railway_routes: createRailwayRoutesSource(),
+        stations: createPublicStationsSource(),
+        scenic_lines: createScenicLinesSource(),
+        public_notes: createPublicNotesSource(),
+      }),
+      // Built with the countries and the rides as they are, so nothing outside
+      // them flashes, and nothing uncoloured, before the effects below take over
+      layers: () => createUserMapLayers(theme, effectiveCountries, ridesRef.current),
     },
     [region.id],
   );
 
-  const routesSourceBuilt = useSourceTileRefresh({
-    map,
-    mapLoaded,
-    sourceId: "railway_routes",
-    signal: routesSignal,
-    cacheBusterRef: routesCacheBusterRef,
-    tileUrl: (cacheBuster) => railwayRoutesTileUrl({ rides, cacheBuster }),
-  });
-  // Stable identity: consumers list it in effect/callback dependency arrays.
-  const refreshTiles = useCallback(() => setRefreshCount((count) => count + 1), []);
+  // A change of rides restyles the route lines in place. MapLibre compares each
+  // value with the one it holds, so a re-run with the same rides costs nothing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger (restyle once the layers exist), not a value read inside the effect.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const color = getUserRouteColorExpression(theme, rides ?? NO_RIDES);
+    const sortKey = getUserRouteSortKeyExpression(rides ?? NO_RIDES);
+    for (const { id: type } of usageOptions) {
+      const id = routeLineLayerId(type);
+      if (!m.getLayer(id)) continue;
+      m.setPaintProperty(id, "line-color", color);
+      m.setLayoutProperty(id, "line-sort-key", sortKey);
+    }
+  }, [map, theme, rides, mapLoaded]);
 
   // The usage types drawn, which the progress box, the ridden stretches and the
   // searched line follow
@@ -237,7 +197,9 @@ export function useUserMap(
     if (mapLoaded) void refreshProgress();
   }, [mapLoaded, refreshProgress]);
 
-  // Ridden stretches of routes not yet finished, drawn over the route line
+  // Ridden stretches of routes not yet finished, drawn over the route line, and
+  // hidden with it: green stretches over no routes would say as little as the
+  // routes would uncoloured
   useCoverageOverlay(
     map,
     mapLoaded,
@@ -246,7 +208,11 @@ export function useUserMap(
     shownTypes,
     coverageVersion,
     theme,
+    rides !== null,
   );
+
+  // The owner's ride on a route, for the popups (`useUserMapInteractions`)
+  const routeRide = useCallback((trackId: number) => rides?.byId.get(trackId), [rides]);
 
   // mapLoaded applies the persisted switches once the layers exist
   useLayerFilters(
@@ -257,7 +223,7 @@ export function useUserMap(
     layerPrefs.showScenicLines && region.hasScenicHighlight,
     effectiveCountries,
     layerPrefs.showClosed,
-    localRiddenTrackIds,
+    rides,
     mapLoaded,
   );
 
@@ -278,7 +244,8 @@ export function useUserMap(
     progressFailed: shownAnswer?.failed ?? false,
     progressPending,
     refreshProgress,
-    refreshTiles,
+    routeRide,
+    refreshRides,
     lineHighlight,
   };
 }

@@ -156,8 +156,8 @@ describe("closed routes on the user map", () => {
     assert.equal(closedRoutesFilter(true), null);
   });
 
-  test("a closed route ridden is drawn: the tile's date, or the visitor's local log", () => {
-    assert.equal(passes(closedRoutesFilter(false), 1, { closed: true, date: "2024-05-01" }), true);
+  test("a closed route ridden is drawn, by id: the tile carries no rides", () => {
+    assert.equal(passes(closedRoutesFilter(false), 1, { closed: true, date: "2024-05-01" }), false);
     assert.equal(passes(closedRoutesFilter(false, [1, 7]), 7, { closed: true }), true);
     assert.equal(passes(closedRoutesFilter(false, [1, 7]), 8, { closed: true }), false);
   });
@@ -182,17 +182,12 @@ describe("closed routes on the user map", () => {
   });
 
   test("the country filter and the closed filter apply together", () => {
-    const filter = userRoutesFilter({ countries: ["CZ"], showClosed: false });
+    const filter = userRoutesFilter({ countries: ["CZ"], showClosed: false, riddenClosed: [1] });
     const inCz = { start_country: "CZ", end_country: "CZ" };
-    assert.equal(passes(filter, 1, { ...inCz, closed: true }), false);
-    assert.equal(passes(filter, 1, { ...inCz, closed: true, date: "2024-05-01" }), true);
+    assert.equal(passes(filter, 2, { ...inCz, closed: true }), false);
+    assert.equal(passes(filter, 1, { ...inCz, closed: true }), true);
     assert.equal(
-      passes(filter, 1, {
-        start_country: "PL",
-        end_country: "PL",
-        closed: true,
-        date: "2024-05-01",
-      }),
+      passes(filter, 1, { start_country: "PL", end_country: "PL", closed: true }),
       false,
     );
   });

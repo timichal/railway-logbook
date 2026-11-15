@@ -4,12 +4,12 @@ What the map draws is decided in `src/lib/shared/map/` (its CLAUDE.md has the st
 
 ## Map lifecycle
 
-- The map is built once per region and colour scheme, never rebuilt for a refresh. Refresh route tiles with `setTiles` on the existing source (`useSourceTileRefresh`, driven by `useUserMap` and keyed on the URL's inputs). Never remove and re-add the layers: they would land above the station labels and lose their state.
+- The map is built once per region and colour scheme, never rebuilt for a refresh. Refresh a source's tiles with `setTiles` on the existing source (`useSourceTileRefresh`: the admin map's routes, notes and scenic lines, keyed on the URL's inputs). The user map's route tiles are never refreshed: they are the same for everyone, and the rides restyle them. Never remove and re-add the layers: they would land above the station labels and lose their state.
 - `useMapLibre` loads the basemap style before creating the map. The attribution starts collapsed (`addAttribution`). The map never rotates, by touch either.
 - **MapLibre is a chunk of its own** (`maplibre.ts`), so the sidebar renders without waiting for it. Import `maplibre-gl` for types only (`import type`); a value import puts it back into the map component's chunk. `useMapLibre` awaits `loadMapLibre()`, the pages start it early with the style (`usePrefetchMap`), and code that only runs once a map exists (popups) takes the module from `mapLibre()`. Each map pane lays `MapPaneStatus` over itself until the map exists (`mapStatus`, not `mapLoaded`, which waits for the first tiles); a failed load offers a reload.
 - **Clear a highlight by filtering its layers to nothing, never by removing them** (`syncHighlightOverlay` in `useRouteHighlighting`). MapLibre keeps parsed tile features per layer id, so a re-added layer flashes the old ones.
 - `useCoverageOverlay`: sync as soon as the data arrives. Don't gate on `isStyleLoaded()`.
-- An anonymous visitor's rides are feature state (`useLocalRouteFeatureStates`), cleared on login.
+- The owner's rides (`useRouteRides`, called by `useUserMap`) are fetched as soon as there is a data access, so they are usually in before the map is built, which reads them through a ref for a coloured first frame. Later changes restyle the three route lines in place (`setPaintProperty`, `setLayoutProperty`) and the filters through `useLayerFilters`, which hides every route layer while the rides are null. A login swaps the data access, and the old owner's rides go at once.
 - **The map shows only the open sidebar tab's highlights** (`TAB_HIGHLIGHT_KIND`: `planner` ↔ Route Logger, `view` ↔ My Trips). Map clicks act only in the Route Logger tab, on its routes: the new journey's selection, or the saved journey it is editing (`updateLoggerRoutes` in `RailwayMap`).
 
 ## Opening something flies to it

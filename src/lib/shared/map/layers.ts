@@ -99,10 +99,17 @@ export interface RouteLineConfig extends RailwayRoutesPaintConfig {
    * every route of the type.
    */
   routesFilter?: FilterSpecification | null;
+  /**
+   * The draw order within a tile (`line-sort-key`): on the user map, ridden over
+   * unridden (`getUserRouteSortKeyExpression`). Omitted, the tile's own order.
+   */
+  sortKeyExpression?: ExpressionSpecification | number;
 }
 
 export interface RouteClickLayerConfig extends RailwayRoutesPaintConfig {
   filter?: FilterSpecification | null;
+  /** Shown from the start (the default); hidden with the route lines it serves. */
+  visible?: boolean;
 }
 
 /**
@@ -165,7 +172,8 @@ export const ROUTE_CLICK_LAYER_ID = "railway_routes_click";
 
 /**
  * The route line of one usage type: Regular solid, Heritage dotted, Special dashed.
- * All three share the route source, so feature-state visit colours apply alike.
+ * All three share the route source, and on the user map one colour and draw order
+ * (the rides, `userRouteLayerConfigs`).
  */
 export function createRouteLineLayer(
   usageType: UsageType,
@@ -180,6 +188,7 @@ export function createRouteLineLayer(
     defaultOpacity = OPACITIES.defaultRoute,
     visible = usageType === 0,
     routesFilter = null,
+    sortKeyExpression,
   } = config;
 
   return {
@@ -191,6 +200,7 @@ export function createRouteLineLayer(
     layout: {
       visibility: visible ? "visible" : "none",
       ...(roundCap ? { "line-cap": "round" as const } : {}),
+      ...(sortKeyExpression !== undefined ? { "line-sort-key": sortKeyExpression } : {}),
     },
     paint: {
       "line-color": colorExpression || lineClassColorExpression(COLORS.railwayRoutes.unvisited),
@@ -214,7 +224,12 @@ export function createRouteLineLayer(
 export function createRailwayRoutesClickLayer(
   config: RouteClickLayerConfig = {},
 ): LineLayerSpecification {
-  const { widthExpression, defaultWidth = WIDTHS.fallback.clickBuffer, filter } = config;
+  const {
+    widthExpression,
+    defaultWidth = WIDTHS.fallback.clickBuffer,
+    filter,
+    visible = true,
+  } = config;
 
   const layer: LineLayerSpecification = {
     id: ROUTE_CLICK_LAYER_ID,
@@ -222,7 +237,7 @@ export function createRailwayRoutesClickLayer(
     source: "railway_routes",
     "source-layer": "railway_routes",
     minzoom: ZOOM_RANGES.railwayRoutes.min,
-    layout: { visibility: "visible" },
+    layout: { visibility: visible ? "visible" : "none" },
     paint: {
       "line-color": "#000000",
       "line-width": widthExpression || defaultWidth,

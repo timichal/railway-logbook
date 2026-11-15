@@ -7,7 +7,7 @@ type Context = { params: Promise<{ token: string }> };
 /**
  * GET /api/shared/:token/progress?region=&countries=&usage= — a shared map's km
  * and route counts, for its progress box. A 404 once the link is dead, never
- * zeros, which would pass for a map with nothing ridden (as the route tile).
+ * zeros, which would pass for a map with nothing ridden (as the rides).
  *
  * The shared map's reads are route handlers, not server actions, for the reason
  * `api/me/progress` gives. The token is resolved on every call, so switching

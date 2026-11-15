@@ -1,14 +1,14 @@
 /**
- * The web session's cookie, as the route handlers read it: the tile handlers
+ * The web session's cookie, as the route handlers read it: the admin notes tile
  * under `api/tiles`, the signed-in page's reads under `api/me` and the admin
  * page's under `api/admin`. This is the
  * one place they do (`api/session`, which also renews it, reads it itself). Not
  * `authActions.getUser`, which is a `"use server"` module a route handler must
  * not import.
  *
- * Reading the cookie in a GET is safe for the reasons the route tile handler
- * gives: a read that changes nothing, a `SameSite=Lax` cookie, and no CORS
- * headers, so another site can neither send it nor read the answer.
+ * Reading the cookie in a GET is safe: a read that changes nothing, a
+ * `SameSite=Lax` cookie, and no CORS headers, so another site can neither send it
+ * nor read the answer.
  */
 
 import { cookies } from "next/headers";

@@ -23,8 +23,5 @@ export const API_ORIGIN = (process.env.EXPO_PUBLIC_API_ORIGIN ?? DEFAULT_ORIGIN)
 /** The versioned API root (`API.md`). */
 export const API_BASE_URL = `${API_ORIGIN}/api/v1`;
 
-/**
- * Martin, behind Caddy. The route tile coloured by the user's rides is not here but
- * on `API_ORIGIN` itself (`map/tileUrls.ts`).
- */
+/** Martin, behind Caddy: every tile the app draws, the route tile included. */
 export const TILE_BASE_URL = `${API_ORIGIN}/tiles`;

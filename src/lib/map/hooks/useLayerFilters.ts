@@ -7,6 +7,7 @@ import {
   routeLineLayerId,
   SCENIC_LINES_LAYER_ID,
 } from "@/lib/shared/map/layers";
+import type { RouteRides } from "@/lib/shared/map/routeRides";
 import {
   clickBufferFilter,
   scenicLinesFilter,
@@ -28,6 +29,8 @@ import {
  * - Scenic lines: visibility
  * - Closed lines: on every route layer, those not ridden are filtered out unless
  *   "All closed lines" is on (`closedRoutesFilter`)
+ * - The rides themselves: with none known for an owner on the server, every route
+ *   layer is hidden (`useRouteRides`)
  *
  * Layer responsibilities:
  * - `railway_routes` (visible solid line): Regular only. Heritage and Special
@@ -49,8 +52,8 @@ export function useLayerFilters(
   selectedCountries: string[],
   /** "All closed lines". */
   showClosed: boolean,
-  /** An anonymous visitor's ridden routes (see `closedRoutesFilter`); empty otherwise. */
-  localRiddenTrackIds: readonly number[],
+  /** The map owner's rides (`useRouteRides`); null hides the routes. */
+  rides: RouteRides | null,
   /** Apply persisted preferences once the map's layers exist. */
   mapLoaded: boolean,
 ) {
@@ -59,21 +62,23 @@ export function useLayerFilters(
   useEffect(() => {
     const m = map.current;
     if (!m) return;
-    const options = { countries: selectedCountries, showClosed, localRiddenTrackIds };
+    const options = { countries: selectedCountries, showClosed, riddenClosed: rides?.closed };
+    const visibility = (shown: boolean) => (shown && rides !== null ? "visible" : "none");
     for (const { id: type } of usageOptions) {
       const id = routeLineLayerId(type);
       if (m.getLayer(id)) {
-        m.setLayoutProperty(id, "visibility", shownTypes.includes(type) ? "visible" : "none");
+        m.setLayoutProperty(id, "visibility", visibility(shownTypes.includes(type)));
         m.setFilter(id, userRouteLineFilter(type, options));
       }
     }
     if (m.getLayer(ROUTE_CLICK_LAYER_ID)) {
+      m.setLayoutProperty(ROUTE_CLICK_LAYER_ID, "visibility", visibility(true));
       m.setFilter(
         ROUTE_CLICK_LAYER_ID,
         bothFilters(clickBufferFilter(shownTypes), userRoutesFilter(options)),
       );
     }
-  }, [map, shownTypes, selectedCountries, showClosed, localRiddenTrackIds, mapLoaded]);
+  }, [map, shownTypes, selectedCountries, showClosed, rides, mapLoaded]);
 
   // Scenic lines: shown by their toggle, filtered by country as the routes are
   // biome-ignore lint/correctness/useExhaustiveDependencies: mapLoaded is an intentional re-run trigger (apply prefs once layers exist), not a value read inside the effect.

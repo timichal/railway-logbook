@@ -12,8 +12,14 @@ import {
   getNetworkProgressByCountry,
   getRouteSummaries,
 } from "./publicReads";
-import { fetchCoveredStretches, fetchProgress, fetchProgressByCountry } from "./sessionReads";
+import {
+  fetchCoveredStretches,
+  fetchProgress,
+  fetchProgressByCountry,
+  fetchRides,
+} from "./sessionReads";
 import type { UsageType } from "./shared/constants";
+import { provisionalRides, type RouteRide, type RouteRides } from "./shared/map/routeRides";
 import {
   type ProgressByCountry,
   round1,
@@ -27,17 +33,9 @@ import {
   fetchSharedCoveredStretches,
   fetchSharedProgress,
   fetchSharedProgressByCountry,
+  fetchSharedRides,
 } from "./sharedMapReads";
 import { updateUserPreferences as dbUpdateUserPreferences } from "./userPreferencesActions";
-
-/** How one route reads on the map for a localStorage user (see getLocalRouteStatuses). */
-export interface LocalRouteStatus {
-  track_id: number;
-  /** Ridden whole — logged complete, or partial stretches covering all of it. */
-  complete: boolean;
-  /** The route is closed (railway_routes.closed), so a filter must let it through. */
-  closed: boolean;
-}
 
 export interface DataAccess {
   // `shownUsageTypes` narrows the count to the usage types the
@@ -52,19 +50,20 @@ export interface DataAccess {
   getCoveredStretches(): Promise<CoveredStretch[]>;
 
   /**
-   * Visit status of every logged route, for the unauthenticated map to colour
-   * routes with feature-state. Only the localStorage implementation has anything
-   * to say here: the other two read it off the route tile, which the database
-   * fills in per user (`has_complete_trip`).
+   * Every route ridden, for the map's colours (`RouteRide`): the route tile is the
+   * same for everyone, and this is what says whose map it is. A refusal (a session
+   * gone, a share link switched off) is an `ActionError`.
    */
-  getLocalRouteStatuses(): Promise<LocalRouteStatus[]>;
+  getRouteRides(): Promise<RouteRide[]>;
 
   /**
-   * The routes the local log has rides on, read straight from localStorage with
-   * nothing to load: what keeps the visitor's closed rides on the map before the
-   * statuses arrive, or if they never do. Empty for the other two.
+   * What the map may draw before `getRouteRides` answers, or if it can't, read
+   * with nothing to load. For localStorage, every logged route kept on the map
+   * uncoloured (`provisionalRides`). Null for the other two: their map draws no
+   * routes until it knows the owner's rides, since uncoloured they would pass for
+   * a map with nothing ridden.
    */
-  getLocalLoggedTrackIds(): number[];
+  getProvisionalRides(): RouteRides | null;
 
   updateUserPreferences(selectedCountries: string[]): Promise<void>;
 }
@@ -86,9 +85,8 @@ function createDatabaseDataAccess(region: RegionId): DataAccess {
       fetchProgress(region, selectedCountries, shownUsageTypes),
     getProgressByCountry: () => fetchProgressByCountry(region),
     getCoveredStretches: () => fetchCoveredStretches(region),
-    // The route tile already carries this user's visit status
-    getLocalRouteStatuses: async () => [],
-    getLocalLoggedTrackIds: () => [],
+    getRouteRides: () => fetchRides(region),
+    getProvisionalRides: () => null,
     updateUserPreferences: dbUpdateUserPreferences,
   };
 }
@@ -235,22 +233,25 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
       return await getCoveredStretchesFor(ranges.filter((range) => !completed.has(range.track_id)));
     },
 
-    async getLocalRouteStatuses(): Promise<LocalRouteStatus[]> {
+    // Whole or not, and closed or not, need the route list; the most recent
+    // journey is left to the signed-in map's popup
+    async getRouteRides(): Promise<RouteRide[]> {
       const logged = localStore.getLoggedParts();
       if (logged.length === 0) return [];
       const routes = await ensureRoutes();
-      const complete = fullyRiddenTrackIds(routes, logged);
+      const whole = fullyRiddenTrackIds(routes, logged);
       const closed = new Set(routes.filter((route) => route.closed).map((r) => r.track_id));
       return Array.from(new Set(logged.map((part) => part.track_id)), (trackId) => ({
         track_id: trackId,
-        complete: complete.has(trackId),
+        whole: whole.has(trackId),
         closed: closed.has(trackId),
+        date: null,
+        journey_name: null,
       }));
     },
 
-    getLocalLoggedTrackIds(): number[] {
-      return [...new Set(localStore.getLoggedParts().map((part) => part.track_id))];
-    },
+    getProvisionalRides: () =>
+      provisionalRides(localStore.getLoggedParts().map((part) => part.track_id)),
 
     async updateUserPreferences(selectedCountries: string[]): Promise<void> {
       localStore.setPreferences(selectedCountries);
@@ -273,10 +274,9 @@ export function createPublicDataAccess(token: string, region: RegionId): DataAcc
       fetchSharedProgress(token, region, selectedCountries, shownUsageTypes),
     getProgressByCountry: () => fetchSharedProgressByCountry(token, region),
     getCoveredStretches: () => fetchSharedCoveredStretches(token, region),
-    // The route tile is asked for the owner's status, and a visitor has no
-    // local log of their own to overlay on it
-    getLocalRouteStatuses: async () => [],
-    getLocalLoggedTrackIds: () => [],
+    // The owner's, never the visitor's: a visitor's own local log has no place here
+    getRouteRides: () => fetchSharedRides(token, region),
+    getProvisionalRides: () => null,
 
     // The shared view is handed the owner's list by the server component, and
     // has nowhere to change it

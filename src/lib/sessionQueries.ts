@@ -10,9 +10,8 @@
  * `users.password_changed_at`, or if the account no longer exists.
  *
  * The rule is written once, as SQL (`currentAccountIdSql`). `verifyToken` runs it
- * on its own for the cookie, the bearer and the refresh; the tile handlers embed
- * it in the tile query instead, so a tile costs one round trip on the tile pool,
- * as a shared map's already does.
+ * on its own for the cookie, the bearer and the refresh; the admin notes tile
+ * embeds it in the tile query instead, so a tile costs one round trip on its pool.
  */
 
 import { readToken, type TokenClaims, type User } from "./authTokens";

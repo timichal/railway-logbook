@@ -156,7 +156,7 @@ export function setupAdminMapInteractions(
     properties: FeatureProperties,
     feature: maplibreglType.MapGeoJSONFeature,
   ) =>
-    formatRouteBody(properties, routeDetails(Number(feature.id), region), region, {
+    formatRouteBody(properties, routeDetails(Number(feature.id), region), undefined, region, {
       linkRow: true,
     });
   hover.layer(ROUTE_CLICK_LAYER_ID, { buildBody: buildRouteBody });

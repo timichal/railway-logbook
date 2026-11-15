@@ -7,6 +7,7 @@ import {
   routeLinkLabel,
   routeTitle,
 } from "@/lib/shared/map/routeFeature";
+import type { RouteRide } from "@/lib/shared/map/routeRides";
 import type { RegionId } from "@/lib/shared/regions";
 import type { RouteDetails } from "@/lib/shared/types";
 
@@ -159,11 +160,13 @@ const LOADING_TITLE = `<h3 style="font-weight: 700; font-size: 1.05rem; margin: 
  *
  * `linkRow` is off in the touch sheet, which carries a button in its place;
  * `linkHint` says how a mouse opens it where the map supports that. The "most
- * recent" row appears only on a tile coloured by someone's rides — never the admin's.
+ * recent" row is the map owner's `ride`, where it names a journey: never on the
+ * admin map, nor on an anonymous visitor's.
  */
 export function formatRouteBody(
   tileProperties: FeatureProperties,
   details: RouteDetails | undefined,
+  ride: RouteRide | undefined,
   regionId: RegionId,
   { linkRow, linkHint }: { linkRow: boolean; linkHint?: string },
 ): string {
@@ -180,12 +183,12 @@ export function formatRouteBody(
     : "";
   if (link) body += `<div style="${POPUP_ROW_STYLE}">${link}</div>`;
 
-  // `date` and `journey_name` are populated together from the most-recent logged
-  // journey (both NOT NULL in user_journeys), so either both are present or neither is.
-  if (properties.date) {
-    const dateStr = escapeHtml(formatDateOnly(String(properties.date)));
+  // `date` and `journey_name` come together from the most recent logged journey
+  // (both NOT NULL in user_journeys), so either both are present or neither is.
+  if (ride?.date) {
+    const dateStr = escapeHtml(formatDateOnly(ride.date));
     body += POPUP_DIVIDER;
-    body += `<div style="${POPUP_ROW_STYLE} color: var(--color-gray-700);">Most recent: ${dateStr} (${escapeHtml(properties.journey_name)})</div>`;
+    body += `<div style="${POPUP_ROW_STYLE} color: var(--color-gray-700);">Most recent: ${dateStr} (${escapeHtml(ride.journey_name)})</div>`;
   }
 
   return body;

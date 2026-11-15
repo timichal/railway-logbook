@@ -11,7 +11,7 @@
  * **This rule exists twice**: in `isRouteFullyRidden` below, for the
  * unauthenticated map's localStorage log, and as the SQL function
  * `user_fully_ridden_routes` in `database/init/02-vector-tiles.sql`, which both
- * the route tile (the colour on the map) and the progress queries go through.
+ * the rides (the colour on the map) and the progress queries go through.
  * Keep the two in step — the tolerances below are the numbers the SQL hard-codes.
  */
 

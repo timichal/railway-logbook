@@ -6,6 +6,7 @@
  */
 
 import { getNoStore, listParam } from "./fetchJson";
+import type { RouteRide } from "./shared/map/routeRides";
 import type { ProgressByCountry, UserProgress } from "./shared/progress";
 import type { RegionId } from "./shared/regions";
 import type { CoveredStretch } from "./shared/types";
@@ -43,4 +44,9 @@ export function fetchSharedCoveredStretches(
   region: RegionId,
 ): Promise<CoveredStretch[]> {
   return getShared(token, "coverage", { region });
+}
+
+/** Every route the owner has ridden in `region`, for the shared map's colours. */
+export function fetchSharedRides(token: string, region: RegionId): Promise<RouteRide[]> {
+  return getShared(token, "rides", { region });
 }

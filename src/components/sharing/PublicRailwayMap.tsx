@@ -11,8 +11,8 @@ import { useRegion } from "@/lib/regionContext";
 
 interface PublicRailwayMapProps {
   /**
-   * Sharing token from the URL — stands in for a session on every data call,
-   * the route tiles included: they are coloured by the owner whose token it is.
+   * Sharing token from the URL — stands in for a session on every data call, the
+   * rides that colour the routes included: they are the owner's whose token it is.
    */
   token: string;
   /** The owner's country filter, shown exactly as they set it. */
@@ -24,10 +24,11 @@ interface PublicRailwayMapProps {
  * The read-only map behind a share link.
  *
  * Same sources, layers and styling as the interactive map (both build them from
- * `userMapLayers`), coloured by the *owner's* rides: the route tile is asked for
- * with the share token, which the tile handler resolves to its owner on every
- * tile — so switching sharing off stops the tiles too, not just the numbers: an
- * open map stops drawing routes (404s) rather than showing them all unridden.
+ * `userMapLayers`), coloured by the *owner's* rides, asked for with the share
+ * token (`api/shared/<token>/rides`), which the server resolves to its owner on
+ * every call. A dead link draws no routes (a 404) rather than all of them
+ * unridden; switched off while the map is open, it stops the numbers, and the
+ * rides with the next read.
  * What is missing is everything that writes or picks: no sidebar, no route
  * selection, no journey planner, no country controls. Hover popups and the layer
  * toggles stay — they only change what the visitor is looking at.
@@ -41,8 +42,8 @@ export default function PublicRailwayMap({
   const region = useRegion();
   const dataAccess = useMemo(() => createPublicDataAccess(token, region.id), [token, region.id]);
 
-  // Nothing here logs a journey, so the route tiles never need a refresh asked for;
-  // the token and the owner's filter are fixed for the page.
+  // Nothing here logs a journey, so the rides never need a refresh asked for; the
+  // token and the owner's filter are fixed for the page.
   const {
     map,
     mapLoaded,
@@ -51,11 +52,11 @@ export default function PublicRailwayMap({
     progressFailed,
     progressPending,
     refreshProgress,
+    routeRide,
     lineHighlight,
   } = useUserMap(mapContainer, {
     dataAccess,
     selectedCountries,
-    rides: { shareToken: token },
     // The owner's numbers, whatever the visitor has switched off
     progressFollowsLayers: false,
   });
@@ -63,7 +64,7 @@ export default function PublicRailwayMap({
   // Read-only: `onRouteClick` is deliberately omitted, so there is nothing to
   // select. A tap on a route still opens its info sheet — on a phone that is the
   // only way to read one here.
-  useUserMapInteractions(map, mapLoaded, { region: region.id });
+  useUserMapInteractions(map, mapLoaded, { region: region.id, routeRide });
 
   return (
     <div className="h-full w-full relative">

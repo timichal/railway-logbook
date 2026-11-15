@@ -15,8 +15,6 @@ import {
   ACCESS_TOKEN_TTL_SECONDS,
   createAccessToken,
   createRefreshToken,
-  readToken,
-  type TokenClaims,
   type User,
 } from "../authTokens";
 import { verifyToken } from "../sessionQueries";
@@ -36,18 +34,6 @@ async function userFromRequest(request: Request): Promise<User | null> {
   if (!token) return null;
 
   return verifyToken(token, "access");
-}
-
-/**
- * What the request's access token claims, signature checked but **not** held
- * against the account — for a tile handler, which does that in its tile query
- * (see `sessionQueries.ts`). Anything else wants `userFromRequest`.
- */
-export async function bearerClaims(request: Request): Promise<TokenClaims | null> {
-  const token = bearerToken(request);
-  if (!token) return null;
-
-  return readToken(token, "access");
 }
 
 /** The request's user, or a 401. */

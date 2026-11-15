@@ -18,12 +18,11 @@ const MIN_CHECK_INTERVAL_MS = 60 * 1000;
  *
  * `onRechecked` is told of every answered check after the first, i.e. each return
  * to the page at least a minute after the last check, whatever the answer. The
- * user map refetches its route tiles there: they may sit in the browser's cache
- * (`TileCaching`), and meanwhile the log may have changed in another tab or the app,
- * or the session may have been revoked with the cookie unchanged (a password
- * changed on another device), where the refetch is what blanks the map. Not after
- * the first check, which runs as the page loads its tiles anyway, nor after a failed
- * one: refetching with no connection behind it would wipe the routes drawn.
+ * user map re-reads its rides there: meanwhile the log may have changed in another
+ * tab or the app, or the session may have been revoked with the cookie unchanged (a
+ * password changed on another device), where the refused re-read is what blanks
+ * the routes. Not after the first check, which runs as the page loads its rides
+ * anyway, nor after a failed one: there is no connection to re-read with.
  */
 export function useSessionKeepAlive(
   userId: number | null,
