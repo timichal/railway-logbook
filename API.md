@@ -81,6 +81,7 @@ No token. These are the same data the tiles already serve to anyone.
 | `GET /stations?region=&q=`      | `{ stations }` — at most 10, `near_route` only, case, diacritics, spaces and hyphens ignored. Under two characters (so folded) returns none                                                                                                                                                     |
 | `GET /routes/track-ids?region=` | `{ trackIds }` — a few thousand integers, for telling which locally-held journeys belong to the region on screen                                                                                                                                                                                |
 | `POST /routes/metadata`         | `{ trackIds }` → `{ routes }` without geometry, `name`, `other_names` (the other lines sharing the route, a JSON array) and `link_name` (null for "Website") included. What a tapped route's sheet says (the route tile carries no text). A POST for a read because the id list is the argument |
+| `GET /routes/tile-version`      | `{ version }` — what the route tile URL carries now (see "Route tiles"). `no-store`                                                                                                                                                                                                             |
 | `POST /coverage/stretches`      | `{ ranges: [{ track_id, covered_start, covered_end }] }` → `{ stretches }` — fraction ranges cut into drawable geometry, for journeys held on the device. Validated and capped at 2000                                                                                                          |
 
 ## The user's own data
@@ -210,15 +211,19 @@ it is `null` when no path was found.
 
 ## Route tiles
 
-Not under `/api/v1`: the route tile is Martin's, `GET /tiles/railway_routes_tile/{z}/{x}/{y}`,
-the same for everyone and sent with no credential. `?selected_countries=["CZ","SK"]`
-filters it to routes with both ends in those countries. The web map no longer sends
-it (it filters by country on the client, so its tile URL doesn't change with the
-ticked countries); the parameter stays until the app does the same.
+Not under `/api/v1`: the route tile is Martin's, the same for everyone and sent with no
+credential. The user maps, the app's included, draw it from
+`GET /tiles/railway_routes_tile_versioned/{z}/{x}/{y}?v=<version>`, served `immutable` and
+cached by Martin under the raw query string, so send `v` and nothing else. The version
+comes from `GET /routes/tile-version` and moves with every change to the tile, so a URL is
+never stale. Keep the last one on the device and start from it (its tiles are the ones
+cached), and read it again on launch and on a return to the foreground. **Never put any
+other `v` on the versioned source**: its tiles would be held for a year. With no version at
+all, use the uncached `GET /tiles/railway_routes_tile/{z}/{x}/{y}`.
 
-The web user maps draw the same tile from `GET /tiles/railway_routes_tile_versioned/{z}/{x}/{y}?v=<version>`,
-served `immutable` and cached by Martin, with the version from the server render. The API
-doesn't expose that version yet, so the app stays on the uncached URL.
+Filter by country on the layers, from the feature's `start_country` and `end_country`
+(both ends in the list, `countryFilter`). The uncached tile still takes
+`?selected_countries=["CZ","SK"]`, for app builds from before that.
 
 A route feature carries its id (`track_id`, the feature id) and what the layers
 style and filter by (`usage_type`, `line_class`, `start_country`, `end_country`,

@@ -52,10 +52,10 @@ import {
   REGULAR_ROUTE_LAYER_ID,
 } from "@shared/map/layers";
 import {
-  closedRoutesFilter,
   scenicLinesFilter,
   shownUsageTypes,
   userRouteLayerConfigs,
+  userRoutesFilter,
 } from "@shared/map/userMapLayers";
 import { REGIONS, type RegionId } from "@shared/regions";
 import type { Station } from "@shared/types";
@@ -91,6 +91,7 @@ import {
 } from "@/map/tileUrls";
 import { useBasemapStyle } from "@/map/useBasemapStyle";
 import { useRides } from "@/map/useRides";
+import { useRoutesTileVersion } from "@/map/useRoutesTileVersion";
 import { useRegion } from "@/region/RegionContext";
 import { useTheme } from "@/theme/ThemeContext";
 
@@ -133,19 +134,27 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   // The user's rides, coloured and ordered over Martin's tile by id. None yet (or
   // none to be had): no route lines, rather than every route drawn unridden.
   const rides = useRides();
-  // Built once per scheme, closed switch and rides rather than on every render,
-  // which would hand each <Layer> a new paint object. The closed lines the user
-  // rode stay whatever the switch says (closedRoutesFilter)
+  // Puts the route source on Martin's cached tile; null until it is known
+  const tileVersion = useRoutesTileVersion();
+  // Built once per scheme, countries, closed switch and rides rather than on every
+  // render, which would hand each <Layer> a new paint object. The country filter is
+  // the layers', as on the web, so the tile URL is the same for everyone and Martin
+  // caches one copy. The closed lines the user rode stay whatever the switch says
+  // (closedRoutesFilter)
   const routeLayers = useMemo(() => {
     if (!rides) return null;
     const configs = userRouteLayerConfigs(theme, undefined, rides);
-    const routesFilter = closedRoutesFilter(showClosed, rides.closed);
+    const routesFilter = userRoutesFilter({
+      countries,
+      showClosed,
+      riddenClosed: rides.closed,
+    });
     return {
       route: createRouteLineLayer(0, { ...configs.route, routesFilter }),
       heritage: createRouteLineLayer(1, { ...configs.heritage, visible: true, routesFilter }),
       special: createRouteLineLayer(2, { ...configs.special, visible: true, routesFilter }),
     };
-  }, [theme, showClosed, rides]);
+  }, [theme, countries, showClosed, rides]);
   // Read by a press, which must not be rebuilt whenever the rides change
   const ridesRef = useRef(rides);
   ridesRef.current = rides;
@@ -277,8 +286,13 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
     [],
   );
 
-  // Martin's tile, the same for everyone: the colours are the rides, laid over it
-  const routesUrl = useMemo(() => routesTileUrl({ selectedCountries: countries }), [countries]);
+  // Martin's tile, the same for everyone: the colours are the rides and the country
+  // filter the layers, laid over it. Under its version (cached), or the uncached one
+  // while there is no version to be had
+  const routesUrl = useMemo(() => {
+    if (tileVersion === null) return null;
+    return routesTileUrl(tileVersion === undefined ? {} : { version: tileVersion });
+  }, [tileVersion]);
 
   const selectedIds = useMemo(() => selected.map((s) => s.route.trackId), [selected]);
   // Only while the route is still ticked partial: unticking claims the whole route,
@@ -390,41 +404,45 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
             source re-adds its layers (as do the rides, arriving after the map), and
             one without an anchor would be appended to the top, over the stations.
             Under the coverage overlay is where they belong, and it is mounted with
-            the map. */}
-        <VectorSource
-          key={routesUrl}
-          id="railway_routes"
-          tiles={[routesUrl]}
-          minzoom={ZOOM_RANGES.railwayRoutes.min}
-          maxzoom={ZOOM_RANGES.railwayRoutes.max}
-          onPress={takeRoutePress}
-        >
-          {routeLayers ? <Layer {...routeLayers.route} beforeId={COVERAGE_LAYER_IDS[0]} /> : null}
-          {routeLayers && showHeritage ? (
-            <Layer {...routeLayers.heritage} beforeId={COVERAGE_LAYER_IDS[0]} />
-          ) : null}
-          {routeLayers && showSpecial ? (
-            <Layer {...routeLayers.special} beforeId={COVERAGE_LAYER_IDS[0]} />
-          ) : null}
-          {/* What the logbook or the planner pointed the map at — gold or orange. */}
-          <HighlightLayers
-            baseId="highlighted_routes"
-            trackIds={highlighted.trackIds}
-            partials={highlighted.partials}
-            color={highlighted.color}
-            beforeId="stations"
-          />
-          {/* The Route Logger selection, in the orange the web app uses for it.
-              `beforeId` rather than mounting order: a set that appears after the map
-              has loaded is otherwise appended to the very top, over the labels. */}
-          <HighlightLayers
-            baseId="selected_routes_highlight"
-            trackIds={selectedIds}
-            partials={selectedPartials}
-            color={HIGHLIGHT_COLORS.view}
-            beforeId="stations"
-          />
-        </VectorSource>
+            the map. Not mounted at all until the tile version is known
+            (`useRoutesTileVersion`): the uncached URL first would fetch every tile
+            twice. */}
+        {routesUrl ? (
+          <VectorSource
+            key={routesUrl}
+            id="railway_routes"
+            tiles={[routesUrl]}
+            minzoom={ZOOM_RANGES.railwayRoutes.min}
+            maxzoom={ZOOM_RANGES.railwayRoutes.max}
+            onPress={takeRoutePress}
+          >
+            {routeLayers ? <Layer {...routeLayers.route} beforeId={COVERAGE_LAYER_IDS[0]} /> : null}
+            {routeLayers && showHeritage ? (
+              <Layer {...routeLayers.heritage} beforeId={COVERAGE_LAYER_IDS[0]} />
+            ) : null}
+            {routeLayers && showSpecial ? (
+              <Layer {...routeLayers.special} beforeId={COVERAGE_LAYER_IDS[0]} />
+            ) : null}
+            {/* What the logbook or the planner pointed the map at — gold or orange. */}
+            <HighlightLayers
+              baseId="highlighted_routes"
+              trackIds={highlighted.trackIds}
+              partials={highlighted.partials}
+              color={highlighted.color}
+              beforeId="stations"
+            />
+            {/* The Route Logger selection, in the orange the web app uses for it.
+                `beforeId` rather than mounting order: a set that appears after the map
+                has loaded is otherwise appended to the very top, over the labels. */}
+            <HighlightLayers
+              baseId="selected_routes_highlight"
+              trackIds={selectedIds}
+              partials={selectedPartials}
+              color={HIGHLIGHT_COLORS.view}
+              beforeId="stations"
+            />
+          </VectorSource>
+        ) : null}
 
         {/* The stretches already ridden of routes not yet finished, in the visited
             green over their own partial-orange line. Mounted here, with the map, so

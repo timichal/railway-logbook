@@ -9,7 +9,6 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 The web user maps cache their route tiles since 2026-11-15: `railway_routes_tile_versioned` under `v=<routesTileVersion>`, served `immutable` and held in Martin's memory cache (128MB, `martin/configuration.yml`). See "Vector tiles" in CLAUDE.md. Left:
 
 - **Measure it on the server** after a week: `pg_stat_statements` calls and mean time of `railway_routes_tile` against the week before (the reload of a page used to run every tile's SQL again, because a 304 still computes the tile), and the `tiles` container's memory (`docker stats`) against the 128MB cache. Resize `cache.size_mb` from that.
-- **The native app.** Expose the version in the API (alongside `GET /api/v1/rides`, or a small `GET /api/v1/routes/version`), and have the app send `railwayRoutesTileUrl(…, { version, selectedCountries })`, refetching the version on foreground. MapLibre Native's ambient cache honours `Cache-Control`. Old builds stay on the uncached source, so it stays published.
 - **Scenic lines and public notes**, if their tiles show up in `pg_stat_statements`: a `data_versions` row and a `bump_data_version` trigger for each table (a migration script, since `01-schema.sql` isn't re-run), then a versioned source each, as for the routes.
 
 ## Pipeline and deploy

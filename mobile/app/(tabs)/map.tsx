@@ -6,8 +6,8 @@
  * token (`map/useRides.ts`), so the signed-in user is simply whoever the request
  * says. The country list is `useEffectiveCountries`
  * — the stored preference where the region allows a filter, the region's own list
- * where it does not — and until it arrives there is nothing to draw, since a tile
- * requested without it would answer for every country and then be replaced.
+ * where it does not — and until it arrives there is nothing to draw, since the route
+ * layers' country filter is made from it.
  *
  * The safe-area inset is deliberately not applied to the map: a map should run under
  * the status bar. The progress box is positioned inside `RailwayMap` against the map's

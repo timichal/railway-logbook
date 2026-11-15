@@ -26,7 +26,10 @@ import { TILE_BASE_URL } from "@/config";
 
 export { ZOOM_RANGES };
 
-/** The route tile, filtered by country on the server (`selected_countries`). */
+/**
+ * The route tile, the same for everyone: the country filter is the layers'
+ * (`userRoutesFilter`). With a `version`, Martin's cached source (`useRoutesTileVersion`).
+ */
 export function routesTileUrl(options: RailwayRoutesSourceOptions): string {
   return railwayRoutesTileUrl(TILE_BASE_URL, options);
 }

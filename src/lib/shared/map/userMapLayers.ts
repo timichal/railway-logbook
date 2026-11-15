@@ -161,8 +161,7 @@ export function closedRoutesFilter(
 
 interface UserRoutesFilterOptions {
   /**
-   * The countries the map is filtered to (`countryFilter`). Omitted, every country:
-   * the native app's tile is still filtered on the server (`selected_countries`).
+   * The countries the map is filtered to (`countryFilter`). Omitted, every country.
    */
   countries?: readonly string[];
   /** "All closed lines" (`closedRoutesFilter`). */

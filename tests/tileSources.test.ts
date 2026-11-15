@@ -1,7 +1,7 @@
 /**
  * The route tile URL (`shared/map/tileSources.ts`). Only a URL carrying the tile's
  * version may reach the source Martin serves `immutable`, and Martin caches it
- * under the raw query string, so the parameters' order is part of the contract.
+ * under the raw query string, so the URL carries the version and nothing else.
  */
 
 import assert from "node:assert/strict";
@@ -14,13 +14,6 @@ test("a versioned route tile URL names the cached source", () => {
   assert.equal(
     railwayRoutesTileUrl(BASE, { version: "0123abcd" }),
     `${BASE}/railway_routes_tile_versioned/{z}/{x}/{y}?v=0123abcd`,
-  );
-});
-
-test("the version comes before the country filter", () => {
-  assert.equal(
-    railwayRoutesTileUrl(BASE, { version: "0123abcd", selectedCountries: ["CZ", "SK"] }),
-    `${BASE}/railway_routes_tile_versioned/{z}/{x}/{y}?v=0123abcd&selected_countries=${encodeURIComponent('["CZ","SK"]')}`,
   );
 });
 

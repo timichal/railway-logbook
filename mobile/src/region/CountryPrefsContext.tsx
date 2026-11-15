@@ -3,8 +3,8 @@
  * the whole app.
  *
  * A context rather than a fetch per screen, because two screens read it and one of
- * them writes it: the map turns it into the route tile's `selected_countries`
- * parameter and into the numbers over the corner, and the Countries screen is a tab
+ * them writes it: the map turns it into its route layers' country filter and into
+ * the numbers over the corner, and the Countries screen is a tab
  * away changing it. Two hooks each fetching on mount would leave the map showing the
  * old set until something remounted it.
  *

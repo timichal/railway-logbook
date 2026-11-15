@@ -93,6 +93,19 @@ export async function routeMetadata(trackIds: number[]): Promise<RailwayRoute[]>
 }
 
 /**
+ * The version the route tile URL carries now, for Martin's cached route source
+ * (`useRoutesTileVersion`). It moves with every change to the tile, so a URL built
+ * from it is never served stale.
+ */
+export async function routesTileVersion(signal?: AbortSignal): Promise<string> {
+  const { version } = await request<{ version: string }>("/routes/tile-version", {
+    auth: false,
+    signal,
+  });
+  return version;
+}
+
+/**
  * The journey planner. **"No path found" is a 200 with an `error` string**, not a
  * failure: the request was fine, the network simply doesn't connect those two
  * stations by the routes searched, and that belongs next to the form rather than in a
