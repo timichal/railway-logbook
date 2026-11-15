@@ -1,7 +1,9 @@
 import { once } from "node:events";
 import { createWriteStream, renameSync, rmSync } from "node:fs";
 import { transliterate } from "transliteration";
+import { countryAt } from "../lib/countryUtils";
 import type { Feature } from "../lib/shared/types";
+import { romanizeName } from "./lib/cyrillicRomanization";
 import {
   createFeatureStreamStats,
   describeFeatureStream,
@@ -22,25 +24,12 @@ if (args.length !== 1 || !args[0].toLowerCase().endsWith(".geojson")) {
 const outputFilePath = args[0];
 
 /**
- * Transliterates station names from Cyrillic and Greek to Latin characters.
- * Preserves Latin characters with diacritics (e.g., Kadaň-Prunéřov).
- * @param name - The station name to potentially transliterate
- * @returns The transliterated name (or original if already Latin)
+ * Romanizes a Cyrillic or Greek station name; a Latin one (diacritics and all,
+ * e.g. Kadaň-Prunéřov) passes through. Cyrillic goes by the system of the
+ * country the station stands in (`romanizeName`).
  */
-function transliterateName(name: string | undefined): string | undefined {
-  if (!name) return name;
-
-  // Check if the name contains Cyrillic or Greek characters
-  // Cyrillic: U+0400-U+04FF
-  // Greek: U+0370-U+03FF
-  const hasCyrillicOrGreek = /[\u0400-\u04FF\u0370-\u03FF]/.test(name);
-
-  if (hasCyrillicOrGreek) {
-    // Transliterate the name (preserves Latin characters with diacritics)
-    return transliterate(name);
-  }
-
-  return name;
+function transliterateName(name: string | undefined, point: [number, number]): string | undefined {
+  return name && romanizeName(name, () => countryAt(point));
 }
 
 /** Han (kanji), hiragana, katakana - the scripts Japanese station names use. */
@@ -80,10 +69,14 @@ function romanizedName(properties: Feature["properties"]): string | undefined {
  * properly and otherwise leaves the original in place: a wrong-language
  * romanization is harder to recognize than the kanji itself.
  *
- * Everything else keeps the previous behaviour - Cyrillic and Greek are
- * transliterated, Latin (diacritics and all) passes through untouched.
+ * Everything else goes through transliterateName: Cyrillic and Greek are
+ * romanized, Latin passes through untouched. `point` is where the station
+ * stands, which picks the Cyrillic romanization.
  */
-function resolveStationName(properties: Feature["properties"]): string | undefined {
+function resolveStationName(
+  properties: Feature["properties"],
+  point: [number, number],
+): string | undefined {
   const name = properties.name;
   const romanized = romanizedName(properties);
 
@@ -98,7 +91,7 @@ function resolveStationName(properties: Feature["properties"]): string | undefin
 
   if (!name && romanized) return romanized;
 
-  return transliterateName(name);
+  return transliterateName(name, point);
 }
 
 /**
@@ -243,7 +236,7 @@ function collectAreaStation(feat: Feature, collected: Map<number, AreaStation>):
     id,
     // Resolved up front, so the name-based dedup below compares the same form
     // of the name that node stations were written out under.
-    name: resolveStationName(feat.properties),
+    name: resolveStationName(feat.properties, [lon, lat]),
     railway: feat.properties.railway as string,
     lon,
     lat,
@@ -276,7 +269,7 @@ function pruneFeatureProperties(feat: Feature): Feature {
       ...feat,
       properties: {
         "@id": feat.properties["@id"],
-        name: resolveStationName(feat.properties),
+        name: resolveStationName(feat.properties, feat.geometry.coordinates as [number, number]),
         railway: feat.properties.railway,
       },
     };

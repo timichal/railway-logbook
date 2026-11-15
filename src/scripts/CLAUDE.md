@@ -17,7 +17,7 @@ Schema changes and data transforms are a TS script here: import `pool` from `../
 
 - **All-or-nothing** (`loadStationsAndParts`). Every file is validated first (present, non-empty, ending in `]}`), then the clear and reload run in one transaction. Use `DELETE`, not `TRUNCATE`, which would block every tile query for the length of the import.
 - **GeoJSON is streamed** through `streamFeatures` (`lib/geojsonFeatureStream.ts`), which tracks string and escape state, because OSM tag values contain braces. Parse failures and truncated input are counted and raised, never skipped.
-- Station names are resolved in `pruneData.ts`. CJK prefers `name:ja_rm`, `name:ja-Latn`, then `name:en`; Cyrillic/Greek are transliterated. Stations mapped as areas become their centroid under a **negated id** (node and way ids overlap). One is dropped when a same-name station node sits within 150m.
+- Station names are resolved in `pruneData.ts`. CJK prefers `name:ja_rm`, `name:ja-Latn`, then `name:en`; Cyrillic/Greek are transliterated. Cyrillic goes by the station's country (`lib/cyrillicRomanization.ts`), each by its own system: Bulgarian, Serbian (also Montenegro, Bosnia, Kosovo), Macedonian, Ukrainian, Belarusian, and Russian everywhere else. A name with a letter its country's alphabet lacks goes by a language whose alphabet has it. The systems were checked against OSM's `name:en`/`int_name`/`name:*-Latn` (agreeing on 80–100%), but those tags are not read: they are often English translations ("Sofia Central Station"), typos or another language's spelling. Stations mapped as areas become their centroid under a **negated id** (node and way ids overlap). One is dropped when a same-name station node sits within 150m.
 
 ## Server data (`serverData.ts`)
 
