@@ -153,6 +153,7 @@ export const SUPPORTED_COUNTRIES = [
   { code: "FI", name: "Finland" },
   { code: "FR", name: "France" },
   { code: "DE", name: "Germany" },
+  { code: "HR", name: "Croatia" },
   { code: "HU", name: "Hungary" },
   { code: "IT", name: "Italy" },
   { code: "LV", name: "Latvia" },
