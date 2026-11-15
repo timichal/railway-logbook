@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import PublicMapLayout from "@/components/sharing/PublicMapLayout";
 import { publicMapOwner } from "@/lib/publicMapQueries";
+import { routesTileVersion } from "@/lib/routesTileVersion";
 import { isRegionId, REGION_COOKIE, regionIdOrDefault } from "@/lib/shared/regions";
 import { btn } from "@/lib/ui/buttonStyles";
 
@@ -23,7 +24,8 @@ export default async function SharedMapPage({
 }) {
   const { token } = await params;
   const { view } = await searchParams;
-  const owner = await publicMapOwner(token);
+  // The route tile version per render, as on the main page, read alongside
+  const [owner, tileVersion] = await Promise.all([publicMapOwner(token), routesTileVersion()]);
 
   // `?view=` is what the sharer was looking at when they copied the link, so it
   // wins: a shared map is shared as a view of something, and the visitor's own
@@ -53,6 +55,7 @@ export default async function SharedMapPage({
         token={token}
         ownerName={owner.displayName}
         selectedCountries={owner.selectedCountries}
+        routesTileVersion={tileVersion}
         initialRegion={initialRegion}
       />
     </div>

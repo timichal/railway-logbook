@@ -5,12 +5,15 @@ import {
   createPublicStationsSource,
   createRailwayRoutesSource,
   createScenicLinesSource,
+  railwayRoutesTileUrl,
 } from "@/lib/map";
 import { useCoverageOverlay } from "@/lib/map/hooks/useCoverageOverlay";
 import { useLayerFilters } from "@/lib/map/hooks/useLayerFilters";
 import { useLineSearchHighlight } from "@/lib/map/hooks/useLineSearchHighlight";
 import { useMapLibre } from "@/lib/map/hooks/useMapLibre";
 import { useRouteRides } from "@/lib/map/hooks/useRouteRides";
+import { useRoutesTileVersion } from "@/lib/map/hooks/useRoutesTileVersion";
+import { useSourceTileRefresh } from "@/lib/map/hooks/useSourceTileRefresh";
 import { useLayerPrefs } from "@/lib/map/layerPrefsContext";
 import { useRegion } from "@/lib/regionContext";
 import { type UsageType, usageOptions } from "@/lib/shared/constants";
@@ -36,6 +39,13 @@ interface UseUserMapOptions {
   dataAccess: DataAccess;
   /** The country filter as stored, before a single-country region pins it. */
   selectedCountries: string[];
+  /**
+   * The route tile's version, from the server render (`routesTileVersion`). The
+   * tiles are fetched under it and held for a year. Checked against the server's
+   * as the page mounts and comes back into view (`useRoutesTileVersion`), since a
+   * page restored from the history carries the one it was first rendered with.
+   */
+  routesTileVersion: string;
   /** Bumped when journeys change, to refetch the ridden-stretch overlay. */
   coverageVersion?: number;
   /** Stands the searched-line band down — see `useLineSearchHighlight`. */
@@ -60,6 +70,7 @@ export function useUserMap(
   {
     dataAccess,
     selectedCountries,
+    routesTileVersion,
     coverageVersion = 0,
     lineHighlightHidden = false,
     progressFollowsLayers = true,
@@ -85,8 +96,8 @@ export function useUserMap(
   const theme = useResolvedTheme();
 
   // The owner's rides, which colour and order the routes and keep their closed
-  // ones on the map. The route tile is Martin's, the same for everyone and never
-  // refetched for them: a login, a logout or a logged ride only restyle the layers
+  // ones on the map. The route tile is Martin's, the same for everyone, cached
+  // under its version and never refetched for them: a login, a logout or a logged ride only restyle the layers
   // (below), from the tiles already loaded. Asked for at once, so they are usually
   // here when the map is built (read through the ref, since `layers` runs in an
   // earlier render's closure).
@@ -94,12 +105,19 @@ export function useUserMap(
   const ridesRef = useRef(rides);
   ridesRef.current = rides;
 
+  // The route tile's version: the rendered one until the server says it moved,
+  // which re-points the route source (below). Read through the ref when the map is
+  // built, so a map rebuilt later starts from the newest.
+  const tileVersion = useRoutesTileVersion(routesTileVersion);
+  const tileVersionRef = useRef(tileVersion);
+  tileVersionRef.current = tileVersion;
+
   const { map, mapLoaded, mapStatus } = useMapLibre(
     mapContainer,
     {
       region: region.id,
       sources: () => ({
-        railway_routes: createRailwayRoutesSource(),
+        railway_routes: routesSource(tileVersionRef.current),
         stations: createPublicStationsSource(),
         scenic_lines: createScenicLinesSource(),
         public_notes: createPublicNotesSource(),
@@ -110,6 +128,22 @@ export function useUserMap(
     },
     [region.id],
   );
+
+  // A new version re-points the route source at its URL, in place: the rides,
+  // filters and highlights on the layers stay
+  const routesSourceBuilt = useSourceTileRefresh({
+    map,
+    mapLoaded,
+    sourceId: "railway_routes",
+    signal: tileVersion,
+    tileUrl: () => railwayRoutesTileUrl({ version: tileVersionRef.current }),
+  });
+  // Recorded as built, so a map built after a version change isn't refreshed to
+  // the same URL on load
+  function routesSource(version: string) {
+    routesSourceBuilt(version);
+    return createRailwayRoutesSource({ version });
+  }
 
   // A change of rides restyles the route lines in place. MapLibre compares each
   // value with the one it holds, so a re-run with the same rides costs nothing.

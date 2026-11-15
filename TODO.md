@@ -4,16 +4,13 @@ Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coa
 
 **Where to measure.** The server is small (2 vCPU / 4GB, see `osmium-scripts/CLAUDE.md`). The dev machine has plenty of cores and disk, so pipeline measurements (prepare timings, extract sizes, changed-part counts, recalculation runs) go there, against the local Docker database and a local `data/` copy. Only sizing decisions (memory, `shared_buffers`, concurrency) need re-checking against the server's limits.
 
-## Cache the route tiles
+## Cache the route tiles: what is left
 
-The route tile is Martin's and the same for everyone since 2026-11-15 (the rides come as a list, `src/lib/shared/map/routeRides.ts`), so it can be cached. It isn't yet: Martin answers with an ETag and no `Cache-Control`, and runs with `cache_size_mb: 0` (`martin/configuration.yml`).
+The web user maps cache their route tiles since 2026-11-15: `railway_routes_tile_versioned` under `v=<routesTileVersion>`, served `immutable` and held in Martin's memory cache (128MB, `martin/configuration.yml`). See "Vector tiles" in CLAUDE.md. Left:
 
-- **Proposal:**
-  - Put the routes version in the route tile URL (`routesFingerprint`, the `data_versions` counter), so a changed route is a new URL. The web page needs it at first paint (from the server render, beside the region), and the native app from the API.
-  - Serve tiles that carry it with `Cache-Control: public, max-age=31536000, immutable` (Caddy, on `/tiles/railway_routes_tile/*` with a `v`), cacheable by browsers, Caddy or a CDN. Raise Martin's `cache_size_mb` above 0, sized against the 4GB server.
-  - Add `data_versions` rows and triggers for `scenic_lines` and `admin_notes` if their tiles want the same.
-- **What must still hold:** an admin's route save shows on the user map at the next page load at the latest; the admin map keeps refetching its own tiles after a save (`useSourceTileRefresh`).
-- **Measure first:** how often a page load refetches tiles it already fetched (browser devtools, a few pans and a reload), and Martin's tile times on the server from `pg_stat_statements`.
+- **Measure it on the server** after a week: `pg_stat_statements` calls and mean time of `railway_routes_tile` against the week before (the reload of a page used to run every tile's SQL again, because a 304 still computes the tile), and the `tiles` container's memory (`docker stats`) against the 128MB cache. Resize `cache.size_mb` from that.
+- **The native app.** Expose the version in the API (alongside `GET /api/v1/rides`, or a small `GET /api/v1/routes/version`), and have the app send `railwayRoutesTileUrl(…, { version, selectedCountries })`, refetching the version on foreground. MapLibre Native's ambient cache honours `Cache-Control`. Old builds stay on the uncached source, so it stays published.
+- **Scenic lines and public notes**, if their tiles show up in `pg_stat_statements`: a `data_versions` row and a `bump_data_version` trigger for each table (a migration script, since `01-schema.sql` isn't re-run), then a versioned source each, as for the routes.
 
 ## Pipeline and deploy
 

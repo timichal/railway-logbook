@@ -21,6 +21,8 @@ interface PublicMapLayoutProps {
   token: string;
   ownerName: string;
   selectedCountries: string[];
+  /** The route tile's version for this page (`routesTileVersion`, `useUserMap`). */
+  routesTileVersion: string;
   initialRegion: RegionId;
 }
 
@@ -33,6 +35,7 @@ export default function PublicMapLayout({
   token,
   ownerName,
   selectedCountries,
+  routesTileVersion,
   initialRegion,
 }: PublicMapLayoutProps) {
   const isMobile = useIsMobile();
@@ -73,6 +76,7 @@ export default function PublicMapLayout({
           <PublicRailwayMap
             token={token}
             selectedCountries={selectedCountries}
+            routesTileVersion={routesTileVersion}
             isMobile={isMobile}
           />
         </main>

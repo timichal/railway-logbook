@@ -61,6 +61,8 @@ interface MainLayoutProps {
   user: User | null;
   onLogout: () => void;
   initialSelectedCountries: string[];
+  /** The route tile's version for this page (`routesTileVersion`, `useUserMap`). */
+  routesTileVersion: string;
   initialRegion: RegionId;
 }
 
@@ -80,6 +82,7 @@ function MainPage({
   user,
   onLogout,
   initialSelectedCountries,
+  routesTileVersion,
 }: Omit<MainLayoutProps, "initialRegion">) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("routes");
   // null = closed. A view name opens the menu straight onto it (the navbar's Sign
@@ -157,6 +160,7 @@ function MainPage({
           className="w-full h-full"
           user={user}
           initialSelectedCountries={initialSelectedCountries}
+          routesTileVersion={routesTileVersion}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           sidebarWidth={sidebarWidth}

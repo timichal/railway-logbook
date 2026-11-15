@@ -15,7 +15,7 @@ This folder is shared with the native app, so a decision about what the map draw
 - Dark mode: the layers chosen to stand out against the basemap follow the scheme. That means stations (`COLORS.stationsDark`) and the user map's visit states (`routeColors(theme)` through `userRouteLayerConfigs(theme)`: three hues, with highspeed lighter rather than darker). The admin map keeps the light palette. Popup badges carry a `dark` pair.
 - Zoom ranges: `ZOOM_RANGES` in `zoomRanges.ts`. Its header lists what else must match.
 - **The route tile carries no text and no rides**, only what the layers style and filter by. A popup's or a click's names, note, tags, link and length are read by `track_id`: on the web from `routeDetails.ts` (one `GET /api/route-details` per region, preloaded as the interactions attach; a popup opened before it arrives says "Loading…" and is rebuilt through `hover.refresh`), in the native app from `POST /api/v1/routes/metadata` on the tap. Don't add text back to `railway_routes_tile`: it was over half of a low-zoom tile's bytes and time.
-- Tile URL templates (`tileSources.ts`) take the tile host as an argument. Query strings are built by hand, for RN.
+- Tile URL templates (`tileSources.ts`) take the tile host as an argument. Query strings are built by hand, for RN, in a fixed order: Martin caches the versioned route tile under the raw query string. `railwayRoutesTileUrl` with a `version` names the cached source (`railway_routes_tile_versioned`), without one the uncached source. Tested in `tests/tileSources.test.ts`.
 
 ## Basemap (`basemap.ts`)
 

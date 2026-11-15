@@ -14,6 +14,11 @@ postgres:
   # We explicitly define our tile sources below
   auto_publish: false
 
+  # No source is kept in Martin's memory cache unless it says so. They answer from
+  # tables that change under them (a route save moves near_route, a note save the
+  # notes), and the cache would serve the old tile until evicted.
+  cache: disable
+
   # Function sources - PostgreSQL functions that generate vector tiles
   functions:
     # Railway parts (raw OSM segments)
@@ -36,6 +41,27 @@ postgres:
       function: railway_routes_tile
       minzoom: 4
       maxzoom: 18
+    # The same function under a URL that carries its version (`v`, from
+    # src/lib/routesTileVersion.ts), which moves with every route write and every
+    # change to the tile's SQL. So one URL is always the same tile, served
+    # immutable and kept in Martin's memory cache. That cache is keyed on the raw
+    # query string, which the clients build in one fixed order (tileSources.ts).
+    # Only a URL with a current version may come here; the admin map and the
+    # native app still use the uncached source above. Martin warns at startup that
+    # two sources run one function, which is intended.
+    railway_routes_tile_versioned:
+      schema: public
+      function: railway_routes_tile
+      minzoom: 4
+      maxzoom: 18
+      cache_control: "public, max-age=31536000, immutable"
+      # Martin keeps only z4-z12: the low-zoom tiles every page load asks for and
+      # that cost the most to draw. The many small high-zoom tiles one user pans
+      # through would otherwise push them out of the LRU. The browser keeps every
+      # zoom (cache_control).
+      cache:
+        minzoom: 4
+        maxzoom: 12
 
     # Stations (point features) — all of them, admin map
     stations_tile:
@@ -70,8 +96,13 @@ postgres:
       minzoom: 4
       maxzoom: 18
       # This function accepts z, x, y parameters
-# Cache configuration - disable caching for dynamic data
-cache_size_mb: 0
+# Martin's memory cache, for the one source that opts in above
+# (railway_routes_tile_versioned). Sized for the 4GB server next to Postgres
+# (shared_buffers=1GB) and Node. Every tile is weighed by its bytes, and the
+# tiles of an old version age out by LRU.
+cache:
+  size_mb: 128
+  tile_size_mb: 128
 
 # Server configuration
 listen_addresses: "0.0.0.0:3000"

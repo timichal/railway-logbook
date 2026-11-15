@@ -216,6 +216,10 @@ filters it to routes with both ends in those countries. The web map no longer se
 it (it filters by country on the client, so its tile URL doesn't change with the
 ticked countries); the parameter stays until the app does the same.
 
+The web user maps draw the same tile from `GET /tiles/railway_routes_tile_versioned/{z}/{x}/{y}?v=<version>`,
+served `immutable` and cached by Martin, with the version from the server render. The API
+doesn't expose that version yet, so the app stays on the uncached URL.
+
 A route feature carries its id (`track_id`, the feature id) and what the layers
 style and filter by (`usage_type`, `line_class`, `start_country`, `end_country`,
 `is_valid`, `under_repair`, `closed`). **No text**: a tapped route's names, note,

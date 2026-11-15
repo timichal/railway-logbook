@@ -64,6 +64,8 @@ interface RailwayMapProps {
   className?: string;
   user: User | null;
   initialSelectedCountries: string[];
+  /** The route tile's version for this page (`routesTileVersion`, `useUserMap`). */
+  routesTileVersion: string;
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   sidebarWidth: string;
@@ -92,6 +94,7 @@ export default function RailwayMap({
   className = "",
   user,
   initialSelectedCountries,
+  routesTileVersion,
   activeTab,
   setActiveTab,
   sidebarWidth,
@@ -219,6 +222,7 @@ export default function RailwayMap({
   } = useUserMap(mapContainer, {
     dataAccess,
     selectedCountries,
+    routesTileVersion,
     coverageVersion,
     lineHighlightHidden: !showFurniture,
   });

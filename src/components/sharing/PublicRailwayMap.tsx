@@ -17,6 +17,8 @@ interface PublicRailwayMapProps {
   token: string;
   /** The owner's country filter, shown exactly as they set it. */
   selectedCountries: string[];
+  /** The route tile's version for this page (`routesTileVersion`, `useUserMap`). */
+  routesTileVersion: string;
   isMobile: boolean;
 }
 
@@ -36,6 +38,7 @@ interface PublicRailwayMapProps {
 export default function PublicRailwayMap({
   token,
   selectedCountries,
+  routesTileVersion,
   isMobile,
 }: PublicRailwayMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -57,6 +60,7 @@ export default function PublicRailwayMap({
   } = useUserMap(mapContainer, {
     dataAccess,
     selectedCountries,
+    routesTileVersion,
     // The owner's numbers, whatever the visitor has switched off
     progressFollowsLayers: false,
   });

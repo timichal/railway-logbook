@@ -23,6 +23,18 @@ import type {
 const getPublic = <T>(path: string, params: Record<string, string | undefined>): Promise<T> =>
   fetchJson<T>(`/api/public/${path}?${queryString(params)}`);
 
+/**
+ * The route tile's current version (`routesTileVersion`), for a page whose own
+ * may have gone stale: restored from the history, or left open across a route
+ * save (`useRoutesTileVersion`). Never cached.
+ */
+export async function getRoutesTileVersion(): Promise<string> {
+  const { version } = await fetchJson<{ version: string }>("/api/public/routes-tile-version", {
+    cache: "no-store",
+  });
+  return version;
+}
+
 /** Station name search for the Journey Planner's station fields. */
 export function searchStations(q: string, region: RegionId): Promise<Station[]> {
   return getPublic("stations", { q, region });

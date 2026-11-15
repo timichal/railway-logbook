@@ -16,10 +16,13 @@ interface UseSourceTileRefreshOptions {
    * latest one — a map rebuilt after a refresh must not go back to a URL from
    * before it; bumped here on every refresh. Undefined until the first one, for a
    * caller that builds its first source with no `v` at all.
+   *
+   * Left out for a URL that carries its own version (the user map's route tile,
+   * `useRoutesTileVersion`), whose `tileUrl` is then called with no `v` of ours.
    */
-  cacheBusterRef: React.RefObject<number | undefined>;
+  cacheBusterRef?: React.RefObject<number | undefined>;
   /** The source's tile URL for a given `v`. Read when a refresh runs, not before. */
-  tileUrl: (cacheBuster: number) => string;
+  tileUrl: (cacheBuster: number | undefined) => string;
 }
 
 /**
@@ -73,8 +76,10 @@ export function useSourceTileRefresh({
     // The `v` must not repeat across page loads (a plain counter would) nor within
     // one (two refreshes in one millisecond would collapse into one). Bumped now,
     // so a map rebuilt before the render below still starts from the new one.
-    cacheBusterRef.current = Math.max(Date.now(), (cacheBusterRef.current ?? 0) + 1);
-    const url = tileUrl(cacheBusterRef.current);
+    if (cacheBusterRef) {
+      cacheBusterRef.current = Math.max(Date.now(), (cacheBusterRef.current ?? 0) + 1);
+    }
+    const url = tileUrl(cacheBusterRef?.current);
     const apply = () => {
       source.setTiles([url]);
       // setTiles' own reload comes a frame later, open to the pause again

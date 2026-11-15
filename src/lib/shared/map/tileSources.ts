@@ -20,8 +20,7 @@ import { ZOOM_RANGES } from "./zoomRanges";
  * `mobile/tsconfig.json`).
  */
 
-export interface RailwayRoutesSourceOptions {
-  cacheBuster?: number;
+interface RailwayRoutesSourceFilter {
   /**
    * Filters the tile to routes with both ends in these countries. Only the native
    * app still passes it: the web user map filters by country on the client
@@ -30,6 +29,19 @@ export interface RailwayRoutesSourceOptions {
    */
   selectedCountries?: string[];
 }
+
+/**
+ * The route tile comes from one of two Martin sources that run the same function.
+ *
+ * - With `version` (`routesTileVersion`, read by the server render), it comes from
+ *   `railway_routes_tile_versioned`, which is served `immutable` and kept in
+ *   Martin's memory cache. Only a URL whose `v` moves with every change to the
+ *   tile may go there: anything else would be held stale for a year.
+ * - Without it, from `railway_routes_tile`, cached nowhere. `cacheBuster` makes
+ *   MapLibre refetch tiles it already holds (the admin map, after a save).
+ */
+export type RailwayRoutesSourceOptions = RailwayRoutesSourceFilter &
+  ({ version: string; cacheBuster?: undefined } | { version?: undefined; cacheBuster?: number });
 
 /**
  * Query parameters as a string, built without `URLSearchParams` — Hermes has it,
@@ -61,13 +73,17 @@ function vectorSource(url: string, zooms: { min: number; max: number }): VectorS
  */
 export function railwayRoutesTileUrl(
   tileBaseUrl: string,
-  { cacheBuster, selectedCountries }: RailwayRoutesSourceOptions = {},
+  { version, cacheBuster, selectedCountries }: RailwayRoutesSourceOptions = {},
 ): string {
-  const params = cacheBusterParam(cacheBuster);
+  // Martin's cache key is the raw query string, so the parameters always go in
+  // this order
+  const params: [string, string][] =
+    version === undefined ? cacheBusterParam(cacheBuster) : [["v", version]];
   if (selectedCountries !== undefined) {
     params.push(["selected_countries", JSON.stringify(selectedCountries)]);
   }
-  return tileUrl(tileBaseUrl, "railway_routes_tile", params);
+  const source = version === undefined ? "railway_routes_tile" : "railway_routes_tile_versioned";
+  return tileUrl(tileBaseUrl, source, params);
 }
 
 export const createRailwayRoutesSource = (
