@@ -143,6 +143,7 @@ export const getNoteTypeLabel = (noteType: NoteType): string => noteTypeById[not
  * Supported countries for filtering
  */
 export const SUPPORTED_COUNTRIES = [
+  { code: "AL", name: "Albania" },
   { code: "AT", name: "Austria" },
   { code: "BE", name: "Belgium" },
   { code: "BA", name: "Bosnia and Herzegovina" },
@@ -154,14 +155,17 @@ export const SUPPORTED_COUNTRIES = [
   { code: "FI", name: "Finland" },
   { code: "FR", name: "France" },
   { code: "DE", name: "Germany" },
+  { code: "GR", name: "Greece" },
   { code: "HR", name: "Croatia" },
   { code: "HU", name: "Hungary" },
   { code: "IT", name: "Italy" },
+  { code: "XK", name: "Kosovo" },
   { code: "LV", name: "Latvia" },
   { code: "LT", name: "Lithuania" },
   { code: "LU", name: "Luxembourg" },
   { code: "ME", name: "Montenegro" },
   { code: "NL", name: "Netherlands" },
+  { code: "MK", name: "North Macedonia" },
   { code: "NO", name: "Norway" },
   { code: "PL", name: "Poland" },
   { code: "RO", name: "Romania" },

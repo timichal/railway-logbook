@@ -15,7 +15,7 @@ Guidance for Claude Code working in this repo. This file holds the commands and 
 
 ## Overview
 
-A unified Next.js app for OSM railway data. It fetches, processes and visualizes railway data for two regions: 21 European countries (`SUPPORTED_COUNTRIES` in `src/lib/shared/constants.ts`) and Japan (`REGIONS` in `src/lib/shared/regions.ts`). One database, one pipeline, one deploy, with a single `package.json`, `.env` and container. Data processing scripts live under `src/scripts/` beside the web app. Data flow: `OSM PBF → filtered → GeoJSON → pruned → Postgres → Martin (MVT) → MapLibre`.
+A unified Next.js app for OSM railway data. It fetches, processes and visualizes railway data for two regions: 32 European countries (`SUPPORTED_COUNTRIES` in `src/lib/shared/constants.ts`) and Japan (`REGIONS` in `src/lib/shared/regions.ts`). One database, one pipeline, one deploy, with a single `package.json`, `.env` and container. Data processing scripts live under `src/scripts/` beside the web app. Data flow: `OSM PBF → filtered → GeoJSON → pruned → Postgres → Martin (MVT) → MapLibre`.
 
 **`mobile/` is a second app** (React Native / Expo) with its own `package.json`. The root `tsc` excludes it (run `npm run typecheck` inside `mobile/`); one root `npm run lint` covers both.
 
