@@ -9,6 +9,7 @@ import {
   describeFeatureStream,
   streamFeatures,
 } from "./lib/geojsonFeatureStream";
+import { isMetroOnlyStation } from "./lib/stationTags";
 
 // The export feeding this carries only the tags listed in
 // osmium-scripts/export-config.json: a tag read here must be listed there too,
@@ -105,17 +106,12 @@ function resolveStationName(
  */
 const STATION_DEDUP_METERS = 150;
 
-/**
- * Station-tagged, and not a metro-only one (metro lines are out of scope). A
- * station metro and trains share carries `subway=yes` beside `train=yes`
- * (Athens Airport, Oshiage), and is kept. One tagged `subway` alone is dropped
- * even where trains stop too: the fix for that is `train=yes` in OSM.
- */
+/** Station-tagged, and not a metro-only one (`isMetroOnlyStation`). */
 function isStationTagged(feat: Feature): boolean {
   return (
     !!feat.properties.railway &&
     ["station", "halt"].includes(feat.properties.railway) &&
-    (!feat.properties.subway || feat.properties.train === "yes")
+    !isMetroOnlyStation(feat.properties)
   );
 }
 
