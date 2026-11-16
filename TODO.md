@@ -17,15 +17,11 @@ Measure these on the dev machine (see the top). **Judge each against "Where a de
 
 To measure step 1 locally: Geofabrik still serves older dated files (`europe/france-261108.osm.pbf`), so a raw file a week behind plus `pyosmium-get-changes` gives a realistic backlog without the server's cache. Run osmium in an `ubuntu:26.04` container with apt `osmium-tool pyosmium` (the server's exact versions), on a Docker volume rather than a Windows bind mount, which is several times slower to read. Geofabrik throttles to 2–3 MB/s.
 
-- **Import only what changed, then recalculate only what it could affect.** Needs care, and the recalculation it would skip is ~11% of a deploy (12 of ~120 min on the server); the load it would shrink is part of the ~9 min after step 1.
-  - Step 1: COPY the new parts into a temp table, DELETE only vanished or changed rows (compare `geometry::bytea` and the attributes the pathfinder and tiles read), INSERT only new and changed ones. Still one transaction, still only ROW EXCLUSIVE locks. Record the changed part ids with old and new geometry.
-  - Step 2: a route can skip recalculation when all three hold:
-    - no changed part (old or new geometry) lies within its first-pass 50km load;
-    - none of those parts has a different route set in `partRoutes` (persist the previous snapshot and compare);
-    - its last run found the path on the first (50km) pass (persist which pass succeeded).
-  - Prove it with the md5-of-geometry regression check in `RECALC_PERFORMANCE.md`.
-  - **Measure the payoff first** on the dev machine: diff two consecutive weekly extracts' parts and count how many routes' 50km disks contain a change. If most do, stop at step 1. (One day's diffs, 2026-11-13 to 14, changed 15 of 2552 recalculated routes' geometry.)
-  - The changed-part diff also gives a cheap "nothing changed" answer for `deployMapData`.
+- **Import only the parts that changed.** Under 1% of parts change in a week (Czechia, 5 days: 232 of 62.5k), yet the import deletes and reinserts all 1.5M. The load it would shrink is part of the ~9 min after step 1. Skipping the recalculation of untouched routes was measured and dropped (`RECALC_PERFORMANCE.md`, "Don't skip routes the import didn't touch"), so every route is still recalculated after it.
+  - COPY the new parts into a temp table, DELETE only vanished or changed rows (compare `geometry::bytea` and `usage`, `highspeed`), INSERT only new and changed ones. Still one transaction, still only ROW EXCLUSIVE locks. `stations` (66k rows) can keep the full replace.
+  - It also leaves no dead tuples to speak of, so it replaces the `VACUUM` item below. It keeps the existing heap order, so whatever spatial order "Insert `railway_parts` in spatial order" gives decays with each import: do that one first, or drop it.
+  - Measure the import (`loadStationsAndParts`) before and after on the dev machine.
+  - The changed-part count also gives a cheap "nothing changed" answer for `deployMapData`.
 - **Hold the whole part network in memory for recalculation.** `partNetwork.ts` asks Postgres for `ST_AsGeoJSON(geometry)` of every part within 50km of each route, `JSON.parse`s it, and rebuilds keys, lengths and adjacency in `add()`, for every route. `runPool` runs its workers as async tasks in one Node process, so all parsing and searching share one JS thread, busy 72% of the run at 4 workers. Ceiling: the parse (75s summed) and most of the part queries (278s summed, overlapping) of a 2m 13s run locally; on the server, part of its 12 minutes.
   - Proposal: load every part once, through the same `ST_AsGeoJSON` text so the coordinates are bit-identical, and build the endpoint-key → parts map once.
   - Per route, run the same `ST_DWithin … ORDER BY id` query but `SELECT id` only, so Postgres still decides which parts load and in what order.

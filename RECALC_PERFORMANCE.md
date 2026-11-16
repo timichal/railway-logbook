@@ -210,6 +210,35 @@ slow import.
 If the buffer is ever revisited, escalation would have to trigger on a length
 mismatch too, not just on failure.
 
+## Don't skip routes the import didn't touch
+
+The idea: after an import that knows which parts changed, skip every route with
+no changed part (old or new geometry) within its first-pass 50km load. Measured
+2026-11-16 and dropped. A 50km disk around each endpoint is too wide for that to
+spare many routes, even over a few days of edits.
+
+The measurement: older Geofabrik files filtered, exported and pruned as
+`prepare.sh` does, then diffed against the Nov 14 extracts on what
+`railway_parts` stores (id, geometry, `usage`, `highspeed`). It counted the
+non-closed routes with both endpoints in the country that have a changed part
+within 50km of either endpoint (`withinMetersSql`, as `loadAround`):
+
+| Extract     | Span    | Parts changed (of)        | Routes with a change within 50km |
+| ----------- | ------- | ------------------------- | -------------------------------- |
+| Czechia     | 5 days  | 232 (62.5k): +40 −3 ~189  | 441 of 537 (82%)                 |
+| Czechia     | 13 days | 455 (62.5k): +130 −6 ~319 | 515 of 537 (96%)                 |
+| Switzerland | 5 days  | 35 (50.8k): +7 −4 ~24     | 309 of 400 (77%)                 |
+| Japan       | 5 days  | 91 (134k): +9 −0 ~82      | 844 of 1376 (61%)                |
+
+Even Switzerland's 35 changed parts reach three routes in four. The European
+figures are lower bounds, since changes in the neighbouring extracts weren't
+counted; Japan has no neighbours, and its long, thin network leaves more routes
+far from any edit. The skip would also need the `partRoutes` and first-pass
+conditions to hold, so at weekly deploys it would spare at most about a quarter
+of the recalculation: 2–3% of a deploy (the recalculation is ~11%). Not worth a second way for a route to end
+up with stale geometry. Importing only the changed parts is a separate question:
+under 1% of parts change in a week.
+
 ## Still on the table
 
 - **Fold the length query into the `UPDATE`.** Each route costs an extra round
