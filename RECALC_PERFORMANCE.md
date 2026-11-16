@@ -47,6 +47,23 @@ that. The diffs applied were one to two days' worth; a weekly deploy applies a
 week's, but the rewrite of the whole file is the bulk of an update either way.
 The recalculation is ~11%.
 
+**Since 2026-11-15 the raw files are not rewritten on each update** ("Raw
+cache" in `osmium-scripts/CLAUDE.md`): the diffs go into a change file beside
+the raw file, and the kept filtered file gets them applied and is filtered
+again. Measured on France with a week of diffs (2026-11-08 to 14) in an Ubuntu
+26.04 container with the server's osmium and pyosmium, limited to 2 CPUs:
+
+| France, one week of diffs                 | before | after           |
+| ----------------------------------------- | ------ | --------------- |
+| update (`pyosmium-up-to-date` / fetch)    | 208s   | 27s, network    |
+| filter (`tags-filter` / apply + refilter) | 72s    | 7s              |
+| raw read for newly tagged ways' nodes     | -      | 34s, some weeks |
+| rebase, every ~4-5 weeks                  | -      | 208s            |
+
+The output is the same file object for object (OPL), and so is Czechia's
+with one and two weeks of diffs. The server's step 1 hasn't been measured
+since (TODO.md).
+
 The recalculation's own split (the summary's "Summed over the workers" lines,
 `SearchTimings`), locally at 4 workers:
 

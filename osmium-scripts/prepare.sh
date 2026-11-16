@@ -50,14 +50,23 @@
 #
 # Raw cache. Where RAW_CACHE names directories for it (the server does), the
 # raw extracts are kept too, and each run brings them up to date with
-# Geofabrik's daily diffs (pyosmium-up-to-date) instead of downloading them
-# again: a day's diff of a country is megabytes, its extract gigabytes, and
-# Geofabrik asks heavy users to use them. A diff can only be applied to the
-# whole extract - a filtered one is missing the untouched nodes of any way the
-# diff newly tags as railway - so the cache holds the raw files, ~35GB for the
-# full list. An extract the cache has no room for is downloaded and deleted
+# Geofabrik's daily diffs instead of downloading them again: a day's diff of a
+# country is megabytes, its extract gigabytes, and Geofabrik asks heavy users
+# to use them. An extract the cache has no room for is downloaded and deleted
 # as before, and one that cannot be updated (too old, or not from Geofabrik's
 # replication) is dropped from it and downloaded whole.
+#
+# The raw file itself is not rewritten on every run: that was most of a
+# deploy (RECALC_PERFORMANCE.md), every block of every extract decompressed
+# and compressed again for a few megabytes of change. It stays at the state it
+# was downloaded or last rebased at, and the diffs since go into one change
+# file beside it (update_changes). The railways are then the filtered file
+# kept from the last run with those changes applied (refilter_extract). The
+# raw file is still needed, and read, only for nodes the kept railways and the
+# changes both lack: those of a way the changes newly tag as railway without
+# touching its nodes. That is why a filtered file alone can't be kept up to
+# date. The raw file is rewritten with the changes applied (rebase_raw) only
+# once they grow past what osmium should hold in memory, or once it is old.
 
 set -e  # Exit on error
 
@@ -304,8 +313,8 @@ for ENTRY in ${RAW_CACHE}; do
         echo "WARNING: raw cache directory ${C_DIR} does not exist - not caching there (is its volume mounted?)" >&2
     fi
 done
-if [ -n "${CACHE_ENTRIES}" ] && ! command -v pyosmium-up-to-date > /dev/null; then
-    echo "ERROR: RAW_CACHE is set but pyosmium-up-to-date is not installed (sudo apt install pyosmium)"
+if [ -n "${CACHE_ENTRIES}" ] && ! command -v pyosmium-get-changes > /dev/null; then
+    echo "ERROR: RAW_CACHE is set but pyosmium-get-changes is not installed (sudo apt install pyosmium)"
     exit 1
 fi
 
@@ -547,11 +556,11 @@ raw_record() {
 
 # Whether a raw file of extract $1 can be kept up to date from Geofabrik: its
 # header says which diff it is at, on that extract's own replication. Checked
-# before every update rather than trusted, because pyosmium-up-to-date takes a
-# file with no replication URL as a planet and would apply the planet's diffs.
-# The URL is compared without a trailing slash: pyosmium 4.3.2 writes one
-# after an update and 4.3.0 doesn't, and a mismatch here deletes the file
-# just updated, so every update after a pyosmium upgrade would empty the cache.
+# before every update rather than trusted, because a sequence number means
+# nothing on another extract's replication. The URL is compared without a
+# trailing slash: pyosmium 4.3.2 wrote one after an update and 4.3.0 didn't,
+# and a mismatch here deletes the file, so a file updated by either would
+# otherwise be dropped by the other.
 updatable_raw() {
     U_BASE_URL="$(header_option "$2" osmosis_replication_base_url)"
     [ "${U_BASE_URL%/}" = "${GEOFABRIK}/$1-updates" ] &&
@@ -569,66 +578,332 @@ cached_raw() {
     done
 }
 
-# Past this many days old, a cached extract is downloaded whole instead,
-# well inside pyosmium-up-to-date's own refusal at 90.
+# Past this many days old, a cached extract is downloaded whole instead. The
+# age is the raw file's own, not that of the changes kept beside it, but a
+# raw file is rebased once it is REBASE_AFTER_DAYS old, so only a cache left
+# without a run for weeks gets here.
 MAX_UPDATE_AGE_DAYS=60
+
+# How many whole days old the data of raw file $1 is, by its replication
+# timestamp; nothing when it has none GNU date can read. (An empty string
+# would read as today: hence "none".)
+raw_age_days() {
+    A_SECS="$(date -u -d "$(header_option "$1" osmosis_replication_timestamp | sed 's/^$/none/')" +%s 2> /dev/null || true)"
+    [ -z "${A_SECS}" ] || echo $((($(date -u +%s) - A_SECS) / 86400))
+}
 
 # Why the cached raw file of an extract (extract, file) cannot be brought up
 # to date, and is to be downloaded whole instead - too old, or not from
-# Geofabrik's replication. Prints nothing when it can be.
+# Geofabrik's replication. Prints nothing when it can be. Nothing else limits
+# a raw file's age, so one whose age can't be read counts as too old.
 stale_raw_reason() {
-    S_TIMESTAMP="$(header_option "$2" osmosis_replication_timestamp)"
-    # GNU date parses the timestamp; where it can't, pyosmium's own check stands.
-    S_SECS="$(date -u -d "${S_TIMESTAMP:-none}" +%s 2> /dev/null || true)"
+    S_AGE="$(raw_age_days "$2")"
     if ! updatable_raw "$1" "$2"; then
         echo "it has no replication state of ${GEOFABRIK}/$1-updates"
-    elif [ -n "${S_SECS}" ] && [ $((($(date -u +%s) - S_SECS) / 86400)) -gt "${MAX_UPDATE_AGE_DAYS}" ]; then
+    elif [ -z "${S_AGE}" ]; then
+        echo "its replication timestamp can't be read"
+    elif [ "${S_AGE}" -gt "${MAX_UPDATE_AGE_DAYS}" ]; then
         echo "its data is more than ${MAX_UPDATE_AGE_DAYS} days old"
     fi
 }
 
-# Bring the cached raw file of an extract up to date in place (extract, file),
-# one stale_raw_reason passed. A failed update stops the run with the file
-# kept as it was: it is far more likely a passing network or server problem
-# than a bad file, and dropping it would cost a full download.
-update_raw() {
+# The changes kept beside a cached raw file: one file of every diff since the
+# raw file's own state, merged, newest version of each object only. Its name
+# says the range, france.4957-4970.osc.gz: from the raw file's sequence number
+# (its base) to the last diff in it (its end), so that name and contents are
+# replaced together by one rename. Losing it costs nothing but the diffs'
+# download: without one, the raw file's own state is where the next update
+# starts.
+#
+# Every change file beside raw file $1, one per line (no cache path holds a
+# space: RAW_CACHE is space-separated).
+all_raw_changes() {
+    for R_CHG in "${1%.osm.pbf}".[0-9]*-[0-9]*.osc.gz; do
+        [ ! -f "${R_CHG}" ] || echo "${R_CHG}"
+    done
+}
+
+# The change file of raw file $1, or nothing. The sweep in step 1 leaves at
+# most one per raw file, and only one whose base is the raw file's.
+raw_changes() {
+    all_raw_changes "$1" | head -n 1
+}
+
+# Delete raw file $1 and its changes.
+drop_raw() {
+    for D_CHG in $(all_raw_changes "$1"); do
+        rm -f "${D_CHG}"
+    done
+    rm -f "$1"
+}
+
+# The bytes raw file $1 and its changes take.
+cached_bytes() {
+    C_BYTES=0
+    for C_PART in "$1" $(all_raw_changes "$1"); do
+        C_BYTES=$((C_BYTES + $(wc -c < "${C_PART}")))
+    done
+    echo "${C_BYTES}"
+}
+changes_range() {
+    R_RANGE="${1%.osc.gz}"
+    echo "${R_RANGE##*.}"
+}
+changes_base() {
+    R_RANGE="$(changes_range "$1")"
+    echo "${R_RANGE%-*}"
+}
+changes_end() {
+    R_RANGE="$(changes_range "$1")"
+    echo "${R_RANGE#*-}"
+}
+
+# The raw file a change file belongs to: the same name, less the range.
+changes_raw() {
+    echo "${1%.*-*.osc.gz}.osm.pbf"
+}
+
+# A state.txt's value of key $2, from the text in $1. Geofabrik escapes the
+# colons of the timestamp (2026-11-14T21\:20\:41Z).
+state_field() {
+    echo "$1" | tr -d '\r\\' | sed -n "s/^$2=//p"
+}
+
+# Bring the changes kept beside the cached raw file of an extract (extract,
+# file) up to date with Geofabrik's diffs, once stale_raw_reason passed:
+# fetch those since the change file's end (or the raw file's state, with
+# none) and merge them in. Sets U_SEQ and U_TIMESTAMP to the state reached,
+# the latest Geofabrik has, and U_CHANGES to the change file (empty: there is
+# nothing newer than the raw file). A failed update stops the run with
+# everything kept as it was: it is far more likely a passing network or
+# server problem than a bad file, and dropping it would cost a full download.
+update_changes() {
     U_EXTRACT="$1"
     U_RAW="$2"
-    # No room for the updated copy stops the run rather than dropping the
-    # file: a download would need the same room, and the shortage is most
-    # likely passing (what a failed run left).
-    U_NEED_MB=$(($(wc -c < "${U_RAW}") / 1048576 + DISK_MARGIN_MB))
-    U_FREE_MB="$(free_mb "$(dirname "${U_RAW}")")"
-    if [ "${U_FREE_MB}" -lt "${U_NEED_MB}" ]; then
-        echo "ERROR: no room to update ${U_RAW} (${U_NEED_MB} MB needed beside it, ${U_FREE_MB} MB free)"
+    U_URL="${GEOFABRIK}/${U_EXTRACT}-updates"
+    U_BASE="$(header_option "${U_RAW}" osmosis_replication_sequence_number)"
+    U_CHANGES="$(raw_changes "${U_RAW}")"
+    U_FROM="${U_BASE}"
+    [ -z "${U_CHANGES}" ] || U_FROM="$(changes_end "${U_CHANGES}")"
+    U_START="$(date +%s)"
+    U_STATE="$(curl -sf --retry 3 "${U_URL}/state.txt")" || {
+        echo "ERROR: ${U_URL}/state.txt is not available"
+        echo "  ${U_RAW} is kept as it was. Rerun later, or delete it to download ${U_EXTRACT} whole."
         exit 1
+    }
+    U_SEQ="$(state_field "${U_STATE}" sequenceNumber)"
+    U_TIMESTAMP="$(state_field "${U_STATE}" timestamp)"
+    case "${U_SEQ}" in
+        '' | *[!0-9]*)
+            echo "ERROR: ${U_URL}/state.txt has no sequence number"
+            exit 1
+            ;;
+    esac
+    # It goes into the headers, where raw_age_days reads it.
+    date -u -d "${U_TIMESTAMP:-none}" +%s > /dev/null 2>&1 || {
+        echo "ERROR: ${U_URL}/state.txt has no readable timestamp (${U_TIMESTAMP:-none})"
+        exit 1
+    }
+    if [ "${U_SEQ}" -lt "${U_FROM}" ]; then
+        echo "ERROR: ${U_URL} is at ${U_SEQ}, behind ${U_FROM} kept in the cache"
+        exit 1
+    fi
+    if [ "${U_SEQ}" -eq "${U_FROM}" ]; then
+        say "${U_EXTRACT}" "no new diffs (checked in $(took "${U_START}"))"
+        return 0
     fi
 
-    U_SEQ="$(header_option "${U_RAW}" osmosis_replication_sequence_number)"
-    say "${U_EXTRACT}" "updating from Geofabrik's diffs (data from $(extract_date "${U_RAW}"))"
-    U_START="$(date +%s)"
-    # In place: pyosmium writes the update to a temporary file beside the
-    # input and renames it over the input only once it is complete (a stopped
-    # run's temporary file is swept on the next). Exit 1 means it stopped at
-    # its size limit with more diffs to come, so it goes again.
-    U_PASSES=0
-    while :; do
-        U_STATUS=0
-        pyosmium-up-to-date "${U_RAW}" || U_STATUS=$?
-        U_PASSES=$((U_PASSES + 1))
-        case "${U_STATUS}" in
-            0) break ;;
-            1) [ "${U_PASSES}" -lt 20 ] && continue ;;
-        esac
-        echo "ERROR: Failed to update ${U_RAW} (pyosmium-up-to-date exited ${U_STATUS})"
-        echo "  It is kept as it was. Rerun later, or delete it to download ${U_EXTRACT} whole."
-        exit 1
-    done
-    if [ "$(header_option "${U_RAW}" osmosis_replication_sequence_number)" = "${U_SEQ}" ]; then
-        say "${U_EXTRACT}" "no new diffs (checked in $(took "${U_START}"))"
+    say "${U_EXTRACT}" "fetching Geofabrik's diffs $((U_FROM + 1))-${U_SEQ}"
+    U_DIR="$(dirname "${U_RAW}")"
+    U_NAME="$(basename "${U_RAW%.osm.pbf}")"
+    # The temporaries start tmp-, which the sweep in step 1 deletes.
+    U_NEW="${U_DIR}/tmp-${U_NAME}.new.osc.gz"
+    U_MERGED="${U_DIR}/tmp-${U_NAME}.${U_BASE}-${U_SEQ}.osc.gz"
+    U_OUT="${U_DIR}/${U_NAME}.${U_BASE}-${U_SEQ}.osc.gz"
+    rm -f "${U_NEW}" "${U_MERGED}"
+    # -I is the last diff applied; it starts at the next. With --end-id
+    # there is no size limit, and it prints the last diff it got.
+    U_GOT="$(pyosmium-get-changes --server "${U_URL}" -I "${U_FROM}" --end-id "${U_SEQ}" -o "${U_NEW}")" &&
+        [ "${U_GOT}" = "${U_SEQ}" ] || {
+            rm -f "${U_NEW}"
+            echo "ERROR: Failed to fetch ${U_URL} diffs $((U_FROM + 1))-${U_SEQ} (got ${U_GOT:-none})"
+            echo "  ${U_RAW} is kept as it was. Rerun later, or delete it to download ${U_EXTRACT} whole."
+            exit 1
+        }
+    if [ -n "${U_CHANGES}" ]; then
+        # -s keeps the newest version of each object, as the diffs fetched
+        # in one go were already.
+        osmium merge-changes -s --no-progress -O -o "${U_MERGED}" "${U_CHANGES}" "${U_NEW}" || {
+            rm -f "${U_NEW}" "${U_MERGED}"
+            echo "ERROR: Failed to merge the diffs of ${U_EXTRACT}"
+            exit 1
+        }
+        rm -f "${U_NEW}"
     else
-        say "${U_EXTRACT}" "updated to data from $(extract_date "${U_RAW}") in $(took "${U_START}")"
+        mv "${U_NEW}" "${U_MERGED}"
     fi
+    mv "${U_MERGED}" "${U_OUT}"
+    [ -z "${U_CHANGES}" ] || rm -f "${U_CHANGES}"
+    U_CHANGES="${U_OUT}"
+    say "${U_EXTRACT}" "diffs to data from $(echo "${U_TIMESTAMP}" | cut -c1-10) fetched in $(took "${U_START}"), $(($(wc -c < "${U_CHANGES}") / 1048576)) MB kept since $(extract_date "${U_RAW}")"
+}
+
+# A file holding the state update_changes reached gets its replication header
+# (apply-changes keeps none of its input's): the raw file's URL, U_SEQ and
+# U_TIMESTAMP. extract_date reads the date from it, raw_record the sequence,
+# updatable_raw the URL. Run osmium with these, after setting H_URL.
+with_state_header() {
+    "$@" --output-header="osmosis_replication_base_url=${H_URL}" \
+        --output-header="osmosis_replication_sequence_number=${U_SEQ}" \
+        --output-header="osmosis_replication_timestamp=${U_TIMESTAMP}"
+}
+
+# Rewrite the cached raw file of an extract (extract, file) at the state
+# update_changes reached, the changes kept beside it applied, and drop them:
+# the next update starts from it. Returns non-zero, having said why, when its
+# disk has no room for the new copy beside the old or osmium fails (out of
+# memory, say), with the raw file and its changes kept as they were.
+rebase_raw() {
+    B_EXTRACT="$1"
+    B_RAW="$2"
+    B_NEED_MB=$(($(wc -c < "${B_RAW}") / 1048576 + DISK_MARGIN_MB))
+    B_FREE_MB="$(free_mb "$(dirname "${B_RAW}")")"
+    if [ "${B_FREE_MB}" -lt "${B_NEED_MB}" ]; then
+        say "${B_EXTRACT}" "no room to rewrite the raw extract (${B_NEED_MB} MB needed beside it, ${B_FREE_MB} MB free)"
+        return 1
+    fi
+    say "${B_EXTRACT}" "rewriting the raw extract with $(($(wc -c < "${U_CHANGES}") / 1048576)) MB of changes applied"
+    B_START="$(date +%s)"
+    # Swept by step 1 (tmp*-*.osm.pbf) if the run stops.
+    B_TMP="$(dirname "${B_RAW}")/tmp-rebase-$(basename "${B_RAW}")"
+    H_URL="$(header_option "${B_RAW}" osmosis_replication_base_url)"
+    with_state_header osmium apply-changes --no-progress -O -f pbf -o "${B_TMP}" "${B_RAW}" "${U_CHANGES}" || {
+        rm -f "${B_TMP}"
+        say "${B_EXTRACT}" "failed to apply the changes to ${B_RAW}"
+        return 1
+    }
+    mv "${B_TMP}" "${B_RAW}"
+    rm -f "${U_CHANGES}"
+    U_CHANGES=""
+    say "${B_EXTRACT}" "raw extract rewritten in $(took "${B_START}")"
+}
+
+# When to rebase. Measured on France at 2 CPUs (the server's): a rebase takes
+# 208s, the refilter's apply-changes 4s per 30 MB of changes (a week's), so
+# by time alone rebasing every ~10 weekly runs would cost least. Memory comes
+# first: osmium holds a change file in memory at ~9-13 times its size (30 MB
+# took 269 MB), and REBASE_CHANGES_MB keeps that to ~1.5GB, under the ~2GB a
+# full tags-filter of France takes anyway. The age limit keeps the raw file
+# well inside MAX_UPDATE_AGE_DAYS, with weeks to spare for missed runs.
+REBASE_CHANGES_MB=128
+REBASE_AFTER_DAYS=35
+
+# Whether the raw file of an extract (extract, file) is due a rebase.
+rebase_due() {
+    [ -n "${U_CHANGES}" ] || return 1
+    [ $(($(wc -c < "${U_CHANGES}") / 1048576)) -lt "${REBASE_CHANGES_MB}" ] || return 0
+    D_AGE="$(raw_age_days "$2")"
+    [ -n "${D_AGE}" ] && [ "${D_AGE}" -ge "${REBASE_AFTER_DAYS}" ]
+}
+
+# The node ids (n123, one per line, sorted) that the ways of OSM file $1 refer
+# to but it lacks; $2 names its temporaries. check-refs exits 1 both for those
+# and for a file it can't read, so its summary line, written only once it has
+# read the whole file, is what says it worked.
+missing_nodes() {
+    osmium check-refs -i "$1" > "$2.refs" 2> "$2.refs-err" || true
+    if ! grep -q '^Nodes in ways missing: ' "$2.refs-err"; then
+        cat "$2.refs-err"
+        return 1
+    fi
+    awk '/^n[0-9]/ { print $1 }' "$2.refs" | sort -u
+    rm -f "$2.refs" "$2.refs-err"
+}
+
+# Whether the filtered file kept for a cached extract (extract, raw file) can
+# be brought to the state update_changes reached by refilter_extract: it went
+# through RAIL_FILTER, from a state between the raw file's and that one. Any
+# change since that state is then in the change file, and anything else is as
+# it was in the raw file.
+refilterable() {
+    [ -n "${U_CHANGES}" ] || return 1
+    G_RAIL_FILE="${WORK_DIR}/$1.rail.pbf"
+    [ -f "${G_RAIL_FILE}" ] || return 1
+    G_RECORD="$(cat "${G_RAIL_FILE}.source" 2> /dev/null || true)"
+    [ "$(echo "${G_RECORD}" | sed -n 2p)" = "${RAIL_FILTER}" ] || return 1
+    G_SEQ="$(echo "${G_RECORD}" | sed -n 's/^replication \([0-9][0-9]*\)$/\1/p')"
+    [ -n "${G_SEQ}" ] &&
+        [ "${G_SEQ}" -ge "$(header_option "$2" osmosis_replication_sequence_number)" ] &&
+        [ "${G_SEQ}" -le "${U_SEQ}" ]
+}
+
+# Bring the filtered file of a cached extract (extract, raw file) to the state
+# update_changes reached, without a pass over the raw file where it can: the
+# filtered file kept, the changes applied, filtered again. What that lacks is
+# the nodes of a way the changes newly tag as railway without touching them;
+# those come from the raw file (getid, one pass, decompression only), where
+# they are current, not being in the changes, and it is done again with them.
+# The result is the very file tags-filter makes of the raw file updated
+# (checked object for object, OPL, against Czechia with one and two weeks of
+# diffs). A node that is in neither is missing there too: a way crossing the
+# extract's edge. One the kept file lacked already is not looked for: not
+# being in the changes, it was not in the raw file then and is not now, so
+# such a way costs no raw read on every run.
+refilter_extract() {
+    R_EXTRACT="$1"
+    R_RAW="$2"
+    R_RAIL_FILE="${WORK_DIR}/${R_EXTRACT}.rail.pbf"
+    R_TMP="${WORK_DIR}/${R_EXTRACT}.refilter"
+    rm -rf "${R_TMP}"
+    mkdir -p "${R_TMP}"
+    say "${R_EXTRACT}" "applying the changes to the kept railways"
+    R_START="$(date +%s)"
+    R_BASE="${R_RAIL_FILE}"
+    R_PASS=1
+    H_URL="$(header_option "${R_RAW}" osmosis_replication_base_url)"
+    while :; do
+        # RAIL_FILTER unquoted: one argument per expression.
+        # shellcheck disable=SC2086
+        osmium apply-changes --no-progress -O -f pbf -o "${R_TMP}/applied.pbf" "${R_BASE}" "${U_CHANGES}" &&
+            with_state_header osmium tags-filter --no-progress -O -f pbf -o "${R_TMP}/rail.pbf" \
+                "${R_TMP}/applied.pbf" ${RAIL_FILTER} || {
+            echo "ERROR: Failed to apply the changes to the railways of ${R_EXTRACT}"
+            exit 1
+        }
+        [ "${R_PASS}" -eq 1 ] || break
+        missing_nodes "${R_TMP}/rail.pbf" "${R_TMP}/rail" > "${R_TMP}/all-missing.txt" &&
+            { [ ! -s "${R_TMP}/all-missing.txt" ] ||
+                missing_nodes "${R_RAIL_FILE}" "${R_TMP}/kept" > "${R_TMP}/kept-missing.txt"; } || {
+            echo "ERROR: Failed to check the railways of ${R_EXTRACT}"
+            exit 1
+        }
+        [ -s "${R_TMP}/all-missing.txt" ] || break
+        comm -23 "${R_TMP}/all-missing.txt" "${R_TMP}/kept-missing.txt" > "${R_TMP}/missing.txt"
+        [ -s "${R_TMP}/missing.txt" ] || break
+        say "${R_EXTRACT}" "reading the raw extract for $(wc -l < "${R_TMP}/missing.txt" | tr -d ' ') nodes of newly tagged ways"
+        # Exit 1 is also "not all found", which is fine (see above); only an
+        # error says anything.
+        osmium getid --no-progress -O -f pbf -o "${R_TMP}/nodes.pbf" -i "${R_TMP}/missing.txt" \
+            "${R_RAW}" 2> "${R_TMP}/getid-err" || [ ! -s "${R_TMP}/getid-err" ] || {
+            cat "${R_TMP}/getid-err"
+            echo "ERROR: Failed to read nodes from ${R_RAW}"
+            exit 1
+        }
+        osmium merge --no-progress -O -f pbf -o "${R_TMP}/base.pbf" "${R_RAIL_FILE}" "${R_TMP}/nodes.pbf" || {
+            echo "ERROR: Failed to add the nodes to the railways of ${R_EXTRACT}"
+            exit 1
+        }
+        R_BASE="${R_TMP}/base.pbf"
+        R_PASS=2
+    done
+    # As in filter_extract: the .source goes before the rename and comes back
+    # after it, so it always describes the file beside it.
+    rm -f "${R_RAIL_FILE}.source"
+    mv "${R_TMP}/rail.pbf" "${R_RAIL_FILE}"
+    source_record "replication ${U_SEQ}" > "${R_RAIL_FILE}.source"
+    rm -rf "${R_TMP}"
+    FILTERED_NOW=1
+    finish "${R_EXTRACT}" "data from $(extract_date "${R_RAIL_FILE}"), changes applied in $(took "${R_START}")"
 }
 
 # Filter a raw extract down to railways (extract, raw file, and where to keep
@@ -717,7 +992,7 @@ make_room() {
                     *-[0-9][0-9][0-9][0-9][0-9][0-9].osm.pbf | *-latest.osm.pbf) continue ;;
                 esac
                 M_REL="${M_FILE#"${C_DIR}/"}"
-                echo "$(wc -c < "${M_FILE}") ${C_DIR} ${M_REL%.osm.pbf}"
+                echo "$(cached_bytes "${M_FILE}") ${C_DIR} ${M_REL%.osm.pbf}"
             done
         done | sort -n)"
         if [ -z "${M_FILES}" ]; then
@@ -731,6 +1006,7 @@ make_room() {
         M_DIR="${M_REST%% *}"
         M_EXTRACT="${M_REST#* }"
         M_FILE="${M_DIR}/${M_EXTRACT}.osm.pbf"
+        # The raw file and its changes, which go with it.
         M_MB=$((M_BYTES / 1048576 + 1))
         # pick_cache_dir never names a directory on the data disk here, since
         # it is short of the reserve that pick_cache_dir keeps there.
@@ -740,10 +1016,15 @@ make_room() {
             mkdir -p "$(dirname "${M_TARGET}/${M_EXTRACT}")"
             cp "${M_FILE}" "${M_TARGET}/${M_EXTRACT}.osm.pbf.part"
             mv "${M_TARGET}/${M_EXTRACT}.osm.pbf.part" "${M_TARGET}/${M_EXTRACT}.osm.pbf"
+            # Its changes follow; one left behind by a stop here is only
+            # fetched again (and swept).
+            for M_CHG in $(all_raw_changes "${M_FILE}"); do
+                mv -f "${M_CHG}" "$(dirname "${M_TARGET}/${M_EXTRACT}")/"
+            done
         else
             echo "  Deleting ${M_FILE} (${M_MB} MB) from the raw cache, which has no room for it elsewhere: the data disk is ${M_SHORT_MB} MB short of ${DATA_DISK_RESERVE_GB}GB free"
         fi
-        rm -f "${M_FILE}"
+        drop_raw "${M_FILE}"
     done
 }
 if [ -n "${MAKE_ROOM}" ]; then
@@ -775,7 +1056,7 @@ state_value() {
         echo "ERROR: ${GEOFABRIK}/$1-updates/state.txt is not available"
         return 1
     }
-    sed -n "s/^$2=//p" "${L_DIR}/$1.state" | tr -d '\\'
+    state_field "$(cat "${L_DIR}/$1.state")" "$2"
 }
 inputs_record() {
     source_record "$1" | paste -s -d ' ' -
@@ -875,11 +1156,15 @@ if [ "${EXTRACTS_FILE}" = "${LISTED_EXTRACTS_FILE}" ]; then
     done
 fi
 
-# What a stopped update left: pyosmium-up-to-date's temporary copies
-# (tmpXXXXXXXX-france.osm.pbf), each as big as its extract.
+# What a stopped update left: a rebase's temporary copy
+# (tmp-rebase-france.osm.pbf), as big as its extract, or the copies of
+# pyosmium-up-to-date, which updated the cache before (tmpXXXXXXXX-...), and
+# the change files being fetched or merged.
 for C_DIR in $(cache_dirs); do
-    find -H "${C_DIR}" -type f -name 'tmp*-*.osm.pbf' -exec rm -f {} +
+    find -H "${C_DIR}" -type f \( -name 'tmp*-*.osm.pbf' -o -name 'tmp-*.osc.gz' \) -exec rm -f {} +
 done
+# And a stopped refilter's working directory (refilter_extract).
+find "${WORK_DIR}" -type d -name '*.refilter' -prune -exec rm -rf {} +
 
 # A second copy of a cached extract, in a later directory than the one
 # cached_raw finds first: left when a directory was missing for a run (an
@@ -896,6 +1181,32 @@ for C_DIR in $(cache_dirs); do
         done
     done
     EARLIER_DIRS="${EARLIER_DIRS} ${C_DIR}"
+done
+
+# Change files that no longer go with a raw file: its raw file is gone (swept
+# above, dropped, or moved by --make-room before its changes followed), or
+# was replaced since (a download, a rebase stopped before it removed them),
+# or a newer one of the same base is there (a stop between writing one and
+# removing the one it replaced). After the sweeps above, so a raw file they
+# removed takes its changes with it.
+for C_DIR in $(cache_dirs); do
+    find -H "${C_DIR}" -type f -name '*.osc.gz' ! -name 'tmp-*' | while read -r KEPT; do
+        KEPT_RAW="$(changes_raw "${KEPT}")"
+        KEPT_BASE="$(changes_base "${KEPT}")"
+        if [ ! -f "${KEPT_RAW}" ]; then
+            rm -f "${KEPT}"
+        elif [ "${KEPT_BASE}" != "$(header_option "${KEPT_RAW}" osmosis_replication_sequence_number)" ]; then
+            echo "  Removing ${KEPT}: ${KEPT_RAW} is no longer at ${KEPT_BASE}"
+            rm -f "${KEPT}"
+        else
+            for OTHER in "${KEPT_RAW%.osm.pbf}.${KEPT_BASE}"-*.osc.gz; do
+                if [ -f "${OTHER}" ] && [ "$(changes_end "${OTHER}")" -gt "$(changes_end "${KEPT}")" ]; then
+                    rm -f "${KEPT}"
+                    break
+                fi
+            done
+        fi
+    done
 done
 
 # What each extract needs. Cached ones go on UPDATES as "extract|file" (no
@@ -923,7 +1234,7 @@ for EXTRACT in ${EXTRACTS}; do
             continue
         fi
         say "${EXTRACT}" "dropped from the cache: ${STALE}"
-        rm -f "${RAW}"
+        drop_raw "${RAW}"
     fi
     if [ ! -f "${RAIL_FILE}" ]; then
         say "${EXTRACT}" "to download: none kept"
@@ -950,7 +1261,8 @@ echo ""
 
 # What the updates still to run (REMAINING_UPDATES) need on the disk holding
 # directory $1, in MB beyond the margin: the largest of their raw files there,
-# since each is rewritten beside itself. A download started beside them leaves
+# since any of them may be rewritten beside itself (a rebase, or a filter with
+# nothing kept to refilter). A download started beside them leaves
 # this free, so that it never takes the room an update counted on.
 update_reserve_mb() {
     R_DISK="$(disk_of "$1")"
@@ -1004,12 +1316,28 @@ if [ "${UPDATE_COUNT}" -gt 0 ]; then
         EXTRACT="${ITEM%%|*}"
         RAW="${ITEM#*|}"
         RAIL_FILE="${WORK_DIR}/${EXTRACT}.rail.pbf"
-        update_raw "${EXTRACT}" "${RAW}"
+        update_changes "${EXTRACT}" "${RAW}"
         if [ -f "${RAIL_FILE}" ] &&
-            [ "$(cat "${RAIL_FILE}.source" 2> /dev/null || true)" = "$(source_record "$(raw_record "${RAW}")")" ]; then
+            [ "$(cat "${RAIL_FILE}.source" 2> /dev/null || true)" = "$(source_record "replication ${U_SEQ}")" ]; then
             finish "${EXTRACT}" "filtered copy still current, data from $(extract_date "${RAIL_FILE}")"
+        elif refilterable "${EXTRACT}" "${RAW}"; then
+            refilter_extract "${EXTRACT}" "${RAW}"
         else
+            # No filtered file to start from (--fresh, a new filter): the raw
+            # file at this state, filtered whole. Failing to rewrite it stops
+            # the run rather than dropping the file: a download would need
+            # the same room, and the shortage is most likely passing (what a
+            # failed run left).
+            if [ -n "${U_CHANGES}" ] && ! rebase_raw "${EXTRACT}" "${RAW}"; then
+                echo "ERROR: could not bring ${RAW} up to date"
+                exit 1
+            fi
             filter_extract "${EXTRACT}" "${RAW}" "${RAW}"
+        fi
+        # Not needed for this run, so a failed one (no room, osmium out of
+        # memory) only waits for the next, the changes kept.
+        if rebase_due "${EXTRACT}" "${RAW}"; then
+            rebase_raw "${EXTRACT}" "${RAW}" || true
         fi
         # The head, since UPDATES is taken in order.
         REMAINING_UPDATES="${REMAINING_UPDATES#* "${ITEM}"}"

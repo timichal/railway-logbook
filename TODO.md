@@ -13,14 +13,10 @@ The web user maps cache their route tiles since 2026-11-15: `railway_routes_tile
 
 ## Pipeline and deploy
 
-Measure these on the dev machine (see the top). **Judge each against "Where a deploy's time goes" in `RECALC_PERFORMANCE.md`** (measured 2026-11-15): prepare's step 1 is ~80% of a deploy (~97 of ~120 min on the server, 20m 40s locally), most of it `pyosmium-up-to-date` rewriting whole files; the recalculation is ~11%; merge, export and prune together under a minute locally.
+Measure these on the dev machine (see the top). **Judge each against "Where a deploy's time goes" in `RECALC_PERFORMANCE.md`** (measured 2026-11-15): prepare's step 1 was ~80% of a deploy (~97 of ~120 min on the server, 20m 40s locally), most of it `pyosmium-up-to-date` rewriting whole files, which it no longer does (see the end of that section); the recalculation is ~11%; merge, export and prune together under a minute locally.
 
-To measure step 1 locally, copy the server's raw cache into `data/raw` (plink `cat` per file, 6 at a time: ~1h for 35 GiB at ~10 MB/s; one stream caps at ~4 MB/s) and run `prepareMapData` with `RAW_CACHE=data/raw` and `pyosmium-up-to-date` on the PATH (`pip install osmium` into a venv works on Windows). Geofabrik itself throttles to 2–3 MB/s. The 2026-11-15 run's update deleted each raw file after updating it (fixed since, see `updatable_raw`), so `data/raw` is empty again.
+To measure step 1 locally: Geofabrik still serves older dated files (`europe/france-261108.osm.pbf`), so a raw file a week behind plus `pyosmium-get-changes` gives a realistic backlog without the server's cache. Run osmium in an `ubuntu:26.04` container with apt `osmium-tool pyosmium` (the server's exact versions), on a Docker volume rather than a Windows bind mount, which is several times slower to read. Geofabrik throttles to 2–3 MB/s.
 
-- **Single-pass update and filter.** The timings say prepare dominates: `pyosmium-up-to-date` took 15m 54s of step 1's 20m 40s locally (France 2m 0s, Germany 1m 45s), `tags-filter` 3m 58s. Each cached extract is rewritten in full, then read twice by `tags-filter` (once to collect referenced nodes): about 70GB of decompression for the 35GB of extracts, on the server's slow volume.
-  - A small libosmium (C++) or Rust tool could apply the diff and filter in one pass, taking the needed node ids from the previous rail file plus the diff.
-  - A cheaper variant: rewrite the raw file only every N deploys and stream `apply-changes` the rest of the time, capping the backlog because osmium holds the changes in memory.
-  - Also try overlapping the next extract's update with the current filter (they mostly touch different disks on the server), minding the disk-budget logic in `osmium-scripts/CLAUDE.md`.
 - **Import only what changed, then recalculate only what it could affect.** Needs care, and the recalculation it would skip is ~11% of a deploy (12 of ~120 min on the server); the load it would shrink is part of the ~9 min after step 1.
   - Step 1: COPY the new parts into a temp table, DELETE only vanished or changed rows (compare `geometry::bytea` and the attributes the pathfinder and tiles read), INSERT only new and changed ones. Still one transaction, still only ROW EXCLUSIVE locks. Record the changed part ids with old and new geometry.
   - Step 2: a route can skip recalculation when all three hold:
@@ -52,4 +48,5 @@ To measure step 1 locally, copy the server's raw cache into `data/raw` (plink `c
 
 ## Ongoing
 
+- **Check step 1 of the next map deploy** (`deployMapData`, then `--follow` or `data/deploy.log`): the raw cache is no longer rewritten on each update (2026-11-15, see "Raw cache" in `osmium-scripts/CLAUDE.md`). Its first run fetches up to a day or two of diffs per extract and refilters; compare `[1/4] took` against ~97 min, and add the figure to `RECALC_PERFORMANCE.md` "Where a deploy's time goes". The first run after `REBASE_AFTER_DAYS` (35) rebases nearly every extract at once (they were all last rewritten 2026-11-13/14), about the old cost: if that one hurts, stagger the rebases (e.g. by the extract's place in the list).
 - **Read `pg_stat_statements` on the server** after a week of real traffic (enabled 2026-11-14: preloaded by the `db` service's `command:`, the extension created in `02-vector-tiles.sql`), and add what it shows to this list.
