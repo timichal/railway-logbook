@@ -3,7 +3,7 @@
 Read this before changing `verifyRouteData.ts` or `scripts/lib/railwayPathFinder.ts`
 (or the `partNetwork.ts`, `partCatalog.ts` and `partGeometry.ts` beside it) for performance reasons. The work described here is **done**; what remains is the
 reasoning behind the current shape, the constraints that must not be broken, and
-the one thing still on the table.
+what was tried and gained nothing.
 
 ## Why this step matters
 
@@ -72,6 +72,13 @@ leaving 1.5M dead rows behind, to 80s whether nothing changed or ~2% did, with
 dead rows only for those. Of the 80s, ~10s is reading the file, ~30s the staging
 inserts (~10s of that server-side WKT parsing), ~6s the diff and ~5s stations.
 
+**Since 2026-11-16 prepare's steps 2–4 are two pipes** (now steps 2 and 3,
+`prepare.sh`): merge into time-filter, and export into pruneData, with the
+export limited to the tags pruneData reads (`osmium-scripts/export-config.json`),
+so neither the merged history nor the GeoJSON (1.4GB, 0.85GB trimmed) is
+written to disk. Locally, on the 54 kept extracts: merge 13s → 8s, export and
+prune 71s → 42s, the merged file and `pruned.geojson` identical to the byte.
+
 The recalculation's own split (the summary's "Summed over the workers" lines,
 `SearchTimings`), locally at 4 workers:
 
@@ -107,7 +114,8 @@ it takes the part-routes snapshot (26–41s), so the 12s is hidden behind it.
 A full `verifyRouteData` with the writes then took 1.7 min locally (snapshot
 and catalog 14s, recalculation 88s), against 24s + 2m 13s before. Summed over
 the workers: part queries 152s, building parts 35s, end parts 21s, search 4s,
-and the length query and write 137s, now the largest share. The part query that remains is Postgres's
+and the length query and write 137s, now the largest share, though nearly all
+of it is waiting on the JS thread ("Don't fold the length query into the write"). The part query that remains is Postgres's
 spatial filter: ids only, it still took 20ms a route serially against 30ms with
 the GeoJSON. The JS thread is still ~85% busy, now with the end parts, the
 `RailwayPart`s made per load and the queries' own handling.
@@ -300,12 +308,22 @@ of the recalculation: 2–3% of a deploy (the recalculation is ~11%). Not worth 
 up with stale geometry. Importing only the changed parts is a separate question:
 under 1% of parts change in a week.
 
-## Still on the table
+## Don't fold the length query into the write
 
-- **Fold the length query into the `UPDATE`.** Each route costs an extra round
-  trip for `ST_Length(...)::geography` before the write, because the result
-  decides whether to invalidate. A single statement with a CTE could do both. At
-  ~4.7k routes this is worth seconds, not minutes — the pathfinding dominates.
+The length query and the `UPDATE` look like the largest share of a run (137s
+summed above), but Postgres spends almost none of it: over the 2552 routes,
+`pg_stat_statements` gave 8ms in total for the length queries and 1.2s for the
+updates. The rest is each reply waiting its turn on the JS thread, busy ~70% of
+the time with the other workers' parts and searches (event-loop delay 22ms on
+average, p99 230ms). Of the 141s, 109s was the length query, sent straight
+after a search, when the thread is at its busiest.
+
+Folding the two into one statement (a CTE measuring the WKT, judging it against
+the stored length and updating only on no mismatch) was tried on 2026-11-16 and
+reverted. The routes came out identical to the bit, but the time only moved to
+the one round trip left: the write took 128s summed and the pool 89s, against
+131–141s and 81–91s before. Fewer round trips don't make the JS thread any less
+busy, and that thread, not the round trips, is what bounds the run.
 
 ## Measuring
 

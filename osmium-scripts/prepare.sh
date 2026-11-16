@@ -102,8 +102,10 @@ fi
 RAW_CACHE="${RAW_CACHE:-}"
 
 WORK_DIR="${DATA_DIR}/extracts"
-MERGED_FILE="${WORK_DIR}/merged.osh.pbf"
 FILTERED_FILE="${DATA_DIR}/rail.tmp.osm.pbf"
+# Written by runs before steps 2 and 3 became pipes; only swept now, should a
+# failed run have left one.
+MERGED_FILE="${WORK_DIR}/merged.osh.pbf"
 GEOJSON_FILE="${DATA_DIR}/rail.tmp.geojson"
 if [ $# -eq 0 ]; then
     OUTPUT_NAME="pruned"
@@ -111,6 +113,10 @@ else
     OUTPUT_NAME="pruned-partial"
 fi
 OUTPUT_FILE="${DATA_DIR}/${OUTPUT_NAME}.geojson"
+# Where step 3 prunes to, moved over OUTPUT_FILE once it succeeded. It ends in
+# .geojson because pruneData.ts refuses any other name; pruneData.ts writes it
+# as its own .part first.
+PRUNING_FILE="${DATA_DIR}/${OUTPUT_NAME}.new.geojson"
 SOURCES_FILE="${DATA_DIR}/${OUTPUT_NAME}.sources"
 INPUTS_FILE="${DATA_DIR}/${OUTPUT_NAME}.inputs"
 # Which extracts ${FILTERED_FILE} was merged from (see step 2).
@@ -151,18 +157,19 @@ extract_date() {
 }
 
 # What a run needs free on the data disk besides the raw cache: the largest
-# extract (France) is ~5GB, the merged and converted intermediates a few more,
-# and the import grows the database. remote-deploy.sh refuses to start with
+# extract (France) is ~5GB, the merged extracts and the pruned output (~0.2 and
+# ~0.6GB, now that merge and export are piped), and the import grows the
+# database. remote-deploy.sh refuses to start with
 # less, and the raw cache never fills the data disk below it.
 DATA_DISK_RESERVE_GB=10
 
 # The code that turns the extracts into the map, as the first line of .inputs
-# records it (see the end of step 1): this script and src/scripts as
-# committed, or "unknown" without git.
+# records it (see the end of step 1): this script, the export's tag list and
+# src/scripts as committed, or "unknown" without git.
 code_inputs() {
-    C_TREES="$(git rev-parse HEAD:osmium-scripts/prepare.sh HEAD:src/scripts 2> /dev/null)" ||
-        C_TREES="unknown"
-    # Unquoted, so the two hashes join on one line.
+    C_TREES="$(git rev-parse HEAD:osmium-scripts/prepare.sh HEAD:osmium-scripts/export-config.json \
+        HEAD:src/scripts 2> /dev/null)" || C_TREES="unknown"
+    # Unquoted, so the hashes join on one line.
     # shellcheck disable=SC2086
     echo "code:" ${C_TREES}
 }
@@ -1128,7 +1135,7 @@ fi
 # when the list is a trial one of its own (EXTRACTS_FILE), which would
 # otherwise cost the next real run every extract it leaves out.
 RUN_START="$(date +%s)"
-echo "[1/4] Checking $(count_extracts "${COUNT}")"
+echo "[1/3] Checking $(count_extracts "${COUNT}")"
 if [ "${EXTRACTS_FILE}" = "${LISTED_EXTRACTS_FILE}" ]; then
     ALL_EXTRACTS="$(all_extracts)"
     find "${WORK_DIR}" -type f -name '*.rail.pbf' | while read -r KEPT; do
@@ -1287,9 +1294,9 @@ DONE_OF=$((UPDATE_COUNT + $#))
 # filtered (and shifted off), and the next one started where there is room.
 if [ "${UPDATE_COUNT}" -gt 0 ]; then
     if [ $# -gt 0 ]; then
-        echo "[1/4] Updating $(count_extracts "${UPDATE_COUNT}" cached), downloading $(count_extracts $#) alongside"
+        echo "[1/3] Updating $(count_extracts "${UPDATE_COUNT}" cached), downloading $(count_extracts $#) alongside"
     else
-        echo "[1/4] Updating $(count_extracts "${UPDATE_COUNT}" cached)"
+        echo "[1/3] Updating $(count_extracts "${UPDATE_COUNT}" cached)"
     fi
     REMAINING_UPDATES="${UPDATES}"
     NO_ROOM_SAID=""
@@ -1351,9 +1358,9 @@ fi
 # published a newer file while they ran.
 if [ $# -gt 0 ]; then
     if [ "${UPDATE_COUNT}" -gt 0 ]; then
-        echo "[1/4] Downloading and filtering the remaining $(count_extracts $#)"
+        echo "[1/3] Downloading and filtering the remaining $(count_extracts $#)"
     else
-        echo "[1/4] Downloading and filtering $(count_extracts $#)"
+        echo "[1/3] Downloading and filtering $(count_extracts $#)"
     fi
     if [ -z "${DL_PID}" ]; then
         resolve_download "$1" || exit 1
@@ -1383,14 +1390,14 @@ while [ $# -gt 0 ]; do
     fi
 done
 
-echo "[1/4] took $(took "${RUN_START}")"
+echo "[1/3] took $(took "${RUN_START}")"
 echo ""
 
 # What the map is built from, exactly: each extract's .source, the dated file
 # or the last diff it was filtered from, plus the filter. A date alone would
 # not do, since a diff applied later the same day changes the data. Then the
-# code that turns it into the map: this script and src/scripts (pruning, the
-# import), as committed - the server's checkout always is, since deploy.sh
+# code that turns it into the map: this script, export-config.json and
+# src/scripts (pruning, the import), as committed - the server's checkout always is, since deploy.sh
 # refuses uncommitted changes there. src/lib, which the route recalculation
 # uses, is left out: it is mostly the web app, and verifyRouteData rechecks
 # the routes without a new map. Anything unknown (an extract with no .source,
@@ -1411,7 +1418,7 @@ if [ -n "${DEPLOYED_INPUTS:-}" ] && ! grep -q ': unknown$' "${INPUTS_FILE}.part"
     # not wanted: several GB of the data disk's reserve, freed.
     rm -f "${INPUTS_FILE}.part" "${SOURCES_FILE}.part" "${MERGED_FILE}" "${MERGED_FILE}.part" \
         "${FILTERED_FILE}" "${FILTERED_FILE}.part" "${MERGED_LIST_FILE}" \
-        "${GEOJSON_FILE}" "${GEOJSON_FILE}.part"
+        "${GEOJSON_FILE}" "${GEOJSON_FILE}.part" "${PRUNING_FILE}" "${PRUNING_FILE}.part"
     echo "=== Nothing new: every extract, and the code, is as in ${DEPLOYED_INPUTS}; no map prepared ==="
     exit 0
 fi
@@ -1421,43 +1428,43 @@ fi
 # versions - a plain merge writes both, which would give railway_parts two
 # rows with one id. So they are merged as history (-H keeps every version,
 # without warning about it) and time-filter then keeps the version current
-# now, i.e. the newest. Run for a single extract too, to keep one path.
+# now, i.e. the newest. Run for a single extract too, to keep one path. The
+# history goes from one to the other through a pipe, never to disk; pipefail
+# in a subshell of its own, because the rest of this script is written without
+# it (a `| head` would fail its producer). The server's sh is dash, which has
+# pipefail (checked on Ubuntu 26.04's 0.5.12-12ubuntu3); a shell without it
+# would fail the step every time, never pass a failure.
 #
 # A merged file left by a failed run is reused only if it was merged from
 # exactly these extracts and none of them was filtered since: an extract
 # added to extracts.txt in between would otherwise be downloaded, listed in
-# .sources, and still be missing from the data. The GeoJSON is converted
-# from the merged file, so it goes with it.
+# .sources, and still be missing from the data.
 if [ -n "${FILTERED_NOW}" ] ||
     [ "$(cat "${MERGED_LIST_FILE}" 2>/dev/null)" != "${EXTRACTS}" ]; then
-    rm -f "${FILTERED_FILE}" "${MERGED_LIST_FILE}" "${GEOJSON_FILE}"
+    rm -f "${FILTERED_FILE}" "${MERGED_LIST_FILE}"
 fi
 if [ -f "${FILTERED_FILE}" ]; then
-    echo "[2/4] Merging: reusing ${FILTERED_FILE}, merged by an earlier run"
+    echo "[2/3] Merging: reusing ${FILTERED_FILE}, merged by an earlier run"
 else
-    echo "[2/4] Merging $(count_extracts "${COUNT}")"
+    echo "[2/3] Merging $(count_extracts "${COUNT}")"
     STEP_START="$(date +%s)"
     RAIL_FILES=""
     for EXTRACT in ${EXTRACTS}; do
         RAIL_FILES="${RAIL_FILES} ${WORK_DIR}/${EXTRACT}.rail.pbf"
     done
-    osmium merge -H --overwrite -f osh.pbf -o "${MERGED_FILE}.part" ${RAIL_FILES} || {
-        echo "ERROR: Failed to merge extracts"
-        rm -f "${MERGED_FILE}.part"
-        exit 1
-    }
-    mv "${MERGED_FILE}.part" "${MERGED_FILE}"
-    echo "  merged in $(took "${STEP_START}")"
-    STEP_START="$(date +%s)"
-    osmium time-filter --overwrite -f pbf -o "${FILTERED_FILE}.part" "${MERGED_FILE}" || {
-        echo "ERROR: Failed to deduplicate merged extracts"
+    # shellcheck disable=SC2086
+    (
+        set -o pipefail
+        osmium merge -H -f osh.pbf -o - ${RAIL_FILES} |
+            osmium time-filter -F osh.pbf --overwrite -f pbf -o "${FILTERED_FILE}.part" -
+    ) || {
+        echo "ERROR: Failed to merge extracts (osmium merge or time-filter, see above)"
         rm -f "${FILTERED_FILE}.part"
         exit 1
     }
     echo "${EXTRACTS}" > "${MERGED_LIST_FILE}"
     mv "${FILTERED_FILE}.part" "${FILTERED_FILE}"
-    rm -f "${MERGED_FILE}"
-    echo "  deduplicated in $(took "${STEP_START}")"
+    echo "  merged in $(took "${STEP_START}")"
 fi
 
 # Written now, while the filtered extracts are still here to read, and
@@ -1467,41 +1474,43 @@ for EXTRACT in ${EXTRACTS}; do
 done > "${SOURCES_FILE}.part"
 echo ""
 
-# 3. Convert to GeoJSON
-if [ -f "${GEOJSON_FILE}" ]; then
-    echo "[3/4] Converting to GeoJSON: reusing ${GEOJSON_FILE}, converted by an earlier run"
-else
-    echo "[3/4] Converting to GeoJSON"
-    STEP_START="$(date +%s)"
-    osmium export "${FILTERED_FILE}" -a id -f geojson -o "${GEOJSON_FILE}.part" || {
-        echo "ERROR: Failed to convert to GeoJSON"
-        rm -f "${GEOJSON_FILE}.part"
-        exit 1
-    }
-    mv "${GEOJSON_FILE}.part" "${GEOJSON_FILE}"
-    echo "  done in $(took "${STEP_START}")"
-fi
-echo ""
-
-# 4. Prune data (pruneData.ts does its own .part/rename on the output, and
-# fails rather than writing a short file if the input ends mid-feature)
-echo "[4/4] Pruning (resolving station names)"
+# 3. Convert to GeoJSON and prune it, through a pipe: the GeoJSON is never on
+# disk (0.85 GB). export-config.json limits the tags exported to the ones
+# pruneData.ts reads, which shrinks it by 40%; a node left with no tag of those
+# is not exported at all, and could never have been kept. A failure here
+# reruns the export (seconds) along with the pruning.
+#
+# pruneData.ts fails on input that ends mid-feature, but osmium closes the
+# GeoJSON even when it fails reading (a damaged PBF gave a well-formed empty
+# collection), and pruneData.ts would rename what it pruned from that into
+# place. So it writes to PRUNING_FILE, and only once both succeeded
+# (pipefail) does that replace the output.
+echo "[3/3] Converting to GeoJSON and pruning (resolving station names)"
 STEP_START="$(date +%s)"
-tsx src/scripts/pruneData.ts "${OUTPUT_FILE}" < "${GEOJSON_FILE}" || {
-    echo "ERROR: Failed to prune data"
+(
+    set -o pipefail
+    osmium export "${FILTERED_FILE}" -c osmium-scripts/export-config.json -f geojson -o - |
+        tsx src/scripts/pruneData.ts "${PRUNING_FILE}"
+) || {
+    echo "ERROR: Failed to convert or prune data (osmium export or pruneData.ts, see above)"
+    rm -f "${PRUNING_FILE}" "${PRUNING_FILE}.part"
     exit 1
 }
+mv "${PRUNING_FILE}" "${OUTPUT_FILE}"
 mv "${SOURCES_FILE}.part" "${SOURCES_FILE}"
 mv "${INPUTS_FILE}.part" "${INPUTS_FILE}"
 echo "  done in $(took "${STEP_START}")"
 echo ""
 
-# 5. Cleanup: remove this run's intermediate files. Only reached once pruning
-# succeeded, so a failed run keeps its intermediates for the retry. The
-# filtered extracts stay, for the next run to reuse (see step 1).
-rm -f "${MERGED_FILE}"
+# 4. Cleanup: remove this run's intermediate files. Only reached once pruning
+# succeeded, so a failed run keeps its merged file for the retry. The filtered
+# extracts stay, for the next run to reuse (see step 1). MERGED_FILE and
+# GEOJSON_FILE are what runs before the pipes wrote to disk. A run stopped
+# mid-prune (the deploy's session ended) leaves PRUNING_FILE's .part, which
+# the next run overwrites and this removes.
 find "${WORK_DIR}" -depth -type d -empty -exec rmdir {} \;
-rm -f "${FILTERED_FILE}" "${MERGED_LIST_FILE}" "${GEOJSON_FILE}"
+rm -f "${FILTERED_FILE}" "${MERGED_LIST_FILE}" "${MERGED_FILE}" "${GEOJSON_FILE}" \
+    "${PRUNING_FILE}.part"
 
 echo "=== Done in $(took "${RUN_START}"): ${OUTPUT_FILE}, with the data of each extract from ==="
 while IFS= read -r LINE; do

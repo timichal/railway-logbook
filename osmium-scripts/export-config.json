@@ -1,0 +1,15 @@
+{
+  "attributes": {
+    "id": true
+  },
+  "include_tags": [
+    "railway",
+    "subway",
+    "usage",
+    "highspeed",
+    "name",
+    "name:ja_rm",
+    "name:ja-Latn",
+    "name:en"
+  ]
+}

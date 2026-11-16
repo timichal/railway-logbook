@@ -265,10 +265,10 @@ check() {
     echo "  => no record of what the deployed map was built from (imported by hand?), so it is prepared anew"
     C_NEW=1
   elif [ "$(grep '^code:' "${DEPLOYED_INPUTS_FILE}")" != "${C_CODE}" ] || [ "${C_CODE}" = "code: unknown" ]; then
-    echo "  => the code that prepares and imports the map (prepare.sh, src/scripts) changed since the deploy"
+    echo "  => the code that prepares and imports the map (prepare.sh, export-config.json, src/scripts) changed since the deploy"
     C_NEW=1
   else
-    echo "  => the code that prepares and imports the map (prepare.sh, src/scripts) is unchanged"
+    echo "  => the code that prepares and imports the map (prepare.sh, export-config.json, src/scripts) is unchanged"
   fi
   if [ -n "${FORCE}" ]; then
     echo "  => forced (--force or --fresh): deploys whatever changed"

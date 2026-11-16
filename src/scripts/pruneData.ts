@@ -10,6 +10,10 @@ import {
   streamFeatures,
 } from "./lib/geojsonFeatureStream";
 
+// The export feeding this carries only the tags listed in
+// osmium-scripts/export-config.json: a tag read here must be listed there too,
+// or it never arrives.
+
 const args = process.argv.slice(2);
 
 // The .geojson check catches the old call form, which took a region name
