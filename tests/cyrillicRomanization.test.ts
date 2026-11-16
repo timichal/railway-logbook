@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { romanizeCyrillic, romanizeName } from "@/scripts/lib/cyrillicRomanization";
+import { romanizeCyrillic, romanizeGreek, romanizeName } from "@/scripts/lib/cyrillicRomanization";
 
 describe("romanizeCyrillic", () => {
   test("Bulgaria: the Streamlined System, ъ a full vowel", () => {
@@ -145,6 +145,59 @@ describe("romanizeCyrillic", () => {
   });
 });
 
+describe("romanizeGreek", () => {
+  test("ELOT 743: χ ch, θ th, ψ ps, η i, υ y, ω o", () => {
+    assert.equal(romanizeGreek("Κάτω Αχαρναί"), "Kato Acharnai");
+    assert.equal(romanizeGreek("Χαλκίδα"), "Chalkida");
+    assert.equal(romanizeGreek("Άνω Λεχώνια"), "Ano Lechonia");
+    assert.equal(romanizeGreek("Θεσσαλονίκη"), "Thessaloniki");
+    assert.equal(romanizeGreek("Πλατύ"), "Platy");
+    assert.equal(romanizeGreek("Αθήνα"), "Athina");
+    assert.equal(romanizeGreek("Πειραιάς"), "Peiraias");
+    assert.equal(romanizeGreek("Αεροδρόμιο"), "Aerodromio");
+    assert.equal(romanizeGreek("Οινόη"), "Oinoi");
+  });
+
+  test("ου is ou, and a diaeresis parts two vowels", () => {
+    assert.equal(romanizeGreek("Αλεξανδρούπολη"), "Alexandroupoli");
+    assert.equal(romanizeGreek("Ρουφ"), "Rouf");
+    assert.equal(romanizeGreek("Κάτω Αχαΐα"), "Kato Achaia");
+    assert.equal(romanizeGreek("Ταΰγετος"), "Taygetos");
+  });
+
+  test("a tonos on the first of two vowels parts them", () => {
+    assert.equal(romanizeGreek("Άυλος"), "Aylos");
+    assert.equal(romanizeGreek("Πρόυπ"), "Proyp");
+    assert.equal(romanizeGreek("Ναύπλιο"), "Nafplio");
+  });
+
+  test("polytonic accents, breathings and the iota subscript are dropped", () => {
+    assert.equal(romanizeGreek("Εὔβοια"), "Evvoia");
+    assert.equal(romanizeGreek("Ἀθῆναι"), "Athinai");
+    assert.equal(romanizeGreek("ᾠδή"), "odi");
+  });
+
+  test("αυ ευ ηυ are v before a vowel or voiced consonant, f elsewhere", () => {
+    assert.equal(romanizeGreek("Λεύκα"), "Lefka");
+    assert.equal(romanizeGreek("Ναύπλιο"), "Nafplio");
+    assert.equal(romanizeGreek("Αυλίδα"), "Avlida");
+    assert.equal(romanizeGreek("Ευαγγελισμός"), "Evangelismos");
+  });
+
+  test("μπ is b at either end of a word and mb inside; γγ ng, γκ gk, γξ nx", () => {
+    assert.equal(romanizeGreek("Μπράλος"), "Bralos");
+    assert.equal(romanizeGreek("Κομποτάδες"), "Kombotades");
+    assert.equal(romanizeGreek("Άγκυρα"), "Agkyra");
+    assert.equal(romanizeGreek("Σφίγξ"), "Sfinx");
+  });
+
+  test("capitals: a two-letter spelling is capitalized, or all capitals in a capital word", () => {
+    assert.equal(romanizeGreek("ΧΑΛΚΙΔΑ"), "CHALKIDA");
+    assert.equal(romanizeGreek("ΑΥΛΙΔΑ"), "AVLIDA");
+    assert.equal(romanizeGreek("Ψαθόπυργος"), "Psathopyrgos");
+  });
+});
+
 describe("romanizeName", () => {
   const nowhere = () => null;
 
@@ -155,7 +208,7 @@ describe("romanizeName", () => {
     );
   });
 
-  test("Greek alone goes to the package, Latin passes through untouched", () => {
+  test("Greek goes by ELOT 743, Latin passes through untouched", () => {
     assert.equal(romanizeName("Θεσσαλονίκη", nowhere), "Thessaloniki");
     assert.equal(romanizeName("Kadaň-Prunéřov", nowhere), "Kadaň-Prunéřov");
   });

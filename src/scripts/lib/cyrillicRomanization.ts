@@ -13,7 +13,7 @@ import { transliterate } from "transliteration";
  * A name written in another language than the country's (a Russian name in
  * Ukraine, say) shows a letter the country's alphabet lacks; it goes to the
  * first system whose alphabet covers it. What no system covers is left to the
- * package, as is Greek (`romanizeName`).
+ * package. Greek goes by ELOT 743 (`romanizeGreek`).
  */
 
 /**
@@ -23,7 +23,7 @@ import { transliterate } from "transliteration";
 type Rule = (chars: string[], i: number) => [string, number] | undefined;
 
 type System = {
-  /** Every Cyrillic letter the language writes, lower case. */
+  /** Every letter the language writes, lower case. It picks among the Cyrillic systems (`covers`); Greek has one. */
   alphabet: string;
   rule: Rule;
 };
@@ -31,7 +31,7 @@ type System = {
 const LETTER = /\p{L}/u;
 const CYRILLIC = /\p{Script=Cyrillic}/u;
 const GREEK = /\p{Script=Greek}/u;
-/** What no system here writes and the package romanizes. */
+/** The scripts the systems here romanize. A letter its system doesn't know goes to `romanizeUnknown`. */
 const NON_LATIN = /[\p{Script=Cyrillic}\p{Script=Greek}]/u;
 /** A combining acute or grave after a Cyrillic letter: a stress mark (Чугу́їв). */
 const STRESS_MARK = /(\p{Script=Cyrillic})[\u{300}\u{301}]/gu;
@@ -388,6 +388,106 @@ const RUSSIAN: System = {
   ),
 };
 
+/**
+ * Greece's ELOT 743 (ISO 843's transcription, adopted by the UN in 1987), the
+ * spelling of Hellenic Train's timetables and the road signs: Κάτω Αχαρναί
+ * Kato Acharnai, Χαλκίδα Chalkida, Αλεξανδρούπολη Alexandroupoli. The package
+ * writes χ as "h" and ου as "oy", and spells ΐ as a capital I (Αχαΐα, "AhaIa").
+ * The accents are dropped before the letters are matched (`greekLower`). The
+ * diaeresis stays, since it parts two vowels (Αχαΐα, Achaia), and a tonos on
+ * the first of two parts them too (Άυλος, Aylos).
+ */
+const GREEK_VOWELS = "αεηιοωυϊϋ";
+/** Before these, and before a vowel, αυ ευ ηυ are av ev iv; af ef if elsewhere. */
+const GREEK_VOICED = "βγδζλμνρ";
+const GREEK_U_DIPHTHONGS: Record<string, string> = { α: "a", ε: "e", η: "i" };
+const GREEK_NASAL_PAIRS: Record<string, string> = { γγ: "ng", γκ: "gk", γξ: "nx", γχ: "nch" };
+
+const ELOT_743: System = {
+  alphabet: "αβγδεζηθικλμνξοπρσςτυφχψωϊϋ",
+  rule: firstOf(
+    (chars, i) => {
+      const vowel = GREEK_U_DIPHTHONGS[chars[i]];
+      if (!vowel || chars[i + 1] !== "υ") return undefined;
+      const next = chars[i + 2] ?? "";
+      const voiced = next !== "" && (GREEK_VOWELS.includes(next) || GREEK_VOICED.includes(next));
+      return [vowel + (voiced ? "v" : "f"), 2];
+    },
+    (chars, i) => (chars[i] === "ο" && chars[i + 1] === "υ" ? ["ou", 2] : undefined),
+    // μπ is b at either end of a word, mb inside one: Μπράλος Bralos, Κομποτάδες Kombotades.
+    (chars, i) => {
+      if (chars[i] !== "μ" || chars[i + 1] !== "π") return undefined;
+      return [startsWord(chars, i) || !isLetter(chars[i + 2]) ? "b" : "mb", 2];
+    },
+    (chars, i) => {
+      const pair = GREEK_NASAL_PAIRS[chars[i] + (chars[i + 1] ?? "")];
+      return pair ? [pair, 2] : undefined;
+    },
+    lettersRule({
+      α: "a",
+      β: "v",
+      γ: "g",
+      δ: "d",
+      ε: "e",
+      ζ: "z",
+      η: "i",
+      θ: "th",
+      ι: "i",
+      ϊ: "i",
+      κ: "k",
+      λ: "l",
+      μ: "m",
+      ν: "n",
+      ξ: "x",
+      ο: "o",
+      π: "p",
+      ρ: "r",
+      σ: "s",
+      ς: "s",
+      τ: "t",
+      υ: "y",
+      ϋ: "y",
+      φ: "f",
+      χ: "ch",
+      ψ: "ps",
+      ω: "o",
+    }),
+  ),
+};
+
+/**
+ * Accents ELOT 743 doesn't write: the tonos (acute, and the grave and
+ * circumflex of polytonic spelling), the breathings and the iota subscript.
+ */
+const GREEK_ACCENTS = /[\u0300\u0301\u0313\u0314\u0342\u0345]/g;
+/** The stress on a vowel: the tonos, or a polytonic grave or circumflex. */
+const GREEK_STRESS = /[\u0300\u0301\u0342]/;
+
+/** A Greek letter lower-cased and stripped of its accents; any other letter lower-cased. */
+function greekLower(char: string): string {
+  const lower = char.toLowerCase();
+  if (!GREEK.test(lower)) return lower;
+  return lower.normalize("NFD").replace(GREEK_ACCENTS, "").normalize("NFC");
+}
+
+/** `name` with its Greek romanized by ELOT 743. Latin letters pass through. */
+export function romanizeGreek(name: string): string {
+  const original = [...name.normalize("NFC")];
+  const lower = original.map(greekLower);
+  // The stress on the first of two vowels parts them, as a diaeresis on the
+  // second would: Άυλος is a-y-los, Aylos, where αύ is one sound (Ναύπλιο).
+  for (let i = 0; i + 1 < lower.length; i++) {
+    if (
+      "αεηο".includes(lower[i]) &&
+      lower[i + 1] === "υ" &&
+      GREEK_STRESS.test(original[i].normalize("NFD"))
+    ) {
+      lower[i + 1] = "ϋ";
+    }
+  }
+  return romanizeWith(ELOT_743, original, lower);
+}
+
 /** The system each country writes Cyrillic in. Russian everywhere else. */
 const COUNTRY_SYSTEMS: Record<string, System> = {
   BG: BULGARIAN,
@@ -423,9 +523,17 @@ function capitalized(latin: string, prev: string | undefined, next: string | und
 }
 
 /**
+ * A run of letters `system` doesn't know: Greek in another system's name goes
+ * by ELOT 743, anything else to the package.
+ */
+function romanizeUnknown(system: System, run: string): string {
+  return system !== ELOT_743 && !CYRILLIC.test(run) ? romanizeGreek(run) : transliterate(run);
+}
+
+/**
  * Romanizes by `system`. A run of Cyrillic or Greek letters the system doesn't
- * know goes to the package, that run alone, so the diacritics the system wrote
- * (and any Latin ones in the name) are kept.
+ * know is romanized on its own (`romanizeUnknown`), so the diacritics the
+ * system wrote (and any Latin ones in the name) are kept.
  */
 function romanizeWith(system: System, original: string[], lower: string[]): string {
   let out = "";
@@ -439,7 +547,7 @@ function romanizeWith(system: System, original: string[], lower: string[]): stri
       continue;
     }
     if (unknown) {
-      out += transliterate(unknown);
+      out += romanizeUnknown(system, unknown);
       unknown = "";
     }
     if (!result) {
@@ -454,7 +562,7 @@ function romanizeWith(system: System, original: string[], lower: string[]): stri
     i += length;
   }
 
-  return unknown ? out + transliterate(unknown) : out;
+  return unknown ? out + romanizeUnknown(system, unknown) : out;
 }
 
 /**
@@ -478,12 +586,12 @@ export function romanizeCyrillic(name: string, country: string | null): string {
 
 /**
  * A station name in Latin script. Cyrillic goes by its country's system
- * (`romanizeCyrillic`, with Greek in the same name left to the package), Greek
- * alone by the package, and Latin passes through. `countryAt` is asked only
+ * (`romanizeCyrillic`, Greek in the same name by ELOT 743), Greek by ELOT 743
+ * (`romanizeGreek`), and Latin passes through. `countryAt` is asked only
  * for a Cyrillic name, since a lookup costs something and most names are Latin.
  */
 export function romanizeName(name: string, countryAt: () => string | null): string {
   if (CYRILLIC.test(name)) return romanizeCyrillic(name, countryAt());
-  if (GREEK.test(name)) return transliterate(name);
+  if (GREEK.test(name)) return romanizeGreek(name);
   return name;
 }
