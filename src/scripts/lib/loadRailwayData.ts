@@ -29,6 +29,22 @@ interface LoadResult {
   partsCount: number;
 }
 
+/** What loading the parts did to `railway_parts` (see applyStagedParts). */
+interface PartChanges {
+  added: number;
+  changed: number;
+  removed: number;
+  unchanged: number;
+}
+
+/**
+ * The parts are read into this first, then compared with `railway_parts` (see
+ * applyStagedParts). A temp table: private to the loading session, dropped with
+ * the transaction whichever way it ends, and written without WAL, trigger or
+ * spatial index, which is most of what made inserting into `railway_parts` slow.
+ */
+const STAGED_PARTS = "railway_parts_staged";
+
 /** Rows are sent in batches; 1000 x 4 parameters stays well under Postgres' 65535. */
 const BATCH_SIZE = 1000;
 
@@ -53,7 +69,7 @@ interface PartRow {
  * Refuse the whole import before a single row is touched if any file is missing,
  * empty or truncated.
  *
- * The loader clears stations and railway_parts before its first insert, so a
+ * The loader clears stations and drops every part the files don't hold, so a
  * mistyped path or a transfer that died halfway would otherwise wipe the map and
  * only then discover it has nothing to put back — and with one file per region,
  * there is more than one chance to get that wrong. A pruned file ends with the
@@ -109,10 +125,17 @@ async function insertStations(client: ClientBase, rows: StationRow[]): Promise<v
   );
 }
 
-/** Insert a batch of railway parts, refreshing usage/highspeed on ones already seen. */
-async function insertParts(client: ClientBase, rows: PartRow[]): Promise<void> {
+/**
+ * Stage a batch of railway parts. Ids are unique in a pruned file (prepare.sh's
+ * merge keeps one version of each way). An id repeated in a later batch keeps
+ * its first geometry and takes the last tags; one repeated within a batch fails
+ * the import ("cannot affect row a second time").
+ */
+async function stageParts(client: ClientBase, rows: PartRow[]): Promise<void> {
   if (rows.length === 0) return;
 
+  // A VALUES list rather than one array per column through unnest(), which
+  // staged half as fast again (45s against 30s for the whole map, measured).
   const values: unknown[] = [];
   const tuples = rows.map((row, index) => {
     const base = index * 4;
@@ -121,25 +144,87 @@ async function insertParts(client: ClientBase, rows: PartRow[]): Promise<void> {
   });
 
   await client.query(
-    `INSERT INTO railway_parts (id, geometry, usage, highspeed)
+    `INSERT INTO ${STAGED_PARTS} (id, geometry, usage, highspeed)
      VALUES ${tuples.join(", ")}
      ON CONFLICT (id) DO UPDATE SET
        usage = EXCLUDED.usage,
-       highspeed = EXCLUDED.highspeed,
-       updated_at = CURRENT_TIMESTAMP`,
+       highspeed = EXCLUDED.highspeed`,
     values,
   );
 }
 
 /**
+ * Bring `railway_parts` to the staged set, writing only the rows that differ.
+ *
+ * Few parts change between two deploys (Czechia over 5 days: 232 of 62.5k), and
+ * deleting and reinserting all 1.5M rewrote the table, ran its trigger's
+ * transform and rebuilt four indexes for the sake of those few, then left the
+ * whole table dead behind it for the recalculation's index scans to wade through.
+ * A part has changed when a tag differs or its geometry differs to the bit. Both
+ * sides come from the same text through ST_GeomFromText, so an unchanged way
+ * parses to the same doubles, and PostGIS's `=` compares the coordinates exactly
+ * and in order (a one-ulp shift counts), faster than comparing `::bytea`. A
+ * changed part is updated in place and keeps its `created_at` (when it was first
+ * imported).
+ */
+async function applyStagedParts(client: ClientBase): Promise<PartChanges> {
+  // Autovacuum never analyses a temp table: without this the joins below are
+  // planned for an empty one.
+  await client.query(`ANALYZE ${STAGED_PARTS}`);
+
+  const removed = await client.query(
+    `DELETE FROM railway_parts p
+     WHERE NOT EXISTS (SELECT 1 FROM ${STAGED_PARTS} s WHERE s.id = p.id)`,
+  );
+  // Two updates, because the trigger refreshing geometry_3857 fires whenever
+  // `geometry` is in the SET list, equal or not: a part retagged only keeps its
+  // geometry untouched. The second finds the moved parts already retagged.
+  const moved = await client.query(
+    `UPDATE railway_parts p
+     SET geometry = s.geometry,
+         usage = s.usage,
+         highspeed = s.highspeed,
+         updated_at = CURRENT_TIMESTAMP
+     FROM ${STAGED_PARTS} s
+     WHERE s.id = p.id AND p.geometry IS DISTINCT FROM s.geometry`,
+  );
+  const retagged = await client.query(
+    `UPDATE railway_parts p
+     SET usage = s.usage,
+         highspeed = s.highspeed,
+         updated_at = CURRENT_TIMESTAMP
+     FROM ${STAGED_PARTS} s
+     WHERE s.id = p.id
+       AND (p.usage IS DISTINCT FROM s.usage OR p.highspeed IS DISTINCT FROM s.highspeed)`,
+  );
+  const added = await client.query(
+    `INSERT INTO railway_parts (id, geometry, usage, highspeed)
+     SELECT s.id, s.geometry, s.usage, s.highspeed
+     FROM ${STAGED_PARTS} s
+     WHERE NOT EXISTS (SELECT 1 FROM railway_parts p WHERE p.id = s.id)`,
+  );
+  const staged = await client.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM ${STAGED_PARTS}`,
+  );
+
+  const counts = {
+    added: added.rowCount ?? 0,
+    changed: (moved.rowCount ?? 0) + (retagged.rowCount ?? 0),
+    removed: removed.rowCount ?? 0,
+  };
+  return { ...counts, unchanged: staged.rows[0].count - counts.added - counts.changed };
+}
+
+/**
  * Load stations and railway parts from GeoJSON files into the database.
  *
- * The tables are emptied and refilled inside one transaction, so the swap is
+ * Stations are emptied and refilled; parts are staged and only their differences
+ * written (applyStagedParts). Both happen inside one transaction, so the swap is
  * atomic: a crash halfway leaves the previous map in place instead of a
  * half-loaded one, and readers keep being served the old data until the new set
- * commits. DELETE rather than TRUNCATE for exactly that reason — TRUNCATE would
- * be faster and leave no dead tuples, but it takes an ACCESS EXCLUSIVE lock held
- * until commit, which would block every tile query for the length of the import.
+ * commits. DELETE rather than TRUNCATE for exactly that reason: TRUNCATE takes an
+ * ACCESS EXCLUSIVE lock held until commit, which would block every tile query for
+ * the length of the import. Nothing here takes more than ROW EXCLUSIVE.
  */
 export async function loadStationsAndParts(
   client: ClientBase,
@@ -154,18 +239,31 @@ export async function loadStationsAndParts(
 
   await client.query("BEGIN");
   try {
-    // Cleared once, before the first file: the regions share these tables, so
-    // clearing per file would drop whichever region was loaded just before.
-    // OSM ids are globally unique, so the regions cannot collide.
-    console.log("Clearing existing data...");
-    await client.query("DELETE FROM railway_parts");
+    // Cleared and staged once, before the first file: the regions share these
+    // tables, so doing it per file would drop whichever region was loaded just
+    // before. OSM ids are globally unique, so the regions cannot collide.
+    console.log("Clearing stations...");
     await client.query("DELETE FROM stations");
+    await client.query(
+      `CREATE TEMP TABLE ${STAGED_PARTS} (
+         id BIGINT PRIMARY KEY,
+         geometry GEOMETRY(LINESTRING, 4326) NOT NULL,
+         usage TEXT,
+         highspeed BOOLEAN NOT NULL
+       ) ON COMMIT DROP`,
+    );
 
     for (const path of paths) {
       const result = await loadOneFile(client, path);
       total.stationsCount += result.stationsCount;
       total.partsCount += result.partsCount;
     }
+
+    console.log("Writing the railway parts that changed...");
+    const changes = await applyStagedParts(client);
+    console.log(
+      `Railway parts: ${changes.added} added, ${changes.changed} changed, ${changes.removed} removed, ${changes.unchanged} unchanged`,
+    );
 
     await client.query("COMMIT");
   } catch (error) {
@@ -180,14 +278,15 @@ export async function loadStationsAndParts(
     console.log("");
     console.log(`All ${paths.length} files loaded:`);
     console.log(`- Stations loaded: ${total.stationsCount}`);
-    console.log(`- Railway parts loaded: ${total.partsCount}`);
+    console.log(`- Railway parts read: ${total.partsCount}`);
   }
 
   return total;
 }
 
 /**
- * Load a single GeoJSON file into the (already cleared) tables.
+ * Load a single GeoJSON file: its stations into the (already cleared) table, its
+ * parts into the staging table.
  *
  * The file is streamed rather than read whole: these run to several gigabytes,
  * and holding one as a single string was what forced importMapData's raised heap
@@ -230,7 +329,7 @@ async function loadOneFile(client: ClientBase, geojsonPath: string): Promise<Loa
       stationRows = [];
     }
     if (partRows.length >= BATCH_SIZE) {
-      await insertParts(client, partRows);
+      await stageParts(client, partRows);
       partRows = [];
     }
 
@@ -257,13 +356,13 @@ async function loadOneFile(client: ClientBase, geojsonPath: string): Promise<Loa
     await insertStations(client, stationRows);
   }
   if (partRows.length > 0) {
-    console.log(`Inserting final batch of ${partRows.length} railway parts...`);
-    await insertParts(client, partRows);
+    console.log(`Staging final batch of ${partRows.length} railway parts...`);
+    await stageParts(client, partRows);
   }
 
   console.log(`Data loading completed successfully!`);
   console.log(`- Stations loaded: ${stationsCount}`);
-  console.log(`- Railway parts loaded: ${partsCount}`);
+  console.log(`- Railway parts read: ${partsCount}`);
 
   return { stationsCount, partsCount };
 }

@@ -22,10 +22,10 @@ services:
     #   indexes alone; the table is ~834MB). Filled as pages are read, and a map
     #   import or recalculation reads enough to fill it, so count the whole 1GB as
     #   taken when sizing anything beside it.
-    # - maintenance_work_mem for vacuum and index builds, which a map import leaves
-    #   plenty of. autovacuum_work_mem caps each autovacuum worker separately (it
-    #   would otherwise take maintenance_work_mem, times up to three workers, all
-    #   busy right after an import).
+    # - maintenance_work_mem for vacuum and index builds. autovacuum_work_mem caps
+    #   each autovacuum worker separately (it would otherwise take
+    #   maintenance_work_mem, times up to three workers, busy after an import or a
+    #   recalculation).
     # - pg_stat_statements, to see which queries the real traffic spends on. Its
     #   extension is created in 02-vector-tiles.sql; the library must be preloaded.
     command: >-

@@ -64,6 +64,14 @@ The output is the same file object for object (OPL), and so is Czechia's
 with one and two weeks of diffs. The server's step 1 hasn't been measured
 since (TODO.md).
 
+**Since 2026-11-16 import step 1 writes only the parts that changed**
+(`applyStagedParts`, `loadRailwayData.ts`): the parts are staged in a temp table
+and compared with `railway_parts`, rather than all 1.5M being deleted and
+reinserted. Locally, the full load of the same `pruned.geojson` went from 144s,
+leaving 1.5M dead rows behind, to 80s whether nothing changed or ~2% did, with
+dead rows only for those. Of the 80s, ~10s is reading the file, ~30s the staging
+inserts (~10s of that server-side WKT parsing), ~6s the diff and ~5s stations.
+
 The recalculation's own split (the summary's "Summed over the workers" lines,
 `SearchTimings`), locally at 4 workers:
 

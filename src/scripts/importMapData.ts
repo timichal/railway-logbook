@@ -28,8 +28,8 @@ async function loadGeoJSONData(): Promise<void> {
 
   try {
     // Parse CLI args: every non-flag positional is a data file path. prepare.sh
-    // writes one file holding every region; several load into the same tables,
-    // cleared once before the first file.
+    // writes one file holding every region; several load into the same tables as
+    // one map (stations cleared once, parts compared once with all files read).
     const args = process.argv.slice(2);
     const concurrency = parseConcurrencyArg(args);
     const dataPaths = args.filter((arg) => !arg.startsWith("--"));
