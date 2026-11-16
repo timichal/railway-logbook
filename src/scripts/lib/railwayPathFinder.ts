@@ -2,6 +2,7 @@ import type { Client, Pool } from "pg";
 import { BACKTRACKING_THRESHOLD_DEGREES } from "../../lib/geoUtils";
 import type { BacktrackingPoint, PathResult } from "../../lib/shared/types";
 import { MinHeap } from "./minHeap";
+import type { PartCatalog } from "./partCatalog";
 import {
   buildCoordinatesWithTruncation,
   coordinateDistance,
@@ -60,6 +61,12 @@ export interface PathFinderOptions {
   avoidOtherRoutes?: { trackId: number | null; snapshot?: PartRoutes };
   /** Where to add up the time `findPathFromCoordinates` spends, for a bulk run. */
   timings?: SearchTimings;
+  /**
+   * Every part, loaded once for a bulk run: the part loads then fetch ids
+   * only and take the geometry from it (`PartNetwork`). The paths found are the
+   * same to the bit.
+   */
+  catalog?: PartCatalog;
 }
 
 /**
@@ -94,7 +101,7 @@ function backtrackingSlack(distance: number): number {
  * orientation, backtracking, truncation — is `partGeometry.ts`.
  */
 export class RailwayPathFinder {
-  private readonly network = new PartNetwork();
+  private readonly network: PartNetwork;
   private readonly quiet: boolean;
   private readonly avoidBacktracking: boolean;
   private readonly avoidOtherRoutes: PathFinderOptions["avoidOtherRoutes"];
@@ -103,6 +110,7 @@ export class RailwayPathFinder {
   private readonly timings: SearchTimings | undefined;
 
   constructor(options: PathFinderOptions = {}) {
+    this.network = new PartNetwork(options.catalog);
     this.quiet = options.quiet ?? false;
     this.timings = options.timings;
     this.avoidBacktracking = options.avoidBacktracking ?? false;

@@ -4,6 +4,7 @@ import { coordinatesToWKT } from "../lib/coordinateUtils";
 import { createPool } from "../lib/db";
 import { lineLengthKmSql } from "../lib/lineLength";
 import { formatStationProximity, refreshAllStationProximity } from "../lib/stationProximity";
+import { PartCatalog } from "./lib/partCatalog";
 import { emptySearchTimings, type SearchTimings } from "./lib/partNetwork";
 import { loadAllPartRoutes, type PartRoutes } from "./lib/partRoutes";
 import { type PathFinderOptions, RailwayPathFinder } from "./lib/railwayPathFinder";
@@ -13,10 +14,10 @@ import { runPool } from "./lib/runPool";
  * How many routes are recalculated at once by default.
  *
  * Every route is recalculated independently of every other one, so this is the
- * one part of the import that parallelises for free. The ceiling is memory, not
- * Postgres: each worker holds its own bufferful of parsed part geometry, which
- * is why `importMapData` runs with a raised heap limit. Raise it by measuring,
- * not by guessing.
+ * one part of the import that parallelises for free. The ceiling is memory as
+ * much as CPU: each worker holds its own bufferful of `RailwayPart`s, beside the
+ * run's `PartCatalog`, and `importMapData` and `verifyRouteData` run with the
+ * heap capped (RECALC_PERFORMANCE.md). Raise it by measuring, not by guessing.
  */
 const DEFAULT_RECALC_CONCURRENCY = 4;
 
@@ -66,7 +67,7 @@ function emptyRecalcTimings(): RecalcTimings {
 
 /**
  * The split of a run's time, as printed under its summary. The synchronous
- * parts (parsing, end parts, search) are time on the one JS thread every worker
+ * parts (building parts, end parts, search) are time on the one JS thread every worker
  * shares, so their share of the wall-clock says how far that thread is the
  * bottleneck; the rest is waiting on Postgres.
  */
@@ -76,15 +77,37 @@ function formatTimings(timings: RecalcTimings): string[] {
   const busy = timings.poolMs > 0 ? ((jsMs / timings.poolMs) * 100).toFixed(0) : "0";
   return [
     `Summed over the workers: part queries ${seconds(timings.loadQueryMs)} (${timings.loads} loads), ` +
-      `parsing ${seconds(timings.loadParseMs)}, end parts ${seconds(timings.endPartsMs)}, ` +
+      `building parts ${seconds(timings.loadParseMs)}, end parts ${seconds(timings.endPartsMs)}, ` +
       `search ${seconds(timings.searchMs)}, length query and write ${seconds(timings.writeMs)}`,
-    `JS thread busy parsing and searching: ${seconds(jsMs)} of ${seconds(timings.poolMs)} (${busy}%)`,
+    `JS thread busy building parts and searching: ${seconds(jsMs)} of ${seconds(timings.poolMs)} (${busy}%)`,
   ];
 }
 
 interface RecalculationOptions {
   /** Routes to recalculate at once. Defaults to DEFAULT_RECALC_CONCURRENCY. */
   concurrency?: number;
+}
+
+/**
+ * The run's `PartCatalog`, loaded on first ask and shared by the routes and the
+ * scenic lines. Not before: the initial import has nothing to recalculate, and
+ * loading every part takes a while (seconds locally).
+ */
+type CatalogSource = () => Promise<PartCatalog>;
+
+function lazyCatalog(db: Pool): CatalogSource {
+  let loading: Promise<PartCatalog> | null = null;
+  return () => {
+    loading ??= (async () => {
+      const started = Date.now();
+      const catalog = await PartCatalog.load(db);
+      console.log(
+        `Loaded ${catalog.size} railway parts in ${((Date.now() - started) / 1000).toFixed(0)}s`,
+      );
+      return catalog;
+    })();
+    return loading;
+  };
 }
 
 /** What a route and a scenic line share, as read for recalculation. */
@@ -130,7 +153,8 @@ type RouteOutcome =
 async function recalculateGeometry(
   db: Pool,
   row: StoredGeometryRow,
-  finder: Omit<PathFinderOptions, "quiet" | "timings">,
+  finder: Omit<PathFinderOptions, "quiet" | "timings" | "catalog">,
+  catalog: PartCatalog,
   timings: RecalcTimings,
 ): Promise<
   | { status: "invalid"; error: string }
@@ -142,7 +166,7 @@ async function recalculateGeometry(
   // searches, several at a time, and their progress logging would bury the
   // summary. See PathFinderOptions for why patching the global console.log —
   // which is what this used to do — cannot survive two overlapping searches.
-  const pathFinder = new RailwayPathFinder({ ...finder, quiet: true, timings });
+  const pathFinder = new RailwayPathFinder({ ...finder, quiet: true, timings, catalog });
 
   // Deliberately no try/catch. Every way pathfinding can fail comes back as
   // null — the one failure that throws, a part combination whose chain doesn't
@@ -203,12 +227,14 @@ async function recalculateAndStoreRoute(
   db: Pool,
   route: RouteRow,
   partRoutes: PartRoutes,
+  catalog: PartCatalog,
   timings: RecalcTimings,
 ): Promise<RouteOutcome> {
   const outcome = await recalculateGeometry(
     db,
     route,
     { avoidOtherRoutes: { trackId: route.track_id, snapshot: partRoutes } },
+    catalog,
     timings,
   );
 
@@ -262,7 +288,8 @@ async function recalculateAndStoreRoute(
  */
 async function recalculateAllRoutes(
   db: Pool,
-  options: RecalculationOptions = {},
+  options: RecalculationOptions,
+  getCatalog: CatalogSource,
 ): Promise<RecalculationResult> {
   const concurrency = options.concurrency ?? DEFAULT_RECALC_CONCURRENCY;
 
@@ -293,15 +320,23 @@ async function recalculateAllRoutes(
 
   result.totalRoutes = routes.rows.length;
   console.log(`Found ${result.totalRoutes} routes to recalculate (${concurrency} at a time)`);
+  if (result.totalRoutes === 0) return result;
 
   // Which routes run along which parts, once for the whole run: each route keeps
   // off the others' track as it stood before the run, so the outcome doesn't
   // depend on which routes the workers happen to rewrite first.
+  // The part catalog loads meanwhile, on connections of its own: neither needs
+  // the other, and each takes a while.
   const snapshotStart = Date.now();
-  const partRoutes = await loadAllPartRoutes(db);
-  console.log(
-    `Found the routes of ${partRoutes.size} parts in ${((Date.now() - snapshotStart) / 1000).toFixed(0)}s`,
-  );
+  const [partRoutes, catalog] = await Promise.all([
+    loadAllPartRoutes(db).then((snapshot) => {
+      console.log(
+        `Found the routes of ${snapshot.size} parts in ${((Date.now() - snapshotStart) / 1000).toFixed(0)}s`,
+      );
+      return snapshot;
+    }),
+    getCatalog(),
+  ]);
 
   // A pathfinding failure is already an outcome (see recalculateGeometry), so a
   // throw means the database itself is unhappy (or a bug): runPool stops the run
@@ -311,7 +346,7 @@ async function recalculateAllRoutes(
   const outcomes = await runPool(
     routes.rows,
     concurrency,
-    (route) => recalculateAndStoreRoute(db, route, partRoutes, result.timings),
+    (route) => recalculateAndStoreRoute(db, route, partRoutes, catalog, result.timings),
     (processed) => {
       if (processed % 10 === 0 || processed === result.totalRoutes) {
         process.stdout.write(`\r  ${processed}/${result.totalRoutes} routes recalculated...`);
@@ -356,7 +391,11 @@ interface ScenicLineRow extends StoredGeometryRow {
  * goes on drawing — it is only a highlight. Like an invalid route, an invalid
  * line is left to the admin's re-pick and never recalculated.
  */
-async function recalculateScenicLines(db: Pool, options: RecalculationOptions): Promise<void> {
+async function recalculateScenicLines(
+  db: Pool,
+  options: RecalculationOptions,
+  getCatalog: CatalogSource,
+): Promise<void> {
   const lines = await db.query<ScenicLineRow>(`
     SELECT id, ${STORED_GEOMETRY_COLUMNS}
     FROM scenic_lines
@@ -367,6 +406,7 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
 
   console.log("");
   console.log(`Recalculating ${lines.rows.length} scenic lines...`);
+  const catalog = await getCatalog();
   const timings = emptyRecalcTimings();
   const poolStart = performance.now();
   const outcomes = await runPool(
@@ -377,6 +417,7 @@ async function recalculateScenicLines(db: Pool, options: RecalculationOptions): 
         db,
         line,
         { avoidBacktracking: true },
+        catalog,
         timings,
       );
       const outcome =
@@ -427,14 +468,15 @@ export async function verifyAndRecalculateRoutes(
 ): Promise<void> {
   console.log("");
   const started = performance.now();
-  const recalcResult = await recalculateAllRoutes(db, options);
+  const getCatalog = lazyCatalog(db);
+  const recalcResult = await recalculateAllRoutes(db, options, getCatalog);
   const elapsedMinutes = (performance.now() - started) / 60000;
 
   // An empty table is the initial import. No summary: deploy.sh replays it at the
   // end, where a block of zeros would read as a recalculation that ran.
   if (recalcResult.totalRoutes === 0) {
     console.log("No routes found - skipping recalculation");
-    await recalculateScenicLines(db, options);
+    await recalculateScenicLines(db, options, getCatalog);
     return;
   }
 
@@ -472,7 +514,7 @@ export async function verifyAndRecalculateRoutes(
   }
 
   // Inside the route summary's span of the log, which deploy.sh prints again at the end
-  await recalculateScenicLines(db, options);
+  await recalculateScenicLines(db, options, getCatalog);
 }
 
 async function verifyRoutes(): Promise<void> {

@@ -1,6 +1,7 @@
 import type { Client, Pool, PoolClient } from "pg";
 import { coordinateToKey } from "../../lib/coordinateUtils";
 import { withinMetersSql } from "../../lib/mercatorDistance";
+import type { PartCatalog } from "./partCatalog";
 import { coordinateDistance, pointToSegmentDistance } from "./partGeometry";
 
 /** One OSM railway way, as the recalculation pathfinder holds it. */
@@ -35,7 +36,10 @@ export interface SearchTimings {
   /** Part loads made, one per buffer tried. */
   loads: number;
   loadQueryMs: number;
-  /** `JSON.parse` of each part and indexing it (`add`). */
+  /**
+   * Building each part and indexing it: from its GeoJSON (`JSON.parse`, `add`),
+   * or with a `PartCatalog`, from the catalog.
+   */
   loadParseMs: number;
   /** Finding the parts that hold the click points (`partsContaining`). */
   endPartsMs: number;
@@ -54,8 +58,13 @@ export function emptySearchTimings(): SearchTimings {
  *
  * Loading is additive — a caller may load around a second area on top of an
  * already-populated network — and `clear()` empties it.
+ *
+ * Given a `PartCatalog` (a bulk run), a load asks Postgres only which parts to
+ * load, and takes their geometry from the catalog.
  */
 export class PartNetwork {
+  constructor(private readonly catalog?: PartCatalog) {}
+
   private parts: Map<string, RailwayPart> = new Map();
   private coordToPartIds: Map<string, string[]> = new Map();
   /**
@@ -96,6 +105,12 @@ export class PartNetwork {
    * each radius scaled at its own coordinate's latitude) rather than
    * `ST_Intersects` against a materialised `ST_Buffer`: the same set, without
    * building a 32-gon per call and without the round trip back through WGS84.
+   *
+   * With a catalog the query is the same but for the geometry column, so
+   * Postgres still decides which parts load and in what order. That order is
+   * text order: `ORDER BY id` binds to the `id::TEXT` output column. It decides
+   * the order `partsContaining` returns the end parts in, and so which of two
+   * equally short combinations wins.
    */
   async loadAround(
     dbClient: Client | Pool,
@@ -124,11 +139,10 @@ export class PartNetwork {
         })
         .join(" OR ");
 
-      const result = await client.query<{ id: string; geometry_json: string }>(
+      const result = await client.query<{ id: string; geometry_json?: string }>(
         `
         SELECT
-          id::TEXT as id,
-          ST_AsGeoJSON(geometry) as geometry_json
+          id::TEXT as id${this.catalog ? "" : ", ST_AsGeoJSON(geometry) as geometry_json"}
         FROM railway_parts rp
         WHERE rp.geometry_3857 IS NOT NULL
           AND (${withinAny})
@@ -138,16 +152,11 @@ export class PartNetwork {
       );
       const parseStart = performance.now();
 
-      // A part already loaded is skipped before its GeoJSON is parsed, not after:
-      // with additive loading, the overlap with the earlier area is every part in it
-      const parts: { id: string; coordinates: [number, number][] }[] = [];
-      for (const row of result.rows) {
-        const id = String(row.id);
-        if (this.parts.has(id)) continue;
-        const geom = JSON.parse(row.geometry_json);
-        if (geom.type === "LineString") parts.push({ id, coordinates: geom.coordinates });
+      if (this.catalog) {
+        this.addFromCatalog(this.catalog, result.rows);
+      } else {
+        this.addFromGeoJson(result.rows);
       }
-      this.add(parts);
 
       if (timings) {
         timings.loads++;
@@ -159,35 +168,69 @@ export class PartNetwork {
     }
   }
 
-  /**
-   * Store parts in memory, skipping any already loaded and any with fewer than two
-   * coordinates — a part with one has no segment to orient, measure or cut.
-   */
+  private addFromGeoJson(rows: { id: string; geometry_json?: string }[]): void {
+    // A part already loaded is skipped before its GeoJSON is parsed, not after:
+    // with additive loading, the overlap with the earlier area is every part in it
+    const parts: { id: string; coordinates: [number, number][] }[] = [];
+    for (const row of rows) {
+      const id = String(row.id);
+      if (this.parts.has(id)) continue;
+      const geom = JSON.parse(row.geometry_json!);
+      if (geom.type === "LineString") parts.push({ id, coordinates: geom.coordinates });
+    }
+    this.add(parts);
+  }
+
+  /** The loaded ids' parts from the catalog, in the order given. */
+  private addFromCatalog(catalog: PartCatalog, rows: { id: string }[]): void {
+    const parts: RailwayPart[] = [];
+    for (const row of rows) {
+      const id = String(row.id);
+      if (this.parts.has(id)) continue;
+      const part = catalog.part(id);
+      if (part) parts.push(part);
+    }
+    this.insert(parts);
+  }
+
+  /** Store parts in memory, measured and keyed here (see `insert`). */
   add(parts: { id: string; coordinates: [number, number][] }[]): void {
+    this.insert(
+      parts
+        .filter(({ id, coordinates }) => !this.parts.has(id) && coordinates.length >= 2)
+        .map(({ id, coordinates }) => {
+          const startPoint = coordinates[0];
+          const endPoint = coordinates[coordinates.length - 1];
+          return {
+            id,
+            coordinates,
+            startPoint,
+            endPoint,
+            startKey: coordinateToKey(startPoint),
+            endKey: coordinateToKey(endPoint),
+            lengthMeters: coordinateDistance(coordinates),
+          };
+        }),
+    );
+  }
+
+  /**
+   * Store parts and map their endpoints to them, for `connected`: the one way in,
+   * whether a part was parsed here (`add`) or taken from a catalog. Skips any
+   * already loaded and any with fewer than two coordinates — a part with one has
+   * no segment to orient, measure or cut.
+   */
+  private insert(parts: RailwayPart[]): void {
     let added = false;
 
-    for (const { id, coordinates } of parts) {
+    for (const part of parts) {
+      const { id, startKey, endKey } = part;
       // The same part can arrive twice (loading is additive). Skipping it here
       // keeps coordToPartIds free of duplicate ids.
-      if (this.parts.has(id) || coordinates.length < 2) continue;
-
-      const startPoint = coordinates[0];
-      const endPoint = coordinates[coordinates.length - 1];
-      const startKey = coordinateToKey(startPoint);
-      const endKey = coordinateToKey(endPoint);
-
-      this.parts.set(id, {
-        id,
-        coordinates,
-        startPoint,
-        endPoint,
-        startKey,
-        endKey,
-        lengthMeters: coordinateDistance(coordinates),
-      });
+      if (this.parts.has(id) || part.coordinates.length < 2) continue;
+      this.parts.set(id, part);
       added = true;
 
-      // Add to coordinate mapping for connection lookups
       if (!this.coordToPartIds.has(startKey)) {
         this.coordToPartIds.set(startKey, []);
       }

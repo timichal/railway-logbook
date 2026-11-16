@@ -1,9 +1,9 @@
 # Route recalculation performance
 
 Read this before changing `verifyRouteData.ts` or `scripts/lib/railwayPathFinder.ts`
-(or the `partNetwork.ts` and `partGeometry.ts` beside it) for performance reasons. The work described here is **done**; what remains is the
+(or the `partNetwork.ts`, `partCatalog.ts` and `partGeometry.ts` beside it) for performance reasons. The work described here is **done**; what remains is the
 reasoning behind the current shape, the constraints that must not be broken, and
-the two things still on the table.
+the one thing still on the table.
 
 ## Why this step matters
 
@@ -87,10 +87,30 @@ The JS thread was busy 72% of the pool's 133s wall-clock (parse, end parts and
 search, 96s), so it is close to the bottleneck at 4 workers, as the scaling
 table below suggests. The two awaited figures include time queued behind that
 thread, so they overstate Postgres. The search itself is negligible: what costs
-is moving parts out of Postgres and parsing them, which is what an in-memory
-network would remove — at most the parse and most of the query time, a minute
-or two of the dev machine's 2m 13s, and of the server's 12 minutes
-proportionally.
+is moving parts out of Postgres and parsing them, which the part catalog
+(next) removed.
+
+**Since 2026-11-16 every part is loaded once per run** (`PartCatalog`, see
+"What it does now"). Measured locally over the same 2552 routes at 4 workers,
+without the length query and writes, two runs each:
+
+|                             | before   | after            |
+| --------------------------- | -------- | ---------------- |
+| catalog load (1.5M parts)   | -        | 12s              |
+| pool wall-clock             | 112–119s | 56–62s           |
+| part queries, summed        | 353–376s | 177–195s         |
+| parse + `add`, summed       | 73–78s   | 26–29s           |
+| peak RSS, heap capped 1.5GB | ~0.5GB   | 1.1GB (pool 71s) |
+
+So ~115s became ~70s with the load, and the run now loads the catalog while
+it takes the part-routes snapshot (26–41s), so the 12s is hidden behind it.
+A full `verifyRouteData` with the writes then took 1.7 min locally (snapshot
+and catalog 14s, recalculation 88s), against 24s + 2m 13s before. Summed over
+the workers: part queries 152s, building parts 35s, end parts 21s, search 4s,
+and the length query and write 137s, now the largest share. The part query that remains is Postgres's
+spatial filter: ids only, it still took 20ms a route serially against 30ms with
+the GeoJSON. The JS thread is still ~85% busy, now with the end parts, the
+`RailwayPart`s made per load and the queries' own handling.
 
 ## What it does now
 
@@ -175,7 +195,35 @@ index and writing its own `UPDATE`:
   turn check per relaxation (`turnDegrees`, two bearings) is still computed each
   time, deliberately: only the search without backtracking makes it, which only
   the few routes whose shortest path backtracks ever run. Caching it per part
-  end would buy little; the time is in loading parts (see "Still on the table").
+  end would buy little; the time is in loading parts (see "Where a deploy's time goes").
+- **Every part is loaded once per run, and a route's load fetches ids only**
+  (`PartCatalog`, `partCatalog.ts`). `verifyAndRecalculateRoutes` loads it on
+  first need (not for an empty table), beside the part-routes snapshot, and
+  shares it between the routes and the scenic lines; the admin preview and `showBacktracking` load per search as
+  before. Postgres still decides which parts a route loads and in what order:
+  the query is the same but for the geometry column. The order is **text
+  order**, as `ORDER BY id` binds to the `id::TEXT` output column, and it
+  decides which of two equally short end-part combinations wins, so keep it.
+  - **Bit-identical.** The coordinates come from the same `ST_AsGeoJSON` text
+    through the same `JSON.parse`, held in a `Float64Array`, which keeps a
+    double exactly; length and endpoint keys are the same functions on the
+    same numbers. Each load makes its parts afresh from the catalog and
+    indexes them as `add` does, so a part's neighbours are still those among
+    the parts loaded. Verified over all 7412 routes and scenic lines (invalid
+    and closed included): the previous finder and the new one back to back,
+    `PathResult` JSON equal for every one, the 71 nulls included.
+  - **Compact for the 4GB server.** Held as `RailwayPart`s (a `[lng, lat]`
+    array per vertex) the 1.5M parts took 1.7GB of heap and 2.1GB RSS; as one
+    flat buffer (14.7M vertices, ~270MB) with the keys interned, ~250MB of heap
+    beside it. Under a 768MB heap cap the whole run still finished (1.0GB RSS,
+    pool 74s), so `importMapData` and `verifyRouteData` run capped at 1.5GB:
+    uncapped, V8 let the garbage of the per-route loads grow RSS to 1.9GB.
+  - **It is a snapshot.** A part id the query returns that it doesn't hold
+    stops the run; a part changed in place under its id is served as it was.
+    Either takes a `verifyRouteData` alongside an import, whose own
+    recalculation then replaces that run's results.
+  - The summary's "building parts" is making the `RailwayPart`s and indexing
+    them, which was the GeoJSON parse before.
 - **`loadRailwayParts`, the part-id-based loader, is gone.** Nothing called it,
   and it was the last carrier of the superseded `ST_Buffer` pattern. If part-id
   loading is ever wanted again, build it on `ST_DWithin` against `geometry_3857`
@@ -196,10 +244,15 @@ network density):
 
 **~2.1× overall at the default of 4.** Scaling flattens hard after 2 — the work
 is a mix of Postgres-side spatial filtering and Node-side JSON parsing, and this
-box saturates one of them early. Measure on the deploy host before raising the
-default there; the ceiling is memory as much as CPU, since each worker holds its
-own bufferful of parsed geometry (which is why `importMapData` runs with
-`--max-old-space-size=8192`).
+box saturates one of them early. (Measured before the part catalog.) Measure
+on the deploy host before raising the default there; the ceiling is memory as
+much as CPU, since each worker holds its own bufferful of `RailwayPart`s.
+
+**The heap limit has to reach the script.** `node --max-old-space-size=N
+./node_modules/tsx/dist/cli.mjs script.ts`, which `importMapData` used to be
+(at 8192), never applied: tsx's CLI runs the script in a child process, which
+got V8's default, sized from the machine's memory. The scripts run
+`node --max-old-space-size=1536 --import tsx script.ts` instead, in one process.
 
 A full `verifyRouteData` over 1744 valid routes takes about 5 min at
 the default concurrency. Treat single-run timings as rough: repeated runs on the
@@ -253,10 +306,6 @@ under 1% of parts change in a week.
   trip for `ST_Length(...)::geography` before the write, because the result
   decides whether to invalidate. A single statement with a CTE could do both. At
   ~4.7k routes this is worth seconds, not minutes — the pathfinding dominates.
-- **Cut the per-route part loading further.** Routes are processed in `track_id`
-  order, which is roughly geographic, so consecutive routes reload much of the
-  same neighbourhood. A shared LRU of parsed parts across workers would cut both
-  the transfer and the parse, at the cost of holding geometry longer.
 
 ## Measuring
 
