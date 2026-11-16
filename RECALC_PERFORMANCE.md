@@ -79,6 +79,38 @@ so neither the merged history nor the GeoJSON (1.4GB, 0.85GB trimmed) is
 written to disk. Locally, on the 54 kept extracts: merge 13s → 8s, export and
 prune 71s → 42s, the merged file and `pruned.geojson` identical to the byte.
 
+**The server's deploy of 2026-11-16, with all of the above** (data of
+2026-11-15, one day of diffs, `railway_parts` reordered spatially that morning
+by `reorderRailwayParts`): ~27 min start to finish, against ~2 h.
+
+| Step                                  | server, 2026-11-16      |
+| ------------------------------------- | ----------------------- |
+| prepare 1: check, 54 updates          | 12m 23s                 |
+| — of which France, Germany            | 2m 3s each              |
+| — of which Poland, Sweden             | 1m 1s, 53s fetch + 23s  |
+| prepare 2: merge                      | 43s                     |
+| prepare 3: export and prune           | 2m 2s                   |
+| import 1: load (951 parts changed)    | 3m 49s                  |
+| import 2: catalog / part-routes       | 47s / 71s, side by side |
+| import 2: recalculation (2932 routes) | 7.9 min                 |
+| import 3: station proximity           | 9s                      |
+
+France, Germany and Poland are the extracts whose changes newly tagged a way
+as rail, so their raw file was read for the nodes (on the slow volume); the
+rest took seconds each. The recalculation came to 0.16s a route against 0.29s
+at the deploy of 2026-11-14, but the part catalog, the changed-parts import and
+the reorder all landed in between, so the share of each is unknown. **Unlike
+the dev machine, the server is bound by its CPUs, not the JS thread**: the
+part queries took 354ms a load summed over the workers (1053s for 2976 loads,
+against ~60ms locally), and the JS thread was busy 46% of the pool's time
+(~70% locally). Not on disk: `pg_stat_statements` gave the part query a mean
+of 245ms on the server against 19.6ms locally, with the same ~520–560 buffers a
+load, every one a hit on both (none read in 3124 loads). Four workers' queries
+and Node share 2 vCPUs. A `verifyRouteData --concurrency=2` on the server right
+after took 8.1 min (pool 410s, part queries 510s summed), against 7.9 min (401s,
+1053s) at 4: each load took half as long, so the same throughput with half the
+workers. Hence the default of at most one worker per CPU.
+
 The recalculation's own split (the summary's "Summed over the workers" lines,
 `SearchTimings`), locally at 4 workers:
 
@@ -126,7 +158,8 @@ the GeoJSON. The JS thread is still ~85% busy, now with the end parts, the
 (`runPool`, `scripts/lib/runPool.ts`), each pulling the next route off a shared
 index and writing its own `UPDATE`:
 
-- **`DEFAULT_RECALC_CONCURRENCY` = 4 routes at a time.** This needs a `Pool`, not
+- **`DEFAULT_RECALC_CONCURRENCY` = 4 routes at a time, or the CPU count where
+  lower** (the server's 2: see its deploy of 2026-11-16 above). This needs a `Pool`, not
   a `Client`: node-pg serialises concurrent queries on a single connection, so
   workers sharing one would just queue behind each other. Both scripts build the
   pool with `createRecalcPool(concurrency)`, and `--concurrency=N` overrides the

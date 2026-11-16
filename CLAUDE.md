@@ -37,7 +37,7 @@ A unified Next.js app for OSM railway data. It fetches, processes and visualizes
 
 - `docker-compose up -d db`: start Postgres+PostGIS.
 - `npm run prepareMapData -- [extract ...]`: OSM → `data/pruned.geojson` (all regions in one file). Naming extracts builds `data/pruned-partial.geojson`.
-- `npm run importMapData <file> [...]`: load stations + railway_parts, **replacing the whole map**, all-or-nothing. Then recalculate the valid routes (`--concurrency=N`, default 4).
+- `npm run importMapData <file> [...]`: load stations + railway_parts, **replacing the whole map**, all-or-nothing. Then recalculate the valid routes (`--concurrency=N`, default 4, or the CPU count where lower: 2 on the server).
 - `npm run verifyRouteData`: recalculate the valid routes, then the valid scenic lines, marking the ones that fail invalid (`--concurrency=N`).
 - `npm run applyVectorTiles`: re-apply `database/init/02-vector-tiles.sql`.
 - `npm run markAllRoutesInvalid`: flag every open route for a manual recheck. Recalculation never revalidates them, so each one comes back only through a re-pick. **The reference example for migration scripts.**

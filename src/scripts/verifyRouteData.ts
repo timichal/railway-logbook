@@ -1,3 +1,4 @@
+import { availableParallelism } from "node:os";
 import type { Pool } from "pg";
 import { SCENIC_BACKTRACKING_ERROR } from "../lib/adminValidation";
 import { coordinatesToWKT } from "../lib/coordinateUtils";
@@ -18,8 +19,14 @@ import { runPool } from "./lib/runPool";
  * much as CPU: each worker holds its own bufferful of `RailwayPart`s, beside the
  * run's `PartCatalog`, and `importMapData` and `verifyRouteData` run with the
  * heap capped (RECALC_PERFORMANCE.md). Raise it by measuring, not by guessing.
+ *
+ * Never more than the machine has CPUs. On the server (2 vCPUs) the part
+ * queries are CPU-bound, every buffer a hit, and 2 workers took 8.1 min where 4
+ * took 7.9 (2026-11-16): the other two only queued for the same CPUs, which the
+ * live site shares during a deploy. Locally the JS thread is the limit, and 4
+ * stays.
  */
-const DEFAULT_RECALC_CONCURRENCY = 4;
+const DEFAULT_RECALC_CONCURRENCY = Math.min(4, availableParallelism());
 
 /** Read `--concurrency=N` off the command line, falling back to the default. */
 export function parseConcurrencyArg(args: string[]): number {
