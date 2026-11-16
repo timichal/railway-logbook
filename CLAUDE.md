@@ -53,7 +53,7 @@ A unified Next.js app for OSM railway data. It fetches, processes and visualizes
 - `npm run backupRouteData`: route data (everything not rebuilt from OSM, users included) → `data/backups/railway_data_<timestamp>.dump`.
 - `npm run pullRouteData`: a backup, then replace the local route data with it. Local accounts become the server's. The geometry was computed against the server's map, so use `pullAllData` if the local map differs.
 - `npm run pullAllData`: a backup, then map + route data from one snapshot (~450MB, ~1.5 min).
-- `npm run restoreRouteData <file.dump>`: restore an earlier backup.
+- `npm run restoreRouteData <file.dump>`: restore an earlier backup, or the `data/server_data.dump` a failed `pullAllData` restore leaves behind (map + route data).
 
 ### Deploys
 

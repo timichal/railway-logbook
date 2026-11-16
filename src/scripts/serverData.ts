@@ -9,7 +9,13 @@
  *   pull-routes     backup, then replace the local route data with it
  *   pull-all        backup, then replace the local map and route data with the
  *                   server's, so the local database mirrors it
- *   restore <file>  replace the local route data with an earlier backup
+ *   restore <file>  replace the local data with a dump on disk: route data from a
+ *                   backup, or map and route data from the dump a failed pull-all
+ *                   leaves behind (data/server_data.dump)
+ *
+ * A pull's restore can fail after its download (the container went away, say).
+ * The local database is then as it was, and the error names the restore command
+ * that finishes the job from the file already on disk.
  *
  * "Route data" is everything that is not rebuilt from OSM: the routes, the scenic
  * lines, the admin notes, and every user's account, preferences, trips, journeys and logged parts.
@@ -133,6 +139,33 @@ function megabytes(file: string): string {
   return `${(fs.statSync(file).size / 1024 / 1024).toFixed(1)}MB`;
 }
 
+/**
+ * Checked before anything is downloaded, since the restore at the end is the
+ * first step to need the container, and finding it stopped there wastes the
+ * download.
+ */
+function assertContainerRunning(): void {
+  const result = spawnSync(
+    "docker",
+    ["inspect", "--type", "container", "--format", "{{.State.Running}}", CONTAINER],
+    { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  if (result.error) throw new Error(`Could not run docker: ${result.error.message}`);
+  const missing = result.status !== 0 && /no such container/i.test(result.stderr ?? "");
+  if (missing || (result.status === 0 && result.stdout.trim() !== "true")) {
+    throw new Error(
+      `The local database container (${CONTAINER}) is not running. Start it with docker-compose up -d db.`,
+    );
+  }
+  // Anything else is Docker itself failing (the daemon not running, say), which
+  // starting the container would not fix: show what Docker said.
+  if (result.status !== 0) {
+    throw new Error(
+      `Could not check the local database container: ${result.stderr?.trim() || `docker exited with status ${result.status}`}`,
+    );
+  }
+}
+
 /** Copy a local dump into the local database container for as long as `use` runs. */
 function inContainer(file: string, use: (containerFile: string) => void): void {
   const containerFile = `/tmp/${path.basename(file)}`;
@@ -148,6 +181,10 @@ function inContainer(file: string, use: (containerFile: string) => void): void {
   }
 }
 
+function holdsExactly(inDump: string[], tables: string[]): boolean {
+  return inDump.length === tables.length && tables.every((table) => inDump.includes(table));
+}
+
 /**
  * Check that a dump holds data for exactly `tables` and reads to the end. The
  * full read is what catches a truncated download: the table of contents comes
@@ -155,11 +192,45 @@ function inContainer(file: string, use: (containerFile: string) => void): void {
  */
 function verifyDump(file: string, tables: string[], name: string): void {
   const inDump = readDumpContents(file, name).tables;
-  const missing = tables.filter((table) => !inDump.includes(table));
-  const unexpected = inDump.filter((table) => !tables.includes(table));
-  if (missing.length > 0 || unexpected.length > 0) {
+  if (!holdsExactly(inDump, tables)) {
+    const missing = tables.filter((table) => !inDump.includes(table));
+    const unexpected = inDump.filter((table) => !tables.includes(table));
     throw new Error(
       `${name} is not the expected dump (missing: ${missing.join(", ") || "none"}; unexpected: ${unexpected.join(", ") || "none"})`,
+    );
+  }
+}
+
+/**
+ * The tables a dump on disk replaces: a route data backup or a pull-all dump,
+ * told apart by what it holds (and read to the end, as verifyDump does).
+ */
+function dumpTables(file: string): string[] {
+  const name = path.basename(file);
+  const inDump = readDumpContents(file, name).tables;
+  const tables = [ROUTE_TABLES, ALL_TABLES].find((set) => holdsExactly(inDump, set));
+  if (!tables) {
+    throw new Error(
+      `${name} is neither a route data backup nor a pullAllData dump (it holds: ${inDump.join(", ") || "nothing"})`,
+    );
+  }
+  return tables;
+}
+
+/**
+ * Restore a pull's download, and when that fails, say how to finish from the
+ * file on disk: the local database is as it was, and downloading again is the
+ * slow part.
+ */
+function restoreDownload(file: string, tables: string[]): void {
+  try {
+    inContainer(file, (containerFile) => restore(containerFile, tables));
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : error}\n` +
+        "The local database is unchanged. Once the cause is fixed, restore the download without fetching it again:\n" +
+        `  npm run restoreRouteData ${path.relative(process.cwd(), file)}`,
+      { cause: error },
     );
   }
 }
@@ -290,7 +361,7 @@ function assertCustomFormat(file: string): void {
     fs.closeSync(fd);
   }
   if (magic.toString("latin1") !== "PGDMP") {
-    throw new Error(`${file} is not a backup made by backupRouteData (no PGDMP header).`);
+    throw new Error(`${file} is not a dump made by this script (no PGDMP header).`);
   }
 }
 
@@ -312,10 +383,11 @@ async function main(): Promise<void> {
     }
 
     case "pull-routes": {
+      assertContainerRunning();
       checkNoDeploy(true);
       const file = downloadRouteBackup();
       console.log("\nReplacing the local route data...");
-      inContainer(file, (containerFile) => restore(containerFile, ROUTE_TABLES));
+      restoreDownload(file, ROUTE_TABLES);
       await repairOwnership();
       await printLocalCounts(ROUTE_TABLES);
       await refreshProximity();
@@ -327,18 +399,17 @@ async function main(): Promise<void> {
     }
 
     case "pull-all": {
+      assertContainerRunning();
       checkNoDeploy(true);
       downloadRouteBackup();
       console.log("\nDownloading map and route data from the server...");
       const file = path.join(DATA_DIR, "server_data.dump");
-      try {
-        download(ALL_TABLES, file);
-        console.log(`✓ Downloaded (${megabytes(file)})`);
-        console.log("\nReplacing the local map and route data...");
-        inContainer(file, (containerFile) => restore(containerFile, ALL_TABLES));
-      } finally {
-        fs.rmSync(file, { force: true });
-      }
+      download(ALL_TABLES, file);
+      console.log(`✓ Downloaded (${megabytes(file)})`);
+      console.log("\nReplacing the local map and route data...");
+      // Kept on a failure for restoreRouteData, and deleted once it is in.
+      restoreDownload(file, ALL_TABLES);
+      fs.rmSync(file, { force: true });
       await repairOwnership();
       await printLocalCounts(ALL_TABLES);
       break;
@@ -349,12 +420,18 @@ async function main(): Promise<void> {
         throw new Error(fileArg ? `File not found: ${fileArg}` : USAGE);
       }
       assertCustomFormat(fileArg);
-      verifyDump(fileArg, ROUTE_TABLES, path.basename(fileArg));
-      console.log(`Replacing the local route data with ${fileArg}...`);
-      inContainer(fileArg, (containerFile) => restore(containerFile, ROUTE_TABLES));
+      const tables = dumpTables(fileArg);
+      const withMap = tables === ALL_TABLES;
+      assertContainerRunning();
+      console.log(
+        `Replacing the local ${withMap ? "map and route" : "route"} data with ${fileArg} ` +
+          `(made ${fs.statSync(fileArg).mtime.toLocaleString()})...`,
+      );
+      inContainer(fileArg, (containerFile) => restore(containerFile, tables));
       await repairOwnership();
-      await printLocalCounts(ROUTE_TABLES);
-      await refreshProximity();
+      await printLocalCounts(tables);
+      // A full dump brings `near_route` as computed beside its own routes.
+      if (!withMap) await refreshProximity();
       break;
     }
 
