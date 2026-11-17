@@ -40,7 +40,6 @@ A unified Next.js app for OSM railway data. It fetches, processes and visualizes
 - `npm run importMapData <file> [...]`: load stations + railway_parts, **replacing the whole map**, all-or-nothing. Then recalculate the valid routes (`--concurrency=N`, default 4, or the CPU count where lower: 2 on the server).
 - `npm run verifyRouteData`: recalculate the valid routes, then the valid scenic lines, marking the ones that fail invalid (`--concurrency=N`).
 - `npm run applyVectorTiles`: re-apply `database/init/02-vector-tiles.sql`.
-- `npm run renameTokensValidAfter`: rename `users.password_changed_at` to `tokens_valid_after` (idempotent). Both sides of the rename fail signed-in requests against the other's column, so run it with the deploy.
 - `npm run markAllRoutesInvalid`: flag every open route for a manual recheck. Recalculation never revalidates them, so each one comes back only through a re-pick. **The reference example for migration scripts.**
 - `npm run reorderRailwayParts`: rewrite `railway_parts` in spatial order (a sorted copy swapped in; readers wait only for the swap, an import blocks). Run on the server between deploys, never during one. Rarely needed: imports keep the order.
 - `npm run fixSequences`: resync SERIAL sequences ("duplicate key violates …_pkey" after rows were loaded with explicit ids).

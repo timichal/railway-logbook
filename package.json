@@ -24,7 +24,6 @@
     "restoreRouteData": "tsx src/scripts/serverData.ts restore",
     "applyVectorTiles": "tsx src/scripts/applyVectorTiles.ts",
     "markAllRoutesInvalid": "tsx src/scripts/markAllRoutesInvalid.ts",
-    "renameTokensValidAfter": "tsx src/scripts/renameTokensValidAfter.ts",
     "reorderRailwayParts": "tsx src/scripts/reorderRailwayParts.ts",
     "fixSequences": "tsx src/scripts/fixSequences.ts",
     "createAdmin": "tsx src/scripts/createAdmin.ts",
