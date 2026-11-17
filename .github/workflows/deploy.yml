@@ -14,10 +14,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Types are checked by `next build` inside the Docker build, so lint is the
-  # only gate that needs its own job. setup-biome takes the version from
-  # package-lock.json, so CI runs the same Biome (and GritQL plugin) as
-  # `npm run lint`.
+  # setup-biome takes the version from package-lock.json, so CI runs the same
+  # Biome (and GritQL plugin) as `npm run lint`.
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -29,8 +27,62 @@ jobs:
       - name: Lint and format check
         run: biome ci .
 
+  # Types, then the tests, the `*.sql.test.ts` ones included: the database is the
+  # compose file's own `db` service (same pinned image, same settings), whose
+  # init runs 01-schema.sql and 02-vector-tiles.sql as on a fresh deployment. The
+  # credentials exist only inside this job. A test that skips here is a test that
+  # could not reach the database, so a skip fails the job.
+  check:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_DB: railway-logbook
+      DB_USER: ci
+      DB_PASSWORD: ci-only-password
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      # Started first: its init runs while the dependencies install.
+      - name: Start the database
+        run: docker compose up -d db
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26
+          cache: npm
+
+      # The npm the Dockerfile builds with (`allowScripts` in package.json)
+      - name: Install dependencies
+        run: |
+          npm install -g npm@12.2.2
+          npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # Over TCP: the image's init runs on a temporary server listening on the
+      # socket alone, so this answers only once the scripts have run.
+      - name: Wait for the database
+        run: |
+          for _ in $(seq 90); do
+            docker exec db pg_isready -q -h 127.0.0.1 -U "$DB_USER" -d "$POSTGRES_DB" && exit 0
+            sleep 2
+          done
+          docker logs db
+          exit 1
+
+      - name: Seed routes and stations
+        run: docker exec -i db psql -X -q -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$POSTGRES_DB" < tests/fixtures/ci-seed.sql
+
+      - name: Test
+        run: |
+          npm test 2>&1 | tee test.log
+          grep -Eq "^(ℹ|#) skipped 0$" test.log || { echo "::error::A test was skipped: the SQL tests could not reach the database"; exit 1; }
+
   build-and-deploy:
-    needs: lint
+    needs: [lint, check]
     runs-on: ubuntu-latest
     env:
       SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}

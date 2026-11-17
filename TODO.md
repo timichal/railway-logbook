@@ -1,17 +1,44 @@
 # TODO
 
-Performance audit, 2026-11-14. Nothing here may lower geometry precision (no coarser coordinates, no extra simplification): the map must stay exact. Numbers marked _measured_ were taken on the local dev database (7,332 routes, 66k stations, 1.5M parts). The rest are estimates, so measure before and after each one.
+## Architecture review (2026-11-17): next
+
+Do these in order. Automatic backups are out of scope (the server already takes them). Session revocation ("Sign out other devices") and the CI gates from this review are done.
+
+- **Let `api/me` and `api/v1` share their read handlers.** Today `src/app/api/me/*` (cookie, the web page's reads through `sessionReads.ts`), `src/app/api/v1/*` (bearer, the native app), `src/app/api/shared/<token>/*` and `src/app/api/public/*` each hold a ~20-line copy of the same wrapper around one query function (`progressForUser`, `routeRidesForUser`, the coverage, logbook and trip reads…). The copies have already drifted: `api/me/progress` passes `usage` (`optionalIntList(url, "usage")`) to `progressForUser`, `api/v1/progress` doesn't, and the app's `progress()` in `mobile/src/api/endpoints.ts` doesn't send it. Decide whether the app should get it before merging. Two ways to do it:
+  - (a) Keep both URL sets and give each read one body, e.g. a `userRead(resolveUser, (user, url) => …)` builder in `src/lib/api/`, with `requireSessionUser` (`webSession.ts`) for `api/me` and `requireUser` (`api/auth.ts`) for `v1`.
+  - (b) Have the `v1` GET handlers also accept the session cookie, point `sessionReads.ts` at them, and delete `api/me`.
+
+  Either way, keep these. `api/auth.ts` reads only the bearer so that a browser session can never drive a mutating call, so a cookie may be accepted on GET alone (the reasoning is in `webSession.ts`'s header). `api/me` answers `sessionJson` (`private, no-store`) and a `v1` answer may not, so check the headers. `v1` is the app's contract: any change to a path or a response shape goes into `mobile/src/api/endpoints.ts` and `API.md` in the same change. The "Two transports, one set of queries" section of the root CLAUDE.md describes the handler families and needs updating.
+- **Turn the rules in the CLAUDE.md files into lint rules or tests.** Only `unwrap` is enforced today (`biome-plugins/unwrapActions.grit`). Candidates:
+  - A `biome.json` override for `src/app/api/**` with `noRestrictedImports` against the `"use server"` modules (`@/lib/*Actions`: admin*, auth, journey, migration, planner, publicMap, trip, userPreferences). The override doesn't collide with the `src/lib/shared` ones, whose options a later override would replace.
+  - `import "server-only"` in the query modules: check first. The `server-only` package throws outside the `react-server` condition, and `src/scripts/*` (tsx) and `tests/` import `db.ts`, `routePathFinder.ts` and the query modules directly, so it may fit only modules nothing outside Next imports. Drop it if nothing qualifies.
+  - GritQL: `new Date("…")` on a date-only string (use `formatDateOnly`), comparing a region id to a literal (`region.id === "japan"`, use a region flag), and `["all", …]` in a paint expression under `src/lib/shared/map/` and `mobile/src/map/`. When writing a plugin, look imports up with `$program <: JsModule(items=$items)`, never `$program <: contains` (root CLAUDE.md: lint goes from 2s to 19s).
+  - The rules inside SQL strings, like no `ST_DWithin` on a `::geography` cast (use `withinMetersSql`): a test in `tests/` that scans `src/**/*.ts` is simpler than GritQL over template literals.
+- **Group `src/lib` by feature.** It has 63 flat files, each feature spread over `*Queries`/`*Actions`/`*Reads`. A possible split: `auth/` (authActions, authQueries, authTokens, authHelpers, sessionQueries, sessionCookie, passwordHash, rateLimit, adminUser), `journeys/` (journey*, trip*, localJourneyMigration, migrationActions), `admin/` (admin*), `routes/` (routeQueries, routesFingerprint, routesTileVersion, lineLength, lineMembership, stationProximity, selectedRoutes), `access/` (dataAccess, localStorage, publicReads, sessionReads, sharedMapReads, fetchJson). Leave `shared/`, `map/`, `planner/`, `api/`, `ui/`, `theme/`, `toast/` where they are. Do it as one mechanical move (`git mv`, then the imports) and update the following. `biome-plugins/unwrapActions.grit` matches the import paths `@/lib/admin*Actions`, `journeyActions` and `tripActions`. The `tests/` files import through `@/lib/...`. `src/scripts/*` import relatively (`../lib/db`). File paths are named in the CLAUDE.md files, `API.md` and code comments. Then run lint, `tsc` and `npm test`.
+
+## Performance (audit 2026-11-14)
+
+Nothing here may lower geometry precision (no coarser coordinates, no extra simplification): the map must stay exact. Numbers marked _measured_ were taken on the local dev database (7,332 routes, 66k stations, 1.5M parts). The rest are estimates, so measure before and after each one.
 
 **Where to measure.** The server is small (2 vCPU / 4GB, see `osmium-scripts/CLAUDE.md`). The dev machine has plenty of cores and disk, so pipeline measurements (prepare timings, extract sizes, changed-part counts, recalculation runs) go there, against the local Docker database and a local `data/` copy. Only sizing decisions (memory, `shared_buffers`, concurrency) need re-checking against the server's limits.
 
-## Cache the route tiles: what is left
+### Cache the route tiles: what is left
 
 The web user maps cache their route tiles since 2026-11-15: `railway_routes_tile_versioned` under `v=<routesTileVersion>`, served `immutable` and held in Martin's memory cache (128MB, `martin/configuration.yml`). See "Vector tiles" in CLAUDE.md. Left:
 
 - **Measure it on the server** after a week: `pg_stat_statements` calls and mean time of `railway_routes_tile` against the week before (the reload of a page used to run every tile's SQL again, because a 304 still computes the tile), and the `tiles` container's memory (`docker stats`) against the 128MB cache. Resize `cache.size_mb` from that.
 - **Scenic lines and public notes**, if their tiles show up in `pg_stat_statements`: a `data_versions` row and a `bump_data_version` trigger for each table (a migration script, since `01-schema.sql` isn't re-run), then a versioned source each, as for the routes.
 
-## Ongoing
+### Ongoing
 
 - **The first map deploy from about 2026-12-18 rebases nearly every raw extract at once**: `REBASE_AFTER_DAYS` (35) runs out together for all of them, last rewritten 2026-11-13/14. That costs about what step 1 cost before the raw cache change (~97 min, against 12m 23s on 2026-11-16, `RECALC_PERFORMANCE.md`). If it hurts, stagger the rebases (e.g. by the extract's place in the list).
 - **Read `pg_stat_statements` on the server** after a week of real traffic (enabled 2026-11-14: preloaded by the `db` service's `command:`, the extension created in `02-vector-tiles.sql`), and add what it shows to this list. The command, run on the server: `docker exec -i db sh -c 'psql -U $POSTGRES_USER -d $POSTGRES_DB'` with the query on stdin. On 2026-11-16 `railway_parts_tile` was 16.8ms a tile with 6.8% of its buffers read from disk, but that entry mixes traffic from before and after `reorderRailwayParts` (its text doesn't name the table, so the reorder didn't start it over): judge it after the week, or after `SELECT pg_stat_statements_reset()`.
+
+## Consider in the future
+
+Deliberately not now. Each was weighed in the 2026-11-17 architecture review.
+
+- **Close the race between a token renewal and a sign-out.** A renewal (`POST /api/session`, or `/api/v1/auth/refresh`) checks the old token (`verifySession`) and then mints a new one as two separate steps. Suppose `signOutOtherSessions` (or a password change) commits between them. The new token's `iatMs` then falls after the cutoff, and the device that was meant to be signed out stays in. The reverse is harmless but visible: this browser's own keep-alive in flight with the old cookie can verify after the cutoff and show a false "Signed out". The window is milliseconds, and the web renews only a cookie at least a day old. Fix if it ever matters: verify and mint inside one transaction holding `SELECT … FOR SHARE` on the `users` row, so the cutoff's `UPDATE` waits for the renewal (and vice versa). Or carry the old token's `iatMs` into the check of the new one.
+
+- **Track schema migrations.** Migration scripts are deleted once run, and `01-schema.sql` is kept in sync by hand, so nothing records which changes a database has had. Nothing compares the server's schema with a fresh one either. If that starts to bite: numbered SQL files under `database/migrations/` and a `schema_migrations` table, applied by the deploy in the step that already streams `02-vector-tiles.sql` in. A cheaper first step is a drift check: diff `pg_dump --schema-only` of the server against a database built from `database/init/` (CI's `check` job already builds one).
+- **Rollback and a health check for app deploys.** `deploy.yml` always tags the image `railway-logbook`, and `docker image prune --force` then deletes the previous one, so a bad deploy can't be rolled back without a rebuild. Nothing checks that the container came up after `up -d`. Fix: tag by git SHA, keep the last two or three, `curl` an endpoint after the restart, and re-tag the previous image if it fails.

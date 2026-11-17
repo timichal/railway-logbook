@@ -56,8 +56,9 @@ never runs its window down.
 
 Tokens carry no session state and there is **no logout endpoint**: logging out
 is the client deleting both tokens, which is why they belong in
-`expo-secure-store` and not in plain storage. The one server-side revocation is
-a **password change**, which invalidates every token issued before it — access
+`expo-secure-store` and not in plain storage. The server-side revocation is the
+account's token cutoff, moved by a **password change** or by **Sign out other
+devices** on the web, which invalidates every token issued before it — access
 and refresh alike, so the next request is a 401 and the refresh behind it a 401
 too, i.e. a real sign-out. A token naming an account that no longer exists is
 refused the same way.

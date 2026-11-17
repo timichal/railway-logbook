@@ -19,7 +19,7 @@
 
 import bcrypt from "bcryptjs";
 import { ADMIN_USER_ID } from "./adminUser";
-import type { User } from "./authTokens";
+import { tokenClockNow, type User } from "./authTokens";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { ABSENT_USER_HASH, hashPassword } from "./passwordHash";
@@ -95,11 +95,15 @@ export async function registerUser(
   // The check above saves a bcrypt on the common case; this catches the race it
   // leaves open (a double submit, two tabs), which would otherwise surface as a
   // unique violation and reach the form as an opaque failure.
+  // The token cutoff set from the start: an id is not guaranteed never to come
+  // back (a restore, `fixSequences`), and a token minted for the account that
+  // held it before must not sign in to this one.
   const result = await pool.query<User>(
-    `INSERT INTO users (email, name, password) VALUES (lower(btrim($1)), $2, $3)
+    `INSERT INTO users (email, name, password, tokens_valid_after)
+     VALUES (lower(btrim($1)), $2, $3, to_timestamp($4::float8 / 1000))
      ON CONFLICT (email) DO NOTHING
      RETURNING id, email, name`,
-    [email, name || null, hashedPassword],
+    [email, name || null, hashedPassword, tokenClockNow()],
   );
 
   const user = result.rows[0];
@@ -123,6 +127,29 @@ export async function registerUser(
 }
 
 /**
+ * The account's password given again, checked against its hash, which is
+ * returned so the write that follows can be made conditional on it: a password
+ * changed during the bcrypt must not be overruled by the old one. A wrong or
+ * missing password is a `ValidationError`, never a 401, which the native client
+ * reads as an expired token and answers by refreshing and then signing out.
+ */
+async function confirmPassword(userId: number, password: string): Promise<string | null> {
+  if (!password) {
+    throw new ValidationError("Password is required");
+  }
+
+  const result = await pool.query<{ password: string | null }>(
+    "SELECT password FROM users WHERE id = $1",
+    [userId],
+  );
+  const stored = result.rows[0]?.password;
+  if (!(await passwordMatches(password, stored))) {
+    throw new ValidationError("Incorrect password");
+  }
+  return stored ?? null;
+}
+
+/**
  * Delete an account and everything it holds, once the password has been given
  * again — the deletion both app stores require (MOBILE_APP_PLAN.md, Phase 6),
  * offered on the web as well so it is not an app-only right.
@@ -142,22 +169,11 @@ export async function registerUser(
  * refreshing and then signing out.
  */
 export async function deleteAccount(userId: number, password: string): Promise<void> {
-  if (!password) {
-    throw new ValidationError("Password is required");
-  }
-
   if (userId === ADMIN_USER_ID) {
     throw new ValidationError("The admin account cannot be deleted");
   }
 
-  const result = await pool.query<{ password: string | null }>(
-    "SELECT password FROM users WHERE id = $1",
-    [userId],
-  );
-  const stored = result.rows[0]?.password;
-  if (!(await passwordMatches(password, stored))) {
-    throw new ValidationError("Incorrect password");
-  }
+  const stored = await confirmPassword(userId, password);
 
   // Only while the hash is still the one just checked: a password changed during
   // the bcrypt must not be overruled by the old one.
@@ -166,6 +182,33 @@ export async function deleteAccount(userId: number, password: string): Promise<v
     stored,
   ]);
   if (deleted.rowCount === 0) {
+    throw new ValidationError("Incorrect password");
+  }
+}
+
+/**
+ * Sign out every session and app login of the account but the caller's own,
+ * once the password has been given again: every token issued before `cutoffMs`
+ * is refused from then on (`users.tokens_valid_after`, `sessionQueries.ts`), and
+ * the caller mints its replacement after this returns.
+ *
+ * The password because the caller keeps a session: without it, whoever held a
+ * stolen one could sign the owner out and stay in, as often as the owner signed
+ * back in. The cutoff comes from the app's clock (`tokenClockNow`).
+ */
+export async function signOutOtherSessions(
+  userId: number,
+  password: string,
+  cutoffMs: number,
+): Promise<void> {
+  const stored = await confirmPassword(userId, password);
+
+  const result = await pool.query(
+    `UPDATE users SET tokens_valid_after = to_timestamp($3::float8 / 1000)
+     WHERE id = $1 AND password = $2`,
+    [userId, stored, cutoffMs],
+  );
+  if (result.rowCount === 0) {
     throw new ValidationError("Incorrect password");
   }
 }

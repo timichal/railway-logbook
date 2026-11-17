@@ -88,7 +88,11 @@ type TokenKind = "session" | "access" | "refresh";
  */
 export const SESSION_TTL_SECONDS = 90 * 24 * 60 * 60;
 const SESSION_TTL = `${SESSION_TTL_SECONDS}s`;
-/** Bearer token the app sends with every request. */
+/**
+ * Bearer token the app sends with every request. Seven days is not a revocation
+ * risk: every request holds it against the account (`sessionQueries.ts`), so
+ * "Sign out other devices" or a password change refuses it at once.
+ */
 const ACCESS_TTL = "7d";
 /**
  * Long, deliberately: a logbook is opened when a trip happens, which may be
@@ -98,13 +102,23 @@ const REFRESH_TTL = "180d";
 
 export const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
+/**
+ * Now, on the clock tokens are stamped with (`iatMs`). Every token cutoff
+ * (`users.tokens_valid_after`) is set from it, never from Postgres' `now()`: in
+ * development the database runs in a VM whose clock can run ahead of the host's,
+ * and a cutoff ahead of the token minted right after it would refuse that token.
+ */
+export function tokenClockNow(): number {
+  return Date.now();
+}
+
 function sign(user: User, kind: TokenKind, ttl: string): Promise<string> {
   const claims: Record<string, unknown> = {
     userId: user.id,
     email: user.email,
     // `iat` is whole seconds, too coarse to say which side of a password change
     // a token issued in the same second fell on (see `sessionQueries.ts`).
-    iatMs: Date.now(),
+    iatMs: tokenClockNow(),
   };
   if (kind !== "session") claims.typ = kind;
 

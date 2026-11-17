@@ -7,6 +7,7 @@ import RailwayNotesArticle from "@/components/articles/RailwayNotesArticle";
 import DeleteAccountForm from "@/components/auth/DeleteAccountForm";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
+import SignOutOtherDevicesForm from "@/components/auth/SignOutOtherDevicesForm";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import RegionSwitch from "@/components/ui/RegionSwitch";
@@ -69,7 +70,14 @@ export interface MenuSheetProps {
   initialView?: MenuView;
 }
 
-export type MenuView = "menu" | "login" | "register" | "howto" | "notes" | "deleteAccount";
+export type MenuView =
+  | "menu"
+  | "login"
+  | "register"
+  | "howto"
+  | "notes"
+  | "signOutOthers"
+  | "deleteAccount";
 
 function Chevron() {
   return <Icon name="chevronRight" className="w-4 h-4 text-gray-300 flex-shrink-0" />;
@@ -174,6 +182,7 @@ export default function MenuSheet({
     register: "Create account",
     howto: "How To Use",
     notes: "Railway Notes",
+    signOutOthers: "Sign out other devices",
     deleteAccount: "Delete account",
   };
 
@@ -188,6 +197,12 @@ export default function MenuSheet({
     body = (
       <div className="p-4">
         <RegisterForm onSuccess={handleAuthSuccess} onSwitchToLogin={() => openView("login")} />
+      </div>
+    );
+  } else if (view === "signOutOthers") {
+    body = (
+      <div className="p-4">
+        <SignOutOtherDevicesForm onDone={backToMenu} />
       </div>
     );
   } else if (view === "deleteAccount") {
@@ -248,6 +263,14 @@ export default function MenuSheet({
               <span className="flex-1">Admin</span>
               <Chevron />
             </Link>
+          )}
+          {user && (
+            <Row
+              icon="logOut"
+              label="Sign out other devices"
+              opens="signOutOthers"
+              onOpen={openView}
+            />
           )}
           {/* Last, and as neutral as the rows above it: the red is in the form it
               opens. Not for the admin, whose account the server refuses to delete. */}

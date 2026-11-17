@@ -14,6 +14,7 @@
  */
 
 import { ADMIN_USER_ID } from "../lib/adminUser";
+import { tokenClockNow } from "../lib/authTokens";
 import pool from "../lib/db";
 import { hashPassword } from "../lib/passwordHash";
 
@@ -144,17 +145,18 @@ async function createAdmin() {
       process.exit(1);
     }
 
-    // password_changed_at on a fresh admin too: a token for user 1 signed with
-    // this JWT_SECRET may outlive the database it was issued against.
+    // tokens_valid_after on a fresh admin too: a token for user 1 signed with
+    // this JWT_SECRET may outlive the database it was issued against. From the
+    // app's clock (`tokenClockNow`), so a sign-in right after isn't refused.
     await pool.query(
-      `INSERT INTO users (id, email, name, password, password_changed_at)
-       VALUES ($4, lower(btrim($1)), $2, $3, now())
+      `INSERT INTO users (id, email, name, password, tokens_valid_after)
+       VALUES ($4, lower(btrim($1)), $2, $3, to_timestamp($5::float8 / 1000))
        ON CONFLICT (id) DO UPDATE
          SET email = EXCLUDED.email,
              name = COALESCE(EXCLUDED.name, users.name),
              password = EXCLUDED.password,
-             password_changed_at = EXCLUDED.password_changed_at`,
-      [email, name, await hashPassword(password), ADMIN_USER_ID],
+             tokens_valid_after = EXCLUDED.tokens_valid_after`,
+      [email, name, await hashPassword(password), ADMIN_USER_ID, tokenClockNow()],
     );
 
     console.log(

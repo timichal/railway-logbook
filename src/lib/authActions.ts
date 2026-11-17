@@ -22,8 +22,9 @@ import {
   authenticateUser,
   deleteAccount as deleteAccountForUser,
   registerUser,
+  signOutOtherSessions,
 } from "./authQueries";
-import { COOKIE_NAME, createToken, type User } from "./authTokens";
+import { COOKIE_NAME, createToken, tokenClockNow, type User } from "./authTokens";
 import { SIGNED_OUT_MESSAGE, ValidationError } from "./errors";
 import {
   enforceLoginRateLimit,
@@ -114,6 +115,28 @@ export async function deleteAccount(formData: FormData): Promise<ActionResult<nu
 
     await deleteAccountForUser(user.id, formData.get("password") as string);
     (await cookies()).delete(COOKIE_NAME);
+    return null;
+  });
+}
+
+/**
+ * Sign out every other browser and app login of the signed-in account, keeping
+ * this one, once the password has been given again: the account's token cutoff
+ * moves to now (`signOutOtherSessions`), and this browser gets a cookie issued
+ * after it. Its other tabs share the cookie. The password check draws on the
+ * sign-in budget, as account deletion's does.
+ */
+export async function signOutOtherDevices(formData: FormData): Promise<ActionResult<null>> {
+  return asActionResult(async () => {
+    const user = await getUser();
+    if (!user) {
+      throw new ValidationError(SIGNED_OUT_MESSAGE);
+    }
+
+    enforcePasswordCheckRateLimit(await headers());
+
+    await signOutOtherSessions(user.id, formData.get("password") as string, tokenClockNow());
+    await setSessionCookie(user);
     return null;
   });
 }

@@ -7,7 +7,9 @@
  * `createAdmin --reset` could not reclaim the admin from whoever was already
  * signed in as it, and a 180-day refresh token kept renewing that. So a token is
  * also held against its account: refused if it was issued before
- * `users.password_changed_at`, or if the account no longer exists.
+ * `users.tokens_valid_after`, or if the account no longer exists. That cutoff is
+ * moved by a password change (`createAdmin`) and by "Sign out other devices"
+ * (`signOutOtherSessions`, which re-issues the caller's own cookie after it).
  *
  * The rule is written once, as SQL (`currentAccountIdSql`). `verifyToken` runs it
  * on its own for the cookie, the bearer and the refresh; the admin notes tile
@@ -19,19 +21,19 @@ import pool from "./db";
 
 /**
  * The rule as SQL: the id of the user in `userIdParam`, or NULL unless that
- * account exists and has not changed its password since `issuedAtMsParam`
+ * account exists and its tokens were not cut off after `issuedAtMsParam`
  * (milliseconds, as `TokenClaims.issuedAtMs` — pass it through `issuedAtParam`).
- * A NULL `password_changed_at` is a password unchanged since the column was
- * added, and every token for it stands.
+ * A NULL `tokens_valid_after` is an account never cut off, and every token for
+ * it stands.
  *
- * The change is truncated to the millisecond to meet the token on its own
- * terms, which lets a token issued in the very millisecond of the change stand.
+ * The cutoff is truncated to the millisecond to meet the token on its own
+ * terms, which lets a token issued in the very millisecond of the cutoff stand.
  */
 export function currentAccountIdSql(userIdParam: string, issuedAtMsParam: string): string {
   return `(SELECT id FROM users
            WHERE id = ${userIdParam}
-             AND (password_changed_at IS NULL
-                  OR floor(extract(epoch FROM password_changed_at) * 1000) <= ${issuedAtMsParam}::bigint))`;
+             AND (tokens_valid_after IS NULL
+                  OR floor(extract(epoch FROM tokens_valid_after) * 1000) <= ${issuedAtMsParam}::bigint))`;
 }
 
 /** `TokenClaims.issuedAtMs` as the bigint parameter `currentAccountIdSql` takes. */

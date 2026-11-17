@@ -1,0 +1,51 @@
+name: Mobile checks
+
+# The native app's own gate. It deploys nothing, and the web deploy's checks
+# skip a push that touches only mobile/, so this runs on every push and pull
+# request that touches the app or the shared code it compiles in.
+on:
+  push:
+    paths:
+      - "mobile/**"
+      - "src/lib/shared/**"
+      - "biome.json"
+      - "biome-plugins/**"
+      - ".github/workflows/mobile.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - "src/lib/shared/**"
+      - "biome.json"
+      - "biome-plugins/**"
+      - ".github/workflows/mobile.yml"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # The version from the root package-lock.json, as `npm run lint` in mobile/
+      # runs the root's Biome.
+      - name: Set up Biome
+        uses: biomejs/setup-biome@v2
+
+      - name: Lint and format check
+        run: biome ci mobile src/lib/shared
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: |
+          npm install -g npm@12.2.2
+          npm ci
+
+      - name: Type check
+        working-directory: mobile
+        run: npm run typecheck
