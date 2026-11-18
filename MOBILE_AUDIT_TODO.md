@@ -11,9 +11,27 @@ Gaps the plan already lists are kept apart at the bottom, so this file is the on
 of what is left. A finished item is deleted, not ticked; whatever it leaves to do
 becomes an item of its own.
 
+**Rechecked on 2026-11-18** against the web app's changes since the audit (closed
+routes, link names, stretch highlights, the journeys refactor, the route tile moving
+to Martin with the rides as a list, the versioned tile, the client country filter,
+"Sign out other devices") and the Expo SDK 58 upgrade. Typecheck and Biome clean.
+Items found already done were deleted; the gaps the web has opened since are under
+"New gaps against the web".
+
 ---
 
 ## High — bugs and the foundation
+
+- [ ] **Check the SDK 58 upgrade on the device.** _(device)_ On 2026-11-18 the app
+      moved to Expo SDK 58, React Native 0.88, React 19.3, gesture-handler 3 and
+      Reanimated 4.7 (now with `react-native-worklets`), and TypeScript 7. The map
+      draws and routes are coloured. Left: the gesture-driven parts (map pan and press,
+      modal swipe-down, the switches), since gesture-handler went up a major version.
+
+      Warnings are read in React Native DevTools now (`mobile/CLAUDE.md`). The one it
+      shows at startup, `ImageBackground is deprecated`, is known and harmless:
+      NativeWind's runtime (`react-native-css-interop` 0.2.7) touches `ImageBackground`
+      as it loads. It goes with NativeWind 5.
 
 - [ ] **Finish checking the 2026-10-14 High fixes on the device.** _(device)_ The
       airplane-mode cold start, the map's top row, dark mode, a plain return after a
@@ -36,9 +54,10 @@ becomes an item of its own.
 
 - [ ] **Run it on Android.** The app shell, the map with overlays, the modals and the
       keyboard handling have never run on Android (`MOBILE_APP_PLAN.md`, Phase 2). The
-      modals' keyboard fix relies on Android resizing the window (with
-      `edgeToEdgeEnabled`, check that it does), and `expo-system-ui` exists only for
-      Android. Do this before the UI pass, so the pass covers both platforms.
+      modals' keyboard fix relies on Android resizing the window. Edge-to-edge is
+      always on since SDK 58 (`edgeToEdgeEnabled` left `app.json` with the upgrade), so
+      check that it still does. `expo-system-ui` exists only for Android. Do this before
+      the UI pass, so the pass covers both platforms.
 
 ---
 
@@ -53,22 +72,21 @@ becomes an item of its own.
       waits for `onDidFinishLoadingStyle`: check that it still happens on the first
       "Show on the map" after a cold start, and after switching the colour scheme.
 
-- [ ] **A journey's highlight ignores partial rides.** `ShowOnMap` highlights whole
-      routes. The web's view highlight draws only the stretch ridden for a route logged in
-      part. `GET /journeys/:id` returns `covered_start`/`covered_end`, and
-      `POST /coverage/stretches` turns those into geometry, so pass the result as
-      `partials`.
-
 - [ ] **The station sheet has no actions.** Tapping a station shows its name and the
       word "Station". On the web, the touch sheet for a station is how the planner gets
       filled. Add "Plan from here" / "Plan to here" (and maybe "Add as via") that write
       into `PlannerContext` and open the planner.
 
 - [ ] **The logbook can't show what a journey contains.** A journey card shows the
-      description and "Show on the map". The web card lists the journey's routes
-      (`LoggedRouteRow`): name, length, partial or whole. Journeys inside a trip can't be
-      expanded at all. Load `GET /journeys/:id` when a card opens and list the routes.
-      This is also the base that editing will need.
+      description and "Show on the map". Since the journeys refactor (2026-11-14) the
+      web card shows the routes as the lines of stations they were ridden along
+      ("Praha – Beroun – Plzeň", `JourneyChainList`, built by `src/lib/journeyChains.ts`
+      from each route's `ends`), with `LoggedRouteRow` for the detail. Journeys inside a
+      trip can't be expanded at all. Load `GET /journeys/:id` when a card opens (it
+      already returns `ends`) and show the chains. `journeyChains.ts` and what it imports
+      (`geoUtils.ts`, `searchText.ts`) are dependency-free, so move them into
+      `src/lib/shared/` rather than writing a second copy. This is also the base that
+      editing will need (`journeyEdit.ts`, `JourneyEditForm` on the web).
 
 - [ ] **Trips can't be created in the app.** `createTrip` is in `endpoints.ts`, but
       nothing calls it, so `TripPicker` offers only trips made on the web. Add "New trip…"
@@ -189,6 +207,23 @@ becomes an item of its own.
 
 ---
 
+## New gaps against the web (found 2026-11-18)
+
+- [ ] **No "Sign out other devices".** The web menu has it since 2026-11-17
+      (`SignOutOtherDevicesForm` → `signOutOtherDevices`): the password, then the
+      account's `tokens_valid_after` moves to now, which also refuses every app token
+      issued before it. `/api/v1` has no endpoint for it. One would have to answer with
+      a fresh token pair for the calling device, as the web re-issues its own cookie,
+      or the app signs itself out with the rest. Rate-limited with the sign-ins, as the
+      web's is. A lost phone is the case it exists for, so it matters less in the app
+      than on the web. Low.
+- [ ] **No map-sharing settings.** The web's `ShareMapDialog` switches the public map
+      on and off and shows its link. The app has neither the setting nor an endpoint
+      for it. This is a separate question from opening `/shared/<token>` links (the
+      open decision in the plan). Low.
+
+---
+
 ## Store readiness (before Phase 6, but cheap to decide now)
 
 - [ ] **Google Play also wants a deletion link outside the app** (a web page or URL
@@ -219,4 +254,6 @@ becomes an item of its own.
       `endpoints.ts`).
 - [ ] The heritage/special highlight variants have never been seen on a device.
 - [ ] "Where am I": `<UserLocation>` plus the permission string above.
-- [ ] Decide how routes are coloured offline before Phase 5.
+- [ ] Offline route colouring before Phase 5. Since 2026-11-15 the route tile is
+      Martin's and the same for everyone, and the colours come from `GET /rides`, so
+      the question is now only how the last rides answer is kept on the device.

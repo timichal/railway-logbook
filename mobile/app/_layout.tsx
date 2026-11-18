@@ -13,6 +13,7 @@
  * has its own, which keeps a crash in a tab from taking the providers down with it.
  */
 import "../global.css";
+import "@/devWarnings";
 
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";

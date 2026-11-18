@@ -17,16 +17,16 @@ is a distinct app in the two stores.
 phase moves, edit the phase's own section rather than appending a note elsewhere,
 and add a line to the Session log at the bottom.
 
-|                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Branch**        | `main` — `mobile-app` was merged on 2026-09-25 and deleted on 2026-10-14                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **Phase 0**       | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **Phase 1**       | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md`                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **Phase 2**       | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Phase 3**       | **Done** (2026-08-27; **seen on a device 2026-09-17**). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. Its two overlays were folded into Phase 4 and both are now built                                                                                                                                                                                                                                                                                                             |
-| **Current phase** | **Phase 4 — features.** Everything on its list is built (2026-09-17): route logger, highlight overlays, logbook, coverage overlay, station search, journey planner, countries & statistics. **Run on the iPhone 2026-10-14**: routes coloured (bearer tile works), coverage overlay and the planner loop work. Four bugs found there and fixed the same day — see "Found on the device" under Phase 4 — **the fixes not yet re-run on the phone**                                                                                                          |
-| **Blocked on**    | nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **Next**          | 1. Re-run on the iPhone: the country filter redrawing the map, a logged journey repainting its route, the planner keeping its answer across closing, logging closing without the `GO_BACK` error, the Log journey button clear of the keyboard. 2. Catch up with the web: Japan's JR / Non-JR checkboxes (Phase 4, "Rough edges"), which also retires `LayerToggles.tsx`'s `region.id === "japan"`; line-name search where `hasRouteNames`. 3. Editing and deleting journeys and trips, then the UI pass. 4. Decide offline route colouring before Phase 5 |
+|                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch**        | `main` — `mobile-app` was merged on 2026-09-25 and deleted on 2026-10-14                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Phase 0**       | **Done. Decision taken: GO** (2026-08-27). Both headline questions answered positively on real hardware                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Phase 1**       | **Done** (2026-08-27). 23 route handlers under `/api/v1`, smoke-tested against the dev database. Reference: `API.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Phase 2**       | **Done** (2026-08-27). The Expo app is in `mobile/` — auth, region, theme, tabs. Runs on iOS and signing in works; not yet run on Android                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Phase 3**       | **Done** (2026-08-27; **seen on a device 2026-09-17**). Basemap, the full railway layer stack, visit colours, filters, stations and labels, tap-to-inspect, the progress box. Its two overlays were folded into Phase 4 and both are now built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Current phase** | **Phase 4 — features.** Everything on its list is built (2026-09-17): route logger, highlight overlays, logbook, coverage overlay, station search, journey planner, countries & statistics. **Run on the iPhone 2026-10-14**: routes coloured (bearer tile works), coverage overlay and the planner loop work. Four bugs found there and fixed the same day — see "Found on the device" under Phase 4 — **the fixes not yet re-run on the phone**. **On Expo SDK 58 / RN 0.88 since 2026-11-18**: the map draws with coloured routes on the iPhone, and RN 0.88's DevTools toast is hidden (`MOBILE_AUDIT_TODO.md`)                                                                                                                               |
+| **Blocked on**    | nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Next**          | The worklist is `MOBILE_AUDIT_TODO.md`; in order: 1. Re-run on the iPhone what is still unconfirmed: the country filter redrawing the map, a logged journey recolouring its route (now through the rides), the planner keeping its answer across closing, logging closing without the `GO_BACK` error, the Log journey button clear of the keyboard. 2. Catch up with the web: Japan's JR / Non-JR checkboxes (Phase 4, "Rough edges"), which also retires `LayerToggles.tsx`'s `region.id === "japan"`; line-name search where `hasRouteNames`; a journey's routes as station chains in the logbook. 3. Editing and deleting journeys and trips, then the UI pass. 4. Keep the last rides on the device (offline route colouring) before Phase 5 |
 
 The spike that answered Phase 0 has been **deleted** — it was throwaway by design
 and everything it taught is written down below. What it proved, in one line: the
@@ -802,16 +802,15 @@ Three smaller ones:
 
 - **`GeoJSONSource`, not `ShapeSource`.** The latter is rnmapbox's name; here the
   prop is `data`, not `shape`.
-- **A tile is cached by URL, so the log version is spent as `cacheBuster`.** Visit
-  colours are rendered into the route tile per user, so logging a journey has to
-  produce a _new_ URL — `railwayRoutesTileUrl` already takes one, for exactly the
-  reason the web app's route tile refresh needs it. **A new URL alone does nothing
-  on native**, though: the source is keyed on it (see "Found on the device"). The
-  version starts at the launch time and is bumped on sign-in, so no launch or account
-  ever reuses an earlier one's URL. `logVersion.ts` is a
+- **The log version says "read again".** `logVersion.ts` is a
   `useSyncExternalStore` rather than a context because the write happens in a modal
-  and the readers are a tab away: the map's tile URL, the map's numbers, and the
-  logbook list.
+  and the readers are a tab away: the rides that colour the map (`useRides`), the
+  ridden stretches, the map's numbers, and the logbook list. It starts at the launch
+  time and is bumped on sign-in and on a return after a minute away. (Until
+  2026-11-15 the colours were baked into a per-user route tile and the version was
+  spent as the tile URL's `cacheBuster`. The tile is Martin's now, the same for
+  everyone, and its URL carries the routes' tile version instead,
+  `useRoutesTileVersion`.)
 - **Verified the same two ways Phase 3 was**: all 12 highlight layers pass
   MapLibre's own `validateStyleMin` (a paint value `tsc` accepts as a tuple is not
   necessarily one MapLibre accepts), and the iOS bundle exports with
@@ -896,7 +895,9 @@ fixed the same day and **not yet re-run**:
   reached the map, and neither did the log version's cache buster: a logged
   journey's route kept its old colour until the app restarted. Android's
   `MLRNTileSourceManager.setTiles` is the same shape. The route `<VectorSource>` is
-  now **keyed on its URL**, so a new URL is a new source. That re-adds the source's
+  now **keyed on its URL**, so a new URL is a new source. (Since 2026-11-15 the URL
+  changes only with the tile version and the country filter is a layer filter, so a
+  logged journey or a country change no longer rebuilds the source.) That re-adds the source's
   layers, and a layer with no anchor is appended to the top of the style, over the
   stations. So **every route layer now carries `beforeId` = the lowest coverage
   layer**, which is mounted with the map. This also fixes a smaller bug: Heritage or
@@ -939,8 +940,8 @@ fixed the same day and **not yet re-run**:
   the base layers' own, but that is not the same as having been seen.
 - **The map's top furniture is one row now** (`MapTopControls`, 2026-10-14). It was
   three pieces positioned each on its own, and they did overlap: the chip had no
-  safe-area inset, and the open search ran under the planner button. Not yet seen on
-  the device.
+  safe-area inset, and the open search ran under the planner button. Confirmed on the
+  iPhone (`MOBILE_AUDIT_TODO.md`).
 - **Japan's JR / Non-JR checkboxes are web-only so far** (added 2026-10-12). On the
   web, the Map & Stats tab (formerly Statistics) ticks each line type like a country:
   unticked, it is hidden on the map and left out of the progress box; the tab's own
@@ -965,14 +966,16 @@ fixed the same day and **not yet re-run**:
 The reason for the project, and it has a genuine design problem in it.
 
 MapLibre Native offline packs cover any source in the style, so both the basemap
-and the railway geometry can be downloaded. But **route colour depends on visit
-status**, which the server bakes into the tile per bearer token and which changes
-every time you log a ride — so a downloaded route tile goes stale the moment it
-is useful. Likely resolution: pack the basemap and the route _geometry_, and
-carry visit status locally, applying it as a style filter over a locally-held id
-set rather than baking it into the tile. Decide this properly before building it.
-(There is no "every route with geometry" endpoint any more — `GET /routes` was
-removed unused; see Phase 1.)
+and the railway geometry can be downloaded. **Route colour was the design problem,
+and the 2026-11-15 tile change mostly settled it**: the route tile is Martin's, the
+same for everyone and `immutable` under its tile version, and the colours are the
+rides (`GET /rides`) laid over it by feature id in the style. That is the
+resolution this section used to propose. The tile version is already kept on the
+device (`useRoutesTileVersion`). What is left is the rides: `useRides` holds them in
+memory only and draws no routes until they answer, so an offline cold start draws
+no routes at all. Keep the last answer on the device as the tile version is kept,
+and draw from it until the server answers. (There is no "every route with geometry"
+endpoint any more. `GET /routes` was removed unused; see Phase 1.)
 
 Logging offline is the other half: an `expo-sqlite` mirror of the logged parts
 plus a write queue and a sync story. Conflicts are mild here — journeys are
@@ -1027,16 +1030,19 @@ offers the same. The admin account cannot be deleted.
 
 ## Open decisions
 
-- **Offline route colouring** (Phase 5) — the stale-tile problem above. This is
-  the one real design question left in the project.
+- **Offline route colouring** (Phase 5): no longer a design question since the
+  route tile became the same for everyone (2026-11-15). What is left is keeping the
+  last rides on the device (Phase 5 above).
 - **Does admin ship?** Recommend no. It is a single-user surface, it works on the
   web, and it would roughly double the API layer and the map work (route
   creation, geometry editing, notes).
 - **Shared public maps** — does the app open a `/shared/<token>` link, or bounce
   it to the browser? Deep links are cheap; the read-only map view is not free.
-  Phase 1 left the endpoints out, which costs nothing to reverse: the queries are
-  already shared through `progressQueries.ts`, so four token-resolving handlers
-  are all that is missing whenever the answer is yes.
+  Phase 1 left the endpoints out of `/api/v1`. Since then the web's shared map reads
+  through its own token-resolving GET handlers (`src/app/api/shared/<token>`,
+  `sharedMapReads.ts`, rides included), which take no session, so a read-only view in
+  the app could call those. Turning sharing on and off is a separate gap
+  (`MOBILE_AUDIT_TODO.md`).
 - **How much does the web app converge?** After Phase 1 the web app could also
   move off server actions onto the same HTTP API. Tempting for consistency, but
   it is a large refactor of working code for no user-visible gain. Recommend not
@@ -1220,3 +1226,19 @@ pick up. Keep it short — the phase sections carry the detail.
   A tapped route's "Most recent" comes from the rides (`lastJourneyOf`). Typecheck
   and Biome clean; **not yet run on a device**: check that routes are coloured,
   ridden ones drawn over unridden, and that logging a journey recolours its route.
+- **2026-11-15 — the app draws Martin's cached route tile.** `useRoutesTileVersion`
+  reads `GET /api/v1/routes/tile-version` on launch and on a return to the
+  foreground, keeps the last version on the device to start from, and falls back to
+  the uncached source only with no version at all. The country filter moved from the
+  tile URL to the layers, as on the web, so Martin caches one copy for everyone.
+- **2026-11-18 — Expo SDK 58, and a check against the web.** The app moved to SDK 58,
+  RN 0.88, React 19.3, gesture-handler 3, Reanimated 4.7 with
+  `react-native-worklets`, and TypeScript 7. On the iPhone the map draws with coloured
+  routes, which confirms the 11-15 rides change. RN 0.88 shows warnings only in React Native DevTools and put up a
+  blank "Open debugger" toast over the tab bar instead; `src/devWarnings.ts` hides
+  it. Checked the web's changes since the 10-14
+  audit: closed routes (the "All closed lines" switch and the planner's
+  `includeClosed`), link names, the stretch highlights, the rides and the tile version
+  are all in the app. The gaps are in `MOBILE_AUDIT_TODO.md`: the journeys refactor's
+  station chains and editing, Japan's JR / Non-JR checkboxes, line-name search, "Sign
+  out other devices" and the sharing settings. Typecheck and Biome clean. **Next: the device re-runs.**

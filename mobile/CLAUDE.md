@@ -8,4 +8,5 @@ A second app with its own `package.json` and `node_modules`. The plan and its st
 - `mobile/tsconfig.json` maps `@maplibre/maplibre-gl-style-spec` to `mobile/node_modules`, so the native program sees one copy (two copies' recursive `ExpressionSpecification` aren't assignable to each other).
 - The app has its own `src/map/fitCamera.ts` (a bounds stop takes no max zoom). A fit request waits in its `HighlightContext` until the map tab is in view and loaded.
 - Every request names its `region`. The API never defaults it.
+- **Warnings are only in React Native DevTools** (`j` in the Metro terminal), never in LogBox or Metro's terminal (RN 0.77+). The "Open debugger to view warnings." toast that replaces them is ignored in `src/devWarnings.ts`, because here it renders blank and can't be closed.
 - Country selection screen: `app/countries.tsx`.
