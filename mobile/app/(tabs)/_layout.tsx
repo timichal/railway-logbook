@@ -30,8 +30,8 @@ export default function TabsLayout(): ReactNode {
         name="map"
         options={{
           title: "Map",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map-outline" color={color} size={size} />
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons name="map-outline" color={focused ? accent : tabBar.inactive} size={size} />
           ),
         }}
       />
@@ -39,8 +39,8 @@ export default function TabsLayout(): ReactNode {
         name="logbook"
         options={{
           title: "Logbook",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="book-outline" color={color} size={size} />
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons name="book-outline" color={focused ? accent : tabBar.inactive} size={size} />
           ),
         }}
       />
@@ -48,8 +48,12 @@ export default function TabsLayout(): ReactNode {
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" color={color} size={size} />
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons
+              name="settings-outline"
+              color={focused ? accent : tabBar.inactive}
+              size={size}
+            />
           ),
         }}
       />

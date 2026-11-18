@@ -134,7 +134,7 @@ export default function LogbookScreen(): ReactNode {
                   onPress={() => setPage((p) => Math.min(lastPage, p + 1))}
                 />
               </View>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => {
             const key = itemKey(item);

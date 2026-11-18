@@ -7,7 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "cz.zlatkovsky.railwaylogbook",
       "supportsTablet": true,
@@ -18,7 +17,6 @@
     },
     "android": {
       "package": "cz.zlatkovsky.railwaylogbook",
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
@@ -40,7 +38,8 @@
             "backgroundColor": "#0b0f14"
           }
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }
