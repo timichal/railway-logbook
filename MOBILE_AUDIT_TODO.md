@@ -22,29 +22,6 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ## High — bugs and the foundation
 
-- [ ] **Check the SDK 58 upgrade on the device.** _(device)_ On 2026-11-18 the app
-      moved to Expo SDK 58, React Native 0.88, React 19.3, gesture-handler 3 and
-      Reanimated 4.7 (now with `react-native-worklets`), and TypeScript 7. The map
-      draws and routes are coloured. Left: the gesture-driven parts (map pan and press,
-      modal swipe-down, the switches), since gesture-handler went up a major version.
-
-      Warnings are read in React Native DevTools now (`mobile/CLAUDE.md`). The one it
-      shows at startup, `ImageBackground is deprecated`, is known and harmless:
-      NativeWind's runtime (`react-native-css-interop` 0.2.7) touches `ImageBackground`
-      as it loads. It goes with NativeWind 5.
-
-- [ ] **Finish checking the 2026-10-14 High fixes on the device.** _(device)_ The
-      airplane-mode cold start, the map's top row, dark mode, a plain return after a
-      minute, switching to a different account, and a return after logging on the web
-      have been confirmed on the iPhone. Left:
-  - A return after more than a minute **offline** changes nothing: routes, numbers and
-    the logbook stay as drawn. Pulling down the notification centre doesn't count as leaving.
-  - The error screen. It needs a throw during render, so add one temporarily: for the
-    tab boundary, `if (Math.random() < 2) throw new Error("test")` at the top of
-    `SettingsScreen` (Retry should keep the session); for the root one, the same line
-    in `RootNavigator` (it renders without any provider). In a development build the
-    red LogBox overlay comes first; dismiss it to see the screen behind.
-
 - [ ] **How does MapLibre Native's disk cache treat the route tile?** _(device)_ It
       is Martin's now, the same for every account, and the colours are the rides
       (`useRides`, `GET /api/v1/rides`), so no cache can show another account's
@@ -62,15 +39,6 @@ Items found already done were deleted; the gaps the web has opened since are und
 ---
 
 ## Medium — UX gaps against the web and platform conventions
-
-- [ ] **Check the fly-to on the device.** _(device)_ "Show on the map" and a
-      planner result now fit the camera (`mobile/src/map/fitCamera.ts`), once the map
-      tab is in view. Check that the routes land clear of the top row and the progress
-      box, that a plan is flown to when the planner modal closes (it relies on
-      `useIsFocused` being false under the modal), that pressing "Showing on the map"
-      again flies back after a pan, and that a short route stops at zoom 12. The fit
-      waits for `onDidFinishLoadingStyle`: check that it still happens on the first
-      "Show on the map" after a cold start, and after switching the colour scheme.
 
 - [ ] **The station sheet has no actions.** Tapping a station shows its name and the
       word "Station". On the web, the touch sheet for a station is how the planner gets
@@ -125,6 +93,15 @@ Items found already done were deleted; the gaps the web has opened since are und
       small phone, the lower results sit behind the keyboard and can't be reached. Use a
       `FlatList` with a `maxHeight` and `keyboardShouldPersistTaps="handled"` (the
       planner's `ScrollView` already has the latter).
+
+- [ ] **Check route taps offline on the device.** _(device)_ Since 2026-11-19 a
+      route's details are kept once read (`src/map/routeMetadataCache.ts`): a route read
+      before opens at once and is refreshed by a new read, and a failed or timed-out
+      (8s) read shows a notice in place of the sheet (`MapNotice`) instead of doing
+      nothing. Check: a route opened online opens again in airplane mode; one never
+      opened shows "No connection…" (closing any open sheet), which goes after about four
+      seconds, on its ×, or with the next press; back online, that route opens. On 2026-11-19 the notice showed, under the progress box; the box is now a child of `RailwayMap`, drawn under the sheet and the notice: check it is covered now.
+      Every route opening offline is Phase 5 (`MOBILE_APP_PLAN.md`).
 
 - [ ] **A failed station search says "No stations found."** `useStationSearch` treats
       errors as no match, which is misleading when offline. Show "Couldn't search — check
@@ -200,10 +177,6 @@ Items found already done were deleted; the gaps the web has opened since are und
 - [ ] **Settings shows `API_ORIGIN` at the bottom.** It's useful in development. For
       users, show the app version and build (`expo-constants`), and keep the origin only
       for non-production builds.
-- [ ] **`SelectionBar`'s "clear" can't be undone** and sits right next to the row that
-      opens the logging screen. A selection built from a planner result is easy to lose.
-      Ask for confirmation once the selection has more than a couple of routes, or offer
-      an undo toast.
 
 ---
 
@@ -245,7 +218,6 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ## Already tracked in `MOBILE_APP_PLAN.md` (listed here so this is the one list)
 
-- [ ] Re-run the 2026-10-14 device fixes on the iPhone (Status → Next, item 1).
 - [ ] Japan's JR / Non-JR checkboxes and `showRegular`. This also removes
       `LayerToggles.tsx`'s `region.id === "japan"`, which `CLAUDE.md` forbids.
       `GET /progress` needs a usage-type parameter for it.

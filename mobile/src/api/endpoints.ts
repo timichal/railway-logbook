@@ -83,11 +83,15 @@ export async function stations(
  * holds whole route features — so the ids are exchanged for the same properties the
  * tile would have carried, and a planned route is described exactly as a tapped one.
  */
-export async function routeMetadata(trackIds: number[]): Promise<RailwayRoute[]> {
+export async function routeMetadata(
+  trackIds: number[],
+  signal?: AbortSignal,
+): Promise<RailwayRoute[]> {
   const { routes } = await request<{ routes: RailwayRoute[] }>("/routes/metadata", {
     method: "POST",
     body: { trackIds },
     auth: false,
+    signal,
   });
   return routes;
 }

@@ -82,11 +82,11 @@ export default function MapScreen(): ReactNode {
   return (
     <View className="flex-1">
       {/* The map and its own furniture in one pane, so the selection bar below is a
-          flex sibling rather than something covering the progress box. */}
-      <View className="flex-1">
-        <RailwayMap countries={countries} />
+          flex sibling rather than something covering the progress box. The box goes
+          inside the map, which draws its sheet and notice over it. */}
+      <RailwayMap countries={countries}>
         <MapProgressBox progress={progress} />
-      </View>
+      </RailwayMap>
       <SelectionBar />
     </View>
   );

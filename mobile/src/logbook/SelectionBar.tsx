@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
+import { confirmClearSelection } from "@/logbook/confirmClearSelection";
 import { useSelection } from "@/logbook/SelectionContext";
 import { useNativeColors } from "@/theme/colors";
 
@@ -48,7 +49,7 @@ export function SelectionBar(): ReactNode {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Clear selection"
-        onPress={clear}
+        onPress={() => confirmClearSelection(selected.length, clear)}
         className="h-14 w-14 items-center justify-center active:opacity-70"
       >
         <Ionicons name="close-circle-outline" size={22} color={colors.icon} />

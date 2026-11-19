@@ -58,13 +58,13 @@ import {
   userRoutesFilter,
 } from "@shared/map/userMapLayers";
 import { REGIONS, type RegionId } from "@shared/regions";
-import type { Station } from "@shared/types";
+import type { RailwayRoute, Station } from "@shared/types";
 import { useIsFocused } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LayoutChangeEvent, NativeSyntheticEvent } from "react-native";
 import { ActivityIndicator, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as api from "@/api/endpoints";
+import { NetworkError } from "@/api/client";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useSelection } from "@/logbook/SelectionContext";
 import { CoverageOverlay } from "@/map/CoverageOverlay";
@@ -72,6 +72,7 @@ import { FeatureSheet } from "@/map/FeatureSheet";
 import { fitCamera } from "@/map/fitCamera";
 import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
+import { MapNotice, type MapNoticeContent } from "@/map/MapNotice";
 import { MapTopControls } from "@/map/MapTopControls";
 import {
   lastJourneyOf,
@@ -82,6 +83,7 @@ import {
   toStationFeature,
 } from "@/map/mapFeatures";
 import { loadMapPosition, type MapPosition, saveMapPosition } from "@/map/mapPosition";
+import { heldRouteMetadata, readRouteMetadata } from "@/map/routeMetadataCache";
 import {
   notesTileUrl,
   routesTileUrl,
@@ -117,9 +119,25 @@ const FIT_GAP = 16;
 const FIT_SIDE_MARGIN = 24;
 const FIT_FLY_MS = 1000;
 
+/** A tapped route's read that hasn't answered by now counts as no connection. */
+const ROUTE_READ_TIMEOUT_MS = 8_000;
+const NO_CONNECTION_NOTICE: MapNoticeContent = {
+  kind: "offline",
+  message: "No connection. Only routes opened earlier in this session can be shown offline.",
+};
+const ROUTE_FAILED_NOTICE: MapNoticeContent = {
+  kind: "error",
+  message: "Couldn't load this route.",
+};
+
 interface RailwayMapProps {
   /** The country filter, already resolved for this region (`useEffectiveCountries`). */
   countries: string[];
+  /**
+   * Furniture over the map's bottom corners (the progress box): drawn over the map
+   * and under the feature sheet and the notice, which would otherwise open beneath it.
+   */
+  children?: ReactNode;
 }
 
 /** `region.bounds` is `[[w, s], [e, n]]`; the binding wants `[w, s, e, n]`. */
@@ -128,7 +146,7 @@ function flatBounds(regionId: RegionId): [number, number, number, number] {
   return [west, south, east, north];
 }
 
-export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
+export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode {
   const { resolved: theme } = useTheme();
   const { showHeritage, showSpecial, showScenicLines, showClosed } = useLayerPrefs();
   // The user's rides, coloured and ordered over Martin's tile by id. None yet (or
@@ -175,6 +193,10 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
 
   const cameraRef = useRef<CameraRef>(null);
   const [feature, setFeature] = useState<MapFeature | null>(null);
+  // A tap that could not be answered, shown where its sheet would have opened
+  const [notice, setNotice] = useState<MapNoticeContent | null>(null);
+  // The route read in flight, aborted by the next route press
+  const routeRead = useRef<AbortController | null>(null);
   // Every press counts itself, so a route's sheet whose details arrive after a
   // later press (another feature, the map's dismissal, a region switch) is dropped.
   const pressRef = useRef(0);
@@ -211,6 +233,7 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
     mountedRegion.current = regionId;
     pressRef.current++;
     setFeature(null);
+    setNotice(null);
 
     // Nothing picked out of the old region survives into the new one, and neither
     // does the camera: `initialViewState` cannot be revisited, so this is a stop.
@@ -308,7 +331,9 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
   const showFeature = useCallback((next: MapFeature | null) => {
     pressRef.current++;
     setFeature(next);
+    setNotice(null);
   }, []);
+  const closeNotice = useCallback(() => setNotice(null), []);
   const takePress = useCallback(
     (
       event: NativeSyntheticEvent<PressEventWithFeatures>,
@@ -323,9 +348,11 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
     [showFeature],
   );
   // The route tile carries only what the layers draw with, so the sheet's text
-  // is read by id, and the last ride from the rides. Nothing opens until the text
-  // is here: a sheet without the route's name, or a selection made from one, is
-  // no use.
+  // is read by id, and the last ride from the rides. A route read before this
+  // session opens at once from what was kept (`routeMetadataCache.ts`) and is
+  // refreshed by the read; otherwise nothing opens until the text is here — a sheet
+  // without the route's name, or a selection made from one, is no use — and a read
+  // that fails says so in place of the sheet.
   const takeRoutePress = useCallback(
     async (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
       event.stopPropagation();
@@ -333,15 +360,46 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
       const trackId = hit ? toRouteTrackId(hit.id) : null;
       if (trackId === null) return;
       const press = ++pressRef.current;
+
+      const open = (route: RailwayRoute) => {
+        const lastJourney = lastJourneyOf(ridesRef.current?.byId.get(trackId));
+        setFeature(routeFeatureFromMetadata(route, lastJourney));
+        setNotice(null);
+      };
+      const fail = (next: MapNoticeContent) => {
+        setFeature(null);
+        setNotice(next);
+      };
+
+      const held = heldRouteMetadata(trackId);
+      if (held) open(held);
+      else setNotice(null);
+
+      routeRead.current?.abort();
+      const controller = new AbortController();
+      routeRead.current = controller;
+      const timeout = setTimeout(() => controller.abort(), ROUTE_READ_TIMEOUT_MS);
+      let route: RailwayRoute | undefined;
       try {
-        const [route] = await api.routeMetadata([trackId]);
-        if (route && press === pressRef.current) {
-          const lastJourney = lastJourneyOf(ridesRef.current?.byId.get(trackId));
-          setFeature(routeFeatureFromMetadata(route, lastJourney));
-        }
+        route = await readRouteMetadata(trackId, controller.signal);
       } catch (error) {
+        // A newer press took over (and aborted this one), or the kept copy is showing
+        // and stays
+        if (press !== pressRef.current || held) return;
         console.warn("Route details failed:", error);
+        // No connection, or one too stalled to answer in time
+        const offline =
+          error instanceof NetworkError || (error instanceof Error && error.name === "AbortError");
+        fail(offline ? NO_CONNECTION_NOTICE : ROUTE_FAILED_NOTICE);
+        return;
+      } finally {
+        clearTimeout(timeout);
+        if (routeRead.current === controller) routeRead.current = null;
       }
+      if (press !== pressRef.current) return;
+      // The server doesn't know it (deleted since the tile was drawn)
+      if (route) open(route);
+      else fail(ROUTE_FAILED_NOTICE);
     },
     [],
   );
@@ -493,10 +551,12 @@ export function RailwayMap({ countries }: RailwayMapProps): ReactNode {
       {/* A map runs under the status bar, so the furniture over it stands clear of
           one — which is the whole of why the map pane takes no safe-area inset. */}
       <MapTopControls onSelectStation={flyToStation} />
+      {children}
 
       {feature ? (
         <FeatureSheet feature={feature} regionId={regionId} onClose={() => showFeature(null)} />
       ) : null}
+      {notice ? <MapNotice notice={notice} onClose={closeNotice} /> : null}
     </View>
   );
 }

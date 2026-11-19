@@ -22,6 +22,7 @@ import { useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
+import { confirmClearSelection } from "@/logbook/confirmClearSelection";
 import { bumpLogVersion } from "@/logbook/logVersion";
 import { type SelectedRoute, useSelection } from "@/logbook/SelectionContext";
 import { useRegion } from "@/region/RegionContext";
@@ -169,14 +170,25 @@ export default function LogJourneyScreen(): ReactNode {
           <TripPicker trips={trips} value={tripId} onChange={setTripId} />
 
           <View className="gap-2">
-            <Text className="text-base font-semibold text-gray-900 dark:text-gray-100">
-              {selected.length} {selected.length === 1 ? "route" : "routes"}
-            </Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                {selected.length} {selected.length === 1 ? "route" : "routes"}
+              </Text>
+              {/* Emptying the selection closes the screen (the effect above), as the
+                  map bar's clear button does. */}
+              <Button
+                label="Clear selection"
+                variant="ghost"
+                disabled={saving}
+                onPress={() => confirmClearSelection(selected.length, clear)}
+              />
+            </View>
             {selected.map((entry) => (
               <RouteRow
                 key={entry.route.trackId}
                 entry={entry}
                 regionId={regionId}
+                saving={saving}
                 onRemove={() => remove(entry.route.trackId)}
                 onPartial={(partial) => setPartial(entry.route.trackId, partial)}
               />
@@ -195,11 +207,14 @@ export default function LogJourneyScreen(): ReactNode {
 function RouteRow({
   entry,
   regionId,
+  saving,
   onRemove,
   onPartial,
 }: {
   entry: SelectedRoute;
   regionId: Parameters<typeof routeTitle>[1];
+  /** While the journey is being sent: what is sent is already fixed. */
+  saving: boolean;
   onRemove(): void;
   onPartial(partial: boolean): void;
 }): ReactNode {
@@ -220,7 +235,7 @@ function RouteRow({
             {entry.partial && entry.covered ? " · part of the line" : ""}
           </Text>
         </View>
-        <Button label="Remove" variant="ghost" onPress={onRemove} />
+        <Button label="Remove" variant="ghost" disabled={saving} onPress={onRemove} />
       </View>
       <ToggleSwitch label="Rode only part of it" value={entry.partial} onChange={onPartial} />
     </View>

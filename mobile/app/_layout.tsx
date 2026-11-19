@@ -14,6 +14,7 @@
  */
 import "../global.css";
 import "@/devWarnings";
+import "@/map/mapLogging";
 
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
