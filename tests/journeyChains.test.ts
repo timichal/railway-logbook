@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { type ChainableRoute, journeyChains } from "@/lib/journeyChains";
+import { type ChainableRoute, journeyChains } from "@/lib/shared/journeyChains";
 
 /** A point `x` tenths of a degree east along latitude 50 (~7km apart), nudged `m` metres. */
 const at = (x: number, m = 0): [number, number] => [14 + x * 0.1 + m / 71_500, 50];

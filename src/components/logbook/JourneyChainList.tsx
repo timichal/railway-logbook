@@ -1,4 +1,4 @@
-import type { JourneyChain } from "@/lib/journeyChains";
+import type { JourneyChain } from "@/lib/shared/journeyChains";
 import { pickRow } from "@/lib/ui/buttonStyles";
 
 interface JourneyChainListProps {

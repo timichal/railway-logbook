@@ -5,9 +5,9 @@ import IconButton from "@/components/ui/IconButton";
 import TagInput from "@/components/ui/TagInput";
 import type { RouteSuggestions, SaveRouteData } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
-import { foldAccents, foldForSearch } from "@/lib/searchText";
 import { type LineClass, lineClassOptions, type UsageType } from "@/lib/shared/constants";
 import { type Region, regionUsageOptions } from "@/lib/shared/regions";
+import { foldAccents, foldForSearch } from "@/lib/shared/searchText";
 import { EGTRE_SHORTCUT, JUNCTION_SHORTCUT } from "@/lib/textShortcut";
 import { btn } from "@/lib/ui/buttonStyles";
 

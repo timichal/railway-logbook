@@ -11,7 +11,7 @@ import {
   calculateBearing,
   haversineDistance,
   normalizeBearingDifference,
-} from "../../lib/geoUtils";
+} from "../../lib/shared/geoUtils";
 import type { BacktrackingPoint } from "../../lib/shared/types";
 import type { RailwayPart } from "./partNetwork";
 

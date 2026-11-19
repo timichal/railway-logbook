@@ -123,7 +123,7 @@ RETURN ' ' || btrim(regexp_replace(
 -- A name as the searches compare it whole: its words with the spaces taken out,
 -- so "owariseto", "owari-seto" and "Owari Seto" are one query, and "sanyo" finds
 -- "San'yō" — operators romanize the same name with and without them. The SQL
--- twin of foldForSearch (src/lib/searchText.ts, its separators in
+-- twin of foldForSearch (src/lib/shared/searchText.ts, its separators in
 -- src/lib/shared/searchQuery.ts); tests/searchText.sql.test.ts holds the two
 -- together. Written over search_words, so a name's words without their spaces
 -- are its key by construction.

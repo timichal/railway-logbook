@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Icon from "@/components/ui/Icon";
-import { foldAccents } from "@/lib/searchText";
+import { foldAccents } from "@/lib/shared/searchText";
 import { optionRow } from "@/lib/ui/buttonStyles";
 
 interface TagInputProps {

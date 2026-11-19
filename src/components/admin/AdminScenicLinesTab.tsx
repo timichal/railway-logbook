@@ -10,7 +10,7 @@ import { fetchScenicLines } from "@/lib/adminReads";
 import { deleteScenicLine, updateScenicLineNames } from "@/lib/adminScenicLineActions";
 import type { AdminScenicLine } from "@/lib/adminScenicLineQueries";
 import { useRegionId } from "@/lib/regionContext";
-import { foldForSearch } from "@/lib/searchText";
+import { foldForSearch } from "@/lib/shared/searchText";
 import type { RouteBounds } from "@/lib/shared/types";
 import { JUNCTION_SHORTCUT } from "@/lib/textShortcut";
 import { ConfirmDialog, useToast } from "@/lib/toast";

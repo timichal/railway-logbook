@@ -10,7 +10,7 @@ import {
   calculateBearing,
   haversineDistance,
   normalizeBearingDifference,
-} from "../geoUtils";
+} from "../shared/geoUtils";
 import {
   ENDPOINT_SIDES,
   ENDPOINT_TOLERANCE_METERS,

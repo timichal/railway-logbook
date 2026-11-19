@@ -1,4 +1,4 @@
-import { SEARCH_SEPARATORS } from "./shared/searchQuery";
+import { SEARCH_SEPARATORS } from "./searchQuery";
 
 /**
  * Letters that carry their accent inside the letter rather than as a combining mark,

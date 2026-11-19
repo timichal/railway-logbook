@@ -21,8 +21,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Client } from "pg";
 import { dbConfig } from "@/lib/dbConfig";
-import { foldForSearch } from "@/lib/searchText";
 import { SEARCH_WORD_BREAKS } from "@/lib/shared/searchQuery";
+import { foldForSearch } from "@/lib/shared/searchText";
 
 const handPicked = [
   "Owari Seto",

@@ -40,16 +40,13 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ## Medium — UX gaps against the web and platform conventions
 
-- [ ] **The logbook can't show what a journey contains.** A journey card shows the
-      description and "Show on the map". Since the journeys refactor (2026-11-14) the
-      web card shows the routes as the lines of stations they were ridden along
-      ("Praha – Beroun – Plzeň", `JourneyChainList`, built by `src/lib/journeyChains.ts`
-      from each route's `ends`), with `LoggedRouteRow` for the detail. Journeys inside a
-      trip can't be expanded at all. Load `GET /journeys/:id` when a card opens (it
-      already returns `ends`) and show the chains. `journeyChains.ts` and what it imports
-      (`geoUtils.ts`, `searchText.ts`) are dependency-free, so move them into
-      `src/lib/shared/` rather than writing a second copy. This is also the base that
-      editing will need (`journeyEdit.ts`, `JourneyEditForm` on the web).
+- [ ] **A chain can't be shown alone on the map.** On the web, pressing a chain
+      highlights just its routes and fits to them. The app's map fits only to a box the
+      server sends, and `GET /journeys/:id` sends one for the whole journey. The query
+      already computes each route's box before taking their union
+      (`journeyWithBoundsForUser`, `routeBoxSql`): return the boxes per route (or per
+      track id beside `bounds`), union a chain's in the app, and make `ChainRow`
+      pressable where there is more than one chain. Low.
 
 - [ ] **Trips can't be created in the app.** `createTrip` is in `endpoints.ts`, but
       nothing calls it, so `TripPicker` offers only trips made on the web. Add "New trip…"
@@ -109,7 +106,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       element's text for VoiceOver and TalkBack:
   - `MapProgressBox` reads only "Show progress", never the percentage.
   - `HighlightChip` reads "Clear the highlight", never "3 routes highlighted".
-  - `CardHeader` reads only the title, without date or stats.
 
   Put the content in the label, or move the action into `accessibilityHint`. Also,
   `ToggleSwitch`'s inner `Switch` is a second focusable element although the comment

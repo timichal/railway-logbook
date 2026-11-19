@@ -14,8 +14,8 @@
  *        --closed searches closed lines too, as the planner does under "All closed lines".
  */
 import pool from "../lib/db";
-import { haversineDistance } from "../lib/geoUtils";
 import { findRoutePathBetweenStations } from "../lib/routePathFinder";
+import { haversineDistance } from "../lib/shared/geoUtils";
 
 async function main() {
   const argv = process.argv.slice(2);

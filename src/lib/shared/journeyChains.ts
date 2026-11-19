@@ -17,8 +17,8 @@
  */
 
 import { haversineDistance } from "./geoUtils";
+import { coverageToleranceFraction } from "./routeCoverage";
 import { foldForSearch } from "./searchText";
-import { coverageToleranceFraction } from "./shared/routeCoverage";
 
 /** What a chain needs of a logged route. `ends` missing: a route the map no longer has. */
 export interface ChainableRoute {

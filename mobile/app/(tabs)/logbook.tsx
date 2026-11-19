@@ -7,19 +7,22 @@
  * page), so nothing here re-sorts or re-filters what it is handed. Search and
  * paging go back to the server; the search is debounced, as on the web.
  *
- * One card is open at a time, for the reason the web app opens one: an open card
- * points the map at its routes, and two open cards would be two claims about what
- * the map is showing. Since the map is a *different tab* here, opening a card sets
- * the highlight and says so — the reader goes to the map to see it.
+ * One card is open at a time, as on the web. There an open card points the map at
+ * its routes; here the map is a *different tab*, so opening a card only shows what is
+ * in it, and its "Show on the map" sets the highlight and takes the reader there
+ * (`ShowOnMap`).
+ *
+ * An open journey shows the lines of stations it rode (`JourneyDetails`), read when
+ * it opens; the journeys inside an open trip open the same way, one at a time.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { formatDateOnly, formatDateOnlyRange } from "@shared/getUntimezonedDateStr";
-import { useRouter } from "expo-router";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from "react-native";
 import * as api from "@/api/endpoints";
-import { useHighlight } from "@/logbook/HighlightContext";
+import { JourneyDetails } from "@/logbook/JourneyDetails";
 import { useLogVersion } from "@/logbook/logVersion";
+import { ShowOnMap } from "@/logbook/ShowOnMap";
 import { useRegion } from "@/region/RegionContext";
 import { useNativeColors } from "@/theme/colors";
 import { Button } from "@/ui/Button";
@@ -193,28 +196,81 @@ function TripCard({
         open={open}
         onToggle={onToggle}
       />
-      {open ? (
-        <View className="gap-2 border-t border-gray-200 p-3 dark:border-gray-700">
-          {/* Opening the trip points the map at every route across its journeys. */}
-          <ShowOnMap kind="trip" id={trip.id} label="Show the whole trip on the map" />
-          {trip.description ? (
-            <Text className="text-sm text-gray-700 dark:text-gray-300">{trip.description}</Text>
-          ) : null}
-          {journeys.map((journey) => (
-            <View key={journey.id} className="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
-              <Text className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {journey.name}
-              </Text>
-              <Text className="text-xs text-gray-600 dark:text-gray-400">
-                {formatDateOnly(journey.date)} · {journey.route_count}{" "}
-                {plural(journey.route_count, "route", "routes")} ·{" "}
-                {formatKm(journey.total_distance)} km
-              </Text>
-              <ShowOnMap kind="journey" id={journey.id} label="Show on the map" />
-            </View>
-          ))}
-        </View>
+      {open ? <TripBody trip={trip} journeys={journeys} /> : null}
+    </View>
+  );
+}
+
+/**
+ * An open trip: its journeys, each of which opens in place to show what it rode. One
+ * at a time, as the cards themselves; mounted only while the trip is open, so closing
+ * the trip closes them too.
+ */
+function TripBody({
+  trip,
+  journeys,
+}: {
+  trip: api.TripWithStats;
+  journeys: api.JourneyWithStats[];
+}): ReactNode {
+  const { regionId } = useRegion();
+  const colors = useNativeColors();
+  const [openJourney, setOpenJourney] = useState<number | null>(null);
+
+  return (
+    <View className="gap-2 border-t border-gray-200 p-3 dark:border-gray-700">
+      {/* Opening the trip points the map at every route across its journeys. */}
+      <ShowOnMap
+        ownerKey={`trip-${trip.id}`}
+        label="Show the whole trip on the map"
+        load={() =>
+          api.trip(trip.id, regionId).then((t) => ({
+            trackIds: t.routeIds,
+            partials: t.partials,
+            bounds: t.bounds,
+          }))
+        }
+      />
+      {trip.description ? (
+        <Text className="text-sm text-gray-700 dark:text-gray-300">{trip.description}</Text>
       ) : null}
+      {journeys.map((journey) => {
+        const isOpen = openJourney === journey.id;
+        const journeyStats = `${formatDateOnly(journey.date)} · ${journey.route_count} ${plural(journey.route_count, "route", "routes")} · ${formatKm(journey.total_distance)} km`;
+        return (
+          <View key={journey.id} className="overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: isOpen }}
+              accessibilityLabel={`${journey.name}, ${journeyStats}`}
+              onPress={() => setOpenJourney(isOpen ? null : journey.id)}
+              className="min-h-11 flex-row items-center gap-2 p-3 active:opacity-70"
+            >
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {journey.name}
+                </Text>
+                <Text className="text-xs text-gray-600 dark:text-gray-400">{journeyStats}</Text>
+              </View>
+              <Ionicons
+                name={isOpen ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={colors.icon}
+              />
+            </Pressable>
+            {isOpen ? (
+              <View className="gap-2 px-3 pb-3">
+                {journey.description ? (
+                  <Text className="text-sm text-gray-700 dark:text-gray-300">
+                    {journey.description}
+                  </Text>
+                ) : null}
+                <JourneyDetails journeyId={journey.id} />
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -243,7 +299,7 @@ function JourneyCard({
           {journey.description ? (
             <Text className="text-sm text-gray-700 dark:text-gray-300">{journey.description}</Text>
           ) : null}
-          <ShowOnMap kind="journey" id={journey.id} label="Show on the map" />
+          <JourneyDetails journeyId={journey.id} />
         </View>
       ) : null}
     </View>
@@ -270,7 +326,8 @@ function CardHeader({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
-      accessibilityLabel={title}
+      // The label replaces the children's text, so it carries what they show
+      accessibilityLabel={`${title}, ${subtitle}, ${stats}`}
       onPress={onToggle}
       className="min-h-14 flex-row items-center gap-3 bg-white p-3 active:opacity-70 dark:bg-gray-900"
     >
@@ -282,80 +339,6 @@ function CardHeader({
       </View>
       <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={colors.icon} />
     </Pressable>
-  );
-}
-
-/**
- * Point the map at this trip's or journey's routes, and take the reader there — the
- * map flies to them, with the box the same request brings back. Pressed again while
- * the map still shows them, it flies there again, in case the reader has panned away.
- *
- * The routes are fetched on the press rather than carried in the list: the logbook
- * page would otherwise ship every track id of every row to draw a button nobody has
- * pressed yet.
- */
-function ShowOnMap({
-  kind,
-  id,
-  label,
-}: {
-  kind: "trip" | "journey";
-  id: number;
-  label: string;
-}): ReactNode {
-  const router = useRouter();
-  const { regionId } = useRegion();
-  const { highlight, refit, ownerKey } = useHighlight();
-  // Read after the request, which a region switch may have overtaken: its routes and
-  // box are the old region's, and the switch has just cleared the map of those
-  const currentRegion = useRef(regionId);
-  currentRegion.current = regionId;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // The map may already be showing this one — from a previous press, or from before
-  // the reader came back to this tab. Saying so beats offering the same press twice.
-  const showing = ownerKey === `${kind}-${id}`;
-
-  const show = useCallback(async (): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      const { trackIds, partials, bounds } =
-        kind === "trip"
-          ? await api.trip(id, regionId).then((t) => ({
-              trackIds: t.routeIds,
-              partials: t.partials,
-              bounds: t.bounds,
-            }))
-          : await api.journey(id, regionId).then((j) => ({
-              trackIds: j.routes.map((route) => route.track_id),
-              partials: j.partials,
-              bounds: j.bounds,
-            }));
-      if (currentRegion.current !== regionId) return;
-      highlight({ trackIds, kind: "view", partials, ownerKey: `${kind}-${id}`, bounds });
-      router.push("/(tabs)/map");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load its routes.");
-    } finally {
-      setBusy(false);
-    }
-  }, [kind, id, regionId, highlight, router]);
-
-  return (
-    <View className="gap-1">
-      <Button
-        label={showing ? "Showing on the map" : label}
-        variant={showing ? "secondary" : "outline"}
-        busy={busy}
-        onPress={() => {
-          if (!showing) return void show();
-          refit();
-          router.push("/(tabs)/map");
-        }}
-      />
-      {error ? <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text> : null}
-    </View>
   );
 }
 

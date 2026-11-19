@@ -315,18 +315,22 @@ export interface LoggedRoute extends Omit<RailwayRoute, "geometry"> {
  * A journey and its routes, with `bounds` — the box of those routes in `region`, which
  * the map fits to when the journey is opened, `null` when none is there — and
  * `partials`, the stretch ridden of each route logged in part where it is known,
- * which the highlight draws in place of the whole route.
+ * which the highlight draws in place of the whole route. The routes come in the order
+ * they were logged, with each one's `ends`, which is what `journeyChains` reads.
  */
-export function journey(
-  id: number,
-  region: RegionId,
-): Promise<{
+export interface LoadedJourney {
   journey: Journey;
   routes: LoggedRoute[];
   bounds: RouteBounds | null;
   partials: PartialRouteGeometry[];
-}> {
-  return request(`/journeys/${id}`, { query: { region } });
+}
+
+export function journey(
+  id: number,
+  region: RegionId,
+  signal?: AbortSignal,
+): Promise<LoadedJourney> {
+  return request(`/journeys/${id}`, { query: { region }, signal });
 }
 
 export async function updateJourney(
