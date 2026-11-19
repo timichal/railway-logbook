@@ -1,10 +1,10 @@
 /**
- * The line picked in the map's search box, named under the map's top row, and the
- * way to stop highlighting it — the web's chip under its search box.
+ * The line picked in the map's search box, named under the search bar, and the way
+ * to stop highlighting it — the web's chip under its search box.
  *
- * Its own row rather than a place in the top one: the middle of that row is the
- * logbook's highlight (`HighlightChip`), and the two can be up at once — a journey
- * opened from the logbook, then the line it ran on looked up.
+ * It shares the chip row with the logbook's or planner's highlight (`HighlightChip`),
+ * leading it: the two can be up at once — a journey opened from the logbook, then
+ * the line it ran on looked up — and each shrinks to share the width.
  *
  * A status the band can't show is said in the chip, rather than naming a highlight
  * that draws nothing: every route of the line on a switched-off layer, or a load that
@@ -18,7 +18,7 @@ import type { LineHighlight } from "@/map/useLineHighlight";
 import { useNativeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 
-/** The chip's height, for the camera fit to stay clear of it (`RailwayMap`). */
+/** The chip's height, which sets the chip row's (`MapTopControls`). */
 export const LINE_CHIP_HEIGHT = 44;
 
 const STATUS_NOTE: Partial<Record<LineHighlight["status"], string>> = {

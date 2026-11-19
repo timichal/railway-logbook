@@ -24,6 +24,7 @@ import { useLogVersion } from "@/logbook/logVersion";
 import { SelectionBar } from "@/logbook/SelectionBar";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import { MapProgressBox } from "@/map/MapProgressBox";
+import { PlannerButton } from "@/map/PlannerButton";
 import { RailwayMap } from "@/map/RailwayMap";
 import { useRegion } from "@/region/RegionContext";
 import { useEffectiveCountries } from "@/region/useEffectiveCountries";
@@ -87,10 +88,11 @@ export default function MapScreen(): ReactNode {
   return (
     <View className="flex-1">
       {/* The map and its own furniture in one pane, so the selection bar below is a
-          flex sibling rather than something covering the progress box. The box goes
-          inside the map, which draws its sheet and notice over it. */}
+          flex sibling rather than something covering the progress box. The box and the
+          planner button go inside the map, which draws its sheet and notice over them. */}
       <RailwayMap countries={countries}>
         <MapProgressBox progress={progress} />
+        <PlannerButton />
       </RailwayMap>
       <SelectionBar />
     </View>

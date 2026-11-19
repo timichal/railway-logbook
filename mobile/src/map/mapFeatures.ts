@@ -13,7 +13,7 @@
 
 import { type RouteFeatureProperties, routeLinkLabel } from "@shared/map/routeFeature";
 import type { RouteRide } from "@shared/map/routeRides";
-import type { RailwayRoute } from "@shared/types";
+import type { RailwayRoute, Station } from "@shared/types";
 
 export interface RouteFeature extends RouteFeatureProperties {
   kind: "route";
@@ -30,6 +30,11 @@ export interface RouteFeature extends RouteFeatureProperties {
 export interface StationFeature {
   kind: "station";
   name: string;
+  /**
+   * The station as the planner takes it, or null when the press carried no usable
+   * id or point: then the sheet can still name it, but has nothing to plan with.
+   */
+  station: Station | null;
 }
 
 export interface NoteFeature {
@@ -78,9 +83,25 @@ export function lastJourneyOf(ride: RouteRide | undefined): RouteFeature["lastJo
   return date && name ? { date, name } : null;
 }
 
-export function toStationFeature(properties: Properties): StationFeature | null {
+/**
+ * A pressed station. The tile's `id` is a property, not the feature id, and may be
+ * negative (an area reduced to its centroid); the point is the press hit's geometry,
+ * which is where the circle is drawn.
+ */
+export function toStationFeature(
+  properties: Properties,
+  geometry: GeoJSON.Geometry | null | undefined,
+): StationFeature | null {
   const name = text(properties?.name);
-  return name ? { kind: "station", name } : null;
+  if (!name) return null;
+  const id = Number(properties?.id);
+  const point =
+    geometry?.type === "Point" && geometry.coordinates.length >= 2
+      ? ([geometry.coordinates[0], geometry.coordinates[1]] as [number, number])
+      : null;
+  const station =
+    Number.isFinite(id) && id !== 0 && point ? { id, name, coordinates: point } : null;
+  return { kind: "station", name, station };
 }
 
 export function toNoteFeature(properties: Properties): NoteFeature | null {

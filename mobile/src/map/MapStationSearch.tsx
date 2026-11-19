@@ -3,11 +3,13 @@
  * and lines where the region names them (`hasRouteNames`), from one request
  * (`/search`).
  *
- * **Collapsed to a button until it is wanted.** On the web the box sits permanently
- * in the map's top-left corner, which a desktop map has the room for; here the map is
- * the whole screen and a field across the top of it would cost a strip of the thing
- * being searched. So it is a round button that becomes the field, and goes back to
- * being a button once something has been picked.
+ * **Always across the top, as map apps have it.** Collapsed it is a bar that looks
+ * exactly like the field (`MapSearchBar`): it says what can be searched, which a round
+ * magnifier never did (in Japan, that lines can be), and costs only the strip beside
+ * it, mostly under the status bar's shade. A tap opens the real field in its place,
+ * with the keyboard up, and it collapses again once something has been picked. Two
+ * states rather than one live field because the open one carries its results list
+ * and takes the space down to the bottom furniture (`MapTopControls`).
  *
  * Picking a station flies the camera to it, and picking a line fits the camera to it
  * and draws its band (`useLineHighlight`); either closes the keyboard: the answer to
@@ -16,15 +18,15 @@
  * query that names a line means it, where a station name turning up inside a line
  * name is incidental.
  *
- * Whether it is open is `MapTopControls`' state, not this one's: the open field takes
- * the whole top row, so the row has to know.
+ * Whether it is open is `MapTopControls`' state, not this one's: the open field hides
+ * the chips under it, so the row has to know.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { REGIONS, type RegionId } from "@shared/regions";
 import { searchQueryLength } from "@shared/searchQuery";
 import type { LineSearchResult, MapSearchResults, Station } from "@shared/types";
 import type { ReactNode } from "react";
-import { Keyboard, Pressable, TextInput, View } from "react-native";
+import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { useRegion } from "@/region/RegionContext";
 import { SearchResultList, SearchResultRow } from "@/stations/StationResults";
@@ -37,18 +39,24 @@ function searchLabel(regionId: RegionId): string {
   return REGIONS[regionId].hasRouteNames ? "Search lines and stations" : "Search for a station";
 }
 
-/** The collapsed search: a round button in the row's leading corner. */
-export function MapSearchButton({ onPress }: { onPress(): void }): ReactNode {
+/**
+ * The collapsed search: the open field's own frame, icon and placeholder, so opening
+ * it changes nothing on screen but the keyboard and the cursor.
+ */
+export function MapSearchBar({ onPress }: { onPress(): void }): ReactNode {
   const { regionId } = useRegion();
   const colors = useNativeColors();
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole="search"
       accessibilityLabel={searchLabel(regionId)}
       onPress={onPress}
-      className="h-11 w-11 items-center justify-center rounded-full bg-white/95 active:opacity-80 dark:bg-gray-900/95"
+      className="min-h-11 flex-row items-center gap-2 rounded-xl bg-white/95 px-3 active:opacity-80 dark:bg-gray-900/95"
     >
-      <Ionicons name="search" size={20} color={colors.iconStrong} />
+      <Ionicons name="search" size={18} color={colors.icon} />
+      <Text numberOfLines={1} className="flex-1 text-base" style={{ color: colors.placeholder }}>
+        {searchLabel(regionId)}
+      </Text>
     </Pressable>
   );
 }

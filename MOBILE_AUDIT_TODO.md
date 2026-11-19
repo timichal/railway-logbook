@@ -40,11 +40,6 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ## Medium — UX gaps against the web and platform conventions
 
-- [ ] **The station sheet has no actions.** Tapping a station shows its name and the
-      word "Station". On the web, the touch sheet for a station is how the planner gets
-      filled. Add "Plan from here" / "Plan to here" (and maybe "Add as via") that write
-      into `PlannerContext` and open the planner.
-
 - [ ] **The logbook can't show what a journey contains.** A journey card shows the
       description and "Show on the map". Since the journeys refactor (2026-11-14) the
       web card shows the routes as the lines of stations they were ridden along
@@ -166,6 +161,25 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ---
 
+## Journey planner polish (ideas from 2026-11-19)
+
+The planner became a half-height sheet over a live map on 2026-11-19, with station
+taps filling its target slot and its button at the bottom right (`MOBILE_APP_PLAN.md`,
+the log). These are for the UI polish pass, not fixes.
+
+- [ ] **Show the planner's stations on the map.** Mark From, To and the vias as
+      labelled pins (A / B, or From / To) while the form holds them, so which end is
+      which shows without looking at the sheet, and the target slot's station could be
+      picked out. A GeoJSON source over the stations layer, fed from `PlannerContext`'s
+      form (each `Station` carries its coordinates). Keep it clear of the gold path's
+      own styling (`src/lib/shared/map/CLAUDE.md`).
+- [ ] **A swap button between From and To**, as most planners have. One `editForm`
+      that exchanges the two (the answer goes with it, as with any edit).
+- [ ] **A haptic tick when a map tap fills a slot** (`pickOnMap`), and perhaps when
+      a path is found. Needs `expo-haptics`, so a development build.
+
+---
+
 ## New gaps against the web (found 2026-11-18)
 
 - [ ] **No "Sign out other devices".** The web menu has it since 2026-11-17
@@ -184,9 +198,11 @@ Items found already done were deleted; the gaps the web has opened since are und
       has `<UserLocation>` and `trackUserLocation` on the `<Camera>`
       (`MOBILE_APP_PLAN.md`, the gap left from Phase 3). It needs the permission string
       (`NSLocationWhenInUseUsageDescription`, through `expo-location`'s config plugin or
-      `app.json`) and a development build. Place the button with the map's other
-      furniture (`MapTopControls`, or above the progress box) and keep `fitCamera`'s
-      padding clear of it. Check on the device that a zoom releases the lock here too,
+      `app.json`) and a development build. Place it over the bottom-right corner,
+      above the planner button (the top is the search bar and the chip row since
+      2026-11-19), where the attribution's button sits now: move that to the
+      bottom-left above the progress box. Keep `fitCamera`'s padding clear of it
+      (`fitPadding` in `RailwayMap.tsx`). Check on the device that a zoom releases the lock here too,
       and that a denied permission says so rather than doing nothing. Medium.
 - [ ] **No map-sharing settings.** The web's `ShareMapDialog` switches the public map
       on and off and shows its link. The app has neither the setting nor an endpoint

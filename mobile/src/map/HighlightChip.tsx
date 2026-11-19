@@ -8,8 +8,8 @@
  * nothing on screen explaining why.
  *
  * Over the top edge rather than the bottom: the bottom corners are the progress box
- * and the attribution, and the selection bar is below the map entirely. It sits in
- * the middle of the top row (`MapTopControls`), between the search and the planner.
+ * and the planner button, and the selection bar is below the map entirely. It sits
+ * in the chip row under the search bar (`MapTopControls`), after the searched line's.
  */
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";

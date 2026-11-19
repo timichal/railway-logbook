@@ -15,11 +15,14 @@
  * in Japan they are the non-JR operators' lines, behind a switch that starts on, as
  * the web planner's does. Europe's are irregular services and never searched.
  *
+ * **A sheet over half the map, not a page over all of it** (`plannerSheet.ts`). On the
+ * web the planner sits in a sidebar next to the map; here the map stays live above
+ * the sheet, so a found path is fitted into what still shows, and a station tapped
+ * there can be placed into the form from its own sheet. A drag raises it to full
+ * height for a long form or a long answer.
+ *
  * **A found path highlights the map immediately**, before anything is added to the
- * selection. On the web the planner sits in a sidebar next to the map and the gold
- * line appears in the same glance; here the modal is over the map, so the highlight
- * is waiting underneath when this screen is dismissed, and the map's own chip says
- * what it is showing. Adding the routes to the selection hands them to the orange
+ * selection, and the map's own chip says what it is showing. Adding the routes to the selection hands them to the orange
  * selection highlight and drops the gold one, which is the web's behaviour too — two
  * colours claiming to be the answer is one too many.
  *
@@ -49,19 +52,36 @@ export default function PlanJourneyScreen(): ReactNode {
   const router = useRouter();
   const { add } = useSelection();
   const { regionId } = useRegion();
-  const { form, result, error, searching, editForm, find, showOnMap, reset } = usePlanner();
+  const {
+    form,
+    result,
+    error,
+    searching,
+    setSheetOpen,
+    editForm,
+    setIncludeSpecial,
+    find,
+    showOnMap,
+    reset,
+    targetSlot,
+    setActiveSlot,
+  } = usePlanner();
   const { from, to, vias, includeSpecial } = form;
   const offersSpecial = hasOrdinaryNonRegular(regionId);
 
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // An answer kept from an earlier visit is drawn again, in case the map has been
-  // pointed at something else (or its chip dismissed) since, and flown to again on
-  // closing, in case the map has been panned away from it
+  // The map under the sheet counts itself in view while it is up. An answer kept
+  // from an earlier visit is drawn again, in case the map has been pointed at
+  // something else (or its chip dismissed) since, and flown to again, in case the map
+  // has been panned away from it. One effect, so the map hears both in one render
+  // and fits the path clear of the sheet.
   // biome-ignore lint/correctness/useExhaustiveDependencies: on opening only — showOnMap changes with every answer, and a fresh answer highlights itself.
   useEffect(() => {
+    setSheetOpen(true);
     showOnMap();
+    return () => setSheetOpen(false);
   }, []);
 
   const setVia = (index: number, station: Station | null): void => {
@@ -111,11 +131,12 @@ export default function PlanJourneyScreen(): ReactNode {
   const hasForm = from !== null || to !== null || vias.length > 0;
 
   return (
-    <Screen>
+    // A sheet never reaches the status bar, so only the bottom is inset
+    <Screen edges={["bottom"]}>
       {/* Not a KeyboardAvoidingView: it measures itself against its parent, not the
           screen, and a modal sheet starts below the top of the screen — so it came up
           short by that much, and the keyboard's suggestion bar covered the bottom of
-          the form. The scroll view's own iOS inset is measured by UIKit in window
+          the form. (The sheet itself rises above the keyboard.) The scroll view's own iOS inset is measured by UIKit in window
           coordinates; Android resizes the window for the keyboard itself. */}
       <View className="flex-1">
         <View className="flex-row items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
@@ -135,9 +156,10 @@ export default function PlanJourneyScreen(): ReactNode {
         >
           <StationField
             label="From"
-            placeholder="Search for a station"
             value={from}
             onChange={(station) => editForm((f) => ({ ...f, from: station }))}
+            targeted={targetSlot === "from"}
+            onTarget={() => setActiveSlot("from")}
           />
 
           {vias.map((station, index) => (
@@ -149,9 +171,10 @@ export default function PlanJourneyScreen(): ReactNode {
               <View className="flex-1">
                 <StationField
                   label={`Via ${index + 1}`}
-                  placeholder="Search for a station"
                   value={station}
                   onChange={(picked) => setVia(index, picked)}
+                  targeted={targetSlot === index}
+                  onTarget={() => setActiveSlot(index)}
                 />
               </View>
               {/* Only worth the width once there are two rows to put in an order. */}
@@ -189,16 +212,17 @@ export default function PlanJourneyScreen(): ReactNode {
 
           <StationField
             label="To"
-            placeholder="Search for a station"
             value={to}
             onChange={(station) => editForm((f) => ({ ...f, to: station }))}
+            targeted={targetSlot === "to"}
+            onTarget={() => setActiveSlot("to")}
           />
 
           {offersSpecial ? (
             <ToggleSwitch
               label={`Include ${regionUsagePluralLabel(regionId, 2)}`}
               value={includeSpecial}
-              onChange={(value) => editForm((f) => ({ ...f, includeSpecial: value }))}
+              onChange={setIncludeSpecial}
             />
           ) : null}
 
@@ -232,8 +256,8 @@ export default function PlanJourneyScreen(): ReactNode {
                 busy={adding}
               />
               <Text className="text-xs text-gray-500 dark:text-gray-400">
-                The path is drawn in gold on the map — close this to look at it. It stays here until
-                you add it, clear it or change the stations.
+                The path is drawn in gold on the map. It stays until you add it, clear it or change
+                the stations, even with the planner closed.
               </Text>
             </View>
           ) : null}

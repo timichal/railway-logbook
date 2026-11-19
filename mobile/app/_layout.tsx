@@ -26,6 +26,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
 import { HighlightProvider } from "@/logbook/HighlightContext";
 import { PlannerProvider } from "@/logbook/PlannerContext";
+import { PLANNER_SHEET_OPTIONS } from "@/logbook/plannerSheet";
 import { SelectionProvider } from "@/logbook/SelectionContext";
 import { LayerPrefsProvider } from "@/map/LayerPrefsContext";
 import { CountryPrefsProvider } from "@/region/CountryPrefsContext";
@@ -58,9 +59,10 @@ function RootNavigator(): ReactNode {
               ends by emptying it. */}
           <Stack.Screen name="log-journey" options={{ presentation: "modal" }} />
           {/* Likewise: opened, spent, closed — what it produces is a gold path on the
-              map behind it and routes in the selection. Its form and answer outlive
-              it (`PlannerContext`). */}
-          <Stack.Screen name="plan-journey" options={{ presentation: "modal" }} />
+              map and routes in the selection. A half-height sheet over a map that
+              stays live (`plannerSheet.ts`). Its form and answer outlive it
+              (`PlannerContext`). */}
+          <Stack.Screen name="plan-journey" options={PLANNER_SHEET_OPTIONS} />
           {/* Pushed, not modal: a settings page is left by going back, not by being
               spent. */}
           <Stack.Screen name="countries" />

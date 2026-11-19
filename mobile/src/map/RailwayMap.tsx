@@ -70,22 +70,23 @@ import {
 } from "@shared/map/userMapLayers";
 import { REGIONS, type RegionId } from "@shared/regions";
 import type { LineSearchResult, RailwayRoute, Station } from "@shared/types";
-import { useIsFocused } from "expo-router";
+import { useIsFocused, useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LayoutChangeEvent, NativeSyntheticEvent } from "react-native";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NetworkError, READ_TIMEOUT_MS } from "@/api/client";
 import { useHighlight } from "@/logbook/HighlightContext";
+import { type PlannerEnd, usePlanner } from "@/logbook/PlannerContext";
+import { plannerSheetCover } from "@/logbook/plannerSheet";
 import { useSelection } from "@/logbook/SelectionContext";
 import { CoverageOverlay } from "@/map/CoverageOverlay";
-import { FeatureSheet } from "@/map/FeatureSheet";
+import { FeatureSheet, RAISED_GAP } from "@/map/FeatureSheet";
 import { type FitPadding, fitCamera } from "@/map/fitCamera";
 import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
-import { LINE_CHIP_HEIGHT } from "@/map/LineChip";
 import { MapNotice, type MapNoticeContent } from "@/map/MapNotice";
-import { MapTopControls, TOP_CONTROLS_GAP } from "@/map/MapTopControls";
+import { CHIP_ROW_HEIGHT, MapTopControls, TOP_CONTROLS_GAP } from "@/map/MapTopControls";
 import {
   lastJourneyOf,
   type MapFeature,
@@ -95,6 +96,7 @@ import {
   toStationFeature,
 } from "@/map/mapFeatures";
 import { loadMapPosition, type MapPosition, saveMapPosition } from "@/map/mapPosition";
+import { PLANNER_BUTTON_HEIGHT } from "@/map/PlannerButton";
 import { heldRouteMetadata, readRouteMetadata } from "@/map/routeMetadataCache";
 import {
   notesTileUrl,
@@ -123,22 +125,33 @@ const STATION_FLY_MS = 1200;
 
 /**
  * Fitting an opened journey, trip or plan, or a searched line: clear of the
- * furniture over the map — the top row (`MapTopControls`) and the progress box and
- * attribution along the bottom, each a 44pt control 8pt in from its edge, and the
- * searched line's chip under the top row while it is up — by a gap, and of the sides
- * by the web's mobile margin.
+ * furniture over the map — the top row (`MapTopControls`, 44pt controls 8pt in), the
+ * progress box and the planner button along the bottom, and the searched line's chip
+ * under the top row while it is up — by a gap, and of the sides by the web's mobile
+ * margin. The attribution's small button sits above the planner button, and may
+ * overlap a fitted path's corner.
  */
 const CONTROL_EDGE = 8 + 44;
+/** The bottom edge's tallest: the planner button, 8pt in (`PlannerButton`). */
+const BOTTOM_CONTROL_EDGE = 8 + PLANNER_BUTTON_HEIGHT;
 const FIT_GAP = 16;
 const FIT_SIDE_MARGIN = 24;
 const FIT_FLY_MS = 1000;
+/**
+ * The least a route's sheet raised above the planner's is given, where the map pane
+ * is short (a small phone, a tall selection bar): it may then run under the top row,
+ * which beats a sheet cut down to nothing.
+ */
+const RAISED_SHEET_MIN_HEIGHT = 160;
 
-function fitPadding(insetTop: number, withLineChip: boolean): FitPadding {
-  const lineChip = withLineChip ? TOP_CONTROLS_GAP + LINE_CHIP_HEIGHT : 0;
+/** `plannerCover`: how much of the map's bottom the planner's sheet covers, or 0. */
+function fitPadding(insetTop: number, withChips: boolean, plannerCover: number): FitPadding {
+  const chipRow = withChips ? TOP_CONTROLS_GAP + CHIP_ROW_HEIGHT : 0;
   return {
-    top: insetTop + CONTROL_EDGE + lineChip + FIT_GAP,
+    top: insetTop + CONTROL_EDGE + chipRow + FIT_GAP,
     right: FIT_SIDE_MARGIN,
-    bottom: CONTROL_EDGE + FIT_GAP,
+    // Over the planner's sheet the progress box is hidden, so only the gap is left
+    bottom: (plannerCover > 0 ? plannerCover : BOTTOM_CONTROL_EDGE) + FIT_GAP,
     left: FIT_SIDE_MARGIN,
   };
 }
@@ -223,10 +236,6 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   // The line picked in the search box, drawn as a band under the route lines
   const lineHighlight = useLineHighlight(regionId, shownTypes);
   const { setLine } = lineHighlight;
-  // Read by the journey fit for its padding, not a reason to fit again: a pick or a
-  // clear re-running it would fly back to a fit still waiting to be taken
-  const linePicked = useRef(false);
-  linePicked.current = lineHighlight.line !== null;
   const lineBandData = useMemo(
     () => lineSearchHighlightData(lineHighlight.geometry ?? []),
     [lineHighlight.geometry],
@@ -248,15 +257,17 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
-
-  const flyToStation = useCallback((station: Station) => {
-    const [lon, lat] = station.coordinates;
-    cameraRef.current?.setStop({
-      center: [lon, lat],
-      zoom: STATION_ZOOM,
-      duration: STATION_FLY_MS,
-    });
-  }, []);
+  const router = useRouter();
+  const { height: windowHeight } = useWindowDimensions();
+  const { sheetOpen: plannerOpen, placeFromMap, pickOnMap } = usePlanner();
+  // The planner's sheet covers the lower half of the map and leaves the rest live, so
+  // the map is in view under it too: fits wait for neither, and aim above it
+  const inView = isFocused || plannerOpen;
+  const plannerCover =
+    plannerOpen && size ? plannerSheetCover(size.height, windowHeight, insets.top) : 0;
+  // Read by a station's planning, which must not be rebuilt as the sheet opens
+  const plannerOpenRef = useRef(plannerOpen);
+  plannerOpenRef.current = plannerOpen;
 
   /**
    * Where the camera is *now*, as opposed to where it started.
@@ -309,9 +320,10 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   const [loadedStyle, setLoadedStyle] = useState<typeof basemapStyle>(null);
   useEffect(() => {
     if (pendingFit === null || !fitBounds) return;
-    if (!isFocused || !size || !basemapStyle || loadedStyle !== basemapStyle) return;
+    if (!inView || !size || !basemapStyle || loadedStyle !== basemapStyle) return;
 
-    const padding = fitPadding(insets.top, linePicked.current);
+    // A highlight fitted to has its chip up, so the chip row is always reserved
+    const padding = fitPadding(insets.top, true, plannerCover);
     try {
       cameraRef.current
         ?.setStop({ ...fitCamera(fitBounds, size, padding, MIN_ZOOM), duration: FIT_FLY_MS })
@@ -322,7 +334,17 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
     } catch {
       // The native camera isn't there yet (`setStop` throws rather than rejects)
     }
-  }, [pendingFit, fitBounds, fitDone, isFocused, size, basemapStyle, loadedStyle, insets.top]);
+  }, [
+    pendingFit,
+    fitBounds,
+    fitDone,
+    inView,
+    size,
+    basemapStyle,
+    loadedStyle,
+    insets.top,
+    plannerCover,
+  ]);
 
   // A line picked in the search box: the whole line in view, as an opened journey
   // is fitted, and its band drawn once the geometry arrives. The map is on screen
@@ -334,7 +356,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
       try {
         cameraRef.current
           ?.setStop({
-            ...fitCamera(line.bounds, size, fitPadding(insets.top, true), MIN_ZOOM),
+            ...fitCamera(line.bounds, size, fitPadding(insets.top, true, plannerCover), MIN_ZOOM),
             duration: FIT_FLY_MS,
           })
           .catch(() => {});
@@ -342,7 +364,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         // The native camera isn't there yet (`setStop` throws rather than rejects)
       }
     },
-    [setLine, size, insets.top],
+    [setLine, size, insets.top, plannerCover],
   );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
@@ -395,15 +417,67 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
     setNotice(null);
   }, []);
   const closeNotice = useCallback(() => setNotice(null), []);
+  // A station picked in the search is taken as a tap on it would be: into the
+  // planner's target slot while that is open, otherwise its sheet, so a plan can start
+  // from a station found by name (the sheet is short, and the camera centres the
+  // station above it)
+  const flyToStation = useCallback(
+    (station: Station) => {
+      const [lon, lat] = station.coordinates;
+      cameraRef.current?.setStop({
+        center: [lon, lat],
+        zoom: STATION_ZOOM,
+        duration: STATION_FLY_MS,
+      });
+      if (plannerOpenRef.current) {
+        showFeature(null);
+        pickOnMap(station);
+      } else {
+        showFeature({ kind: "station", name: station.name, station });
+      }
+    },
+    [showFeature, pickOnMap],
+  );
+  // A station placed into the planner from its sheet opens the planner over the
+  // lower half of the map, where the form shows what is left and searches by itself
+  // once both ends are in. An open planner is left as it is.
+  const planFromStation = useCallback(
+    (station: Station, end: PlannerEnd) => {
+      showFeature(null);
+      placeFromMap(station, end);
+      if (!plannerOpenRef.current) router.push("/plan-journey");
+    },
+    [showFeature, placeFromMap, router],
+  );
+  // While the planner is open a station goes straight into its target slot, as a
+  // click fills the web planner's focused field: a sheet with buttons over the
+  // planner's would be one step too many, and the planner shows where it went.
+  // Anything else, and a station with no usable id, opens its sheet as ever.
+  const readStationPress = useCallback(
+    (
+      properties: Record<string, unknown> | null,
+      geometry: GeoJSON.Geometry | null | undefined,
+    ): MapFeature | null => {
+      const station = toStationFeature(properties, geometry);
+      if (!station?.station || !plannerOpenRef.current) return station;
+      showFeature(null);
+      pickOnMap(station.station);
+      return null;
+    },
+    [showFeature, pickOnMap],
+  );
   const takePress = useCallback(
     (
       event: NativeSyntheticEvent<PressEventWithFeatures>,
-      read: (properties: Record<string, unknown> | null, id: unknown) => MapFeature | null,
+      read: (
+        properties: Record<string, unknown> | null,
+        geometry: GeoJSON.Geometry | null | undefined,
+      ) => MapFeature | null,
     ) => {
       event.stopPropagation();
       const hit = event.nativeEvent.features[0];
       if (!hit) return;
-      const next = read((hit.properties ?? null) as Record<string, unknown> | null, hit.id);
+      const next = read((hit.properties ?? null) as Record<string, unknown> | null, hit.geometry);
       if (next) showFeature(next);
     },
     [showFeature],
@@ -485,7 +559,8 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         touchPitch={false}
         logo={false}
         compass={false}
-        attributionPosition={{ bottom: 8, right: 8 }}
+        // Above the planner button, which has the bottom-right corner
+        attributionPosition={{ bottom: BOTTOM_CONTROL_EDGE + 8, right: 8 }}
         onPress={() => showFeature(null)}
         onRegionDidChange={handleRegionDidChange}
         onDidFinishLoadingStyle={() => setLoadedStyle(basemapStyle)}
@@ -633,7 +708,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
           tiles={[stationsTileUrl()]}
           minzoom={ZOOM_RANGES.stations.min}
           maxzoom={ZOOM_RANGES.stations.max}
-          onPress={(event) => takePress(event, (properties) => toStationFeature(properties))}
+          onPress={(event) => takePress(event, readStationPress)}
         >
           <Layer {...createStationsLayer(theme)} />
           <Layer {...createStationLabelsLayer(theme)} />
@@ -644,7 +719,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
           tiles={[notesTileUrl()]}
           minzoom={ZOOM_RANGES.publicNotes.min}
           maxzoom={ZOOM_RANGES.publicNotes.max}
-          onPress={(event) => takePress(event, (properties) => toNoteFeature(properties))}
+          onPress={(event) => takePress(event, toNoteFeature)}
         >
           <Layer {...createPublicNotesLayer()} />
         </VectorSource>
@@ -656,13 +731,36 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         onSelectStation={flyToStation}
         onSelectLine={selectLine}
         lineHighlight={lineHighlight}
+        plannerCover={plannerCover}
       />
       {children}
 
       {feature ? (
-        <FeatureSheet feature={feature} regionId={regionId} onClose={() => showFeature(null)} />
+        <FeatureSheet
+          feature={feature}
+          regionId={regionId}
+          bottom={plannerCover}
+          // Raised, it keeps clear of the top row too
+          maxHeight={
+            plannerCover > 0 && size
+              ? Math.max(
+                  RAISED_SHEET_MIN_HEIGHT,
+                  size.height -
+                    plannerCover -
+                    RAISED_GAP -
+                    fitPadding(
+                      insets.top,
+                      lineHighlight.line !== null || highlighted.trackIds.length > 0,
+                      plannerCover,
+                    ).top,
+                )
+              : undefined
+          }
+          onPlan={planFromStation}
+          onClose={() => showFeature(null)}
+        />
       ) : null}
-      {notice ? <MapNotice notice={notice} onClose={closeNotice} /> : null}
+      {notice ? <MapNotice notice={notice} bottom={plannerCover} onClose={closeNotice} /> : null}
     </View>
   );
 }
