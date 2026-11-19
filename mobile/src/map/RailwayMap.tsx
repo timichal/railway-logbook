@@ -255,6 +255,8 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   // later press (another feature, the map's dismissal, a region switch) is dropped.
   const pressRef = useRef(0);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  // The open feature sheet's height, measured; read only while one is open
+  const [sheetHeight, setSheetHeight] = useState(0);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const router = useRouter();
@@ -738,7 +740,21 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         lineHighlight={lineHighlight}
         plannerCover={plannerCover}
       />
-      {children}
+      {/* The progress box and the planner button ride above an open sheet rather than
+          going under it: "Plan journey" is still the next step from a tapped route.
+          Not while the planner is up: the raised sheet floats over the planner's own. */}
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: feature && plannerCover === 0 ? sheetHeight : 0,
+        }}
+      >
+        {children}
+      </View>
 
       {feature ? (
         <FeatureSheet
@@ -761,6 +777,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
                 )
               : undefined
           }
+          onHeight={setSheetHeight}
           onPlan={planFromStation}
           onClose={() => showFeature(null)}
         />

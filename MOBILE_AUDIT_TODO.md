@@ -117,18 +117,19 @@ Items found already done were deleted; the gaps the web has opened since are und
       stack header (`headerShown: true` with a title) gives the platform back chevron, a
       large title, the right placement on Android, and Dynamic Type for free.
 
-- [ ] **Check editing and deleting on the device.** _(device)_ Added 2026-11-19, not yet
-      run. Edit on an open journey card opens the logging screen as its editor with the
-      journey's routes and fields; Close keeps the edit, and the map's bar then says
-      "Editing “…”" with taps, the sheet's button ("Add to the journey") and the planner's
-      add all working on the journey; the new selection made before comes back after
-      Save or Stop editing. Check: "Add on the map" from the editor lands on the map tab
-      (close, then `router.navigate`), with one tab bar and nothing stacked under it; Save sends only the change (rename on the web meanwhile, then
-      change only the date here: the web's name stays); a partial ride with a known
-      stretch, saved untouched, keeps its stretch; removing every route then Save offers
-      Delete; Edit on another journey with changes asks first; Delete on a journey or a
-      trip asks, and the list reloads without it (no "Journey not found" flash); "New trip"
-      and "Edit trip" save; a closed route in the editor shows its badge.
+- [ ] **Finish checking editing and deleting on the device.** _(device)_ Confirmed
+      on the iPhone 2026-11-19/20: the editor opens with the journey, "X km of Y", the
+      "Editing “…”" bar, Continue editing / Cancel editing and "Unsaved changes…" on
+      the card, the sheet's "Add to the journey" and remove, the planner's add, "Add
+      more on the map" and its hint, the progress box and "Plan journey" riding above
+      a route sheet, the selection coming back after Save and Cancel editing, and
+      Delete on a journey asking and the list reloading without it. Still to run: Save
+      sends only the change (rename on the web meanwhile, then change only the date
+      here: the web's name stays); a partial ride saved untouched keeps its stretch;
+      Cancel editing with changes asks; Edit on another journey with changes asks;
+      removing every route then Save offers Delete; Delete on a trip asks and the list
+      reloads; "New trip" and "Edit trip" save; a closed route in the editor shows its
+      badge.
 
 ---
 

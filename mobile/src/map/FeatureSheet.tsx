@@ -43,6 +43,8 @@ interface FeatureSheetProps {
   bottom: number;
   /** Its tallest, where the room above the planner sheet is less than 60% of the map. */
   maxHeight?: number;
+  /** Its measured height, which the map's bottom furniture rides above. */
+  onHeight?(height: number): void;
   onPlan(station: Station, end: PlannerEnd): void;
   onClose(): void;
 }
@@ -55,6 +57,7 @@ export function FeatureSheet({
   regionId,
   bottom,
   maxHeight,
+  onHeight,
   onPlan,
   onClose,
 }: FeatureSheetProps): ReactNode {
@@ -62,6 +65,7 @@ export function FeatureSheet({
   const raised = bottom > 0;
   return (
     <View
+      onLayout={(event) => onHeight?.(event.nativeEvent.layout.height)}
       style={raised ? { bottom: bottom + RAISED_GAP, maxHeight } : undefined}
       className={`absolute bg-white dark:bg-gray-900 ${
         raised

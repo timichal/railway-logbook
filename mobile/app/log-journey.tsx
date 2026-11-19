@@ -7,7 +7,7 @@
  * while there is something to spend. **Closing it keeps everything**: the form and
  * the routes are the selection context's, so going back to the map to pick another
  * route loses nothing. A new journey's draft ends when it is logged; an edit's when
- * it is saved, deleted or dropped ("Stop editing").
+ * it is saved, deleted or dropped ("Cancel editing").
  *
  * The form is the web app's: a required name, a required date defaulting to today,
  * an optional description, and an optional trip to file it under. The trip list is
@@ -256,7 +256,7 @@ export default function LogJourneyScreen(): ReactNode {
               {editing ? (
                 // Reached from the logbook, so the map is not what closing returns to
                 <Button
-                  label="Add on the map"
+                  label="Add more on the map"
                   variant="ghost"
                   disabled={saving}
                   onPress={() => {
@@ -276,9 +276,11 @@ export default function LogJourneyScreen(): ReactNode {
                 />
               )}
             </View>
-            {editing && selected.length === 0 ? (
+            {editing ? (
               <Text className="text-sm text-gray-600 dark:text-gray-400">
-                No routes left. Add some on the map, or save to delete the journey.
+                {selected.length === 0
+                  ? "No routes left. Add some on the map, or save to delete the journey."
+                  : "Tap routes on the map or plan a path to add them; the edit waits here until you save."}
               </Text>
             ) : null}
             {selected.map((entry) => (
@@ -308,7 +310,7 @@ export default function LogJourneyScreen(): ReactNode {
                 </Text>
               ) : null}
               <Button
-                label="Stop editing"
+                label="Cancel editing"
                 variant="ghost"
                 disabled={saving}
                 onPress={stopEditing}

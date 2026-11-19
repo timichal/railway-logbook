@@ -40,9 +40,7 @@ A unified Next.js app for OSM railway data. It fetches, processes and visualizes
 - `npm run importMapData <file> [...]`: load stations + railway_parts, **replacing the whole map**, all-or-nothing. Then recalculate the valid routes (`--concurrency=N`, default 4, or the CPU count where lower: 2 on the server).
 - `npm run verifyRouteData`: recalculate the valid routes, then the valid scenic lines, marking the ones that fail invalid (`--concurrency=N`).
 - `npm run applyVectorTiles`: re-apply `database/init/02-vector-tiles.sql`.
-- `npm run addPartialStretchCheck`: add the CHECK that a logged ride is partial exactly when it carries its stretch (idempotent). It lists the rows that break it and changes nothing while any do. Run it on the server once the deploy that brings the rule is live, then delete the script.
 - `npm run markAllRoutesInvalid`: flag every open route for a manual recheck. Recalculation never revalidates them, so each one comes back only through a re-pick. **The reference example for migration scripts.**
-- `npm run reorderRailwayParts`: rewrite `railway_parts` in spatial order (a sorted copy swapped in; readers wait only for the swap, an import blocks). Run on the server between deploys, never during one. Rarely needed: imports keep the order.
 - `npm run fixSequences`: resync SERIAL sequences ("duplicate key violates …_pkey" after rows were loaded with explicit ids).
 - `npm run createAdmin -- <email> [name] [--reset]`: create the admin (user 1), prompting for the password (12+ chars, never an argument). **A setup step for every new database.** `--reset` replaces the admin's credentials and signs out all their sessions. On the server, run it from its checkout.
 - `npm run inspectPath -- "<from>" "<to>" ["<via>"...] [--special] [--closed]`: run the Journey Planner from the CLI and print the chain, the partial legs and the gaps.

@@ -125,7 +125,12 @@ export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode 
   );
 }
 
-/** Edit and Delete, under a loaded journey. */
+/**
+ * Edit and Delete, under a loaded journey. While it is the journey being edited they
+ * are Continue editing and Cancel editing: the card shows the journey as saved, and
+ * the edit is what to come back to or drop (asked first if changed), not a reason to
+ * delete it.
+ */
 function JourneyActions({
   journey,
   onDeleted,
@@ -184,14 +189,28 @@ function JourneyActions({
           disabled={deleting}
           onPress={edit}
         />
-        <Button
-          label="Delete"
-          variant="outline"
-          className="flex-1"
-          busy={deleting}
-          onPress={askDelete}
-        />
+        {editingThis ? (
+          <Button
+            label="Cancel editing"
+            variant="outline"
+            className="flex-1"
+            onPress={() => confirmStopEditing(editing, endEdit)}
+          />
+        ) : (
+          <Button
+            label="Delete"
+            variant="outline"
+            className="flex-1"
+            busy={deleting}
+            onPress={askDelete}
+          />
+        )}
       </View>
+      {editingThis && editing.changed ? (
+        <Text className="text-sm text-gray-600 dark:text-gray-400">
+          Unsaved changes. This card shows the journey as saved.
+        </Text>
+      ) : null}
       {error ? <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text> : null}
     </View>
   );

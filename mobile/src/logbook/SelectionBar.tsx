@@ -63,7 +63,7 @@ export function SelectionBar(): ReactNode {
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={editing ? "Stop editing" : "Clear selection"}
+        accessibilityLabel={editing ? "Cancel editing" : "Clear selection"}
         onPress={() =>
           editing
             ? confirmStopEditing(editing, endEdit)
