@@ -36,6 +36,13 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * How long a read the screen is waiting on (a tapped route, a search, a searched
+ * line) may take before it counts as no connection: a stalled train connection
+ * otherwise never answers, and a spinner would stay up for good.
+ */
+export const READ_TIMEOUT_MS = 8_000;
+
 /** Thrown when the device has no usable connection to the API at all. */
 export class NetworkError extends Error {
   constructor(cause: unknown) {

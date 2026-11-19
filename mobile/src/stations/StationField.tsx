@@ -38,7 +38,7 @@ export function StationField({
 }: StationFieldProps): ReactNode {
   const colors = useNativeColors();
   const { regionId } = useRegion();
-  const { query, setQuery, results, searching, reset } = useStationSearch(regionId);
+  const { query, setQuery, results, searching, error, reset } = useStationSearch(regionId);
 
   if (value) {
     return (
@@ -74,6 +74,7 @@ export function StationField({
       <StationResults
         results={results}
         searching={searching}
+        error={error}
         queryLength={searchQueryLength(query)}
         onSelect={(station) => {
           onChange(station);

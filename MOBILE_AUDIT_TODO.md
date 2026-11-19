@@ -88,12 +88,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       changes colour after the tile reloads (with a blink). The web shows a success toast.
       Add a short toast or banner ("Journey logged · View in logbook").
 
-- [ ] **The map's station search results can't be scrolled.** `StationResults` is a
-      plain `View` inside an absolutely positioned container. With the keyboard up on a
-      small phone, the lower results sit behind the keyboard and can't be reached. Use a
-      `FlatList` with a `maxHeight` and `keyboardShouldPersistTaps="handled"` (the
-      planner's `ScrollView` already has the latter).
-
 - [ ] **Check route taps offline on the device.** _(device)_ Since 2026-11-19 a
       route's details are kept once read (`src/map/routeMetadataCache.ts`): a route read
       before opens at once and is refreshed by a new read, and a failed or timed-out
@@ -103,18 +97,22 @@ Items found already done were deleted; the gaps the web has opened since are und
       seconds, on its ×, or with the next press; back online, that route opens. On 2026-11-19 the notice showed, under the progress box; the box is now a child of `RailwayMap`, drawn under the sheet and the notice: check it is covered now.
       Every route opening offline is Phase 5 (`MOBILE_APP_PLAN.md`).
 
-- [ ] **Check Japan's JR / Non-JR checkboxes on the device.** _(device)_ Built
-      2026-11-19 (Statistics screen, `UsageFilter` in `app/countries.tsx`). In Japan:
-      unticking JR lines hides them on the map (the Regular layer goes to
-      `visibility: none`, since it anchors the scenic band) and takes them out of the
-      progress box; a tap where a hidden JR line runs opens nothing; both unticked
-      warns and the box shows zeros; Settings' map layers offer Heritage only. In
-      Europe nothing changes. Needs the server deployed: an older `/api/v1/progress`
-      ignores `usage` and counts both.
-
-- [ ] **A failed station search says "No stations found."** `useStationSearch` treats
-      errors as no match, which is misleading when offline. Show "Couldn't search — check
-      your connection" instead.
+- [ ] **Check line-name search on the device.** _(device)_ Built 2026-11-19: the
+      map's search box asks `GET /api/v1/search`, which lists lines before stations
+      where `hasRouteNames` (Japan); a picked line fits the camera to it, draws the
+      blue band under the route lines (`useLineHighlight`, the source in
+      `RailwayMap`) and puts a chip under the top row (`LineChip`) that clears it. In
+      Japan: "yamanote" lists the line ("Line · N routes") above the stations; picking
+      it lands the whole line clear of the top row and the chip; the band sits under
+      the route lines and over the scenic band (toggle scenic on after the pick, and
+      before); unticking the line's type says "layer hidden"; the band and chip go
+      on ×, and on a region switch; the logbook's chip and the line chip are up
+      together without overlapping. In airplane mode a search says "Couldn't
+      search…", and a pick shows "failed to load". With the keyboard up, a long
+      result list scrolls and its last rows can be reached (iOS insets; on Android
+      the window's resize), and stops above the progress box. A stalled connection
+      gives up after 8s (`READ_TIMEOUT_MS`) in both the search and the band. In Europe: placeholder "Search for a station", no line
+      rows. Needs the server deployed (the two endpoints are new).
 
 - [ ] **Planner legs don't show the line name.** `PlannedRouteRow` shows only
       `from ⟷ to`. Where `hasRouteNames` (Japan), the line name is what identifies a route,
@@ -235,10 +233,8 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ## Already tracked in `MOBILE_APP_PLAN.md` (listed here so this is the one list)
 
-- [ ] Line-name search where `hasRouteNames` (the API has no endpoint for it yet).
 - [ ] Editing and deleting journeys and trips (the endpoints already exist in
       `endpoints.ts`).
-- [ ] The heritage/special highlight variants have never been seen on a device.
 - [ ] Offline route colouring before Phase 5. Since 2026-11-15 the route tile is
       Martin's and the same for everyone, and the colours come from `GET /rides`, so
       the question is now only how the last rides answer is kept on the device.

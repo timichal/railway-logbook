@@ -12,13 +12,17 @@ import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
 import { ZOOM_RANGES } from "./zoomRanges";
 
 /**
- * The features of the given usage types, as a filter; none given matches nothing,
- * since a `match` needs at least one label. One expression for every layer that
- * follows the usage switches (the click buffer, the searched line), so its shape —
- * which MapLibre Native is particular about — is written once.
+ * The features of the given usage types, as a filter. One expression for every layer
+ * that follows the usage switches (the click buffer, the searched line), so its
+ * shape — which MapLibre Native is particular about — is written once.
+ *
+ * None given matches nothing, as a comparison no feature passes (no usage type is
+ * -1), never a bare `false`: a `match` needs at least one label, and the iOS binding
+ * turns a constant filter into the predicate `0 == 1`, which MapLibre Native refuses
+ * ("Invalid predicate").
  */
 export function usageTypeFilter(usageTypes: readonly UsageType[]): FilterSpecification {
-  if (usageTypes.length === 0) return false;
+  if (usageTypes.length === 0) return ["==", ["get", "usage_type"], -1];
   return ["match", ["get", "usage_type"], [...usageTypes], true, false];
 }
 

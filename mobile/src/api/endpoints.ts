@@ -17,6 +17,8 @@ import type { RegionId } from "@shared/regions";
 import type {
   CoveredStretch,
   Journey,
+  LineGeometry,
+  MapSearchResults,
   PartialRouteGeometry,
   PlannerRoute,
   RailwayRoute,
@@ -75,6 +77,32 @@ export async function stations(
     signal,
   });
   return found;
+}
+
+/**
+ * The map's search box: the stations `stations` finds, and the lines where the
+ * region names them (`hasRouteNames`; empty elsewhere), in one request.
+ */
+export function mapSearch(
+  region: RegionId,
+  q: string,
+  signal?: AbortSignal,
+): Promise<MapSearchResults> {
+  return request<MapSearchResults>("/search", { query: { region, q }, auth: false, signal });
+}
+
+/** A line picked in the map's search box, merged per usage type for its band. */
+export async function lineGeometry(
+  region: RegionId,
+  name: string,
+  signal?: AbortSignal,
+): Promise<LineGeometry[]> {
+  const { lines } = await request<{ lines: LineGeometry[] }>("/lines/geometry", {
+    query: { region, name },
+    auth: false,
+    signal,
+  });
+  return lines;
 }
 
 /**

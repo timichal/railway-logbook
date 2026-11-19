@@ -38,6 +38,7 @@ import type { LineLayerSpecification } from "@maplibre/maplibre-gl-style-spec";
 import {
   Camera,
   type CameraRef,
+  GeoJSONSource,
   Layer,
   Map as MapLibreMap,
   type PressEventWithFeatures,
@@ -45,7 +46,14 @@ import {
   type ViewStateChangeEvent,
 } from "@maplibre/maplibre-react-native";
 import { COVERAGE_LAYER_IDS } from "@shared/map/coverageLayer";
-import { HIGHLIGHT_COLORS } from "@shared/map/highlightLayers";
+import {
+  createLineSearchHighlightLayer,
+  HIGHLIGHT_COLORS,
+  LINE_SEARCH_HIGHLIGHT_LAYER_ID,
+  LINE_SEARCH_HIGHLIGHT_SOURCE_ID,
+  LINE_SEARCH_HIGHLIGHT_TOLERANCE,
+  lineSearchHighlightData,
+} from "@shared/map/highlightLayers";
 import {
   createPublicNotesLayer,
   createRouteLineLayer,
@@ -61,22 +69,23 @@ import {
   userRoutesFilter,
 } from "@shared/map/userMapLayers";
 import { REGIONS, type RegionId } from "@shared/regions";
-import type { RailwayRoute, Station } from "@shared/types";
+import type { LineSearchResult, RailwayRoute, Station } from "@shared/types";
 import { useIsFocused } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LayoutChangeEvent, NativeSyntheticEvent } from "react-native";
 import { ActivityIndicator, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { NetworkError } from "@/api/client";
+import { NetworkError, READ_TIMEOUT_MS } from "@/api/client";
 import { useHighlight } from "@/logbook/HighlightContext";
 import { useSelection } from "@/logbook/SelectionContext";
 import { CoverageOverlay } from "@/map/CoverageOverlay";
 import { FeatureSheet } from "@/map/FeatureSheet";
-import { fitCamera } from "@/map/fitCamera";
+import { type FitPadding, fitCamera } from "@/map/fitCamera";
 import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
+import { LINE_CHIP_HEIGHT } from "@/map/LineChip";
 import { MapNotice, type MapNoticeContent } from "@/map/MapNotice";
-import { MapTopControls } from "@/map/MapTopControls";
+import { MapTopControls, TOP_CONTROLS_GAP } from "@/map/MapTopControls";
 import {
   lastJourneyOf,
   type MapFeature,
@@ -95,6 +104,7 @@ import {
   ZOOM_RANGES,
 } from "@/map/tileUrls";
 import { useBasemapStyle } from "@/map/useBasemapStyle";
+import { useLineHighlight } from "@/map/useLineHighlight";
 import { useRides } from "@/map/useRides";
 import { useRoutesTileVersion } from "@/map/useRoutesTileVersion";
 import { useRegion } from "@/region/RegionContext";
@@ -112,18 +122,27 @@ const STATION_ZOOM = 14;
 const STATION_FLY_MS = 1200;
 
 /**
- * Fitting an opened journey, trip or plan: clear of the furniture over the map —
- * the top row (`MapTopControls`) and the progress box and attribution along the
- * bottom, each a 44pt control 8pt in from its edge — by a gap, and of the sides by
- * the web's mobile margin.
+ * Fitting an opened journey, trip or plan, or a searched line: clear of the
+ * furniture over the map — the top row (`MapTopControls`) and the progress box and
+ * attribution along the bottom, each a 44pt control 8pt in from its edge, and the
+ * searched line's chip under the top row while it is up — by a gap, and of the sides
+ * by the web's mobile margin.
  */
 const CONTROL_EDGE = 8 + 44;
 const FIT_GAP = 16;
 const FIT_SIDE_MARGIN = 24;
 const FIT_FLY_MS = 1000;
 
-/** A tapped route's read that hasn't answered by now counts as no connection. */
-const ROUTE_READ_TIMEOUT_MS = 8_000;
+function fitPadding(insetTop: number, withLineChip: boolean): FitPadding {
+  const lineChip = withLineChip ? TOP_CONTROLS_GAP + LINE_CHIP_HEIGHT : 0;
+  return {
+    top: insetTop + CONTROL_EDGE + lineChip + FIT_GAP,
+    right: FIT_SIDE_MARGIN,
+    bottom: CONTROL_EDGE + FIT_GAP,
+    left: FIT_SIDE_MARGIN,
+  };
+}
+
 const NO_CONNECTION_NOTICE: MapNoticeContent = {
   kind: "offline",
   message: "No connection. Only routes opened earlier in this session can be shown offline.",
@@ -201,6 +220,21 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
     [showRegular, showHeritage, showSpecial],
   );
   const initialPosition = useInitialPosition(regionId);
+  // The line picked in the search box, drawn as a band under the route lines
+  const lineHighlight = useLineHighlight(regionId, shownTypes);
+  const { setLine } = lineHighlight;
+  // Read by the journey fit for its padding, not a reason to fit again: a pick or a
+  // clear re-running it would fly back to a fit still waiting to be taken
+  const linePicked = useRef(false);
+  linePicked.current = lineHighlight.line !== null;
+  const lineBandData = useMemo(
+    () => lineSearchHighlightData(lineHighlight.geometry ?? []),
+    [lineHighlight.geometry],
+  );
+  const lineBandLayer = useMemo(
+    () => createLineSearchHighlightLayer(shownTypes, theme),
+    [shownTypes, theme],
+  );
 
   const cameraRef = useRef<CameraRef>(null);
   const [feature, setFeature] = useState<MapFeature | null>(null);
@@ -277,12 +311,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
     if (pendingFit === null || !fitBounds) return;
     if (!isFocused || !size || !basemapStyle || loadedStyle !== basemapStyle) return;
 
-    const padding = {
-      top: insets.top + CONTROL_EDGE + FIT_GAP,
-      right: FIT_SIDE_MARGIN,
-      bottom: CONTROL_EDGE + FIT_GAP,
-      left: FIT_SIDE_MARGIN,
-    };
+    const padding = fitPadding(insets.top, linePicked.current);
     try {
       cameraRef.current
         ?.setStop({ ...fitCamera(fitBounds, size, padding, MIN_ZOOM), duration: FIT_FLY_MS })
@@ -294,6 +323,27 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
       // The native camera isn't there yet (`setStop` throws rather than rejects)
     }
   }, [pendingFit, fitBounds, fitDone, isFocused, size, basemapStyle, loadedStyle, insets.top]);
+
+  // A line picked in the search box: the whole line in view, as an opened journey
+  // is fitted, and its band drawn once the geometry arrives. The map is on screen
+  // (the box is over it), so unlike `pendingFit` there is nothing to wait for.
+  const selectLine = useCallback(
+    (line: LineSearchResult) => {
+      setLine(line);
+      if (!size) return;
+      try {
+        cameraRef.current
+          ?.setStop({
+            ...fitCamera(line.bounds, size, fitPadding(insets.top, true), MIN_ZOOM),
+            duration: FIT_FLY_MS,
+          })
+          .catch(() => {});
+      } catch {
+        // The native camera isn't there yet (`setStop` throws rather than rejects)
+      }
+    },
+    [setLine, size, insets.top],
+  );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -389,7 +439,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
       routeRead.current?.abort();
       const controller = new AbortController();
       routeRead.current = controller;
-      const timeout = setTimeout(() => controller.abort(), ROUTE_READ_TIMEOUT_MS);
+      const timeout = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
       let route: RailwayRoute | undefined;
       try {
         route = await readRouteMetadata(trackId, controller.signal);
@@ -448,12 +498,14 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
           maxBounds={flatBounds(regionId)}
         />
 
-        {/* The scenic band, under every route line, where the region offers it at
-            all. `beforeId` because a layer mounted after the map has loaded (the
-            toggle switched on) is otherwise appended to the very top — so it waits
-            for its anchor, the Regular route layer, which comes with the rides and
-            the tile version. A remounted route source re-adds that layer above the
-            band (before the coverage overlay), so the order holds after. */}
+        {/* The scenic band, under every route line and under the searched line's
+            band, where the region offers it at all. `beforeId` because a layer
+            mounted after the map has loaded (the toggle switched on) is otherwise
+            appended to the very top — so it waits for its anchor, the searched
+            line's band, which waits for the Regular route layer, which comes with
+            the rides and the tile version (the binding holds a layer until its
+            `beforeId` exists). A remounted route source re-adds that layer above
+            both bands (before the coverage overlay), so the order holds after. */}
         <VectorSource
           id="scenic_lines"
           tiles={[scenicTileUrl()]}
@@ -464,10 +516,25 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
             <Layer
               {...createScenicLinesLayer({ visible: true })}
               filter={scenicFilter}
-              beforeId={REGULAR_ROUTE_LAYER_ID}
+              beforeId={LINE_SEARCH_HIGHLIGHT_LAYER_ID}
             />
           ) : null}
         </VectorSource>
+
+        {/* The searched line's band, directly under the route lines and above the
+            scenic band, so the searched line wins where the two meet (as on the web).
+            Mounted with the route lines and emptied rather than removed when no line
+            is picked, as the coverage overlay is: the scenic band anchors on it, and
+            an anchor that comes and goes would move the scenic band each time. */}
+        {routeLayers && routesUrl ? (
+          <GeoJSONSource
+            id={LINE_SEARCH_HIGHLIGHT_SOURCE_ID}
+            data={lineBandData}
+            tolerance={LINE_SEARCH_HIGHLIGHT_TOLERANCE}
+          >
+            <Layer {...lineBandLayer} beforeId={REGULAR_ROUTE_LAYER_ID} />
+          </GeoJSONSource>
+        ) : null}
 
         {/* Keyed on its URL: the binding reads `tiles` once, when it builds the
             source, and a new URL handed to a built one is stored and never used — so
@@ -488,21 +555,35 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
             maxzoom={ZOOM_RANGES.railwayRoutes.max}
             onPress={takeRoutePress}
           >
+            {/* Every child keyed: a source drops its null children and keys the rest
+                by position (`cloneReactChildrenWithProps`), so a layer switched on
+                would shift the ones after it into each other's places, and a
+                `<Layer>` handed another's id throws ("`id` cannot be changed"). */}
             {routeLayers ? (
               <Layer
+                key="route-regular"
                 {...routeLayers.route}
                 layout={regularLayout}
                 beforeId={COVERAGE_LAYER_IDS[0]}
               />
             ) : null}
             {routeLayers && showHeritage ? (
-              <Layer {...routeLayers.heritage} beforeId={COVERAGE_LAYER_IDS[0]} />
+              <Layer
+                key="route-heritage"
+                {...routeLayers.heritage}
+                beforeId={COVERAGE_LAYER_IDS[0]}
+              />
             ) : null}
             {routeLayers && showSpecial ? (
-              <Layer {...routeLayers.special} beforeId={COVERAGE_LAYER_IDS[0]} />
+              <Layer
+                key="route-special"
+                {...routeLayers.special}
+                beforeId={COVERAGE_LAYER_IDS[0]}
+              />
             ) : null}
             {/* What the logbook or the planner pointed the map at — gold or orange. */}
             <HighlightLayers
+              key="highlighted_routes"
               baseId="highlighted_routes"
               trackIds={highlighted.trackIds}
               partials={highlighted.partials}
@@ -513,6 +594,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
                 `beforeId` rather than mounting order: a set that appears after the map
                 has loaded is otherwise appended to the very top, over the labels. */}
             <HighlightLayers
+              key="selected_routes_highlight"
               baseId="selected_routes_highlight"
               trackIds={selectedIds}
               partials={selectedPartials}
@@ -570,7 +652,11 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
 
       {/* A map runs under the status bar, so the furniture over it stands clear of
           one — which is the whole of why the map pane takes no safe-area inset. */}
-      <MapTopControls onSelectStation={flyToStation} />
+      <MapTopControls
+        onSelectStation={flyToStation}
+        onSelectLine={selectLine}
+        lineHighlight={lineHighlight}
+      />
       {children}
 
       {feature ? (
