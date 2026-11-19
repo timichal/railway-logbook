@@ -404,7 +404,12 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   // Only while the route is still ticked partial: unticking claims the whole route,
   // and the highlight follows — the same rule the web app's selection highlight keeps.
   const selectedPartials = useMemo(
-    () => selected.flatMap((s) => (s.partial && s.covered ? [s.covered] : [])),
+    // A stretch too short to draw (a journey's, cut to under two points) is left
+    // out, and its route drawn whole: an empty line is nothing to hand the source
+    () =>
+      selected.flatMap((s) =>
+        s.partial && s.covered && s.covered.coordinates.length >= 2 ? [s.covered] : [],
+      ),
     [selected],
   );
 

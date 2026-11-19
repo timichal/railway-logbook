@@ -58,6 +58,8 @@ function RootNavigator(): ReactNode {
           {/* Not a tab: it exists only while there is a selection to spend, and it
               ends by emptying it. */}
           <Stack.Screen name="log-journey" options={{ presentation: "modal" }} />
+          {/* A trip's name and description, new or edited from the logbook. */}
+          <Stack.Screen name="edit-trip" options={{ presentation: "modal" }} />
           {/* Likewise: opened, spent, closed — what it produces is a gold path on the
               map and routes in the selection. A half-height sheet over a map that
               stays live (`plannerSheet.ts`). Its form and answer outlive it

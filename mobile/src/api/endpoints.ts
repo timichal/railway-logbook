@@ -333,15 +333,24 @@ export function journey(
   return request(`/journeys/${id}`, { query: { region }, signal });
 }
 
-export async function updateJourney(
-  id: number,
-  input: { name: string; date: string; description?: string },
-): Promise<Journey> {
-  const { journey: updated } = await request<{ journey: Journey }>(`/journeys/${id}`, {
-    method: "PATCH",
-    body: input,
-  });
-  return updated;
+/**
+ * An edit of a journey as a whole, saved in one transaction: only what changed is
+ * sent, and a field left out keeps what the journey holds now (it may have changed
+ * on the web meanwhile). `upsert` routes are written as sent, so one without
+ * `covered` has no stretch; `tripId: null` files it under none.
+ */
+export interface JourneyEditInput {
+  name?: string;
+  date?: string;
+  /** Null clears it. */
+  description?: string | null;
+  tripId?: number | null;
+  upsert?: LoggedRouteInput[];
+  remove?: number[];
+}
+
+export async function updateJourney(id: number, edits: JourneyEditInput): Promise<void> {
+  await request(`/journeys/${id}`, { method: "PATCH", body: edits });
 }
 
 export function deleteJourney(id: number): Promise<void> {
@@ -387,11 +396,4 @@ export async function updateTrip(
 
 export function deleteTrip(id: number): Promise<void> {
   return request(`/trips/${id}`, { method: "DELETE" });
-}
-
-/** File a journey under a trip, or under none. Keyed on the journey: `trip_id` is its column. */
-export function assignJourneyToTrip(journeyId: number, tripId: number | null): Promise<void> {
-  return tripId === null
-    ? request(`/journeys/${journeyId}/trip`, { method: "DELETE" })
-    : request(`/journeys/${journeyId}/trip`, { method: "PUT", body: { tripId } });
 }

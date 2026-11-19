@@ -188,6 +188,19 @@ export function requireIntArray(body: JsonBody, key: string): number[] {
 }
 
 /**
+ * Track ids the query will compare against an `int` column, so one past its range
+ * is a 400 here rather than Postgres' out-of-range error as an opaque 500.
+ */
+export function requireTrackIdArray(body: JsonBody, key: string): number[] {
+  return requireArray(body, key).map((item) => {
+    if (!Number.isInteger(item) || (item as number) <= 0 || (item as number) > MAX_PG_INT) {
+      throw new ApiError(400, `${key} must hold track ids`);
+    }
+    return item as number;
+  });
+}
+
+/**
  * The route ids of a public read: any array, keeping only what can be a track id,
  * uncapped (the query takes them as one array parameter). A malformed entry is
  * dropped rather than refused, so one bad id in a local journey costs only that
@@ -266,7 +279,11 @@ export function requireLoggedRoutes(
     const entry = item as Record<string, unknown>;
 
     const trackId = entry.trackId;
-    if (!Number.isInteger(trackId) || (trackId as number) <= 0) {
+    if (
+      !Number.isInteger(trackId) ||
+      (trackId as number) <= 0 ||
+      (trackId as number) > MAX_PG_INT
+    ) {
       throw new ApiError(400, `${key} entries need a positive integer trackId`);
     }
 

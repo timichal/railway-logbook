@@ -50,7 +50,7 @@ import { ToggleSwitch } from "@/ui/ToggleSwitch";
 
 export default function PlanJourneyScreen(): ReactNode {
   const router = useRouter();
-  const { add } = useSelection();
+  const { add, editing } = useSelection();
   const { regionId } = useRegion();
   const {
     form,
@@ -251,7 +251,8 @@ export default function PlanJourneyScreen(): ReactNode {
                 ))}
               </View>
               <Button
-                label="Add routes to selection"
+                // During an edit the selection is the journey being edited
+                label={editing ? "Add routes to the journey" : "Add routes to selection"}
                 onPress={() => void addToSelection()}
                 busy={adding}
               />

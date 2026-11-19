@@ -143,18 +143,19 @@ export async function journeyWithBoundsForUser(
   );
 
   // Exclude the heavy geometry column; its two ends are enough to chain the routes.
-  // `box`, `closed` and `stretch` are for the bounds and partials, not the route.
+  // `box` and `stretch` are for the bounds and partials, not the route. The rest is
+  // what the native app's editor describes a route with (`routeFeatureFromMetadata`).
   const routesQuery = pool.query<
     RailwayRoute & LoggedPart & { box: RouteBounds | null; closed: boolean; stretch: string | null }
   >(
     `SELECT
-      rr.track_id, rr.name, rr.from_station, rr.to_station,
+      rr.track_id, rr.name, rr.other_names, rr.from_station, rr.to_station,
       rr.description, rr.usage_type, rr.usage_tags, rr.link, rr.link_name, rr.line_class,
       rr.length_km, rr.start_country, rr.end_country,
       rr.is_valid, ${routeEndsSql("rr")} AS ends,
       ulp.partial, ulp.covered_start, ulp.covered_end,
       ${routeBoxSql("rr", region)} AS box,
-      rr.closed,
+      rr.closed, rr.closed_on,
       CASE WHEN ${HAS_STRETCH_SQL}
         THEN ${coveredStretchGeoJsonSql("rr.geometry", "ulp.covered_start", "ulp.covered_end")}
       END AS stretch
@@ -175,7 +176,7 @@ export async function journeyWithBoundsForUser(
   const routes: RailwayRoute[] = [];
   const boxes: (RouteBounds | null)[] = [];
   const stretches: CoveredStretchRow[] = [];
-  for (const { box, closed, stretch, ...route } of routesResult.rows) {
+  for (const { box, stretch, ...route } of routesResult.rows) {
     routes.push(route);
     boxes.push(box);
     if (stretch !== null) {
@@ -186,7 +187,7 @@ export async function journeyWithBoundsForUser(
         covered_end: route.covered_end as number,
         line_class: route.line_class ?? null,
         usage_type: route.usage_type,
-        closed,
+        closed: route.closed,
         start_country: route.start_country ?? null,
         end_country: route.end_country ?? null,
         geojson: stretch,
@@ -242,27 +243,6 @@ export async function createJourneyForUser(
 
     return journey;
   });
-}
-
-/** Update journey metadata (name, description, date). */
-export async function updateJourneyForUser(
-  userId: number,
-  journeyId: number,
-  name: string,
-  description: string | null,
-  date: string,
-): Promise<Journey> {
-  assertJourneyMeta(name, date);
-
-  const result = await pool.query<Journey>(
-    `UPDATE user_journeys
-     SET name = $1, description = $2, date = $3
-     WHERE id = $4 AND user_id = $5
-     RETURNING *`,
-    [name.trim(), description, date, journeyId, userId],
-  );
-  if (result.rows.length === 0) throw new NotFoundError("Journey not found");
-  return result.rows[0];
 }
 
 /** Delete a journey and all its logged parts. */

@@ -19,3 +19,21 @@ export function confirmClearSelection(count: number, clear: () => void): void {
     { text: "Clear", style: "destructive", onPress: clear },
   ]);
 }
+
+/**
+ * Dropping the edit of a saved journey, from the map's bar or the editor. Only an
+ * edit that changed something asks; the journey itself is never touched.
+ */
+export function confirmStopEditing(
+  editing: { name: string; changed: boolean } | null,
+  stop: () => void,
+): void {
+  if (!editing?.changed) {
+    stop();
+    return;
+  }
+  Alert.alert(`Discard your changes to “${editing.name}”?`, "The journey stays as it was.", [
+    { text: "Keep editing", style: "cancel" },
+    { text: "Discard", style: "destructive", onPress: stop },
+  ]);
+}

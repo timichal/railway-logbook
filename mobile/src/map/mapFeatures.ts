@@ -111,9 +111,11 @@ export function toNoteFeature(properties: Properties): NoteFeature | null {
 }
 
 /**
- * A route feature, from the HTTP API's route row (`POST /routes/metadata`).
+ * A route feature, from the HTTP API's route row (`POST /routes/metadata`, or a
+ * logged route of `GET /journeys/:id`).
  *
- * Both a tapped route and the journey planner's go through here: the tile holds
+ * A tapped route, the journey planner's and a journey taken up for editing all go
+ * through here: the tile holds
  * only what the layers draw with, and the planner identifies its routes by id. So a
  * route is described by exactly the same `routeTitle` and `routeBadges` wherever it
  * came from.
@@ -124,7 +126,7 @@ export function toNoteFeature(properties: Properties): NoteFeature | null {
  * where you have been.
  */
 export function routeFeatureFromMetadata(
-  route: RailwayRoute,
+  route: Omit<RailwayRoute, "geometry">,
   lastJourney: RouteFeature["lastJourney"] = null,
 ): RouteFeature {
   return {

@@ -1,4 +1,4 @@
-import { readJsonBody, requireIntArray } from "@/lib/api/params";
+import { readJsonBody, requireTrackIdArray } from "@/lib/api/params";
 import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { routeMetadataByIds } from "@/lib/routeQueries";
 
@@ -11,7 +11,7 @@ import { routeMetadataByIds } from "@/lib/routeQueries";
 export async function POST(request: Request): Promise<Response> {
   return apiHandler(async () => {
     const body = await readJsonBody(request);
-    const trackIds = requireIntArray(body, "trackIds");
+    const trackIds = requireTrackIdArray(body, "trackIds");
 
     return jsonResponse({ routes: await routeMetadataByIds(trackIds) });
   });

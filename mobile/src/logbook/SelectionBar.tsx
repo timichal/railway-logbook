@@ -10,46 +10,64 @@
  * The row itself is the way in, so there is nothing to aim at; the only separate
  * control is the one that throws the selection away, which is worth keeping distinct
  * from the one that opens it.
+ *
+ * While a saved journey is being edited the bar is that edit's, shown even with no
+ * routes left (the edit isn't over), and its × stops the edit, asking first when it
+ * changed something. The new journey's selection comes back after it.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { confirmClearSelection } from "@/logbook/confirmClearSelection";
+import { confirmClearSelection, confirmStopEditing } from "@/logbook/confirmClearSelection";
 import { useSelection } from "@/logbook/SelectionContext";
 import { useNativeColors } from "@/theme/colors";
 
 export function SelectionBar(): ReactNode {
   const colors = useNativeColors();
   const router = useRouter();
-  const { selected, clear } = useSelection();
+  const { selected, clear, editing, endEdit } = useSelection();
 
-  if (selected.length === 0) return null;
+  if (selected.length === 0 && !editing) return null;
 
   const km = selected.reduce((sum, s) => sum + s.route.lengthKm, 0);
+  const routes = `${selected.length} ${selected.length === 1 ? "route" : "routes"}`;
 
   return (
     <View className="flex-row items-center border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Log ${selected.length} selected routes`}
+        accessibilityLabel={
+          editing
+            ? `Editing ${editing.name}, ${routes}. Review the journey`
+            : `Log ${routes} selected`
+        }
         onPress={() => router.push("/log-journey")}
         className="min-h-14 flex-1 flex-row items-center gap-3 px-4 active:opacity-70"
       >
         <View className="flex-1">
-          <Text className="text-base font-semibold text-gray-900 dark:text-gray-100">
-            {selected.length} {selected.length === 1 ? "route" : "routes"} selected
+          <Text
+            className="text-base font-semibold text-gray-900 dark:text-gray-100"
+            numberOfLines={1}
+          >
+            {editing ? `Editing “${editing.name}”` : `${routes} selected`}
           </Text>
           <Text className="text-xs text-gray-600 dark:text-gray-400">
-            {km.toFixed(1)} km · tap to log a journey
+            {editing
+              ? `${routes} · ${km.toFixed(1)} km · tap to review and save`
+              : `${km.toFixed(1)} km · tap to log a journey`}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.icon} />
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Clear selection"
-        onPress={() => confirmClearSelection(selected.length, clear)}
+        accessibilityLabel={editing ? "Stop editing" : "Clear selection"}
+        onPress={() =>
+          editing
+            ? confirmStopEditing(editing, endEdit)
+            : confirmClearSelection(selected.length, clear)
+        }
         className="h-14 w-14 items-center justify-center active:opacity-70"
       >
         <Ionicons name="close-circle-outline" size={22} color={colors.icon} />

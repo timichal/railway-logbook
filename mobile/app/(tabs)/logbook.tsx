@@ -17,11 +17,13 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { formatDateOnly, formatDateOnlyRange } from "@shared/getUntimezonedDateStr";
+import { useRouter } from "expo-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, Text, TextInput, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { JourneyDetails } from "@/logbook/JourneyDetails";
-import { useLogVersion } from "@/logbook/logVersion";
+import { bumpLogVersion, useLogVersion } from "@/logbook/logVersion";
+import { useSelection } from "@/logbook/SelectionContext";
 import { ShowOnMap } from "@/logbook/ShowOnMap";
 import { useRegion } from "@/region/RegionContext";
 import { useNativeColors } from "@/theme/colors";
@@ -33,6 +35,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 export default function LogbookScreen(): ReactNode {
   const colors = useNativeColors();
+  const router = useRouter();
   const { regionId } = useRegion();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -84,7 +87,10 @@ export default function LogbookScreen(): ReactNode {
   return (
     <Screen edges={["top"]}>
       <View className="gap-3 px-4 pb-3 pt-2">
-        <Text className="text-2xl font-bold text-gray-900 dark:text-gray-100">Logbook</Text>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-2xl font-bold text-gray-900 dark:text-gray-100">Logbook</Text>
+          <Button label="New trip" variant="ghost" onPress={() => router.push("/edit-trip")} />
+        </View>
         <TextInput
           value={search}
           onChangeText={setSearch}
@@ -234,6 +240,11 @@ function TripBody({
       {trip.description ? (
         <Text className="text-sm text-gray-700 dark:text-gray-300">{trip.description}</Text>
       ) : null}
+      {journeys.length === 0 ? (
+        <Text className="text-sm italic text-gray-600 dark:text-gray-400">
+          No journeys yet. Pick this trip when you log or edit one.
+        </Text>
+      ) : null}
       {journeys.map((journey) => {
         const isOpen = openJourney === journey.id;
         const journeyStats = `${formatDateOnly(journey.date)} · ${journey.route_count} ${plural(journey.route_count, "route", "routes")} · ${formatKm(journey.total_distance)} km`;
@@ -271,6 +282,71 @@ function TripBody({
           </View>
         );
       })}
+      <TripActions trip={trip} />
+    </View>
+  );
+}
+
+/** Edit and Delete, at the foot of an open trip. Deleting keeps its journeys, unfiled. */
+function TripActions({ trip }: { trip: api.TripWithStats }): ReactNode {
+  const router = useRouter();
+  const { forgetTrip } = useSelection();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const remove = async (): Promise<void> => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteTrip(trip.id);
+      forgetTrip(trip.id);
+      bumpLogVersion();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not delete the trip.");
+      setDeleting(false);
+    }
+  };
+
+  const askDelete = (): void =>
+    Alert.alert(
+      `Delete the trip “${trip.name}”?`,
+      trip.journey_count > 0
+        ? "Its journeys are kept, no longer part of a trip."
+        : "It has no journeys.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete trip", style: "destructive", onPress: () => void remove() },
+      ],
+    );
+
+  return (
+    <View className="gap-1 pt-1">
+      <View className="flex-row gap-2">
+        <Button
+          label="Edit trip"
+          variant="outline"
+          className="flex-1"
+          disabled={deleting}
+          onPress={() =>
+            router.push({
+              pathname: "/edit-trip",
+              params: {
+                id: String(trip.id),
+                name: trip.name,
+                description: trip.description ?? "",
+              },
+            })
+          }
+        />
+        <Button
+          label="Delete trip"
+          variant="outline"
+          className="flex-1"
+          busy={deleting}
+          onPress={askDelete}
+        />
+      </View>
+      {error ? <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text> : null}
     </View>
   );
 }

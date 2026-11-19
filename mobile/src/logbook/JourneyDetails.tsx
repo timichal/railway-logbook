@@ -11,13 +11,21 @@
  *
  * On the web a chain can be pressed to show it alone on the map. Not here yet: the
  * map fits only to a box the server sends, and the server sends one per journey.
+ *
+ * Edit takes the journey as loaded into the selection as its edit draft
+ * (`SelectionContext`), and opens the logging screen as its editor. Delete asks
+ * first.
  */
 import { type JourneyChain, journeyChains } from "@shared/journeyChains";
 import { routeTitle } from "@shared/map/routeFeature";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Alert, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
-import { useLogVersion } from "@/logbook/logVersion";
+import { confirmStopEditing } from "@/logbook/confirmClearSelection";
+import { snapshotFromJourney } from "@/logbook/journeyEdit";
+import { bumpLogVersion, useLogVersion } from "@/logbook/logVersion";
+import { useSelection } from "@/logbook/SelectionContext";
 import { ShowOnMap } from "@/logbook/ShowOnMap";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
@@ -33,9 +41,13 @@ export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode 
   const [showRoutes, setShowRoutes] = useState(false);
   const key = `${regionId}|${journeyId}`;
   const journey = loaded?.key === key ? loaded.journey : null;
+  // Deleted here: the log version the delete bumps would otherwise read it again,
+  // and show its 404 until the list drops the card
+  const deleted = useRef(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt and logVersion are intentional triggers — a retry, and a log that may have changed.
   useEffect(() => {
+    if (deleted.current) return;
     const controller = new AbortController();
     setError(null);
     api
@@ -103,6 +115,84 @@ export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode 
           bounds: journey.bounds,
         })}
       />
+      <JourneyActions
+        journey={journey}
+        onDeleted={() => {
+          deleted.current = true;
+        }}
+      />
+    </View>
+  );
+}
+
+/** Edit and Delete, under a loaded journey. */
+function JourneyActions({
+  journey,
+  onDeleted,
+}: {
+  journey: api.LoadedJourney;
+  /** Before the log version moves, so nothing reads the journey again. */
+  onDeleted(): void;
+}): ReactNode {
+  const router = useRouter();
+  const { editing, startEdit, endEdit } = useSelection();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { id, name } = journey.journey;
+  const editingThis = editing?.journeyId === id;
+
+  const edit = (): void => {
+    if (editingThis) {
+      router.push("/log-journey");
+      return;
+    }
+    // One edit at a time: another one under way is dropped, asked first if changed
+    confirmStopEditing(editing, () => {
+      startEdit(id, snapshotFromJourney(journey));
+      router.push("/log-journey");
+    });
+  };
+
+  const remove = async (): Promise<void> => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteJourney(id);
+      onDeleted();
+      if (editingThis) endEdit();
+      // The list reloads without it, and the map drops its colours
+      bumpLogVersion();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not delete the journey.");
+      setDeleting(false);
+    }
+  };
+
+  const askDelete = (): void =>
+    Alert.alert(`Delete “${name}”?`, "Its routes are unlogged. This can't be undone.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => void remove() },
+    ]);
+
+  return (
+    <View className="gap-1">
+      <View className="flex-row gap-2">
+        <Button
+          label={editingThis ? "Continue editing" : "Edit"}
+          variant={editingThis ? "primary" : "outline"}
+          className="flex-1"
+          disabled={deleting}
+          onPress={edit}
+        />
+        <Button
+          label="Delete"
+          variant="outline"
+          className="flex-1"
+          busy={deleting}
+          onPress={askDelete}
+        />
+      </View>
+      {error ? <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text> : null}
     </View>
   );
 }

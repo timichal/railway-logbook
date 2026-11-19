@@ -134,7 +134,7 @@ function RouteBody({
   const { name, alsoOn, endpoints } = routeTitle(feature, regionId);
   const badges = routeBadges(feature, regionId);
   const { resolved: theme } = useTheme();
-  const { isSelected, toggle } = useSelection();
+  const { isSelected, toggle, editing } = useSelection();
   // The button says what it is about to do, as the web app's touch sheet does: here
   // the tap opens the sheet and the button is what acts, so it has to be readable
   // before it is pressed.
@@ -189,7 +189,16 @@ function RouteBody({
       ) : null}
 
       <Button
-        label={picked ? "Remove from selection" : "Add to selection"}
+        // During an edit the selection is the journey being edited
+        label={
+          editing
+            ? picked
+              ? "Remove from the journey"
+              : "Add to the journey"
+            : picked
+              ? "Remove from selection"
+              : "Add to selection"
+        }
         variant={picked ? "secondary" : "primary"}
         onPress={() => toggle(feature)}
       />

@@ -48,9 +48,9 @@ Items found already done were deleted; the gaps the web has opened since are und
       track id beside `bounds`), union a chain's in the app, and make `ChainRow`
       pressable where there is more than one chain. Low.
 
-- [ ] **Trips can't be created in the app.** `createTrip` is in `endpoints.ts`, but
-      nothing calls it, so `TripPicker` offers only trips made on the web. Add "New trip…"
-      to the picker, or a create button in the logbook.
+- [ ] **A trip can't be made from the logging screen.** The logbook's "New trip"
+      (`app/edit-trip.tsx`) makes one, but `TripPicker` in `log-journey.tsx` offers only
+      trips that exist. Add "New trip…" there, picking the new trip once made. Low.
 
 - [ ] **The logbook needs pull-to-refresh, and should probably scroll endlessly.**
       Lists on a phone are refreshed by pulling down (`FlatList` `refreshing` /
@@ -66,19 +66,13 @@ Items found already done were deleted; the gaps the web has opened since are und
 - [ ] **The journey date is typed as text.** The plan ruled out a native picker
       because it would need "another development build". But every run is already a
       development build, so `@react-native-community/datetimepicker` costs only one
-      rebuild. Until then, check the format before submitting (the server's 400 is the
-      only check now), and show the date in the user's locale (`formatDateOnly`) next to
-      the raw value.
-
-- [ ] **The log-journey form is lost on Cancel or swipe-down.** The selection
-      survives, but the typed name, description, date and trip are gone. The web keeps
-      them as a draft until Save or Cancel (`editGuard`). Keep the form in a small context,
-      as `PlannerContext` does, and clear it after a successful log. iOS's swipe-down
-      dismiss isn't guarded either (`gestureEnabled` / `usePreventRemove`).
+      rebuild. The typed date is checked before sending and shown in the phone's
+      format beneath the field since 2026-11-19.
 
 - [ ] **Logging a journey gives no confirmation.** The modal closes and the route
       changes colour after the tile reloads (with a blink). The web shows a success toast.
-      Add a short toast or banner ("Journey logged · View in logbook").
+      Add a short toast or banner ("Journey logged · View in logbook"). The same goes
+      for an edit saved and a journey or trip deleted.
 
 - [ ] **Check route taps offline on the device.** _(device)_ Since 2026-11-19 a
       route's details are kept once read (`src/map/routeMetadataCache.ts`): a route read
@@ -123,6 +117,24 @@ Items found already done were deleted; the gaps the web has opened since are und
       stack header (`headerShown: true` with a title) gives the platform back chevron, a
       large title, the right placement on Android, and Dynamic Type for free.
 
+- [ ] **Check editing and deleting on the device.** _(device)_ Added 2026-11-19, not yet
+      run. Edit on an open journey card opens the logging screen as its editor with the
+      journey's routes and fields; Close keeps the edit, and the map's bar then says
+      "Editing “…”" with taps, the sheet's button ("Add to the journey") and the planner's
+      add all working on the journey; the new selection made before comes back after
+      Save or Stop editing. Check: "Add on the map" from the editor lands on the map tab
+      (close, then `router.navigate`), with one tab bar and nothing stacked under it; Save sends only the change (rename on the web meanwhile, then
+      change only the date here: the web's name stays); a partial ride with a known
+      stretch, saved untouched, keeps its stretch; removing every route then Save offers
+      Delete; Edit on another journey with changes asks first; Delete on a journey or a
+      trip asks, and the list reloads without it (no "Journey not found" flash); "New trip"
+      and "Edit trip" save; a closed route in the editor shows its badge.
+- [ ] **The superseded journey endpoints.** Since the whole-edit `PATCH /journeys/:id`
+      (2026-11-19), nothing calls `POST /journeys/:id/routes`, `PATCH`/`DELETE
+      /journeys/:id/routes/:trackId`, `PUT`/`DELETE /journeys/:id/trip` or `GET
+      /journeys/unassigned`. Delete them (and their `API.md` rows) unless a use for them
+      is planned.
+
 ---
 
 ## Low — polish and consistency
@@ -140,10 +152,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       reads AsyncStorage in an effect, so someone who picked a theme different from the
       system's can see a flash. If the map mounts first, the basemap is fetched twice.
       Wait for the read before rendering, as `RegionProvider` does.
-- [ ] **`log-journey`'s "nothing left" effect calls `router.back()` without
-  checking.** If the screen is ever reached with an empty selection (a deep link, or
-      state restored after a crash), it is a `GO_BACK` with nothing to go back to. Use
-      `router.canGoBack() ? back() : replace("/map")`.
 - [ ] **Stale comments about NUMERIC.** `JourneyWithStats.total_distance` ("a string
       over the wire") and `logbook.tsx`'s `formatKm` ("arrives as a string; an absent one
       as null") contradict `dbConfig.ts`'s type parser and the `COALESCE`s in
@@ -228,8 +236,6 @@ the log). These are for the UI polish pass, not fixes.
 
 ## Already tracked in `MOBILE_APP_PLAN.md` (listed here so this is the one list)
 
-- [ ] Editing and deleting journeys and trips (the endpoints already exist in
-      `endpoints.ts`).
 - [ ] Offline route colouring before Phase 5. Since 2026-11-15 the route tile is
       Martin's and the same for everyone, and the colours come from `GET /rides`, so
       the question is now only how the last rides answer is kept on the device.
