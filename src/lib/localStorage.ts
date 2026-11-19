@@ -7,7 +7,7 @@
  */
 
 import { normalizeCountryCodes, SUPPORTED_COUNTRIES } from "./shared/constants";
-import { sanitizeRange } from "./shared/routeCoverage";
+import { loggedRide } from "./shared/routeCoverage";
 import type { JourneyEdits, LocalJourney, LocalLoggedPart } from "./shared/types";
 
 const JOURNEYS_KEY = "railway_journeys";
@@ -61,6 +61,24 @@ const isLocalLoggedPart = (entry: unknown): entry is LocalLoggedPart =>
   typeof entry.id === "string" &&
   typeof entry.journey_id === "string" &&
   typeof entry.track_id === "number";
+
+/**
+ * A stored part as every reader sees it: `loggedRide`'s rule applied, so a ride an
+ * older version stored partial with no stretch reads (and is next saved) whole.
+ * A whole ride drops its stretch fields rather than storing them null, so the
+ * list never grows by being read and written back (the rollbacks after a failed
+ * write rely on that to fit).
+ */
+const asStoredRide = (part: LocalLoggedPart): LocalLoggedPart => {
+  const ride = loggedRide(
+    Boolean(part.partial),
+    part.covered_start != null && part.covered_end != null
+      ? { covered_start: part.covered_start, covered_end: part.covered_end }
+      : null,
+  );
+  const { covered_start: _start, covered_end: _end, ...rest } = part;
+  return ride.partial ? { ...rest, ...ride } : { ...rest, partial: false };
+};
 
 /** What an edit says when the journey has been deleted in another tab. */
 const GONE_MESSAGE = "This journey is no longer saved in this browser.";
@@ -132,7 +150,8 @@ function writeStoredArray(key: string, field: string, list: unknown[], what?: st
 
 // The lists a write starts from: these throw rather than return an unreadable list as empty.
 const journeysToWrite = () => readStoredArray(JOURNEYS_KEY, "journeys", isLocalJourney) ?? [];
-const partsToWrite = () => readStoredArray(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? [];
+const partsToWrite = () =>
+  (readStoredArray(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? []).map(asStoredRide);
 const writeJourneys = (journeys: LocalJourney[]) =>
   writeStoredArray(JOURNEYS_KEY, "journeys", journeys, "journeys");
 const writeParts = (parts: LocalLoggedPart[]) =>
@@ -189,7 +208,8 @@ export function addJourneyWithParts(
 /**
  * Saves an edited journey — what changed of its name, description and date, and
  * its routes — as `saveJourneyEditsForUser` does on the server: an upserted route
- * is written as the edit has it, its stretch included (none if it carries none).
+ * is written as the edit has it, its stretch included (`loggedRide`: partial
+ * without a usable stretch is logged whole).
  * Both lists or neither.
  */
 export function saveJourneyEdits(id: string, edits: JourneyEdits): void {
@@ -198,14 +218,7 @@ export function saveJourneyEdits(id: string, edits: JourneyEdits): void {
   if (!journeys.some((journey) => journey.id === id)) throw new StorageError(GONE_MESSAGE, true);
 
   const now = new Date().toISOString();
-  const ride = ({ partial, range }: JourneyEdits["upsert"][number]) => {
-    const known = sanitizeRange(range, partial);
-    return {
-      partial,
-      covered_start: known?.covered_start ?? null,
-      covered_end: known?.covered_end ?? null,
-    };
-  };
+  const ride = ({ partial, range }: JourneyEdits["upsert"][number]) => loggedRide(partial, range);
   const upserts = new Map(edits.upsert.map((upsert) => [upsert.trackId, upsert]));
   const removed = new Set(edits.remove);
   const kept = parts.filter((part) => part.journey_id !== id || !removed.has(part.track_id));
@@ -256,7 +269,7 @@ export function deleteJourney(id: string): void {
 // ===== Logged parts =====
 
 export function getLoggedParts(): LocalLoggedPart[] {
-  return readForDisplay(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? [];
+  return (readForDisplay(LOGGED_PARTS_KEY, "parts", isLocalLoggedPart) ?? []).map(asStoredRide);
 }
 
 /**
@@ -276,7 +289,11 @@ export function getJourneyWithParts(id: string): {
 const newLoggedPart = (
   part: Omit<LocalLoggedPart, "id" | "created_at">,
   created_at: string,
-): LocalLoggedPart => ({ ...part, id: crypto.randomUUID(), created_at });
+): LocalLoggedPart => ({
+  ...asStoredRide({ ...part, id: "", created_at }),
+  id: crypto.randomUUID(),
+  created_at,
+});
 
 // ===== Preferences =====
 

@@ -41,13 +41,8 @@ export interface JourneyChain {
   endsPartway: boolean;
   /** Its routes, in order along it. */
   trackIds: number[];
-  /** What was travelled: a known partial stretch counts its own length. */
+  /** What was travelled: a partial ride's stretch counts its own length. */
   lengthKm: number;
-  /**
-   * One of its routes was ticked partial by hand, with no known stretch, and is
-   * counted whole in `lengthKm` (the rule `LOGGED_KM_SQL` follows).
-   */
-  unknownExtent: boolean;
 }
 
 /**
@@ -78,7 +73,7 @@ interface Edge {
   /** The labels at `a` and at `b`, once oriented. */
   labelA: string;
   labelB: string;
-  /** The end at that node was not reached (a partial ride of known extent). */
+  /** The end at that node was not reached (a partial ride). */
   partwayA: boolean;
   partwayB: boolean;
 }
@@ -220,10 +215,6 @@ export function journeyChains(routes: ChainableRoute[]): JourneyChain[] {
           endsPartway: partwayAt(ordered[ordered.length - 1], last),
           trackIds: ordered.map((e) => e.route.track_id),
           lengthKm: ordered.reduce((sum, e) => sum + travelledKm(e.route), 0),
-          unknownExtent: ordered.some(
-            (e) =>
-              e.route.partial && (e.route.covered_start == null || e.route.covered_end == null),
-          ),
         },
       };
     })

@@ -285,17 +285,31 @@ function downloadRouteBackup(): string {
  * With the triggers goes the `data_versions` bump, so the restore makes it
  * itself, or a running dev server would keep serving its cache of the old routes.
  * Schema-qualified, because pg_restore's script empties `search_path`.
+ *
+ * A dump taken before `logged_parts_partial_has_stretch` can hold rows the CHECK
+ * (not a trigger, so still on) would refuse: partial rides with no stretch, and
+ * whole ones still carrying one. It is dropped for the load, both are made whole
+ * as `loggedRide` would, and it goes back on, in the same transaction.
  */
 function restore(containerFile: string, tables: string[]): void {
   const bump = tables.includes("railway_routes")
     ? "UPDATE public.data_versions SET version = version + 1 WHERE table_name = 'railway_routes'; "
+    : "";
+  const parts = tables.includes("user_logged_parts");
+  const unchecked = parts
+    ? "ALTER TABLE public.user_logged_parts DROP CONSTRAINT IF EXISTS logged_parts_partial_has_stretch; "
+    : "";
+  const checked = parts
+    ? "UPDATE public.user_logged_parts SET partial = FALSE WHERE partial AND covered_start IS NULL; " +
+      "UPDATE public.user_logged_parts SET covered_start = NULL, covered_end = NULL WHERE NOT partial AND covered_start IS NOT NULL; " +
+      "ALTER TABLE public.user_logged_parts ADD CONSTRAINT logged_parts_partial_has_stretch CHECK (partial = (covered_start IS NOT NULL)); "
     : "";
   run("Restoring into the local database", "docker", [
     "exec",
     CONTAINER,
     "sh",
     "-c",
-    `set -o pipefail; { echo "BEGIN; SET session_replication_role = replica; TRUNCATE ${tables.join(", ")};" && pg_restore -f - ${containerFile} && echo "${bump}COMMIT;"; } | psql -X -q -v ON_ERROR_STOP=1 ${PG_CONNECT} > /dev/null`,
+    `set -o pipefail; { echo "BEGIN; SET session_replication_role = replica; ${unchecked}TRUNCATE ${tables.join(", ")};" && pg_restore -f - ${containerFile} && echo "${checked}${bump}COMMIT;"; } | psql -X -q -v ON_ERROR_STOP=1 ${PG_CONNECT} > /dev/null`,
   ]);
 }
 

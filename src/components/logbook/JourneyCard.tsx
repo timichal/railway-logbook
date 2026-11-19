@@ -85,7 +85,7 @@ export default function JourneyCard<Id extends number | string>({
 
   /**
    * Light up `shown` on the map. A route logged in part lights up only along its
-   * stretch; one ticked partial by hand has no stretch, and is drawn whole.
+   * stretch.
    */
   const highlight = (from: LoadedJourney, shown: RailwayRoute[], options?: HighlightOptions) => {
     const stretches = knownStretches(shown);

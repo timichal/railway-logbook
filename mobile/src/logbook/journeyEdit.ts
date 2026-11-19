@@ -15,9 +15,9 @@ import {
 } from "./SelectionContext";
 
 /**
- * A loaded journey as an edit starts from it. A partial ride of known extent keeps
- * its stretch, drawn from `partials` where the load cut it to geometry, so that
- * saving it untouched writes it back as it was.
+ * A loaded journey as an edit starts from it. A partial ride keeps its stretch,
+ * drawn from `partials` where the load cut it to geometry, so that saving it
+ * untouched writes it back as it was.
  */
 export function snapshotFromJourney(loaded: api.LoadedJourney): JourneySnapshot {
   const { journey, routes, partials } = loaded;
@@ -56,8 +56,6 @@ export function snapshotFromJourney(loaded: api.LoadedJourney): JourneySnapshot 
 
 /** One selected route as the logging endpoints take it. */
 export function loggedRouteInput(entry: SelectedRoute): api.LoggedRouteInput {
-  // Not sent at all when the extent is unknown — a route ticked by hand says a
-  // piece was ridden without saying which.
   return {
     trackId: entry.route.trackId,
     partial: entry.partial,

@@ -283,10 +283,9 @@ ON user_logged_parts (user_id, track_id) WHERE covered_start IS NOT NULL;
 -- endpoint is a hand-picked click point rather than the platform centre, so a
 -- ride from a terminus is recorded as starting a little past 0; the same widening
 -- closes the small gap left when an OSM recalculation moves two rides' shared
--- station fraction apart between them. Rows of unknown extent (both fractions
--- NULL: a route ticked partial by hand) are excluded by branch 2's WHERE -- they
--- say a piece was ridden without saying which, and GREATEST/LEAST ignore NULLs,
--- so a row let through would widen into the whole route and complete it alone.
+-- station fraction apart between them. A partial row always carries its stretch
+-- (logged_parts_partial_has_stretch); branch 2's WHERE still requires one, since
+-- GREATEST/LEAST ignore NULLs and a row without would widen into the whole route.
 --
 -- Read by the progress figures and the map's rides (routeRidesForUser,
 -- src/lib/progressQueries.ts), so the numbers and the colours can't disagree.

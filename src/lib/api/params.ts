@@ -8,6 +8,7 @@ import type { LoggedRange } from "../journeyQueries";
 import { MAX_PG_INT } from "../progressQueries";
 import { normalizeCountryCodes } from "../shared/constants";
 import { isRegionId, type RegionId } from "../shared/regions";
+import { loggedRide } from "../shared/routeCoverage";
 import type { CoveredRange } from "../shared/types";
 import { ApiError } from "./response";
 
@@ -150,14 +151,6 @@ export function requireBoolean(body: JsonBody, key: string): boolean {
   return value;
 }
 
-export function requirePositiveInt(body: JsonBody, key: string): number {
-  const value = body[key];
-  if (!Number.isInteger(value) || (value as number) <= 0) {
-    throw new ApiError(400, `${key} must be a positive integer`);
-  }
-  return value as number;
-}
-
 export function optionalPositiveInt(body: JsonBody, key: string): number | null {
   const value = body[key];
   if (value === undefined || value === null) return null;
@@ -292,9 +285,19 @@ export function requireLoggedRoutes(
       throw new ApiError(400, `${key} entries' partial must be a boolean`);
     }
 
+    const covered = coveredRange(entry.covered, key);
+    // Refused rather than logged whole as `loggedRide` would: a client that says
+    // partial means it, and a whole ride would complete the route without a word
+    if (partial && !loggedRide(true, covered).partial) {
+      throw new ApiError(
+        400,
+        `${key} entries marked partial need covered, with 0 <= covered_start < covered_end <= 1`,
+      );
+    }
+
     trackIds.push(trackId as number);
     partialFlags.push(partial);
-    coveredRanges.push(coveredRange(entry.covered, key));
+    coveredRanges.push(covered);
   }
 
   return { trackIds, partialFlags, coveredRanges };

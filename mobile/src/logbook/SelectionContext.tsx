@@ -50,12 +50,15 @@ import { useRegion } from "@/region/RegionContext";
 
 export interface SelectedRoute {
   route: RouteFeature;
-  /** Ridden only in part. Ticked by hand, or arriving already ticked from the planner. */
+  /**
+   * Ridden only in part: a planner result's route joined between the endpoints, or
+   * one of a journey taken up for editing. Never set by hand, and set exactly when
+   * `covered` is (the server's `loggedRide` logs one without a stretch whole).
+   */
   partial: boolean;
   /**
-   * Which stretch, when it is known — only the Journey Planner produces one, for a
-   * route it joins between the endpoints. Null means "partial, extent unknown",
-   * which is what a route ticked by hand looks like.
+   * Which stretch — only the Journey Planner produces one, for a route it joins
+   * between the endpoints. Null on a whole ride.
    */
   covered: PartialRouteGeometry | null;
 }
@@ -115,7 +118,6 @@ interface SelectionValue {
   /** Add without removing — the planner adding its result to what is already picked. */
   add(route: RouteFeature, options?: { partial?: boolean; covered?: PartialRouteGeometry }): void;
   remove(trackId: number): void;
-  setPartial(trackId: number, partial: boolean): void;
   /** Empties the routes, leaving what was typed. */
   clear(): void;
   updateForm(patch: Partial<JourneyForm>): void;
@@ -151,6 +153,13 @@ export function rangeOf(entry: SelectedRoute): LoggedRange | null {
   return entry.partial && entry.covered
     ? { covered_start: entry.covered.covered_start, covered_end: entry.covered.covered_end }
     : null;
+}
+
+/** The km a route is logged with: its stretch where it has one, else the whole line. */
+export function loggedLengthKm(entry: SelectedRoute): number {
+  return entry.partial && entry.covered
+    ? Math.abs(entry.covered.covered_end - entry.covered.covered_start) * entry.route.lengthKm
+    : entry.route.lengthKm;
 }
 
 /** The routes an edit's Save sends: added or changed (flag or stretch), and removed. */
@@ -282,20 +291,6 @@ export function SelectionProvider({ children }: { children: ReactNode }): ReactN
     [setRoutes],
   );
 
-  const setPartial = useCallback(
-    (trackId: number, partial: boolean) =>
-      setRoutes((current) =>
-        current.map((s) =>
-          s.route.trackId === trackId
-            ? // Unticking claims the whole route, so the stretch goes with it — leaving
-              // it would have the map highlight a stretch of a route logged whole.
-              { ...s, partial, covered: partial ? s.covered : null }
-            : s,
-        ),
-      ),
-    [setRoutes],
-  );
-
   const clear = useCallback(() => setRoutes(() => []), [setRoutes]);
 
   const updateForm = useCallback(
@@ -360,7 +355,6 @@ export function SelectionProvider({ children }: { children: ReactNode }): ReactN
       toggle,
       add,
       remove,
-      setPartial,
       clear,
       updateForm,
       resetNew,
@@ -377,7 +371,6 @@ export function SelectionProvider({ children }: { children: ReactNode }): ReactN
       toggle,
       add,
       remove,
-      setPartial,
       clear,
       updateForm,
       resetNew,

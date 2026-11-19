@@ -306,7 +306,7 @@ export async function createJourney(input: {
  */
 export interface LoggedRoute extends Omit<RailwayRoute, "geometry"> {
   partial: boolean;
-  /** The stretch ridden, both fields or neither — NULL means the extent is unknown. */
+  /** The stretch ridden, set exactly when `partial` is. */
   covered_start?: number | null;
   covered_end?: number | null;
 }

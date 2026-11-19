@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PickedPointField from "@/components/admin/PickedPointField";
 import RouteMetadataFields, {
   NO_ROUTE_SUGGESTIONS,
   routeMetadataIncomplete,
 } from "@/components/admin/RouteMetadataFields";
 import { unwrap } from "@/lib/actionResult";
+import { fetchPartialRideCount } from "@/lib/adminReads";
 import {
   type AdminRouteDetail,
   type RouteSuggestions,
@@ -23,7 +24,7 @@ import { useSingleFlight } from "@/lib/ui/useSingleFlight";
 /** A geometry edit in progress: the route whose points are being re-picked. */
 export type EditingGeometry = Pick<
   AdminRouteDetail,
-  "track_id" | "name" | "from_station" | "to_station" | "intended_backtracking"
+  "track_id" | "name" | "from_station" | "to_station" | "intended_backtracking" | "has_backtracking"
 >;
 
 const EMPTY_FORM: SaveRouteData = {
@@ -85,6 +86,26 @@ export default function AdminCreateRouteTab({
 
   const [createForm, setCreateForm] = useState(EMPTY_FORM);
 
+  // Users' partial rides on the route being re-picked, read as the re-pick starts
+  // (fresh: a duplicate's are cloned after its detail was returned). Kept with
+  // the route it counts, so another route's count never shows meanwhile.
+  const editingTrackId = editingGeometry?.track_id ?? null;
+  const [partialRides, setPartialRides] = useState<{ trackId: number; count: number } | null>(null);
+  useEffect(() => {
+    // A count from an earlier edit of the same route may be stale (its save can
+    // log or delete the rides), so none shows until this one's arrives
+    setPartialRides(null);
+    if (editingTrackId === null) return;
+    let cancelled = false;
+    fetchPartialRideCount(editingTrackId)
+      .then((count) => !cancelled && setPartialRides({ trackId: editingTrackId, count }))
+      // Without the count there is no warning; the save itself is unaffected
+      .catch((error: unknown) => console.error("Failed to count partial rides:", error));
+    return () => {
+      cancelled = true;
+    };
+  }, [editingTrackId]);
+
   const handleSaveRoute = async () => {
     if (!onSaveRoute || !previewRoute) return;
     await run("save the route", async () => {
@@ -131,6 +152,18 @@ export default function AdminCreateRouteTab({
     ? editingGeometry.intended_backtracking
     : createForm.intended_backtracking;
   const warnBacktracking = previewRoute?.hasBacktracking === true && !intendedBacktracking;
+  // A re-pick of a route that backtracks, before or after, can't place a partial
+  // ride's stretch on the new geometry and logs the ride whole
+  // (`reprojectCoveredRanges`), which may complete the route for its user
+  const ridesLoggedWhole =
+    editingGeometry &&
+    previewRoute &&
+    partialRides?.trackId === editingGeometry.track_id &&
+    (editingGeometry.has_backtracking ||
+      editingGeometry.intended_backtracking ||
+      previewRoute.hasBacktracking === true)
+      ? partialRides.count
+      : 0;
 
   return (
     <div className="p-4 overflow-y-auto">
@@ -167,6 +200,18 @@ export default function AdminCreateRouteTab({
             {isEditMode
               ? "; if it is, tick Intended backtracking on the route after saving."
               : ", or tick Intended backtracking below if it is."}
+          </div>
+        )}
+        {ridesLoggedWhole > 0 && (
+          <div
+            role="alert"
+            className="border rounded-md p-3 bg-red-50 border-red-200 text-sm text-red-800"
+          >
+            Re-picking this route changes the completion of users' logs: it backtracks, so{" "}
+            {ridesLoggedWhole === 1
+              ? "the 1 partial ride logged on it can't be placed on the new geometry: it will be logged whole if it still runs along the route, and deleted if not"
+              : `the ${ridesLoggedWhole} partial rides logged on it can't be placed on the new geometry: each will be logged whole if it still runs along the route, and deleted if not`}
+            . Unchanged geometry leaves them as they are.
           </div>
         )}
 

@@ -49,9 +49,8 @@ export default function LoggedRouteRow({
 }
 
 /**
- * The whole line's length, unless the ride was partial: then the stretch travelled
- * where it is known, and otherwise only that it was part of the line — a partial
- * ride ticked by hand says a piece was ridden without saying which.
+ * The whole line's length, unless the ride was partial: then the stretch travelled,
+ * of the whole line.
  */
 function RouteLength({
   lengthKm,
@@ -63,11 +62,9 @@ function RouteLength({
   covered: LoggedRouteRowProps["covered"];
 }) {
   const whole = `${lengthKm.toFixed(1)} km`;
-  if (!partial) return whole;
   const { start, end } = covered ?? {};
-  if (start == null || end == null) {
-    return <span className="text-amber-700">partial, of {whole}</span>;
-  }
+  // A partial ride always carries its stretch (`loggedRide`)
+  if (!partial || start == null || end == null) return whole;
   return (
     <>
       {(Math.abs(end - start) * lengthKm).toFixed(1)} km{" "}

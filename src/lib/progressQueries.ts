@@ -241,10 +241,10 @@ export function networkProgressByCountry(region: RegionId): Promise<ProgressByCo
 }
 
 /**
- * Whether the logged part `ulp` carries the stretch it covered. A partial ride
- * ticked by hand has none, and like a whole ride it counts the route's full length
- * — the same rule the Route Logger's total follows (`loggedLengthKm`), and the test
- * `knownStretches` makes in JS.
+ * Whether the logged part `ulp` carries the stretch it covered: exactly the partial
+ * rides (`logged_parts_partial_has_stretch`). A whole ride counts the route's full
+ * length — the same rule the Route Logger's total follows (`loggedLengthKm`), and
+ * the test `knownStretches` makes in JS.
  */
 export const HAS_STRETCH_SQL =
   "ulp.partial AND ulp.covered_start IS NOT NULL AND ulp.covered_end IS NOT NULL";

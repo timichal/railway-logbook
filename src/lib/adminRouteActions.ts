@@ -77,13 +77,19 @@ const REPROJECT_CORRIDOR_METERS = 20;
  * that ride is deleted, since it says the user rode track that is now some
  * other route's.
  *
- * Nothing moves when the geometry is re-saved unchanged. A route that turns
- * back on itself, before or after, has its stretches cleared to unknown extent
- * instead: on doubled track a point lies on both legs, and locating it picks
- * one of them arbitrarily. Whole rides (`partial = FALSE`) and stretches already
- * of unknown extent are untouched. On OSM recalculation (`verifyRouteData`) the
- * fractions are kept as they are: there the geometry only shifts, which is
- * what fractions are for.
+ * Nothing moves when the geometry is re-saved unchanged.
+ *
+ * On a route that turns back on itself, before or after, a ride that still runs
+ * along the new line becomes a whole one instead of being moved: on doubled track
+ * a point lies on both legs, and locating it picks one of them arbitrarily, and a
+ * partial ride always carries its stretch (`loggedRide`), so one that can't be
+ * placed is the route ridden. One that no longer runs along it is deleted, as
+ * anywhere. Whole rides are untouched. Logging a ride whole may complete the route
+ * for its user, so the geometry editor warns before such a save
+ * (`partialRideCount`).
+ *
+ * On OSM recalculation (`verifyRouteData`) the fractions are kept as they are:
+ * there the geometry only shifts, which is what fractions are for.
  */
 async function reprojectCoveredRanges(
   client: PoolClient,
@@ -129,8 +135,9 @@ async function reprojectCoveredRanges(
           ST_LineLocatePoint(r.new_geom, ST_StartPoint(piece.geom)) AS a,
           ST_LineLocatePoint(r.new_geom, ST_EndPoint(piece.geom)) AS b
       ) loc
-      WHERE NOT r.ambiguous
-        AND ST_GeometryType(piece.geom) = 'ST_LineString'
+      -- Run on an ambiguous route too: the ends located there are arbitrary, but
+      -- whether any piece runs along the new line is not
+      WHERE ST_GeometryType(piece.geom) = 'ST_LineString'
         AND ST_Length(piece.geom::geography) / 1000 >= r.min_km
       GROUP BY rides.id
     ),
@@ -140,6 +147,7 @@ async function reprojectCoveredRanges(
         e.lo,
         e.hi,
         CASE
+          WHEN e.id IS NULL THEN 'delete'
           WHEN r.ambiguous THEN 'clear'
           WHEN e.hi > e.lo THEN 'move'
           ELSE 'delete'
@@ -156,6 +164,7 @@ async function reprojectCoveredRanges(
     changed AS (
       UPDATE user_logged_parts ulp
       SET
+        partial = (j.action = 'move'),
         covered_start = CASE WHEN j.action = 'move' THEN j.lo END,
         covered_end = CASE WHEN j.action = 'move' THEN j.hi END
       FROM judged j
@@ -181,7 +190,7 @@ async function reprojectCoveredRanges(
   const { moved, cleared, dropped } = result.rows[0];
   if (Number(moved) + Number(cleared) + Number(dropped) > 0) {
     console.log(
-      `Route ${trackId}: partial rides moved onto the new geometry ${moved}, cleared to unknown extent ${cleared}, deleted as no longer overlapping ${dropped}`,
+      `Route ${trackId}: partial rides moved onto the new geometry ${moved}, logged whole (backtracking) ${cleared}, deleted as no longer overlapping ${dropped}`,
     );
   }
 }

@@ -41,12 +41,9 @@ const stretch = (covered_start: number, covered_end: number): RiddenPart => ({
   covered_start,
   covered_end,
 });
-const unknown: RiddenPart = { partial: true, covered_start: null, covered_end: null };
 
 const handPicked: Omit<Case, "trackId">[] = [
   { lengthKm: 10, parts: [{ partial: false }] },
-  { lengthKm: 10, parts: [unknown] },
-  { lengthKm: 10, parts: [unknown, stretch(0, 0.5)] },
   { lengthKm: 10, parts: [stretch(0.5, 1), stretch(0, 0.5)] },
   { lengthKm: 10, parts: [stretch(0.02, 0.99)] },
   { lengthKm: 10, parts: [stretch(0.04, 1)] },
@@ -73,8 +70,6 @@ function randomCases(count: number): Omit<Case, "trackId">[] {
       const kind = random();
       if (kind < 0.05) {
         parts.push({ partial: false });
-      } else if (kind < 0.15) {
-        parts.push(unknown);
       } else {
         // Sometimes pick up exactly where the last stretch ended (a shared
         // station), sometimes at a terminus, otherwise anywhere

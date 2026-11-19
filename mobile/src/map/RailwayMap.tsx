@@ -401,8 +401,8 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   }, [tileVersion]);
 
   const selectedIds = useMemo(() => selected.map((s) => s.route.trackId), [selected]);
-  // Only while the route is still ticked partial: unticking claims the whole route,
-  // and the highlight follows — the same rule the web app's selection highlight keeps.
+  // A partial route's stretch is drawn in place of the whole route, as the web app's
+  // selection highlight does.
   const selectedPartials = useMemo(
     // A stretch too short to draw (a journey's, cut to under two points) is left
     // out, and its route drawn whole: an empty line is nothing to hand the source

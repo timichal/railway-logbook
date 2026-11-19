@@ -58,10 +58,9 @@ export interface RiddenPart {
 }
 
 /**
- * The stretches of `parts` that can be drawn: those of rides logged in part whose
- * extent is known. A ride logged whole has none (it covered the route), nor has a
- * route ticked partial by hand. `HAS_STRETCH_SQL` (`progressQueries.ts`) is the same
- * test in SQL.
+ * The stretches of `parts` that can be drawn: those of rides logged in part. A
+ * ride logged whole has none (it covered the route). `HAS_STRETCH_SQL`
+ * (`progressQueries.ts`) is the same test in SQL.
  */
 export function knownStretches(
   parts: {
@@ -87,9 +86,8 @@ export function knownStretches(
 /**
  * Whether `parts` — every ride the user logged of one route — cover all of it.
  *
- * Stretches of unknown extent (both fractions null: a route ticked partial by
- * hand) contribute nothing. They say a piece was ridden without saying which,
- * and a route can't be completed by a piece nobody can place.
+ * A partial ride always carries its stretch (`loggedRide`). One without, which
+ * nothing stores any more, is passed over, as the SQL passes it over.
  */
 export function isRouteFullyRidden(
   parts: RiddenPart[],
@@ -118,20 +116,29 @@ export function isRouteFullyRidden(
   return reached >= 1;
 }
 
+/** A ride as it is stored: partial exactly when it carries its stretch. */
+export interface StoredRide {
+  partial: boolean;
+  covered_start: number | null;
+  covered_end: number | null;
+}
+
 /**
- * A ridden stretch is only stored when it is a genuine, non-degenerate part of
- * the route, and only for a partial ride: a route logged whole covers all of it,
- * so a range would be redundant (and would draw a stray overlay). The rule of
- * every write, to the database and to localStorage alike.
+ * The rule of every write, to the database and to localStorage alike, and of
+ * reading what an older version stored: **a ride is partial only with its
+ * stretch**, a genuine, non-degenerate part of the route. One sent partial without
+ * a usable stretch is stored whole. A piece nobody can place says no more than
+ * that the route was ridden, and the stretch is what everything downstream draws
+ * and counts. A whole ride carries no stretch: it covers the route, so one would
+ * be redundant (and would draw a stray overlay). The database holds this with a
+ * CHECK (`logged_parts_partial_has_stretch`).
  */
-export function sanitizeRange(
-  range: LoggedRange | null | undefined,
-  partial: boolean,
-): LoggedRange | null {
-  if (!partial || !range) return null;
+export function loggedRide(partial: boolean, range: LoggedRange | null | undefined): StoredRide {
+  const whole: StoredRide = { partial: false, covered_start: null, covered_end: null };
+  if (!partial || !range) return whole;
   const start = Number(range.covered_start);
   const end = Number(range.covered_end);
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-  if (start < 0 || end > 1 || start >= end) return null;
-  return { covered_start: start, covered_end: end };
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return whole;
+  if (start < 0 || end > 1 || start >= end) return whole;
+  return { partial: true, covered_start: start, covered_end: end };
 }

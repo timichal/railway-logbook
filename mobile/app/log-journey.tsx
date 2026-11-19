@@ -33,28 +33,22 @@ import * as api from "@/api/endpoints";
 import { confirmClearSelection, confirmStopEditing } from "@/logbook/confirmClearSelection";
 import { journeyEditsToSave, loggedRouteInput } from "@/logbook/journeyEdit";
 import { bumpLogVersion } from "@/logbook/logVersion";
-import { dateOffsetFromToday, type SelectedRoute, useSelection } from "@/logbook/SelectionContext";
+import {
+  dateOffsetFromToday,
+  loggedLengthKm,
+  type SelectedRoute,
+  useSelection,
+} from "@/logbook/SelectionContext";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
 import { Screen } from "@/ui/Screen";
 import { TextField } from "@/ui/TextField";
-import { ToggleSwitch } from "@/ui/ToggleSwitch";
 
 export default function LogJourneyScreen(): ReactNode {
   const router = useRouter();
   const { regionId } = useRegion();
-  const {
-    selected,
-    form,
-    editing,
-    updateForm,
-    remove,
-    setPartial,
-    clear,
-    resetNew,
-    freshenDate,
-    endEdit,
-  } = useSelection();
+  const { selected, form, editing, updateForm, remove, clear, resetNew, freshenDate, endEdit } =
+    useSelection();
 
   const [trips, setTrips] = useState<api.TripWithStats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -294,7 +288,6 @@ export default function LogJourneyScreen(): ReactNode {
                 regionId={regionId}
                 saving={saving}
                 onRemove={() => remove(entry.route.trackId)}
-                onPartial={(partial) => setPartial(entry.route.trackId, partial)}
               />
             ))}
           </View>
@@ -335,35 +328,36 @@ function RouteRow({
   regionId,
   saving,
   onRemove,
-  onPartial,
 }: {
   entry: SelectedRoute;
   regionId: Parameters<typeof routeTitle>[1];
   /** While the journey is being sent: what is sent is already fixed. */
   saving: boolean;
   onRemove(): void;
-  onPartial(partial: boolean): void;
 }): ReactNode {
   const { name, endpoints } = routeTitle(entry.route, regionId);
 
   return (
-    <View className="gap-1 rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+    <View className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
       <View className="flex-row items-start gap-2">
         <View className="flex-1">
           {name ? (
             <Text className="text-sm font-semibold text-gray-900 dark:text-gray-100">{name}</Text>
           ) : null}
           <Text className="text-sm text-gray-900 dark:text-gray-100">{endpoints}</Text>
+          {/* A partial ride comes from the planner, with the stretch it measured, as
+              the web's Route Logger shows it */}
           <Text className="text-xs text-gray-600 dark:text-gray-400">
-            {entry.route.lengthKm.toFixed(1)} km
-            {/* A stretch the planner attached says which part; one ticked by hand
-                does not, and the row should not pretend otherwise. */}
-            {entry.partial && entry.covered ? " · part of the line" : ""}
+            {loggedLengthKm(entry).toFixed(1)} km
+            {entry.partial && entry.covered ? (
+              <Text className="text-amber-700 dark:text-amber-400">
+                {` of ${entry.route.lengthKm.toFixed(1)}`}
+              </Text>
+            ) : null}
           </Text>
         </View>
         <Button label="Remove" variant="ghost" disabled={saving} onPress={onRemove} />
       </View>
-      <ToggleSwitch label="Rode only part of it" value={entry.partial} onChange={onPartial} />
     </View>
   );
 }

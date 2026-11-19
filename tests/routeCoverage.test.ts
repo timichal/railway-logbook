@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import {
   coverageToleranceFraction,
   isRouteFullyRidden,
+  loggedRide,
   MAX_TOLERANCE_FRACTION,
   type RiddenPart,
 } from "@/lib/shared/routeCoverage";
@@ -62,13 +63,6 @@ describe("isRouteFullyRidden", () => {
     assert.equal(isRouteFullyRidden(parts, 10), true);
   });
 
-  test("stretches of unknown extent contribute nothing", () => {
-    const unknown: RiddenPart = { partial: true, covered_start: null, covered_end: null };
-    assert.equal(isRouteFullyRidden([unknown], 10), false);
-    assert.equal(isRouteFullyRidden([unknown, stretch(0, 0.5)], 10), false);
-    assert.equal(isRouteFullyRidden([{ partial: true }, stretch(0, 0.5)], 10), false);
-  });
-
   test("on a short route the stretch must still cover the middle half", () => {
     assert.equal(isRouteFullyRidden([stretch(0.25, 0.75)], 0.5), true);
     assert.equal(isRouteFullyRidden([stretch(0.26, 0.75)], 0.5), false);
@@ -77,5 +71,31 @@ describe("isRouteFullyRidden", () => {
   test("with no known length there is no tolerance at all", () => {
     assert.equal(isRouteFullyRidden([stretch(0, 1)], null), true);
     assert.equal(isRouteFullyRidden([stretch(0.001, 1)], null), false);
+  });
+});
+
+describe("loggedRide", () => {
+  const whole = { partial: false, covered_start: null, covered_end: null };
+
+  test("a partial ride keeps its stretch", () => {
+    assert.deepEqual(loggedRide(true, { covered_start: 0.2, covered_end: 0.7 }), {
+      partial: true,
+      covered_start: 0.2,
+      covered_end: 0.7,
+    });
+  });
+
+  test("a partial ride without a usable stretch is logged whole", () => {
+    assert.deepEqual(loggedRide(true, null), whole);
+    assert.deepEqual(loggedRide(true, undefined), whole);
+    assert.deepEqual(loggedRide(true, { covered_start: 0.5, covered_end: 0.5 }), whole);
+    assert.deepEqual(loggedRide(true, { covered_start: 0.7, covered_end: 0.2 }), whole);
+    assert.deepEqual(loggedRide(true, { covered_start: -0.1, covered_end: 0.5 }), whole);
+    assert.deepEqual(loggedRide(true, { covered_start: 0, covered_end: 1.1 }), whole);
+    assert.deepEqual(loggedRide(true, { covered_start: Number.NaN, covered_end: 1 }), whole);
+  });
+
+  test("a whole ride carries no stretch", () => {
+    assert.deepEqual(loggedRide(false, { covered_start: 0.2, covered_end: 0.7 }), whole);
   });
 });

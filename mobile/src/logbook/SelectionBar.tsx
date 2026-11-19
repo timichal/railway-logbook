@@ -20,7 +20,7 @@ import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { confirmClearSelection, confirmStopEditing } from "@/logbook/confirmClearSelection";
-import { useSelection } from "@/logbook/SelectionContext";
+import { loggedLengthKm, useSelection } from "@/logbook/SelectionContext";
 import { useNativeColors } from "@/theme/colors";
 
 export function SelectionBar(): ReactNode {
@@ -30,7 +30,8 @@ export function SelectionBar(): ReactNode {
 
   if (selected.length === 0 && !editing) return null;
 
-  const km = selected.reduce((sum, s) => sum + s.route.lengthKm, 0);
+  // As the journey will log it: a planner stretch counts its own length
+  const km = selected.reduce((sum, s) => sum + loggedLengthKm(s), 0);
   const routes = `${selected.length} ${selected.length === 1 ? "route" : "routes"}`;
 
   return (

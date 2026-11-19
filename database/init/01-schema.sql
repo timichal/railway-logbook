@@ -192,10 +192,10 @@ CREATE TABLE user_logged_parts (
     track_id INTEGER NOT NULL REFERENCES railway_routes(track_id) ON DELETE CASCADE, -- Deleted when the route is deleted
     partial BOOLEAN NOT NULL DEFAULT FALSE, -- Per-journey partial flag
     -- Which stretch of the route was ridden, as fractions along railway_routes.geometry
-    -- (ST_LineLocatePoint space, 0 = the geometry's first point). Both NULL means the
-    -- extent is unknown: either the whole route (partial = FALSE) or a partial ride
-    -- whose extent was never captured (partial ticked by hand). Only the Journey
-    -- Planner knows an exact stretch, from the station it joins the route at.
+    -- (ST_LineLocatePoint space, 0 = the geometry's first point). Set exactly when the
+    -- ride is partial (logged_parts_partial_has_stretch): both NULL is the whole route.
+    -- Only the Journey Planner knows a stretch, from the station it joins the route at;
+    -- every write goes through loggedRide (src/lib/shared/routeCoverage.ts).
     covered_start DOUBLE PRECISION,
     covered_end DOUBLE PRECISION,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -203,6 +203,7 @@ CREATE TABLE user_logged_parts (
         (covered_start IS NULL) = (covered_end IS NULL)
         AND (covered_start IS NULL OR (covered_start >= 0 AND covered_end <= 1 AND covered_start < covered_end))
     ),
+    CONSTRAINT logged_parts_partial_has_stretch CHECK (partial = (covered_start IS NOT NULL)),
     -- A logged part belongs to the same user as its journey (see user_journeys).
     CONSTRAINT user_logged_parts_journey_owner_fkey FOREIGN KEY (journey_id, user_id)
         REFERENCES user_journeys (id, user_id) ON DELETE CASCADE

@@ -129,11 +129,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       Delete; Edit on another journey with changes asks first; Delete on a journey or a
       trip asks, and the list reloads without it (no "Journey not found" flash); "New trip"
       and "Edit trip" save; a closed route in the editor shows its badge.
-- [ ] **The superseded journey endpoints.** Since the whole-edit `PATCH /journeys/:id`
-      (2026-11-19), nothing calls `POST /journeys/:id/routes`, `PATCH`/`DELETE
-      /journeys/:id/routes/:trackId`, `PUT`/`DELETE /journeys/:id/trip` or `GET
-      /journeys/unassigned`. Delete them (and their `API.md` rows) unless a use for them
-      is planned.
 
 ---
 

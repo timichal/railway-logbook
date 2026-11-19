@@ -35,7 +35,7 @@ const stretch = (track_id: number, covered_start: number, covered_end: number) =
 });
 
 describe("selectionFromJourney", () => {
-  test("a partial ride of known extent keeps its stretch and travelled length", () => {
+  test("a partial ride keeps its stretch and travelled length", () => {
     const [route] = selectionFromJourney(
       [logged(1, { partial: true, covered_start: 0.2, covered_end: 0.7 })],
       [stretch(1, 0.2, 0.7)],
@@ -57,14 +57,11 @@ describe("selectionFromJourney", () => {
     );
   });
 
-  test("a whole ride, or one ticked partial by hand, has none", () => {
-    const routes = selectionFromJourney([logged(1), logged(2, { partial: true })], []);
+  test("a whole ride has none", () => {
+    const routes = selectionFromJourney([logged(1)], []);
     assert.deepEqual(
       routes.map((r) => [r.partial, r.covered]),
-      [
-        [false, null],
-        [true, null],
-      ],
+      [[false, null]],
     );
   });
 });

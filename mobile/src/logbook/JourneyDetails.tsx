@@ -212,7 +212,6 @@ function ChainRow({ chain }: { chain: JourneyChain }): ReactNode {
     startsPartway ? `boarded between ${stops[0]} and ${stops[1]}` : null,
     endsPartway ? `left the train between ${stops[last - 1]} and ${stops[last]}` : null,
     `${chain.lengthKm.toFixed(1)} kilometres`,
-    chain.unknownExtent ? "includes a route ridden only in part, counted whole" : null,
   ]
     .filter(Boolean)
     .join("; ");
@@ -241,9 +240,6 @@ function ChainRow({ chain }: { chain: JourneyChain }): ReactNode {
       </Text>
       <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
         {chain.lengthKm.toFixed(1)} km
-        {chain.unknownExtent ? (
-          <Text className="text-amber-700 dark:text-amber-400"> · partial</Text>
-        ) : null}
       </Text>
     </View>
   );
@@ -271,23 +267,20 @@ function RouteRow({
 }
 
 /**
- * The whole line's length, unless the ride was partial: then the stretch travelled
- * where it is known, and otherwise only that it was part of the line — a partial ride
- * ticked by hand says a piece was ridden without saying which.
+ * The whole line's length, unless the ride was partial: then the stretch travelled,
+ * of the whole line. A partial ride always carries its stretch (`loggedRide`).
  */
 function RouteLength({ route }: { route: api.LoggedRoute }): ReactNode {
   const length = Number(route.length_km);
   const whole = `${length.toFixed(1)} km`;
   const { partial, covered_start: start, covered_end: end } = route;
-  const known = partial && start != null && end != null;
+  if (!partial || start == null || end == null) {
+    return <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{whole}</Text>;
+  }
   return (
     <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
-      {!partial ? whole : known ? `${(Math.abs(end - start) * length).toFixed(1)} km ` : null}
-      {partial ? (
-        <Text className="text-amber-700 dark:text-amber-400">
-          {known ? `(partial, of ${whole})` : `partial, of ${whole}`}
-        </Text>
-      ) : null}
+      {`${(Math.abs(end - start) * length).toFixed(1)} km `}
+      <Text className="text-amber-700 dark:text-amber-400">(partial, of {whole})</Text>
     </Text>
   );
 }
