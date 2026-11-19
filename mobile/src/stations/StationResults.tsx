@@ -30,11 +30,12 @@ interface SearchResultListProps {
   /** What an answer with nothing in it says. */
   emptyLabel: string;
   /**
-   * Rows that scroll within whatever height the parent leaves, clear of the
-   * keyboard: the map's box floats over the map, where nothing else would scroll it.
-   * The planner's lists sit in the form's own `ScrollView` and leave this off.
+   * Over the map rather than in a form: the rows scroll within whatever height the
+   * parent leaves (the map's box keeps it clear of the keyboard), and the list and
+   * its status line are cards, since the map would show through them. The planner's
+   * lists sit in the form's own `ScrollView` and leave this off.
    */
-  scrollable?: boolean;
+  floating?: boolean;
   children: ReactNode;
 }
 
@@ -44,15 +45,17 @@ export function SearchResultList({
   error,
   queryLength,
   emptyLabel,
-  scrollable = false,
+  floating = false,
   children,
 }: SearchResultListProps): ReactNode {
   // Under the server's floor it answers with none, which is not "no match"
   if (queryLength < MIN_SEARCH_QUERY_LENGTH) return null;
 
+  const card = "rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800";
+
   if (count === 0) {
     return (
-      <View className="flex-row items-center gap-2 px-3 py-2">
+      <View className={`flex-row items-center gap-2 px-3 py-2 ${floating ? card : ""}`}>
         {searching ? <ActivityIndicator size="small" /> : null}
         <Text
           className={`text-sm ${
@@ -67,20 +70,21 @@ export function SearchResultList({
     );
   }
 
-  const frame = "overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700";
-  if (!scrollable) return <View className={frame}>{children}</View>;
+  if (!floating) {
+    return (
+      <View className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+        {children}
+      </View>
+    );
+  }
 
   // `shrink` all the way down: a column's children don't shrink by default here, so
   // without it the list would run past the height it was given rather than scroll.
+  // The card's own background fills the hairlines rows of fractional height leave
+  // between them, which the map would otherwise show through.
   return (
-    <View className={`shrink ${frame}`}>
-      <ScrollView
-        className="grow-0"
-        keyboardShouldPersistTaps="handled"
-        // iOS: the rows behind the keyboard scroll up past it. Android resizes the
-        // window instead, which shrinks the space the list is given.
-        automaticallyAdjustKeyboardInsets
-      >
+    <View className={`shrink overflow-hidden ${card}`}>
+      <ScrollView className="grow-0" keyboardShouldPersistTaps="handled">
         {children}
       </ScrollView>
     </View>

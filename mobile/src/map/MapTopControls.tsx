@@ -11,20 +11,22 @@
  * centred in what the two buttons leave, and the line chip on a row of its own below,
  * under the search it came from (`LineChip`). Open, the search field **replaces**
  * both — it is being typed into, and the chips and the planner come back when it
- * closes. Open, the box also runs down to just above the progress box, so the results
- * list has a height to scroll within rather than running off the map.
+ * closes. Open, the box also runs down to just above the progress box, or the
+ * keyboard where that is higher (`OpenSearch`), so the results list has a height to
+ * scroll within rather than running off the map or behind the keyboard.
  *
  * `box-none` throughout, so the row's empty stretches pass taps to the map beneath.
  */
 import type { LineSearchResult, Station } from "@shared/types";
-import { type ReactNode, useState } from "react";
-import { View } from "react-native";
+import { type ReactNode, useRef, useState } from "react";
+import { type HostInstance, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HighlightChip } from "@/map/HighlightChip";
 import { LineChip } from "@/map/LineChip";
 import { MapSearchButton, MapStationSearch } from "@/map/MapStationSearch";
 import { PlannerButton } from "@/map/PlannerButton";
 import type { LineHighlight } from "@/map/useLineHighlight";
+import { useKeyboardTop } from "@/ui/useKeyboardTop";
 
 /** The gap between the rows, and between the furniture and the map's edges. */
 export const TOP_CONTROLS_GAP = 8;
@@ -50,17 +52,12 @@ export function MapTopControls({
 
   if (searching) {
     return (
-      <View
-        pointerEvents="box-none"
-        className="absolute inset-x-2"
-        style={{ top: insets.top + TOP_CONTROLS_GAP, bottom: OPEN_SEARCH_BOTTOM }}
-      >
-        <MapStationSearch
-          onSelectStation={onSelectStation}
-          onSelectLine={onSelectLine}
-          onClose={() => setSearching(false)}
-        />
-      </View>
+      <OpenSearch
+        top={insets.top + TOP_CONTROLS_GAP}
+        onSelectStation={onSelectStation}
+        onSelectLine={onSelectLine}
+        onClose={() => setSearching(false)}
+      />
     );
   }
 
@@ -79,5 +76,52 @@ export function MapTopControls({
       </View>
       <LineChip highlight={lineHighlight} />
     </View>
+  );
+}
+
+/**
+ * The open search, held above the keyboard. The map doesn't move for the keyboard
+ * on iOS, so the box's bottom is raised to wherever the keyboard's top edge lands
+ * over the map: the map's own bottom edge is measured in window coordinates (an
+ * invisible view filling the map) and compared with the keyboard's
+ * (`useKeyboardTop`). Where the window resizes instead (Android), the two never
+ * overlap and the box keeps its place above the progress box.
+ */
+function OpenSearch({
+  top,
+  onSelectStation,
+  onSelectLine,
+  onClose,
+}: {
+  top: number;
+  onSelectStation(station: Station): void;
+  onSelectLine(line: LineSearchResult): void;
+  onClose(): void;
+}): ReactNode {
+  const keyboardTop = useKeyboardTop();
+  const mapRef = useRef<HostInstance>(null);
+  const [mapBottom, setMapBottom] = useState<number | null>(null);
+
+  const overlap = keyboardTop !== null && mapBottom !== null ? mapBottom - keyboardTop : 0;
+  const bottom = Math.max(OPEN_SEARCH_BOTTOM, overlap + TOP_CONTROLS_GAP);
+
+  return (
+    <>
+      <View
+        ref={mapRef}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+        onLayout={() =>
+          mapRef.current?.measureInWindow((_x, y, _width, height) => setMapBottom(y + height))
+        }
+      />
+      <View pointerEvents="box-none" className="absolute inset-x-2" style={{ top, bottom }}>
+        <MapStationSearch
+          onSelectStation={onSelectStation}
+          onSelectLine={onSelectLine}
+          onClose={onClose}
+        />
+      </View>
+    </>
   );
 }

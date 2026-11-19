@@ -112,7 +112,7 @@ export function MapStationSearch({
         error={error}
         queryLength={searchQueryLength(query)}
         emptyLabel={withLines ? "No lines or stations found." : "No stations found."}
-        scrollable
+        floating
       >
         {results.lines.map((line, index) => (
           <SearchResultRow

@@ -33,7 +33,7 @@ Items found already done were deleted; the gaps the web has opened since are und
       keyboard handling have never run on Android (`MOBILE_APP_PLAN.md`, Phase 2). The
       modals' keyboard fix relies on Android resizing the window. Edge-to-edge is
       always on since SDK 58 (`edgeToEdgeEnabled` left `app.json` with the upgrade), so
-      check that it still does. `expo-system-ui` exists only for Android. Do this before
+      check that it still does. `expo-system-ui` exists only for Android. The map's open search should keep its place above the progress box with the keyboard up (the window resizes, so `useKeyboardTop` finds no overlap). Do this before
       the UI pass, so the pass covers both platforms.
 
 ---
@@ -96,23 +96,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       opened shows "No connection…" (closing any open sheet), which goes after about four
       seconds, on its ×, or with the next press; back online, that route opens. On 2026-11-19 the notice showed, under the progress box; the box is now a child of `RailwayMap`, drawn under the sheet and the notice: check it is covered now.
       Every route opening offline is Phase 5 (`MOBILE_APP_PLAN.md`).
-
-- [ ] **Check line-name search on the device.** _(device)_ Built 2026-11-19: the
-      map's search box asks `GET /api/v1/search`, which lists lines before stations
-      where `hasRouteNames` (Japan); a picked line fits the camera to it, draws the
-      blue band under the route lines (`useLineHighlight`, the source in
-      `RailwayMap`) and puts a chip under the top row (`LineChip`) that clears it. In
-      Japan: "yamanote" lists the line ("Line · N routes") above the stations; picking
-      it lands the whole line clear of the top row and the chip; the band sits under
-      the route lines and over the scenic band (toggle scenic on after the pick, and
-      before); unticking the line's type says "layer hidden"; the band and chip go
-      on ×, and on a region switch; the logbook's chip and the line chip are up
-      together without overlapping. In airplane mode a search says "Couldn't
-      search…", and a pick shows "failed to load". With the keyboard up, a long
-      result list scrolls and its last rows can be reached (iOS insets; on Android
-      the window's resize), and stops above the progress box. A stalled connection
-      gives up after 8s (`READ_TIMEOUT_MS`) in both the search and the band. In Europe: placeholder "Search for a station", no line
-      rows. Needs the server deployed (the two endpoints are new).
 
 - [ ] **Planner legs don't show the line name.** `PlannedRouteRow` shows only
       `from ⟷ to`. Where `hasRouteNames` (Japan), the line name is what identifies a route,
