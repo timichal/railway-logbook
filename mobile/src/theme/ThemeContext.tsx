@@ -29,6 +29,8 @@ const WINDOW_BACKGROUND: Record<ResolvedTheme, string> = {
 };
 
 interface ThemeValue {
+  /** Whether the stored preference has been read (or found missing). */
+  ready: boolean;
   preference: ThemePreference;
   resolved: ResolvedTheme;
   setPreference(next: ThemePreference): void;
@@ -42,19 +44,27 @@ function isPreference(value: string | null): value is ThemePreference {
 
 export function ThemeProvider({ children }: { children: ReactNode }): ReactNode {
   const [preference, setStored] = useState<ThemePreference>("system");
+  const [ready, setReady] = useState(false);
   const { colorScheme: active } = useColorScheme();
   const resolved: ResolvedTheme = active === "dark" ? "dark" : "light";
 
   useEffect(() => {
+    let cancelled = false;
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
-        if (!isPreference(stored)) return;
+        if (cancelled || !isPreference(stored)) return;
         setStored(stored);
         colorScheme.set(stored);
       })
       .catch(() => {
         // Nothing to recover: "system" is the default and already applied.
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -67,8 +77,11 @@ export function ThemeProvider({ children }: { children: ReactNode }): ReactNode 
     void AsyncStorage.setItem(STORAGE_KEY, next);
   }, []);
 
+  // The providers below mount at once, so the session's keychain read runs beside
+  // this one; only the screens wait for `ready` (`RootNavigator`), so nothing is
+  // drawn in the system's scheme and then flipped to the stored one.
   return (
-    <ThemeContext.Provider value={{ preference, resolved, setPreference }}>
+    <ThemeContext.Provider value={{ ready, preference, resolved, setPreference }}>
       {children}
     </ThemeContext.Provider>
   );

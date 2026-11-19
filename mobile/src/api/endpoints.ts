@@ -244,7 +244,6 @@ export interface LoggedRouteInput {
 /** A journey as the logbook list carries it: the row plus what it adds up to. */
 export interface JourneyWithStats extends Journey {
   route_count: number;
-  /** A Postgres numeric, so a string over the wire. */
   total_distance: number;
 }
 

@@ -28,7 +28,14 @@ import { formatDateOnly, isDateOnly } from "@shared/getUntimezonedDateStr";
 import { routeTitle } from "@shared/map/routeFeature";
 import { useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Text,
+  type TextInputInstance,
+  View,
+} from "react-native";
 import * as api from "@/api/endpoints";
 import { confirmClearSelection, confirmStopEditing } from "@/logbook/confirmClearSelection";
 import { journeyEditsToSave, loggedRouteInput } from "@/logbook/journeyEdit";
@@ -41,6 +48,7 @@ import {
 } from "@/logbook/SelectionContext";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
+import { formatKm } from "@/ui/format";
 import { Screen } from "@/ui/Screen";
 import { TextField } from "@/ui/TextField";
 
@@ -69,6 +77,10 @@ export default function LogJourneyScreen(): ReactNode {
 
   // The draft can be days old by now: a date never chosen means today, not then
   useEffect(() => freshenDate(), [freshenDate]);
+
+  // The return key moves on through the form
+  const dateRef = useRef<TextInputInstance>(null);
+  const descriptionRef = useRef<TextInputInstance>(null);
 
   // Once: ending an edit puts the new journey's draft in front, whose empty
   // selection would close the screen a second time
@@ -204,15 +216,21 @@ export default function LogJourneyScreen(): ReactNode {
               placeholder="Weekend trip to Vienna"
               autoFocus={!editing && form.name === ""}
               returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => dateRef.current?.focus()}
             />
             <View className="gap-1.5">
               <TextField
+                ref={dateRef}
                 label="Date"
                 value={form.date}
                 onChangeText={(date) => updateForm({ date })}
                 placeholder="YYYY-MM-DD"
                 autoCapitalize="none"
                 autoCorrect={false}
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => descriptionRef.current?.focus()}
                 // The day as the phone writes dates, so a typo in the digits shows
                 hint={dateValid ? formatDateOnly(form.date) : undefined}
                 // Not while it is still being typed
@@ -234,6 +252,7 @@ export default function LogJourneyScreen(): ReactNode {
               </View>
             </View>
             <TextField
+              ref={descriptionRef}
               label="Description"
               value={form.description}
               onChangeText={(description) => updateForm({ description })}
@@ -350,10 +369,10 @@ function RouteRow({
           {/* A partial ride comes from the planner, with the stretch it measured, as
               the web's Route Logger shows it */}
           <Text className="text-xs text-gray-600 dark:text-gray-400">
-            {loggedLengthKm(entry).toFixed(1)} km
+            {formatKm(loggedLengthKm(entry))} km
             {entry.partial && entry.covered ? (
               <Text className="text-amber-700 dark:text-amber-400">
-                {` of ${entry.route.lengthKm.toFixed(1)}`}
+                {` of ${formatKm(entry.route.lengthKm)}`}
               </Text>
             ) : null}
           </Text>

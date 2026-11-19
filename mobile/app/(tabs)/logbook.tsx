@@ -16,7 +16,9 @@
  * it opens; the journeys inside an open trip open the same way, one at a time.
  */
 import { Ionicons } from "@expo/vector-icons";
+import { SEARCH_DEBOUNCE_MS } from "@shared/constants";
 import { formatDateOnly, formatDateOnlyRange } from "@shared/getUntimezonedDateStr";
+import type { RegionId } from "@shared/regions";
 import { useRouter } from "expo-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, Text, TextInput, View } from "react-native";
@@ -28,15 +30,23 @@ import { ShowOnMap } from "@/logbook/ShowOnMap";
 import { useRegion } from "@/region/RegionContext";
 import { useNativeColors } from "@/theme/colors";
 import { Button } from "@/ui/Button";
+import { formatKm } from "@/ui/format";
 import { Screen } from "@/ui/Screen";
 
 const PAGE_SIZE = 10;
-const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * Keyed by region: a switch starts the list over — page, search and open card — since
+ * page 3 of Europe is no page of Japan, and may be past its last.
+ */
 export default function LogbookScreen(): ReactNode {
+  const { regionId } = useRegion();
+  return <Logbook key={regionId} regionId={regionId} />;
+}
+
+function Logbook({ regionId }: { regionId: RegionId }): ReactNode {
   const colors = useNativeColors();
   const router = useRouter();
-  const { regionId } = useRegion();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -83,6 +93,12 @@ export default function LogbookScreen(): ReactNode {
 
   const total = data?.total ?? 0;
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // A delete can empty the last page; go back to the new last one rather than show
+  // an empty list with no pager
+  useEffect(() => {
+    if (data && page > lastPage) setPage(lastPage);
+  }, [data, page, lastPage]);
 
   return (
     <Screen edges={["top"]}>
@@ -421,12 +437,6 @@ function CardHeader({
 function plural(count: number, one: string, many: string): string {
   return count === 1 ? one : many;
 }
-
-/** A Postgres numeric arrives as a string; an absent one as null. */
-function formatKm(value: number): string {
-  return value.toFixed(1);
-}
-
 function dateRange(start: string | null, end: string | null): string {
   if (!start || !end) return "No journeys yet";
   return formatDateOnlyRange(start, end);

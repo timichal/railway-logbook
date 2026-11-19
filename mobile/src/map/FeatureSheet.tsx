@@ -35,6 +35,7 @@ import type { MapFeature, RouteFeature, StationFeature } from "@/map/mapFeatures
 import { useNativeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { Button } from "@/ui/Button";
+import { formatKm } from "@/ui/format";
 
 interface FeatureSheetProps {
   feature: MapFeature;
@@ -174,7 +175,7 @@ function RouteBody({
       </View>
 
       <Text className="text-sm text-gray-600 dark:text-gray-400">
-        {feature.lengthKm.toFixed(1)} km
+        {formatKm(feature.lengthKm)} km
       </Text>
 
       {feature.description ? (

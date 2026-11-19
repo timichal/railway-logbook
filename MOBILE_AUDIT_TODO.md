@@ -58,11 +58,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       sidebar. On a phone the convention is to load more with `onEndReached`. Changing
       pages also shows no loading state: the old page stays until the new one arrives.
 
-- [ ] **The logbook keeps its page, search and open card across a region switch.**
-      Page 3 of Europe becomes page 3 of Japan, which can be past the last page. The list
-      is then empty and says "Nothing logged in this region yet". Reset all three when the
-      region changes.
-
 - [ ] **The journey date is typed as text.** The plan ruled out a native picker
       because it would need "another development build". But every run is already a
       development build, so `@react-native-community/datetimepicker` costs only one
@@ -82,30 +77,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       opened shows "No connection…" (closing any open sheet), which goes after about four
       seconds, on its ×, or with the next press; back online, that route opens. On 2026-11-19 the notice showed, under the progress box; the box is now a child of `RailwayMap`, drawn under the sheet and the notice: check it is covered now.
       Every route opening offline is Phase 5 (`MOBILE_APP_PLAN.md`).
-
-- [ ] **Planner legs don't show the line name.** `PlannedRouteRow` shows only
-      `from ⟷ to`. Where `hasRouteNames` (Japan), the line name is what identifies a route,
-      and `PlannerRoute.name` is already in the response. Use `routeTitle` as the other
-      route rows do.
-
-- [ ] **Number formatting is inconsistent.** km is shown three ways: `toFixed(1)`
-      (logbook, sheet, planner, selection bar), `Math.round().toLocaleString()` (progress
-      box) and `toLocaleString("en-US", 1 dp)` (countries). Percentages are calculated
-      again in `countries.tsx`. `MapProgressBox` prints `percentage.toFixed(1)` although
-      the server already rounds to a whole number (`toUserProgress`), so it always shows
-      "42.0%". Add one `formatKm` and one `formatPercent` (in `shared/progress.ts` next to
-      `round1`, or a mobile util) and use them everywhere.
-
-- [ ] **Screen readers miss information.** An `accessibilityLabel` replaces the
-      element's text for VoiceOver and TalkBack:
-  - `MapProgressBox` reads only "Show progress", never the percentage.
-  - `HighlightChip` reads "Clear the highlight", never "3 routes highlighted".
-
-  Put the content in the label, or move the action into `accessibilityHint`. Also,
-  `ToggleSwitch`'s inner `Switch` is a second focusable element although the comment
-  says it is decorative: add `accessibilityElementsHidden` and
-  `importantForAccessibility="no-hide-descendants"`. `SelectionBar`'s label says "Log
-  1 selected routes".
 
 - [ ] **The feature sheet is a static view.** It has no slide-in animation, can't be
       dragged down, and `pb-8` is fixed. A bottom sheet that can be swiped away is what
@@ -135,29 +106,33 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ## Low — polish and consistency
 
-- [ ] **Forms don't move to the next field.** Login and register set
-      `returnKeyType="next"` but don't focus the next field, because `TextField` doesn't
-      forward a ref. Forward the ref, then chain the fields with `onSubmitEditing`.
-- [ ] **Register doesn't state the password rule up front.** Users need at least 6
-      characters (`authQueries.ts`); add that as a `hint`. While there, consider whether 6
-      is too low, given that the admin needs 12.
-- [ ] **`TextField`'s error state drops the field's background**, so in dark mode an
-      invalid field shows the screen colour through it. Keep the background classes and
-      change only the border.
-- [ ] **The theme preference is applied after the first render.** `ThemeContext`
-      reads AsyncStorage in an effect, so someone who picked a theme different from the
-      system's can see a flash. If the map mounts first, the basemap is fetched twice.
-      Wait for the read before rendering, as `RegionProvider` does.
-- [ ] **Stale comments about NUMERIC.** `JourneyWithStats.total_distance` ("a string
-      over the wire") and `logbook.tsx`'s `formatKm` ("arrives as a string; an absent one
-      as null") contradict `dbConfig.ts`'s type parser and the `COALESCE`s in
-      `tripQueries.ts`. Delete them. If either were true, `toFixed` would crash.
-- [ ] **Constants copied instead of imported.** `logbook.tsx` defines its own
-      `SEARCH_DEBOUNCE_MS = 300`, but `@shared/constants` exports it, and
-      `useStationSearch` already imports it from there.
-- [ ] **Settings shows `API_ORIGIN` at the bottom.** It's useful in development. For
-      users, show the app version and build (`expo-constants`), and keep the origin only
-      for non-production builds.
+- [ ] **Check the 2026-11-20 polish batch on the device.** _(device)_ Not run yet:
+      the return key moves through sign-in, register, New/Edit trip and the journey
+      form (Name → Date → Description) with the keyboard staying up
+      (`submitBehavior="submit"`); VoiceOver reads the progress box's numbers
+      (collapsed and expanded), "N routes highlighted" on the chip with its hint, a
+      toggle's hint line, and the selection bar's km; the switch inside a toggle row is
+      not a second stop; a cold start with a theme other than the system's doesn't
+      flash and the splash stays up until both the theme and the session are read
+      (`ThemeContext` `ready`, gated in `RootNavigator`); an invalid field keeps its
+      background in dark mode; planner legs in Japan show the line name above the
+      endpoints; deleting the only item on the logbook's last page goes back a page;
+      switching region resets the logbook's page, search and open card; Settings shows
+      "Version 0.1.0" (with the server only in a development build).
+- [ ] **The expanded progress box is wider since km show one decimal** ("12,345.6 /
+      98,765.4 km", was whole km), from the one `formatKm` (`src/ui/format.ts`). Look
+      at it on a small phone in Europe; if it crowds the corner, add a whole-km variant
+      for the box alone.
+- [ ] **Settings hides the server address in every non-`__DEV__` build**, release-mode
+      preview builds included. If preview or TestFlight builds will point at a test
+      server, gate it on a build-profile flag (an `EXPO_PUBLIC_` variable or
+      `expoConfig.extra`) instead, so a tester can see which server it is.
+- [ ] **Is 6 characters enough for a user's password?** Register now states the
+      rule as a hint, as the web's form does, but the admin needs 12
+      (`createAdmin`). Raising it is one check in `authQueries.ts` and the two forms' hints.
+- [ ] **Settings shows the version but not the build number.** The build number is
+      `expo-application`'s (`nativeBuildVersion`), a native module, so adding it needs a
+      new development build. Add it beside the version once the store builds are numbered.
 
 ---
 
@@ -220,11 +195,6 @@ the log). These are for the UI polish pass, not fixes.
 - [ ] **The `NSLocalNetworkUsageDescription` / `NSBonjourServices` entries are for
   development** and will ship in a release build. Move them to an `app.config.ts` that
       adds them only for development builds.
-- [ ] **`ios.supportsTablet: true`** means App Store review expects iPad screenshots
-      and a usable iPad layout, and the iPad layout has never been looked at. Set it to
-      `false` until iPad is a goal.
-- [ ] **`ios.config.usesNonExemptEncryption: false`** (HTTPS only), so App Store
-      Connect stops asking about export compliance on every build.
 - [ ] **A location-permission string**, needed by "Go to my location" (under "New
       gaps against the web").
 

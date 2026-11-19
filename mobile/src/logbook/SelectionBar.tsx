@@ -22,6 +22,7 @@ import { Pressable, Text, View } from "react-native";
 import { confirmClearSelection, confirmStopEditing } from "@/logbook/confirmClearSelection";
 import { loggedLengthKm, useSelection } from "@/logbook/SelectionContext";
 import { useNativeColors } from "@/theme/colors";
+import { formatKm } from "@/ui/format";
 
 export function SelectionBar(): ReactNode {
   const colors = useNativeColors();
@@ -40,9 +41,10 @@ export function SelectionBar(): ReactNode {
         accessibilityRole="button"
         accessibilityLabel={
           editing
-            ? `Editing ${editing.name}, ${routes}. Review the journey`
-            : `Log ${routes} selected`
+            ? `Editing ${editing.name}, ${routes}, ${formatKm(km)} km`
+            : `${routes} selected, ${formatKm(km)} km`
         }
+        accessibilityHint={editing ? "Reviews and saves the journey" : "Logs a journey"}
         onPress={() => router.push("/log-journey")}
         className="min-h-14 flex-1 flex-row items-center gap-3 px-4 active:opacity-70"
       >
@@ -55,8 +57,8 @@ export function SelectionBar(): ReactNode {
           </Text>
           <Text className="text-xs text-gray-600 dark:text-gray-400">
             {editing
-              ? `${routes} · ${km.toFixed(1)} km · tap to review and save`
-              : `${km.toFixed(1)} km · tap to log a journey`}
+              ? `${routes} · ${formatKm(km)} km · tap to review and save`
+              : `${formatKm(km)} km · tap to log a journey`}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.icon} />

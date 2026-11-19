@@ -40,6 +40,7 @@ import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import { useCountryPrefs } from "@/region/CountryPrefsContext";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
+import { formatKm, formatPercent, percentOf } from "@/ui/format";
 import { Screen } from "@/ui/Screen";
 
 export default function CountriesScreen(): ReactNode {
@@ -246,15 +247,14 @@ function UsageFilter({ stats }: { stats: api.ProgressByCountry | null }): ReactN
 
 /** A row's km, and its share where there is anything to share. */
 function KmShare({ completedKm, totalKm }: { completedKm: number; totalKm: number }): ReactNode {
+  const share = percentOf(completedKm, totalKm);
   return (
     <View className="items-end">
       <Text className="text-sm text-gray-600 dark:text-gray-400">
         {formatKm(completedKm)} / {formatKm(totalKm)} km
       </Text>
-      {totalKm > 0 ? (
-        <Text className="text-xs text-gray-500 dark:text-gray-400">
-          {((completedKm / totalKm) * 100).toFixed(1)}%
-        </Text>
+      {share !== null ? (
+        <Text className="text-xs text-gray-500 dark:text-gray-400">{formatPercent(share)}</Text>
       ) : null}
     </View>
   );
@@ -314,6 +314,7 @@ function Total({
   total: api.ProgressByCountry["total"];
   label: string;
 }): ReactNode {
+  const share = percentOf(total.completedKm, total.totalKm);
   return (
     <View className="gap-1 border-t border-gray-200 pt-4 dark:border-gray-700">
       <Text className="text-sm font-semibold text-gray-700 dark:text-gray-300">{label}</Text>
@@ -324,15 +325,11 @@ function Total({
         {" / "}
         <Text className="font-semibold">{formatKm(total.totalKm)}</Text> km
       </Text>
-      {total.totalKm > 0 ? (
+      {share !== null ? (
         <Text className="text-sm text-gray-600 dark:text-gray-400">
-          {((total.completedKm / total.totalKm) * 100).toFixed(1)}% completed
+          {formatPercent(share)} completed
         </Text>
       ) : null}
     </View>
   );
-}
-
-function formatKm(value: number): string {
-  return value.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }

@@ -29,6 +29,7 @@ import { useSelection } from "@/logbook/SelectionContext";
 import { ShowOnMap } from "@/logbook/ShowOnMap";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
+import { formatKm } from "@/ui/format";
 
 export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode {
   const { regionId } = useRegion();
@@ -230,7 +231,7 @@ function ChainRow({ chain }: { chain: JourneyChain }): ReactNode {
     stops.join(", "),
     startsPartway ? `boarded between ${stops[0]} and ${stops[1]}` : null,
     endsPartway ? `left the train between ${stops[last - 1]} and ${stops[last]}` : null,
-    `${chain.lengthKm.toFixed(1)} kilometres`,
+    `${formatKm(chain.lengthKm)} kilometres`,
   ]
     .filter(Boolean)
     .join("; ");
@@ -258,7 +259,7 @@ function ChainRow({ chain }: { chain: JourneyChain }): ReactNode {
         ))}
       </Text>
       <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
-        {chain.lengthKm.toFixed(1)} km
+        {formatKm(chain.lengthKm)} km
       </Text>
     </View>
   );
@@ -291,14 +292,14 @@ function RouteRow({
  */
 function RouteLength({ route }: { route: api.LoggedRoute }): ReactNode {
   const length = Number(route.length_km);
-  const whole = `${length.toFixed(1)} km`;
+  const whole = `${formatKm(length)} km`;
   const { partial, covered_start: start, covered_end: end } = route;
   if (!partial || start == null || end == null) {
     return <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{whole}</Text>;
   }
   return (
     <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
-      {`${(Math.abs(end - start) * length).toFixed(1)} km `}
+      {`${formatKm(Math.abs(end - start) * length)} km `}
       <Text className="text-amber-700 dark:text-amber-400">(partial, of {whole})</Text>
     </Text>
   );

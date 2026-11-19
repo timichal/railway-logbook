@@ -32,7 +32,8 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
-import { hasOrdinaryNonRegular, regionUsagePluralLabel } from "@shared/regions";
+import { routeTitle } from "@shared/map/routeFeature";
+import { hasOrdinaryNonRegular, type RegionId, regionUsagePluralLabel } from "@shared/regions";
 import type { PlannerRoute, Station } from "@shared/types";
 import { useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
@@ -45,6 +46,7 @@ import { useRegion } from "@/region/RegionContext";
 import { StationField } from "@/stations/StationField";
 import { useNativeColors } from "@/theme/colors";
 import { Button } from "@/ui/Button";
+import { formatKm } from "@/ui/format";
 import { Screen } from "@/ui/Screen";
 import { ToggleSwitch } from "@/ui/ToggleSwitch";
 
@@ -243,11 +245,16 @@ export default function PlanJourneyScreen(): ReactNode {
             <View className="gap-3">
               <Text className="text-base font-semibold text-gray-900 dark:text-gray-100">
                 {result.routes.length} {result.routes.length === 1 ? "route" : "routes"} ·{" "}
-                {result.totalDistance.toFixed(1)} km
+                {formatKm(result.totalDistance)} km
               </Text>
               <View className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
                 {result.routes.map((route, index) => (
-                  <PlannedRouteRow key={route.track_id} route={route} index={index} />
+                  <PlannedRouteRow
+                    key={route.track_id}
+                    route={route}
+                    index={index}
+                    regionId={regionId}
+                  />
                 ))}
               </View>
               <Button
@@ -273,17 +280,32 @@ export default function PlanJourneyScreen(): ReactNode {
  * travelled, so a route joined between its endpoints shows what the plan uses of it
  * against what the whole line is.
  */
-function PlannedRouteRow({ route, index }: { route: PlannerRoute; index: number }): ReactNode {
+function PlannedRouteRow({
+  route,
+  index,
+  regionId,
+}: {
+  route: PlannerRoute;
+  index: number;
+  regionId: RegionId;
+}): ReactNode {
+  // Where the region names its lines, the name is what identifies the leg
+  const { name, endpoints } = routeTitle(route, regionId);
   return (
     <View
       className={`gap-0.5 p-3 ${index === 0 ? "" : "border-t border-gray-200 dark:border-gray-700"}`}
     >
+      {name ? (
+        <Text className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {index + 1}. {name}
+        </Text>
+      ) : null}
       <Text className="text-sm text-gray-900 dark:text-gray-100">
-        {index + 1}. {route.from_station} ⟷ {route.to_station}
+        {name ? endpoints : `${index + 1}. ${endpoints}`}
       </Text>
       <Text className="text-xs text-gray-600 dark:text-gray-400">
-        {route.travelled_length_km.toFixed(1)} km
-        {route.partial ? ` · part of ${route.length_km.toFixed(1)} km` : ""}
+        {formatKm(route.travelled_length_km)} km
+        {route.partial ? ` · part of ${formatKm(route.length_km)} km` : ""}
       </Text>
     </View>
   );

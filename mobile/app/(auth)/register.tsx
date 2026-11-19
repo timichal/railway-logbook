@@ -1,6 +1,13 @@
 import { Link } from "expo-router";
-import { type ReactNode, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
+import { type ReactNode, useRef, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  type TextInputInstance,
+  View,
+} from "react-native";
 import { ApiError } from "@/api/client";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/ui/Button";
@@ -15,6 +22,9 @@ export default function RegisterScreen(): ReactNode {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const emailRef = useRef<TextInputInstance>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
+  const confirmRef = useRef<TextInputInstance>(null);
 
   async function submit(): Promise<void> {
     setError(null);
@@ -58,8 +68,12 @@ export default function RegisterScreen(): ReactNode {
               onChangeText={setName}
               autoComplete="name"
               returnKeyType="next"
+              // "submit" keeps the keyboard up while the focus moves on
+              submitBehavior="submit"
+              onSubmitEditing={() => emailRef.current?.focus()}
             />
             <TextField
+              ref={emailRef}
               label="Email"
               value={email}
               onChangeText={setEmail}
@@ -68,17 +82,25 @@ export default function RegisterScreen(): ReactNode {
               keyboardType="email-address"
               textContentType="emailAddress"
               returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
             <TextField
+              ref={passwordRef}
               label="Password"
+              // As the web's form says it; the server enforces it (`authQueries.ts`)
+              hint="At least 6 characters."
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="new-password"
               textContentType="newPassword"
               returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => confirmRef.current?.focus()}
             />
             <TextField
+              ref={confirmRef}
               label="Confirm password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}

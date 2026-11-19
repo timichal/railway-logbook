@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "cz.zlatkovsky.railwaylogbook",
-      "supportsTablet": true,
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Railway Logbook connects to the development server on your local network while it is being developed.",
         "NSBonjourServices": ["_expo._tcp", "_expo-dev-server._tcp"]

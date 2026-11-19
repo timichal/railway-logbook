@@ -43,11 +43,16 @@ void SplashScreen.preventAutoHideAsync();
 
 function RootNavigator(): ReactNode {
   const { status } = useAuth();
-  const { resolved } = useTheme();
+  const { ready, resolved } = useTheme();
 
   useEffect(() => {
-    if (status !== "loading") void SplashScreen.hideAsync();
-  }, [status]);
+    if (status !== "loading" && ready) void SplashScreen.hideAsync();
+  }, [status, ready]);
+
+  // Nothing is drawn in the system's scheme and then flipped to the stored one: that
+  // would flash every screen, and the map would fetch its basemap twice. The splash
+  // screen covers the wait.
+  if (!ready) return null;
 
   return (
     <>

@@ -9,8 +9,8 @@
  * belongs to every region's list until something is filed under it.
  */
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactNode, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { type ReactNode, useRef, useState } from "react";
+import { ScrollView, Text, type TextInputInstance, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { bumpLogVersion } from "@/logbook/logVersion";
 import { Button } from "@/ui/Button";
@@ -25,6 +25,7 @@ export default function EditTripScreen(): ReactNode {
   const [description, setDescription] = useState(params.description ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const descriptionRef = useRef<TextInputInstance>(null);
 
   const submit = async (): Promise<void> => {
     if (!name.trim()) {
@@ -66,8 +67,11 @@ export default function EditTripScreen(): ReactNode {
             placeholder="Summer in the Alps"
             autoFocus={id === null}
             returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => descriptionRef.current?.focus()}
           />
           <TextField
+            ref={descriptionRef}
             label="Description"
             value={description}
             onChangeText={setDescription}
