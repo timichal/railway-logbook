@@ -16,6 +16,7 @@
  *   of the factories with `visibility: "none"` for the three optional layers, since
  *   that is what the web app's imperative toggles expect; here the layer is simply
  *   not rendered when it is off, and built with `visible: true` when it is on.
+ *   The Regular layer is the exception (see `routeLayers`).
  * - **`initialViewState` is initial and nothing else** — it cannot move the camera
  *   later, and remounting the `<Camera>` does not reset it. So the saved position is
  *   read *before* the map mounts, and a region switch moves the camera through
@@ -32,6 +33,8 @@
  * the hitbox wins — which gives the note-beats-station-beats-route precedence the web
  * app hand-codes with `queryRenderedFeatures`.
  */
+
+import type { LineLayerSpecification } from "@maplibre/maplibre-gl-style-spec";
 import {
   Camera,
   type CameraRef,
@@ -148,17 +151,17 @@ function flatBounds(regionId: RegionId): [number, number, number, number] {
 
 export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode {
   const { resolved: theme } = useTheme();
-  const { showHeritage, showSpecial, showScenicLines, showClosed } = useLayerPrefs();
+  const { showRegular, showHeritage, showSpecial, showScenicLines, showClosed } = useLayerPrefs();
   // The user's rides, coloured and ordered over Martin's tile by id. None yet (or
   // none to be had): no route lines, rather than every route drawn unridden.
   const rides = useRides();
   // Puts the route source on Martin's cached tile; null until it is known
   const tileVersion = useRoutesTileVersion();
-  // Built once per scheme, countries, closed switch and rides rather than on every
+  // Built once per scheme, countries, switches and rides rather than on every
   // render, which would hand each <Layer> a new paint object. The country filter is
   // the layers', as on the web, so the tile URL is the same for everyone and Martin
   // caches one copy. The closed lines the user rode stay whatever the switch says
-  // (closedRoutesFilter)
+  // (closedRoutesFilter).
   const routeLayers = useMemo(() => {
     if (!rides) return null;
     const configs = userRouteLayerConfigs(theme, undefined, rides);
@@ -173,6 +176,15 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
       special: createRouteLineLayer(2, { ...configs.special, visible: true, routesFilter }),
     };
   }, [theme, countries, showClosed, rides]);
+  // The Regular layer is the one switch that is a `visibility` rather than an absent
+  // child: it is the scenic band's `beforeId`, and an anchor that isn't there would
+  // send the band to the top of the map. It is switched off only where Regular is
+  // not the only ordinary type (Japan's JR lines, ticked in Statistics). Laid over
+  // the built spec here, so the switch restyles this one layer and not all three.
+  const regularLayout = useMemo((): LineLayerSpecification["layout"] => {
+    if (!routeLayers) return undefined;
+    return { ...routeLayers.route.layout, visibility: showRegular ? "visible" : "none" };
+  }, [routeLayers, showRegular]);
   // Read by a press, which must not be rebuilt whenever the rides change
   const ridesRef = useRef(rides);
   ridesRef.current = rides;
@@ -183,11 +195,10 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   const basemapStyle = useBasemapStyle(theme);
   // Memoised: a new array each render would be sent across to the native layer again
   const scenicFilter = useMemo(() => scenicLinesFilter(countries), [countries]);
-  // Regular is always drawn here: the native app has no JR-lines switch yet (the
-  // web app's is a checkbox in its Map & Stats tab)
+  // What the ridden stretches follow
   const shownTypes = useMemo(
-    () => shownUsageTypes({ showRegular: true, showHeritage, showSpecial }),
-    [showHeritage, showSpecial],
+    () => shownUsageTypes({ showRegular, showHeritage, showSpecial }),
+    [showRegular, showHeritage, showSpecial],
   );
   const initialPosition = useInitialPosition(regionId);
 
@@ -439,14 +450,17 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
 
         {/* The scenic band, under every route line, where the region offers it at
             all. `beforeId` because a layer mounted after the map has loaded (the
-            toggle switched on) is otherwise appended to the very top. */}
+            toggle switched on) is otherwise appended to the very top — so it waits
+            for its anchor, the Regular route layer, which comes with the rides and
+            the tile version. A remounted route source re-adds that layer above the
+            band (before the coverage overlay), so the order holds after. */}
         <VectorSource
           id="scenic_lines"
           tiles={[scenicTileUrl()]}
           minzoom={ZOOM_RANGES.scenicLines.min}
           maxzoom={ZOOM_RANGES.scenicLines.max}
         >
-          {showScenicLines && REGIONS[regionId].hasScenicHighlight ? (
+          {showScenicLines && REGIONS[regionId].hasScenicHighlight && routeLayers && routesUrl ? (
             <Layer
               {...createScenicLinesLayer({ visible: true })}
               filter={scenicFilter}
@@ -474,7 +488,13 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
             maxzoom={ZOOM_RANGES.railwayRoutes.max}
             onPress={takeRoutePress}
           >
-            {routeLayers ? <Layer {...routeLayers.route} beforeId={COVERAGE_LAYER_IDS[0]} /> : null}
+            {routeLayers ? (
+              <Layer
+                {...routeLayers.route}
+                layout={regularLayout}
+                beforeId={COVERAGE_LAYER_IDS[0]}
+              />
+            ) : null}
             {routeLayers && showHeritage ? (
               <Layer {...routeLayers.heritage} beforeId={COVERAGE_LAYER_IDS[0]} />
             ) : null}

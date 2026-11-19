@@ -68,7 +68,10 @@ export default function SettingsScreen(): ReactNode {
             />
           </Section>
         ) : hasStatsView(regionId) ? (
-          <Section title="Statistics" hint="How far you are on each kind of line.">
+          <Section
+            title="Statistics"
+            hint="Which kinds of line the map shows and counts, and how far you are on each."
+          >
             <Button
               label="Statistics"
               variant="outline"

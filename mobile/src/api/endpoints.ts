@@ -9,6 +9,8 @@
  * server-only code. Only dependency-free modules cross over (the progress
  * figures, `@shared/progress`); see `@shared` in `tsconfig.json`.
  */
+
+import type { UsageType } from "@shared/constants";
 import type { RouteRide } from "@shared/map/routeRides";
 import type { ProgressByCountry, UserProgress } from "@shared/progress";
 import type { RegionId } from "@shared/regions";
@@ -138,12 +140,21 @@ export interface PlannerResult {
   error?: string;
 }
 
-export function progress(region: RegionId, countries?: string[]): Promise<Progress> {
-  // `countries` absent means no filter; an empty string means "filter everything
+export function progress(
+  region: RegionId,
+  countries?: readonly string[],
+  usage?: readonly UsageType[],
+): Promise<Progress> {
+  // Both lists: absent means no filter; an empty string means "filter everything
   // out", which is a real state and answers zeros. So an empty list must still be
-  // sent as an empty value rather than dropped.
+  // sent as an empty value rather than dropped. `usage` is the counted types the map
+  // shows (Japan's JR and non-JR lines are ticked like countries).
   return request<Progress>("/progress", {
-    query: { region, countries: countries === undefined ? undefined : countries.join(",") },
+    query: {
+      region,
+      countries: countries === undefined ? undefined : countries.join(","),
+      usage: usage === undefined ? undefined : usage.join(","),
+    },
   });
 }
 

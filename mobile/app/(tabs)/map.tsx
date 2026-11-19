@@ -13,12 +13,16 @@
  * the status bar. The progress box is positioned inside `RailwayMap` against the map's
  * own bottom edge, which the tab bar already keeps clear.
  */
-import { type ReactNode, useEffect, useState } from "react";
+import type { UsageType } from "@shared/constants";
+import { shownUsageTypes } from "@shared/map/userMapLayers";
+import { countedUsageTypes } from "@shared/regions";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { useAuth } from "@/auth/AuthContext";
 import { useLogVersion } from "@/logbook/logVersion";
 import { SelectionBar } from "@/logbook/SelectionBar";
+import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import { MapProgressBox } from "@/map/MapProgressBox";
 import { RailwayMap } from "@/map/RailwayMap";
 import { useRegion } from "@/region/RegionContext";
@@ -30,24 +34,25 @@ export default function MapScreen(): ReactNode {
   const { regionId } = useRegion();
   const { countries, loadError, retry } = useEffectiveCountries();
   const logVersion = useLogVersion();
+  const counted = useCountedUsageTypes();
   const [progress, setProgress] = useState<api.Progress | null>(null);
 
   // The previous region's numbers must not sit over the new region's map. Only a
   // change of what is counted clears them: a refresh (a new log version) keeps them
   // until the new ones arrive, and keeps them if those never do.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: regionId and countries are the triggers — a change of either is what makes the numbers on screen wrong.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: regionId, countries and counted are the triggers — a change of any is what makes the numbers on screen wrong.
   useEffect(() => {
     setProgress(null);
-  }, [regionId, countries]);
+  }, [regionId, countries, counted]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: logVersion is an intentional trigger — bumping it is what re-reads the numbers after a journey is logged.
   useEffect(() => {
-    if (!countries) return;
+    if (!countries || !counted) return;
     // Nor may they arrive late and replace the new region's: an answer for inputs
     // that have since changed is dropped.
     let cancelled = false;
     api
-      .progress(regionId, countries)
+      .progress(regionId, countries, counted)
       .then((next) => {
         if (!cancelled) setProgress(next);
       })
@@ -58,7 +63,7 @@ export default function MapScreen(): ReactNode {
     return () => {
       cancelled = true;
     };
-  }, [countries, regionId, logVersion]);
+  }, [countries, counted, regionId, logVersion]);
 
   // Only a list that could not be had at all stops the map — not a failed save,
   // which is undone and reported on the Countries screen.
@@ -90,4 +95,26 @@ export default function MapScreen(): ReactNode {
       <SelectionBar />
     </View>
   );
+}
+
+/**
+ * The usage types the progress box counts: the region's ordinary ones among those
+ * the map shows, as on the web (`useUserMap`), so unticking Japan's non-JR lines in
+ * Statistics takes them out of the numbers as unticking a country does. Memoised on
+ * the list's content rather than on the switches: Europe counts Regular alone, and
+ * its heritage and special switches must not re-read the numbers.
+ */
+function useCountedUsageTypes(): UsageType[] | null {
+  const { regionId } = useRegion();
+  const { showRegular, showHeritage, showSpecial, loaded } = useLayerPrefs();
+  const key = countedUsageTypes(
+    regionId,
+    shownUsageTypes({ showRegular, showHeritage, showSpecial }),
+  ).join(",");
+  return useMemo(() => {
+    // Not until the stored switches are read: the defaults first would ask twice,
+    // and clear the box in between, for anyone who has unticked a line type
+    if (!loaded) return null;
+    return key === "" ? [] : (key.split(",").map(Number) as UsageType[]);
+  }, [key, loaded]);
 }

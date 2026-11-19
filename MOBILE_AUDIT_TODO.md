@@ -103,6 +103,15 @@ Items found already done were deleted; the gaps the web has opened since are und
       seconds, on its ×, or with the next press; back online, that route opens. On 2026-11-19 the notice showed, under the progress box; the box is now a child of `RailwayMap`, drawn under the sheet and the notice: check it is covered now.
       Every route opening offline is Phase 5 (`MOBILE_APP_PLAN.md`).
 
+- [ ] **Check Japan's JR / Non-JR checkboxes on the device.** _(device)_ Built
+      2026-11-19 (Statistics screen, `UsageFilter` in `app/countries.tsx`). In Japan:
+      unticking JR lines hides them on the map (the Regular layer goes to
+      `visibility: none`, since it anchors the scenic band) and takes them out of the
+      progress box; a tap where a hidden JR line runs opens nothing; both unticked
+      warns and the box shows zeros; Settings' map layers offer Heritage only. In
+      Europe nothing changes. Needs the server deployed: an older `/api/v1/progress`
+      ignores `usage` and counts both.
+
 - [ ] **A failed station search says "No stations found."** `useStationSearch` treats
       errors as no match, which is misleading when offline. Show "Couldn't search — check
       your connection" instead.
@@ -159,10 +168,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       reads AsyncStorage in an effect, so someone who picked a theme different from the
       system's can see a flash. If the map mounts first, the basemap is fetched twice.
       Wait for the read before rendering, as `RegionProvider` does.
-- [ ] **`LayerPrefsContext.setPref` writes to AsyncStorage from inside a state
-  updater**, which `CountryPrefsContext`'s comment warns against. Also, a toggle made
-      before the stored prefs have loaded is overwritten when they arrive. Write in an
-      effect or from a ref, and merge the loaded value with any change already made.
 - [ ] **`log-journey`'s "nothing left" effect calls `router.back()` without
   checking.** If the screen is ever reached with an empty selection (a deep link, or
       state restored after a crash), it is a `GO_BACK` with nothing to go back to. Use
@@ -190,6 +195,18 @@ Items found already done were deleted; the gaps the web has opened since are und
       or the app signs itself out with the rest. Rate-limited with the sign-ins, as the
       web's is. A lost phone is the case it exists for, so it matters less in the app
       than on the web. Low.
+- [ ] **No "Go to my location" button.** The web map has one (MapLibre's
+      `GeolocateControl`, top right, `enableHighAccuracy` and `trackUserLocation`, in
+      `useMapLibre.ts`): a tap centres the map on you and keeps following, and a pan
+      _or a zoom_ releases the lock while the dot stays (`watchGeolocateZoom`, since
+      MapLibre keeps the lock through a zoom and the next fix undoes it). The binding
+      has `<UserLocation>` and `trackUserLocation` on the `<Camera>`
+      (`MOBILE_APP_PLAN.md`, the gap left from Phase 3). It needs the permission string
+      (`NSLocationWhenInUseUsageDescription`, through `expo-location`'s config plugin or
+      `app.json`) and a development build. Place the button with the map's other
+      furniture (`MapTopControls`, or above the progress box) and keep `fitCamera`'s
+      padding clear of it. Check on the device that a zoom releases the lock here too,
+      and that a denied permission says so rather than doing nothing. Medium.
 - [ ] **No map-sharing settings.** The web's `ShareMapDialog` switches the public map
       on and off and shows its link. The app has neither the setting nor an endpoint
       for it. This is a separate question from opening `/shared/<token>` links (the
@@ -211,21 +228,17 @@ Items found already done were deleted; the gaps the web has opened since are und
       `false` until iPad is a goal.
 - [ ] **`ios.config.usesNonExemptEncryption: false`** (HTTPS only), so App Store
       Connect stops asking about export compliance on every build.
-- [ ] **A location-permission string**, needed once the "where am I" button exists
-      (the gap left from Phase 3).
+- [ ] **A location-permission string**, needed by "Go to my location" (under "New
+      gaps against the web").
 
 ---
 
 ## Already tracked in `MOBILE_APP_PLAN.md` (listed here so this is the one list)
 
-- [ ] Japan's JR / Non-JR checkboxes and `showRegular`. This also removes
-      `LayerToggles.tsx`'s `region.id === "japan"`, which `CLAUDE.md` forbids.
-      `GET /progress` needs a usage-type parameter for it.
 - [ ] Line-name search where `hasRouteNames` (the API has no endpoint for it yet).
 - [ ] Editing and deleting journeys and trips (the endpoints already exist in
       `endpoints.ts`).
 - [ ] The heritage/special highlight variants have never been seen on a device.
-- [ ] "Where am I": `<UserLocation>` plus the permission string above.
 - [ ] Offline route colouring before Phase 5. Since 2026-11-15 the route tile is
       Martin's and the same for everyone, and the colours come from `GET /rides`, so
       the question is now only how the last rides answer is kept on the device.
