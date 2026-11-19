@@ -33,7 +33,7 @@ Items found already done were deleted; the gaps the web has opened since are und
       keyboard handling have never run on Android (`MOBILE_APP_PLAN.md`, Phase 2). The
       modals' keyboard fix relies on Android resizing the window. Edge-to-edge is
       always on since SDK 58 (`edgeToEdgeEnabled` left `app.json` with the upgrade), so
-      check that it still does. `expo-system-ui` exists only for Android. The map's open search should keep its place above the progress box with the keyboard up (the window resizes, so `useKeyboardTop` finds no overlap). Do this before
+      check that it still does. `expo-system-ui` exists only for Android. The map's open search should keep its place above the progress box with the keyboard up (the window resizes, so `useKeyboardTop` finds no overlap). Since 2026-11-19 the planner is a half-height `formSheet` over an undimmed map (`plannerSheet.ts`): check the map above it takes taps, that `plannerSheetCover`'s estimate puts a raised route sheet just above it (Android measures detents without the top inset while `sheetShouldOverflowTopInset` is off), and that the open search's tap-to-close layer stays above the "Plan journey" pill (it carries an `elevation` for this, `MapTopControls.tsx`). Do this before
       the UI pass, so the pass covers both platforms.
 
 ---
