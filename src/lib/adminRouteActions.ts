@@ -13,7 +13,7 @@ import {
 } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT, lngLatSql, pointToWKT } from "./coordinateUtils";
-import { countryAt } from "./countryUtils";
+import { countriesAt } from "./countryBoundaries";
 import pool, { withTransaction } from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
@@ -219,8 +219,10 @@ export async function saveRailwayRoute(
       const startPointWKT = pointToWKT(startCoordinate);
       const endPointWKT = pointToWKT(endCoordinate);
       const hasBacktracking = pathResult.hasBacktracking === true;
-      const startCountry = countryAt(startCoordinate);
-      const endCountry = countryAt(endCoordinate);
+      const [startCountry, endCountry] = await countriesAt(client, [
+        startCoordinate,
+        endCoordinate,
+      ]);
 
       let queryStr: string;
       let values: (string | number | string[] | boolean | null)[];

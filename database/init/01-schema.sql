@@ -246,6 +246,19 @@ CREATE TABLE admin_notes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- OSM's country borders (admin_level=2 relations), clipped to the regions and
+-- cut into small pieces (ST_Subdivide) so a point lookup reads a few hundred
+-- vertices rather than a whole country. What the countries of a route's ends
+-- are looked up in (countriesAt, src/lib/countryBoundaries.ts). Filled and
+-- replaced whole by `npm run importCountryBoundaries`, which also creates the
+-- table on a database from before it. Neither map data nor route data: in no
+-- backup or pull, so each database runs the import itself
+CREATE TABLE country_boundaries (
+    code VARCHAR(2) NOT NULL CHECK (code ~ '^[A-Z]{2}$'), -- ISO 3166-1 alpha-2
+    geometry GEOMETRY(POLYGON, 4326) NOT NULL
+);
+CREATE INDEX idx_country_boundaries_geometry ON country_boundaries USING GIST (geometry);
+
 -- Data versions: one counter per table, moved by every committed write to it
 -- (bump_data_version, below). What the app's in-memory caches of a table are
 -- keyed on (routesFingerprint in src/lib/routesFingerprint.ts), read with one

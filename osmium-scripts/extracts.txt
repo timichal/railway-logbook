@@ -14,26 +14,33 @@
 # data is read, and the regions are far enough apart that merging them changes
 # nothing.
 #
-# Europe's list is every region Geofabrik's Europe page lists
-# (download.geofabrik.de/europe.html), so the data is the same as the whole
-# continent's extract: track everywhere on the admin map, whether or not the
-# country is on the user map (SUPPORTED_COUNTRIES in
-# src/lib/shared/constants.ts) or has routes yet. Three adjustments:
+# Europe's list is the regions on Geofabrik's Europe page
+# (download.geofabrik.de/europe.html), so there is track on the admin map
+# whether or not the country is on the user map (SUPPORTED_COUNTRIES in
+# src/lib/shared/constants.ts) or has routes yet. Left out:
 #
-# - Iceland and the Azores are left out: both lie west of the Europe region's
-#   12W edge (src/lib/shared/regions.ts), so nothing of them would ever be
-#   drawn.
-# - "Russian Federation" links to Geofabrik's Russia, which covers all of it.
-#   The continent's extract reaches only as far as 46.8E, so it is taken as the
-#   federal districts inside that line. The Volga and Northwestern districts
-#   run on further east, and that extra is harmless: the Europe region is cut
-#   at 40E (src/lib/shared/regions.ts), so it is never drawn. Crimea's
-#   district is left out, Geofabrik's Ukraine including Crimea already.
+# - Russia (Kaliningrad included), Ukraine and Turkey: big networks we don't
+#   map, which cost download, filter and import time on every deploy for track
+#   nothing uses. No route crosses into them, and the neighbours' extracts
+#   overlap the border, so the track up to it stays. Checked 2026-11-20 against
+#   every route and scenic line: none ran along a part only these extracts
+#   carried (the nearest was 460m off, at Ormenio), and no station within 250m
+#   of a route was lost. Re-check before adding a route near those borders
+#   that runs right up to one.
+# - Cyprus, Malta and the Faroe Islands: no railway at all (Cyprus has a few
+#   preserved display tracks, the Faroes a short industrial line), so nothing
+#   to draw.
+# - Iceland and the Azores: both lie west of the Europe region's 12W edge
+#   (src/lib/shared/regions.ts), so nothing of them would ever be drawn.
 # - The page's "special sub regions" (Alps, DACH, Britain and Ireland, Great
-#   Britain) are left out: each is only a combination of countries listed here.
+#   Britain): each is only a combination of countries listed here.
+#
+# A route running into a region missing from this list goes invalid on import.
 #
 # Adding an extract: add its line (the path of its -latest.osm.pbf on
-# Geofabrik, without the suffix), commit, push, deploy.
+# Geofabrik, without the suffix), commit, push, deploy. Russia is not one
+# extract on the Europe page but Geofabrik's Russia, split into federal
+# districts (russia/<name>-fed-district; Kaliningrad is russia/kaliningrad).
 
 # Europe
 europe/albania
@@ -44,11 +51,9 @@ europe/belgium
 europe/bosnia-herzegovina
 europe/bulgaria
 europe/croatia
-europe/cyprus
 europe/czech-republic
 europe/denmark
 europe/estonia
-europe/faroe-islands
 europe/finland
 europe/france
 europe/georgia
@@ -65,7 +70,6 @@ europe/liechtenstein
 europe/lithuania
 europe/luxembourg
 europe/macedonia
-europe/malta
 europe/moldova
 europe/monaco
 europe/montenegro
@@ -80,15 +84,7 @@ europe/slovenia
 europe/spain
 europe/sweden
 europe/switzerland
-europe/turkey
-europe/ukraine
 europe/united-kingdom
-russia/kaliningrad
-russia/northwestern-fed-district
-russia/central-fed-district
-russia/south-fed-district
-russia/north-caucasus-fed-district
-russia/volga-fed-district
 
 # Japan
 asia/japan
