@@ -29,7 +29,7 @@
  * included: the coordinates stay as they are, only the label of the country
  * they lie in is corrected.
  *
- * Usage: npm run importCountryBoundaries
+ * Usage: npx tsx src/scripts/importCountryBoundaries.ts
  * OVERPASS_URL names a single Overpass instance to list the countries with.
  */
 

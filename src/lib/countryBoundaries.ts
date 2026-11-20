@@ -6,8 +6,8 @@ import { countryAt } from "./countryUtils";
  * `start_country`/`end_country`.
  *
  * Looked up in `country_boundaries`: OSM's own country borders
- * (`admin_level=2`), filled by `npm run importCountryBoundaries`. The track and
- * the border then come from one dataset, so a station a few hundred metres
+ * (`admin_level=2`), filled by `src/scripts/importCountryBoundaries.ts`. The
+ * track and the border then come from one dataset, so a station a few hundred metres
  * inside a country is in that country. country-coder (`countryAt`) answers only
  * where no boundary covers the point (out at sea, a country not imported, or a
  * database where the import was never run, with no table at all). Its borders are generalized for size

@@ -250,8 +250,8 @@ CREATE TABLE admin_notes (
 -- cut into small pieces (ST_Subdivide) so a point lookup reads a few hundred
 -- vertices rather than a whole country. What the countries of a route's ends
 -- are looked up in (countriesAt, src/lib/countryBoundaries.ts). Filled and
--- replaced whole by `npm run importCountryBoundaries`, which also creates the
--- table on a database from before it. Neither map data nor route data: in no
+-- replaced whole by `src/scripts/importCountryBoundaries.ts`, which also
+-- creates the table on a database from before it. Neither map data nor route data: in no
 -- backup or pull, so each database runs the import itself
 CREATE TABLE country_boundaries (
     code VARCHAR(2) NOT NULL CHECK (code ~ '^[A-Z]{2}$'), -- ISO 3166-1 alpha-2
