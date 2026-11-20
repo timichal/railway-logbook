@@ -12,9 +12,17 @@
  * On the web a chain can be pressed to show it alone on the map. Not here yet: the
  * map fits only to a box the server sends, and the server sends one per journey.
  *
- * Edit takes the journey as loaded into the selection as its edit draft
- * (`SelectionContext`), and opens the logging screen as its editor. Delete asks
- * first.
+ * "Open on the map" is both looking at a journey and editing it: the two came to the
+ * same thing, a trip to the map with the journey on it. The journey as loaded goes
+ * into the selection as its edit draft (`SelectionContext`), every highlight is
+ * dropped (it would draw over the draft, and go on showing a route the edit removes),
+ * and the map flies to it. Looking changes nothing; a route tapped there is added or
+ * removed. The selection bar names the journey and opens the logging screen as its
+ * editor, for the name, the date and Save, and its × closes the journey, asking only
+ * when something changed. Closing is the map's alone: the card here stays "Open on
+ * the map" and Delete, and opening another journey closes this one (asking the same
+ * way). A trip has no edit on the map, and keeps its orange "Show on the map"
+ * (`ShowOnMap`). Delete asks first.
  */
 import { type JourneyChain, journeyChains } from "@shared/journeyChains";
 import { routeTitle } from "@shared/map/routeFeature";
@@ -23,10 +31,10 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { confirmStopEditing } from "@/logbook/confirmClearSelection";
+import { useHighlight } from "@/logbook/HighlightContext";
 import { snapshotFromJourney } from "@/logbook/journeyEdit";
 import { bumpLogVersion, useLogVersion } from "@/logbook/logVersion";
 import { useSelection } from "@/logbook/SelectionContext";
-import { ShowOnMap } from "@/logbook/ShowOnMap";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
 import { formatKm } from "@/ui/format";
@@ -107,15 +115,6 @@ export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode 
             : null}
         </>
       )}
-      <ShowOnMap
-        ownerKey={`journey-${journeyId}`}
-        label="Show on the map"
-        load={async () => ({
-          trackIds: journey.routes.map((route) => route.track_id),
-          partials: journey.partials,
-          bounds: journey.bounds,
-        })}
-      />
       <JourneyActions
         journey={journey}
         onDeleted={() => {
@@ -127,10 +126,9 @@ export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode 
 }
 
 /**
- * Edit and Delete, under a loaded journey. While it is the journey being edited they
- * are Continue editing and Cancel editing: the card shows the journey as saved, and
- * the edit is what to come back to or drop (asked first if changed), not a reason to
- * delete it.
+ * Open on the map and Delete, under a loaded journey. The open journey's card says
+ * when it has unsaved changes, since it shows the journey as saved; Open on it goes
+ * back to the edit, and Delete deletes it, edit and all.
  */
 function JourneyActions({
   journey,
@@ -142,20 +140,29 @@ function JourneyActions({
 }): ReactNode {
   const router = useRouter();
   const { editing, startEdit, endEdit } = useSelection();
+  const { clear: clearHighlight, fitTo } = useHighlight();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { id, name } = journey.journey;
   const editingThis = editing?.journeyId === id;
 
-  const edit = (): void => {
+  // Back to a changed edit, the map is left where it was: this card's box is the
+  // journey as saved, and the edit may have routes far outside it
+  const toMap = (fit: boolean): void => {
+    clearHighlight();
+    if (fit && journey.bounds) fitTo(journey.bounds, id);
+    router.push("/(tabs)/map");
+  };
+
+  const open = (): void => {
     if (editingThis) {
-      router.push("/log-journey");
+      toMap(!editing.changed);
       return;
     }
-    // One edit at a time: another one under way is dropped, asked first if changed
+    // One journey open at a time: another is closed, asked first if changed
     confirmStopEditing(editing, () => {
       startEdit(id, snapshotFromJourney(journey));
-      router.push("/log-journey");
+      toMap(true);
     });
   };
 
@@ -184,28 +191,19 @@ function JourneyActions({
     <View className="gap-1">
       <View className="flex-row gap-2">
         <Button
-          label={editingThis ? "Continue editing" : "Edit"}
+          label="Open on the map"
           variant={editingThis ? "primary" : "outline"}
           className="flex-1"
           disabled={deleting}
-          onPress={edit}
+          onPress={open}
         />
-        {editingThis ? (
-          <Button
-            label="Cancel editing"
-            variant="outline"
-            className="flex-1"
-            onPress={() => confirmStopEditing(editing, endEdit)}
-          />
-        ) : (
-          <Button
-            label="Delete"
-            variant="outline"
-            className="flex-1"
-            busy={deleting}
-            onPress={askDelete}
-          />
-        )}
+        <Button
+          label="Delete"
+          variant="outline"
+          className="flex-1"
+          busy={deleting}
+          onPress={askDelete}
+        />
       </View>
       {editingThis && editing.changed ? (
         <Text className="text-sm text-gray-600 dark:text-gray-400">

@@ -165,14 +165,22 @@ const FIT_FLY_MS = 1000;
  */
 const RAISED_SHEET_MIN_HEIGHT = 160;
 
-/** `plannerCover`: how much of the map's bottom the planner's sheet covers, or 0. */
-function fitPadding(insetTop: number, withChips: boolean, plannerCover: number): FitPadding {
+/**
+ * `plannerCover`: how much of the map's bottom the planner's sheet covers, or 0.
+ * `floor`: the footer's height, which the bottom furniture stands on (see `footer`).
+ */
+function fitPadding(
+  insetTop: number,
+  withChips: boolean,
+  plannerCover: number,
+  floor: number,
+): FitPadding {
   const chipRow = withChips ? TOP_CONTROLS_GAP + CHIP_ROW_HEIGHT : 0;
   return {
     top: insetTop + CONTROL_EDGE + chipRow + FIT_GAP,
     right: FIT_SIDE_MARGIN,
     // Over the planner's sheet the progress box is hidden, so only the gap is left
-    bottom: (plannerCover > 0 ? plannerCover : BOTTOM_CONTROL_EDGE) + FIT_GAP,
+    bottom: (plannerCover > 0 ? plannerCover : floor + BOTTOM_CONTROL_EDGE) + FIT_GAP,
     left: FIT_SIDE_MARGIN,
   };
 }
@@ -198,6 +206,16 @@ interface RailwayMapProps {
    * and under the feature sheet and the notice, which would otherwise open beneath it.
    */
   children?: ReactNode;
+  /**
+   * A bar along the map's bottom edge (the selection bar), laid **over** the map
+   * rather than beside it: as a flex sibling it resized the map as it came and went,
+   * and the map, keeping its centre, jumped by half its height. The bottom furniture
+   * (children, the corner buttons, the sheet and the notice) stands on it instead, in
+   * a pane ending at its top edge, so they move with it and the map doesn't. Under
+   * the planner's sheet, which covers it, the pane runs to the map's own bottom,
+   * which is what `plannerCover` is measured from.
+   */
+  footer?: ReactNode;
 }
 
 /** `region.bounds` is `[[w, s], [e, n]]`; the binding wants `[w, s, e, n]`. */
@@ -206,7 +224,7 @@ function flatBounds(regionId: RegionId): [number, number, number, number] {
   return [west, south, east, north];
 }
 
-export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode {
+export function RailwayMap({ countries, children, footer }: RailwayMapProps): ReactNode {
   const { resolved: theme } = useTheme();
   const { showRegular, showHeritage, showSpecial, showScenicLines, showClosed } = useLayerPrefs();
   // The user's rides, coloured and ordered over Martin's tile by id. None yet (or
@@ -292,6 +310,8 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   const [sheetHeight, setSheetHeight] = useState(0);
   // The notice's, likewise
   const [noticeHeight, setNoticeHeight] = useState(0);
+  // The footer's, 0 while it draws nothing
+  const [footerHeight, setFooterHeight] = useState(0);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const router = useRouter();
@@ -302,6 +322,8 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   const inView = isFocused || plannerOpen;
   const plannerCover =
     plannerOpen && size ? plannerSheetCover(size.height, windowHeight, insets.top) : 0;
+  // Where the bottom furniture's pane ends (see `footer`)
+  const floor = plannerCover > 0 ? 0 : footerHeight;
   // Read by a station's planning, which must not be rebuilt as the sheet opens
   const plannerOpenRef = useRef(plannerOpen);
   plannerOpenRef.current = plannerOpen;
@@ -360,19 +382,23 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
    * settled only once the binding has taken the stop; one it refuses stays asked,
    * and is tried again on the next change here.
    */
-  const { bounds: fitBounds, pendingFit, fitDone } = highlighted;
+  const { pendingFit, fitDone } = highlighted;
   const [loadedStyle, setLoadedStyle] = useState<typeof basemapStyle>(null);
   useEffect(() => {
-    if (pendingFit === null || !fitBounds) return;
+    if (pendingFit === null) return;
     if (!inView || !size || !basemapStyle || loadedStyle !== basemapStyle) return;
 
-    // A highlight fitted to has its chip up, so the chip row is always reserved
-    const padding = fitPadding(insets.top, true, plannerCover);
+    // A highlight fitted to has its chip up, so the chip row is always reserved (a
+    // `fitTo` has none, and keeps the same room rather than land a little lower)
+    const padding = fitPadding(insets.top, true, plannerCover, floor);
     try {
       cameraRef.current
-        ?.setStop({ ...fitCamera(fitBounds, size, padding, MIN_ZOOM), duration: FIT_FLY_MS })
+        ?.setStop({
+          ...fitCamera(pendingFit.bounds, size, padding, MIN_ZOOM),
+          duration: FIT_FLY_MS,
+        })
         .then(
-          () => fitDone(pendingFit),
+          () => fitDone(pendingFit.id),
           () => {},
         );
     } catch {
@@ -380,7 +406,6 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
     }
   }, [
     pendingFit,
-    fitBounds,
     fitDone,
     inView,
     size,
@@ -388,6 +413,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
     loadedStyle,
     insets.top,
     plannerCover,
+    floor,
   ]);
 
   // A line picked in the search box: the whole line in view, as an opened journey
@@ -400,7 +426,12 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
       try {
         cameraRef.current
           ?.setStop({
-            ...fitCamera(line.bounds, size, fitPadding(insets.top, true, plannerCover), MIN_ZOOM),
+            ...fitCamera(
+              line.bounds,
+              size,
+              fitPadding(insets.top, true, plannerCover, floor),
+              MIN_ZOOM,
+            ),
             duration: FIT_FLY_MS,
           })
           .catch(() => {});
@@ -408,7 +439,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         // The native camera isn't there yet (`setStop` throws rather than rejects)
       }
     },
-    [setLine, size, insets.top, plannerCover],
+    [setLine, size, insets.top, plannerCover, floor],
   );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
@@ -685,10 +716,15 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
       ? plannerCover + (bottomOverlay > 0 ? RAISED_GAP + bottomOverlay : 0) + CORNER_GAP
       : bottomOverlay + CORNER_GAP + PLANNER_BUTTON_HEIGHT + CORNER_GAP;
 
+  // The footer stays while the map loads (a theme switch rebuilds it): the selection
+  // is still there, and the bar is the way to it
   if (!basemapStyle || !position.current) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <ActivityIndicator />
+      <View className="flex-1 bg-gray-100 dark:bg-gray-900">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator />
+        </View>
+        {footer}
       </View>
     );
   }
@@ -883,77 +919,92 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         onSelectLine={selectLine}
         lineHighlight={lineHighlight}
         plannerCover={plannerCover}
+        floor={floor}
       />
-      {/* The progress box and the planner button ride above an open sheet or notice
+      {/* The bottom furniture's pane, standing on the footer (see `footer`) */}
+      <View
+        pointerEvents="box-none"
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: floor }}
+      >
+        {/* The progress box and the planner button ride above an open sheet or notice
           rather than going under it: "Plan journey" is still the next step from a
           tapped route. Not while the planner is up, which covers them: the raised
           sheet floats over the planner's own. */}
-      <View
-        pointerEvents="box-none"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: plannerCover === 0 ? bottomOverlay : 0,
-        }}
-      >
-        {children}
-      </View>
-      {/* The credits' ⓘ over the locate button, above the planner button — or, while
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: plannerCover === 0 ? bottomOverlay : 0,
+          }}
+        >
+          {children}
+        </View>
+        {/* The credits' ⓘ over the locate button, above the planner button — or, while
           the planner is up, above its sheet: where you are is worth finding while
           picking a station on the map. Over a sheet or a notice, raised with it. */}
+        <View
+          pointerEvents="box-none"
+          className="absolute right-2 items-center"
+          style={{ bottom: cornerBottom, gap: CORNER_GAP }}
+        >
+          <MapCreditsButton onPress={openCredits} />
+          <LocateButton busy={locating} shown={locationShown} onPress={locate} />
+        </View>
+
+        {feature ? (
+          <FeatureSheet
+            feature={feature}
+            regionId={regionId}
+            bottom={plannerCover}
+            // Raised, it keeps clear of the top row too
+            maxHeight={
+              plannerCover > 0 && size
+                ? Math.max(
+                    RAISED_SHEET_MIN_HEIGHT,
+                    size.height -
+                      plannerCover -
+                      RAISED_GAP -
+                      fitPadding(
+                        insets.top,
+                        lineHighlight.line !== null || highlighted.trackIds.length > 0,
+                        plannerCover,
+                        floor,
+                      ).top,
+                  )
+                : undefined
+            }
+            onHeight={setSheetHeight}
+            onPlan={planFromStation}
+            onClose={() => showFeature(null)}
+          />
+        ) : null}
+        {notice ? (
+          <MapNotice
+            notice={notice}
+            bottom={plannerCover}
+            onHeight={setNoticeHeight}
+            onClose={closeNotice}
+          />
+        ) : null}
+        {/* The raster fallback has no vector source: OpenStreetMap's tiles alone */}
+        {creditsOpen ? (
+          <MapCredits
+            vectorBasemap={Object.values(basemapStyle.sources).some((s) => s.type === "vector")}
+            bottom={cornerBottom + LOCATE_BUTTON_SIZE + CORNER_GAP}
+            onClose={closeCredits}
+          />
+        ) : null}
+      </View>
       <View
         pointerEvents="box-none"
-        className="absolute right-2 items-center"
-        style={{ bottom: cornerBottom, gap: CORNER_GAP }}
+        style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
+        onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
       >
-        <MapCreditsButton onPress={openCredits} />
-        <LocateButton busy={locating} shown={locationShown} onPress={locate} />
+        {footer}
       </View>
-
-      {feature ? (
-        <FeatureSheet
-          feature={feature}
-          regionId={regionId}
-          bottom={plannerCover}
-          // Raised, it keeps clear of the top row too
-          maxHeight={
-            plannerCover > 0 && size
-              ? Math.max(
-                  RAISED_SHEET_MIN_HEIGHT,
-                  size.height -
-                    plannerCover -
-                    RAISED_GAP -
-                    fitPadding(
-                      insets.top,
-                      lineHighlight.line !== null || highlighted.trackIds.length > 0,
-                      plannerCover,
-                    ).top,
-                )
-              : undefined
-          }
-          onHeight={setSheetHeight}
-          onPlan={planFromStation}
-          onClose={() => showFeature(null)}
-        />
-      ) : null}
-      {notice ? (
-        <MapNotice
-          notice={notice}
-          bottom={plannerCover}
-          onHeight={setNoticeHeight}
-          onClose={closeNotice}
-        />
-      ) : null}
-      {/* The raster fallback has no vector source: OpenStreetMap's tiles alone */}
-      {creditsOpen ? (
-        <MapCredits
-          vectorBasemap={Object.values(basemapStyle.sources).some((s) => s.type === "vector")}
-          bottom={cornerBottom + LOCATE_BUTTON_SIZE + CORNER_GAP}
-          onClose={closeCredits}
-        />
-      ) : null}
     </View>
   );
 }

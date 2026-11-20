@@ -2,18 +2,21 @@
  * What the selection looks like from the map: one row under it saying how many
  * routes are picked, and the way into the logging screen.
  *
- * A **flex sibling of the map, not an overlay** — the same argument the web app's
- * bottom sheet makes. The map's own bottom furniture (the progress box, the planner,
- * locate and credits buttons) lives in its bottom corners, and a bar floating over them would cover
- * exactly the two things that have to stay readable.
+ * The map's **footer** (`RailwayMap`): laid over the map's bottom edge, with the
+ * map's own bottom furniture (the progress box, the planner, locate and credits
+ * buttons, a route's sheet) standing on it rather than covered by it. Not a flex
+ * sibling of the map, which it was: the map resized as the bar came and went, and
+ * jumped by half the bar's height.
  *
  * The row itself is the way in, so there is nothing to aim at; the only separate
  * control is the one that throws the selection away, which is worth keeping distinct
  * from the one that opens it.
  *
- * While a saved journey is being edited the bar is that edit's, shown even with no
- * routes left (the edit isn't over), and its × stops the edit, asking first when it
- * changed something. The new journey's selection comes back after it.
+ * While a saved journey is open (`editing`, from its logbook card) the bar is that
+ * journey's, shown even with no routes left (it is still open), and its × closes it,
+ * asking first when something changed. Open is also how a journey is looked at, so
+ * the bar names it rather than announcing an edit. The new journey's selection comes
+ * back after it.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -27,7 +30,9 @@ import { formatKm } from "@/ui/format";
 export function SelectionBar(): ReactNode {
   const colors = useNativeColors();
   const router = useRouter();
-  const { selected, clear, editing, endEdit } = useSelection();
+  const { selected, form, clear, editing, endEdit } = useSelection();
+  // The draft's name, renamed or not: the bar is the journey as it stands
+  const name = editing ? form.name.trim() || editing.name : "";
 
   if (selected.length === 0 && !editing) return null;
 
@@ -41,10 +46,10 @@ export function SelectionBar(): ReactNode {
         accessibilityRole="button"
         accessibilityLabel={
           editing
-            ? `Editing ${editing.name}, ${routes}, ${formatKm(km)} km`
+            ? `${name}, ${routes}, ${formatKm(km)} km${editing.changed ? ", unsaved changes" : ""}`
             : `${routes} selected, ${formatKm(km)} km`
         }
-        accessibilityHint={editing ? "Reviews and saves the journey" : "Logs a journey"}
+        accessibilityHint={editing ? "Edits the journey's details and saves" : "Logs a journey"}
         onPress={() => router.push("/log-journey")}
         className="min-h-14 flex-1 flex-row items-center gap-3 px-4 active:opacity-70"
       >
@@ -53,11 +58,11 @@ export function SelectionBar(): ReactNode {
             className="text-base font-semibold text-gray-900 dark:text-gray-100"
             numberOfLines={1}
           >
-            {editing ? `Editing “${editing.name}”` : `${routes} selected`}
+            {editing ? `“${name}”` : `${routes} selected`}
           </Text>
           <Text className="text-xs text-gray-600 dark:text-gray-400">
             {editing
-              ? `${routes} · ${formatKm(km)} km · tap to review and save`
+              ? `${routes} · ${formatKm(km)} km · ${editing.changed ? "unsaved changes, tap to save" : "tap to edit"}`
               : `${formatKm(km)} km · tap to log a journey`}
           </Text>
         </View>
@@ -65,7 +70,7 @@ export function SelectionBar(): ReactNode {
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={editing ? "Cancel editing" : "Clear selection"}
+        accessibilityLabel={editing ? `Close ${name}` : "Clear selection"}
         onPress={() =>
           editing
             ? confirmStopEditing(editing, endEdit)

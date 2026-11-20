@@ -21,8 +21,9 @@ export function confirmClearSelection(count: number, clear: () => void): void {
 }
 
 /**
- * Dropping the edit of a saved journey, from the map's bar or the editor. Only an
- * edit that changed something asks; the journey itself is never touched.
+ * Closing an open saved journey: from the map's bar, the editor, or by opening
+ * another from the logbook. Only an edit that changed something asks; the journey
+ * itself is never touched.
  */
 export function confirmStopEditing(
   editing: { name: string; changed: boolean } | null,

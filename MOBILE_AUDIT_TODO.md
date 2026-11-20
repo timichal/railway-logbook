@@ -94,13 +94,28 @@ Items found already done were deleted; the gaps the web has opened since are und
       the card, the sheet's "Add to the journey" and remove, the planner's add, "Add
       more on the map" and its hint, the progress box and "Plan journey" riding above
       a route sheet, the selection coming back after Save and Cancel editing, and
-      Delete on a journey asking and the list reloading without it. Still to run: Save
-      sends only the change (rename on the web meanwhile, then change only the date
-      here: the web's name stays); a partial ride saved untouched keeps its stretch;
-      Cancel editing with changes asks; Edit on another journey with changes asks;
-      removing every route then Save offers Delete; Delete on a trip asks and the list
-      reloads; "New trip" and "Edit trip" save; a closed route in the editor shows its
-      badge.
+      Delete on a journey asking and the list reloading without it; on 2026-11-20 Save
+      sending only the change, a partial ride saved untouched keeping its stretch,
+      Cancel editing and Edit on another journey asking when changed, and an emptied
+      journey's Save offering Delete; Delete on a trip, "New trip" and "Edit trip";
+      Edit and Continue editing going to the map flown to the journey. Still to run: a
+      closed route in the editor shows its badge (no closed routes in the data yet).
+      And the 2026-11-20 merge of Show and Edit into **"Open on the map"**: it flies to
+      the journey with every highlight gone (a trip's, another journey's, the
+      planner's); the bar reads "“Name”" with "tap to edit", then "unsaved changes, tap
+      to save" after a change; its × closes without asking when unchanged; the journey
+      stays open across tab switches; the card is always "Open on the map" + Delete,
+      with "Unsaved changes…" under the open one when changed; Open on the open journey
+      goes back to it without asking, on another asks if changed; Delete on the open
+      journey closes it with the delete; the form's button reads "Close journey", then
+      "Discard changes"; a trip's "Show on the map" still highlights orange. And the
+      selection bar is the map's footer since 2026-11-20 (`RailwayMap`'s `footer`): it
+      lies over the map, so the map no longer jumps as it comes and goes, while the
+      progress box, the corner buttons, a route's sheet and a notice stand on it and
+      move with it. Check: no jump on the bar's ×, on Save, or on the first route
+      tapped; the furniture clear of the bar; an opened journey's ends land clear of
+      the bar. (A raised sheet over the planner's, with `plannerCover` now measured on
+      the full-height map, checked out on 2026-11-20.)
 
 ---
 
@@ -130,7 +145,7 @@ Items found already done were deleted; the gaps the web has opened since are und
       (`ThemeContext` `ready`, gated in `RootNavigator`); an invalid field keeps its
       background in dark mode; planner legs in Japan show the line name above the
       endpoints; deleting the only item on the logbook's last page goes back a page;
-      switching region resets the logbook's page, search and open card; Settings shows
+      Settings shows
       "Version 0.1.0" (with the server only in a development build).
 - [ ] **The expanded progress box is wider since km show one decimal** ("12,345.6 /
       98,765.4 km", was whole km), from the one `formatKm` (`src/ui/format.ts`). Look
@@ -166,6 +181,22 @@ the log). These are for the UI polish pass, not fixes.
 - [ ] **A haptic tick when a map tap fills a slot** (`pickOnMap`), and perhaps when
       a path is found. `expo-haptics` is installed (2026-11-20) and needs no config
       plugin, so this is JS only once the build that carries it is on the phone.
+- [ ] **A route or station sheet raised over the planner hangs in mid-air as the
+      planner is swiped away.** _(device, seen 2026-11-20)_ The raised sheet sits at
+      `plannerCover`, which allows for the half detent only (`plannerSheet.ts`), and
+      drops to the map's bottom edge only once `PlannerContext.sheetOpen` goes false,
+      after the dismiss has finished. So for about a second it floats in the middle
+      with nothing under it. Fix: drop the raise as the dismiss starts (the screen's
+      `transitionStart` or `beforeRemove` event, or react-native-screens'
+      `onSheetDetentChanged`), and perhaps animate the sheet down rather than jump.
+- [ ] **The selection bar is under the planner's sheet while it is up.** It always
+      was (a flex sibling below the map, now the map's `footer` at its bottom edge),
+      but `mobile/CLAUDE.md` says what runs along the map's bottom edge rides above
+      `plannerSheetCover`. Kept under on purpose for now: above it, the bar and a
+      raised route sheet would stack over the half of the map left, and the planner
+      says "Add routes to the journey" itself. Decide in the UI pass: raise it (the
+      footer wrapper's `bottom: plannerCover`), or write the exception into
+      `mobile/CLAUDE.md`.
 
 ---
 

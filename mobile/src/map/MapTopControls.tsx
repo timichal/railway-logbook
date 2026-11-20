@@ -42,7 +42,8 @@ export const CHIP_ROW_HEIGHT = LINE_CHIP_HEIGHT;
 /**
  * Where the open search stops: clear of the furniture along the map's bottom edge
  * (the progress box and the taller planner button, 8pt in), which is drawn over this
- * and would take the taps meant for the list's last rows.
+ * and would take the taps meant for the list's last rows. Measured from the floor
+ * that furniture stands on (the selection bar, `RailwayMap`'s `footer`).
  */
 const OPEN_SEARCH_BOTTOM = TOP_CONTROLS_GAP + PLANNER_BUTTON_HEIGHT + TOP_CONTROLS_GAP;
 
@@ -51,12 +52,15 @@ export function MapTopControls({
   onSelectLine,
   lineHighlight,
   plannerCover,
+  floor,
 }: {
   onSelectStation(station: Station): void;
   onSelectLine(line: LineSearchResult): void;
   lineHighlight: LineHighlight;
   /** How much of the map's bottom the planner's sheet covers, or 0 (`plannerSheet.ts`). */
   plannerCover: number;
+  /** The height of the bar along the map's bottom edge, or 0 (`RailwayMap`'s `footer`). */
+  floor: number;
 }): ReactNode {
   const insets = useSafeAreaInsets();
   const [searching, setSearching] = useState(false);
@@ -68,6 +72,7 @@ export function MapTopControls({
       <OpenSearch
         top={insets.top + TOP_CONTROLS_GAP}
         plannerCover={plannerCover}
+        floor={floor}
         onSelectStation={onSelectStation}
         onSelectLine={onSelectLine}
         onClose={() => setSearching(false)}
@@ -112,12 +117,14 @@ export function MapTopControls({
 function OpenSearch({
   top,
   plannerCover,
+  floor,
   onSelectStation,
   onSelectLine,
   onClose,
 }: {
   top: number;
   plannerCover: number;
+  floor: number;
   onSelectStation(station: Station): void;
   onSelectLine(line: LineSearchResult): void;
   onClose(): void;
@@ -129,7 +136,7 @@ function OpenSearch({
   const overlap = keyboardTop !== null && mapBottom !== null ? mapBottom - keyboardTop : 0;
   // Clear of the planner's sheet too, which covers the bottom furniture while it is up
   const bottom = Math.max(
-    OPEN_SEARCH_BOTTOM,
+    floor + OPEN_SEARCH_BOTTOM,
     plannerCover + TOP_CONTROLS_GAP,
     overlap + TOP_CONTROLS_GAP,
   );

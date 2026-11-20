@@ -9,8 +9,9 @@
  *
  * One card is open at a time, as on the web. There an open card points the map at
  * its routes; here the map is a *different tab*, so opening a card only shows what is
- * in it, and its "Show on the map" sets the highlight and takes the reader there
- * (`ShowOnMap`).
+ * in it. A trip's "Show on the map" sets the highlight and takes the reader there
+ * (`ShowOnMap`); a journey's "Open on the map" opens it there as the selection, to
+ * look at or edit (`JourneyDetails`).
  *
  * An open journey shows the lines of stations it rode (`JourneyDetails`), read when
  * it opens; the journeys inside an open trip open the same way, one at a time.

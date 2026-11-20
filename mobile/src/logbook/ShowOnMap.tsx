@@ -1,12 +1,12 @@
 /**
- * Point the map at a trip's or a journey's routes, and take the reader there — the
+ * Point the map at a trip's routes, and take the reader there — the
  * map flies to them, with the box the same request brings back. Pressed again while
  * the map still shows them, it flies there again, in case the reader has panned away.
  *
  * `load` says where the routes come from. A trip's are fetched on the press rather
  * than carried in the list: the logbook page would otherwise ship every track id of
- * every row to draw a button nobody has pressed yet. An open journey has already
- * loaded its own (`JourneyDetails`), and hands them over as they are.
+ * every row to draw a button nobody has pressed yet. A journey has no such button: it
+ * opens on the map as the selection instead (`JourneyDetails`).
  */
 import type { PartialRouteGeometry, RouteBounds } from "@shared/types";
 import { useRouter } from "expo-router";
