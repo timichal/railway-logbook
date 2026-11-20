@@ -106,6 +106,19 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ## Low — polish and consistency
 
+- [ ] **Check "where am I" and the map credits on the device.** _(device)_ Built
+      2026-11-20, needs a fresh build (`npm run prebuild`, then `npm run ios`: it brings
+      in `expo-location` and `expo-haptics`). Check: the first press asks, Allow flies
+      to you at zoom 12 or closer and the dot stays (also after a relaunch); "Allow
+      Once", then a relaunch shows no dialog and no dot until pressed; Don't Allow
+      shows the notice, and its Settings button opens the app's settings; a second
+      press after moving lands where you are, not where you were; a tap on the map
+      while it waits stops the spinner; the "off the map" notice (switch region to see
+      it), and "Show Japan/Europe" landing on you; the corner buttons ride above a
+      route sheet, a notice and the planner's sheet; the ⓘ card's links open, and lists
+      only OpenStreetMap on the raster fallback; no shadow warnings. On Android:
+      "Approximate" counts as allowed and isn't asked to upgrade on the next press.
+
 - [ ] **Check the 2026-11-20 polish batch on the device.** _(device)_ Not run yet:
       the return key moves through sign-in, register, New/Edit trip and the journey
       form (Name → Date → Description) with the keyboard staying up
@@ -151,7 +164,8 @@ the log). These are for the UI polish pass, not fixes.
 - [ ] **A swap button between From and To**, as most planners have. One `editForm`
       that exchanges the two (the answer goes with it, as with any edit).
 - [ ] **A haptic tick when a map tap fills a slot** (`pickOnMap`), and perhaps when
-      a path is found. Needs `expo-haptics`, so a development build.
+      a path is found. `expo-haptics` is installed (2026-11-20) and needs no config
+      plugin, so this is JS only once the build that carries it is on the phone.
 
 ---
 
@@ -165,20 +179,6 @@ the log). These are for the UI polish pass, not fixes.
       or the app signs itself out with the rest. Rate-limited with the sign-ins, as the
       web's is. A lost phone is the case it exists for, so it matters less in the app
       than on the web. Low.
-- [ ] **No "Go to my location" button.** The web map has one (MapLibre's
-      `GeolocateControl`, top right, `enableHighAccuracy` and `trackUserLocation`, in
-      `useMapLibre.ts`): a tap centres the map on you and keeps following, and a pan
-      _or a zoom_ releases the lock while the dot stays (`watchGeolocateZoom`, since
-      MapLibre keeps the lock through a zoom and the next fix undoes it). The binding
-      has `<UserLocation>` and `trackUserLocation` on the `<Camera>`
-      (`MOBILE_APP_PLAN.md`, the gap left from Phase 3). It needs the permission string
-      (`NSLocationWhenInUseUsageDescription`, through `expo-location`'s config plugin or
-      `app.json`) and a development build. Place it over the bottom-right corner,
-      above the planner button (the top is the search bar and the chip row since
-      2026-11-19), where the attribution's button sits now: move that to the
-      bottom-left above the progress box. Keep `fitCamera`'s padding clear of it
-      (`fitPadding` in `RailwayMap.tsx`). Check on the device that a zoom releases the lock here too,
-      and that a denied permission says so rather than doing nothing. Medium.
 - [ ] **No map-sharing settings.** The web's `ShareMapDialog` switches the public map
       on and off and shows its link. The app has neither the setting nor an endpoint
       for it. This is a separate question from opening `/shared/<token>` links (the
@@ -195,8 +195,6 @@ the log). These are for the UI polish pass, not fixes.
 - [ ] **The `NSLocalNetworkUsageDescription` / `NSBonjourServices` entries are for
   development** and will ship in a release build. Move them to an `app.config.ts` that
       adds them only for development builds.
-- [ ] **A location-permission string**, needed by "Go to my location" (under "New
-      gaps against the web").
 
 ---
 

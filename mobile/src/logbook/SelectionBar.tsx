@@ -3,8 +3,8 @@
  * routes are picked, and the way into the logging screen.
  *
  * A **flex sibling of the map, not an overlay** — the same argument the web app's
- * bottom sheet makes. The map's own bottom furniture (the progress box, MapLibre's
- * attribution) lives in its bottom corners, and a bar floating over them would cover
+ * bottom sheet makes. The map's own bottom furniture (the progress box, the planner,
+ * locate and credits buttons) lives in its bottom corners, and a bar floating over them would cover
  * exactly the two things that have to stay readable.
  *
  * The row itself is the way in, so there is nothing to aim at; the only separate

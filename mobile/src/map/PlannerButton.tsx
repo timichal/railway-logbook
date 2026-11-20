@@ -21,7 +21,7 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { usePlanner } from "@/logbook/PlannerContext";
 
-/** Its height, which the attribution sits above and the map's fits and open search clear. */
+/** Its height, which the locate button sits above and the map's fits and open search clear. */
 export const PLANNER_BUTTON_HEIGHT = 48;
 
 export function PlannerButton(): ReactNode {

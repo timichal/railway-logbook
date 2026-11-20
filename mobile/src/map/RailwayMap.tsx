@@ -41,6 +41,7 @@ import {
   GeoJSONSource,
   Layer,
   Map as MapLibreMap,
+  NativeUserLocation,
   type PressEventWithFeatures,
   VectorSource,
   type ViewStateChangeEvent,
@@ -68,12 +69,12 @@ import {
   userRouteLayerConfigs,
   userRoutesFilter,
 } from "@shared/map/userMapLayers";
-import { REGIONS, type RegionId } from "@shared/regions";
+import { REGIONS, type RegionId, regionOfPoint } from "@shared/regions";
 import type { LineSearchResult, RailwayRoute, Station } from "@shared/types";
 import { useIsFocused, useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LayoutChangeEvent, NativeSyntheticEvent } from "react-native";
-import { ActivityIndicator, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NetworkError, READ_TIMEOUT_MS } from "@/api/client";
 import { useHighlight } from "@/logbook/HighlightContext";
@@ -85,6 +86,8 @@ import { FeatureSheet, RAISED_GAP } from "@/map/FeatureSheet";
 import { type FitPadding, fitCamera } from "@/map/fitCamera";
 import { HighlightLayers, PartialHighlightSource } from "@/map/HighlightOverlay";
 import { useLayerPrefs } from "@/map/LayerPrefsContext";
+import { LOCATE_BUTTON_SIZE, LocateButton } from "@/map/LocateButton";
+import { MapCredits, MapCreditsButton } from "@/map/MapCredits";
 import { MapNotice, type MapNoticeContent } from "@/map/MapNotice";
 import { CHIP_ROW_HEIGHT, MapTopControls, TOP_CONTROLS_GAP } from "@/map/MapTopControls";
 import {
@@ -109,6 +112,12 @@ import { useBasemapStyle } from "@/map/useBasemapStyle";
 import { useLineHighlight } from "@/map/useLineHighlight";
 import { useRides } from "@/map/useRides";
 import { useRoutesTileVersion } from "@/map/useRoutesTileVersion";
+import {
+  locationShownAtLaunch,
+  nextLocationFix,
+  rememberLocationShown,
+  requestLocationAccess,
+} from "@/map/userLocation";
 import { useRegion } from "@/region/RegionContext";
 import { useTheme } from "@/theme/ThemeContext";
 
@@ -124,15 +133,27 @@ const STATION_ZOOM = 14;
 const STATION_FLY_MS = 1200;
 
 /**
+ * The least zoom the locate button lands at: the lines around you and the stations on
+ * them. A reader already closer in stays where they are.
+ */
+const LOCATE_ZOOM = 12;
+
+/** The gap between the corner buttons, and between them and what they stand on. */
+const CORNER_GAP = 8;
+
+/**
  * Fitting an opened journey, trip or plan, or a searched line: clear of the
  * furniture over the map — the top row (`MapTopControls`, 44pt controls 8pt in), the
  * progress box and the planner button along the bottom, and the searched line's chip
  * under the top row while it is up — by a gap, and of the sides by the web's mobile
- * margin. The attribution's small button sits above the planner button, and may
- * overlap a fitted path's corner.
+ * margin. The locate button and the credits' small ⓘ above it stand over the
+ * bottom-right corner, and may overlap a fitted path's corner.
  */
 const CONTROL_EDGE = 8 + 44;
-/** The bottom edge's tallest: the planner button, 8pt in (`PlannerButton`). */
+/**
+ * The bottom edge's tallest: the planner button, 8pt in (`PlannerButton`). The locate
+ * button above it is a narrow corner, left to overlap as the credits' ⓘ is.
+ */
 const BOTTOM_CONTROL_EDGE = 8 + PLANNER_BUTTON_HEIGHT;
 const FIT_GAP = 16;
 const FIT_SIDE_MARGIN = 24;
@@ -163,6 +184,10 @@ const NO_CONNECTION_NOTICE: MapNoticeContent = {
 const ROUTE_FAILED_NOTICE: MapNoticeContent = {
   kind: "error",
   message: "Couldn't load this route.",
+};
+const NO_LOCATION_NOTICE: MapNoticeContent = {
+  kind: "location",
+  message: "Couldn't find your location.",
 };
 
 interface RailwayMapProps {
@@ -220,7 +245,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   // Read by a press, which must not be rebuilt whenever the rides change
   const ridesRef = useRef(rides);
   ridesRef.current = rides;
-  const { regionId } = useRegion();
+  const { regionId, setRegion } = useRegion();
   const { selected } = useSelection();
   const highlighted = useHighlight();
 
@@ -254,9 +279,19 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   // Every press counts itself, so a route's sheet whose details arrive after a
   // later press (another feature, the map's dismissal, a region switch) is dropped.
   const pressRef = useRef(0);
+  // A locate press waiting for its fix. Every later press takes over from it, so each
+  // counts itself through `nextPress`, which stops the spinner too: otherwise the
+  // button would stay disabled until the dropped fix's wait ran out.
+  const [locating, setLocating] = useState(false);
+  const nextPress = useCallback(() => {
+    setLocating(false);
+    return ++pressRef.current;
+  }, []);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   // The open feature sheet's height, measured; read only while one is open
   const [sheetHeight, setSheetHeight] = useState(0);
+  // The notice's, likewise
+  const [noticeHeight, setNoticeHeight] = useState(0);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const router = useRouter();
@@ -286,10 +321,13 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   position.current ??= initialPosition;
 
   const mountedRegion = useRef(regionId);
+  // Where the device was found, when that is in another region and the reader asked
+  // to switch to it: the switch lands there instead of on the saved position.
+  const locatedIn = useRef<{ regionId: RegionId; center: [number, number] } | null>(null);
   useEffect(() => {
     if (mountedRegion.current === regionId) return;
     mountedRegion.current = regionId;
-    pressRef.current++;
+    nextPress();
     setFeature(null);
     setNotice(null);
 
@@ -300,14 +338,18 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
     void loadMapPosition(regionId).then((saved) => {
       if (cancelled) return;
       const region = REGIONS[regionId];
-      const next = saved ?? { center: region.center, zoom: region.zoom };
+      const located = locatedIn.current?.regionId === regionId ? locatedIn.current : null;
+      locatedIn.current = null;
+      const next = located
+        ? { center: located.center, zoom: LOCATE_ZOOM }
+        : (saved ?? { center: region.center, zoom: region.zoom });
       position.current = next;
       cameraRef.current?.setStop({ ...next, duration: 0 });
     });
     return () => {
       cancelled = true;
     };
-  }, [regionId]);
+  }, [regionId, nextPress]);
 
   /**
    * Flying to what the logbook or the planner just opened (`pendingFit`, see
@@ -418,11 +460,14 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
   // A press on a source stops there rather than bubbling to the map, whose own
   // handler is the dismissal — otherwise the press that opened the sheet would close
   // it in the same gesture.
-  const showFeature = useCallback((next: MapFeature | null) => {
-    pressRef.current++;
-    setFeature(next);
-    setNotice(null);
-  }, []);
+  const showFeature = useCallback(
+    (next: MapFeature | null) => {
+      nextPress();
+      setFeature(next);
+      setNotice(null);
+    },
+    [nextPress],
+  );
   const closeNotice = useCallback(() => setNotice(null), []);
   // A station picked in the search is taken as a tap on it would be: into the
   // planner's target slot while that is open, otherwise its sheet, so a plan can start
@@ -456,6 +501,92 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
     },
     [showFeature, placeFromMap, router],
   );
+
+  // The dot, once the reader has asked for it (`userLocation.ts`); on the map only
+  // while the map is in view, so the device stops looking when it isn't
+  const [locationShown, setLocationShown] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);
+  const openCredits = useCallback(() => {
+    showFeature(null);
+    setCreditsOpen(true);
+  }, [showFeature]);
+  const closeCredits = useCallback(() => setCreditsOpen(false), []);
+  useEffect(() => {
+    let cancelled = false;
+    void locationShownAtLaunch().then((shown) => {
+      if (!cancelled && shown) setLocationShown(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // Flies to where the device is. A press on the map or a region switch while the fix
+  // is awaited takes over, and the fix is dropped. Somewhere off this region's map is
+  // said rather than flown to — the camera would stop at the edge of the bounds — with
+  // the switch offered where it is the other region.
+  const locate = useCallback(async () => {
+    showFeature(null);
+    const press = pressRef.current;
+    setLocating(true);
+    try {
+      // A request that fails outright (Android, with the app on its way out) is
+      // taken as a refusal: the notice says how to allow it
+      const allowed = await requestLocationAccess().catch(() => false);
+      if (!allowed) {
+        if (press === pressRef.current) {
+          setNotice({
+            kind: "location",
+            message: "Location access is off for Railway Logbook.",
+            action: { label: "Settings", onPress: () => void Linking.openSettings() },
+          });
+        }
+        return;
+      }
+      setLocationShown(true);
+      rememberLocationShown();
+      const fix = await nextLocationFix();
+      if (press !== pressRef.current) return;
+      if (!fix) {
+        setNotice(NO_LOCATION_NOTICE);
+        return;
+      }
+      const current = mountedRegion.current;
+      const there = regionOfPoint(fix);
+      if (there !== current) {
+        const here = REGIONS[current].label;
+        setNotice(
+          there
+            ? {
+                kind: "location",
+                message: `You're in ${REGIONS[there].label}, off the ${here} map.`,
+                action: {
+                  label: `Show ${REGIONS[there].label}`,
+                  onPress: () => {
+                    locatedIn.current = { regionId: there, center: fix };
+                    setRegion(there);
+                  },
+                },
+              }
+            : { kind: "location", message: `You're off the ${here} map.` },
+        );
+        return;
+      }
+      try {
+        cameraRef.current
+          ?.setStop({
+            center: fix,
+            zoom: Math.max(position.current?.zoom ?? 0, LOCATE_ZOOM),
+            duration: STATION_FLY_MS,
+          })
+          .catch(() => {});
+      } catch {
+        // The native camera isn't there yet (`setStop` throws rather than rejects)
+      }
+    } finally {
+      // A later press has stopped the spinner already, and may have started its own
+      if (press === pressRef.current) setLocating(false);
+    }
+  }, [showFeature, setRegion]);
   // While the planner is open a station goes straight into its target slot, as a
   // click fills the web planner's focused field: a sheet with buttons over the
   // planner's would be one step too many, and the planner shows where it went.
@@ -501,7 +632,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
       const hit = event.nativeEvent.features[0];
       const trackId = hit ? toRouteTrackId(hit.id) : null;
       if (trackId === null) return;
-      const press = ++pressRef.current;
+      const press = nextPress();
 
       const open = (route: RailwayRoute) => {
         const lastJourney = lastJourneyOf(ridesRef.current?.byId.get(trackId));
@@ -543,8 +674,16 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
       if (route) open(route);
       else fail(ROUTE_FAILED_NOTICE);
     },
-    [],
+    [nextPress],
   );
+
+  // What stands on the map's bottom edge (or on the planner's sheet, raised by a gap)
+  // and the corner buttons ride above: an open sheet, else a notice
+  const bottomOverlay = feature ? sheetHeight : notice ? noticeHeight : 0;
+  const cornerBottom =
+    plannerCover > 0
+      ? plannerCover + (bottomOverlay > 0 ? RAISED_GAP + bottomOverlay : 0) + CORNER_GAP
+      : bottomOverlay + CORNER_GAP + PLANNER_BUTTON_HEIGHT + CORNER_GAP;
 
   if (!basemapStyle || !position.current) {
     return (
@@ -566,8 +705,8 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         touchPitch={false}
         logo={false}
         compass={false}
-        // Above the planner button, which has the bottom-right corner
-        attributionPosition={{ bottom: BOTTOM_CONTROL_EDGE + 8, right: 8 }}
+        // Ours instead, which lists the credits as links (`MapCredits`)
+        attribution={false}
         onPress={() => showFeature(null)}
         onRegionDidChange={handleRegionDidChange}
         onDidFinishLoadingStyle={() => setLoadedStyle(basemapStyle)}
@@ -730,6 +869,11 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         >
           <Layer {...createPublicNotesLayer()} />
         </VectorSource>
+
+        {/* MapLibre's own puck, drawn above every layer. Unmounted, it stops the
+            device looking (`showsUserLocation` off on iOS, the location component
+            on Android), which is why it goes with the map out of view. */}
+        {locationShown && inView ? <NativeUserLocation /> : null}
       </MapLibreMap>
 
       {/* A map runs under the status bar, so the furniture over it stands clear of
@@ -740,9 +884,10 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         lineHighlight={lineHighlight}
         plannerCover={plannerCover}
       />
-      {/* The progress box and the planner button ride above an open sheet rather than
-          going under it: "Plan journey" is still the next step from a tapped route.
-          Not while the planner is up: the raised sheet floats over the planner's own. */}
+      {/* The progress box and the planner button ride above an open sheet or notice
+          rather than going under it: "Plan journey" is still the next step from a
+          tapped route. Not while the planner is up, which covers them: the raised
+          sheet floats over the planner's own. */}
       <View
         pointerEvents="box-none"
         style={{
@@ -750,10 +895,21 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
           top: 0,
           left: 0,
           right: 0,
-          bottom: feature && plannerCover === 0 ? sheetHeight : 0,
+          bottom: plannerCover === 0 ? bottomOverlay : 0,
         }}
       >
         {children}
+      </View>
+      {/* The credits' ⓘ over the locate button, above the planner button — or, while
+          the planner is up, above its sheet: where you are is worth finding while
+          picking a station on the map. Over a sheet or a notice, raised with it. */}
+      <View
+        pointerEvents="box-none"
+        className="absolute right-2 items-center"
+        style={{ bottom: cornerBottom, gap: CORNER_GAP }}
+      >
+        <MapCreditsButton onPress={openCredits} />
+        <LocateButton busy={locating} shown={locationShown} onPress={locate} />
       </View>
 
       {feature ? (
@@ -782,7 +938,22 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
           onClose={() => showFeature(null)}
         />
       ) : null}
-      {notice ? <MapNotice notice={notice} bottom={plannerCover} onClose={closeNotice} /> : null}
+      {notice ? (
+        <MapNotice
+          notice={notice}
+          bottom={plannerCover}
+          onHeight={setNoticeHeight}
+          onClose={closeNotice}
+        />
+      ) : null}
+      {/* The raster fallback has no vector source: OpenStreetMap's tiles alone */}
+      {creditsOpen ? (
+        <MapCredits
+          vectorBasemap={Object.values(basemapStyle.sources).some((s) => s.type === "vector")}
+          bottom={cornerBottom + LOCATE_BUTTON_SIZE + CORNER_GAP}
+          onClose={closeCredits}
+        />
+      ) : null}
     </View>
   );
 }

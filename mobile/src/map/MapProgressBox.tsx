@@ -4,8 +4,7 @@
  * tap opens and closes it**, because the numbers are the control and there is no ×
  * to aim at.
  *
- * It sits above the map's own bottom-right attribution rather than beside it, and
- * carries no layer switches: those are in the Settings tab, and the counted line
+ * It carries no layer switches: those are in the Settings tab, and the counted line
  * types' (Japan's JR and non-JR lines) on the Statistics screen.
  */
 import type { ReactNode } from "react";
