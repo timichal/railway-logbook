@@ -57,7 +57,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.8",
-    "@maplibre/maplibre-gl-style-spec": "^26.8.0",
+    "@maplibre/maplibre-gl-style-spec": "^26.9.0",
     "@tailwindcss/postcss": "^4.3.5",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
