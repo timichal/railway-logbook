@@ -591,13 +591,18 @@ RETURNS bytea AS $$
             start_country,
             end_country,
             is_valid,
-            -- Simplified to about a pixel at this zoom first. The band is a wide,
-            -- translucent, blurred line, and MapLibre blends each join of a line
-            -- with the segments either side of it: at a vertex every pixel or two,
-            -- which an OSM-derived line has when zoomed out, the band turns into a
-            -- string of bright blotches. The routes are opaque and never show it.
+            -- Simplified to 1.5 pixels at this zoom, then rounded off (Chaikin, 2
+            -- passes). The band is a translucent line, and MapLibre blends each join
+            -- of a line with the segments either side of it: at a jagged vertex
+            -- every pixel or two, which an OSM-derived line has when zoomed out, the
+            -- band turns into a string of bright blotches. Rounded, the joins along
+            -- a curve don't show, and the band stops copying every kink of the
+            -- track. Not simplified harder: the band is only a few pixels wider than
+            -- the route drawn over it from its own tile, and at 4 pixels the smoothed
+            -- curve drifted far enough off the track for the route to poke out.
+            -- `preserveCollapsed`, as the other line tiles, so a short line stays.
             ST_AsMVTGeom(
-                ST_Simplify(geometry_3857, 40075016.68 / (512 * 2 ^ z)),
+                ST_ChaikinSmoothing(ST_Simplify(geometry_3857, 1.5 * 40075016.68 / (512 * 2 ^ z), true), 2),
                 envelope,
                 4096,
                 64,
@@ -605,10 +610,9 @@ RETURNS bytea AS $$
             ) AS geom
         FROM scenic_lines,
             ST_TileEnvelope(z, x, y) AS envelope,
-            -- Widened by the 64-unit MVT buffer: the band is up to 18px wide with
-            -- round caps, so a line ending just inside the next tile still spills
-            -- into this one, and selecting on the bare envelope cut its cap flat
-            -- at the tile edge.
+            -- Widened by the 64-unit MVT buffer: the band is up to 13px wide, so a
+            -- line ending just inside the next tile still spills into this one,
+            -- and selecting on the bare envelope cut its end at the tile edge.
             ST_TileEnvelope(z, x, y, margin => 64.0 / 4096) AS query_envelope
         WHERE geometry_3857 && query_envelope
         ORDER BY id

@@ -596,7 +596,7 @@ export function RailwayMap({ countries, children }: RailwayMapProps): ReactNode 
         >
           {showScenicLines && REGIONS[regionId].hasScenicHighlight && routeLayers && routesUrl ? (
             <Layer
-              {...createScenicLinesLayer({ visible: true })}
+              {...createScenicLinesLayer({ visible: true, theme })}
               filter={scenicFilter}
               beforeId={LINE_SEARCH_HIGHLIGHT_LAYER_ID}
             />

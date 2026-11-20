@@ -68,24 +68,28 @@ export const COLORS = {
     view: "#ff6b35",
   },
   /**
-   * Scenic lines (`createScenicLinesLayer`): a soft violet band drawn *under* the
-   * routes, like a highlighter stroke — wide, translucent and blurred at the
-   * edges, so it marks a stretch of country without competing with the route
-   * colours on top. It often runs over track with no route at all, so it has to
-   * read on the bare basemap too.
+   * Scenic lines (`createScenicLinesLayer`): a translucent blue band drawn *under*
+   * the routes, a little wider than them, so it reads as the route outlined. It
+   * often runs over track with no route at all, so it has to read on the bare
+   * basemap too.
    *
-   * **Violet because nothing else on the user map is.** The routes own green,
-   * orange and red; amber (the first try) sat on liberty's yellow motorways,
-   * which follow the same valleys as the railways; cyan read as the river
-   * beside them. (The admin map's under-repair violet is a different map.)
+   * **Blue because it is the one hue that sits apart from the routes.** They own
+   * green, orange and red. Amber (the first try) sat on liberty's yellow motorways,
+   * which follow the same valleys as the railways. Violet (the second) blended with
+   * the red-pink unridden routes into something visceral. A light cyan reads as the
+   * river beside the line on the light basemap, so the light scheme takes a deep
+   * blue, the dark one a sky blue that doesn't sink into the ground. The searched
+   * line (`lineSearchHighlight`) is a blue too, but only in regions without scenic
+   * lines (`hasRouteNames` and `hasScenicHighlight` never meet).
    */
-  scenicLine: "#a855f7",
-  // The same band on the admin map, where an invalid line is greyed like an
-  // invalid route and the selected one is drawn in the selected-route orange.
+  scenicLine: "#2563eb",
+  scenicLineDark: "#38bdf8",
+  // On the admin map an invalid line is greyed like an invalid route, and the
+  // selected one is drawn in the selected-route orange.
   scenicLineInvalid: "#9ca3af",
   /**
-   * A line picked in the map's search box (`createLineSearchHighlightLayer`): the
-   * scenic lines' band in blue. Blue because it must not read as either of the
+   * A line picked in the map's search box (`createLineSearchHighlightLayer`): a band
+   * like the scenic lines', in blue. Blue because it must not read as either of the
    * overlays drawn over routes (planner gold, selection orange) nor as a scenic
    * stretch. Lighter over the dark basemap, where the strong blue sinks into the
    * ground.
@@ -132,7 +136,7 @@ export const COLORS = {
    * **Neutral on purpose.** Zoomed out over Europe the routes are the only
    * saturated thing on the map, and a border has to be traceable through them
    * without joining in - anything with a hue reads as one more line of data, and
-   * the greens/oranges/reds and the scenic violet are all spoken for. A grey at
+   * the greens/oranges/reds and the scenic blue are all spoken for. A grey at
    * this contrast is the one thing that can be crisp without competing: it is the
    * only sharp element left on a basemap washed 25-40% toward its own ground.
    *
@@ -246,10 +250,12 @@ export const WIDTHS = {
   railwayParts: { z4: 0.8, z7: 3, z7Hover: 5 },
   // The invisible hit area of the user map's routes, one width for every line.
   clickBuffer: { z4: 14, z12: 16 },
-  // Scenic line band: a few times a route's width, growing with zoom so it stays
-  // a band around the line rather than shrinking into a second line beside it.
-  // `blur` softens its edges by that many pixels.
-  scenicLine: { z4: 5, z7: 10, z12: 18, blur: { z4: 1, z12: 4 } },
+  // Scenic line band: a couple of times a route's width, growing with zoom so it
+  // stays a band around the line rather than shrinking into a second line beside it.
+  // Wider read as a worm crawling along the line.
+  // `blur` only antialiases the edge: a wide blur turned the band into a fuzzy
+  // glow that, with the route wiggling through it, read as a worm.
+  scenicLine: { z4: 4, z7: 7, z12: 13, blur: 0.5 },
   // Special-usage routes are drawn a little fatter than branch (multiplier on
   // the branch width at each stop). A dashed line lays down less ink than a
   // solid one of the same width, so matching branch exactly reads as thinner
@@ -400,14 +406,14 @@ export const OPACITIES = {
   // light enough that the dashes on top still stand out against it.
   highlightCasing: 0.45,
   preview: 1.0,
-  scenicLine: 0.5,
+  scenicLine: 0.35,
   // The admin map draws them a little stronger (an invalid grey one all but
   // vanishes over the parts otherwise), and the selected one near solid.
   scenicLineAdmin: 0.55,
   scenicLineSelected: 0.85,
   // The searched line's band: a touch stronger than the scenic one it is drawn over,
   // so where the two meet the searched line wins.
-  lineSearchHighlight: 0.6,
+  lineSearchHighlight: 0.45,
   railwayParts: 0.7,
   stations: 0.8,
   // Country borders (createCountryBordersLayer). Just short of solid: they are

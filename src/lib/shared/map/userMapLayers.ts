@@ -218,7 +218,7 @@ export function createUserMapLayers(
   return [
     // Under everything: a band the route lines are drawn over. Hidden until the
     // "Scenic lines" toggle shows it (useLayerFilters).
-    createScenicLinesLayer(),
+    createScenicLinesLayer({ theme }),
     // Closed routes not ridden start out filtered away (in the configs), as "All
     // closed lines" starts off, and so do the countries not ticked; useLayerFilters
     // applies the switches once loaded

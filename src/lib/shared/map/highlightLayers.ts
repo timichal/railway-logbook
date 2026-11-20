@@ -255,7 +255,7 @@ export function wholeRouteIds(ids: number[], partials: PartialRouteGeometry[]): 
 /**
  * The line picked in the map's search box, in a region that names its lines.
  *
- * Drawn as the scenic lines are — a wide, translucent, soft-edged band under the
+ * Drawn as the scenic lines are — a translucent band a little wider than a route, under the
  * route lines (`highlighterBandPaint`) — in a colour of its own, and above the scenic
  * band, so where the two meet the searched line wins. Under the routes rather than
  * over them, so what has been ridden of the line still shows.
@@ -272,8 +272,9 @@ export const LINE_SEARCH_HIGHLIGHT_SOURCE_ID = "line_search_highlight";
 export const LINE_SEARCH_HIGHLIGHT_LAYER_ID = "line_search_highlight";
 
 /**
- * The GeoJSON source's simplification, in pixels of a 512px tile: the scenic tile's
- * "about a pixel per zoom" (see `scenic_lines_tile`).
+ * The GeoJSON source's simplification, in pixels of a 512px tile: about a pixel per
+ * zoom. (The scenic tile simplifies harder and smooths, see `scenic_lines_tile`; a
+ * GeoJSON source can't smooth, and a searched line is shown once, not as a layer.)
  */
 export const LINE_SEARCH_HIGHLIGHT_TOLERANCE = 1;
 

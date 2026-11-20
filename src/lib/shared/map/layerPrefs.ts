@@ -30,7 +30,7 @@ export interface LayerPrefs {
   showHeritage: boolean;
   /** "Show special services" / "Non-JR lines" — Special routes (usage_type=2, dashed). */
   showSpecial: boolean;
-  /** "Scenic lines" — the violet band under the admin-drawn scenic stretches. */
+  /** "Scenic lines" — the blue band under the admin-drawn scenic stretches. */
   showScenicLines: boolean;
   /**
    * "Show all closed lines" — closed routes (railway_routes.closed) the user hasn't
