@@ -19,13 +19,14 @@
 # whether or not the country is on the user map (SUPPORTED_COUNTRIES in
 # src/lib/shared/constants.ts) or has routes yet. Left out:
 #
-# - Russia (Kaliningrad included), Ukraine and Turkey: big networks we don't
-#   map, which cost download, filter and import time on every deploy for track
-#   nothing uses. No route crosses into them, and the neighbours' extracts
+# - Russia (Kaliningrad included), Ukraine, Belarus and Turkey: big networks we
+#   don't map, which cost download, filter and import time on every deploy for
+#   track nothing uses. No route crosses into them, and the neighbours' extracts
 #   overlap the border, so the track up to it stays. Checked 2026-11-20 against
 #   every route and scenic line: none ran along a part only these extracts
 #   carried (the nearest was 460m off, at Ormenio), and no station within 250m
-#   of a route was lost. Re-check before adding a route near those borders
+#   of a route was lost. Belarus checked the same way 2026-11-21 (nearest 3.5km,
+#   Chełm - Włodawa). Re-check before adding a route near those borders
 #   that runs right up to one.
 # - Cyprus, Malta and the Faroe Islands: no railway at all (Cyprus has a few
 #   preserved display tracks, the Faroes a short industrial line), so nothing
@@ -46,7 +47,6 @@
 europe/albania
 europe/andorra
 europe/austria
-europe/belarus
 europe/belgium
 europe/bosnia-herzegovina
 europe/bulgaria
