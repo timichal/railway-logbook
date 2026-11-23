@@ -93,7 +93,10 @@ Items found already done were deleted; the gaps the web has opened since are und
       Cancel editing and Edit on another journey asking when changed, and an emptied
       journey's Save offering Delete; Delete on a trip, "New trip" and "Edit trip";
       Edit and Continue editing going to the map flown to the journey. Still to run: a
-      closed route in the editor shows its badge (no closed routes in the data yet).
+      closed route in the editor shows its badge. Prod has no closed routes: close one
+      for the test (232 Pečky ↔ Kouřim, which the test account `mobiletest@example.com`
+      rides in "Czech rail weekend") and reopen it after. Its badge in the map sheet and
+      in the journey card's rows was confirmed on 2026-11-23.
       And the 2026-11-20 merge of Show and Edit into **"Open on the map"**: it flies to
       the journey with every highlight gone (a trip's, another journey's, the
       planner's); the bar reads "“Name”" with "tap to edit", then "unsaved changes, tap
@@ -140,17 +143,20 @@ Items found already done were deleted; the gaps the web has opened since are und
       background in dark mode; planner legs in Japan show the line name above the
       endpoints; Settings shows
       "Version 0.1.0" (with the server only in a development build).
-- [ ] **Check the 2026-11-23 batch on the device.** _(device)_ JS only, no rebuild.
-      The logging screen's trip list: "New trip…" (also with no trips yet) opens New
-      trip over it, and Create picks the new trip in the list on return. The planner's
-      swap button (beside "+ Add via station") swaps From and To and reverses the vias,
-      and drops the answer. The logbook scrolls on past 20 (a spinner at the foot while
-      the next page loads), pull-to-refresh reloads it with the map's colours and keeps
-      the place, a failed pull says "Couldn’t refresh" above the list, and a search
-      starts again at the top. Settings → "Sign out other devices": a wrong password
-      says so, the right one says done and this phone stays signed in (map, logbook,
-      a ride logged afterwards), while another device or the web is signed out at its
-      next request.
+- [ ] **Check the rest of the 2026-11-23 batch on the device.** _(device)_ JS only,
+      no rebuild. The logging screen's trip list: "New trip…" (also with no trips yet)
+      opens New trip over it, and Create picks the new trip in the list on return. The
+      planner's swap button (beside "+ Add via station") swaps From and To and reverses
+      the vias, and drops the answer. Pull-to-refresh reloads the logbook with the map's
+      colours and keeps the place, and a failed pull says "Couldn’t refresh" above the
+      list. "Sign out other devices" with a wrong password says so. (Confirmed on
+      2026-11-23: the logbook loading on past 20, search, and the right password
+      keeping this phone signed in while the web is signed out.)
+- [ ] **Tune the station touch box after some use.** _(device)_ Since 2026-11-23 a
+      station takes presses only by its dot, in a 24pt box against the routes' 44pt
+      (`STATION_HITBOX`, `RailwayMap.tsx`), as station dots kept taking presses meant
+      for the line beside them. It felt right at first try; if dots are fiddly to hit,
+      try 16 per side (32pt).
 - [ ] **The expanded progress box is wider since km show one decimal** ("12,345.6 /
       98,765.4 km", was whole km), from the one `formatKm` (`src/ui/format.ts`). Look
       at it on a small phone in Europe; if it crowds the corner, add a whole-km variant
@@ -191,6 +197,14 @@ the log). These are for the UI polish pass, not fixes.
       with nothing under it. Fix: drop the raise as the dismiss starts (the screen's
       `transitionStart` or `beforeRemove` event, or react-native-screens'
       `onSheetDetentChanged`), and perhaps animate the sheet down rather than jump.
+- [ ] **A via station can be passed on a line that doesn't stop there.** Since
+      2026-11-23 the planner charges the walk to a line passing further from the start
+      or end station than its nearest line (`accessCosts`, `src/lib/planner/CLAUDE.md`),
+      so it no longer boards a line merely passing by. A via is left out on purpose:
+      `changeCosts` already charges a change there, and charging the arrival too counted
+      that walk twice. So a plan may still run through a via on a line ~300m off with no
+      stop. Fixing it means charging the arrival at a via and taking that charge back
+      off a change made there. Server-side, so the web planner too.
 - [ ] **The selection bar is under the planner's sheet while it is up.** It always
       was (a flex sibling below the map, now the map's `footer` at its bottom edge),
       but `mobile/CLAUDE.md` says what runs along the map's bottom edge rides above
