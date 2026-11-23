@@ -1,3 +1,6 @@
+import RouteBadgeChip from "@/components/ui/RouteBadgeChip";
+import { closedRowBadge } from "@/lib/shared/map/routeFeature";
+
 interface LoggedRouteRowProps {
   title: string;
   /** A second line under the title — the endpoints, where the title is a line name. */
@@ -14,6 +17,9 @@ interface LoggedRouteRowProps {
    * than as the whole line. Ignored unless `partial`.
    */
   covered?: { start?: number | null; end?: number | null };
+  /** The route no longer has passenger service (railway_routes.closed), and since when. */
+  closed?: boolean | null;
+  closedOn?: string | null;
 }
 
 /**
@@ -26,7 +32,10 @@ export default function LoggedRouteRow({
   lengthKm,
   partial,
   covered,
+  closed,
+  closedOn,
 }: LoggedRouteRowProps) {
+  const closure = closedRowBadge([{ closed, closed_on: closedOn }]);
   return (
     <div className="p-2 bg-surface border border-gray-200 rounded text-xs">
       <div className="min-w-0">
@@ -39,9 +48,14 @@ export default function LoggedRouteRow({
           </div>
         )}
       </div>
-      {lengthKm != null && (
-        <div className="text-gray-500 mt-0.5">
-          <RouteLength lengthKm={Number(lengthKm)} partial={partial} covered={covered} />
+      {(lengthKm != null || closure) && (
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-gray-500">
+          {lengthKm != null && (
+            <span>
+              <RouteLength lengthKm={Number(lengthKm)} partial={partial} covered={covered} />
+            </span>
+          )}
+          {closure && <RouteBadgeChip badge={closure} />}
         </div>
       )}
     </div>

@@ -229,7 +229,12 @@ export default function JourneyCard<Id extends number | string>({
                 <p className="text-xs text-gray-500 italic">No routes in this journey.</p>
               ) : (
                 <>
-                  <JourneyChainList chains={chains} picked={pickedChain} onPick={handlePickChain} />
+                  <JourneyChainList
+                    chains={chains}
+                    routes={routes}
+                    picked={pickedChain}
+                    onPick={handlePickChain}
+                  />
                   <button
                     type="button"
                     onClick={() => setShowRoutes((shown) => !shown)}
@@ -251,6 +256,8 @@ export default function JourneyCard<Id extends number | string>({
                             lengthKm={route.length_km}
                             partial={route.partial ?? false}
                             covered={{ start: route.covered_start, end: route.covered_end }}
+                            closed={route.closed}
+                            closedOn={route.closed_on}
                           />
                         );
                       })}

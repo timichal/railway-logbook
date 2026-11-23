@@ -1,8 +1,13 @@
+import RouteBadgeChip from "@/components/ui/RouteBadgeChip";
 import type { JourneyChain } from "@/lib/shared/journeyChains";
+import { chainClosedBadge, type RouteBadge } from "@/lib/shared/map/routeFeature";
+import type { RailwayRoute } from "@/lib/shared/types";
 import { pickRow } from "@/lib/ui/buttonStyles";
 
 interface JourneyChainListProps {
   chains: JourneyChain[];
+  /** The journey's routes, for telling which chains ride a closed line. */
+  routes: Pick<RailwayRoute, "track_id" | "closed" | "closed_on">[];
   /** The chain the map shows on its own, by index; null for the whole journey. */
   picked: number | null;
   onPick: (index: number | null) => void;
@@ -13,13 +18,19 @@ interface JourneyChainListProps {
  * the distance travelled along it. Pressing one shows it alone on the map, and
  * pressing it again brings back the whole journey.
  */
-export default function JourneyChainList({ chains, picked, onPick }: JourneyChainListProps) {
+export default function JourneyChainList({
+  chains,
+  routes,
+  picked,
+  onPick,
+}: JourneyChainListProps) {
   // One line needs no picking out: it is the whole journey
   const pickable = chains.length > 1;
   return (
     <ul className="space-y-1.5">
       {chains.map((chain, index) => {
-        const content = <ChainContent chain={chain} />;
+        const closure = chainClosedBadge(chain.trackIds, routes);
+        const content = <ChainContent chain={chain} closure={closure} />;
         return (
           <li key={chain.trackIds[0]}>
             {pickable ? (
@@ -43,7 +54,7 @@ export default function JourneyChainList({ chains, picked, onPick }: JourneyChai
   );
 }
 
-function ChainContent({ chain }: { chain: JourneyChain }) {
+function ChainContent({ chain, closure }: { chain: JourneyChain; closure: RouteBadge | null }) {
   const last = chain.stops.length - 1;
   return (
     <>
@@ -71,7 +82,10 @@ function ChainContent({ chain }: { chain: JourneyChain }) {
           </span>
         ))}
       </span>
-      <span className="block mt-0.5 text-xs text-gray-500">{chain.lengthKm.toFixed(1)} km</span>
+      <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+        <span>{chain.lengthKm.toFixed(1)} km</span>
+        {closure && <RouteBadgeChip badge={closure} />}
+      </span>
     </>
   );
 }

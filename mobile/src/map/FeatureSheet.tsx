@@ -33,9 +33,9 @@ import type { PlannerEnd } from "@/logbook/PlannerContext";
 import { useSelection } from "@/logbook/SelectionContext";
 import type { MapFeature, RouteFeature, StationFeature } from "@/map/mapFeatures";
 import { useNativeColors } from "@/theme/colors";
-import { useTheme } from "@/theme/ThemeContext";
 import { Button } from "@/ui/Button";
 import { formatKm } from "@/ui/format";
+import { RouteBadgePill } from "@/ui/RouteBadgePill";
 
 interface FeatureSheetProps {
   feature: MapFeature;
@@ -138,7 +138,6 @@ function RouteBody({
 }): ReactNode {
   const { name, alsoOn, endpoints } = routeTitle(feature, regionId);
   const badges = routeBadges(feature, regionId);
-  const { resolved: theme } = useTheme();
   const { isSelected, toggle, editing } = useSelection();
   // The button says what it is about to do, as the web app's touch sheet does: here
   // the tap opens the sheet and the button is what acts, so it has to be readable
@@ -158,20 +157,9 @@ function RouteBody({
       )}
 
       <View className="flex-row flex-wrap items-center gap-1">
-        {badges.map((badge) => {
-          const colors = theme === "dark" ? badge.dark : badge;
-          return (
-            <View
-              key={badge.label}
-              className="rounded px-1.5 py-0.5"
-              style={{ backgroundColor: colors.bgColor }}
-            >
-              <Text className="text-xs font-semibold" style={{ color: colors.color }}>
-                {badge.label}
-              </Text>
-            </View>
-          );
-        })}
+        {badges.map((badge) => (
+          <RouteBadgePill key={badge.label} badge={badge} />
+        ))}
       </View>
 
       <Text className="text-sm text-gray-600 dark:text-gray-400">

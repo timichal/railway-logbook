@@ -25,7 +25,7 @@ import { COLORS } from "./style";
  * business, and React Native has no such hazard.
  */
 
-interface RouteBadge extends BadgeColors {
+export interface RouteBadge extends BadgeColors {
   label: string;
 }
 
@@ -117,6 +117,37 @@ const CLOSED_BADGE: BadgeColors = {
 export function closedLabel(closedOn: unknown): string {
   const match = typeof closedOn === "string" ? /^(\d{4})-(\d{2})/.exec(closedOn) : null;
   return match ? `Closed ${match[2]}/${match[1]}` : "Closed";
+}
+
+/**
+ * The closed badge of a row in an open journey: one route, or a line of stations
+ * standing for several (`journeyChains`). Only the closure, as the rest of
+ * `routeBadges` is noise in a list of rides. Every route closed reads as one would
+ * ("Closed 12/2024", the month dropped where they differ); some of them "Partly
+ * closed"; none, no badge. A journey keeps its rides on a line after it closes, so
+ * this is where the closure has to be told.
+ */
+export function closedRowBadge(
+  routes: readonly { closed?: boolean | null; closed_on?: string | null }[],
+): RouteBadge | null {
+  const closed = routes.filter((route) => route.closed === true);
+  if (closed.length === 0) return null;
+  if (closed.length < routes.length) return { label: "Partly closed", ...CLOSED_BADGE };
+  // An undated closure is a month not known, not a month that differs: one in the
+  // row drops the month, rather than lending it the others' date
+  const labels = new Set(closed.map((route) => closedLabel(route.closed_on)));
+  return { label: labels.size === 1 ? [...labels][0] : "Closed", ...CLOSED_BADGE };
+}
+
+/**
+ * `closedRowBadge` for one line of stations (`journeyChains`), out of the journey's
+ * routes: the chain carries only its track ids.
+ */
+export function chainClosedBadge<
+  Route extends { track_id: number; closed?: boolean | null; closed_on?: string | null },
+>(trackIds: readonly number[], routes: readonly Route[]): RouteBadge | null {
+  const ids = new Set(trackIds);
+  return closedRowBadge(routes.filter((route) => ids.has(route.track_id)));
 }
 
 /**

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  chainClosedBadge,
   closedLabel,
+  closedRowBadge,
   parseTextArray,
   routeLinkLabel,
   routeTitle,
@@ -70,5 +72,61 @@ describe("closedLabel", () => {
     assert.equal(closedLabel(null), "Closed");
     assert.equal(closedLabel(""), "Closed");
     assert.equal(closedLabel(undefined), "Closed");
+  });
+});
+
+describe("closedRowBadge", () => {
+  const open = { closed: false, closed_on: null };
+  const label = (routes: Parameters<typeof closedRowBadge>[0]) => closedRowBadge(routes)?.label;
+
+  test("no badge when nothing is closed", () => {
+    assert.equal(closedRowBadge([open, { closed: null }]), null);
+    assert.equal(closedRowBadge([]), null);
+  });
+
+  test("every route closed reads as one would, the month only where they agree", () => {
+    assert.equal(label([{ closed: true, closed_on: "2025-12-14" }]), "Closed 12/2025");
+    assert.equal(
+      label([
+        { closed: true, closed_on: "2025-12-01" },
+        { closed: true, closed_on: "2025-12-14" },
+      ]),
+      "Closed 12/2025",
+    );
+    assert.equal(
+      label([
+        { closed: true, closed_on: "2025-12-14" },
+        { closed: true, closed_on: "2024-06-01" },
+      ]),
+      "Closed",
+    );
+  });
+
+  test("an undated closure drops the month rather than borrowing the others'", () => {
+    assert.equal(
+      label([
+        { closed: true, closed_on: "2025-12-14" },
+        { closed: true, closed_on: null },
+      ]),
+      "Closed",
+    );
+  });
+
+  test("some closed is partly closed", () => {
+    assert.equal(label([{ closed: true, closed_on: "2025-12-14" }, open]), "Partly closed");
+  });
+});
+
+describe("chainClosedBadge", () => {
+  const routes = [
+    { track_id: 1, closed: true, closed_on: "2025-12-14" },
+    { track_id: 2, closed: false },
+    { track_id: 3, closed: true, closed_on: "2025-12-01" },
+  ];
+
+  test("looks only at the chain's own routes", () => {
+    assert.equal(chainClosedBadge([1, 3], routes)?.label, "Closed 12/2025");
+    assert.equal(chainClosedBadge([1, 2], routes)?.label, "Partly closed");
+    assert.equal(chainClosedBadge([2], routes), null);
   });
 });

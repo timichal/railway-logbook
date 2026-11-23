@@ -25,7 +25,12 @@
  * (`ShowOnMap`). Delete asks first.
  */
 import { type JourneyChain, journeyChains } from "@shared/journeyChains";
-import { routeTitle } from "@shared/map/routeFeature";
+import {
+  chainClosedBadge,
+  closedRowBadge,
+  type RouteBadge,
+  routeTitle,
+} from "@shared/map/routeFeature";
 import { useRouter } from "expo-router";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Text, View } from "react-native";
@@ -38,6 +43,7 @@ import { useSelection } from "@/logbook/SelectionContext";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
 import { formatKm } from "@/ui/format";
+import { RouteBadgePill } from "@/ui/RouteBadgePill";
 
 export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode {
   const { regionId } = useRegion();
@@ -70,7 +76,13 @@ export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode 
   }, [key, attempt, logVersion]);
 
   const routes = journey?.routes;
-  const chains = useMemo(() => (routes ? journeyChains(routes) : []), [routes]);
+  const chains = useMemo(() => {
+    if (!routes) return [];
+    return journeyChains(routes).map((chain) => ({
+      chain,
+      closure: chainClosedBadge(chain.trackIds, routes),
+    }));
+  }, [routes]);
 
   if (journey === null) {
     return error ? (
@@ -95,8 +107,8 @@ export function JourneyDetails({ journeyId }: { journeyId: number }): ReactNode 
         </Text>
       ) : (
         <>
-          {chains.map((chain) => (
-            <ChainRow key={chain.trackIds[0]} chain={chain} />
+          {chains.map(({ chain, closure }) => (
+            <ChainRow key={chain.trackIds[0]} chain={chain} closure={closure} />
           ))}
           <Button
             label={
@@ -222,7 +234,14 @@ const keepWhole = (name: string) => name.replace(/ /g, " ");
  * One line of stations. "…" marks an end the ride didn't reach: it began or ended
  * partway along the route, between that stop and the next.
  */
-function ChainRow({ chain }: { chain: JourneyChain }): ReactNode {
+function ChainRow({
+  chain,
+  closure,
+}: {
+  chain: JourneyChain;
+  /** `closedRowBadge` of its routes: null unless one of them is closed. */
+  closure: RouteBadge | null;
+}): ReactNode {
   const { stops, startsPartway, endsPartway } = chain;
   const last = stops.length - 1;
   const spoken = [
@@ -230,6 +249,7 @@ function ChainRow({ chain }: { chain: JourneyChain }): ReactNode {
     startsPartway ? `boarded between ${stops[0]} and ${stops[1]}` : null,
     endsPartway ? `left the train between ${stops[last - 1]} and ${stops[last]}` : null,
     `${formatKm(chain.lengthKm)} kilometres`,
+    closure?.label,
   ]
     .filter(Boolean)
     .join("; ");
@@ -256,9 +276,12 @@ function ChainRow({ chain }: { chain: JourneyChain }): ReactNode {
           </Text>
         ))}
       </Text>
-      <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
-        {formatKm(chain.lengthKm)} km
-      </Text>
+      <View className="mt-0.5 flex-row flex-wrap items-center gap-1.5">
+        <Text className="text-xs text-gray-600 dark:text-gray-400">
+          {formatKm(chain.lengthKm)} km
+        </Text>
+        {closure ? <RouteBadgePill badge={closure} /> : null}
+      </View>
     </View>
   );
 }
@@ -273,13 +296,19 @@ function RouteRow({
 }): ReactNode {
   // A naming region leads with the line name, the endpoints beneath
   const { name, endpoints } = routeTitle(route, regionId);
+  const closure = closedRowBadge([route]);
   return (
     <View className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900">
       <Text className="text-sm font-medium text-gray-900 dark:text-gray-100">
         {name ?? endpoints}
       </Text>
       {name ? <Text className="text-xs text-gray-600 dark:text-gray-400">{endpoints}</Text> : null}
-      {route.length_km != null ? <RouteLength route={route} /> : null}
+      {route.length_km != null || closure ? (
+        <View className="mt-0.5 flex-row flex-wrap items-center gap-1.5">
+          {route.length_km != null ? <RouteLength route={route} /> : null}
+          {closure ? <RouteBadgePill badge={closure} /> : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -293,10 +322,10 @@ function RouteLength({ route }: { route: api.LoggedRoute }): ReactNode {
   const whole = `${formatKm(length)} km`;
   const { partial, covered_start: start, covered_end: end } = route;
   if (!partial || start == null || end == null) {
-    return <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{whole}</Text>;
+    return <Text className="text-xs text-gray-600 dark:text-gray-400">{whole}</Text>;
   }
   return (
-    <Text className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+    <Text className="text-xs text-gray-600 dark:text-gray-400">
       {`${formatKm(Math.abs(end - start) * length)} km `}
       <Text className="text-amber-700 dark:text-amber-400">(partial, of {whole})</Text>
     </Text>
