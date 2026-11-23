@@ -45,6 +45,7 @@ import {
 import * as api from "@/api/endpoints";
 import { useOnForeground } from "@/lifecycle/useOnForeground";
 import { bumpLogVersion } from "@/logbook/logVersion";
+import { forgetStoredRides } from "@/map/storedRides";
 import { clearTokens, loadTokens, loadUser, saveTokens, saveUser } from "./tokenStore";
 
 /** Renew the pair on a return to the foreground when it has less than this left. */
@@ -82,6 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   const [notice, setNotice] = useState<string | null>(null);
 
   const forgetSession = useCallback(() => {
+    // The rides kept for an offline start name the user's journeys: they go with
+    // the session, as the keychain's copy of the user does
+    forgetStoredRides();
     setUser(null);
     setStatus("signedOut");
   }, []);

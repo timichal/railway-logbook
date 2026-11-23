@@ -76,6 +76,8 @@ function RootNavigator(): ReactNode {
           {/* Modal: it is spent, not left — and once spent, the guard above takes it
               away with the rest of the signed-in tree. */}
           <Stack.Screen name="delete-account" options={{ presentation: "modal" }} />
+          {/* Likewise spent, but the session stays: it closes on Done. */}
+          <Stack.Screen name="sign-out-others" options={{ presentation: "modal" }} />
         </Stack.Protected>
         <Stack.Protected guard={status === "signedOut"}>
           <Stack.Screen name="(auth)" />

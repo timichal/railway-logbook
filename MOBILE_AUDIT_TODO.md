@@ -26,8 +26,12 @@ Items found already done were deleted; the gaps the web has opened since are und
       is Martin's now, the same for every account, and the colours are the rides
       (`useRides`, `GET /api/v1/rides`), so no cache can show another account's
       colours. Check how big the cache gets after some use, and whether a cached tile
-      is served offline. Offline colouring now needs the rides too: the routes are
-      drawn only once `useRides` has answered (the decision at the bottom).
+      is served offline. Since 2026-11-23 the last rides are kept on the device
+      (`storedRides.ts`), so check an offline cold start: sign in and open the map
+      online, quit the app, airplane mode, relaunch. The routes should draw coloured as
+      before (no coverage green on part-ridden ones: that is still read from the
+      server). Then sign out and in as another account: none of the first account's
+      colours, even offline.
 
 - [ ] **Run it on Android.** The app shell, the map with overlays, the modals and the
       keyboard handling have never run on Android (`MOBILE_APP_PLAN.md`, Phase 2). The
@@ -47,16 +51,6 @@ Items found already done were deleted; the gaps the web has opened since are und
       (`journeyWithBoundsForUser`, `routeBoxSql`): return the boxes per route (or per
       track id beside `bounds`), union a chain's in the app, and make `ChainRow`
       pressable where there is more than one chain. Low.
-
-- [ ] **A trip can't be made from the logging screen.** The logbook's "New trip"
-      (`app/edit-trip.tsx`) makes one, but `TripPicker` in `log-journey.tsx` offers only
-      trips that exist. Add "New trip…" there, picking the new trip once made. Low.
-
-- [ ] **The logbook needs pull-to-refresh, and should probably scroll endlessly.**
-      Lists on a phone are refreshed by pulling down (`FlatList` `refreshing` /
-      `onRefresh`), and that doesn't exist here. Previous/Next paging copies the web's
-      sidebar. On a phone the convention is to load more with `onEndReached`. Changing
-      pages also shows no loading state: the old page stays until the new one arrives.
 
 - [ ] **The journey date is typed as text.** The plan ruled out a native picker
       because it would need "another development build". But every run is already a
@@ -144,9 +138,19 @@ Items found already done were deleted; the gaps the web has opened since are und
       flash and the splash stays up until both the theme and the session are read
       (`ThemeContext` `ready`, gated in `RootNavigator`); an invalid field keeps its
       background in dark mode; planner legs in Japan show the line name above the
-      endpoints; deleting the only item on the logbook's last page goes back a page;
-      Settings shows
+      endpoints; Settings shows
       "Version 0.1.0" (with the server only in a development build).
+- [ ] **Check the 2026-11-23 batch on the device.** _(device)_ JS only, no rebuild.
+      The logging screen's trip list: "New trip…" (also with no trips yet) opens New
+      trip over it, and Create picks the new trip in the list on return. The planner's
+      swap button (beside "+ Add via station") swaps From and To and reverses the vias,
+      and drops the answer. The logbook scrolls on past 20 (a spinner at the foot while
+      the next page loads), pull-to-refresh reloads it with the map's colours and keeps
+      the place, a failed pull says "Couldn’t refresh" above the list, and a search
+      starts again at the top. Settings → "Sign out other devices": a wrong password
+      says so, the right one says done and this phone stays signed in (map, logbook,
+      a ride logged afterwards), while another device or the web is signed out at its
+      next request.
 - [ ] **The expanded progress box is wider since km show one decimal** ("12,345.6 /
       98,765.4 km", was whole km), from the one `formatKm` (`src/ui/format.ts`). Look
       at it on a small phone in Europe; if it crowds the corner, add a whole-km variant
@@ -176,8 +180,6 @@ the log). These are for the UI polish pass, not fixes.
       picked out. A GeoJSON source over the stations layer, fed from `PlannerContext`'s
       form (each `Station` carries its coordinates). Keep it clear of the gold path's
       own styling (`src/lib/shared/map/CLAUDE.md`).
-- [ ] **A swap button between From and To**, as most planners have. One `editForm`
-      that exchanges the two (the answer goes with it, as with any edit).
 - [ ] **A haptic tick when a map tap fills a slot** (`pickOnMap`), and perhaps when
       a path is found. `expo-haptics` is installed (2026-11-20) and needs no config
       plugin, so this is JS only once the build that carries it is on the phone.
@@ -202,14 +204,6 @@ the log). These are for the UI polish pass, not fixes.
 
 ## New gaps against the web (found 2026-11-18)
 
-- [ ] **No "Sign out other devices".** The web menu has it since 2026-11-17
-      (`SignOutOtherDevicesForm` → `signOutOtherDevices`): the password, then the
-      account's `tokens_valid_after` moves to now, which also refuses every app token
-      issued before it. `/api/v1` has no endpoint for it. One would have to answer with
-      a fresh token pair for the calling device, as the web re-issues its own cookie,
-      or the app signs itself out with the rest. Rate-limited with the sign-ins, as the
-      web's is. A lost phone is the case it exists for, so it matters less in the app
-      than on the web. Low.
 - [ ] **No map-sharing settings.** The web's `ShareMapDialog` switches the public map
       on and off and shows its link. The app has neither the setting nor an endpoint
       for it. This is a separate question from opening `/shared/<token>` links (the
@@ -223,14 +217,3 @@ the log). These are for the UI polish pass, not fixes.
       in the listing for people who uninstalled it). The web menu's "Delete account" is
       that path once signed in; point the listing at the site and say so there.
 - [ ] **Privacy policy URL** for both store listings, and a link to it in Settings.
-- [ ] **The `NSLocalNetworkUsageDescription` / `NSBonjourServices` entries are for
-  development** and will ship in a release build. Move them to an `app.config.ts` that
-      adds them only for development builds.
-
----
-
-## Already tracked in `MOBILE_APP_PLAN.md` (listed here so this is the one list)
-
-- [ ] Offline route colouring before Phase 5. Since 2026-11-15 the route tile is
-      Martin's and the same for everyone, and the colours come from `GET /rides`, so
-      the question is now only how the last rides answer is kept on the device.

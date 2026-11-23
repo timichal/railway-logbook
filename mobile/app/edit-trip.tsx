@@ -7,20 +7,34 @@
  * version, which reloads the logbook (and the logging screen's trip list next
  * time it opens). A trip is region-free on the server: a new one with no journeys
  * belongs to every region's list until something is filed under it.
+ *
+ * Opened from the logging screen's trip list ("New trip…", with `fileUnder`), a
+ * new trip is also picked for the journey on that screen: the selection's form in
+ * front, the new journey's or the one being edited.
  */
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useRef, useState } from "react";
 import { ScrollView, Text, type TextInputInstance, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { bumpLogVersion } from "@/logbook/logVersion";
+import { rememberNewTrip } from "@/logbook/newTrip";
+import { useSelection } from "@/logbook/SelectionContext";
 import { Button } from "@/ui/Button";
 import { Screen } from "@/ui/Screen";
 import { TextField } from "@/ui/TextField";
 
 export default function EditTripScreen(): ReactNode {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string; name?: string; description?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    name?: string;
+    description?: string;
+    /** "1": file the journey on the logging screen under the new trip */
+    fileUnder?: string;
+  }>();
   const id = params.id ? Number(params.id) : null;
+  const fileUnder = id === null && params.fileUnder === "1";
+  const { updateForm } = useSelection();
   const [name, setName] = useState(params.name ?? "");
   const [description, setDescription] = useState(params.description ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +50,15 @@ export default function EditTripScreen(): ReactNode {
     setError(null);
     try {
       const input = { name: name.trim(), description: description.trim() || undefined };
-      if (id === null) await api.createTrip(input);
-      else await api.updateTrip(id, input);
+      if (id === null) {
+        const created = await api.createTrip(input);
+        if (fileUnder) {
+          rememberNewTrip({ id: created.id, name: created.name });
+          updateForm({ tripId: created.id });
+        }
+      } else {
+        await api.updateTrip(id, input);
+      }
       bumpLogVersion();
       router.back();
     } catch (caught) {

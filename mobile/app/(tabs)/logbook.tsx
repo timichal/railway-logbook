@@ -5,7 +5,8 @@
  * **The page is the server's**, ordered and hydrated by `GET /logbook` (a trip's
  * date is the latest of its journeys', which no client could work out from one
  * page), so nothing here re-sorts or re-filters what it is handed. Search and
- * paging go back to the server; the search is debounced, as on the web.
+ * paging go back to the server; the search is debounced, as on the web. Paging is
+ * an endless scroll rather than the web's Previous/Next (`Logbook`).
  *
  * One card is open at a time, as on the web. There an open card points the map at
  * its routes; here the map is a *different tab*, so opening a card only shows what is
@@ -21,7 +22,7 @@ import { SEARCH_DEBOUNCE_MS } from "@shared/constants";
 import { formatDateOnly, formatDateOnlyRange } from "@shared/getUntimezonedDateStr";
 import type { RegionId } from "@shared/regions";
 import { useRouter } from "expo-router";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, Text, TextInput, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { JourneyDetails } from "@/logbook/JourneyDetails";
@@ -34,72 +35,154 @@ import { Button } from "@/ui/Button";
 import { formatKm } from "@/ui/format";
 import { Screen } from "@/ui/Screen";
 
-const PAGE_SIZE = 10;
+/** Loaded at a time, as the list nears its end. */
+const PAGE_SIZE = 20;
+/** The server's cap on `pageSize`: a refresh reloads at most this many in one read. */
+const MAX_PAGE_SIZE = 100;
+
+/** The list as loaded so far: the first `pages` pages of the search `query`. */
+interface LoadedList {
+  items: api.LogbookItem[];
+  total: number;
+  pages: number;
+  query: string;
+}
 
 /**
- * Keyed by region: a switch starts the list over — page, search and open card — since
- * page 3 of Europe is no page of Japan, and may be past its last.
+ * Keyed by region: a switch starts the list over — search, loaded pages and open
+ * card — since nothing loaded for Europe belongs to Japan's list.
  */
 export default function LogbookScreen(): ReactNode {
   const { regionId } = useRegion();
   return <Logbook key={regionId} regionId={regionId} />;
 }
 
+/**
+ * Scrolls without end: the next page is read as the list nears its bottom
+ * (`onEndReached`). Pulling down re-reads the log (`bumpLogVersion`, so the map's
+ * colours and numbers come along with the list). A re-read — a pull, a write, a
+ * return to the app — reloads as much as was shown in one request (to the server's
+ * cap), so the reader keeps their place; a new search starts at the top. A re-read
+ * that fails keeps the list shown and says so above it; only a list never loaded
+ * becomes an error screen.
+ *
+ * Pages are by offset, so the two kinds of load are kept from crossing: no next
+ * page is asked for while a reload is out (it would be the old search's, or be
+ * thrown away by the reload landing), a reload drops any page still out, and a
+ * page whose `total` differs from the list's means rows were added or removed
+ * meanwhile (on the web, say) and every offset has moved: the list is reloaded
+ * rather than the page appended, which would skip or repeat a row.
+ */
 function Logbook({ regionId }: { regionId: RegionId }): ReactNode {
   const colors = useNativeColors();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [data, setData] = useState<api.LogbookPage | null>(null);
+  const [list, setList] = useState<LoadedList | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // A journey logged from the map lands in this list, so its version is one of the
   // list's inputs rather than something a focus event has to notice.
   const logVersion = useLogVersion();
   const [openKey, setOpenKey] = useState<string | null>(null);
-  // Which inputs the list on screen answers. A refresh of those same inputs that
-  // fails (offline, after a return to the foreground) keeps the list rather than
-  // replacing it with an error.
-  const shownKey = useRef<string | null>(null);
 
-  // Typing is not a request. The debounce also resets the page, because a new
-  // search's page 3 is a page of a different list.
+  // Read by the loads, which must not be rebuilt whenever the list grows
+  const listRef = useRef(list);
+  listRef.current = list;
+  /** Bumped by every reload: a page landing for an older one is dropped. */
+  const generation = useRef(0);
+  const loadingMoreRef = useRef(false);
+  /** A reload is out: no next page until it lands. */
+  const reloading = useRef(false);
+
+  // Typing is not a request
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setQuery(search);
-      setPage(1);
-    }, SEARCH_DEBOUNCE_MS);
+    const timer = setTimeout(() => setQuery(search), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [search]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey and logVersion are intentional triggers — a retry and a newly logged journey both mean this page is stale.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey and logVersion are intentional triggers — a retry, a pull and a newly logged journey all mean the list is stale.
   useEffect(() => {
+    const own = ++generation.current;
     const controller = new AbortController();
-    const key = `${regionId}|${page}|${query}`;
+    const shown = listRef.current;
+    // The same search keeps as many pages as were loaded; a new one starts over
+    const pages =
+      shown && shown.query === query ? Math.min(shown.pages, MAX_PAGE_SIZE / PAGE_SIZE) : 1;
     setError(null);
+    // Said of the search on screen; a new one answers for itself
+    if (shown?.query !== query) setRefreshError(null);
+    reloading.current = true;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    setMoreError(null);
     api
-      .logbook(regionId, { page, pageSize: PAGE_SIZE, search: query }, controller.signal)
+      .logbook(regionId, { page: 1, pageSize: pages * PAGE_SIZE, search: query }, controller.signal)
       .then((next) => {
-        shownKey.current = key;
-        setData(next);
+        if (own !== generation.current) return;
+        setRefreshError(null);
+        setList({ items: next.items, total: next.total, pages, query });
       })
       .catch((caught: unknown) => {
-        if (caught instanceof Error && caught.name === "AbortError") return;
-        if (shownKey.current === key) return;
-        setError(caught instanceof Error ? caught.message : "Could not load the logbook.");
+        if (controller.signal.aborted || own !== generation.current) return;
+        const message = caught instanceof Error ? caught.message : "Could not load the logbook.";
+        // The list on screen answers this same search: keep it
+        if (listRef.current?.query === query) {
+          setRefreshError(message);
+        } else {
+          setRefreshError(null);
+          setError(message);
+        }
+      })
+      .finally(() => {
+        if (own !== generation.current) return;
+        reloading.current = false;
+        setRefreshing(false);
       });
     return () => controller.abort();
-  }, [regionId, page, query, reloadKey, logVersion]);
+  }, [regionId, query, reloadKey, logVersion]);
 
-  const total = data?.total ?? 0;
-  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  // A delete can empty the last page; go back to the new last one rather than show
-  // an empty list with no pager
-  useEffect(() => {
-    if (data && page > lastPage) setPage(lastPage);
-  }, [data, page, lastPage]);
+  const loadMore = useCallback((): void => {
+    const shown = listRef.current;
+    if (
+      !shown ||
+      reloading.current ||
+      loadingMoreRef.current ||
+      shown.items.length >= shown.total
+    ) {
+      return;
+    }
+    const own = generation.current;
+    const page = shown.pages + 1;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    setMoreError(null);
+    api
+      .logbook(regionId, { page, pageSize: PAGE_SIZE, search: shown.query })
+      .then((next) => {
+        if (own !== generation.current) return;
+        const items = appendNew(shown.items, next.items);
+        // Rows added or removed since the list loaded: every offset has moved
+        if (next.total !== shown.total || items.length !== shown.items.length + next.items.length) {
+          setReloadKey((key) => key + 1);
+          return;
+        }
+        setList({ ...shown, items, pages: page });
+      })
+      .catch((caught: unknown) => {
+        if (own !== generation.current) return;
+        setMoreError(caught instanceof Error ? caught.message : "Could not load more.");
+      })
+      .finally(() => {
+        if (own !== generation.current) return;
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  }, [regionId]);
 
   return (
     <Screen edges={["top"]}>
@@ -118,6 +201,11 @@ function Logbook({ regionId }: { regionId: RegionId }): ReactNode {
           returnKeyType="search"
           className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
         />
+        {refreshError ? (
+          <Text className="text-sm text-red-600 dark:text-red-400">
+            Couldn’t refresh: {refreshError}
+          </Text>
+        ) : null}
       </View>
 
       {error ? (
@@ -125,40 +213,41 @@ function Logbook({ regionId }: { regionId: RegionId }): ReactNode {
           <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text>
           <Button label="Try again" onPress={() => setReloadKey((key) => key + 1)} />
         </View>
-      ) : data === null ? (
+      ) : list === null ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
       ) : (
         <FlatList
-          data={data.items}
+          data={list.items}
           keyExtractor={itemKey}
           contentContainerClassName="gap-3 px-4 pb-6"
+          keyboardDismissMode="on-drag"
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true);
+            bumpLogVersion();
+          }}
+          // Not after a failure: that waits for "Try again", rather than retrying as
+          // fast as the list can scroll
+          onEndReached={moreError ? undefined : loadMore}
+          onEndReachedThreshold={0.5}
           ListEmptyComponent={
             <Text className="pt-8 text-center text-sm text-gray-600 dark:text-gray-400">
-              {query
+              {list.query
                 ? "Nothing matches that."
                 : "Nothing logged in this region yet. Pick routes on the map to start."}
             </Text>
           }
           ListFooterComponent={
-            lastPage > 1 ? (
-              <View className="flex-row items-center justify-between gap-3 pt-4">
-                <Button
-                  label="Previous"
-                  variant="outline"
-                  disabled={page <= 1}
-                  onPress={() => setPage((p) => Math.max(1, p - 1))}
-                />
-                <Text className="text-sm text-gray-600 dark:text-gray-400">
-                  {page} / {lastPage}
-                </Text>
-                <Button
-                  label="Next"
-                  variant="outline"
-                  disabled={page >= lastPage}
-                  onPress={() => setPage((p) => Math.min(lastPage, p + 1))}
-                />
+            moreError ? (
+              <View className="gap-2 pt-2">
+                <Text className="text-sm text-red-600 dark:text-red-400">{moreError}</Text>
+                <Button label="Try again" variant="outline" onPress={loadMore} />
+              </View>
+            ) : loadingMore ? (
+              <View className="items-center pt-2">
+                <ActivityIndicator />
               </View>
             ) : undefined
           }
@@ -176,6 +265,12 @@ function Logbook({ regionId }: { regionId: RegionId }): ReactNode {
       )}
     </Screen>
   );
+}
+
+/** `next` after `items`, less any row `items` already has. */
+function appendNew(items: api.LogbookItem[], next: api.LogbookItem[]): api.LogbookItem[] {
+  const seen = new Set(items.map(itemKey));
+  return [...items, ...next.filter((item) => !seen.has(itemKey(item)))];
 }
 
 function itemKey(item: api.LogbookItem): string {

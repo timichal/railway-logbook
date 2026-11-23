@@ -12,7 +12,9 @@
  * The form is the web app's: a required name, a required date defaulting to today,
  * an optional description, and an optional trip to file it under. The trip list is
  * region-scoped for the reason `API.md` gives — a journey is logged on one region's
- * map, so offering the other continent's trips only invites a misfile.
+ * map, so offering the other continent's trips only invites a misfile. "New trip…"
+ * makes one on the spot (`edit-trip`, which files this journey under it), and the
+ * list is read again on the log version its save bumps.
  *
  * An edit's Save sends only what changed (`journeyEditsToSave`), in one request the
  * server applies all or nothing. Saving a journey with no routes left offers to
@@ -39,7 +41,8 @@ import {
 import * as api from "@/api/endpoints";
 import { confirmClearSelection, confirmStopEditing } from "@/logbook/confirmClearSelection";
 import { journeyEditsToSave, loggedRouteInput } from "@/logbook/journeyEdit";
-import { bumpLogVersion } from "@/logbook/logVersion";
+import { bumpLogVersion, useLogVersion } from "@/logbook/logVersion";
+import { newTripMark, settleNewTrip, withNewTrip } from "@/logbook/newTrip";
 import {
   dateOffsetFromToday,
   loggedLengthKm,
@@ -58,22 +61,32 @@ export default function LogJourneyScreen(): ReactNode {
   const { selected, form, editing, updateForm, remove, clear, resetNew, freshenDate, endEdit } =
     useSelection();
 
+  const logVersion = useLogVersion();
   const [trips, setTrips] = useState<api.TripWithStats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Read again on the log version: a trip made with "New trip…" joins the list. The
+  // list shown stays meanwhile.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: logVersion is an intentional trigger — a trip made or renamed elsewhere re-reads the list.
   useEffect(() => {
     let cancelled = false;
+    const mark = newTripMark();
     void api
       .trips(regionId)
+      .then((list) => {
+        if (cancelled) return;
+        settleNewTrip(mark);
+        setTrips(list);
+      })
       // A trip is optional, so a list that fails to load is not an error worth
-      // blocking the form with — it just means this journey stands on its own.
-      .then((list) => !cancelled && setTrips(list))
-      .catch(() => !cancelled && setTrips([]));
+      // blocking the form with. A list already shown stays; none means this journey
+      // stands on its own (or goes under a new trip).
+      .catch(() => !cancelled && setTrips((current) => current ?? []));
     return () => {
       cancelled = true;
     };
-  }, [regionId]);
+  }, [regionId, logVersion]);
 
   // The draft can be days old by now: a date never chosen means today, not then
   useEffect(() => freshenDate(), [freshenDate]);
@@ -176,12 +189,14 @@ export default function LogJourneyScreen(): ReactNode {
       endEdit();
     });
 
-  // The trip it is filed under, though the list doesn't have it (another region's):
+  // A trip just made here, though the list hasn't read it yet (`newTrip.ts`); then
+  // the trip it is filed under, though the list doesn't have it (another region's):
   // shown rather than read as None
+  const withMade = trips && withNewTrip(trips);
   const tripOptions =
-    trips && form.tripId !== null && !trips.some((trip) => trip.id === form.tripId)
-      ? [...trips, { id: form.tripId, name: "Current trip" }]
-      : trips;
+    withMade && form.tripId !== null && !withMade.some((trip) => trip.id === form.tripId)
+      ? [...withMade, { id: form.tripId, name: "Current trip" }]
+      : withMade;
 
   return (
     <Screen>
@@ -265,6 +280,8 @@ export default function LogJourneyScreen(): ReactNode {
             trips={tripOptions}
             value={form.tripId}
             onChange={(tripId) => updateForm({ tripId })}
+            onNew={() => router.push({ pathname: "/edit-trip", params: { fileUnder: "1" } })}
+            disabled={saving}
           />
 
           <View className="gap-2">
@@ -383,15 +400,20 @@ function RouteRow({
 /**
  * Which trip this journey is filed under, if any. A plain list rather than a native
  * picker: there are rarely many, and a list says what the options are without a tap.
+ * Shown with no trips too, for "New trip…".
  */
 function TripPicker({
   trips,
   value,
   onChange,
+  onNew,
+  disabled,
 }: {
   trips: { id: number; name: string }[] | null;
   value: number | null;
   onChange(id: number | null): void;
+  onNew(): void;
+  disabled: boolean;
 }): ReactNode {
   if (trips === null) {
     return (
@@ -400,7 +422,6 @@ function TripPicker({
       </View>
     );
   }
-  if (trips.length === 0) return null;
 
   return (
     <View className="gap-2">
@@ -419,6 +440,7 @@ function TripPicker({
             onPress={() => onChange(trip.id)}
           />
         ))}
+        <Button label="New trip…" variant="ghost" disabled={disabled} onPress={onNew} />
       </View>
     </View>
   );

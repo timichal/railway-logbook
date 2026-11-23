@@ -26,7 +26,7 @@ import type {
   Station,
   Trip,
 } from "@shared/types";
-import { type ApiUser, type AuthResponse, request } from "./client";
+import { type ApiUser, type AuthResponse, replacePair, request } from "./client";
 
 export type Progress = UserProgress;
 
@@ -55,6 +55,23 @@ export async function me(): Promise<ApiUser> {
 /** The account and everything in it, gone. A wrong password is a 400, never a sign-out. */
 export async function deleteAccount(password: string): Promise<void> {
   await request("/auth/me", { method: "DELETE", body: { password } });
+}
+
+/**
+ * Every other device and browser signed out (`POST /auth/sign-out-others`), this
+ * one kept: the server refuses every token issued before now, this device's own
+ * pair included, and answers with a new pair, which is saved in its place
+ * (`replacePair`, which also keeps requests still out with the old one from ending
+ * the session).
+ */
+export function signOutOtherDevices(password: string): Promise<AuthResponse> {
+  return replacePair(() =>
+    request<AuthResponse>("/auth/sign-out-others", {
+      method: "POST",
+      body: { password },
+      replacingPair: true,
+    }),
+  );
 }
 
 // ============================================================================

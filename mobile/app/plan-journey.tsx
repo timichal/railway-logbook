@@ -206,11 +206,24 @@ export default function PlanJourneyScreen(): ReactNode {
             </View>
           ))}
 
-          <Button
-            label="+ Add via station"
-            variant="outline"
-            onPress={() => editForm((f) => ({ ...f, vias: [...f.vias, null] }))}
-          />
+          <View className="flex-row gap-2">
+            <Button
+              label="+ Add via station"
+              variant="outline"
+              className="flex-1"
+              onPress={() => editForm((f) => ({ ...f, vias: [...f.vias, null] }))}
+            />
+            {/* The journey the other way: From and To change places, and the vias
+                are taken in reverse order */}
+            <IconButton
+              icon="swap-vertical"
+              label="Swap From and To"
+              disabled={!from && !to && vias.length < 2}
+              onPress={() =>
+                editForm((f) => ({ ...f, from: f.to, to: f.from, vias: [...f.vias].reverse() }))
+              }
+            />
+          </View>
 
           <StationField
             label="To"

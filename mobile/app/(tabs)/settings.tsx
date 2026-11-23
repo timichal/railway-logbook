@@ -95,6 +95,11 @@ export default function SettingsScreen(): ReactNode {
 
         <Section title="Account">
           <Button label="Log out" variant="danger" onPress={() => void signOut()} />
+          <Button
+            label="Sign out other devices"
+            variant="ghost"
+            onPress={() => router.push("/sign-out-others")}
+          />
           {/* Required by both stores. Not for the admin, whose account the server
               refuses to delete. */}
           {user && user.id !== 1 ? (

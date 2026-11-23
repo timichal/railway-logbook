@@ -15,6 +15,13 @@
  * cold start would otherwise send three refreshes, and since each one issues a new
  * pair (`API.md`), the last write would win and the other two responses would be
  * discarded — leaving tokens in the keychain that no reply ever confirmed.
+ *
+ * **A pair can also be replaced on purpose** (`replacePair`: "Sign out other
+ * devices", which refuses every token issued before it, this device's own old pair
+ * included). A request still out with the old token then comes back 401, and its
+ * refresh with the old refresh token would be refused and end the session. So a
+ * 401 first waits for a replacement under way and retries with the pair held now,
+ * if that is not the one it was sent with; only a 401 on the current pair refreshes.
  */
 
 import {
@@ -71,6 +78,8 @@ export interface RequestOptions {
   query?: Record<string, QueryValue>;
   /** Send the bearer token, and refresh-and-retry on a 401. Default true. */
   auth?: boolean;
+  /** The request a `replacePair` is made with, which must not wait for itself on a 401. */
+  replacingPair?: boolean;
   signal?: AbortSignal;
 }
 
@@ -144,6 +153,45 @@ type RefreshResult =
 
 let refreshInFlight: Promise<RefreshResult> | null = null;
 
+/** A `replacePair` under way: a 401 waits for it before deciding anything. */
+let pairBeingReplaced: Promise<void> | null = null;
+
+/** Once no replacement is under way, the pair held then if it is not `sent`; else null. */
+async function replacedSince(sent: TokenPair): Promise<TokenPair | null> {
+  while (pairBeingReplaced) await pairBeingReplaced;
+  const held = await loadTokens();
+  return held && held.accessToken !== sent.accessToken ? held : null;
+}
+
+/**
+ * Swap the held pair for the one `exchange` gets from the server, where the server
+ * refuses the old one from then on. `exchange` makes its request with
+ * `replacingPair: true`. A refresh in flight lands first, so it can't overwrite the
+ * new pair with an old one. Nothing is saved if `exchange` fails.
+ */
+export async function replacePair(exchange: () => Promise<AuthResponse>): Promise<AuthResponse> {
+  const run = (async () => {
+    const result = await exchange();
+    await refreshInFlight;
+    await saveTokens(
+      { accessToken: result.accessToken, refreshToken: result.refreshToken },
+      result.expiresIn,
+    );
+    return result;
+  })();
+  // Settles either way, and never rejects: the caller hears the failure from `run`
+  const tracked: Promise<void> = run
+    .then(
+      () => {},
+      () => {},
+    )
+    .finally(() => {
+      if (pairBeingReplaced === tracked) pairBeingReplaced = null;
+    });
+  pairBeingReplaced = tracked;
+  return run;
+}
+
 /** Swap the pair for a fresh one. Single-flight. */
 function refresh(refreshToken: string): Promise<RefreshResult> {
   refreshInFlight ??= (async (): Promise<RefreshResult> => {
@@ -196,14 +244,24 @@ export async function refreshIfExpiring(marginMs: number): Promise<void> {
   const expiresAt = accessTokenExpiresAt();
   if (expiresAt !== null && expiresAt - Date.now() > marginMs) return;
   const result = await refresh(tokens.refreshToken);
-  if (result.kind === "rejected") await endSession();
+  // Refused because the pair was replaced meanwhile: the new one stands
+  if (result.kind === "rejected" && !(await replacedSince(tokens))) await endSession();
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const authenticated = options.auth !== false;
-  const tokens = authenticated ? await loadTokens() : null;
+  let tokens = authenticated ? await loadTokens() : null;
 
   let response = await send(path, options, tokens?.accessToken ?? null);
+
+  // Sent with a pair that has been replaced since: once more with the new one
+  if (response.status === 401 && authenticated && tokens && !options.replacingPair) {
+    const replaced = await replacedSince(tokens);
+    if (replaced) {
+      tokens = replaced;
+      response = await send(path, options, tokens.accessToken);
+    }
+  }
 
   if (response.status === 401 && authenticated && tokens) {
     const result = await refresh(tokens.refreshToken);
@@ -218,10 +276,17 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       response = await send(path, options, result.tokens.accessToken);
     }
 
+    // Refused because the pair was replaced while the refresh was out: the new one
+    const replaced =
+      result.kind === "rejected" && !options.replacingPair ? await replacedSince(tokens) : null;
+    if (replaced) {
+      response = await send(path, options, replaced.accessToken);
+    }
+
     // Either the refresh token was refused, or a freshly minted access token was:
     // both mean the session is over, and it ends here rather than at whichever
     // screen made the call.
-    if (result.kind === "rejected" || response.status === 401) {
+    if ((result.kind === "rejected" && !replaced) || response.status === 401) {
       await endSession();
       throw new ApiError(401, "Your session has expired. Please sign in again.");
     }
