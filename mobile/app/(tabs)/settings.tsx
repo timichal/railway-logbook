@@ -5,6 +5,7 @@
  */
 
 import { hasStatsView, REGIONS, type RegionId } from "@shared/regions";
+import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { type ReactNode, useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
@@ -68,7 +69,10 @@ export default function SettingsScreen(): ReactNode {
             />
           </Section>
         ) : hasStatsView(regionId) ? (
-          <Section title="Statistics" hint="How far you are on each kind of line.">
+          <Section
+            title="Statistics"
+            hint="Which kinds of line the map shows and counts, and how far you are on each."
+          >
             <Button
               label="Statistics"
               variant="outline"
@@ -102,7 +106,11 @@ export default function SettingsScreen(): ReactNode {
           ) : null}
         </Section>
 
-        <Text className="text-center text-xs text-gray-400 dark:text-gray-500">{API_ORIGIN}</Text>
+        <Text className="text-center text-xs text-gray-400 dark:text-gray-500">
+          {/* The server only matters to whoever is developing against it */}
+          Version {Constants.expoConfig?.version ?? "unknown"}
+          {__DEV__ ? ` · ${API_ORIGIN}` : ""}
+        </Text>
       </ScrollView>
     </Screen>
   );

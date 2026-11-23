@@ -561,17 +561,30 @@ raw_record() {
     printf 'replication %s' "$(header_option "$1" osmosis_replication_sequence_number)"
 }
 
+# The replication (daily diffs and state.txt) of extract $1. Geofabrik moved
+# it from <extract>-updates to <extract>/updates in November 2026, with the
+# same sequence numbers; the old URL answers with a redirect.
+updates_url() {
+    echo "${GEOFABRIK}/$1/updates"
+}
+
 # Whether a raw file of extract $1 can be kept up to date from Geofabrik: its
 # header says which diff it is at, on that extract's own replication. Checked
 # before every update rather than trusted, because a sequence number means
 # nothing on another extract's replication. The URL is compared without a
 # trailing slash: pyosmium 4.3.2 wrote one after an update and 4.3.0 didn't,
 # and a mismatch here deletes the file, so a file updated by either would
-# otherwise be dropped by the other.
+# otherwise be dropped by the other. The old <extract>-updates URL is taken
+# too: files cached before the move carry it until their next rebase, which
+# writes the new one (rebase_raw), and dropping them would download the whole
+# cache again.
 updatable_raw() {
     U_BASE_URL="$(header_option "$2" osmosis_replication_base_url)"
-    [ "${U_BASE_URL%/}" = "${GEOFABRIK}/$1-updates" ] &&
-        [ -n "$(header_option "$2" osmosis_replication_sequence_number)" ]
+    case "${U_BASE_URL%/}" in
+        "$(updates_url "$1")" | "${GEOFABRIK}/$1-updates") ;;
+        *) return 1 ;;
+    esac
+    [ -n "$(header_option "$2" osmosis_replication_sequence_number)" ]
 }
 
 # The cached raw file of extract $1, or nothing.
@@ -606,7 +619,7 @@ raw_age_days() {
 stale_raw_reason() {
     S_AGE="$(raw_age_days "$2")"
     if ! updatable_raw "$1" "$2"; then
-        echo "it has no replication state of ${GEOFABRIK}/$1-updates"
+        echo "it has no replication state of $(updates_url "$1")"
     elif [ -z "${S_AGE}" ]; then
         echo "its replication timestamp can't be read"
     elif [ "${S_AGE}" -gt "${MAX_UPDATE_AGE_DAYS}" ]; then
@@ -687,7 +700,7 @@ state_field() {
 update_changes() {
     U_EXTRACT="$1"
     U_RAW="$2"
-    U_URL="${GEOFABRIK}/${U_EXTRACT}-updates"
+    U_URL="$(updates_url "${U_EXTRACT}")"
     U_BASE="$(header_option "${U_RAW}" osmosis_replication_sequence_number)"
     U_CHANGES="$(raw_changes "${U_RAW}")"
     U_FROM="${U_BASE}"
@@ -756,7 +769,7 @@ update_changes() {
 }
 
 # A file holding the state update_changes reached gets its replication header
-# (apply-changes keeps none of its input's): the raw file's URL, U_SEQ and
+# (apply-changes keeps none of its input's): the extract's URL, U_SEQ and
 # U_TIMESTAMP. extract_date reads the date from it, raw_record the sequence,
 # updatable_raw the URL. Run osmium with these, after setting H_URL.
 with_state_header() {
@@ -783,7 +796,7 @@ rebase_raw() {
     B_START="$(date +%s)"
     # Swept by step 1 (tmp*-*.osm.pbf) if the run stops.
     B_TMP="$(dirname "${B_RAW}")/tmp-rebase-$(basename "${B_RAW}")"
-    H_URL="$(header_option "${B_RAW}" osmosis_replication_base_url)"
+    H_URL="$(updates_url "${B_EXTRACT}")"
     with_state_header osmium apply-changes --no-progress -O -f pbf -o "${B_TMP}" "${B_RAW}" "${U_CHANGES}" || {
         rm -f "${B_TMP}"
         say "${B_EXTRACT}" "failed to apply the changes to ${B_RAW}"
@@ -867,7 +880,7 @@ refilter_extract() {
     R_START="$(date +%s)"
     R_BASE="${R_RAIL_FILE}"
     R_PASS=1
-    H_URL="$(header_option "${R_RAW}" osmosis_replication_base_url)"
+    H_URL="$(updates_url "${R_EXTRACT}")"
     while :; do
         # RAIL_FILTER unquoted: one argument per expression.
         # shellcheck disable=SC2086
@@ -957,7 +970,7 @@ filter_extract() {
         source_record "$(raw_record "${F_KEEP_AS}")" > "${F_RAIL_FILE}.source"
     else
         if [ -n "${F_KEEP_AS}" ]; then
-            say "${F_EXTRACT}" "not cached: it has no replication state of ${GEOFABRIK}/${F_EXTRACT}-updates"
+            say "${F_EXTRACT}" "not cached: it has no replication state of $(updates_url "${F_EXTRACT}")"
         fi
         rm -f "${F_DOWNLOAD}"
         case "${F_DOWNLOAD}" in
@@ -1059,8 +1072,8 @@ fi
 # Geofabrik is asked a few extracts at a time. Any one that fails to answer
 # fails the whole query, its reason printed instead.
 state_value() {
-    curl -sf --retry 3 "${GEOFABRIK}/$1-updates/state.txt" > "${L_DIR}/$1.state" || {
-        echo "ERROR: ${GEOFABRIK}/$1-updates/state.txt is not available"
+    curl -sf --retry 3 "$(updates_url "$1")/state.txt" > "${L_DIR}/$1.state" || {
+        echo "ERROR: $(updates_url "$1")/state.txt is not available"
         return 1
     }
     state_field "$(cat "${L_DIR}/$1.state")" "$2"

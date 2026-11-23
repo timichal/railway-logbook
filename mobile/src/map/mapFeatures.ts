@@ -13,7 +13,7 @@
 
 import { type RouteFeatureProperties, routeLinkLabel } from "@shared/map/routeFeature";
 import type { RouteRide } from "@shared/map/routeRides";
-import type { RailwayRoute } from "@shared/types";
+import type { RailwayRoute, Station } from "@shared/types";
 
 export interface RouteFeature extends RouteFeatureProperties {
   kind: "route";
@@ -30,6 +30,11 @@ export interface RouteFeature extends RouteFeatureProperties {
 export interface StationFeature {
   kind: "station";
   name: string;
+  /**
+   * The station as the planner takes it, or null when the press carried no usable
+   * id or point: then the sheet can still name it, but has nothing to plan with.
+   */
+  station: Station | null;
 }
 
 export interface NoteFeature {
@@ -78,9 +83,25 @@ export function lastJourneyOf(ride: RouteRide | undefined): RouteFeature["lastJo
   return date && name ? { date, name } : null;
 }
 
-export function toStationFeature(properties: Properties): StationFeature | null {
+/**
+ * A pressed station. The tile's `id` is a property, not the feature id, and may be
+ * negative (an area reduced to its centroid); the point is the press hit's geometry,
+ * which is where the circle is drawn.
+ */
+export function toStationFeature(
+  properties: Properties,
+  geometry: GeoJSON.Geometry | null | undefined,
+): StationFeature | null {
   const name = text(properties?.name);
-  return name ? { kind: "station", name } : null;
+  if (!name) return null;
+  const id = Number(properties?.id);
+  const point =
+    geometry?.type === "Point" && geometry.coordinates.length >= 2
+      ? ([geometry.coordinates[0], geometry.coordinates[1]] as [number, number])
+      : null;
+  const station =
+    Number.isFinite(id) && id !== 0 && point ? { id, name, coordinates: point } : null;
+  return { kind: "station", name, station };
 }
 
 export function toNoteFeature(properties: Properties): NoteFeature | null {
@@ -90,9 +111,11 @@ export function toNoteFeature(properties: Properties): NoteFeature | null {
 }
 
 /**
- * A route feature, from the HTTP API's route row (`POST /routes/metadata`).
+ * A route feature, from the HTTP API's route row (`POST /routes/metadata`, or a
+ * logged route of `GET /journeys/:id`).
  *
- * Both a tapped route and the journey planner's go through here: the tile holds
+ * A tapped route, the journey planner's and a journey taken up for editing all go
+ * through here: the tile holds
  * only what the layers draw with, and the planner identifies its routes by id. So a
  * route is described by exactly the same `routeTitle` and `routeBadges` wherever it
  * came from.
@@ -103,7 +126,7 @@ export function toNoteFeature(properties: Properties): NoteFeature | null {
  * where you have been.
  */
 export function routeFeatureFromMetadata(
-  route: RailwayRoute,
+  route: Omit<RailwayRoute, "geometry">,
   lastJourney: RouteFeature["lastJourney"] = null,
 ): RouteFeature {
   return {

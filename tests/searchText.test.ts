@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { filterByName, foldAccents, foldForSearch } from "@/lib/searchText";
+import { filterByName, foldAccents, foldForSearch } from "@/lib/shared/searchText";
 
 describe("foldForSearch", () => {
   test("drops case and combining diacritics", () => {

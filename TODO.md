@@ -4,7 +4,7 @@
 
 Do these in order. Automatic backups are out of scope (the server already takes them). Session revocation ("Sign out other devices") and the CI gates from this review are done.
 
-- **Let `api/me` and `api/v1` share their read handlers.** Today `src/app/api/me/*` (cookie, the web page's reads through `sessionReads.ts`), `src/app/api/v1/*` (bearer, the native app), `src/app/api/shared/<token>/*` and `src/app/api/public/*` each hold a ~20-line copy of the same wrapper around one query function (`progressForUser`, `routeRidesForUser`, the coverage, logbook and trip reads…). The copies have already drifted: `api/me/progress` passes `usage` (`optionalIntList(url, "usage")`) to `progressForUser`, `api/v1/progress` doesn't, and the app's `progress()` in `mobile/src/api/endpoints.ts` doesn't send it. Decide whether the app should get it before merging. Two ways to do it:
+- **Let `api/me` and `api/v1` share their read handlers.** Today `src/app/api/me/*` (cookie, the web page's reads through `sessionReads.ts`), `src/app/api/v1/*` (bearer, the native app), `src/app/api/shared/<token>/*` and `src/app/api/public/*` each hold a ~20-line copy of the same wrapper around one query function (`progressForUser`, `routeRidesForUser`, the coverage, logbook and trip reads…). They had drifted once already (`api/v1/progress` lacked `usage` until 2026-11-19). Two ways to do it:
   - (a) Keep both URL sets and give each read one body, e.g. a `userRead(resolveUser, (user, url) => …)` builder in `src/lib/api/`, with `requireSessionUser` (`webSession.ts`) for `api/me` and `requireUser` (`api/auth.ts`) for `v1`.
   - (b) Have the `v1` GET handlers also accept the session cookie, point `sessionReads.ts` at them, and delete `api/me`.
 

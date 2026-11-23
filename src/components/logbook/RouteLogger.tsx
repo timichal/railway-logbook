@@ -332,22 +332,12 @@ function SelectedRoutesList({
                     <div className="font-medium truncate">{name ?? endpoints}</div>
                     {name && <div className="text-gray-500 truncate">{endpoints}</div>}
                     {/* A partial ride comes from the planner, with the stretch it
-                        measured; one of unknown extent only from older journeys
-                        (and the API), and is shown for what it is */}
+                        measured */}
                     <div className="mt-1 text-gray-600">
                       {loggedLengthKm(route).toFixed(1)} km
-                      {route.partial &&
-                        (route.travelled_length_km != null ? (
-                          <span className="text-amber-700"> of {route.length_km.toFixed(1)}</span>
-                        ) : (
-                          <span
-                            className="text-amber-700"
-                            title="Ridden in part, where along it unknown. Remove it and pick it again to log it whole."
-                          >
-                            {" "}
-                            · partial, extent unknown
-                          </span>
-                        ))}
+                      {route.partial && route.travelled_length_km != null && (
+                        <span className="text-amber-700"> of {route.length_km.toFixed(1)}</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">

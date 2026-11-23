@@ -17,9 +17,9 @@ import {
   updateRailwayRoute,
 } from "@/lib/adminRouteActions";
 import { useRegion } from "@/lib/regionContext";
-import { foldForSearch } from "@/lib/searchText";
 import { routeTitle } from "@/lib/shared/map/routeFeature";
 import type { Region } from "@/lib/shared/regions";
+import { foldForSearch } from "@/lib/shared/searchText";
 import type { RouteBounds } from "@/lib/shared/types";
 import { ConfirmDialog, useToast } from "@/lib/toast";
 import { compareByEndpoints, compareText } from "@/lib/ui/adminListSort";

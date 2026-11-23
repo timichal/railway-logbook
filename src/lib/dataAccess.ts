@@ -213,7 +213,7 @@ function createLocalStorageDataAccess(region: RegionId): DataAccess {
 
     async getCoveredStretches(): Promise<CoveredStretch[]> {
       // Same shape as the database query in getCoveredStretches: partial rides
-      // with a known stretch, on routes that aren't ridden whole (a route whose
+      // (each with its stretch), on routes that aren't ridden whole (a route whose
       // stretches add up to all of it draws in the visited colour already). The
       // route list is asked for only where there is a stretch to check.
       const logged = localStore.getLoggedParts();

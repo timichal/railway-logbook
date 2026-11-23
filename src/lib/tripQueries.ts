@@ -60,8 +60,8 @@ export type TripWithStats = Trip & {
 };
 
 /**
- * How far the logged part `ulp` of route `rr` went: the stretch travelled where it
- * is known, the whole line otherwise.
+ * How far the logged part `ulp` of route `rr` went: the stretch travelled on a
+ * partial ride, the whole line otherwise.
  */
 const LOGGED_KM_SQL = `CASE WHEN ${HAS_STRETCH_SQL}
   THEN rr.length_km * (ulp.covered_end - ulp.covered_start)::numeric
@@ -69,8 +69,7 @@ const LOGGED_KM_SQL = `CASE WHEN ${HAS_STRETCH_SQL}
 
 /**
  * What a trip rode of each of its routes, one row per (trip_id, track_id): `whole`
- * when any journey rode it whole (or partial with no known stretch, see
- * HAS_STRETCH_SQL), otherwise `stretches`, the union of the journeys' stretches as a
+ * when any journey rode it whole, otherwise `stretches`, the union of the journeys' stretches as a
  * nummultirange — so two rides over one stretch count it once, and A–B plus B–C add
  * up to A–C. `where` is a condition on `uj` (the trip's journeys) and must hold the
  * user condition.
@@ -222,8 +221,8 @@ export async function tripNamesForUser(userId: number, region: RegionId): Promis
  *
  * `partials` are the routes the trip rode only part of, cut to what it rode — each
  * disjoint stretch of the union its distance counts (tripRouteCoverageSql). A route
- * any journey rode whole, or partial with no known stretch, has none and is
- * highlighted whole, as the distance counts it whole.
+ * any journey rode whole has none and is highlighted whole, as the distance counts
+ * it whole.
  *
  * `bounds` is the box of its routes in `region`, which the map fits to (see
  * journeyWithBoundsForUser), read with the route ids rather than in a query of its
@@ -337,7 +336,7 @@ export async function assignJourneyToTripForUser(
   tripId: number,
 ): Promise<void> {
   // A null would pass the FK (MATCH SIMPLE skips it) and unfile the journey,
-  // which is unassignJourneyFromTripForUser's job, not this one's
+  // which a journey edit does (tripId: null), not this
   if (!Number.isInteger(tripId)) throw new ValidationError("Trip id is required");
 
   // A trip that isn't the user's fails the composite FK (trip_id, user_id),
@@ -351,18 +350,6 @@ export async function assignJourneyToTripForUser(
     .catch((error: unknown) => {
       throw asMissingRow(error);
     });
-  if (result.rowCount === 0) throw new NotFoundError("Journey not found");
-}
-
-/** File a journey under no trip. */
-export async function unassignJourneyFromTripForUser(
-  userId: number,
-  journeyId: number,
-): Promise<void> {
-  const result = await pool.query(
-    "UPDATE user_journeys SET trip_id = NULL WHERE id = $1 AND user_id = $2",
-    [journeyId, userId],
-  );
   if (result.rowCount === 0) throw new NotFoundError("Journey not found");
 }
 
@@ -402,6 +389,12 @@ export async function journeysAndTripsForUser(
     ? `%${escapeLikePattern(search.trim().toLowerCase())}%`
     : null;
 
+  // What a journey is found by. A trip is found by its own name and description,
+  // or by any journey filed under it: searching for a journey that sits in a trip
+  // lists the trip, which is where the journey is shown.
+  const journeyMatches = (alias: string) =>
+    `(LOWER(${alias}.name) LIKE $2 OR LOWER(COALESCE(${alias}.description, '')) LIKE $2 OR ${alias}.date::text LIKE $2)`;
+
   // Build the union of trips + standalone journeys with effective_date for sorting.
   // The search predicate (when present) is applied per branch to keep it index-friendly.
   const baseCte = `
@@ -413,7 +406,15 @@ export async function journeysAndTripsForUser(
       LEFT JOIN user_journeys uj ON ut.id = uj.trip_id AND uj.user_id = $1
       WHERE ut.user_id = $1
         AND ${tripInRegionSql(region, "ut.id")}
-        ${searchPattern ? `AND (LOWER(ut.name) LIKE $2 OR LOWER(COALESCE(ut.description, '')) LIKE $2)` : ""}
+        ${
+          searchPattern
+            ? `AND (LOWER(ut.name) LIKE $2 OR LOWER(COALESCE(ut.description, '')) LIKE $2
+                    OR EXISTS (
+                      SELECT 1 FROM user_journeys mj
+                      WHERE mj.trip_id = ut.id AND mj.user_id = $1 AND ${journeyMatches("mj")}
+                    ))`
+            : ""
+        }
       GROUP BY ut.id
 
       UNION ALL
@@ -424,7 +425,7 @@ export async function journeysAndTripsForUser(
       FROM user_journeys uj
       WHERE uj.user_id = $1 AND uj.trip_id IS NULL
         AND ${journeyInRegionSql(region, "uj.id")}
-        ${searchPattern ? `AND (LOWER(uj.name) LIKE $2 OR LOWER(COALESCE(uj.description, '')) LIKE $2 OR uj.date::text LIKE $2)` : ""}
+        ${searchPattern ? `AND ${journeyMatches("uj")}` : ""}
     )
   `;
 

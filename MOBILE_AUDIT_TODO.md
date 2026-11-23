@@ -22,29 +22,6 @@ Items found already done were deleted; the gaps the web has opened since are und
 
 ## High — bugs and the foundation
 
-- [ ] **Check the SDK 58 upgrade on the device.** _(device)_ On 2026-11-18 the app
-      moved to Expo SDK 58, React Native 0.88, React 19.3, gesture-handler 3 and
-      Reanimated 4.7 (now with `react-native-worklets`), and TypeScript 7. The map
-      draws and routes are coloured. Left: the gesture-driven parts (map pan and press,
-      modal swipe-down, the switches), since gesture-handler went up a major version.
-
-      Warnings are read in React Native DevTools now (`mobile/CLAUDE.md`). The one it
-      shows at startup, `ImageBackground is deprecated`, is known and harmless:
-      NativeWind's runtime (`react-native-css-interop` 0.2.7) touches `ImageBackground`
-      as it loads. It goes with NativeWind 5.
-
-- [ ] **Finish checking the 2026-10-14 High fixes on the device.** _(device)_ The
-      airplane-mode cold start, the map's top row, dark mode, a plain return after a
-      minute, switching to a different account, and a return after logging on the web
-      have been confirmed on the iPhone. Left:
-  - A return after more than a minute **offline** changes nothing: routes, numbers and
-    the logbook stay as drawn. Pulling down the notification centre doesn't count as leaving.
-  - The error screen. It needs a throw during render, so add one temporarily: for the
-    tab boundary, `if (Math.random() < 2) throw new Error("test")` at the top of
-    `SettingsScreen` (Retry should keep the session); for the root one, the same line
-    in `RootNavigator` (it renders without any provider). In a development build the
-    red LogBox overlay comes first; dismiss it to see the screen behind.
-
 - [ ] **How does MapLibre Native's disk cache treat the route tile?** _(device)_ It
       is Martin's now, the same for every account, and the colours are the rides
       (`useRides`, `GET /api/v1/rides`), so no cache can show another account's
@@ -56,41 +33,24 @@ Items found already done were deleted; the gaps the web has opened since are und
       keyboard handling have never run on Android (`MOBILE_APP_PLAN.md`, Phase 2). The
       modals' keyboard fix relies on Android resizing the window. Edge-to-edge is
       always on since SDK 58 (`edgeToEdgeEnabled` left `app.json` with the upgrade), so
-      check that it still does. `expo-system-ui` exists only for Android. Do this before
+      check that it still does. `expo-system-ui` exists only for Android. The map's open search should keep its place above the progress box with the keyboard up (the window resizes, so `useKeyboardTop` finds no overlap). Since 2026-11-19 the planner is a half-height `formSheet` over an undimmed map (`plannerSheet.ts`): check the map above it takes taps, that `plannerSheetCover`'s estimate puts a raised route sheet just above it (Android measures detents without the top inset while `sheetShouldOverflowTopInset` is off), and that the open search's tap-to-close layer stays above the "Plan journey" pill (it carries an `elevation` for this, `MapTopControls.tsx`). Do this before
       the UI pass, so the pass covers both platforms.
 
 ---
 
 ## Medium — UX gaps against the web and platform conventions
 
-- [ ] **Check the fly-to on the device.** _(device)_ "Show on the map" and a
-      planner result now fit the camera (`mobile/src/map/fitCamera.ts`), once the map
-      tab is in view. Check that the routes land clear of the top row and the progress
-      box, that a plan is flown to when the planner modal closes (it relies on
-      `useIsFocused` being false under the modal), that pressing "Showing on the map"
-      again flies back after a pan, and that a short route stops at zoom 12. The fit
-      waits for `onDidFinishLoadingStyle`: check that it still happens on the first
-      "Show on the map" after a cold start, and after switching the colour scheme.
+- [ ] **A chain can't be shown alone on the map.** On the web, pressing a chain
+      highlights just its routes and fits to them. The app's map fits only to a box the
+      server sends, and `GET /journeys/:id` sends one for the whole journey. The query
+      already computes each route's box before taking their union
+      (`journeyWithBoundsForUser`, `routeBoxSql`): return the boxes per route (or per
+      track id beside `bounds`), union a chain's in the app, and make `ChainRow`
+      pressable where there is more than one chain. Low.
 
-- [ ] **The station sheet has no actions.** Tapping a station shows its name and the
-      word "Station". On the web, the touch sheet for a station is how the planner gets
-      filled. Add "Plan from here" / "Plan to here" (and maybe "Add as via") that write
-      into `PlannerContext` and open the planner.
-
-- [ ] **The logbook can't show what a journey contains.** A journey card shows the
-      description and "Show on the map". Since the journeys refactor (2026-11-14) the
-      web card shows the routes as the lines of stations they were ridden along
-      ("Praha – Beroun – Plzeň", `JourneyChainList`, built by `src/lib/journeyChains.ts`
-      from each route's `ends`), with `LoggedRouteRow` for the detail. Journeys inside a
-      trip can't be expanded at all. Load `GET /journeys/:id` when a card opens (it
-      already returns `ends`) and show the chains. `journeyChains.ts` and what it imports
-      (`geoUtils.ts`, `searchText.ts`) are dependency-free, so move them into
-      `src/lib/shared/` rather than writing a second copy. This is also the base that
-      editing will need (`journeyEdit.ts`, `JourneyEditForm` on the web).
-
-- [ ] **Trips can't be created in the app.** `createTrip` is in `endpoints.ts`, but
-      nothing calls it, so `TripPicker` offers only trips made on the web. Add "New trip…"
-      to the picker, or a create button in the logbook.
+- [ ] **A trip can't be made from the logging screen.** The logbook's "New trip"
+      (`app/edit-trip.tsx`) makes one, but `TripPicker` in `log-journey.tsx` offers only
+      trips that exist. Add "New trip…" there, picking the new trip once made. Low.
 
 - [ ] **The logbook needs pull-to-refresh, and should probably scroll endlessly.**
       Lists on a phone are refreshed by pulling down (`FlatList` `refreshing` /
@@ -98,62 +58,25 @@ Items found already done were deleted; the gaps the web has opened since are und
       sidebar. On a phone the convention is to load more with `onEndReached`. Changing
       pages also shows no loading state: the old page stays until the new one arrives.
 
-- [ ] **The logbook keeps its page, search and open card across a region switch.**
-      Page 3 of Europe becomes page 3 of Japan, which can be past the last page. The list
-      is then empty and says "Nothing logged in this region yet". Reset all three when the
-      region changes.
-
 - [ ] **The journey date is typed as text.** The plan ruled out a native picker
       because it would need "another development build". But every run is already a
       development build, so `@react-native-community/datetimepicker` costs only one
-      rebuild. Until then, check the format before submitting (the server's 400 is the
-      only check now), and show the date in the user's locale (`formatDateOnly`) next to
-      the raw value.
-
-- [ ] **The log-journey form is lost on Cancel or swipe-down.** The selection
-      survives, but the typed name, description, date and trip are gone. The web keeps
-      them as a draft until Save or Cancel (`editGuard`). Keep the form in a small context,
-      as `PlannerContext` does, and clear it after a successful log. iOS's swipe-down
-      dismiss isn't guarded either (`gestureEnabled` / `usePreventRemove`).
+      rebuild. The typed date is checked before sending and shown in the phone's
+      format beneath the field since 2026-11-19.
 
 - [ ] **Logging a journey gives no confirmation.** The modal closes and the route
       changes colour after the tile reloads (with a blink). The web shows a success toast.
-      Add a short toast or banner ("Journey logged · View in logbook").
+      Add a short toast or banner ("Journey logged · View in logbook"). The same goes
+      for an edit saved and a journey or trip deleted.
 
-- [ ] **The map's station search results can't be scrolled.** `StationResults` is a
-      plain `View` inside an absolutely positioned container. With the keyboard up on a
-      small phone, the lower results sit behind the keyboard and can't be reached. Use a
-      `FlatList` with a `maxHeight` and `keyboardShouldPersistTaps="handled"` (the
-      planner's `ScrollView` already has the latter).
-
-- [ ] **A failed station search says "No stations found."** `useStationSearch` treats
-      errors as no match, which is misleading when offline. Show "Couldn't search — check
-      your connection" instead.
-
-- [ ] **Planner legs don't show the line name.** `PlannedRouteRow` shows only
-      `from ⟷ to`. Where `hasRouteNames` (Japan), the line name is what identifies a route,
-      and `PlannerRoute.name` is already in the response. Use `routeTitle` as the other
-      route rows do.
-
-- [ ] **Number formatting is inconsistent.** km is shown three ways: `toFixed(1)`
-      (logbook, sheet, planner, selection bar), `Math.round().toLocaleString()` (progress
-      box) and `toLocaleString("en-US", 1 dp)` (countries). Percentages are calculated
-      again in `countries.tsx`. `MapProgressBox` prints `percentage.toFixed(1)` although
-      the server already rounds to a whole number (`toUserProgress`), so it always shows
-      "42.0%". Add one `formatKm` and one `formatPercent` (in `shared/progress.ts` next to
-      `round1`, or a mobile util) and use them everywhere.
-
-- [ ] **Screen readers miss information.** An `accessibilityLabel` replaces the
-      element's text for VoiceOver and TalkBack:
-  - `MapProgressBox` reads only "Show progress", never the percentage.
-  - `HighlightChip` reads "Clear the highlight", never "3 routes highlighted".
-  - `CardHeader` reads only the title, without date or stats.
-
-  Put the content in the label, or move the action into `accessibilityHint`. Also,
-  `ToggleSwitch`'s inner `Switch` is a second focusable element although the comment
-  says it is decorative: add `accessibilityElementsHidden` and
-  `importantForAccessibility="no-hide-descendants"`. `SelectionBar`'s label says "Log
-  1 selected routes".
+- [ ] **Check route taps offline on the device.** _(device)_ Since 2026-11-19 a
+      route's details are kept once read (`src/map/routeMetadataCache.ts`): a route read
+      before opens at once and is refreshed by a new read, and a failed or timed-out
+      (8s) read shows a notice in place of the sheet (`MapNotice`) instead of doing
+      nothing. Check: a route opened online opens again in airplane mode; one never
+      opened shows "No connection…" (closing any open sheet), which goes after about four
+      seconds, on its ×, or with the next press; back online, that route opens. On 2026-11-19 the notice showed, under the progress box; the box is now a child of `RailwayMap`, drawn under the sheet and the notice: check it is covered now.
+      Every route opening offline is Phase 5 (`MOBILE_APP_PLAN.md`).
 
 - [ ] **The feature sheet is a static view.** It has no slide-in animation, can't be
       dragged down, and `pb-8` is fixed. A bottom sheet that can be swiped away is what
@@ -165,45 +88,115 @@ Items found already done were deleted; the gaps the web has opened since are und
       stack header (`headerShown: true` with a title) gives the platform back chevron, a
       large title, the right placement on Android, and Dynamic Type for free.
 
+- [ ] **Finish checking editing and deleting on the device.** _(device)_ Confirmed
+      on the iPhone 2026-11-19/20: the editor opens with the journey, "X km of Y", the
+      "Editing “…”" bar, Continue editing / Cancel editing and "Unsaved changes…" on
+      the card, the sheet's "Add to the journey" and remove, the planner's add, "Add
+      more on the map" and its hint, the progress box and "Plan journey" riding above
+      a route sheet, the selection coming back after Save and Cancel editing, and
+      Delete on a journey asking and the list reloading without it; on 2026-11-20 Save
+      sending only the change, a partial ride saved untouched keeping its stretch,
+      Cancel editing and Edit on another journey asking when changed, and an emptied
+      journey's Save offering Delete; Delete on a trip, "New trip" and "Edit trip";
+      Edit and Continue editing going to the map flown to the journey. Still to run: a
+      closed route in the editor shows its badge (no closed routes in the data yet).
+      And the 2026-11-20 merge of Show and Edit into **"Open on the map"**: it flies to
+      the journey with every highlight gone (a trip's, another journey's, the
+      planner's); the bar reads "“Name”" with "tap to edit", then "unsaved changes, tap
+      to save" after a change; its × closes without asking when unchanged; the journey
+      stays open across tab switches; the card is always "Open on the map" + Delete,
+      with "Unsaved changes…" under the open one when changed; Open on the open journey
+      goes back to it without asking, on another asks if changed; Delete on the open
+      journey closes it with the delete; the form's button reads "Close journey", then
+      "Discard changes"; a trip's "Show on the map" still highlights orange. And the
+      selection bar is the map's footer since 2026-11-20 (`RailwayMap`'s `footer`): it
+      lies over the map, so the map no longer jumps as it comes and goes, while the
+      progress box, the corner buttons, a route's sheet and a notice stand on it and
+      move with it. Check: no jump on the bar's ×, on Save, or on the first route
+      tapped; the furniture clear of the bar; an opened journey's ends land clear of
+      the bar. (A raised sheet over the planner's, with `plannerCover` now measured on
+      the full-height map, checked out on 2026-11-20.)
+
 ---
 
 ## Low — polish and consistency
 
-- [ ] **Forms don't move to the next field.** Login and register set
-      `returnKeyType="next"` but don't focus the next field, because `TextField` doesn't
-      forward a ref. Forward the ref, then chain the fields with `onSubmitEditing`.
-- [ ] **Register doesn't state the password rule up front.** Users need at least 6
-      characters (`authQueries.ts`); add that as a `hint`. While there, consider whether 6
-      is too low, given that the admin needs 12.
-- [ ] **`TextField`'s error state drops the field's background**, so in dark mode an
-      invalid field shows the screen colour through it. Keep the background classes and
-      change only the border.
-- [ ] **The theme preference is applied after the first render.** `ThemeContext`
-      reads AsyncStorage in an effect, so someone who picked a theme different from the
-      system's can see a flash. If the map mounts first, the basemap is fetched twice.
-      Wait for the read before rendering, as `RegionProvider` does.
-- [ ] **`LayerPrefsContext.setPref` writes to AsyncStorage from inside a state
-  updater**, which `CountryPrefsContext`'s comment warns against. Also, a toggle made
-      before the stored prefs have loaded is overwritten when they arrive. Write in an
-      effect or from a ref, and merge the loaded value with any change already made.
-- [ ] **`log-journey`'s "nothing left" effect calls `router.back()` without
-  checking.** If the screen is ever reached with an empty selection (a deep link, or
-      state restored after a crash), it is a `GO_BACK` with nothing to go back to. Use
-      `router.canGoBack() ? back() : replace("/map")`.
-- [ ] **Stale comments about NUMERIC.** `JourneyWithStats.total_distance` ("a string
-      over the wire") and `logbook.tsx`'s `formatKm` ("arrives as a string; an absent one
-      as null") contradict `dbConfig.ts`'s type parser and the `COALESCE`s in
-      `tripQueries.ts`. Delete them. If either were true, `toFixed` would crash.
-- [ ] **Constants copied instead of imported.** `logbook.tsx` defines its own
-      `SEARCH_DEBOUNCE_MS = 300`, but `@shared/constants` exports it, and
-      `useStationSearch` already imports it from there.
-- [ ] **Settings shows `API_ORIGIN` at the bottom.** It's useful in development. For
-      users, show the app version and build (`expo-constants`), and keep the origin only
-      for non-production builds.
-- [ ] **`SelectionBar`'s "clear" can't be undone** and sits right next to the row that
-      opens the logging screen. A selection built from a planner result is easy to lose.
-      Ask for confirmation once the selection has more than a couple of routes, or offer
-      an undo toast.
+- [ ] **Check "where am I" and the map credits on the device.** _(device)_ Built
+      2026-11-20, needs a fresh build (`npm run prebuild`, then `npm run ios`: it brings
+      in `expo-location` and `expo-haptics`). Check: the first press asks, Allow flies
+      to you at zoom 12 or closer and the dot stays (also after a relaunch); "Allow
+      Once", then a relaunch shows no dialog and no dot until pressed; Don't Allow
+      shows the notice, and its Settings button opens the app's settings; a second
+      press after moving lands where you are, not where you were; a tap on the map
+      while it waits stops the spinner; the "off the map" notice (switch region to see
+      it), and "Show Japan/Europe" landing on you; the corner buttons ride above a
+      route sheet, a notice and the planner's sheet; the ⓘ card's links open, and lists
+      only OpenStreetMap on the raster fallback; no shadow warnings. On Android:
+      "Approximate" counts as allowed and isn't asked to upgrade on the next press.
+
+- [ ] **Check the 2026-11-20 polish batch on the device.** _(device)_ Not run yet:
+      the return key moves through sign-in, register, New/Edit trip and the journey
+      form (Name → Date → Description) with the keyboard staying up
+      (`submitBehavior="submit"`); VoiceOver reads the progress box's numbers
+      (collapsed and expanded), "N routes highlighted" on the chip with its hint, a
+      toggle's hint line, and the selection bar's km; the switch inside a toggle row is
+      not a second stop; a cold start with a theme other than the system's doesn't
+      flash and the splash stays up until both the theme and the session are read
+      (`ThemeContext` `ready`, gated in `RootNavigator`); an invalid field keeps its
+      background in dark mode; planner legs in Japan show the line name above the
+      endpoints; deleting the only item on the logbook's last page goes back a page;
+      Settings shows
+      "Version 0.1.0" (with the server only in a development build).
+- [ ] **The expanded progress box is wider since km show one decimal** ("12,345.6 /
+      98,765.4 km", was whole km), from the one `formatKm` (`src/ui/format.ts`). Look
+      at it on a small phone in Europe; if it crowds the corner, add a whole-km variant
+      for the box alone.
+- [ ] **Settings hides the server address in every non-`__DEV__` build**, release-mode
+      preview builds included. If preview or TestFlight builds will point at a test
+      server, gate it on a build-profile flag (an `EXPO_PUBLIC_` variable or
+      `expoConfig.extra`) instead, so a tester can see which server it is.
+- [ ] **Is 6 characters enough for a user's password?** Register now states the
+      rule as a hint, as the web's form does, but the admin needs 12
+      (`createAdmin`). Raising it is one check in `authQueries.ts` and the two forms' hints.
+- [ ] **Settings shows the version but not the build number.** The build number is
+      `expo-application`'s (`nativeBuildVersion`), a native module, so adding it needs a
+      new development build. Add it beside the version once the store builds are numbered.
+
+---
+
+## Journey planner polish (ideas from 2026-11-19)
+
+The planner became a half-height sheet over a live map on 2026-11-19, with station
+taps filling its target slot and its button at the bottom right (`MOBILE_APP_PLAN.md`,
+the log). These are for the UI polish pass, not fixes.
+
+- [ ] **Show the planner's stations on the map.** Mark From, To and the vias as
+      labelled pins (A / B, or From / To) while the form holds them, so which end is
+      which shows without looking at the sheet, and the target slot's station could be
+      picked out. A GeoJSON source over the stations layer, fed from `PlannerContext`'s
+      form (each `Station` carries its coordinates). Keep it clear of the gold path's
+      own styling (`src/lib/shared/map/CLAUDE.md`).
+- [ ] **A swap button between From and To**, as most planners have. One `editForm`
+      that exchanges the two (the answer goes with it, as with any edit).
+- [ ] **A haptic tick when a map tap fills a slot** (`pickOnMap`), and perhaps when
+      a path is found. `expo-haptics` is installed (2026-11-20) and needs no config
+      plugin, so this is JS only once the build that carries it is on the phone.
+- [ ] **A route or station sheet raised over the planner hangs in mid-air as the
+      planner is swiped away.** _(device, seen 2026-11-20)_ The raised sheet sits at
+      `plannerCover`, which allows for the half detent only (`plannerSheet.ts`), and
+      drops to the map's bottom edge only once `PlannerContext.sheetOpen` goes false,
+      after the dismiss has finished. So for about a second it floats in the middle
+      with nothing under it. Fix: drop the raise as the dismiss starts (the screen's
+      `transitionStart` or `beforeRemove` event, or react-native-screens'
+      `onSheetDetentChanged`), and perhaps animate the sheet down rather than jump.
+- [ ] **The selection bar is under the planner's sheet while it is up.** It always
+      was (a flex sibling below the map, now the map's `footer` at its bottom edge),
+      but `mobile/CLAUDE.md` says what runs along the map's bottom edge rides above
+      `plannerSheetCover`. Kept under on purpose for now: above it, the bar and a
+      raised route sheet would stack over the half of the map left, and the planner
+      says "Add routes to the journey" itself. Decide in the UI pass: raise it (the
+      footer wrapper's `bottom: plannerCover`), or write the exception into
+      `mobile/CLAUDE.md`.
 
 ---
 
@@ -233,27 +226,11 @@ Items found already done were deleted; the gaps the web has opened since are und
 - [ ] **The `NSLocalNetworkUsageDescription` / `NSBonjourServices` entries are for
   development** and will ship in a release build. Move them to an `app.config.ts` that
       adds them only for development builds.
-- [ ] **`ios.supportsTablet: true`** means App Store review expects iPad screenshots
-      and a usable iPad layout, and the iPad layout has never been looked at. Set it to
-      `false` until iPad is a goal.
-- [ ] **`ios.config.usesNonExemptEncryption: false`** (HTTPS only), so App Store
-      Connect stops asking about export compliance on every build.
-- [ ] **A location-permission string**, needed once the "where am I" button exists
-      (the gap left from Phase 3).
 
 ---
 
 ## Already tracked in `MOBILE_APP_PLAN.md` (listed here so this is the one list)
 
-- [ ] Re-run the 2026-10-14 device fixes on the iPhone (Status → Next, item 1).
-- [ ] Japan's JR / Non-JR checkboxes and `showRegular`. This also removes
-      `LayerToggles.tsx`'s `region.id === "japan"`, which `CLAUDE.md` forbids.
-      `GET /progress` needs a usage-type parameter for it.
-- [ ] Line-name search where `hasRouteNames` (the API has no endpoint for it yet).
-- [ ] Editing and deleting journeys and trips (the endpoints already exist in
-      `endpoints.ts`).
-- [ ] The heritage/special highlight variants have never been seen on a device.
-- [ ] "Where am I": `<UserLocation>` plus the permission string above.
 - [ ] Offline route colouring before Phase 5. Since 2026-11-15 the route tile is
       Martin's and the same for everyone, and the colours come from `GET /rides`, so
       the question is now only how the last rides answer is kept on the device.

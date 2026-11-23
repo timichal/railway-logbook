@@ -111,7 +111,7 @@ describe("usage type filtering", () => {
 
   test("the click buffer filters nothing when all are shown, everything when none", () => {
     assert.equal(clickBufferFilter([0, 1, 2]), null);
-    assert.equal(clickBufferFilter([]), false);
+    assert.deepEqual(clickBufferFilter([]), ["==", ["get", "usage_type"], -1]);
     assert.deepEqual(clickBufferFilter([2]), ["match", ["get", "usage_type"], [2], true, false]);
   });
 

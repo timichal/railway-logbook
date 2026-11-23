@@ -1,7 +1,7 @@
 import { ValidationError } from "./errors";
-import { foldAccents, foldForSearch } from "./searchText";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
 import { REGIONS, regionOfPoint } from "./shared/regions";
+import { foldAccents, foldForSearch } from "./shared/searchText";
 
 /**
  * A route's or scenic line's endpoint names, required. The forms say so first,

@@ -54,6 +54,7 @@ import {
   routeLineLayerId,
   SCENIC_ENDPOINTS_LAYER_ID,
   SCENIC_LINES_LAYER_ID,
+  scenicLineColor,
 } from "@/lib/shared/map/layers";
 import {
   closedRouteOpacityExpression,
@@ -235,7 +236,7 @@ export default function AdminMap({
         // Over the parts, so a scenic stretch shows while points are picked on them.
         // It takes clicks only in scenic mode (`onScenicLineSelect`); otherwise
         // they fall through to the parts.
-        createScenicLinesLayer({ visible: true }),
+        createScenicLinesLayer({ visible: true, theme }),
         // Regular solid; Heritage (dotted) and Special (dashed) get their own layers
         // so the gaps aren't filled by a solid line underneath. All three always show.
         // Every route at first, closed ones included, as "Closed Routes" starts ticked
@@ -355,7 +356,7 @@ export default function AdminMap({
     }
   }, [showClosed, selectedRouteId, mapLoaded, map]);
 
-  // Scenic lines: violet, grey when invalid, the selected one in the selected-route
+  // Scenic lines: the user map's blue (`scenicLineColor`), grey when invalid, the selected one in the selected-route
   // orange. Nested single-condition `case`s, per the house rule for data-driven paint.
   useEffect(() => {
     const m = map.current;
@@ -364,7 +365,7 @@ export default function AdminMap({
       "case",
       ["==", ["get", "is_valid"], false],
       COLORS.scenicLineInvalid,
-      COLORS.scenicLine,
+      scenicLineColor(theme),
     ];
     const selected = selectedScenicLineId;
     m.setPaintProperty(
@@ -386,7 +387,7 @@ export default function AdminMap({
             OPACITIES.scenicLineAdmin,
           ],
     );
-  }, [selectedScenicLineId, mapLoaded, map]);
+  }, [selectedScenicLineId, mapLoaded, map, theme]);
 
   // The popups' text comes from the route details, not the tile: reloaded with it
   useEffect(() => {

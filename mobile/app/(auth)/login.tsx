@@ -1,6 +1,13 @@
 import { Link } from "expo-router";
-import { type ReactNode, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
+import { type ReactNode, useRef, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  type TextInputInstance,
+  View,
+} from "react-native";
 import { ApiError } from "@/api/client";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/ui/Button";
@@ -13,6 +20,7 @@ export default function LoginScreen(): ReactNode {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const passwordRef = useRef<TextInputInstance>(null);
 
   async function submit(): Promise<void> {
     setError(null);
@@ -64,8 +72,12 @@ export default function LoginScreen(): ReactNode {
               keyboardType="email-address"
               textContentType="emailAddress"
               returnKeyType="next"
+              // "submit" keeps the keyboard up while the focus moves on
+              submitBehavior="submit"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
             <TextField
+              ref={passwordRef}
               label="Password"
               value={password}
               onChangeText={setPassword}

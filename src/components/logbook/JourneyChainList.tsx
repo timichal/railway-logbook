@@ -1,4 +1,4 @@
-import type { JourneyChain } from "@/lib/journeyChains";
+import type { JourneyChain } from "@/lib/shared/journeyChains";
 import { pickRow } from "@/lib/ui/buttonStyles";
 
 interface JourneyChainListProps {
@@ -71,18 +71,7 @@ function ChainContent({ chain }: { chain: JourneyChain }) {
           </span>
         ))}
       </span>
-      <span className="block mt-0.5 text-xs text-gray-500">
-        {chain.lengthKm.toFixed(1)} km
-        {chain.unknownExtent && (
-          <span
-            className="text-amber-700"
-            title="Includes a route ridden only in part, counted whole"
-          >
-            {" "}
-            · partial
-          </span>
-        )}
-      </span>
+      <span className="block mt-0.5 text-xs text-gray-500">{chain.lengthKm.toFixed(1)} km</span>
     </>
   );
 }

@@ -199,8 +199,8 @@ export interface JourneyEdits {
   tripId?: number | null;
   /**
    * Routes to log, or whose ride changed, as they now stand: the partial flag and,
-   * for a partial ride of known extent, its stretch. The stretch is written as sent,
-   * so a route upserted without one has none.
+   * for a partial ride, its stretch. Written as sent through `loggedRide`, so
+   * a route upserted partial without a usable stretch is logged whole.
    */
   upsert: { trackId: number; partial: boolean; range?: LoggedRange | null }[];
   /** Routes to unlog. */
@@ -223,8 +223,9 @@ export type LocalLoggedPart = {
   journey_id: string; // References LocalJourney.id
   track_id: number; // References railway_routes.track_id
   partial: boolean;
-  // Stretch ridden as fractions along the route geometry; absent when unknown
-  // (mirrors user_logged_parts.covered_start/covered_end — see CoveredRange)
+  // Stretch ridden as fractions along the route geometry, set exactly when partial
+  // (mirrors user_logged_parts.covered_start/covered_end — see CoveredRange and
+  // loggedRide, which every read and write applies)
   covered_start?: number | null;
   covered_end?: number | null;
   created_at: string; // ISO timestamp
@@ -414,11 +415,10 @@ export interface SelectedRoute {
   partial: boolean | null;
   length_km: number;
   /**
-   * Stretch ridden, when known — set by the Journey Planner for a route it joins
-   * mid-way. Its fractions are carried through to user_logged_parts on logging,
-   * and its geometry is what the selection highlight draws, so only the part
-   * being logged lights up. Null for a route ticked partial by hand, whose
-   * extent nobody knows.
+   * Stretch ridden on a partial ride — set by the Journey Planner for a route it
+   * joins mid-way. Its fractions are carried through to user_logged_parts on
+   * logging, and its geometry is what the selection highlight draws, so only the
+   * part being logged lights up. Null on a whole ride.
    */
   covered?: PartialRouteGeometry | null;
   /**

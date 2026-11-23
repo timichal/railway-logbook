@@ -22,8 +22,7 @@ export interface PlannedLeg {
 
 /**
  * How much of a selected route the journey will log: the stretch the Journey Planner
- * measured while the route is still ticked partial, otherwise the whole line — a
- * route ticked partial by hand has no known extent, and unticking claims it whole.
+ * measured on a partial ride, otherwise the whole line.
  */
 export function loggedLengthKm(route: SelectedRoute): number {
   return route.partial && route.travelled_length_km != null

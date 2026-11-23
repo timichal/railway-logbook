@@ -1,14 +1,22 @@
 /**
  * Logging the selection as a journey — the web app's Route Logger, minus the map
- * that is already behind this screen.
+ * that is already behind this screen — and, while a saved journey is being edited
+ * (`SelectionContext`'s `editing`), that journey's editor.
  *
  * Presented as a modal over the tabs rather than as a fourth tab: it exists only
- * while there is a selection to spend, and it ends by emptying it.
+ * while there is something to spend. **Closing it keeps everything**: the form and
+ * the routes are the selection context's, so going back to the map to pick another
+ * route loses nothing. A new journey's draft ends when it is logged; an edit's when
+ * it is saved, deleted or closed ("Close journey", "Discard changes" once changed).
  *
  * The form is the web app's: a required name, a required date defaulting to today,
  * an optional description, and an optional trip to file it under. The trip list is
  * region-scoped for the reason `API.md` gives — a journey is logged on one region's
  * map, so offering the other continent's trips only invites a misfile.
+ *
+ * An edit's Save sends only what changed (`journeyEditsToSave`), in one request the
+ * server applies all or nothing. Saving a journey with no routes left offers to
+ * delete it instead, as the web does.
  *
  * **The date is typed, not picked.** A native date picker is another native module
  * and therefore another development build; the two buttons beside the field cover
@@ -16,36 +24,40 @@
  * field takes anything else. See `MOBILE_APP_PLAN.md`.
  */
 
-import { getUntimezonedDateStr } from "@shared/getUntimezonedDateStr";
+import { formatDateOnly, isDateOnly } from "@shared/getUntimezonedDateStr";
 import { routeTitle } from "@shared/map/routeFeature";
 import { useRouter } from "expo-router";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Text,
+  type TextInputInstance,
+  View,
+} from "react-native";
 import * as api from "@/api/endpoints";
+import { confirmClearSelection, confirmStopEditing } from "@/logbook/confirmClearSelection";
+import { journeyEditsToSave, loggedRouteInput } from "@/logbook/journeyEdit";
 import { bumpLogVersion } from "@/logbook/logVersion";
-import { type SelectedRoute, useSelection } from "@/logbook/SelectionContext";
+import {
+  dateOffsetFromToday,
+  loggedLengthKm,
+  type SelectedRoute,
+  useSelection,
+} from "@/logbook/SelectionContext";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
+import { formatKm } from "@/ui/format";
 import { Screen } from "@/ui/Screen";
 import { TextField } from "@/ui/TextField";
-import { ToggleSwitch } from "@/ui/ToggleSwitch";
-
-/** `YYYY-MM-DD`, `days` before today, in the phone's own timezone. */
-function dateOffsetFromToday(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return getUntimezonedDateStr(date);
-}
 
 export default function LogJourneyScreen(): ReactNode {
   const router = useRouter();
   const { regionId } = useRegion();
-  const { selected, remove, setPartial, clear } = useSelection();
+  const { selected, form, editing, updateForm, remove, clear, resetNew, freshenDate, endEdit } =
+    useSelection();
 
-  const [name, setName] = useState("");
-  const [date, setDate] = useState(() => dateOffsetFromToday(0));
-  const [description, setDescription] = useState("");
-  const [tripId, setTripId] = useState<number | null>(null);
   const [trips, setTrips] = useState<api.TripWithStats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -63,48 +75,113 @@ export default function LogJourneyScreen(): ReactNode {
     };
   }, [regionId]);
 
-  // Spending the last route ends the screen: there is nothing left to log, and
-  // leaving an empty form up only invites a request the server would reject.
-  useEffect(() => {
-    if (selected.length === 0) router.back();
-  }, [selected.length, router]);
+  // The draft can be days old by now: a date never chosen means today, not then
+  useEffect(() => freshenDate(), [freshenDate]);
 
-  const submit = useCallback(async (): Promise<void> => {
-    if (!name.trim()) {
-      setError("Give the journey a name.");
-      return;
-    }
+  // The return key moves on through the form
+  const dateRef = useRef<TextInputInstance>(null);
+  const descriptionRef = useRef<TextInputInstance>(null);
+
+  // Once: ending an edit puts the new journey's draft in front, whose empty
+  // selection would close the screen a second time
+  const closing = useRef(false);
+  const close = useCallback(() => {
+    if (closing.current) return;
+    closing.current = true;
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/map");
+  }, [router]);
+
+  // Spending the last route of a new journey ends the screen: there is nothing
+  // left to log. An edit stays open with none, to add some or delete the journey.
+  useEffect(() => {
+    if (!editing && selected.length === 0) close();
+  }, [editing, selected.length, close]);
+
+  const dateValid = isDateOnly(form.date);
+
+  const run = useCallback(async (action: () => Promise<void>, failure: string): Promise<void> => {
     setSaving(true);
     setError(null);
     try {
-      await api.createJourney({
-        name: name.trim(),
-        date,
-        description: description.trim() || undefined,
-        tripId: tripId ?? undefined,
-        routes: selected.map((s) => ({
-          trackId: s.route.trackId,
-          partial: s.partial,
-          // Dropped by the server unless `partial` is set, but not sent at all when
-          // the extent is unknown — a route ticked by hand says a piece was ridden
-          // without saying which.
-          covered:
-            s.partial && s.covered
-              ? { covered_start: s.covered.covered_start, covered_end: s.covered.covered_end }
-              : undefined,
-        })),
-      });
-      // The version bump is what repaints the route in its new colour and reloads the
-      // numbers over it. Emptying the selection is what closes this screen (the
-      // effect above), so there is no `router.back()` here: a second one would find
-      // nothing under the tabs to go back to.
-      bumpLogVersion();
-      clear();
+      await action();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not log the journey.");
+      // The draft stays, whatever went wrong: an edit worth retrying or changing
+      setError(caught instanceof Error ? caught.message : failure);
       setSaving(false);
     }
-  }, [name, date, description, tripId, selected, clear]);
+  }, []);
+
+  const submit = (): void => {
+    if (!form.name.trim()) {
+      setError("Give the journey a name.");
+      return;
+    }
+    if (!dateValid) {
+      setError("The date must be a real day, as YYYY-MM-DD.");
+      return;
+    }
+
+    if (!editing) {
+      void run(async () => {
+        await api.createJourney({
+          name: form.name.trim(),
+          date: form.date,
+          description: form.description.trim() || undefined,
+          tripId: form.tripId ?? undefined,
+          routes: selected.map(loggedRouteInput),
+        });
+        // The version bump is what repaints the route in its new colour and reloads
+        // the numbers over it. Emptying the selection is what closes this screen
+        // (the effect above).
+        bumpLogVersion();
+        resetNew();
+      }, "Could not log the journey.");
+      return;
+    }
+
+    const { journeyId, base } = editing;
+    const deleteIt = () =>
+      void run(async () => {
+        await api.deleteJourney(journeyId);
+        bumpLogVersion();
+        close();
+        endEdit();
+      }, "Could not delete the journey.");
+
+    // A journey with no routes left is one to delete, not keep
+    if (selected.length === 0) {
+      Alert.alert(
+        "Delete this journey?",
+        `“${base.form.name}” has no routes left. Delete the journey, or keep editing to add some?`,
+        [
+          { text: "Keep editing", style: "cancel" },
+          { text: "Delete journey", style: "destructive", onPress: deleteIt },
+        ],
+      );
+      return;
+    }
+
+    void run(async () => {
+      await api.updateJourney(journeyId, journeyEditsToSave(base, form, selected));
+      bumpLogVersion();
+      close();
+      endEdit();
+    }, "Could not save the journey.");
+  };
+
+  const stopEditing = (): void =>
+    confirmStopEditing(editing, () => {
+      close();
+      endEdit();
+    });
+
+  // The trip it is filed under, though the list doesn't have it (another region's):
+  // shown rather than read as None
+  const tripOptions =
+    trips && form.tripId !== null && !trips.some((trip) => trip.id === form.tripId)
+      ? [...trips, { id: form.tripId, name: "Current trip" }]
+      : trips;
 
   return (
     <Screen>
@@ -115,8 +192,15 @@ export default function LogJourneyScreen(): ReactNode {
           coordinates; Android resizes the window for the keyboard itself. */}
       <View className="flex-1">
         <View className="flex-row items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-          <Text className="text-lg font-bold text-gray-900 dark:text-gray-100">Log journey</Text>
-          <Button label="Cancel" variant="ghost" onPress={() => router.back()} />
+          <Text
+            className="flex-1 text-lg font-bold text-gray-900 dark:text-gray-100"
+            numberOfLines={1}
+          >
+            {editing ? `Edit “${editing.name}”` : "Log journey"}
+          </Text>
+          {/* Keeps the draft: it is how the reader goes back to the map for more */}
+          {/* Not while saving: a failure is shown here, and nowhere else */}
+          <Button label="Close" variant="ghost" disabled={saving} onPress={close} />
         </View>
 
         <ScrollView
@@ -127,65 +211,130 @@ export default function LogJourneyScreen(): ReactNode {
           <View className="gap-3">
             <TextField
               label="Name"
-              value={name}
-              onChangeText={setName}
+              value={form.name}
+              onChangeText={(name) => updateForm({ name })}
               placeholder="Weekend trip to Vienna"
-              autoFocus
+              autoFocus={!editing && form.name === ""}
               returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => dateRef.current?.focus()}
             />
             <View className="gap-1.5">
               <TextField
+                ref={dateRef}
                 label="Date"
-                value={date}
-                onChangeText={setDate}
+                value={form.date}
+                onChangeText={(date) => updateForm({ date })}
                 placeholder="YYYY-MM-DD"
                 autoCapitalize="none"
                 autoCorrect={false}
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => descriptionRef.current?.focus()}
+                // The day as the phone writes dates, so a typo in the digits shows
+                hint={dateValid ? formatDateOnly(form.date) : undefined}
+                // Not while it is still being typed
+                error={form.date.length >= 10 && !dateValid ? "Not a real day: YYYY-MM-DD" : null}
               />
               <View className="flex-row gap-2">
                 <Button
                   label="Today"
                   variant="outline"
                   className="flex-1"
-                  onPress={() => setDate(dateOffsetFromToday(0))}
+                  onPress={() => updateForm({ date: dateOffsetFromToday(0) })}
                 />
                 <Button
                   label="Yesterday"
                   variant="outline"
                   className="flex-1"
-                  onPress={() => setDate(dateOffsetFromToday(1))}
+                  onPress={() => updateForm({ date: dateOffsetFromToday(1) })}
                 />
               </View>
             </View>
             <TextField
+              ref={descriptionRef}
               label="Description"
-              value={description}
-              onChangeText={setDescription}
+              value={form.description}
+              onChangeText={(description) => updateForm({ description })}
               placeholder="Optional"
               multiline
             />
           </View>
 
-          <TripPicker trips={trips} value={tripId} onChange={setTripId} />
+          <TripPicker
+            trips={tripOptions}
+            value={form.tripId}
+            onChange={(tripId) => updateForm({ tripId })}
+          />
 
           <View className="gap-2">
-            <Text className="text-base font-semibold text-gray-900 dark:text-gray-100">
-              {selected.length} {selected.length === 1 ? "route" : "routes"}
-            </Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                {selected.length} {selected.length === 1 ? "route" : "routes"}
+              </Text>
+              {editing ? (
+                // Closing is all it does (the map is under this screen), but an
+                // edit's routes are picked there, and this says so
+                <Button
+                  label="Add more on the map"
+                  variant="ghost"
+                  disabled={saving}
+                  onPress={close}
+                />
+              ) : (
+                // Emptying the selection closes the screen (the effect above), as the
+                // map bar's clear button does.
+                <Button
+                  label="Clear selection"
+                  variant="ghost"
+                  disabled={saving}
+                  onPress={() => confirmClearSelection(selected.length, clear)}
+                />
+              )}
+            </View>
+            {editing ? (
+              <Text className="text-sm text-gray-600 dark:text-gray-400">
+                {selected.length === 0
+                  ? "No routes left. Add some on the map, or save to delete the journey."
+                  : "Tap routes on the map or plan a path to add them; the edit waits here until you save."}
+              </Text>
+            ) : null}
             {selected.map((entry) => (
               <RouteRow
                 key={entry.route.trackId}
                 entry={entry}
                 regionId={regionId}
+                saving={saving}
                 onRemove={() => remove(entry.route.trackId)}
-                onPartial={(partial) => setPartial(entry.route.trackId, partial)}
               />
             ))}
           </View>
 
           {error ? <Text className="text-sm text-red-600 dark:text-red-400">{error}</Text> : null}
 
-          <Button label="Log journey" onPress={() => void submit()} busy={saving} />
+          {editing ? (
+            <View className="gap-2">
+              <Button
+                label="Save changes"
+                onPress={submit}
+                busy={saving}
+                disabled={!editing.changed}
+              />
+              {!editing.changed && !saving ? (
+                <Text className="text-center text-xs text-gray-500 dark:text-gray-400">
+                  Nothing changed yet
+                </Text>
+              ) : null}
+              <Button
+                label={editing.changed ? "Discard changes" : "Close journey"}
+                variant="ghost"
+                disabled={saving}
+                onPress={stopEditing}
+              />
+            </View>
+          ) : (
+            <Button label="Log journey" onPress={submit} busy={saving} />
+          )}
         </ScrollView>
       </View>
     </Screen>
@@ -195,34 +344,38 @@ export default function LogJourneyScreen(): ReactNode {
 function RouteRow({
   entry,
   regionId,
+  saving,
   onRemove,
-  onPartial,
 }: {
   entry: SelectedRoute;
   regionId: Parameters<typeof routeTitle>[1];
+  /** While the journey is being sent: what is sent is already fixed. */
+  saving: boolean;
   onRemove(): void;
-  onPartial(partial: boolean): void;
 }): ReactNode {
   const { name, endpoints } = routeTitle(entry.route, regionId);
 
   return (
-    <View className="gap-1 rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+    <View className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
       <View className="flex-row items-start gap-2">
         <View className="flex-1">
           {name ? (
             <Text className="text-sm font-semibold text-gray-900 dark:text-gray-100">{name}</Text>
           ) : null}
           <Text className="text-sm text-gray-900 dark:text-gray-100">{endpoints}</Text>
+          {/* A partial ride comes from the planner, with the stretch it measured, as
+              the web's Route Logger shows it */}
           <Text className="text-xs text-gray-600 dark:text-gray-400">
-            {entry.route.lengthKm.toFixed(1)} km
-            {/* A stretch the planner attached says which part; one ticked by hand
-                does not, and the row should not pretend otherwise. */}
-            {entry.partial && entry.covered ? " · part of the line" : ""}
+            {formatKm(loggedLengthKm(entry))} km
+            {entry.partial && entry.covered ? (
+              <Text className="text-amber-700 dark:text-amber-400">
+                {` of ${formatKm(entry.route.lengthKm)}`}
+              </Text>
+            ) : null}
           </Text>
         </View>
-        <Button label="Remove" variant="ghost" onPress={onRemove} />
+        <Button label="Remove" variant="ghost" disabled={saving} onPress={onRemove} />
       </View>
-      <ToggleSwitch label="Rode only part of it" value={entry.partial} onChange={onPartial} />
     </View>
   );
 }
@@ -236,7 +389,7 @@ function TripPicker({
   value,
   onChange,
 }: {
-  trips: api.TripWithStats[] | null;
+  trips: { id: number; name: string }[] | null;
   value: number | null;
   onChange(id: number | null): void;
 }): ReactNode {

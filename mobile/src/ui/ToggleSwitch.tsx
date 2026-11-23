@@ -21,6 +21,8 @@ export function ToggleSwitch({ label, hint, value, onChange }: ToggleSwitchProps
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
       accessibilityLabel={label}
+      // The label replaces the row's text, so the hint line is read as the hint
+      accessibilityHint={hint}
       onPress={() => onChange(!value)}
       className="min-h-11 flex-row items-center gap-3 active:opacity-70"
     >
@@ -28,9 +30,14 @@ export function ToggleSwitch({ label, hint, value, onChange }: ToggleSwitchProps
         <Text className="text-base text-gray-900 dark:text-gray-100">{label}</Text>
         {hint ? <Text className="text-xs text-gray-600 dark:text-gray-400">{hint}</Text> : null}
       </View>
-      {/* The row above already answers to a press, so the switch itself is decorative
-          for accessibility purposes — hence no second role on it. */}
-      <Switch value={value} onValueChange={onChange} />
+      {/* The row above already answers to a press and carries the role and state, so
+          the switch is hidden from screen readers rather than read a second time. */}
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
     </Pressable>
   );
 }

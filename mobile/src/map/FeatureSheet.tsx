@@ -10,29 +10,70 @@
  *
  * The badges and the heading come from `@shared/map/routeFeature` — the same
  * decisions the web popup renders as HTML spans.
+ *
+ * **A station is where a plan starts.** On the web a station clicked on the map fills
+ * the planner's focused field, or From, then To, because the planner sits beside the
+ * map. Here no field is focused while the map is in view, so the sheet says which end
+ * the station is: From, To, or a via. The map places it (`onPlan`, then
+ * `PlannerContext.placeFromMap`) and opens the planner over the lower half of the map,
+ * which searches as soon as both ends are in.
+ *
+ * **Raised above the planner while its sheet is up** (`bottom`): it covers the lower
+ * half of the map, and a sheet opened under it could not be seen. Raised, it is a card
+ * with a gap below, rather than a sheet joined to the planner's.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { formatDateOnly } from "@shared/getUntimezonedDateStr";
 import { routeBadges, routeTitle } from "@shared/map/routeFeature";
 import type { RegionId } from "@shared/regions";
+import type { Station } from "@shared/types";
 import type { ReactNode } from "react";
 import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import type { PlannerEnd } from "@/logbook/PlannerContext";
 import { useSelection } from "@/logbook/SelectionContext";
-import type { MapFeature, RouteFeature } from "@/map/mapFeatures";
+import type { MapFeature, RouteFeature, StationFeature } from "@/map/mapFeatures";
 import { useNativeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { Button } from "@/ui/Button";
+import { formatKm } from "@/ui/format";
 
 interface FeatureSheetProps {
   feature: MapFeature;
   regionId: RegionId;
+  /** How far up from the map's bottom edge it sits: 0, or the planner sheet's cover. */
+  bottom: number;
+  /** Its tallest, where the room above the planner sheet is less than 60% of the map. */
+  maxHeight?: number;
+  /** Its measured height, which the map's bottom furniture rides above. */
+  onHeight?(height: number): void;
+  onPlan(station: Station, end: PlannerEnd): void;
   onClose(): void;
 }
 
-export function FeatureSheet({ feature, regionId, onClose }: FeatureSheetProps): ReactNode {
+/** The gap between a raised sheet and the planner's. */
+export const RAISED_GAP = 8;
+
+export function FeatureSheet({
+  feature,
+  regionId,
+  bottom,
+  maxHeight,
+  onHeight,
+  onPlan,
+  onClose,
+}: FeatureSheetProps): ReactNode {
   const colors = useNativeColors();
+  const raised = bottom > 0;
   return (
-    <View className="absolute inset-x-0 bottom-0 max-h-[60%] rounded-t-2xl border-t border-gray-200 bg-white pb-8 dark:border-gray-700 dark:bg-gray-900">
+    <View
+      onLayout={(event) => onHeight?.(event.nativeEvent.layout.height)}
+      style={raised ? { bottom: bottom + RAISED_GAP, maxHeight } : undefined}
+      className={`absolute bg-white dark:bg-gray-900 ${
+        raised
+          ? "inset-x-2 rounded-2xl border border-gray-200 pb-3 dark:border-gray-700"
+          : "inset-x-0 bottom-0 max-h-[60%] rounded-t-2xl border-t border-gray-200 pb-8 dark:border-gray-700"
+      }`}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close"
@@ -45,12 +86,7 @@ export function FeatureSheet({ feature, regionId, onClose }: FeatureSheetProps):
         {feature.kind === "route" ? (
           <RouteBody feature={feature} regionId={regionId} />
         ) : feature.kind === "station" ? (
-          <>
-            <Text className="pr-8 text-lg font-bold text-gray-900 dark:text-gray-100">
-              {feature.name}
-            </Text>
-            <Text className="text-xs text-gray-600 dark:text-gray-400">Station</Text>
-          </>
+          <StationBody feature={feature} onPlan={onPlan} />
         ) : (
           <>
             <Text className="pr-8 text-base text-gray-900 dark:text-gray-100">{feature.text}</Text>
@@ -59,6 +95,37 @@ export function FeatureSheet({ feature, regionId, onClose }: FeatureSheetProps):
         )}
       </ScrollView>
     </View>
+  );
+}
+
+function StationBody({
+  feature,
+  onPlan,
+}: {
+  feature: StationFeature;
+  onPlan(station: Station, end: PlannerEnd): void;
+}): ReactNode {
+  const { station } = feature;
+  const plan = (end: PlannerEnd): void => {
+    if (station) onPlan(station, end);
+  };
+
+  return (
+    <>
+      <Text className="pr-8 text-lg font-bold text-gray-900 dark:text-gray-100">
+        {feature.name}
+      </Text>
+      <Text className="text-xs text-gray-600 dark:text-gray-400">Station</Text>
+      {station ? (
+        <>
+          <View className="flex-row gap-2">
+            <Button label="Plan from here" className="flex-1" onPress={() => plan("from")} />
+            <Button label="Plan to here" className="flex-1" onPress={() => plan("to")} />
+          </View>
+          <Button label="Add as via" variant="outline" onPress={() => plan("via")} />
+        </>
+      ) : null}
+    </>
   );
 }
 
@@ -72,7 +139,7 @@ function RouteBody({
   const { name, alsoOn, endpoints } = routeTitle(feature, regionId);
   const badges = routeBadges(feature, regionId);
   const { resolved: theme } = useTheme();
-  const { isSelected, toggle } = useSelection();
+  const { isSelected, toggle, editing } = useSelection();
   // The button says what it is about to do, as the web app's touch sheet does: here
   // the tap opens the sheet and the button is what acts, so it has to be readable
   // before it is pressed.
@@ -108,7 +175,7 @@ function RouteBody({
       </View>
 
       <Text className="text-sm text-gray-600 dark:text-gray-400">
-        {feature.lengthKm.toFixed(1)} km
+        {formatKm(feature.lengthKm)} km
       </Text>
 
       {feature.description ? (
@@ -127,7 +194,16 @@ function RouteBody({
       ) : null}
 
       <Button
-        label={picked ? "Remove from selection" : "Add to selection"}
+        // During an edit the selection is the journey being edited
+        label={
+          editing
+            ? picked
+              ? "Remove from the journey"
+              : "Add to the journey"
+            : picked
+              ? "Remove from selection"
+              : "Add to selection"
+        }
         variant={picked ? "secondary" : "primary"}
         onPress={() => toggle(feature)}
       />

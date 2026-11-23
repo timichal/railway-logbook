@@ -25,6 +25,11 @@ export function fetchAdminRoute(trackId: number): Promise<AdminRouteDetail> {
   return getAdmin(`routes/${trackId}`);
 }
 
+/** Partial rides logged on the route, by every user (`partialRideCount`). */
+export function fetchPartialRideCount(trackId: number): Promise<number> {
+  return getAdmin(`routes/${trackId}/partial-rides`);
+}
+
 export function fetchRouteEndpoints(region: RegionId): Promise<GeoJSONFeatureCollection> {
   return getAdmin("routes/endpoints", { region });
 }

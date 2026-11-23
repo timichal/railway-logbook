@@ -14,6 +14,7 @@
  */
 import "../global.css";
 import "@/devWarnings";
+import "@/map/mapLogging";
 
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -25,6 +26,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
 import { HighlightProvider } from "@/logbook/HighlightContext";
 import { PlannerProvider } from "@/logbook/PlannerContext";
+import { PLANNER_SHEET_OPTIONS } from "@/logbook/plannerSheet";
 import { SelectionProvider } from "@/logbook/SelectionContext";
 import { LayerPrefsProvider } from "@/map/LayerPrefsContext";
 import { CountryPrefsProvider } from "@/region/CountryPrefsContext";
@@ -41,11 +43,16 @@ void SplashScreen.preventAutoHideAsync();
 
 function RootNavigator(): ReactNode {
   const { status } = useAuth();
-  const { resolved } = useTheme();
+  const { ready, resolved } = useTheme();
 
   useEffect(() => {
-    if (status !== "loading") void SplashScreen.hideAsync();
-  }, [status]);
+    if (status !== "loading" && ready) void SplashScreen.hideAsync();
+  }, [status, ready]);
+
+  // Nothing is drawn in the system's scheme and then flipped to the stored one: that
+  // would flash every screen, and the map would fetch its basemap twice. The splash
+  // screen covers the wait.
+  if (!ready) return null;
 
   return (
     <>
@@ -56,10 +63,13 @@ function RootNavigator(): ReactNode {
           {/* Not a tab: it exists only while there is a selection to spend, and it
               ends by emptying it. */}
           <Stack.Screen name="log-journey" options={{ presentation: "modal" }} />
+          {/* A trip's name and description, new or edited from the logbook. */}
+          <Stack.Screen name="edit-trip" options={{ presentation: "modal" }} />
           {/* Likewise: opened, spent, closed — what it produces is a gold path on the
-              map behind it and routes in the selection. Its form and answer outlive
-              it (`PlannerContext`). */}
-          <Stack.Screen name="plan-journey" options={{ presentation: "modal" }} />
+              map and routes in the selection. A half-height sheet over a map that
+              stays live (`plannerSheet.ts`). Its form and answer outlive it
+              (`PlannerContext`). */}
+          <Stack.Screen name="plan-journey" options={PLANNER_SHEET_OPTIONS} />
           {/* Pushed, not modal: a settings page is left by going back, not by being
               spent. */}
           <Stack.Screen name="countries" />

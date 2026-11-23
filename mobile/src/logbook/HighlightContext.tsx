@@ -20,6 +20,13 @@
  * the map, because the map is in another tab and may not be looking — it fits when it
  * next is, and says so (`fitDone`), so a map built again later finds nothing to
  * replay. A later highlight replaces a fit not yet made, as it would on the web.
+ *
+ * A fit can also be asked **without a highlight** (`fitTo`): editing a saved journey
+ * flies to it, but its routes are drawn as the selection, and an orange copy of them
+ * as saved would go on showing a route the edit has just removed. The ask carries its
+ * own box for this, so it never replaces the highlight's (`bounds`, which `refit`
+ * flies to again), and the journey it is for: one closed before the map could fly
+ * (a style still loading) drops the ask, rather than fly to routes no longer drawn.
  */
 import { HIGHLIGHT_COLORS } from "@shared/map/highlightLayers";
 import type { PartialRouteGeometry, RouteBounds } from "@shared/types";
@@ -34,6 +41,7 @@ import {
   useState,
 } from "react";
 import { useOnSessionEnd } from "@/auth/useOnSessionEnd";
+import { useSelection } from "@/logbook/SelectionContext";
 import { useRegion } from "@/region/RegionContext";
 
 export type HighlightKind = "planner" | "view";
@@ -48,10 +56,11 @@ export interface Highlight {
   /** The box the map fits to, `null` when none of the routes is in this region. */
   bounds: RouteBounds | null;
   /**
-   * A fit to `bounds` asked for and not yet made, by number — numbered so that the
-   * map's `fitDone` for one ask cannot settle a newer one. Never set without `bounds`.
+   * A fit asked for and not yet made, by number — numbered so that the map's
+   * `fitDone` for one ask cannot settle a newer one — with the box to fit: the
+   * highlight's own, or one asked by `fitTo`.
    */
-  pendingFit: number | null;
+  pendingFit: { id: number; bounds: RouteBounds; journeyId?: number } | null;
 }
 
 const EMPTY: Highlight = {
@@ -75,6 +84,11 @@ interface HighlightValue extends Highlight {
   }): void;
   /** Asks the map to fit the current highlight again, if it has a box. */
   refit(): void;
+  /**
+   * Asks the map to fit the open journey `journeyId`'s `bounds`, leaving the
+   * highlight as it is (see the header).
+   */
+  fitTo(bounds: RouteBounds, journeyId: number): void;
   /** The map has made fit `id`. */
   fitDone(id: number): void;
   clear(): void;
@@ -106,17 +120,34 @@ export function HighlightProvider({ children }: { children: ReactNode }): ReactN
       partials: input.partials ?? [],
       ownerKey: input.ownerKey ?? null,
       bounds,
-      pendingFit: bounds ? ++fitCount.current : null,
+      pendingFit: bounds ? { id: ++fitCount.current, bounds } : null,
     });
   }, []);
 
   const refit = useCallback(() => {
-    const pendingFit = ++fitCount.current;
-    setCurrent((prev) => (prev.bounds ? { ...prev, pendingFit } : prev));
+    const id = ++fitCount.current;
+    setCurrent((prev) =>
+      prev.bounds ? { ...prev, pendingFit: { id, bounds: prev.bounds } } : prev,
+    );
   }, []);
 
+  const fitTo = useCallback((bounds: RouteBounds, journeyId: number) => {
+    const id = ++fitCount.current;
+    setCurrent((prev) => ({ ...prev, pendingFit: { id, bounds, journeyId } }));
+  }, []);
+
+  const openJourney = useSelection().editing?.journeyId ?? null;
+  useEffect(() => {
+    setCurrent((prev) => {
+      const forJourney = prev.pendingFit?.journeyId;
+      return forJourney !== undefined && forJourney !== openJourney
+        ? { ...prev, pendingFit: null }
+        : prev;
+    });
+  }, [openJourney]);
+
   const fitDone = useCallback((id: number) => {
-    setCurrent((prev) => (prev.pendingFit === id ? { ...prev, pendingFit: null } : prev));
+    setCurrent((prev) => (prev.pendingFit?.id === id ? { ...prev, pendingFit: null } : prev));
   }, []);
 
   const value = useMemo(
@@ -125,10 +156,11 @@ export function HighlightProvider({ children }: { children: ReactNode }): ReactN
       color: current.kind === "planner" ? HIGHLIGHT_COLORS.planner : HIGHLIGHT_COLORS.view,
       highlight,
       refit,
+      fitTo,
       fitDone,
       clear,
     }),
-    [current, highlight, refit, fitDone, clear],
+    [current, highlight, refit, fitTo, fitDone, clear],
   );
 
   return <HighlightContext.Provider value={value}>{children}</HighlightContext.Provider>;

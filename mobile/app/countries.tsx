@@ -7,10 +7,13 @@
  * the map filters on; the km beside it is why you would.
  *
  * Where it counts more than Regular (`ordinaryUsageTypes`), the numbers by line type:
- * Japan is one country, its filter pinned to itself and nothing to tick, but its JR
- * and non-JR lines are counted separately and then together — so there the screen is
- * "Statistics" and holds just that. A region with neither has no screen: Settings
- * hides the row, and a region switch while this is open sends it back.
+ * Japan is one country, its filter pinned to itself, but its JR and non-JR lines are
+ * counted separately and then together — so there the screen is "Statistics" and
+ * holds just that. Each line type is ticked as a country is: unticked, it is hidden
+ * on the map and left out of the progress box. The tick is that type's layer switch
+ * (`usageTypeLayerPref`), which is why Settings' map layers don't repeat it. A region
+ * with neither has no screen: Settings hides the row, and a region switch while this
+ * is open sends it back.
  *
  * Pushed rather than modal: it is a settings page, and it is left by going back
  * rather than by being spent.
@@ -21,6 +24,7 @@
  * moves them.
  */
 import { getCountryFlag } from "@shared/countryFlag";
+import { usageTypeLayerPref } from "@shared/map/layerPrefs";
 import {
   hasOrdinaryNonRegular,
   hasStatsView,
@@ -32,9 +36,11 @@ import { type ReactNode, useEffect, useReducer, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import * as api from "@/api/endpoints";
 import { useLogVersion } from "@/logbook/logVersion";
+import { useLayerPrefs } from "@/map/LayerPrefsContext";
 import { useCountryPrefs } from "@/region/CountryPrefsContext";
 import { useRegion } from "@/region/RegionContext";
 import { Button } from "@/ui/Button";
+import { formatKm, formatPercent, percentOf } from "@/ui/format";
 import { Screen } from "@/ui/Screen";
 
 export default function CountriesScreen(): ReactNode {
@@ -98,6 +104,8 @@ export default function CountriesScreen(): ReactNode {
 
       <ScrollView contentContainerClassName="gap-4 p-4">
         {showCountries ? <CountryFilter stats={stats} /> : null}
+        {/* Only where the line types are counted apart (Japan) */}
+        {hasOrdinaryNonRegular(regionId) ? <UsageFilter stats={stats} /> : null}
 
         {current === null ? (
           <ActivityIndicator />
@@ -107,21 +115,6 @@ export default function CountriesScreen(): ReactNode {
               Couldn't load the statistics.
             </Text>
             <Button label="Retry" variant="outline" onPress={retry} />
-          </View>
-        ) : null}
-
-        {/* Only where the line types are counted apart (Japan). `?? []`: a server
-            deployed before the field existed sends none. */}
-        {hasOrdinaryNonRegular(regionId) && stats ? (
-          <View className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-            {(stats.byUsage ?? []).map((usage, index) => (
-              <StatRow
-                key={usage.usageType}
-                label={regionUsagePluralLabel(regionId, usage.usageType)}
-                stat={usage}
-                first={index === 0}
-              />
-            ))}
           </View>
         ) : null}
 
@@ -189,76 +182,107 @@ function CountryFilter({ stats }: { stats: api.ProgressByCountry | null }): Reac
       )}
 
       <View className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-        {region.countries.map((country, index) => (
-          <CountryRow
-            key={country.code}
-            code={country.code}
-            name={country.name}
-            stat={stats?.byCountry.find((s) => s.countryCode === country.code)}
-            selected={selected.includes(country.code)}
-            first={index === 0}
-            disabled={!ready}
-            onToggle={() => toggle(country.code)}
-          />
-        ))}
+        {region.countries.map((country, index) => {
+          const stat = stats?.byCountry.find((s) => s.countryCode === country.code);
+          return (
+            <CheckRow
+              key={country.code}
+              label={country.name}
+              leading={<Text className="text-2xl">{getCountryFlag(country.code)}</Text>}
+              numbers={
+                <Text className="text-sm text-gray-600 dark:text-gray-400">
+                  {formatKm(stat?.completedKm ?? 0)} / {formatKm(stat?.totalKm ?? 0)} km
+                </Text>
+              }
+              selected={selected.includes(country.code)}
+              first={index === 0}
+              disabled={!ready}
+              onToggle={() => toggle(country.code)}
+            />
+          );
+        })}
       </View>
     </>
   );
 }
 
-/** One line type's km and share, for a region that counts more than one. */
-function StatRow({
-  label,
-  stat,
-  first,
-}: {
-  label: string;
-  stat: api.UsageProgress;
-  first: boolean;
-}): ReactNode {
+/**
+ * The line types to tick, each with its km and share. The rows are the filter and
+ * stay while the numbers load or fail to, as the country rows do.
+ */
+function UsageFilter({ stats }: { stats: api.ProgressByCountry | null }): ReactNode {
+  const { region } = useRegion();
+  const prefs = useLayerPrefs();
+  const types = region.ordinaryUsageTypes;
+
   return (
-    <View
-      className={`min-h-14 flex-row items-center gap-3 bg-white px-3 py-2 dark:bg-gray-800 ${
-        first ? "" : "border-t border-gray-200 dark:border-gray-700"
-      }`}
-    >
-      <Text className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">{label}</Text>
-      <View className="items-end">
-        <Text className="text-sm text-gray-600 dark:text-gray-400">
-          {formatKm(stat.completedKm)} / {formatKm(stat.totalKm)} km
+    <>
+      {types.every((type) => !prefs[usageTypeLayerPref(type)]) ? (
+        <Text className="text-sm font-medium text-amber-700 dark:text-amber-400">
+          No line types selected.
         </Text>
-        {stat.totalKm > 0 ? (
-          <Text className="text-xs text-gray-500 dark:text-gray-400">
-            {((stat.completedKm / stat.totalKm) * 100).toFixed(1)}%
-          </Text>
-        ) : null}
+      ) : null}
+      <View className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+        {types.map((usageType, index) => {
+          const key = usageTypeLayerPref(usageType);
+          // `?.`: a server deployed before the field existed sends none
+          const stat = stats?.byUsage?.find((u) => u.usageType === usageType);
+          return (
+            <CheckRow
+              key={usageType}
+              label={regionUsagePluralLabel(region.id, usageType)}
+              numbers={
+                stat ? <KmShare completedKm={stat.completedKm} totalKm={stat.totalKm} /> : null
+              }
+              selected={prefs[key]}
+              first={index === 0}
+              onToggle={() => prefs.toggle(key)}
+            />
+          );
+        })}
       </View>
+    </>
+  );
+}
+
+/** A row's km, and its share where there is anything to share. */
+function KmShare({ completedKm, totalKm }: { completedKm: number; totalKm: number }): ReactNode {
+  const share = percentOf(completedKm, totalKm);
+  return (
+    <View className="items-end">
+      <Text className="text-sm text-gray-600 dark:text-gray-400">
+        {formatKm(completedKm)} / {formatKm(totalKm)} km
+      </Text>
+      {share !== null ? (
+        <Text className="text-xs text-gray-500 dark:text-gray-400">{formatPercent(share)}</Text>
+      ) : null}
     </View>
   );
 }
 
-function CountryRow({
-  code,
-  name,
-  stat,
+/** One ticked row — a country, or a line type — with its numbers beside it. */
+function CheckRow({
+  label,
+  leading,
+  numbers,
   selected,
   first,
-  disabled,
+  disabled = false,
   onToggle,
 }: {
-  code: string;
-  name: string;
-  stat: api.CountryProgress | undefined;
+  label: string;
+  leading?: ReactNode;
+  numbers: ReactNode;
   selected: boolean;
   first: boolean;
-  disabled: boolean;
+  disabled?: boolean;
   onToggle(): void;
 }): ReactNode {
   return (
     <Pressable
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected, disabled }}
-      accessibilityLabel={name}
+      accessibilityLabel={label}
       disabled={disabled}
       onPress={onToggle}
       className={`min-h-14 flex-row items-center gap-3 px-3 py-2 active:opacity-70 ${
@@ -276,11 +300,9 @@ function CountryRow({
       >
         {selected ? <Text className="text-xs font-bold text-white">✓</Text> : null}
       </View>
-      <Text className="text-2xl">{getCountryFlag(code)}</Text>
-      <Text className="flex-1 text-sm text-gray-900 dark:text-gray-100">{name}</Text>
-      <Text className="text-sm text-gray-600 dark:text-gray-400">
-        {formatKm(stat?.completedKm ?? 0)} / {formatKm(stat?.totalKm ?? 0)} km
-      </Text>
+      {leading}
+      <Text className="flex-1 text-sm text-gray-900 dark:text-gray-100">{label}</Text>
+      {numbers}
     </Pressable>
   );
 }
@@ -292,6 +314,7 @@ function Total({
   total: api.ProgressByCountry["total"];
   label: string;
 }): ReactNode {
+  const share = percentOf(total.completedKm, total.totalKm);
   return (
     <View className="gap-1 border-t border-gray-200 pt-4 dark:border-gray-700">
       <Text className="text-sm font-semibold text-gray-700 dark:text-gray-300">{label}</Text>
@@ -302,15 +325,11 @@ function Total({
         {" / "}
         <Text className="font-semibold">{formatKm(total.totalKm)}</Text> km
       </Text>
-      {total.totalKm > 0 ? (
+      {share !== null ? (
         <Text className="text-sm text-gray-600 dark:text-gray-400">
-          {((total.completedKm / total.totalKm) * 100).toFixed(1)}% completed
+          {formatPercent(share)} completed
         </Text>
       ) : null}
     </View>
   );
-}
-
-function formatKm(value: number): string {
-  return value.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }

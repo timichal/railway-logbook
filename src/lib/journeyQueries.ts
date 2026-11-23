@@ -25,7 +25,7 @@ import {
 import { routeBoxSql, routeEndsSql } from "./routeQueries";
 import { isDateOnly } from "./shared/getUntimezonedDateStr";
 import type { RegionId } from "./shared/regions";
-import { sanitizeRange } from "./shared/routeCoverage";
+import { loggedRide } from "./shared/routeCoverage";
 import type {
   Journey,
   JourneyEdits,
@@ -96,18 +96,11 @@ function loggedPartRows(
   const valuePlaceholders: string[] = [];
   for (const [trackId, index] of lastIndexByTrackId) {
     const offset = values.length;
-    const range = sanitizeRange(coveredRanges?.[index], partialFlags[index]);
+    const ride = loggedRide(partialFlags[index], coveredRanges?.[index]);
     valuePlaceholders.push(
       `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`,
     );
-    values.push(
-      userId,
-      journeyId,
-      trackId,
-      partialFlags[index],
-      range?.covered_start ?? null,
-      range?.covered_end ?? null,
-    );
+    values.push(userId, journeyId, trackId, ride.partial, ride.covered_start, ride.covered_end);
   }
 
   return { placeholders: valuePlaceholders.join(", "), values };
@@ -143,18 +136,19 @@ export async function journeyWithBoundsForUser(
   );
 
   // Exclude the heavy geometry column; its two ends are enough to chain the routes.
-  // `box`, `closed` and `stretch` are for the bounds and partials, not the route.
+  // `box` and `stretch` are for the bounds and partials, not the route. The rest is
+  // what the native app's editor describes a route with (`routeFeatureFromMetadata`).
   const routesQuery = pool.query<
     RailwayRoute & LoggedPart & { box: RouteBounds | null; closed: boolean; stretch: string | null }
   >(
     `SELECT
-      rr.track_id, rr.name, rr.from_station, rr.to_station,
+      rr.track_id, rr.name, rr.other_names, rr.from_station, rr.to_station,
       rr.description, rr.usage_type, rr.usage_tags, rr.link, rr.link_name, rr.line_class,
       rr.length_km, rr.start_country, rr.end_country,
       rr.is_valid, ${routeEndsSql("rr")} AS ends,
       ulp.partial, ulp.covered_start, ulp.covered_end,
       ${routeBoxSql("rr", region)} AS box,
-      rr.closed,
+      rr.closed, rr.closed_on,
       CASE WHEN ${HAS_STRETCH_SQL}
         THEN ${coveredStretchGeoJsonSql("rr.geometry", "ulp.covered_start", "ulp.covered_end")}
       END AS stretch
@@ -175,7 +169,7 @@ export async function journeyWithBoundsForUser(
   const routes: RailwayRoute[] = [];
   const boxes: (RouteBounds | null)[] = [];
   const stretches: CoveredStretchRow[] = [];
-  for (const { box, closed, stretch, ...route } of routesResult.rows) {
+  for (const { box, stretch, ...route } of routesResult.rows) {
     routes.push(route);
     boxes.push(box);
     if (stretch !== null) {
@@ -186,7 +180,7 @@ export async function journeyWithBoundsForUser(
         covered_end: route.covered_end as number,
         line_class: route.line_class ?? null,
         usage_type: route.usage_type,
-        closed,
+        closed: route.closed,
         start_country: route.start_country ?? null,
         end_country: route.end_country ?? null,
         geojson: stretch,
@@ -212,8 +206,8 @@ export async function createJourneyForUser(
   partialFlags: boolean[],
   tripId?: number | null,
   /**
-   * Stretch ridden per route, positionally aligned with trackIds; null where the
-   * extent isn't known (see user_logged_parts.covered_start).
+   * Stretch ridden per route, positionally aligned with trackIds; null for a whole
+   * ride. A partial flag without a usable stretch is logged whole (`loggedRide`).
    */
   coveredRanges?: (LoggedRange | null)[],
 ): Promise<Journey> {
@@ -244,27 +238,6 @@ export async function createJourneyForUser(
   });
 }
 
-/** Update journey metadata (name, description, date). */
-export async function updateJourneyForUser(
-  userId: number,
-  journeyId: number,
-  name: string,
-  description: string | null,
-  date: string,
-): Promise<Journey> {
-  assertJourneyMeta(name, date);
-
-  const result = await pool.query<Journey>(
-    `UPDATE user_journeys
-     SET name = $1, description = $2, date = $3
-     WHERE id = $4 AND user_id = $5
-     RETURNING *`,
-    [name.trim(), description, date, journeyId, userId],
-  );
-  if (result.rows.length === 0) throw new NotFoundError("Journey not found");
-  return result.rows[0];
-}
-
 /** Delete a journey and all its logged parts. */
 export async function deleteJourneyForUser(userId: number, journeyId: number): Promise<void> {
   const result = await pool.query("DELETE FROM user_journeys WHERE id = $1 AND user_id = $2", [
@@ -272,82 +245,6 @@ export async function deleteJourneyForUser(userId: number, journeyId: number): P
     userId,
   ]);
   if (result.rowCount === 0) throw new NotFoundError("Journey not found");
-}
-
-/** Add routes to an existing journey. */
-export async function addRoutesToJourneyForUser(
-  userId: number,
-  journeyId: number,
-  trackIds: number[],
-  partialFlags: boolean[],
-  /** Stretch ridden per route, positionally aligned with trackIds (see createJourney). */
-  coveredRanges?: (LoggedRange | null)[],
-): Promise<void> {
-  assertAligned(trackIds, partialFlags);
-
-  // Not left to the composite FK: where someone else's journey already logs one
-  // of these routes, the insert conflicts and DO UPDATE rewrites *their* row, and
-  // an update that leaves journey_id and user_id alone is never FK-checked
-  const journeyCheck = await pool.query(
-    "SELECT id FROM user_journeys WHERE id = $1 AND user_id = $2",
-    [journeyId, userId],
-  );
-  if (journeyCheck.rows.length === 0) throw new NotFoundError("Journey not found");
-  if (trackIds.length === 0) return;
-
-  // One statement, so it is atomic without a transaction of its own
-  const rows = loggedPartRows(userId, journeyId, trackIds, partialFlags, coveredRanges);
-  await pool
-    .query(
-      `INSERT INTO user_logged_parts (user_id, journey_id, track_id, partial, covered_start, covered_end)
-       VALUES ${rows.placeholders}
-       ON CONFLICT (journey_id, track_id) DO UPDATE SET
-         partial = EXCLUDED.partial,
-         covered_start = EXCLUDED.covered_start,
-         covered_end = EXCLUDED.covered_end`,
-      rows.values,
-    )
-    .catch((error: unknown) => {
-      throw asMissingRow(error);
-    });
-}
-
-/** Remove a single route from a journey. */
-export async function removeRouteFromJourneyForUser(
-  userId: number,
-  journeyId: number,
-  trackId: number,
-): Promise<void> {
-  const result = await pool.query(
-    "DELETE FROM user_logged_parts WHERE journey_id = $1 AND track_id = $2 AND user_id = $3",
-    [journeyId, trackId, userId],
-  );
-  if (result.rowCount === 0) throw new NotFoundError("Route not found in journey");
-}
-
-/**
- * Toggle partial flag for a logged part.
- *
- * Clearing `partial` clears the stretch with it, the same rule `sanitizeRange`
- * applies on every other write path: a route logged whole covers all of it, so a
- * range left behind would claim the whole route while still carrying fractions —
- * a state the rest of the code assumes cannot exist.
- */
-export async function updateLoggedPartPartialForUser(
-  userId: number,
-  journeyId: number,
-  trackId: number,
-  partial: boolean,
-): Promise<void> {
-  const result = await pool.query(
-    `UPDATE user_logged_parts
-     SET partial = $1,
-         covered_start = CASE WHEN $1 THEN covered_start ELSE NULL END,
-         covered_end = CASE WHEN $1 THEN covered_end ELSE NULL END
-     WHERE journey_id = $2 AND track_id = $3 AND user_id = $4`,
-    [partial, journeyId, trackId, userId],
-  );
-  if (result.rowCount === 0) throw new NotFoundError("Route not found in journey");
 }
 
 /**
@@ -362,7 +259,7 @@ export async function updateLoggedPartPartialForUser(
  * An upserted route is written as the edit has it, stretch included: the Route
  * Logger edits a journey as a whole selection, and a route re-picked through the
  * Journey Planner arrives with the stretch it measured. One sent without a stretch
- * has none, which is what unticking partial or ticking it by hand means.
+ * has none, which logs it whole (`loggedRide`).
  */
 export async function saveJourneyEditsForUser(
   userId: number,

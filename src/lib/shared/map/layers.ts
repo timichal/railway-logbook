@@ -12,13 +12,17 @@ import { CIRCLES, COLORS, DASHES, LABELS, OPACITIES, WIDTHS } from "./style";
 import { ZOOM_RANGES } from "./zoomRanges";
 
 /**
- * The features of the given usage types, as a filter; none given matches nothing,
- * since a `match` needs at least one label. One expression for every layer that
- * follows the usage switches (the click buffer, the searched line), so its shape —
- * which MapLibre Native is particular about — is written once.
+ * The features of the given usage types, as a filter. One expression for every layer
+ * that follows the usage switches (the click buffer, the searched line), so its
+ * shape — which MapLibre Native is particular about — is written once.
+ *
+ * None given matches nothing, as a comparison no feature passes (no usage type is
+ * -1), never a bare `false`: a `match` needs at least one label, and the iOS binding
+ * turns a constant filter into the predicate `0 == 1`, which MapLibre Native refuses
+ * ("Invalid predicate").
  */
 export function usageTypeFilter(usageTypes: readonly UsageType[]): FilterSpecification {
-  if (usageTypes.length === 0) return false;
+  if (usageTypes.length === 0) return ["==", ["get", "usage_type"], -1];
   return ["match", ["get", "usage_type"], [...usageTypes], true, false];
 }
 
@@ -258,19 +262,23 @@ export function createRailwayRoutesClickLayer(
  */
 export function highlighterBandPaint(): {
   "line-width": ExpressionSpecification;
-  "line-blur": ExpressionSpecification;
+  "line-blur": number;
 } {
   const w = WIDTHS.scenicLine;
   return {
     "line-width": ["interpolate", ["linear"], ["zoom"], 4, w.z4, 7, w.z7, 12, w.z12],
-    "line-blur": ["interpolate", ["linear"], ["zoom"], 4, w.blur.z4, 12, w.blur.z12],
+    "line-blur": w.blur,
   };
 }
 
 export const SCENIC_LINES_LAYER_ID = "scenic_lines";
 
+export function scenicLineColor(theme: ResolvedTheme): string {
+  return theme === "dark" ? COLORS.scenicLineDark : COLORS.scenicLine;
+}
+
 /**
- * Scenic lines: a soft band under the routes (see `COLORS.scenicLine`), from their
+ * Scenic lines: a translucent band under the routes (see `COLORS.scenicLine`), from their
  * own tile (`scenic_lines_tile`) — a scenic stretch is a piece of track, not a
  * route, and rarely starts or ends where one does. Drawn first, so every route
  * line sits on top of it.
@@ -282,6 +290,8 @@ export const SCENIC_LINES_LAYER_ID = "scenic_lines";
 export function createScenicLinesLayer(
   options: {
     visible?: boolean;
+    /** The user map's scheme, which picks the band's blue. */
+    theme?: ResolvedTheme;
     colorExpression?: ExpressionSpecification;
     opacity?: ExpressionSpecification | number;
     filter?: FilterSpecification;
@@ -295,11 +305,13 @@ export function createScenicLinesLayer(
     minzoom: ZOOM_RANGES.scenicLines.min,
     layout: {
       visibility: options.visible ? "visible" : "none",
-      "line-cap": "round",
+      // Butt, not round: where two scenic lines meet end to end, round caps
+      // overlapped into a brighter disc on the translucent band.
+      "line-cap": "butt",
       "line-join": "round",
     },
     paint: {
-      "line-color": options.colorExpression ?? COLORS.scenicLine,
+      "line-color": options.colorExpression ?? scenicLineColor(options.theme ?? "light"),
       ...highlighterBandPaint(),
       "line-opacity": options.opacity ?? OPACITIES.scenicLine,
     },

@@ -6,12 +6,12 @@ import CardHeader from "@/components/logbook/CardHeader";
 import JourneyChainList from "@/components/logbook/JourneyChainList";
 import LoggedRouteRow from "@/components/logbook/LoggedRouteRow";
 import { ActionError, actionErrorMessage } from "@/lib/actionResult";
-import { journeyChains } from "@/lib/journeyChains";
 import { selectionFromJourney, useJourneyEditDraft } from "@/lib/journeyEdit";
 import type { JourneyStore, LoadedJourney } from "@/lib/journeyStore";
 import { plural } from "@/lib/plural";
 import { useRegionId } from "@/lib/regionContext";
 import { formatDateOnly } from "@/lib/shared/getUntimezonedDateStr";
+import { journeyChains } from "@/lib/shared/journeyChains";
 import { routeTitle } from "@/lib/shared/map/routeFeature";
 import { knownStretches } from "@/lib/shared/routeCoverage";
 import type { HighlightOptions, HighlightRoutesFn, RailwayRoute } from "@/lib/shared/types";
@@ -85,7 +85,7 @@ export default function JourneyCard<Id extends number | string>({
 
   /**
    * Light up `shown` on the map. A route logged in part lights up only along its
-   * stretch; one ticked partial by hand has no stretch, and is drawn whole.
+   * stretch.
    */
   const highlight = (from: LoadedJourney, shown: RailwayRoute[], options?: HighlightOptions) => {
     const stretches = knownStretches(shown);

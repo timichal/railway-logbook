@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { type ChainableRoute, journeyChains } from "@/lib/journeyChains";
+import { type ChainableRoute, journeyChains } from "@/lib/shared/journeyChains";
 
 /** A point `x` tenths of a degree east along latitude 50 (~7km apart), nudged `m` metres. */
 const at = (x: number, m = 0): [number, number] => [14 + x * 0.1 + m / 71_500, 50];
@@ -119,15 +119,6 @@ describe("journeyChains", () => {
       ],
     );
     assert.equal(chains[0].lengthKm, 10.5);
-    assert.equal(chains[0].unknownExtent, false);
-  });
-
-  test("a route ticked partial by hand joins as usual and is flagged", () => {
-    const routes = [route("A", "B", 0, 1), route("B", "C", 1, 2, { partial: true })];
-    const [chain] = journeyChains(routes);
-    assert.deepEqual(chain.stops, ["A", "B", "C"]);
-    assert.equal(chain.unknownExtent, true);
-    assert.equal(chain.lengthKm, 14);
   });
 
   test("a route with no geometry stands alone, From first", () => {

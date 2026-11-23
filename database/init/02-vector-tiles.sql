@@ -123,7 +123,7 @@ RETURN ' ' || btrim(regexp_replace(
 -- A name as the searches compare it whole: its words with the spaces taken out,
 -- so "owariseto", "owari-seto" and "Owari Seto" are one query, and "sanyo" finds
 -- "San'yō" — operators romanize the same name with and without them. The SQL
--- twin of foldForSearch (src/lib/searchText.ts, its separators in
+-- twin of foldForSearch (src/lib/shared/searchText.ts, its separators in
 -- src/lib/shared/searchQuery.ts); tests/searchText.sql.test.ts holds the two
 -- together. Written over search_words, so a name's words without their spaces
 -- are its key by construction.
@@ -283,10 +283,9 @@ ON user_logged_parts (user_id, track_id) WHERE covered_start IS NOT NULL;
 -- endpoint is a hand-picked click point rather than the platform centre, so a
 -- ride from a terminus is recorded as starting a little past 0; the same widening
 -- closes the small gap left when an OSM recalculation moves two rides' shared
--- station fraction apart between them. Rows of unknown extent (both fractions
--- NULL: a route ticked partial by hand) are excluded by branch 2's WHERE -- they
--- say a piece was ridden without saying which, and GREATEST/LEAST ignore NULLs,
--- so a row let through would widen into the whole route and complete it alone.
+-- station fraction apart between them. A partial row always carries its stretch
+-- (logged_parts_partial_has_stretch); branch 2's WHERE still requires one, since
+-- GREATEST/LEAST ignore NULLs and a row without would widen into the whole route.
 --
 -- Read by the progress figures and the map's rides (routeRidesForUser,
 -- src/lib/progressQueries.ts), so the numbers and the colours can't disagree.
@@ -592,13 +591,18 @@ RETURNS bytea AS $$
             start_country,
             end_country,
             is_valid,
-            -- Simplified to about a pixel at this zoom first. The band is a wide,
-            -- translucent, blurred line, and MapLibre blends each join of a line
-            -- with the segments either side of it: at a vertex every pixel or two,
-            -- which an OSM-derived line has when zoomed out, the band turns into a
-            -- string of bright blotches. The routes are opaque and never show it.
+            -- Simplified to 1.5 pixels at this zoom, then rounded off (Chaikin, 2
+            -- passes). The band is a translucent line, and MapLibre blends each join
+            -- of a line with the segments either side of it: at a jagged vertex
+            -- every pixel or two, which an OSM-derived line has when zoomed out, the
+            -- band turns into a string of bright blotches. Rounded, the joins along
+            -- a curve don't show, and the band stops copying every kink of the
+            -- track. Not simplified harder: the band is only a few pixels wider than
+            -- the route drawn over it from its own tile, and at 4 pixels the smoothed
+            -- curve drifted far enough off the track for the route to poke out.
+            -- `preserveCollapsed`, as the other line tiles, so a short line stays.
             ST_AsMVTGeom(
-                ST_Simplify(geometry_3857, 40075016.68 / (512 * 2 ^ z)),
+                ST_ChaikinSmoothing(ST_Simplify(geometry_3857, 1.5 * 40075016.68 / (512 * 2 ^ z), true), 2),
                 envelope,
                 4096,
                 64,
@@ -606,10 +610,9 @@ RETURNS bytea AS $$
             ) AS geom
         FROM scenic_lines,
             ST_TileEnvelope(z, x, y) AS envelope,
-            -- Widened by the 64-unit MVT buffer: the band is up to 18px wide with
-            -- round caps, so a line ending just inside the next tile still spills
-            -- into this one, and selecting on the bare envelope cut its cap flat
-            -- at the tile edge.
+            -- Widened by the 64-unit MVT buffer: the band is up to 13px wide, so a
+            -- line ending just inside the next tile still spills into this one,
+            -- and selecting on the bare envelope cut its end at the tile edge.
             ST_TileEnvelope(z, x, y, margin => 64.0 / 4096) AS query_envelope
         WHERE geometry_3857 && query_envelope
         ORDER BY id

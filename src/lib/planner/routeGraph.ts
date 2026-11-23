@@ -4,7 +4,7 @@
  * loads it from the database, so a test can build one by hand.
  */
 
-import { haversineDistance } from "../geoUtils";
+import { haversineDistance } from "../shared/geoUtils";
 
 /** A route as the planner's graph holds it: its ends, and what it costs to ride. */
 export interface NetworkRoute {

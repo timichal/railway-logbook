@@ -139,6 +139,19 @@ export const ROUTE_DETAIL_COLUMNS = `
   intended_backtracking, has_backtracking
 `;
 
+/**
+ * How many partial rides users have logged on the route. A geometry re-pick of a
+ * route that backtracks (before or after) can't place their stretches and logs them
+ * whole (`reprojectCoveredRanges`), which the editor warns about before the save.
+ */
+export async function partialRideCount(trackId: number): Promise<number> {
+  const result = await pool.query<{ count: number }>(
+    "SELECT count(*)::int AS count FROM user_logged_parts WHERE track_id = $1 AND partial",
+    [trackId],
+  );
+  return result.rows[0].count;
+}
+
 /** A single railway route by track_id, as the admin edits it. */
 export async function adminRoute(trackId: number): Promise<AdminRouteDetail> {
   const result = await pool.query<AdminRouteDetail>(

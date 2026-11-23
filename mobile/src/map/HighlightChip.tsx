@@ -8,8 +8,8 @@
  * nothing on screen explaining why.
  *
  * Over the top edge rather than the bottom: the bottom corners are the progress box
- * and the attribution, and the selection bar is below the map entirely. It sits in
- * the middle of the top row (`MapTopControls`), between the search and the planner.
+ * and the planner button, and the selection bar is below the map entirely. It sits
+ * in the chip row under the search bar (`MapTopControls`), after the searched line's.
  */
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
@@ -23,10 +23,14 @@ export function HighlightChip(): ReactNode {
 
   if (trackIds.length === 0) return null;
 
+  const text = `${trackIds.length} ${trackIds.length === 1 ? "route" : "routes"} highlighted`;
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Clear the highlight"
+      // The label replaces the text, so it says what is shown; the hint, what a press does
+      accessibilityLabel={text}
+      accessibilityHint="Clears the highlight"
       onPress={clear}
       className="min-h-11 shrink flex-row items-center gap-2 rounded-full bg-white/95 px-4 active:opacity-80 dark:bg-gray-900/95"
     >
@@ -37,7 +41,7 @@ export function HighlightChip(): ReactNode {
         numberOfLines={1}
         className="shrink text-sm font-semibold text-gray-900 dark:text-gray-100"
       >
-        {trackIds.length} {trackIds.length === 1 ? "route" : "routes"} highlighted
+        {text}
       </Text>
       <Ionicons name="close" size={16} color={colors.icon} />
     </Pressable>

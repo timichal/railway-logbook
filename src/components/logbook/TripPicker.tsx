@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
-import { filterByName } from "@/lib/searchText";
+import { filterByName } from "@/lib/shared/searchText";
 import { optionRow } from "@/lib/ui/buttonStyles";
 import { useSearchCombobox } from "@/lib/ui/useSearchCombobox";
 

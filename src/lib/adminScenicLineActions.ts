@@ -5,7 +5,7 @@ import { findAdminPath } from "./adminPathSearch";
 import { requiredStations, SCENIC_BACKTRACKING_ERROR } from "./adminValidation";
 import { asAdmin } from "./authHelpers";
 import { coordinatesToWKT, pointToWKT } from "./coordinateUtils";
-import { countryAt } from "./countryUtils";
+import { countriesAt } from "./countryBoundaries";
 import pool from "./db";
 import { ValidationError } from "./errors";
 import { lineLengthKmSql } from "./lineLength";
@@ -50,8 +50,7 @@ export async function createScenicLine(
   return asAdmin(async () => {
     const { from, to } = requiredStations(fromStation, toStation, "A scenic line");
     const geometryWKT = await scenicLineWKT(startCoordinate, endCoordinate);
-    const startCountry = countryAt(startCoordinate);
-    const endCountry = countryAt(endCoordinate);
+    const [startCountry, endCountry] = await countriesAt(pool, [startCoordinate, endCoordinate]);
     const result = await pool.query<{ id: number }>(
       `
       INSERT INTO scenic_lines (
@@ -89,8 +88,7 @@ export async function updateScenicLineGeometry(
     const exists = await pool.query("SELECT 1 FROM scenic_lines WHERE id = $1", [id]);
     if (exists.rowCount === 0) throw new ValidationError("Scenic line not found");
     const geometryWKT = await scenicLineWKT(startCoordinate, endCoordinate);
-    const startCountry = countryAt(startCoordinate);
-    const endCountry = countryAt(endCoordinate);
+    const [startCountry, endCountry] = await countriesAt(pool, [startCoordinate, endCoordinate]);
     const result = await pool.query(
       `
       UPDATE scenic_lines

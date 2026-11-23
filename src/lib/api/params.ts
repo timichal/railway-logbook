@@ -8,6 +8,7 @@ import type { LoggedRange } from "../journeyQueries";
 import { MAX_PG_INT } from "../progressQueries";
 import { normalizeCountryCodes } from "../shared/constants";
 import { isRegionId, type RegionId } from "../shared/regions";
+import { loggedRide } from "../shared/routeCoverage";
 import type { CoveredRange } from "../shared/types";
 import { ApiError } from "./response";
 
@@ -150,14 +151,6 @@ export function requireBoolean(body: JsonBody, key: string): boolean {
   return value;
 }
 
-export function requirePositiveInt(body: JsonBody, key: string): number {
-  const value = body[key];
-  if (!Number.isInteger(value) || (value as number) <= 0) {
-    throw new ApiError(400, `${key} must be a positive integer`);
-  }
-  return value as number;
-}
-
 export function optionalPositiveInt(body: JsonBody, key: string): number | null {
   const value = body[key];
   if (value === undefined || value === null) return null;
@@ -182,6 +175,19 @@ export function requireIntArray(body: JsonBody, key: string): number[] {
   return requireArray(body, key).map((item) => {
     if (!Number.isInteger(item)) {
       throw new ApiError(400, `${key} must hold integers`);
+    }
+    return item as number;
+  });
+}
+
+/**
+ * Track ids the query will compare against an `int` column, so one past its range
+ * is a 400 here rather than Postgres' out-of-range error as an opaque 500.
+ */
+export function requireTrackIdArray(body: JsonBody, key: string): number[] {
+  return requireArray(body, key).map((item) => {
+    if (!Number.isInteger(item) || (item as number) <= 0 || (item as number) > MAX_PG_INT) {
+      throw new ApiError(400, `${key} must hold track ids`);
     }
     return item as number;
   });
@@ -266,7 +272,11 @@ export function requireLoggedRoutes(
     const entry = item as Record<string, unknown>;
 
     const trackId = entry.trackId;
-    if (!Number.isInteger(trackId) || (trackId as number) <= 0) {
+    if (
+      !Number.isInteger(trackId) ||
+      (trackId as number) <= 0 ||
+      (trackId as number) > MAX_PG_INT
+    ) {
       throw new ApiError(400, `${key} entries need a positive integer trackId`);
     }
 
@@ -275,9 +285,19 @@ export function requireLoggedRoutes(
       throw new ApiError(400, `${key} entries' partial must be a boolean`);
     }
 
+    const covered = coveredRange(entry.covered, key);
+    // Refused rather than logged whole as `loggedRide` would: a client that says
+    // partial means it, and a whole ride would complete the route without a word
+    if (partial && !loggedRide(true, covered).partial) {
+      throw new ApiError(
+        400,
+        `${key} entries marked partial need covered, with 0 <= covered_start < covered_end <= 1`,
+      );
+    }
+
     trackIds.push(trackId as number);
     partialFlags.push(partial);
-    coveredRanges.push(coveredRange(entry.covered, key));
+    coveredRanges.push(covered);
   }
 
   return { trackIds, partialFlags, coveredRanges };

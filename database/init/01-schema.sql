@@ -192,10 +192,10 @@ CREATE TABLE user_logged_parts (
     track_id INTEGER NOT NULL REFERENCES railway_routes(track_id) ON DELETE CASCADE, -- Deleted when the route is deleted
     partial BOOLEAN NOT NULL DEFAULT FALSE, -- Per-journey partial flag
     -- Which stretch of the route was ridden, as fractions along railway_routes.geometry
-    -- (ST_LineLocatePoint space, 0 = the geometry's first point). Both NULL means the
-    -- extent is unknown: either the whole route (partial = FALSE) or a partial ride
-    -- whose extent was never captured (partial ticked by hand). Only the Journey
-    -- Planner knows an exact stretch, from the station it joins the route at.
+    -- (ST_LineLocatePoint space, 0 = the geometry's first point). Set exactly when the
+    -- ride is partial (logged_parts_partial_has_stretch): both NULL is the whole route.
+    -- Only the Journey Planner knows a stretch, from the station it joins the route at;
+    -- every write goes through loggedRide (src/lib/shared/routeCoverage.ts).
     covered_start DOUBLE PRECISION,
     covered_end DOUBLE PRECISION,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -203,6 +203,7 @@ CREATE TABLE user_logged_parts (
         (covered_start IS NULL) = (covered_end IS NULL)
         AND (covered_start IS NULL OR (covered_start >= 0 AND covered_end <= 1 AND covered_start < covered_end))
     ),
+    CONSTRAINT logged_parts_partial_has_stretch CHECK (partial = (covered_start IS NOT NULL)),
     -- A logged part belongs to the same user as its journey (see user_journeys).
     CONSTRAINT user_logged_parts_journey_owner_fkey FOREIGN KEY (journey_id, user_id)
         REFERENCES user_journeys (id, user_id) ON DELETE CASCADE
@@ -244,6 +245,19 @@ CREATE TABLE admin_notes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- OSM's country borders (admin_level=2 relations), clipped to the regions and
+-- cut into small pieces (ST_Subdivide) so a point lookup reads a few hundred
+-- vertices rather than a whole country. What the countries of a route's ends
+-- are looked up in (countriesAt, src/lib/countryBoundaries.ts). Filled and
+-- replaced whole by `src/scripts/importCountryBoundaries.ts`, which also
+-- creates the table on a database from before it. Neither map data nor route data: in no
+-- backup or pull, so each database runs the import itself
+CREATE TABLE country_boundaries (
+    code VARCHAR(2) NOT NULL CHECK (code ~ '^[A-Z]{2}$'), -- ISO 3166-1 alpha-2
+    geometry GEOMETRY(POLYGON, 4326) NOT NULL
+);
+CREATE INDEX idx_country_boundaries_geometry ON country_boundaries USING GIST (geometry);
 
 -- Data versions: one counter per table, moved by every committed write to it
 -- (bump_data_version, below). What the app's in-memory caches of a table are

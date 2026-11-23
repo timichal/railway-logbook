@@ -21,6 +21,20 @@
  * logbook's "Showing on the map" flies back. The map makes the move once it is in
  * view, so with this modal over it, on closing.
  *
+ * **A station on the map goes straight into the form.** With the planner closed, from
+ * its sheet's "Plan from here" / "Plan to here" / "Add as via" (`placeFromMap`), which
+ * opens the planner. With the planner open, a tap on a station fills the planner's
+ * **target slot** (`pickOnMap`), as a click fills the web planner's focused field:
+ * the slot last tapped or typed into (`setActiveSlot`), else the first empty one —
+ * From, the empty via rows, To — else To, so a full form re-plans to the station
+ * tapped. The planner marks the target, so a tap never lands somewhere unseen. Once a
+ * station completes the form the search runs by itself: picking two stations on the
+ * map is the whole of asking for the path between them.
+ *
+ * **Whether the planner's sheet is up is kept here too** (`sheetOpen`): it covers only
+ * half the map (`plannerSheet.ts`), so the map counts itself in view under it, fits
+ * the path into what still shows, and raises its own sheets above it.
+ *
  * Cleared on a region switch, as the web app's planner is: its stations and its
  * answer are the other region's. And when the session ends: the provider sits above
  * the auth guard, and the next account must not open the last one's plan.
@@ -64,14 +78,40 @@ export interface PlannerResult {
   bounds: RouteBounds | null;
 }
 
+export type PlannerEnd = "from" | "to" | "via";
+
+/** A slot of the form: an end, or a via row by its index. */
+export type PlannerSlot = "from" | "to" | number;
+
 interface PlannerValue {
   form: PlannerForm;
   result: PlannerResult | null;
   error: string | null;
   searching: boolean;
-  /** Changes the form. The answer was for the old one, so it goes. */
+  /** The planner's sheet is up, over the lower half of the map. */
+  sheetOpen: boolean;
+  /** The planner screen says so as it mounts and unmounts. */
+  setSheetOpen(open: boolean): void;
+  /**
+   * Changes the form's stations. The answer was for the old one, so it goes, and so
+   * does the slot chosen as the map's target.
+   */
   editForm(update: (form: PlannerForm) => PlannerForm): void;
-  find(): Promise<void>;
+  /** The "Include …" switch: drops the answer, but keeps the target slot. */
+  setIncludeSpecial(value: boolean): void;
+  /** Searches `form`, or the current one. */
+  find(form?: PlannerForm): Promise<void>;
+  /**
+   * A station from the map, as From, To or a via (the first empty via row, else a new
+   * one), searching at once if that completes the form.
+   */
+  placeFromMap(station: Station, end: PlannerEnd): void;
+  /** Where a station tapped on the map goes while the planner is open. */
+  targetSlot: PlannerSlot;
+  /** A slot tapped or typed into becomes the target; any edit to the form lets it go. */
+  setActiveSlot(slot: PlannerSlot | null): void;
+  /** A station tapped on the map, into the target slot — searching if that completes the form. */
+  pickOnMap(station: Station): void;
   /** Puts the answer's gold line back on the map and flies to it — the screen asks on opening. */
   showOnMap(): void;
   /** An empty form and no answer: Clear, a spent plan, a region switch. */
@@ -81,6 +121,33 @@ interface PlannerValue {
 const EMPTY_FORM: PlannerForm = { from: null, to: null, vias: [], includeSpecial: true };
 
 const PlannerContext = createContext<PlannerValue | null>(null);
+
+function fillSlot(form: PlannerForm, slot: PlannerSlot, station: Station): PlannerForm {
+  if (slot === "from") return { ...form, from: station };
+  if (slot === "to") return { ...form, to: station };
+  return { ...form, vias: form.vias.map((s, i) => (i === slot ? station : s)) };
+}
+
+/** From a station sheet's buttons: a via goes into the first empty row, else a new one. */
+function placeStation(form: PlannerForm, station: Station, end: PlannerEnd): PlannerForm {
+  if (end !== "via") return fillSlot(form, end, station);
+  const empty = form.vias.indexOf(null);
+  return empty === -1 ? { ...form, vias: [...form.vias, station] } : fillSlot(form, empty, station);
+}
+
+/** The slot a map tap fills (see the header). An active via row since removed is ignored. */
+function targetOf(form: PlannerForm, active: PlannerSlot | null): PlannerSlot {
+  if (active !== null && (typeof active !== "number" || active < form.vias.length)) return active;
+  if (!form.from) return "from";
+  const emptyVia = form.vias.indexOf(null);
+  if (emptyVia !== -1) return emptyVia;
+  return "to";
+}
+
+/** Both ends and every via row filled: what `find` would refuse otherwise. */
+function isComplete({ from, to, vias }: PlannerForm): boolean {
+  return from !== null && to !== null && !vias.includes(null);
+}
 
 /** A station id is `string | number` off the API, and may be negative (see `API.md`). */
 function stationId(station: Station): number {
@@ -96,6 +163,15 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
   const [result, setResult] = useState<PlannerResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [activeSlot, setActiveSlot] = useState<PlannerSlot | null>(null);
+  // Every change is built on this, and writes it at once, so two changes before the
+  // next render build on each other rather than the second undoing the first
+  const formRef = useRef(form);
+  formRef.current = form;
+  const activeRef = useRef(activeSlot);
+  activeRef.current = activeSlot;
+  const targetSlot = useMemo(() => targetOf(form, activeSlot), [form, activeSlot]);
   // Only the latest search may write: anything that drops the answer also drops a
   // search still running, whose answer would be for a form that no longer exists
   const searchRef = useRef(0);
@@ -114,14 +190,33 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
 
   const editForm = useCallback<PlannerValue["editForm"]>(
     (update) => {
-      setForm(update);
+      const next = update(formRef.current);
+      formRef.current = next;
+      setForm(next);
+      // A pick or a clear is done with its slot, and a via row moved or removed has
+      // taken its index with it
+      activeRef.current = null;
+      setActiveSlot(null);
+      dropResult();
+    },
+    [dropResult],
+  );
+
+  const setIncludeSpecial = useCallback(
+    (value: boolean): void => {
+      const next = { ...formRef.current, includeSpecial: value };
+      formRef.current = next;
+      setForm(next);
       dropResult();
     },
     [dropResult],
   );
 
   const reset = useCallback((): void => {
+    formRef.current = EMPTY_FORM;
     setForm(EMPTY_FORM);
+    activeRef.current = null;
+    setActiveSlot(null);
     dropResult();
   }, [dropResult]);
 
@@ -160,52 +255,80 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
     [highlight],
   );
 
-  const find = useCallback(async (): Promise<void> => {
-    const { from, to, vias, includeSpecial } = form;
-    if (!from || !to) {
-      setError("Pick both a from and a to station.");
-      return;
-    }
-    if (vias.some((s) => s === null)) {
-      setError("Fill in every via station, or remove the empty ones.");
-      return;
-    }
-
-    dropResult();
-    const request = searchRef.current;
-    setSearching(true);
-    try {
-      const answer = await api.plan({
-        fromStationId: stationId(from),
-        toStationId: stationId(to),
-        viaStationIds: vias.flatMap((s) => (s ? [stationId(s)] : [])),
-        includeSpecial: hasOrdinaryNonRegular(regionId) && includeSpecial,
-        // Closed lines while the map shows them all, as on the web: how a past
-        // trip over a line since closed gets planned
-        includeClosed: showClosed,
-      });
-      if (request !== searchRef.current) return;
-
-      // "No path found" is a 200 with an `error`, not a failure — see `API.md`
-      if (answer.error) {
-        setError(answer.error);
+  const find = useCallback(
+    async (searched?: PlannerForm): Promise<void> => {
+      const { from, to, vias, includeSpecial } = searched ?? form;
+      if (!from || !to) {
+        setError("Pick both a from and a to station.");
+        return;
+      }
+      if (vias.some((s) => s === null)) {
+        setError("Fill in every via station, or remove the empty ones.");
         return;
       }
 
-      const found = {
-        routes: answer.routes,
-        totalDistance: answer.totalDistance,
-        bounds: answer.bounds,
-      };
-      setResult(found);
-      highlightResult(found);
-    } catch (caught) {
-      if (request !== searchRef.current) return;
-      setError(caught instanceof Error ? caught.message : "Could not plan that journey.");
-    } finally {
-      if (request === searchRef.current) setSearching(false);
-    }
-  }, [form, regionId, showClosed, dropResult, highlightResult]);
+      dropResult();
+      const request = searchRef.current;
+      setSearching(true);
+      try {
+        const answer = await api.plan({
+          fromStationId: stationId(from),
+          toStationId: stationId(to),
+          viaStationIds: vias.flatMap((s) => (s ? [stationId(s)] : [])),
+          includeSpecial: hasOrdinaryNonRegular(regionId) && includeSpecial,
+          // Closed lines while the map shows them all, as on the web: how a past
+          // trip over a line since closed gets planned
+          includeClosed: showClosed,
+        });
+        if (request !== searchRef.current) return;
+
+        // "No path found" is a 200 with an `error`, not a failure — see `API.md`
+        if (answer.error) {
+          setError(answer.error);
+          return;
+        }
+
+        const found = {
+          routes: answer.routes,
+          totalDistance: answer.totalDistance,
+          bounds: answer.bounds,
+        };
+        setResult(found);
+        highlightResult(found);
+      } catch (caught) {
+        if (request !== searchRef.current) return;
+        setError(caught instanceof Error ? caught.message : "Could not plan that journey.");
+      } finally {
+        if (request === searchRef.current) setSearching(false);
+      }
+    },
+    [form, regionId, showClosed, dropResult, highlightResult],
+  );
+
+  const place = useCallback(
+    (next: PlannerForm): void => {
+      formRef.current = next;
+      setForm(next);
+      activeRef.current = null;
+      setActiveSlot(null);
+      dropResult();
+      if (isComplete(next)) void find(next);
+    },
+    [dropResult, find],
+  );
+
+  const placeFromMap = useCallback<PlannerValue["placeFromMap"]>(
+    (station, end) => place(placeStation(formRef.current, station, end)),
+    [place],
+  );
+
+  const pickOnMap = useCallback<PlannerValue["pickOnMap"]>(
+    (station) => {
+      const form = formRef.current;
+      place(fillSlot(form, targetOf(form, activeRef.current), station));
+    },
+    [place],
+  );
 
   const showOnMap = useCallback((): void => {
     if (!result) return;
@@ -214,8 +337,38 @@ export function PlannerProvider({ children }: { children: ReactNode }): ReactNod
   }, [result, highlightResult, refit]);
 
   const value = useMemo(
-    () => ({ form, result, error, searching, editForm, find, showOnMap, reset }),
-    [form, result, error, searching, editForm, find, showOnMap, reset],
+    () => ({
+      form,
+      result,
+      error,
+      searching,
+      sheetOpen,
+      setSheetOpen,
+      editForm,
+      setIncludeSpecial,
+      find,
+      placeFromMap,
+      targetSlot,
+      setActiveSlot,
+      pickOnMap,
+      showOnMap,
+      reset,
+    }),
+    [
+      form,
+      result,
+      error,
+      searching,
+      sheetOpen,
+      editForm,
+      setIncludeSpecial,
+      find,
+      placeFromMap,
+      targetSlot,
+      pickOnMap,
+      showOnMap,
+      reset,
+    ],
   );
 
   return <PlannerContext.Provider value={value}>{children}</PlannerContext.Provider>;

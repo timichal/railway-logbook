@@ -1,5 +1,5 @@
 import type { Client, Pool } from "pg";
-import { BACKTRACKING_THRESHOLD_DEGREES } from "../../lib/geoUtils";
+import { BACKTRACKING_THRESHOLD_DEGREES } from "../../lib/shared/geoUtils";
 import type { BacktrackingPoint, PathResult } from "../../lib/shared/types";
 import { MinHeap } from "./minHeap";
 import type { PartCatalog } from "./partCatalog";

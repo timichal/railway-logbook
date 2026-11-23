@@ -2,7 +2,7 @@
 
 import { getUser } from "./authActions";
 import { withTransaction } from "./db";
-import { sanitizeRange } from "./shared/routeCoverage";
+import { loggedRide } from "./shared/routeCoverage";
 
 export interface JourneyMigrationResult {
   journeysMigrated: number;
@@ -137,18 +137,18 @@ export async function migrateLocalJourneys(
         continue;
       }
 
-      const partial = Boolean(localPart.partial);
-      const range = sanitizeRange(
+      // A ride an older version stored partial with no stretch arrives whole
+      const ride = loggedRide(
+        Boolean(localPart.partial),
         localPart.covered_start != null && localPart.covered_end != null
           ? { covered_start: localPart.covered_start, covered_end: localPart.covered_end }
           : null,
-        partial,
       );
       journeyIds.push(dbJourneyId);
       trackIds.push(localPart.track_id);
-      partials.push(partial);
-      starts.push(range?.covered_start ?? null);
-      ends.push(range?.covered_end ?? null);
+      partials.push(ride.partial);
+      starts.push(ride.covered_start);
+      ends.push(ride.covered_end);
     }
 
     // One row per (journey, route): a route already logged on the journey

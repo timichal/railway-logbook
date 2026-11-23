@@ -1,15 +1,18 @@
 import { requireUser } from "@/lib/api/auth";
-import { optionalCountries, requireRegion } from "@/lib/api/params";
+import { optionalCountries, optionalIntList, requireRegion } from "@/lib/api/params";
 import { apiHandler, jsonResponse } from "@/lib/api/response";
 import { progressForUser } from "@/lib/progressQueries";
 
 /**
- * GET /api/v1/progress?region=&countries= — the km and route counts.
+ * GET /api/v1/progress?region=&countries=&usage= — the km and route counts.
  *
  * `countries` absent means no country filter; `countries=` (empty) means the
  * filter excludes everything, which is a real state the web app can be in and
  * answers zeros. Only the usage types the region counts as ordinary service count
- * (`ordinaryUsageTypes` — Regular, plus Japan's non-JR lines), as on the web.
+ * (`ordinaryUsageTypes` — Regular, plus Japan's non-JR lines), as on the web, and
+ * `usage` narrows them to the types the map shows: Japan's JR and non-JR lines are
+ * ticked like countries. It keeps the same three states, and a type the region
+ * doesn't count is ignored (`countedUsageTypes`).
  */
 export async function GET(request: Request): Promise<Response> {
   return apiHandler(async () => {
@@ -17,6 +20,8 @@ export async function GET(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const region = requireRegion(url);
 
-    return jsonResponse(await progressForUser(user.id, region, optionalCountries(url)));
+    return jsonResponse(
+      await progressForUser(user.id, region, optionalCountries(url), optionalIntList(url, "usage")),
+    );
   });
 }

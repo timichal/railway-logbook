@@ -38,15 +38,11 @@ describe("loggedLengthKm", () => {
     assert.equal(loggedLengthKm(route(1, "A", "B", { partial: true, travelled_length_km: 4 })), 4);
   });
 
-  test("unticking partial claims the whole route", () => {
+  test("a whole ride counts the whole line, whatever stretch it once had", () => {
     assert.equal(
       loggedLengthKm(route(1, "A", "B", { partial: false, travelled_length_km: 4 })),
       10,
     );
-  });
-
-  test("a route ticked partial by hand has no known stretch and counts whole", () => {
-    assert.equal(loggedLengthKm(route(1, "A", "B", { partial: true })), 10);
   });
 
   test("selectionLengthKm sums the logged lengths", () => {
