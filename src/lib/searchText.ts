@@ -1,4 +1,4 @@
-import { SEARCH_SEPARATORS } from "./shared/searchQuery";
+import { SEARCH_SEPARATORS, SEARCH_WORD_BREAKS } from "./shared/searchQuery";
 
 /**
  * Letters that carry their accent inside the letter rather than as a combining mark,
@@ -55,4 +55,19 @@ export function foldAccents(text: string): string {
  */
 export function foldForSearch(text: string): string {
   return foldAccents(text).replace(SEARCH_SEPARATORS, "");
+}
+
+/**
+ * The items whose name holds every word of the query, each folded with
+ * `foldForSearch` and anywhere in the name, in any order: "2025 japan" finds
+ * "Japan spring 2025". For short lists picked from in the browser (the trip
+ * picker), kept in the order given. An empty query keeps them all.
+ */
+export function filterByName<T extends { name: string }>(items: T[], query: string): T[] {
+  const words = query.split(SEARCH_WORD_BREAKS).map(foldForSearch).filter(Boolean);
+  if (words.length === 0) return items;
+  return items.filter((item) => {
+    const name = foldForSearch(item.name);
+    return words.every((word) => name.includes(word));
+  });
 }

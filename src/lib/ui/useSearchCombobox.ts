@@ -23,11 +23,17 @@ interface SearchComboboxOptions<T> {
   onFocus?: () => void;
   /** Called once the field has really been left: after the blur delay, and not at all when focus comes back first. */
   onBlur?: () => void;
+  /**
+   * A search of a list already in the browser: no debounce and no two-character
+   * floor, so focusing the field lists everything (`search("")`) and each
+   * keystroke narrows it at once. The server searches keep both.
+   */
+  local?: boolean;
 }
 
 /**
- * A search field with a suggestion dropdown — `StationSearchInput` and
- * `MapStationSearch` — written once so the two cannot drift: the debounce, the
+ * A search field with a suggestion dropdown — `StationSearchInput`,
+ * `MapStationSearch` and `TripPicker` — written once so they cannot drift: the debounce, the
  * two-character floor, the latest-request guard, the arrow keys' cursor, the blur
  * delay, and the ARIA combobox wiring.
  *
@@ -54,7 +60,10 @@ export function useSearchCombobox<T>({
   id,
   onFocus,
   onBlur,
+  local = false,
 }: SearchComboboxOptions<T>) {
+  const minQueryLength = local ? 0 : MIN_SEARCH_QUERY_LENGTH;
+  const debounceMs = local ? 0 : SEARCH_DEBOUNCE_MS;
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const listId = `${inputId}-results`;
@@ -70,10 +79,15 @@ export function useSearchCombobox<T>({
   // Only the latest request may write, so a slow answer to an older query never
   // replaces a newer one's, nor stops the spinner while the newer one runs
   const requestRef = useRef(0);
-  // The latest `search`, so a debounced request sent after a re-render uses it
+  // The latest `search`, so a debounced request sent after a re-render uses it,
+  // and the latest `onBlur`, which runs after the blur delay: choosing a result
+  // blurs the field in the same event, so the closure the timer was set in still
+  // sees the state from before the choice
   const searchRef = useRef(search);
+  const onBlurRef = useRef(onBlur);
   useLayoutEffect(() => {
     searchRef.current = search;
+    onBlurRef.current = onBlur;
   });
 
   const expanded = focused && results.length > 0;
@@ -130,14 +144,15 @@ export function useSearchCombobox<T>({
   const handleChange = (next: string) => {
     typedRef.current = next;
     onChange(next);
-    if (searchQueryLength(next) >= MIN_SEARCH_QUERY_LENGTH) {
+    if (searchQueryLength(next) >= minQueryLength) {
       // The list still showing answers the old text: a request for that text still
       // in flight must not replace it, and Enter must not pick a row arrowed to then
       cancelDebounce();
       requestRef.current++;
       setIsSearching(false);
       setActiveIndex(-1);
-      debounceRef.current = setTimeout(() => runSearch(next), SEARCH_DEBOUNCE_MS);
+      if (debounceMs === 0) runSearch(next);
+      else debounceRef.current = setTimeout(() => runSearch(next), debounceMs);
     } else {
       clearResults();
     }
@@ -150,7 +165,7 @@ export function useSearchCombobox<T>({
     setFocused(true);
     if (!returning) {
       setActiveIndex(-1);
-      if (searchQueryLength(value) >= MIN_SEARCH_QUERY_LENGTH) runSearch(value);
+      if (searchQueryLength(value) >= minQueryLength) runSearch(value);
     }
     onFocus?.();
   };
@@ -161,7 +176,7 @@ export function useSearchCombobox<T>({
       blurRef.current = null;
       setFocused(false);
       clearResults();
-      onBlur?.();
+      onBlurRef.current?.();
     }, BLUR_DELAY_MS);
   };
 
@@ -199,6 +214,7 @@ export function useSearchCombobox<T>({
     results,
     activeIndex,
     expanded,
+    focused,
     isSearching,
     inputProps: {
       ref: inputRef,

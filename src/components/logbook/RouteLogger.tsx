@@ -68,8 +68,8 @@ interface RouteLoggerProps extends RouteSelectionProps {
 }
 
 /**
- * The Route Logger tab: the Journey Planner, the routes picked on the map and the
- * new-journey form. Where the journey goes — the account or localStorage — is the
+ * The Route Logger tab: the new journey's fields, the Journey Planner, the routes
+ * picked on the map and the button that logs them. Where the journey goes — the account or localStorage — is the
  * caller's `onCreate` and `onSaveEdit`, which are the whole of the difference
  * between `JourneyLogger` and `LocalTripLogger`.
  *
@@ -135,15 +135,18 @@ export default function RouteLogger({
   const journeyTripId = trips?.some((trip) => trip.id === pickedTripId) ? pickedTripId : null;
 
   // In the order the tab asks for them
-  const missingField =
-    selectedRoutes.length === 0
-      ? "Select at least one route, on the map or with the planner"
-      : !journeyName.trim()
-        ? "Give the journey a name"
-        : !journeyDate
-          ? "Pick the journey's date"
-          : null;
+  const fieldsIncomplete = !journeyName.trim() || !journeyDate;
+  const missingField = !journeyName.trim()
+    ? "Give the journey a name"
+    : !journeyDate
+      ? "Pick the journey's date"
+      : selectedRoutes.length === 0
+        ? "Select at least one route, on the map or with the planner"
+        : null;
   const disabledReason = blockedReason || missingField;
+  // The name suggestion is made by the planner below the field, so it is offered
+  // beside the button too, where the eye is once the routes are in
+  const offeredName = !blockedReason && !journeyName.trim() ? suggestedName : null;
 
   const handleCreateJourney = async () => {
     if (missingField) {
@@ -188,12 +191,38 @@ export default function RouteLogger({
         notice
       )}
 
-      {/* In the order of the task: find the routes, check them, then name the journey */}
-      <JourneyPlanner
-        onHighlightRoutes={onHighlightRoutes}
-        onAddRoutesToSelection={onAddRoutesFromPlanner && handleAddFromPlanner}
-        onStationClickHandler={onStationClickHandler}
-      />
+      {/* The new journey's fields first: its name and date are known before the
+          routes are found, and the planner is what the tab goes back and forth
+          with. They wait out an edit hidden, so what was typed survives it.
+          NEW_JOURNEY_FORM_ID marks where the summary bar lands: here while a
+          field is missing, at the button once they are filled. */}
+      <div hidden={edit !== null} id={!edit && fieldsIncomplete ? NEW_JOURNEY_FORM_ID : undefined}>
+        <h3 className="text-lg font-bold mb-3">New Journey</h3>
+        <JourneyMetaFields
+          idPrefix="new-journey"
+          name={journeyName}
+          onNameChange={setJourneyName}
+          suggestedName={suggestedName}
+          date={journeyDate}
+          onDateChange={setJourneyDate}
+          onDateFocus={refreshJourneyDate}
+          description={journeyDescription}
+          onDescriptionChange={setJourneyDescription}
+          trip={
+            trips && trips.length > 0
+              ? { value: journeyTripId, options: trips, onChange: setPickedTripId }
+              : undefined
+          }
+        />
+      </div>
+
+      <div className={edit ? undefined : "pt-3 border-t border-gray-200"}>
+        <JourneyPlanner
+          onHighlightRoutes={onHighlightRoutes}
+          onAddRoutesToSelection={onAddRoutesFromPlanner && handleAddFromPlanner}
+          onStationClickHandler={onStationClickHandler}
+        />
+      </div>
 
       <SelectedRoutesList
         title={edit ? "Routes in this journey" : "Selected Routes"}
@@ -214,29 +243,9 @@ export default function RouteLogger({
         />
       )}
 
-      {/* The new journey, waiting out an edit (see above) */}
-      <div hidden={edit !== null} className="space-y-4">
-        <div id={edit ? undefined : NEW_JOURNEY_FORM_ID} className="pt-3 border-t border-gray-200">
-          <h3 className="text-lg font-bold mb-3">New Journey</h3>
-          <JourneyMetaFields
-            idPrefix="new-journey"
-            name={journeyName}
-            onNameChange={setJourneyName}
-            suggestedName={suggestedName}
-            date={journeyDate}
-            onDateChange={setJourneyDate}
-            onDateFocus={refreshJourneyDate}
-            description={journeyDescription}
-            onDescriptionChange={setJourneyDescription}
-            trip={
-              trips && trips.length > 0
-                ? { value: journeyTripId, options: trips, onChange: setPickedTripId }
-                : undefined
-            }
-          />
-        </div>
-
-        <div>
+      {/* The new journey's button, after the routes it logs (see above) */}
+      <div hidden={edit !== null}>
+        <div id={!edit && !fieldsIncomplete ? NEW_JOURNEY_FORM_ID : undefined}>
           <button
             type="button"
             onClick={handleCreateJourney}
@@ -255,6 +264,17 @@ export default function RouteLogger({
             <p id="new-journey-blocked" className="mt-1.5 text-xs text-gray-500 text-center">
               {disabledReason}
             </p>
+          )}
+          {offeredName && !isSaving && (
+            <div className="mt-1.5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setJourneyName(offeredName)}
+                className={`${btn("softPrimary", "xs")} max-w-full`}
+              >
+                <span className="truncate">Use “{offeredName}”</span>
+              </button>
+            </div>
           )}
         </div>
       </div>

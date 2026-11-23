@@ -1,8 +1,9 @@
+import TripPicker, { type TripOption } from "@/components/logbook/TripPicker";
 import { btn } from "@/lib/ui/buttonStyles";
 
-interface TripPicker {
+interface TripField {
   value: number | null;
-  options: { id: number; name: string }[];
+  options: TripOption[];
   onChange: (tripId: number | null) => void;
 }
 
@@ -21,7 +22,7 @@ interface JourneyMetaFieldsProps {
   description: string;
   onDescriptionChange: (description: string) => void;
   /** Only a signed-in user's journeys belong to trips; omitted, the field is not drawn. */
-  trip?: TripPicker;
+  trip?: TripField;
 }
 
 /** Name, date, description and trip of a journey — the new-journey form and the edit form. */
@@ -102,19 +103,13 @@ export default function JourneyMetaFields({
           <label htmlFor={`${idPrefix}-trip`} className={labelClass}>
             Trip
           </label>
-          <select
+          <TripPicker
             id={`${idPrefix}-trip`}
-            value={trip.value ?? ""}
-            onChange={(e) => trip.onChange(e.target.value ? Number(e.target.value) : null)}
-            className={fieldClass}
-          >
-            <option value="">None</option>
-            {trip.options.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
+            inputClassName={fieldClass}
+            value={trip.value}
+            options={trip.options}
+            onChange={trip.onChange}
+          />
         </div>
       )}
     </div>

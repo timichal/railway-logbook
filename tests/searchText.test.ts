@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { foldAccents, foldForSearch } from "@/lib/searchText";
+import { filterByName, foldAccents, foldForSearch } from "@/lib/searchText";
 
 describe("foldForSearch", () => {
   test("drops case and combining diacritics", () => {
@@ -49,5 +49,30 @@ describe("foldForSearch", () => {
   test("a folded query finds the original", () => {
     assert.ok(foldForSearch("Chūō Main Line").includes(foldForSearch("chuo")));
     assert.ok(foldForSearch("Owari-Seto").includes(foldForSearch("owari se")));
+  });
+});
+
+describe("filterByName", () => {
+  const trips = [
+    { id: 1, name: "Japan spring 2025" },
+    { id: 2, name: "Balkány – léto" },
+    { id: 3, name: "Tōhoku rail pass" },
+  ];
+  const ids = (query: string) => filterByName(trips, query).map((trip) => trip.id);
+
+  test("keeps everything, in order, for an empty query", () => {
+    assert.deepEqual(ids(""), [1, 2, 3]);
+    assert.deepEqual(ids("  - "), [1, 2, 3]);
+  });
+
+  test("needs every word, anywhere and in any order", () => {
+    assert.deepEqual(ids("2025 japan"), [1]);
+    assert.deepEqual(ids("pan spr"), [1]);
+    assert.deepEqual(ids("japan 2024"), []);
+  });
+
+  test("folds case and diacritics", () => {
+    assert.deepEqual(ids("balkany leto"), [2]);
+    assert.deepEqual(ids("TOHOKU"), [3]);
   });
 });

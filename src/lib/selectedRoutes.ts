@@ -1,6 +1,10 @@
 import type { SelectedRoute } from "@/lib/shared/types";
 
-/** The new-journey form in the Route Logger, which the mobile sheet's summary bar scrolls to. */
+/**
+ * Where the mobile sheet's summary bar scrolls to in the Route Logger: the new
+ * journey's fields while one is missing, its button once they are filled, or the
+ * edit form while a saved journey is edited.
+ */
 export const NEW_JOURNEY_FORM_ID = "new-journey-form";
 
 /** The stations a Journey Planner search ran between, by name — what a journey is usually called. */
