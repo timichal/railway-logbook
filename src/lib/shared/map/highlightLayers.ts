@@ -305,7 +305,8 @@ export function createLineSearchHighlightLayer(
     paint: {
       "line-color": lineSearchHighlightColor(theme),
       ...highlighterBandPaint(),
-      "line-opacity": OPACITIES.lineSearchHighlight,
+      "line-opacity":
+        theme === "dark" ? OPACITIES.lineSearchHighlightDark : OPACITIES.lineSearchHighlight,
     },
     filter: usageTypeFilter(usageTypes),
   };

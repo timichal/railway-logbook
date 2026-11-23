@@ -19,6 +19,8 @@ export interface StationRouteMatch {
   fractions: Map<number, number>;
   /** The point on each route closest to the station, by track id. */
   points: Map<number, [number, number]>;
+  /** How far each route passes from the station, in metres, by track id (`accessCosts`). */
+  distances: Map<number, number>;
 }
 
 /**
@@ -31,7 +33,11 @@ export interface StationRouteMatch {
  *
  * Per station: the smallest tolerance level that matches anything wins, extended
  * to the next level up to catch nearby routes at slightly different distances
- * (e.g. parallel tracks at the same station).
+ * (e.g. parallel tracks at the same station). That widening also takes in other
+ * lines merely passing near — one a few hundred metres off, with no stop there,
+ * beside the line that does stop — so the search charges each route for how much further off it
+ * passes than the nearest (`accessCosts`) rather than this narrowing harder: a big
+ * station's own platforms can spread over hundreds of metres.
  *
  * Each match also carries where the station falls along that route, as a 0..1
  * fraction of its geometry: a station is regularly mid-route, and the search
@@ -50,7 +56,12 @@ export async function findRoutesNearStations(
 ): Promise<Map<number, StationRouteMatch>> {
   const matches = new Map<number, StationRouteMatch>();
   for (const stationId of stationIds) {
-    matches.set(stationId, { routes: [], fractions: new Map(), points: new Map() });
+    matches.set(stationId, {
+      routes: [],
+      fractions: new Map(),
+      points: new Map(),
+      distances: new Map(),
+    });
   }
   if (stationIds.length === 0) return matches;
 
@@ -112,6 +123,7 @@ export async function findRoutesNearStations(
     const match = matches.get(stationId)!;
     match.fractions.set(row.track_id, row.frac);
     match.points.set(row.track_id, [Number(row.lon), Number(row.lat)]);
+    match.distances.set(row.track_id, distance);
   }
 
   for (const stationId of stationIds) {

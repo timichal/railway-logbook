@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { buildRouteGraph, type NetworkRoute, type RouteNetwork } from "@/lib/planner/routeGraph";
 import {
+  accessCosts,
   changeCosts,
   findShortestPath,
   type SearchResult,
@@ -192,6 +193,76 @@ describe("searchSegment", () => {
   });
 });
 
+describe("accessCosts", () => {
+  test("charges the walk past the nearest route, at the gap rate", () => {
+    const costs = accessCosts(
+      [1, 2, 3],
+      new Map([
+        [1, 13],
+        [2, 422],
+        [3, 13],
+      ]),
+    );
+    assert.equal(costs.get(1), 0);
+    assert.equal(costs.get(3), 0);
+    assert.ok(Math.abs(costs.get(2)! - 0.409 * 25) < 1e-9);
+  });
+
+  test("lines all about as far off cost about nothing", () => {
+    const costs = accessCosts(
+      [1, 2],
+      new Map([
+        [1, 300],
+        [2, 310],
+      ]),
+    );
+    assert.equal(costs.get(1), 0);
+    assert.ok(Math.abs(costs.get(2)! - 0.25) < 1e-9);
+  });
+
+  test("an unknown distance is charged nothing", () => {
+    assert.equal(accessCosts([1, 2], new Map([[1, 50]])).get(2), 0);
+  });
+});
+
+describe("station access", () => {
+  // A branch line starts at the station and runs to the destination (4.6km, so
+  // 9.2 at the branch rate). A main line passes 422m off and gets there via a
+  // second main route in 6km. The station is mid-way along the main line.
+  const Q: Coord = [14.05, 50.0];
+  const net = network(
+    route(1, 4.6, Q, P1, { line_class: "branch" }),
+    route(2, 9.2, P0, [14.07, 50.0]),
+    route(3, 1.3, [14.07, 50.0], P1),
+  );
+  const f = fractions({ 1: 0, 2: 0.5 }, { 1: 1, 3: 1 });
+
+  test("free, the passing main line wins", () => {
+    assert.deepEqual(findShortestPath(net, [1, 2], [1, 3], f)?.path, [2, 3]);
+  });
+
+  test("charged the walk to it, the line that stops at the station wins", () => {
+    const startCosts = accessCosts(
+      [1, 2],
+      new Map([
+        [1, 13],
+        [2, 422],
+      ]),
+    );
+    assert.deepEqual(searchSegment(net, [1, 2], [1, 3], f, { startCosts })?.path, [1]);
+  });
+
+  test("an end cost is added where the journey finishes", () => {
+    // Two parallel routes into the destination: the shorter wins until leaving it
+    // costs more than the difference
+    const into = network(route(1, 7, P0, P1), route(2, 1.3, P1, P2), route(3, 2, P1, P2));
+    const ends = fractions({ 1: 0 }, { 2: 1, 3: 1 });
+    assert.deepEqual(findShortestPath(into, [1], [2, 3], ends)?.path, [1, 2]);
+    const charged = findShortestPath(into, [1], [2, 3], ends, { endCosts: new Map([[2, 1]]) });
+    assert.deepEqual(charged, { path: [1, 3], sides: ["end", "end"], cost: 9 });
+  });
+});
+
 describe("changeCosts", () => {
   test("carrying on is free, changing costs the gap plus a penalty", () => {
     const points = new Map<number, Coord>([
@@ -217,6 +288,7 @@ function stationsAt(entries: Record<number, Record<number, number>>) {
       routes: [...fracs.keys()],
       fractions: fracs,
       points: new Map(),
+      distances: new Map(),
     });
   }
   return stations;

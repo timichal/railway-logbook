@@ -31,7 +31,9 @@
  * The click-buffer layer has no counterpart: a press is delivered by each
  * `<VectorSource>`'s own `onPress` with a 44×44pt hitbox, and the topmost layer in
  * the hitbox wins — which gives the note-beats-station-beats-route precedence the web
- * app hand-codes with `queryRenderedFeatures`.
+ * app hand-codes with `queryRenderedFeatures`. Stations take a smaller box, and only
+ * by their dot (`STATION_HITBOX`): they are over the routes, and would win presses
+ * meant for the line beneath.
  */
 
 import type { LineLayerSpecification } from "@maplibre/maplibre-gl-style-spec";
@@ -127,6 +129,14 @@ const MAX_ZOOM = 18;
 
 /** How long a settled camera waits before its position is written down. */
 const SAVE_DEBOUNCE_MS = 500;
+
+/**
+ * A station's touch box, 24pt square against every other source's 44pt. Stations
+ * are drawn over routes and the topmost source in its own box wins, so at 44pt a
+ * dot up to 22pt from the finger took a press aimed at the line under it. A dot is
+ * a few points across: 24pt still finds it, and leaves the line its press.
+ */
+const STATION_HITBOX = { top: 12, right: 12, bottom: 12, left: 12 };
 
 /** Where a station picked out of the search box lands, as on the web. */
 const STATION_ZOOM = 14;
@@ -890,11 +900,16 @@ export function RailwayMap({ countries, children, footer }: RailwayMapProps): Re
           tiles={[stationsTileUrl()]}
           minzoom={ZOOM_RANGES.stations.min}
           maxzoom={ZOOM_RANGES.stations.max}
+          hitbox={STATION_HITBOX}
           onPress={(event) => takePress(event, readStationPress)}
         >
           <Layer {...createStationsLayer(theme)} />
-          <Layer {...createStationLabelsLayer(theme)} />
         </VectorSource>
+        {/* Outside the source, so not pressable: a source hit-tests every layer it
+            holds, and a name runs far off its dot across the lines beside it. A
+            station is pressed by its dot. Anchored over the dots, as a layer left
+            unanchored goes on top whenever a source re-adds its own. */}
+        <Layer {...createStationLabelsLayer(theme)} afterId="stations" />
 
         <VectorSource
           id="public_notes"

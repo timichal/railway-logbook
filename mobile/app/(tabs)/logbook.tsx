@@ -191,16 +191,36 @@ function Logbook({ regionId }: { regionId: RegionId }): ReactNode {
           <Text className="text-2xl font-bold text-gray-900 dark:text-gray-100">Logbook</Text>
           <Button label="New trip" variant="ghost" onPress={() => router.push("/edit-trip")} />
         </View>
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search trips and journeys"
-          placeholderTextColor={colors.placeholder}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-base text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-        />
+        <View
+          className={`flex-row items-center gap-2 rounded-xl border border-gray-300 bg-white pl-3 dark:border-gray-600 dark:bg-gray-800 ${search ? "" : "pr-3"}`}
+        >
+          <Ionicons name="search" size={18} color={colors.icon} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search trips and journeys"
+            placeholderTextColor={colors.placeholder}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            className="min-h-11 flex-1 text-base text-gray-900 dark:text-gray-100"
+          />
+          {search ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear the search"
+              // At once rather than after the debounce: nothing is being typed, and
+              // the whole list is what the reader asked for
+              onPress={() => {
+                setSearch("");
+                setQuery("");
+              }}
+              className="h-11 w-11 items-center justify-center active:opacity-70"
+            >
+              <Ionicons name="close-circle" size={20} color={colors.icon} />
+            </Pressable>
+          ) : null}
+        </View>
         {refreshError ? (
           <Text className="text-sm text-red-600 dark:text-red-400">
             Couldn’t refresh: {refreshError}

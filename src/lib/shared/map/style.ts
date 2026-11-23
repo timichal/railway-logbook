@@ -412,8 +412,11 @@ export const OPACITIES = {
   scenicLineAdmin: 0.55,
   scenicLineSelected: 0.85,
   // The searched line's band: a touch stronger than the scenic one it is drawn over,
-  // so where the two meet the searched line wins.
+  // so where the two meet the searched line wins. Stronger again over the dark
+  // basemap, where a translucent band lets the near-black ground through and all but
+  // disappears among the lit routes.
   lineSearchHighlight: 0.45,
+  lineSearchHighlightDark: 0.7,
   railwayParts: 0.7,
   stations: 0.8,
   // Country borders (createCountryBordersLayer). Just short of solid: they are

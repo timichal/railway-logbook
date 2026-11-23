@@ -213,8 +213,10 @@ interface SearchOptions {
   avoidBacktracking?: boolean;
   /** Give up on paths whose weighted cost exceeds this. */
   maxCost?: number;
-  /** Extra cost of starting on each route, by track id (see `changeCosts`). */
+  /** Extra cost of starting on each route, by track id (`changeCosts`, `accessCosts`). */
   startCosts?: Map<number, number>;
+  /** Extra cost of finishing on each route, by track id (`accessCosts`). */
+  endCosts?: Map<number, number>;
 }
 
 export interface SearchResult {
@@ -284,7 +286,8 @@ export function findShortestPath(
     return null;
   }
 
-  const { avoidBacktracking = false, maxCost = Infinity, startCosts } = options;
+  const { avoidBacktracking = false, maxCost = Infinity, startCosts, endCosts } = options;
+  const endCost = (route: number) => endCosts?.get(route) ?? 0;
   const endSet = new Set(endRoutes);
   const queue = new SearchQueue();
   const bestCost = new Map<string, number>();
@@ -319,7 +322,7 @@ export function findShortestPath(
       considerFinish(
         [route],
         [null],
-        startCost + info.length_km * covered * getRouteCostMultiplier(info),
+        startCost + info.length_km * covered * getRouteCostMultiplier(info) + endCost(route),
       );
       continue;
     }
@@ -384,7 +387,8 @@ export function findShortestPath(
           [...current.sides, entry.exitSide],
           current.cost +
             gapCost +
-            terminalCost(neighborInfo, fractions.to.get(neighbor), oppositeSide(entry.exitSide)),
+            terminalCost(neighborInfo, fractions.to.get(neighbor), oppositeSide(entry.exitSide)) +
+            endCost(neighbor),
         );
         continue;
       }
@@ -422,17 +426,49 @@ export function searchSegment(
   fromRoutes: number[],
   toRoutes: number[],
   fractions: TerminalFractions,
-  startCosts?: Map<number, number>,
+  costs: Pick<SearchOptions, "startCosts" | "endCosts"> = {},
 ): SearchResult | null {
-  const best = findShortestPath(network, fromRoutes, toRoutes, fractions, { startCosts });
+  const best = findShortestPath(network, fromRoutes, toRoutes, fractions, costs);
   if (!best || !hasRoutePathBacktracking(best, network.routeInfo)) return best;
 
   const alternative = findShortestPath(network, fromRoutes, toRoutes, fractions, {
     avoidBacktracking: true,
     maxCost: Math.min(best.cost * 2, best.cost + 20),
-    startCosts,
+    ...costs,
   });
   return alternative ?? best;
+}
+
+/**
+ * What getting on or off each of a station's routes costs: the walk past the
+ * nearest of them, charged at GAP_PENALTY_PER_KM as a gap between two routes is.
+ *
+ * `findRoutesNearStations` matches every route within a widened tolerance, so a
+ * station is "on" a line passing a few hundred metres off with no stop there as much
+ * as on the one that stops at it. Free, a journey would board the passing line
+ * wherever it was cheaper: Hagiyama → Kokubunji rode JR from a point ~340m off
+ * rather than the Seibu line that starts at the station (a branch line, costing
+ * double), and Ōsaka → Nara joined the Tōzai Line west of Kitashinchi rather than
+ * the Loop Line at Ōsaka itself. Charging only
+ * the excess over the nearest route leaves a station whose lines are all about as
+ * far off as each other — a big station's platforms, or one placed off its tracks —
+ * costing what it did.
+ *
+ * Charged where a journey starts and where it ends, not at a via: there
+ * `changeCosts` already charges the gap between the line arrived on and the one
+ * left on, and carrying on is free, as nobody gets off. A route with no known
+ * distance (none should be) is charged nothing.
+ */
+export function accessCosts(routes: number[], distances: Map<number, number>): Map<number, number> {
+  const known = routes.flatMap((trackId) => distances.get(trackId) ?? []);
+  const nearest = known.length > 0 ? Math.min(...known) : 0;
+  return new Map(
+    routes.map((trackId) => {
+      const distance = distances.get(trackId);
+      const excess = distance === undefined ? 0 : distance - nearest;
+      return [trackId, (excess / 1000) * GAP_PENALTY_PER_KM];
+    }),
+  );
 }
 
 /**

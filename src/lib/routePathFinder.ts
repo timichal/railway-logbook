@@ -20,6 +20,7 @@ import pool from "./db";
 import type { PlannerOptions } from "./planner/routeGraph";
 import { getRouteNetwork } from "./planner/routeGraphCache";
 import {
+  accessCosts,
   changeCosts,
   type SearchResult,
   searchSegment,
@@ -235,15 +236,23 @@ export async function findRoutePathBetweenStations(
       const from = stops[i];
       const to = stops[i + 1];
       const previous = segments[segments.length - 1];
+      // Getting on at the journey's start and off at its end costs the walk to a
+      // line further off than the nearest (`accessCosts`). A via is costed by
+      // `changeCosts` alone: charging the arrival there too would count a change's
+      // walk twice, and charge a rider who stays on board for getting off
       const startCosts = previous
         ? changeCosts(previous.path[previous.path.length - 1], from.routes, from.points)
-        : undefined;
+        : accessCosts(from.routes, from.distances);
+      const endCosts = i === stops.length - 2 ? accessCosts(to.routes, to.distances) : undefined;
 
       // Each segment is costed from its own pair of stations, so a via station
       // partway along a route splits that route's cost between the two segments
       const fractions: TerminalFractions = { from: from.fractions, to: to.fractions };
 
-      const segment = searchSegment(network, from.routes, to.routes, fractions, startCosts);
+      const segment = searchSegment(network, from.routes, to.routes, fractions, {
+        startCosts,
+        endCosts,
+      });
       if (!segment) {
         // The plan's region, from a route its first station is on: the search is
         // over both regions' one graph and never needed to know it before now
