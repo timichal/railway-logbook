@@ -1,6 +1,6 @@
 # Route data audits
 
-Findings from audits of the route data that were reviewed and **accepted as they are**. A later audit reports only what is new here, or what has grown. Label conventions are in `CLAUDE.md` ("Route labels").
+Findings from audits of the route data that were reviewed and **accepted as they are**. The audit itself is the `route-audit` skill (`.claude/skills/route-audit/SKILL.md`, over `npm run auditRoutes`). A later audit reports only what is new here, or what has grown. Label conventions are in `CLAUDE.md` ("Route labels").
 
 **Check the admin's `Todo` notes before reporting a finding** (`admin_notes`, `note_type = 'Todo'`, within a few hundred metres of the route). A note such as "osm fix nov 15" means the admin has already fixed the OSM data there, and will re-pick the route once a map deploy brings the fix in. A route that ends short of its station, leaves a gap or carries a stop-gap label beside such a note is known and pending, so leave it out.
 
@@ -12,7 +12,8 @@ Findings from audits of the route data that were reviewed and **accepted as they
 - **Hitahikosan Line: Jōno → Tagawa-Ita** and **Tagawa Line: Tagawa-Ita → Yukuhashi** (1 km): really shared single track.
 - Approaches into Wrocław (**Kamieniec Ząbkowicki → Wrocław** and **Świdnica → Wrocław**; **Jaworzyna Śląska → Wrocław** and **Rudna Miasto → Wrocław**) and into Poznań (**Krzyż → Poznań** and **Złotniki → Poznań**), about 1.9 km each: too few tracks in OSM to draw them in parallel.
 - Overlaps of 0.7 km or less at stations and junctions are normal.
-- **Tomaszów Mazowiecki → Radzice [west junction]** and **Tomaszów Mazowiecki → Spała** (0.73 km, 2026-11-15): the shared stretch out of the station.
+- **Tomaszów Mazowiecki → Radzice [west junction]** and **Tomaszów Mazowiecki → Spała** (0.73 km, 2026-11-15): the shared stretch out of the station. The same goes for **Tachov → Planá** and **Planá → Svojšín**, and **Šabac → Ruma** and **Zvornik → Šabac** (0.73–0.74 km, 2026-11-27).
+- **Veleliby → Kopidlno** and **Dolní Bousov → Kopidlno** (1.1 km west of Kopidlno), and **Kladno → Hostivice**, **Rudná u Prahy → Hostivice** and **Noutonice → Hostivice** (about 1 km west of Hostivice, each pair) (2026-11-27): the approach the lines share into the station.
 
 ## Two routes between the same points (2026-11-15)
 
@@ -24,8 +25,15 @@ Findings from audits of the route data that were reviewed and **accepted as they
 
 - **Sasebo → Imari** (Matsuura Railway) is 80.7 km for 18 km in a straight line: the line goes around the peninsula.
 - Long, winding routes that are correct: **Oravița → Anina** (2.4× the straight line), **Pernik Razpredelitelna → Voluyak** (2×, by the Hrabarsko bypass), **Vidin → Brusartsi** (2.2×).
+- More detours that follow the line itself (2026-11-27, checked by the stations along them): **Mokra Gora → Šargan Vitasi** (the Šargan Eight), **Nezvěstice → Rokycany**, **Vejprty → Chomutov**, **Roudnice nad Labem → Vraňany**, **Nové Město pod Smrkem → Jindřichovice pod Smrkem**, **Győr → Győrszabadhegy** (via Győr-Gyárváros), **Vidin → Golenți [junction]** (over the Danube bridge), **Ano Lechonia → Milies**, **Praha-Vysočany → Praha-Libeň**, and in Japan the **Yurikamome**, **Uchibō Line**, **Kisei Main Line**, **Ibusuki Makurazaki Line** and **Kōya Line**.
+- **Makov → Čadca** ends about 260 m from the other Čadca routes (2026-11-27): the Makov trains have their own platform, Makovské nástupište in OSM.
 - **Csömödér → Csömödér [junction]** (0.24 km) is a real stub into the forest railway's station.
 - **Inō / Ino** and **Narutō / Naruto** are four different stations (居能 / 井野, 成東 / 鳴門).
 - **Moldovița → Vatra Moldoviței** and **Szilvásvárad Fatelep → Szalajka Fátyol-vízesés** use the stop names from the operators' websites. OSM has other names there ("Mănăstirea Moldovița", "Szalajka-Fatelep"), and the operator wins. This happens on small heritage and forest railways, where an operator's own name beats OSM's.
 - Endpoints with no OSM station nearby (2026-11-15), probably stations missing from OSM, which is common. Not checked one by one: **Waliły**, **Żabno**, **Criscior**, **Vydrovo-Konečná**, and in Japan **Tenjimbashisuji Rokuchōme**, **Kira-Yoshida**, **Kannoura**, **Kōiki-kōen-mae**, **Torokko Kameoka**.
+- More endpoints with no OSM station nearby (2026-11-27), checked by the admin: **Žacléř**, **Kolín-Sendražice** (the Kolín sugar-beet narrow-gauge railway) and **Zbýšov-Důl Jindřich**.
+- **Senice na Hané → Olomouc** ends about 190 m from where the other Olomouc routes meet (2026-11-27): the trains use a bay platform there.
+- **Tokyo** is written without macrons (2026-11-27), an exception to the macron rule for now, as JR spells it.
+- Usage tags that look unusual for their type but are right (2026-11-27): **Kolešovice → Krupá** is Regular with "Regularly in summer" (timetabled, on random summer days); **Maltanka → Zwierzyniec** is Heritage with "Daily" (a park railway that runs every day); **Praha-Bubny → Sluncová [junction]** is Regular with "Daily" and "Excursions" (one timetabled train a day around midnight, plus excursions).
+- **"Seasonal" is fine in Japan** (2026-11-27), which tags its own way. In Europe it is a retired tag, which the script reports.
 - Stations shared by a metro and trains (2026-11-16) are in OSM, but `pruneData` drops a `subway=yes` station whose `station` tag lists `subway` alone (`isMetroOnlyStation`). **Oshiage**, **Sengakuji**, **Kotake-Mukaihara**, **Misasagi**, **Kaizuka** and **Meinohama** are tagged that way (fix in OSM: `station=train;subway`). **Akaike** is a shared station too, not checked.

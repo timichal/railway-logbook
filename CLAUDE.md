@@ -46,6 +46,7 @@ A unified Next.js app for OSM railway data. It fetches, processes and visualizes
 - `npx tsx src/scripts/importCountryBoundaries.ts` (no npm shorthand: it is rarely run): fetch OSM's country borders (`admin_level=2`, listed by Overpass, polygons from Nominatim) into `country_boundaries`, then correct the countries stored on every route's and scenic line's ends, listing the changes. All-or-nothing. **A setup step for every new database** (the table is in no backup or pull); rerun only when a border moves. On the server, run it from its checkout.
 - `npm run inspectPath -- "<from>" "<to>" ["<via>"...] [--special] [--closed]`: run the Journey Planner from the CLI and print the chain, the partial legs and the gaps.
 - `npm run showBacktracking`: list routes that backtrack unintentionally, with OpenRailwayMap links. Read-only.
+- `npm run auditRoutes -- [--all] [--region=<id>] [--save-baseline]`: the route data audit's candidate list, over valid routes only, by default only the ones new or changed since the last saved baseline (`data/route-audit-baseline.json`). Read-only. The procedure is the `route-audit` skill.
 - `npm run listStations`: debug.
 
 ### Server data (run locally; the server only runs `pg_dump`)
@@ -101,8 +102,7 @@ Schema in `database/init/01-schema.sql`. What the columns don't tell you:
 - **Europe** keeps the local spelling with its diacritics (Starołęka, Zemitāni, Vácrátót); the OSM station name is the reference. A shortened form is fine ("Rīga" for Rīgas Centrālā stacija).
 - **Japan** keeps each operator's own English spelling (hyphen or space, "-mae" or "-Mae", Onsen forms, n or m before b/m/p) and only adds macrons, because operators romanize differently even on their signs. Don't report those differences. Do report real typos, wrong pastes, labels that don't match the endpoints, and a missing macron. Same-named stations far apart (Fukushima, Ōmiya…) are different stations, and so are two operators' stations side by side (Meitetsu Nagoya, Kintetsu-Nagoya).
 - An endpoint with no OSM station nearby is usually a station missing from OSM (Alūksne, Olecko, underground stations in Japan), not a wrong label.
-- Audit findings the admin has reviewed and accepted are in `ROUTE_DATA_AUDIT.md`. Don't report them again.
-- Audit the labels of **invalid routes too**. A label is fixed before the geometry is re-picked, and an invalid route still shows in the journeys that logged it.
+- **The route audit** is the `route-audit` skill (`.claude/skills/route-audit/SKILL.md`) over `npm run auditRoutes`. It covers **valid routes only**, as the admin asked: an invalid one is re-picked anyway and gets audited once it is valid again. Findings the admin has reviewed and accepted are in `ROUTE_DATA_AUDIT.md`. Don't report them again.
 
 ## Regions (`src/lib/shared/regions.ts`)
 
